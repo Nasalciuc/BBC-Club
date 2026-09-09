@@ -2,15 +2,18 @@
   "expo": {
     "name": "BuyBusinessClass Club",
     "slug": "buybusinessclass-club",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bbcclub",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.buybusinessclass.club",
+      "supportsTablet": false,
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.buybusinessclass.club",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#1E293B",
@@ -19,10 +22,6 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",

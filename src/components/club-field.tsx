@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -29,12 +29,27 @@ type InputProps = TextInputProps & {
   size?: "md" | "lg";
 };
 
-export function ClubInput({ size = "md", style, ...props }: InputProps) {
+export function ClubInput({ size = "md", style, onFocus, onBlur, ...props }: InputProps) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <TextInput
-      placeholderTextColor={Club.colors.outline}
-      style={[styles.input, size === "lg" && styles.inputLg, style]}
+      placeholderTextColor={Club.colors.textTertiary}
       {...props}
+      onFocus={(event) => {
+        setFocused(true);
+        onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        setFocused(false);
+        onBlur?.(event);
+      }}
+      style={[
+        styles.input,
+        size === "lg" && styles.inputLg,
+        focused && styles.inputFocused,
+        style,
+      ]}
     />
   );
 }
@@ -42,6 +57,7 @@ export function ClubInput({ size = "md", style, ...props }: InputProps) {
 type PasswordProps = Omit<InputProps, "secureTextEntry"> & {
   visible: boolean;
   onToggleVisibility: () => void;
+  toggleTestID?: string;
 };
 
 export function ClubPasswordInput({
@@ -49,6 +65,7 @@ export function ClubPasswordInput({
   onToggleVisibility,
   style,
   size = "lg",
+  toggleTestID,
   ...props
 }: PasswordProps) {
   return (
@@ -62,16 +79,17 @@ export function ClubPasswordInput({
         {...props}
       />
       <Pressable
+        testID={toggleTestID}
         accessibilityRole="button"
         accessibilityLabel={visible ? "Hide password" : "Show password"}
-        hitSlop={8}
+        hitSlop={Club.space.xs}
         onPress={onToggleVisibility}
         style={styles.eye}
       >
         <ClubIcon
           name={visible ? "eyeOff" : "eye"}
           size={20}
-          color={Club.colors.secondary}
+          color={Club.colors.textSecondary}
         />
       </Pressable>
     </View>
@@ -80,26 +98,30 @@ export function ClubPasswordInput({
 
 const styles = StyleSheet.create({
   field: {
-    gap: 8,
+    gap: Club.space.xs,
   },
   label: {
-    ...Club.type.label,
-    color: Club.colors.onPrimaryContainer,
+    ...Club.type.labelMono,
+    color: Club.colors.textOnDarkMuted,
     textTransform: "uppercase",
   },
   input: {
     ...Club.type.body,
-    backgroundColor: Club.colors.mist,
-    color: Club.colors.navyDeep,
-    borderRadius: Club.radius.input,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    minHeight: 56,
+    backgroundColor: Club.colors.surfaceCard,
+    color: Club.colors.textPrimary,
+    borderRadius: Club.radius.field,
+    paddingHorizontal: Club.space.md,
+    paddingVertical: Club.space.sm,
     borderWidth: 1,
-    borderColor: "rgba(197,198,205,0.3)",
+    borderColor: Club.colors.borderDefault,
   },
   inputLg: {
-    ...Club.type.bodyLg,
-    paddingVertical: 16,
+    paddingVertical: Club.space.md,
+  },
+  inputFocused: {
+    borderColor: Club.colors.textSecondary,
+    borderWidth: 2,
   },
   passwordWrap: {
     position: "relative",
@@ -110,9 +132,9 @@ const styles = StyleSheet.create({
   },
   eye: {
     position: "absolute",
-    right: 12,
+    right: Club.space.sm,
     height: "100%",
     justifyContent: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: Club.space.xxs,
   },
 });

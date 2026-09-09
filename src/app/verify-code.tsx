@@ -31,6 +31,7 @@ export default function VerifyCodeScreen() {
       onBack={() => router.back()}
       footer={
         <ClubButton
+          testID="verify.submit"
           label="Verify"
           arrow
           disabled={!canVerify}
@@ -62,6 +63,7 @@ export default function VerifyCodeScreen() {
         })}
         <TextInput
           ref={inputRef}
+          testID="verify.code"
           value={code}
           onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, CODE_LENGTH))}
           keyboardType="number-pad"
@@ -75,6 +77,9 @@ export default function VerifyCodeScreen() {
       </Pressable>
 
       <Pressable
+        testID="verify.resend"
+        accessibilityRole="link"
+        hitSlop={Club.space.sm}
         disabled={seconds > 0}
         onPress={() => {
           setSeconds(RESEND_SECONDS);
@@ -92,54 +97,54 @@ export default function VerifyCodeScreen() {
 
 const styles = StyleSheet.create({
   copy: {
-    gap: Club.space.stackSm,
-    marginBottom: Club.space.stackLg,
+    gap: Club.space.sm,
+    marginBottom: Club.space.xl,
   },
   headline: {
-    ...Club.type.headlineLg,
-    color: Club.colors.white,
+    ...Club.type.display,
+    color: Club.colors.textOnDark,
   },
   body: {
     ...Club.type.body,
-    color: Club.colors.onPrimaryContainer,
+    color: Club.colors.textOnDarkMuted,
   },
   email: {
-    color: "rgba(255,255,255,0.9)",
+    color: Club.colors.textOnDark,
   },
   boxes: {
     flexDirection: "row",
-    gap: 8,
+    gap: Club.space.xs,
   },
   box: {
     flex: 1,
     height: 56,
-    borderRadius: Club.radius.input,
-    backgroundColor: Club.colors.mist,
+    borderRadius: Club.radius.field,
+    backgroundColor: Club.colors.surfaceCard,
     borderWidth: 1,
-    borderColor: Club.colors.outlineVariant,
+    borderColor: Club.colors.borderDefault,
     alignItems: "center",
     justifyContent: "center",
   },
   boxFocused: {
     borderWidth: 2,
-    borderColor: "#D8E3FB",
+    borderColor: Club.colors.textSecondary,
   },
   digit: {
-    ...Club.type.headlineMd,
-    color: Club.colors.navyDeep,
+    ...Club.type.headline,
+    color: Club.colors.textPrimary,
   },
   hiddenInput: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0.01,
     color: "transparent",
   },
   resendWrap: {
     alignSelf: "flex-start",
-    marginTop: Club.space.stackMd,
+    marginTop: Club.space.lg,
   },
   resend: {
-    ...Club.type.label,
-    color: Club.colors.onPrimaryContainer,
+    ...Club.type.labelMono,
+    color: Club.colors.textOnDarkMuted,
     textTransform: "uppercase",
   },
 });

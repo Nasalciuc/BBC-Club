@@ -12,6 +12,7 @@ type Props = {
   arrow?: boolean;
   variant?: Variant;
   style?: ViewStyle;
+  testID?: string;
 };
 
 export function ClubButton({
@@ -21,11 +22,13 @@ export function ClubButton({
   arrow = false,
   variant = "primary",
   style,
+  testID,
 }: Props) {
   const isSecondary = variant === "secondary";
 
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
@@ -42,7 +45,7 @@ export function ClubButton({
         <ClubIcon
           name="arrow"
           size={20}
-          color={isSecondary ? Club.colors.white : Club.colors.navyDeep}
+          color={isSecondary ? Club.colors.textOnDark : Club.colors.textPrimary}
         />
       ) : null}
     </Pressable>
@@ -53,19 +56,19 @@ const styles = StyleSheet.create({
   button: {
     width: "100%",
     minHeight: 56,
-    backgroundColor: Club.colors.white,
+    backgroundColor: Club.colors.actionInverted,
     borderRadius: Club.radius.pill,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    paddingVertical: Club.space.md,
+    paddingHorizontal: Club.space.lg,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: Club.space.xs,
   },
   secondary: {
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: "rgba(117,119,125,0.3)",
+    borderColor: Club.colors.borderOnDark,
   },
   pressed: {
     transform: [{ scale: 0.98 }],
@@ -75,9 +78,9 @@ const styles = StyleSheet.create({
   },
   label: {
     ...Club.type.button,
-    color: Club.colors.navyDeep,
+    color: Club.colors.textPrimary,
   },
   secondaryLabel: {
-    color: Club.colors.white,
+    color: Club.colors.textOnDark,
   },
 });
