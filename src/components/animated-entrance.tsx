@@ -20,15 +20,15 @@ export function AnimatedEntrance({ children, delay = 0, fade = false }: Props) {
 
   useEffect(() => {
     const ease = Easing.bezier(0.16, 1, 0.3, 1);
-    opacity.value = withDelay(delay, withTiming(1, { duration: 900, easing: ease }));
+    opacity.set(withDelay(delay, withTiming(1, { duration: 900, easing: ease })));
     if (!fade && !reduceMotion) {
-      translateY.value = withDelay(delay, withTiming(0, { duration: 900, easing: ease }));
+      translateY.set(withDelay(delay, withTiming(0, { duration: 900, easing: ease })));
     }
   }, [delay, fade, opacity, reduceMotion, translateY]);
 
   const style = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateY: translateY.value }],
+    opacity: opacity.get(),
+    transform: [{ translateY: translateY.get() }],
   }));
 
   return <Animated.View style={style}>{children}</Animated.View>;

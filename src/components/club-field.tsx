@@ -57,7 +57,7 @@ export function ClubInput({ size = "md", style, onFocus, onBlur, ...props }: Inp
 type PasswordProps = Omit<InputProps, "secureTextEntry"> & {
   visible: boolean;
   onToggleVisibility: () => void;
-  toggleTestID?: string;
+  toggleTestID: string;
 };
 
 export function ClubPasswordInput({

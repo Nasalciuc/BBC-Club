@@ -1,3 +1,4 @@
+import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,6 +10,7 @@ export default function HomeScreen() {
   // TODO(tabs): replaced by (tabs)/proposals in the next stage
   return (
     <View style={[styles.root, { paddingTop: insets.top + Club.space.lg }]}>
+      <StatusBar style="dark" />
       <Text style={styles.title}>Proposals</Text>
       <Text style={styles.body}>Your proposals will appear here.</Text>
     </View>

@@ -232,7 +232,7 @@ The app should feel like a private lounge: calm, precise, expensive. Create this
 - Photography of empty luxury spaces as the primary material; the interface recedes
 
 ## Source of Truth
-Tokens and components in this file are canonical. Details live in `design/components.md` (anatomy, states, rules), `design/motion.md`, `design/agent-prompts.md`. Production code in `packages/ui` must match; on conflict, report it — do not improvise.
+Tokens and components in this file are canonical. Details live in `design/components.md` (anatomy, states, rules), `design/motion.md`, `design/agent-prompts.md`. Production code in `src/constants/club.ts` and `src/components` must match; on conflict, report it — do not improvise.
 
 ## Colors
 - `primary` / `action-primary` (#1E293B): panels, primary buttons on light screens, badges, active tab. The only strong tone.
@@ -304,5 +304,5 @@ Documented in `design/components.md`. Summary of the rules an agent most often g
 
 ## Maintenance and Validation
 - Validate on every change: `npx @google/design.md lint DESIGN.md`; compare versions with `npx @google/design.md diff`. CI fails on errors and orphaned tokens.
-- Remove anything that no longer matches `packages/ui`. Every rule here is reusable; screen-specific decisions live in the playbook, not in this file.
+- Remove anything that no longer matches `src/constants/club.ts` and `src/components`. Every rule here is reusable; screen-specific decisions live in the playbook, not in this file.
 - Known gaps: serif family pending ratification (Newsreader specified); onboarding components (`destination-card`, `stepper`) not yet tokenized; motion durations to be confirmed on device.

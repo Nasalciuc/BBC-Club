@@ -12,4 +12,5 @@ Principle: motion explains a change of state; it never decorates. Nothing bounce
 | Responded state | confirmation crossfades 250ms; no confetti, no checkmark animation beyond a 150ms fade |
 | Press | 120ms scale to 0.98; arrow drifts 4px right; release 160ms |
 | Reduced motion | all movement replaced by opacity-only transitions of the same duration |
-Implementation: Reanimated 3 (New Architecture); durations are tokens in `packages/ui/motion.ts`.
+
+Implementation: Reanimated 4 (New Architecture). Welcome entrance timing lives in `src/components/animated-entrance.tsx`.

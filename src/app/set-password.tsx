@@ -44,6 +44,7 @@ export default function SetPasswordScreen() {
       <ClubField label="Password">
         <ClubPasswordInput
           testID="setPassword.password"
+          toggleTestID="setPassword.togglePassword"
           autoComplete="new-password"
           placeholder="Password"
           value={password}

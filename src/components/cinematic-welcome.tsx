@@ -21,14 +21,16 @@ export function CinematicWelcome() {
   const scale = useSharedValue(1);
 
   useEffect(() => {
-    scale.value = withTiming(1.1, {
-      duration: 20000,
-      easing: Easing.out(Easing.ease),
-    });
+    scale.set(
+      withTiming(1.1, {
+        duration: 20000,
+        easing: Easing.out(Easing.ease),
+      }),
+    );
   }, [scale]);
 
   const kenBurns = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.get() }],
   }));
 
   return (
