@@ -14,7 +14,7 @@ export function PasswordRule({ ok, label }: Props) {
       <ClubIcon
         name={ok ? "check" : "circle"}
         size={18}
-        color={ok ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.35)"}
+        color={ok ? Club.colors.textOnDark : Club.colors.textOnDarkMuted}
       />
       <Text style={[styles.label, ok && styles.labelOk]}>{label}</Text>
     </View>
@@ -25,13 +25,13 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: Club.space.sm,
   },
   label: {
     ...Club.type.bodySm,
-    color: "rgba(255,255,255,0.55)",
+    color: Club.colors.textOnDarkMuted,
   },
   labelOk: {
-    color: "rgba(255,255,255,0.9)",
+    color: Club.colors.textOnDark,
   },
 });

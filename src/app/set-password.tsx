@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { AuthShell } from "@/components/auth-shell";
@@ -21,25 +21,17 @@ export default function SetPasswordScreen() {
   const complexEnough = hasNumberOrSymbol(password);
   const canContinue = longEnough && complexEnough;
 
-  const rules = useMemo(
-    () => [
-      { ok: longEnough, label: "At least 8 characters" },
-      { ok: complexEnough, label: "One number or symbol" },
-    ],
-    [complexEnough, longEnough],
-  );
-
   return (
     <AuthShell
       heroPercent={0.25}
-      panelRadius={Club.radius.panelTight}
       onBack={() => router.back()}
       footer={
         <ClubButton
+          testID="setPassword.continue"
           label="Continue"
           arrow
           disabled={!canContinue}
-          onPress={() => router.replace("/sign-in")}
+          onPress={() => router.replace("/home")}
         />
       }
     >
@@ -51,6 +43,8 @@ export default function SetPasswordScreen() {
 
       <ClubField label="Password">
         <ClubPasswordInput
+          testID="setPassword.password"
+          toggleTestID="setPassword.togglePassword"
           autoComplete="new-password"
           placeholder="Password"
           value={password}
@@ -61,9 +55,8 @@ export default function SetPasswordScreen() {
       </ClubField>
 
       <View style={styles.rules}>
-        {rules.map((rule) => (
-          <PasswordRule key={rule.label} ok={rule.ok} label={rule.label} />
-        ))}
+        <PasswordRule ok={longEnough} label="At least 8 characters" />
+        <PasswordRule ok={complexEnough} label="One number or symbol" />
       </View>
     </AuthShell>
   );
@@ -71,25 +64,25 @@ export default function SetPasswordScreen() {
 
 const styles = StyleSheet.create({
   copy: {
-    marginBottom: Club.space.stackLg,
+    marginBottom: Club.space.xl,
   },
   kicker: {
-    ...Club.type.label,
-    color: Club.colors.onPrimaryContainer,
+    ...Club.type.labelMono,
+    color: Club.colors.textOnDarkMuted,
     textTransform: "uppercase",
-    marginBottom: Club.space.stackSm,
+    marginBottom: Club.space.sm,
   },
   headline: {
-    ...Club.type.headlineLg,
-    color: Club.colors.white,
-    marginBottom: 8,
+    ...Club.type.display,
+    color: Club.colors.textOnDark,
+    marginBottom: Club.space.xs,
   },
   body: {
     ...Club.type.body,
-    color: Club.colors.onPrimaryContainer,
+    color: Club.colors.textOnDarkMuted,
   },
   rules: {
-    marginTop: Club.space.stackMd,
-    gap: 12,
+    marginTop: Club.space.lg,
+    gap: Club.space.sm,
   },
 });

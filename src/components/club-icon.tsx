@@ -41,6 +41,6 @@ type Props = {
   color?: string;
 };
 
-export function ClubIcon({ name, size = 24, color = Club.colors.white }: Props) {
+export function ClubIcon({ name, size = 24, color = Club.colors.textOnDark }: Props) {
   return <SymbolView name={icons[name]} size={size} tintColor={color} />;
 }

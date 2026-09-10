@@ -19,6 +19,7 @@ export default function JoinScreen() {
       footer={
         <>
           <ClubButton
+            testID="join.continue"
             label="Continue"
             arrow
             disabled={!canContinue}
@@ -31,7 +32,12 @@ export default function JoinScreen() {
           />
           <View style={styles.memberRow}>
             <Text style={styles.member}>Already a member? </Text>
-            <Pressable accessibilityRole="link" onPress={() => router.replace("/sign-in")}>
+            <Pressable
+              testID="join.signIn"
+              accessibilityRole="link"
+              hitSlop={Club.space.sm}
+              onPress={() => router.replace("/sign-in")}
+            >
               <Text style={styles.memberLink}>Sign in</Text>
             </Pressable>
           </View>
@@ -47,6 +53,7 @@ export default function JoinScreen() {
 
       <ClubField label="Email">
         <ClubInput
+          testID="join.email"
           autoCapitalize="none"
           autoComplete="email"
           autoCorrect={false}
@@ -62,29 +69,29 @@ export default function JoinScreen() {
 
 const styles = StyleSheet.create({
   copy: {
-    gap: Club.space.stackSm,
-    marginBottom: Club.space.stackLg,
+    gap: Club.space.sm,
+    marginBottom: Club.space.xl,
   },
   headline: {
-    ...Club.type.headlineLg,
-    color: Club.colors.white,
+    ...Club.type.display,
+    color: Club.colors.textOnDark,
   },
   body: {
     ...Club.type.body,
-    color: Club.colors.onPrimaryContainer,
+    color: Club.colors.textOnDarkMuted,
   },
   memberRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    paddingBottom: 8,
+    paddingBottom: Club.space.xs,
   },
   member: {
     ...Club.type.bodySm,
-    color: Club.colors.onPrimaryContainer,
+    color: Club.colors.textOnDarkMuted,
   },
   memberLink: {
     ...Club.type.bodySm,
-    color: Club.colors.white,
+    color: Club.colors.textOnDark,
   },
 });

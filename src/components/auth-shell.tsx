@@ -21,6 +21,7 @@ type Props = PropsWithChildren<{
   logo?: Logo;
   heroPercent?: number;
   panelRadius?: number;
+  testID?: string;
 }>;
 
 export function AuthShell({
@@ -30,9 +31,10 @@ export function AuthShell({
   logo = "none",
   heroPercent = 0.3,
   panelRadius = Club.radius.panel,
+  testID = "authShell.back",
 }: Props) {
   const insets = useSafeAreaInsets();
-  const top = Math.max(insets.top, 16) + 8;
+  const top = Math.max(insets.top, Club.space.md) + Club.space.xs;
 
   return (
     <View style={styles.root}>
@@ -42,22 +44,23 @@ export function AuthShell({
       >
         <View style={[styles.hero, { height: `${Math.round(heroPercent * 100)}%` }]}>
           <Image
-            source={require("@/assets/images/signin-cabin.png")}
+            source={require("@/assets/images/cabin.webp")}
             style={[StyleSheet.absoluteFill, styles.heroImage]}
             contentFit="cover"
             blurRadius={12}
           />
-          <View style={styles.heroDim} />
+          <View style={[StyleSheet.absoluteFill, styles.heroDim]} />
 
           {onBack ? (
             <Pressable
+              testID={testID}
               accessibilityRole="button"
               accessibilityLabel="Go back"
               onPress={onBack}
-              hitSlop={8}
+              hitSlop={Club.space.xs}
               style={[styles.back, { top }]}
             >
-              <ClubIcon name="back" size={24} color={Club.colors.white} />
+              <ClubIcon name="back" size={24} color={Club.colors.textOnDark} />
             </Pressable>
           ) : null}
 
@@ -82,7 +85,9 @@ export function AuthShell({
           ) : null}
         </View>
 
-        <View style={[styles.panel, { borderTopLeftRadius: panelRadius, borderTopRightRadius: panelRadius }]}>
+        <View
+          style={[styles.panel, { borderTopLeftRadius: panelRadius, borderTopRightRadius: panelRadius }]}
+        >
           <ScrollView
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
@@ -92,7 +97,9 @@ export function AuthShell({
             {children}
           </ScrollView>
           {footer ? (
-            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>{footer}</View>
+            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Club.space.md) }]}>
+              {footer}
+            </View>
           ) : null}
         </View>
       </KeyboardAvoidingView>
@@ -103,7 +110,7 @@ export function AuthShell({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: Club.colors.navyDeep,
+    backgroundColor: Club.colors.surfacePanel,
   },
   flex: {
     flex: 1,
@@ -117,12 +124,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.05 }],
   },
   heroDim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(9,20,38,0.4)",
+    backgroundColor: Club.colors.heroDim,
   },
   back: {
     position: "absolute",
-    left: Club.space.margin,
+    left: Club.space.gutter,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -132,7 +138,7 @@ const styles = StyleSheet.create({
   },
   logoLeft: {
     position: "absolute",
-    left: Club.space.margin,
+    left: Club.space.gutter,
   },
   logoCenter: {
     position: "absolute",
@@ -148,20 +154,20 @@ const styles = StyleSheet.create({
   },
   panel: {
     flex: 1,
-    marginTop: -32,
-    backgroundColor: Club.colors.navy,
+    marginTop: -Club.space.xl,
+    backgroundColor: Club.colors.surfacePanel,
     zIndex: 2,
   },
   scroll: {
     flexGrow: 1,
-    paddingHorizontal: Club.space.margin,
-    paddingTop: Club.space.stackLg,
-    paddingBottom: Club.space.stackLg,
+    paddingHorizontal: Club.space.gutter,
+    paddingTop: Club.space.xl,
+    paddingBottom: Club.space.xl,
   },
   footer: {
-    paddingHorizontal: Club.space.margin,
-    paddingTop: 8,
-    backgroundColor: Club.colors.navy,
-    gap: Club.space.stackMd,
+    paddingHorizontal: Club.space.gutter,
+    paddingTop: Club.space.xs,
+    backgroundColor: Club.colors.surfacePanel,
+    gap: Club.space.lg,
   },
 });
