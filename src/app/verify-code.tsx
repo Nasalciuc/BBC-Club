@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
+import { setPendingOtp } from "@/features/auth/otp-holder";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { Club } from "@/constants/club";
@@ -31,6 +32,24 @@ export default function VerifyCodeScreen() {
   const canVerify = code.length === CODE_LENGTH;
   const destination = email?.trim() || "your email";
 
+  function onVerify() {
+    if (purpose === "reset") {
+      setPendingOtp(code);
+      router.replace({
+        pathname: "/set-password",
+        params: { purpose: "reset", email: email ?? "" },
+      });
+      return;
+    }
+
+    // TODO(identity): signIn.emailOtp({ email, otp }) — creates the
+    // account and the session on the server (ADR-PROD-001 path A)
+    router.replace({
+      pathname: "/set-password",
+      params: { purpose: "join" },
+    });
+  }
+
   return (
     <AuthShell
       onBack="/sign-in"
@@ -40,16 +59,7 @@ export default function VerifyCodeScreen() {
           label="Verify"
           arrow
           disabled={!canVerify}
-          onPress={() =>
-            router.push({
-              pathname: "/set-password",
-              params: {
-                email: email ?? "",
-                purpose,
-                otp: code,
-              },
-            })
-          }
+          onPress={onVerify}
         />
       }
     >

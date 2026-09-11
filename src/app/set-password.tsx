@@ -1,7 +1,9 @@
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+import { parseAuthPurpose } from "@/lib/auth-purpose";
+import { clearPendingOtp, takePendingOtp } from "@/features/auth/otp-holder";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { ClubField, ClubPasswordInput } from "@/components/club-field";
@@ -14,13 +16,38 @@ function hasNumberOrSymbol(value: string) {
 
 export default function SetPasswordScreen() {
   const router = useRouter();
-  // ADR-PROD-001: verify-code pushes email, purpose, otp on this route. Read them at identity wiring.
+  const { email, purpose: purposeParam } = useLocalSearchParams<{
+    email?: string;
+    purpose?: string;
+  }>();
+  const purpose = parseAuthPurpose(purposeParam);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => () => clearPendingOtp(), []);
 
   const longEnough = password.length >= 8;
   const complexEnough = hasNumberOrSymbol(password);
   const canContinue = longEnough && complexEnough;
+
+  function onContinue() {
+    if (purpose === "reset") {
+      // TODO(identity): the reset call needs the code; see Task 1b
+      // emailOtp.resetPassword({ email, otp, password }) — otp from
+      // takePendingOtp(); must not enter navigation state or the URL.
+      if (!email) {
+        clearPendingOtp();
+        router.replace("/sign-in");
+        return;
+      }
+      takePendingOtp();
+      router.replace("/home");
+      return;
+    }
+
+    // TODO(identity): setPassword on the session (ADR-PROD-001 path A)
+    router.replace("/home");
+  }
 
   return (
     <AuthShell
@@ -32,7 +59,7 @@ export default function SetPasswordScreen() {
           label="Continue"
           arrow
           disabled={!canContinue}
-          onPress={() => router.replace("/home")}
+          onPress={onContinue}
         />
       }
     >

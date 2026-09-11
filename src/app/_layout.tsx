@@ -14,6 +14,7 @@ import { Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { Club } from "@/constants/club";
+import { clearPendingOtp } from "@/features/auth/otp-holder";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -36,6 +37,8 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded, error]);
+
+  useEffect(() => () => clearPendingOtp(), []);
 
   if (!loaded && !error) {
     return null;
