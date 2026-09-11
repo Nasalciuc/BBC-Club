@@ -15,6 +15,10 @@ npx expo start
 
 Use a development build (Expo Go is not the target). iOS and Android phones only.
 
+## Web
+
+Web is a development preview only; the product ships to the App Store and Google Play. Do not add web-only code paths.
+
 ## Status
 
 Entry flow UI; backend not wired.

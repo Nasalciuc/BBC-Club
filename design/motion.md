@@ -1,9 +1,9 @@
 # BBC Club — Motion
-Principle: motion explains a change of state; it never decorates. Nothing bounces, springs or slides sideways.
+Principle: motion explains a change of state; it never decorates. Nothing bounces or springs. Screen **push/pop** may slide horizontally (navigation between screens). No element *inside* a screen enters from the side.
 
 | Moment | Spec |
 |---|---|
-| Welcome entrance | photo fades from black 1.2s; then logo, label, headline line-by-line (200ms apart), subline, button — each fade + 12px rise, ease-out; total ≤2.5s |
+| Welcome entrance | photo fades from black 1.2s; then logo, label, headline block, subline, button at the **150ms default** between elements; **200ms between the two serif headline lines** (exception: sequential reading needs more air). Each beat fade + 12px rise, ease-out; last beat starts at 1.6s and finishes by 2.5s. Ken Burns on the cabin photo (20s) is approved on Welcome only — the one screen seen once |
 | Entry panel appearance | panel rises with the keyboard in one movement, ease-out 300ms; photo dims/blurs over the same duration |
 | Auth step change | headline crossfade 200ms; field group fade + 12px rise |
 | Success (sign in / password set) | panel releases upward 300ms ease-in; light feed fades in 200ms — the "threshold" |

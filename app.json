@@ -7,6 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "bbcclub",
     "userInterfaceStyle": "dark",
+    "platforms": ["ios", "android", "web"],
     "ios": {
       "bundleIdentifier": "com.buybusinessclass.club",
       "supportsTablet": false,
@@ -37,6 +38,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/icon.png"
     }
   }
 }

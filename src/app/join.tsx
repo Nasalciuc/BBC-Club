@@ -15,7 +15,7 @@ export default function JoinScreen() {
   return (
     <AuthShell
       logo="center"
-      onBack={() => router.back()}
+      onBack="/sign-in"
       footer={
         <>
           <ClubButton
@@ -26,7 +26,7 @@ export default function JoinScreen() {
             onPress={() =>
               router.push({
                 pathname: "/verify-code",
-                params: { email: email.trim() },
+                params: { email: email.trim(), purpose: "join" },
               })
             }
           />
@@ -47,7 +47,9 @@ export default function JoinScreen() {
       <View style={styles.copy}>
         <Text style={styles.headline}>Join the club</Text>
         <Text style={styles.body}>
-          If you've flown with us, use the email your advisor has on file — we'll recognise you.
+          If you've flown with us, use the email your advisor has on file — we'll
+          recognise you and set things up. If you're new, we'll add you to the
+          list.
         </Text>
       </View>
 
