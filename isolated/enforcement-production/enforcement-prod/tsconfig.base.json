@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2023", "module": "ESNext", "moduleResolution": "Bundler", "lib": ["ES2023"],
+    "strict": true, "noUncheckedIndexedAccess": true, "noImplicitOverride": true, "exactOptionalPropertyTypes": false,
+    "verbatimModuleSyntax": true, "isolatedModules": true, "skipLibCheck": true, "resolveJsonModule": true,
+    "types": ["bun-types"],
+    "paths": {
+      "@bbc/shared/*": ["./packages/shared/src/*"],
+      "@bbc/db": ["./packages/db/src/client.ts"],
+      "@bbc/db/*": ["./packages/db/src/*"],
+      "@bbc/ui": ["./packages/ui/src/index.ts"],
+      "@bbc/platform": ["./packages/modules/platform/src/api/index.ts"],
+      "@bbc/identity": ["./packages/modules/core/identity/src/api/index.ts"],
+      "@bbc/members": ["./packages/modules/core/members/src/api/index.ts"],
+      "@bbc/notifications": ["./packages/modules/core/notifications/src/api/index.ts"],
+      "@bbc/proposals": ["./packages/modules/domain/proposals/src/api/index.ts"],
+      "@bbc/engagement": ["./packages/modules/domain/engagement/src/api/index.ts"],
+      "@bbc/personalization": ["./packages/modules/intelligence/personalization/src/api/index.ts"],
+      "@bbc/crm": ["./packages/modules/integration/crm/src/api/index.ts"],
+      "@bbc/email": ["./packages/modules/integration/email/src/index.ts"],
+      "@bbc/push": ["./packages/modules/integration/push/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "**/graphify-out"]
+}
