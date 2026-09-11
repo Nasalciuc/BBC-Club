@@ -17,6 +17,7 @@ export default function ResetPasswordScreen() {
       onBack={() => router.back()}
       footer={
         <ClubButton
+          testID="reset.send"
           label="Send code"
           arrow
           disabled={!canSend}
@@ -36,6 +37,7 @@ export default function ResetPasswordScreen() {
 
       <ClubField label="Email">
         <ClubInput
+          testID="reset.email"
           size="lg"
           autoCapitalize="none"
           autoComplete="email"
@@ -52,15 +54,15 @@ export default function ResetPasswordScreen() {
 
 const styles = StyleSheet.create({
   copy: {
-    gap: 8,
-    marginBottom: Club.space.stackLg,
+    gap: Club.space.xs,
+    marginBottom: Club.space.xl,
   },
   headline: {
-    ...Club.type.headlineLg,
-    color: Club.colors.white,
+    ...Club.type.display,
+    color: Club.colors.textOnDark,
   },
   body: {
     ...Club.type.body,
-    color: Club.colors.onPrimaryContainer,
+    color: Club.colors.textOnDarkMuted,
   },
 });

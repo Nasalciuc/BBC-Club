@@ -18,13 +18,22 @@ export default function SignInScreen() {
       logo="left"
       footer={
         <>
-          <ClubButton label="Sign in" arrow onPress={() => undefined} />
+          <ClubButton
+            testID="signIn.submit"
+            label="Sign in"
+            arrow
+            onPress={() => {
+              // TODO(identity): wire to Better Auth
+              router.replace("/home");
+            }}
+          />
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerLabel}>New to the club</Text>
             <View style={styles.dividerLine} />
           </View>
           <ClubButton
+            testID="signIn.createAccount"
             label="Create account"
             variant="secondary"
             onPress={() => router.push("/join")}
@@ -37,6 +46,7 @@ export default function SignInScreen() {
       <View style={styles.fields}>
         <ClubField label="Email">
           <ClubInput
+            testID="signIn.email"
             autoCapitalize="none"
             autoComplete="email"
             autoCorrect={false}
@@ -49,6 +59,8 @@ export default function SignInScreen() {
 
         <ClubField label="Password">
           <ClubPasswordInput
+            testID="signIn.password"
+            toggleTestID="signIn.togglePassword"
             size="md"
             autoComplete="password"
             placeholder="Password"
@@ -58,7 +70,9 @@ export default function SignInScreen() {
             onToggleVisibility={() => setShowPassword((value) => !value)}
           />
           <Pressable
-            accessibilityRole="button"
+            testID="signIn.forgot"
+            accessibilityRole="link"
+            hitSlop={Club.space.sm}
             style={styles.forgotWrap}
             onPress={() => router.push("/reset-password")}
           >
@@ -72,36 +86,36 @@ export default function SignInScreen() {
 
 const styles = StyleSheet.create({
   headline: {
-    ...Club.type.headlineLg,
-    color: Club.colors.white,
-    marginBottom: Club.space.stackLg,
+    ...Club.type.display,
+    color: Club.colors.textOnDark,
+    marginBottom: Club.space.xl,
   },
   fields: {
-    gap: Club.space.stackMd,
+    gap: Club.space.lg,
     flexGrow: 1,
   },
   forgotWrap: {
     alignSelf: "flex-end",
-    marginTop: 8,
+    marginTop: Club.space.xs,
   },
   forgot: {
     ...Club.type.bodySm,
-    color: Club.colors.onPrimaryContainer,
+    color: Club.colors.textOnDarkMuted,
   },
   divider: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    paddingVertical: 8,
+    gap: Club.space.md,
+    paddingVertical: Club.space.xs,
   },
   dividerLine: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(117,119,125,0.2)",
+    backgroundColor: Club.colors.borderOnDark,
   },
   dividerLabel: {
-    ...Club.type.label,
-    color: Club.colors.onPrimaryContainer,
+    ...Club.type.labelMono,
+    color: Club.colors.textOnDarkMuted,
     textTransform: "uppercase",
   },
 });
