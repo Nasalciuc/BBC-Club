@@ -1,0 +1,48 @@
+# Adds staging as EXTRA services in the same project. Same Caddy, second domain, separate DB.
+# Disposable: no backups, no WAL archiving, no error tracking. Removed when staging gets its own machine.
+services:
+  api-staging:
+    image: ${API_IMAGE_STAGING:-ghcr.io/nasalciuc/bbc-api:staging}
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+    networks: [edge, data]
+    env_file: [./env/staging.env]
+    environment:
+      PORT: "8000"
+      LOG_LEVEL: debug
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc
+    depends_on: { postgres-staging: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    stop_grace_period: 15s
+    deploy: { resources: { limits: { cpus: "1.0", memory: 512m } } }
+
+  postgres-staging:
+    image: postgres:16                        # plain image: no archiving here
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+    networks: [data]
+    environment:
+      POSTGRES_USER: bbc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STAGING}
+      POSTGRES_DB: bbc
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes: ["postgres_staging_data:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
+    deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
+
+  cron-staging:
+    image: alpine:3.20
+    restart: unless-stopped
+    networks: [edge]
+    entrypoint: ["/bin/sh", "/etc/cron/run.sh"]
+    volumes: ["./cron:/etc/cron:ro"]
+    environment: { API_URL: "http://api-staging:8000", INTERNAL_API_SECRET: "${INTERNAL_API_SECRET_STAGING}" }
+    depends_on: { api-staging: { condition: service_healthy } }
+
+volumes:
+  postgres_staging_data: {}

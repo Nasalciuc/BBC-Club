@@ -1,0 +1,10 @@
+# HTTP jobs only — logic lives in the API (platform.jobs). Host-level jobs (backups, restore drill,
+# disk check) are in infra/host/crontab, installed by bootstrap.sh.
+*/5  *  *  *  *   expire-offers
+*/15 *  *  *  *   reconcile-activities
+0    3  *  *  *   sync-mirror
+0    4  *  *  *   retention
+0    2  *  *  *   partitions
+30   4  *  *  *   cleanup-devices
+0    5  *  *  *   receipts
+*/10 *  *  *  *   queue-health

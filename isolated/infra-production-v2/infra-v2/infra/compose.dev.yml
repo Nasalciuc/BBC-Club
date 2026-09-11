@@ -1,0 +1,11 @@
+# Laptop: only the database in Docker; the API runs with `bun --watch` outside.
+name: bbc-dev
+services:
+  postgres-dev:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: bbc, POSTGRES_PASSWORD: bbc, POSTGRES_DB: bbc }
+    ports: ["5432:5432"]
+    volumes: ["postgres_dev_data:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 2s, timeout: 2s, retries: 15 }
+volumes:
+  postgres_dev_data: {}

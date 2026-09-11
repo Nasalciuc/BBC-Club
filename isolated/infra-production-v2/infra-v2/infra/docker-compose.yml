@@ -1,0 +1,147 @@
+# ONE project, ONE compose file, overlays for prod/staging/test. Staging is extra services in this same
+# project (api-staging, postgres-staging) so a single Caddy can hold certificates for both domains.
+name: bbc
+
+x-logging: &logging
+  logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }
+x-restart: &restart
+  restart: unless-stopped
+
+networks:
+  edge: {}                                   # caddy ↔ api
+  data: { internal: true }                   # postgres, redis, minio, glitchtip, kuma — no internet, no host
+
+services:
+  # ── the only door ─────────────────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    <<: [*restart, *logging]
+    ports: ["80:80", "443:443"]
+    networks: [edge, data]
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/well-known:/srv/well-known:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    env_file: [${ENV_FILE:-./env/production.env}]
+    # deliberately NOT depends_on api: a dead upstream is a 502, not a dead Caddy (certs must keep renewing)
+    deploy: { resources: { limits: { memory: 128m } } }
+
+  # ── production API ────────────────────────────────────────────────────────
+  api:
+    image: ${API_IMAGE:?API_IMAGE must be a SHA-tagged image}
+    <<: [*restart, *logging]
+    networks: [edge, data]
+    env_file: [${ENV_FILE:-./env/production.env}]
+    environment:
+      PORT: "8000"
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
+    depends_on: { postgres: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    stop_grace_period: 15s
+    deploy: { resources: { limits: { cpus: "2.0", memory: 1g } } }
+
+  postgres:
+    build: { context: ./postgres }            # postgres:16 + pgbackrest in the SAME container (archive_command needs it)
+    image: bbc-postgres:16
+    <<: [*restart, *logging]
+    networks: [data]
+    env_file: [${ENV_FILE:-./env/production.env}]   # PGBACKREST_* options live in the env file
+    environment:
+      POSTGRES_USER: bbc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: bbc
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+      PGBACKREST_STANZA: bbc
+    command:
+      - postgres
+      - -c=shared_buffers=512MB
+      - -c=effective_cache_size=1536MB
+      - -c=work_mem=8MB
+      - -c=maintenance_work_mem=128MB
+      - -c=max_connections=100
+      - -c=wal_level=replica
+      - -c=archive_mode=on
+      - -c=archive_command=pgbackrest --stanza=bbc archive-push %p
+      - -c=archive_timeout=300
+      - -c=log_min_duration_statement=1000
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - pgbackrest_spool:/var/spool/pgbackrest
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
+    deploy: { resources: { limits: { cpus: "2.0", memory: 2g } } }
+
+  cron:
+    image: alpine:3.20                        # busybox crond + wget, verified present
+    <<: [*restart, *logging]
+    networks: [edge]
+    entrypoint: ["/bin/sh", "/etc/cron/run.sh"]
+    volumes: ["./cron:/etc/cron:ro"]
+    environment: { API_URL: "http://api:8000", INTERNAL_API_SECRET: "${INTERNAL_API_SECRET}" }
+    depends_on: { api: { condition: service_healthy } }
+    deploy: { resources: { limits: { memory: 64m } } }
+
+  minio:
+    image: minio/minio:latest
+    <<: [*restart, *logging]
+    networks: [data]
+    command: server /data --console-address ":9001"
+    environment: { MINIO_ROOT_USER: "${MINIO_USER}", MINIO_ROOT_PASSWORD: "${MINIO_PASSWORD}" }
+    volumes: ["minio_data:/data"]
+    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 15s, timeout: 5s, retries: 5 }
+    deploy: { resources: { limits: { memory: 256m } } }
+
+  redis:
+    image: redis:7-alpine
+    <<: [*restart, *logging]
+    networks: [data]
+    # ONLY for GlitchTip. Our rate limiting stays in Postgres (fail-closed). Do not point the API here.
+    command: ["redis-server", "--maxmemory", "192mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    deploy: { resources: { limits: { memory: 256m } } }
+
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET}
+      REDIS_URL: redis://redis:6379/0
+      GLITCHTIP_DOMAIN: https://${ERRORS_DOMAIN}
+      GLITCHTIP_MAX_EVENT_LIFE_DAYS: "30"
+      ENABLE_USER_REGISTRATION: "false"
+    depends_on: { postgres: { condition: service_healthy } }
+    deploy: { resources: { limits: { memory: 512m } } }
+
+  glitchtip-worker:
+    image: glitchtip/glitchtip:latest
+    <<: [*restart, *logging]
+    networks: [data]
+    command: ["./bin/run-celery-with-beat.sh"]
+    environment:
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET}
+      REDIS_URL: redis://redis:6379/0
+    depends_on: [glitchtip]
+    deploy: { resources: { limits: { memory: 384m } } }
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    <<: [*restart, *logging]
+    networks: [data, edge]                    # needs edge to probe the API; reachable by humans only via SSH tunnel
+    volumes: ["kuma_data:/app/data"]
+    deploy: { resources: { limits: { memory: 128m } } }
+
+volumes:
+  postgres_data: {}
+  pgbackrest_spool: {}
+  minio_data: {}
+  kuma_data: {}
+  caddy_data: {}
+  caddy_config: {}

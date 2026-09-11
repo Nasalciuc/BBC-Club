@@ -1,0 +1,12 @@
+**/node_modules
+**/graphify-out
+**/.git
+apps/mobile
+isolated
+docs
+design
+infra
+*.md
+!packages/**/MODULE.md
+.github
+.husky

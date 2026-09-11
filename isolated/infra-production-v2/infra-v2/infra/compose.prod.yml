@@ -1,0 +1,5 @@
+# Production overlay is intentionally tiny: the base file IS production. This exists so the command line
+# is symmetric with staging and so production-only hardening has a place.
+services:
+  api:
+    environment: { NODE_ENV: production, LOG_LEVEL: info }

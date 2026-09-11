@@ -12,6 +12,7 @@ export async function onMemberRegistered(deps: {
 }, raw: unknown) {
   const evt = MemberRegisteredV1.parse(raw);
   const match = await deps.crm.findByEmail(evt.emailNormalized);
+  // ADR-PROD-001: v1 keeps this flag off — unknown CRM email is waitlist, never active.
   const openSignups = await deps.flags.get("members.allow_non_crm_signups");
   const status = match ? "active" : openSignups ? "active" : "waitlist";
 
