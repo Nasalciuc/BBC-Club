@@ -1,4 +1,5 @@
-# Snapshot copy of the live workflow at .github/workflows/api-deploy.yml (GitHub does not load this nested path).
+# Live workflow — GitHub only loads .github/workflows/ at the repository root.
+# Snapshot copy: isolated/infra-production-v2/infra-v2/.github/workflows/api-deploy.yml
 name: api-deploy
 on:
   push:

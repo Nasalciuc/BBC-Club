@@ -2,8 +2,19 @@
 # Monthly drill: restore the latest backup into a THROWAWAY container built from the SAME postgres image
 # (same uid → no permission surprises), assert the shape, report, destroy.
 set -Eeuo pipefail
-APP_DIR="${APP_DIR:-/opt/bbc}"; cd "$APP_DIR"
-ENV_FILE="$APP_DIR/infra/env/production.env"
+# Work from the script's own location so this works whether infra/ is at the repo root
+# (after the monorepo assembly) or nested under isolated/ (today).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]]; then
+  INFRA_DIR="$SCRIPT_DIR"
+elif [[ -f "$SCRIPT_DIR/../docker-compose.yml" ]]; then
+  INFRA_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
+  INFRA_DIR="$SCRIPT_DIR"
+fi
+APP_DIR="$(cd "$INFRA_DIR/.." && pwd)"
+cd "$APP_DIR"
+ENV_FILE="$INFRA_DIR/env/production.env"
 source <(grep -E '^(OPS_WEBHOOK|SEC_WEBHOOK)=' "$ENV_FILE" || true)
 notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
 STAMP=$(date +%Y%m%d-%H%M%S); VOL="bbc_restoretest_$STAMP"; CT="bbc-restoretest-$STAMP"

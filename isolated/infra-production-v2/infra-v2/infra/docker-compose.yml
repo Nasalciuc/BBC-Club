@@ -23,7 +23,9 @@ services:
       - ./caddy/well-known:/srv/well-known:ro
       - caddy_data:/data
       - caddy_config:/config
-    env_file: [${ENV_FILE:-./env/production.env}]
+    env_file:
+      - path: "${ENV_FILE:-./env/production.env}"
+        required: false
     # deliberately NOT depends_on api: a dead upstream is a 502, not a dead Caddy (certs must keep renewing)
     deploy: { resources: { limits: { memory: 128m } } }
 
@@ -32,7 +34,9 @@ services:
     image: ${API_IMAGE:?API_IMAGE must be a SHA-tagged image}
     <<: [*restart, *logging]
     networks: [edge, data]
-    env_file: [${ENV_FILE:-./env/production.env}]
+    env_file:
+      - path: "${ENV_FILE:-./env/production.env}"
+        required: false
     environment:
       PORT: "8000"
       DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
@@ -51,7 +55,9 @@ services:
     image: bbc-postgres:16
     <<: [*restart, *logging]
     networks: [data]
-    env_file: [${ENV_FILE:-./env/production.env}]   # PGBACKREST_* options live in the env file
+    env_file:
+      - path: "${ENV_FILE:-./env/production.env}"
+        required: false   # so `compose config` works on a checkout that only has *.example; deploy/bootstrap always pass the real 600 file
     environment:
       POSTGRES_USER: bbc
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -83,7 +89,9 @@ services:
     networks: [edge]
     entrypoint: ["/bin/sh", "/etc/cron/run.sh"]
     volumes: ["./cron:/etc/cron:ro"]
-    environment: { API_URL: "http://api:8000", INTERNAL_API_SECRET: "${INTERNAL_API_SECRET}" }
+    environment:
+      API_URL: "http://api:8000"
+      INTERNAL_API_SECRET: "${INTERNAL_API_SECRET}"
     depends_on: { api: { condition: service_healthy } }
     deploy: { resources: { limits: { memory: 64m } } }
 
@@ -92,7 +100,9 @@ services:
     <<: [*restart, *logging]
     networks: [data]
     command: server /data --console-address ":9001"
-    environment: { MINIO_ROOT_USER: "${MINIO_USER}", MINIO_ROOT_PASSWORD: "${MINIO_PASSWORD}" }
+    environment:
+      MINIO_ROOT_USER: "${MINIO_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_PASSWORD}"
     volumes: ["minio_data:/data"]
     healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 15s, timeout: 5s, retries: 5 }
     deploy: { resources: { limits: { memory: 256m } } }

@@ -20,7 +20,7 @@ curl -s localhost:8000/metrics | grep -E 'queue_pending|queue_dead|queue_oldest'
 ```bash
 bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: deploy.sh staging <image>
 ```
-Seven steps with automatic rollback if `/ready` stays red for 60 s. **Never deploy `:latest` to production** — the compose file refuses it.
+Seven steps with automatic rollback if `/ready` stays red for 60 s. **Never deploy `:latest` to production** — the compose file refuses it. `deploy.sh` rejects any image that is not tagged with a commit SHA.
 
 ## Roll back right now
 ```bash
@@ -56,6 +56,7 @@ bash infra/restore.sh --to-time "2026-09-11 14:00:00+00" # point in time
 ```
 Backups run inside the postgres container (pgbackrest lives there); schedule is in `/etc/cron.d/bbc`: full 01:30 UTC daily, diff every 6 h, restore drill on the 1st at 06:00.
 Asks twice. RTO ≈ 45 min, RPO ≈ 5 min (continuous WAL). **Drill it monthly** — the cron job `restore-test` does it automatically; if `#bbc-ops` has not shown "restore drill ok" this month, run `bash infra/restore-test.sh` by hand.
+The script aborts before starting the API if Postgres does not come back or the restored database does not contain all 8 schemas.
 
 ## Rotate a secret
 ```bash
@@ -81,7 +82,8 @@ Inbox rows already exist, so nothing is lost — pushes are late, not missing.
 ## Disk filling up (alert at 70 %)
 ```bash
 df -h /; docker system df
-docker image prune -af; docker builder prune -af
+docker image prune -f; docker builder prune -af
+# `-af` would delete the previous release image that `deploy.sh` needs for rollback.
 docker compose ... exec -T postgres psql -U bbc -d bbc -c "SELECT platform.drop_old_event_partitions(24);"
 ```
 Log rotation is configured (10 MB × 5 per service); if a service escapes it, that is the bug.
@@ -95,14 +97,13 @@ Everything above is runnable by anyone with SSH. Credentials are in the company 
 
 ---
 ## First-day checklist on a new machine
-1. `curl -fsSL <raw>/infra/bootstrap.sh | sudo bash -s -- staging` (or `production`)
-2. Fill `infra/env/<mode>.env`, re-run the script
+1. `curl -fsSL https://raw.githubusercontent.com/Nasalciuc/BBC-Club/main/isolated/infra-production-v2/infra-v2/infra/bootstrap.sh | sudo bash -s -- production`
+2. Fill `infra/env/<mode>.env`, re-run the script (bootstrap runs migrations once Postgres is ready)
 3. Point DNS at the host; wait for Caddy to get a certificate
-4. `docker compose ... run --rm api bun run --filter @bbc/db db:migrate`
-5. Production only: `bash infra/pgbackrest-init.sh`
-6. `bash infra/restore-test.sh` — **before any real data exists**
-7. Add the Uptime Kuma monitors: `/health` (1 min), `/ready` (5 min), and an external ping from a free service
-8. Store every secret in the password manager
+4. Production only: `bash infra/pgbackrest-init.sh`
+5. `bash infra/restore-test.sh` — **before any real data exists**
+6. Add the Uptime Kuma monitors: `/health` (1 min), `/ready` (5 min), and an external ping from a free service
+7. Store every secret in the password manager
 
 ## Staging on the same box
 `bash infra/deploy.sh staging <image>` — separate database, separate secrets (`infra/env/staging.env`), same Caddy (second domain). Move it to its own machine at the first real offer (ADR-IMPL-010 §7).

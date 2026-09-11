@@ -4,12 +4,28 @@
 #   bash infra/deploy.sh staging    ghcr.io/nasalciuc/bbc-api:8f3c21a
 set -Eeuo pipefail
 MODE="${1:?usage: deploy.sh <production|staging> <image:sha>}"; IMAGE="${2:?image with a SHA tag}"
-[[ "$IMAGE" != *:latest ]] || { echo "❌ never :latest"; exit 1; }
-APP_DIR="${APP_DIR:-/opt/bbc}"; cd "$APP_DIR"
-PROD_ENV="$APP_DIR/infra/env/production.env"; STG_ENV="$APP_DIR/infra/env/staging.env"
+[[ "$IMAGE" =~ ^[^:]+:[0-9a-f]{7,40}$ ]] || { echo "❌ image must be tagged with a commit SHA (got: $IMAGE)"; exit 1; }
+# Work from the script's own location so this works whether infra/ is at the repo root
+# (after the monorepo assembly) or nested under isolated/ (today).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]]; then
+  INFRA_DIR="$SCRIPT_DIR"
+elif [[ -f "$SCRIPT_DIR/../docker-compose.yml" ]]; then
+  INFRA_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
+  INFRA_DIR="$SCRIPT_DIR"
+fi
+APP_DIR="$(cd "$INFRA_DIR/.." && pwd)"
+cd "$APP_DIR"
+PROD_ENV="$INFRA_DIR/env/production.env"; STG_ENV="$INFRA_DIR/env/staging.env"
 export ENV_FILE="$PROD_ENV"
-DC="docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file $PROD_ENV"
-[[ -f "$STG_ENV" ]] && DC="$DC -f infra/compose.staging.yml"
+if [[ "$MODE" == "staging" ]]; then
+  [[ -f "$STG_ENV" ]] || { echo "❌ $STG_ENV missing"; exit 1; }
+  DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml -f $INFRA_DIR/compose.staging.yml --env-file $PROD_ENV --env-file $STG_ENV"
+else
+  DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml --env-file $PROD_ENV"
+  [[ -f "$STG_ENV" ]] && DC="$DC -f $INFRA_DIR/compose.staging.yml --env-file $STG_ENV"   # keep staging running while deploying production
+fi
 
 if [[ "$MODE" == "production" ]]; then SVC=api; PG=postgres; VAR=API_IMAGE; ENVF="$PROD_ENV"; else SVC=api-staging; PG=postgres-staging; VAR=API_IMAGE_STAGING; ENVF="$STG_ENV"; fi
 source <(grep -E '^(OPS_WEBHOOK|SEC_WEBHOOK)=' "$PROD_ENV" || true)
