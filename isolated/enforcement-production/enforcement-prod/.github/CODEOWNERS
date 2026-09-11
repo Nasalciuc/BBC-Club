@@ -1,0 +1,10 @@
+# Contracts and the platform change only with the integrator's review.
+packages/shared/**                     @Nasalciuc
+packages/modules/platform/**           @Nasalciuc
+packages/db/migrations/**              @Nasalciuc
+.dependency-cruiser.cjs                @Nasalciuc
+eslint.config.mjs                      @Nasalciuc
+eslint-rules/**                        @Nasalciuc
+apps/api/src/index.ts                  @Nasalciuc
+apps/api/src/middleware/**             @Nasalciuc
+DESIGN.md                              @Nasalciuc

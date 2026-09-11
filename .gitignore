@@ -41,3 +41,13 @@ example
 # generated native folders
 /ios
 /android
+
+# Expo Graphify at repo root stays local
+/graphify-out/
+
+# Isolated backend snapshots are tracked. Machine-local Graphify sidecars stay out.
+isolated/graphify-out/cost.json
+isolated/graphify-out/.graphify_python
+isolated/graphify-out/.graphify_root
+isolated/graphify-out/cache/
+isolated/graphify-out/.vocab.txt
