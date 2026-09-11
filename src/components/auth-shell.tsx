@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import { Href, useRouter } from "expo-router";
 import { PropsWithChildren, ReactNode } from "react";
 import {
   KeyboardAvoidingView,
@@ -17,7 +18,7 @@ type Logo = "none" | "left" | "center";
 
 type Props = PropsWithChildren<{
   footer?: ReactNode;
-  onBack?: () => void;
+  onBack?: Href;
   logo?: Logo;
   heroPercent?: number;
   panelRadius?: number;
@@ -33,8 +34,19 @@ export function AuthShell({
   panelRadius = Club.radius.panel,
   testID = "authShell.back",
 }: Props) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const top = Math.max(insets.top, Club.space.md) + Club.space.xs;
+
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    if (onBack) {
+      router.replace(onBack);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -56,7 +68,7 @@ export function AuthShell({
               testID={testID}
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              onPress={onBack}
+              onPress={goBack}
               hitSlop={Club.space.xs}
               style={[styles.back, { top }]}
             >

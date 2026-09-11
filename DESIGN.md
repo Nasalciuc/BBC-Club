@@ -286,7 +286,7 @@ Documented in `design/components.md`. Summary of the rules an agent most often g
 - Nothing communicated by color alone (the palette has no semantic hues to rely on).
 
 ## Motion
-- Motion explains a change of state; it never decorates. Entrance: staggered fade + 12px rise, 150ms apart, ease-out, ≤2.5s total. Screen push 300ms ease-out; pop ease-in. Press 120ms. No bounce, no spring overshoot.
+- Motion explains a change of state; it never decorates, except the approved Ken Burns on Welcome's cabin photograph (once per session; `design/motion.md`). Entrance: staggered fade + 12px rise, 150ms apart, ease-out, last beat starts at 1.6s and finishes by 2.5s. Screen push/pop may slide horizontally; nothing inside a screen enters from the side. Press 120ms. No bounce, no spring overshoot.
 - Reduced motion: replace movement with opacity only. Details in `design/motion.md`.
 
 ## Iconography

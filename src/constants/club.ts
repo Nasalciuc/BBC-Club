@@ -35,6 +35,9 @@ export const Club = {
     panel: 24,
     pill: 999,
   },
+  layout: {
+    phoneMaxWidth: 430,
+  },
   type: {
     // TODO(design): swap to Newsreader when ratified
     display: {

@@ -14,6 +14,7 @@ function hasNumberOrSymbol(value: string) {
 
 export default function SetPasswordScreen() {
   const router = useRouter();
+  // ADR-PROD-001: verify-code pushes email, purpose, otp on this route. Read them at identity wiring.
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -24,7 +25,7 @@ export default function SetPasswordScreen() {
   return (
     <AuthShell
       heroPercent={0.25}
-      onBack={() => router.back()}
+      onBack="/sign-in"
       footer={
         <ClubButton
           testID="setPassword.continue"

@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { Club } from "@/constants/club";
@@ -11,7 +12,11 @@ const RESEND_SECONDS = 30;
 
 export default function VerifyCodeScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams<{ email?: string }>();
+  const { email, purpose: purposeParam } = useLocalSearchParams<{
+    email?: string;
+    purpose?: string;
+  }>();
+  const purpose = parseAuthPurpose(purposeParam);
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState("");
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
@@ -28,7 +33,7 @@ export default function VerifyCodeScreen() {
 
   return (
     <AuthShell
-      onBack={() => router.back()}
+      onBack="/sign-in"
       footer={
         <ClubButton
           testID="verify.submit"
@@ -38,7 +43,11 @@ export default function VerifyCodeScreen() {
           onPress={() =>
             router.push({
               pathname: "/set-password",
-              params: { email: email ?? "" },
+              params: {
+                email: email ?? "",
+                purpose,
+                otp: code,
+              },
             })
           }
         />

@@ -14,7 +14,7 @@ export default function ResetPasswordScreen() {
 
   return (
     <AuthShell
-      onBack={() => router.back()}
+      onBack="/sign-in"
       footer={
         <ClubButton
           testID="reset.send"
@@ -23,9 +23,9 @@ export default function ResetPasswordScreen() {
           disabled={!canSend}
           onPress={() =>
             router.push({
-              pathname: "/verify-code",
-              params: { email: email.trim() },
-            })
+                pathname: "/verify-code",
+                params: { email: email.trim(), purpose: "reset" },
+              })
           }
         />
       }
