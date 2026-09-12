@@ -27,7 +27,7 @@ if ! command -v docker >/dev/null; then
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $VERSION_CODENAME stable" > /etc/apt/sources.list.d/docker.list
   apt-get update -qq && apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
-CV=$(docker compose version --short 2>/dev/null | sed 's/^v//')
+CV=$(docker compose version --short 2>/dev/null | sed 's/^v//' || true)
 if [ -z "$CV" ] || [ "$(printf '%s\n2.24.0\n' "$CV" | sort -V | head -1)" != "2.24.0" ]; then
   echo "❌ docker compose >= 2.24.0 required (env_file.required); found: ${CV:-none}"
   echo "   apt-get install --only-upgrade docker-compose-plugin"
@@ -111,6 +111,15 @@ for i in {1..30}; do $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>
 $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres never became ready"; exit 1; }
 $DC run --rm --no-deps api bun run --filter @bbc/db db:migrate      # schema exists before anything serves traffic
 $DC run --rm --no-deps api bun run scripts/seed-flags.ts || { echo "❌ flag seeding failed"; exit 1; }
+if [[ "$WITH_STAGING" == "--with-staging" ]]; then
+  $DC up -d postgres-staging
+  for i in {1..30}; do $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
+  $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres-staging never became ready"; exit 1; }
+  $DC run --rm --no-deps api-staging bun run --filter @bbc/db db:migrate \
+    || { echo "❌ staging migration failed — is API_IMAGE_STAGING a real published SHA tag?"; exit 1; }
+  $DC run --rm --no-deps api-staging bun run scripts/seed-flags.ts \
+    || { echo "❌ staging flag seeding failed — is API_IMAGE_STAGING a real published SHA tag?"; exit 1; }
+fi
 $DC up -d
 
 say "9/9 waiting for api /ready"

@@ -19,10 +19,9 @@ try {
                          ON CONFLICT (key) DO NOTHING`);
     console.log(`flag ensured: ${key}`);
   }
-  process.exit(0);
 } catch (e) {
   console.error("seed-flags failed:", e);
-  process.exit(1);
+  process.exitCode = 1;        // not exit() — finally must run
 } finally {
-  await db.close();
+  await db.close();            // now this actually happens
 }
