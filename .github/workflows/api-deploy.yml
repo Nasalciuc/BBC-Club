@@ -1,28 +1,29 @@
 # Live workflow — GitHub only loads .github/workflows/ at the repository root.
 # Snapshot copy: isolated/infra-production-v2/infra-v2/.github/workflows/api-deploy.yml
 name: api-deploy
+# DISABLED until the monorepo assembly lands (PLAN.md → D2).
+# The Docker build needs bun.lock, turbo.json, tsconfig.base.json, apps/api/ and packages/ at the context
+# root; today none of them exist. Re-enable by restoring the push trigger below and setting
+# `context: .` with `file: apps/api/Dockerfile`.
 on:
-  push:
-    branches: [main]
-    # After the monorepo assembly these become infra/**, apps/api/**, packages/**.
-    paths:
-      - "apps/api/**"
-      - "packages/**"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/api-deploy.yml"
-      - "isolated/infra-production-v2/infra-v2/**"
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       target:
         description: "staging | production"
         required: true
-        default: "staging"
+        default: staging
+      confirm_assembled:
+        description: "type ASSEMBLED to confirm the monorepo layout exists"
+        required: true
+        default: ""
+# on:
+#   push:
+#     branches: [main]
+#     paths: ["apps/api/**", "packages/**", "package.json", "bun.lock", ".github/workflows/api-deploy.yml"]
+#     tags: ["v*"]
 
 permissions:
   contents: read
-  packages: write
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
@@ -30,9 +31,17 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
     steps:
+      - name: refuse to run before the monorepo assembly
+        if: inputs.confirm_assembled != 'ASSEMBLED'
+        run: |
+          echo "::error::This workflow needs the assembled monorepo (bun.lock, turbo.json, apps/api, packages at the context root)."
+          exit 1
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -58,7 +67,9 @@ jobs:
 
   staging:
     needs: build
-    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -67,12 +78,19 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
-          # After the assembly this is simply: bash ${APP_DIR}/infra/deploy.sh (APP_DIR defaults to /opt/bbc)
-          script: bash "$(find /opt/bbc -maxdepth 5 -type f -name deploy.sh -path '*/infra/deploy.sh' | head -1)" staging ${{ needs.build.outputs.image }}
+          script: |
+            set -euo pipefail
+            APP_DIR="${APP_DIR:-/opt/bbc}"
+            cd "$APP_DIR"
+            git fetch -q --all
+            git checkout -q ${{ github.sha }}
+            bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" staging ${{ needs.build.outputs.image }}
 
   production:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
     runs-on: ubuntu-latest
     environment: production            # protected: requires manual approval in GitHub → Environments
     steps:
@@ -82,5 +100,9 @@ jobs:
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/bbc && git fetch -q && git checkout -q ${{ github.sha }}
-            bash "$(find /opt/bbc -maxdepth 5 -type f -name deploy.sh -path '*/infra/deploy.sh' | head -1)" production ${{ needs.build.outputs.image }}
+            set -euo pipefail
+            APP_DIR="${APP_DIR:-/opt/bbc}"
+            cd "$APP_DIR"
+            git fetch -q --all
+            git checkout -q ${{ github.sha }}
+            bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" production ${{ needs.build.outputs.image }}

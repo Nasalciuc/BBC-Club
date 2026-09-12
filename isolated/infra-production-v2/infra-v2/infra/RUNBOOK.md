@@ -97,7 +97,20 @@ Everything above is runnable by anyone with SSH. Credentials are in the company 
 
 ---
 ## First-day checklist on a new machine
-1. `curl -fsSL https://raw.githubusercontent.com/Nasalciuc/BBC-Club/main/isolated/infra-production-v2/infra-v2/infra/bootstrap.sh | sudo bash -s -- production`
+0. Publish an API image first. `production.env.example` ships `API_IMAGE=…:REPLACE_WITH_SHA` and bootstrap
+   starts Compose, so a placeholder tag makes the first pull fail. Either run the deploy workflow once to
+   push a SHA-tagged image and set `API_IMAGE` to it, or build on the host:
+   `docker build -f apps/api/Dockerfile -t ghcr.io/nasalciuc/bbc-api:$(git rev-parse --short HEAD) .`
+   (both require the assembled monorepo — see PLAN.md D2).
+1. Bootstrap from a **pinned commit**, never from `main` — piping a mutable branch into `sudo bash` runs
+   whatever is on it at that moment:
+   ```bash
+   SHA=<the reviewed commit sha>
+   BASE=https://raw.githubusercontent.com/Nasalciuc/BBC-Club/$SHA/isolated/infra-production-v2/infra-v2/infra
+   curl -fsSL "$BASE/bootstrap.sh" -o /tmp/bootstrap.sh
+   sha256sum /tmp/bootstrap.sh    # compare with the checksum in the PR / release notes
+   sudo bash /tmp/bootstrap.sh production
+   ```
 2. Fill `infra/env/<mode>.env`, re-run the script (bootstrap runs migrations once Postgres is ready)
 3. Point DNS at the host; wait for Caddy to get a certificate
 4. Production only: `bash infra/pgbackrest-init.sh`

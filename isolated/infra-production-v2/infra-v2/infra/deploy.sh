@@ -5,6 +5,7 @@
 set -Eeuo pipefail
 MODE="${1:?usage: deploy.sh <production|staging> <image:sha>}"; IMAGE="${2:?image with a SHA tag}"
 [[ "$IMAGE" =~ ^[^:]+:[0-9a-f]{7,40}$ ]] || { echo "❌ image must be tagged with a commit SHA (got: $IMAGE)"; exit 1; }
+[[ "$MODE" =~ ^(production|staging)$ ]] || { echo "❌ MODE must be exactly 'production' or 'staging' (got: $MODE)"; exit 1; }
 # Work from the script's own location so this works whether infra/ is at the repo root
 # (after the monorepo assembly) or nested under isolated/ (today).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

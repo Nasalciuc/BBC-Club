@@ -27,6 +27,12 @@ if ! command -v docker >/dev/null; then
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $VERSION_CODENAME stable" > /etc/apt/sources.list.d/docker.list
   apt-get update -qq && apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
+CV=$(docker compose version --short 2>/dev/null | sed 's/^v//')
+if [ -z "$CV" ] || [ "$(printf '%s\n2.24.0\n' "$CV" | sort -V | head -1)" != "2.24.0" ]; then
+  echo "❌ docker compose >= 2.24.0 required (env_file.required); found: ${CV:-none}"
+  echo "   apt-get install --only-upgrade docker-compose-plugin"
+  exit 1
+fi
 # global log rotation: covers `docker compose run --rm` containers that per-service options miss
 cat > /etc/docker/daemon.json << 'JSON'
 { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "5" }, "live-restore": true }
@@ -83,14 +89,16 @@ if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   STG="$INFRA_DIR/env/staging.env"
   [[ -f "$STG" ]] || { install -m 600 "$INFRA_DIR/env/staging.env.example" "$STG"; echo "⚠ fill $STG and re-run"; exit 2; }
   chmod 600 "$STG"
+  chown root:root "$STG"
   stg_missing=(); for k in POSTGRES_PASSWORD_STAGING BETTER_AUTH_SECRET INTERNAL_API_SECRET_STAGING API_IMAGE_STAGING APP_ORIGIN; do
     grep -qE "^${k}=.+" "$STG" || stg_missing+=("$k"); done
   [[ ${#stg_missing[@]} -eq 0 ]] || { echo "❌ missing in $STG: ${stg_missing[*]}"; exit 2; }
 fi
 
 say "7/9 host cron (backups, restore drill, disk check)"
-sed "s|%APP_DIR%|$APP_DIR|g" "$INFRA_DIR/host/crontab" > /etc/cron.d/bbc
-chmod 644 /etc/cron.d/bbc
+APP_DIR_ESC=$(printf '%s' "$APP_DIR" | sed -e 's/[&|\\]/\\&/g')
+sed "s|%APP_DIR%|${APP_DIR_ESC}|g" "$INFRA_DIR/host/crontab" > /etc/cron.d/bbc
+chmod 644 /etc/cron.d/bbc && chown root:root /etc/cron.d/bbc
 
 say "8/9 start (database → migrations → API and ingress)"
 DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml --env-file $ENV_FILE"
@@ -102,6 +110,7 @@ $DC up -d postgres
 for i in {1..30}; do $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
 $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres never became ready"; exit 1; }
 $DC run --rm --no-deps api bun run --filter @bbc/db db:migrate      # schema exists before anything serves traffic
+$DC run --rm --no-deps api bun run scripts/seed-flags.ts || { echo "❌ flag seeding failed"; exit 1; }
 $DC up -d
 
 say "9/9 waiting for api /ready"
