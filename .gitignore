@@ -64,3 +64,8 @@ graphify-out/
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+
+# ── agent skills ─────────────────────────────────────────────────────────────
+# Vendor documentation, pinned by skills-lock.json and reinstalled with one command.
+# skills-lock.json IS committed — that is what makes the install reproducible.
+.agents/skills/
