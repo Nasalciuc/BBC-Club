@@ -1,15 +1,14 @@
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
-import { emailOTPClient, adminClient } from "better-auth/client/plugins";
+import { emailOTPClient } from "better-auth/client/plugins";
 import * as SecureStore from "expo-secure-store";
-import { ac, roles } from "@bbc/identity/access";   // shared access control (type-safe permissions)
+// Roles are server-side only (ADR-IMPL-006); the app never needs the admin client.
 
 export const authClient = createAuthClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL!,      // validated at app start in lib/env.ts
   plugins: [
     expoClient({ scheme: "bbcclub", storagePrefix: "bbcclub", storage: SecureStore }),
     emailOTPClient(),
-    adminClient({ ac, roles }),
   ],
 });
 export const { useSession } = authClient;
