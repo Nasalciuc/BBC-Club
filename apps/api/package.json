@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": { "./registry": "./src/registry.ts", "./middleware/authorize": "./src/middleware/authorize.ts", "./middleware/principal": "./src/middleware/principal.ts" },
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
@@ -17,6 +18,12 @@
     "@bbc/shared": "workspace:*",
     "@bbc/platform": "workspace:*",
     "@bbc/identity": "workspace:*",
-    "@bbc/email": "workspace:*"
+    "@bbc/email": "workspace:*",
+    "@bbc/members": "workspace:*",
+    "@bbc/notifications": "workspace:*",
+    "@bbc/proposals": "workspace:*",
+    "@bbc/engagement": "workspace:*",
+    "@bbc/crm": "workspace:*",
+    "@bbc/push": "workspace:*"
   }
 }

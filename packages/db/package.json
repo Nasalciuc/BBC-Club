@@ -20,11 +20,11 @@
     "test": "bun test"
   },
   "dependencies": {
-    "drizzle-orm": "^1.0.0",
+    "drizzle-orm": "1.0.0-rc.4",
     "postgres": "^3.4.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^1.0.0"
+    "drizzle-kit": "1.0.0-rc.4"
   }
 }

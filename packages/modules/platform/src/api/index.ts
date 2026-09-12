@@ -44,3 +44,6 @@ export { type Handler, type HandlerContext, type EventDefinition } from "../even
 export { type Flags } from "../flags";
 export { type Jobs } from "../jobs";
 export { type Logger, type Metrics } from "../telemetry";
+
+/** The host imports this from "@bbc/platform"; it is defined in jobs/builtin.ts. */
+export { registerPlatformJobs } from "../jobs/builtin";

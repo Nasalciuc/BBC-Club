@@ -1,0 +1,22 @@
+{
+  "name": "@bbc/identity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/api/index.ts",
+    "./module": "./src/module.ts",
+    "./ports/email": "./src/ports/email.ts",
+    "./access": "./src/infrastructure/access.ts"
+  },
+  "scripts": { "test:db": "bun test tests", "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@bbc/db": "workspace:*",
+    "@bbc/shared": "workspace:*",
+    "@better-auth/expo": "~1.6.0",
+    "better-auth": "~1.6.0",
+    "drizzle-orm": "1.0.0-rc.4",
+    "hono": "^4.7.0",
+    "zod": "^3.24.0"
+  }
+}

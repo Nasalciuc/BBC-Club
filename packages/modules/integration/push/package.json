@@ -1,0 +1,4 @@
+{ "name": "@bbc/push", "version": "0.1.0", "private": true, "type": "module",
+  "exports": { ".": "./src/index.ts", "./module": "./src/module.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "@bbc/shared": "workspace:*" } }

@@ -25,6 +25,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.0",
     "turbo": "^2.5.0",
     "typescript": "^5.8.0",
     "eslint": "^9.20.0",

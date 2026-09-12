@@ -1,0 +1,25 @@
+{
+  "name": "@bbc/engagement",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/api/index.ts",
+    "./module": "./src/module.ts",
+    "./schema": "./src/infrastructure/schema.ts"
+  },
+  "scripts": {
+    "test:unit": "bun test tests/unit",
+    "test:db": "bun test tests/contract tests/handlers",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "1.0.0-rc.4",
+    "hono": "^4.7.0",
+    "zod": "^3.24.0",
+    "@bbc/api": "workspace:*",
+    "@bbc/shared": "workspace:*",
+    "@bbc/db": "workspace:*",
+    "@bbc/platform": "workspace:*"
+  }
+}

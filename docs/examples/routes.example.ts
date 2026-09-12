@@ -1,3 +1,4 @@
+// @ts-nocheck — illustration of route registration + authorize(); lives outside apps/api and is not compiled.
 import { Hono } from "hono";
 import { resolvePrincipal, type PrincipalVars, err } from "./middleware/principal";
 import { authorize, registerRoute } from "./middleware/authorize";

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { ModuleDescriptor } from "@bbc/api/registry";
+import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/api/middleware/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { respond, RespondInput } from "./application/respond";
