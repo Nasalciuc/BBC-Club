@@ -1,0 +1,39 @@
+---
+description: Rules for Drizzle schemas, migrations and queries
+globs: **/schema.ts,**/schema/**/*.ts,**/migrations/**,**/*.repo.ts,packages/db/**
+alwaysApply: false
+---
+
+Drizzle 1.x on PostgreSQL 16. **One Postgres schema per module** (`pgSchema("proposals")`), and a table has
+exactly one owning module.
+
+**Invariants live in the database, not in TypeScript:**
+- states are `pgEnum`, never `text` with a TS union — Postgres must refuse an unknown value;
+- CHECK constraints for ranges and consistency (`price > 0`, `published_price >= price`,
+  `(targeting = 'user') = (target_member_id IS NOT NULL)`, `(status = 'deleted') = (deleted_at IS NOT NULL)`);
+- UNIQUE for idempotency, scoped to the parent (`idempotency_key`, `(member_id, offer_id, category)`);
+- `NOT NULL` explicitly — Drizzle columns are nullable by default;
+- `timestamptz` only; money is `numeric(10,2)`; IATA and currency are `char(3)`.
+
+**Every table has `created_at`.** `updated_at` only where rows change, and always with the database trigger
+(`$onUpdate` does not fire for raw SQL). Immutable tables (journal, inbox, runs) have neither.
+
+**Every reference column is indexed** — Postgres creates indexes for PK and UNIQUE, not for foreign keys.
+Each hot query gets its own, often partial, index named `<table>_<purpose>`.
+
+**Foreign keys with `onDelete` only inside a module.** Across modules: opaque ids, events, idempotent
+handlers, and the "zero rows" deletion test.
+
+**Every transient row expires** — `expires_at`, `last_seen_at`, `deleted_at` plus a purge job, monthly
+partitions with retention. Data that never dies becomes debt.
+
+**Counters are atomic:** `INSERT … ON CONFLICT DO UPDATE SET count = count + 1`, never `SELECT` then
+`UPDATE`. Queues use `FOR UPDATE SKIP LOCKED`; singleton jobs use `pg_try_advisory_lock`.
+
+**Repositories take an `Executor`** (a db or a transaction) so use cases own the transaction boundary.
+Raw `sql` only in `infrastructure/`, for what Drizzle cannot express.
+
+**Never edit an applied migration.** New change, new numbered file, expand-only (the old code must keep
+working against the new schema).
+
+**Scripts that destroy data** (seed, reset) refuse to run unless `NODE_ENV` is development or test.

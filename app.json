@@ -39,6 +39,11 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "extra": {
+      "eas": {
+        "projectId": "2b5d951a-4c19-4141-9829-0ba480b24a47"
+      }
+    },
     "web": {
       "bundler": "metro",
       "output": "static",

@@ -1,0 +1,26 @@
+---
+description: What this repository is and the three rules that apply everywhere
+alwaysApply: true
+---
+
+BBC Club is a private members' app for a business-class flight concierge: existing clients sign in,
+receive personalised flight proposals curated by a human advisor, tap "I'm interested", and the advisor
+calls them. No booking, no payment, no search inside the app.
+
+Today the repository holds two things that must not mix:
+- `src/` — the Expo app (SDK 57, RN 0.86, React 19.2, React Compiler ON, Expo Router, Reanimated 4).
+- `isolated/` — reference backend packages (Hono API, Drizzle/Postgres, event journal, Better Auth, authz)
+  that are **not** wired to the app yet. They are snapshots waiting for the monorepo assembly.
+
+Three rules with no exceptions:
+1. **Never import anything from `isolated/` into `src/`.** The app talks to the API over HTTPS; it never
+   imports Drizzle, the journal, the host or authz. A type you need from the backend belongs in a shared
+   contracts package, not in a direct import.
+2. **Never invent an API signature.** Before using a library call, check it against the installed version
+   (`@Docs`, the Expo skills, or `node_modules`). This project has already been bitten by Reanimated 3
+   syntax on Reanimated 4 and by assumed Better Auth methods.
+3. **Secrets never travel in navigation params, URLs, logs or event payloads** — no OTP, no token, no
+   password. Route params are public.
+
+When a decision is not obvious, read `AGENTS.md`, then `DESIGN.md`, then `docs/adr/`. If it is still not
+obvious, say so in the answer instead of guessing.

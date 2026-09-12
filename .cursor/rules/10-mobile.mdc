@@ -1,0 +1,36 @@
+---
+description: Rules for the Expo app
+globs: src/**/*.ts,src/**/*.tsx,app.json,babel.config.js
+alwaysApply: false
+---
+
+**React Compiler is ON.** Never write `useMemo`, `useCallback` or `memo` — manual memoisation is a bug
+here, not an optimisation.
+
+**Animation:** `react-native-reanimated` only. Never import `Animated` or `Easing` from `react-native`.
+On Reanimated 4 use `sharedValue.get()` / `sharedValue.set(…)`, not `.value`.
+
+**Styling:** every colour, size, radius and spacing comes from `src/constants/club.ts` (the `Club` object).
+No inline hex, no `rgba(...)`, no magic numbers. If a token is missing, say so — do not invent one.
+The tokens mirror `DESIGN.md`; that file is the source of truth and is not edited casually.
+
+**Typography roles** (do not swap them): `display`/`headline`/`title` are serif; body text is Inter;
+flight facts and field labels are JetBrains Mono, uppercase for labels.
+
+**Every interactive element needs `testID="screen.element"`** (`signIn.submit`, `verify.code`,
+`setPassword.continue`). Maestro flows depend on these names.
+
+**Accessibility:** `accessibilityRole` and `accessibilityLabel` on everything tappable; tap targets ≥ 44 pt
+(use `hitSlop` on text links).
+
+**Navigation:** Expo Router. Route params carry `email` and `purpose` only — never `otp`, `code`, `token`
+or `password` (Expo Router serialises params into the URL on web and into persisted state everywhere).
+A one-time code lives in component state or in `src/features/auth/otp-holder.ts`, which is cleared when the
+auth stack unmounts.
+
+**Forbidden imports:** `@bbc/db`, `@bbc/platform`, `@bbc/api`, anything under `isolated/` or
+`packages/modules/`; `@react-native-async-storage/async-storage` (use MMKV for cache, `expo-secure-store`
+for secrets); `react-native-fast-image` (use `expo-image`).
+
+**Never run the app yourself** (`expo start`, `expo run:ios`, simulators). Produce the code and give the
+commands for the human to run.
