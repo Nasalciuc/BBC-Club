@@ -1,0 +1,35 @@
+---
+description: Rules for compose files, Caddy, shell scripts and GitHub workflows
+globs: infra/**,isolated/infra-production-v2/**,.github/workflows/**,**/Dockerfile,**/*.sh
+alwaysApply: false
+---
+
+**A config file is not written until a parser has read it.** Before proposing a change, run — and paste the
+output of — the relevant check:
+- `docker compose -f <file> --env-file <env> config -q`
+- `actionlint <workflow>`
+- `bash -n <script>` (and `shellcheck` when available)
+This project has already shipped a compose file and a workflow that could not be loaded at all, because
+`${VAR}` inside a YAML flow sequence (`env_file: [${ENV_FILE:-…}]`, `concurrency: { group: ${{ … }} }`) is
+parsed as syntax. **Always quote interpolated values, or use block style.**
+
+**Scripts must not assume a layout.** Derive paths from the script's own location
+(`SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`), never hard-code `/opt/bbc/infra`. The infra
+tree moves to the repository root during the monorepo assembly.
+
+**Failures are loud.** `set -Eeuo pipefail`; no `|| true` on a step whose failure matters (a failed
+`git checkout` must stop bootstrap, not start the old revision and report success). A readiness loop must
+check its result after the loop, not rely on the exit status of `sleep`.
+
+**Release contract:** images are tagged with a commit SHA (`^[^:]+:[0-9a-f]{7,40}$`); `:latest` and mutable
+tags are rejected. Migrations run as a separate job before the API starts, expand-only. If `/ready` stays
+red for 60 s, roll back automatically.
+
+**Exposure:** only Caddy (80/443) and SSH (22) listen on the internet. Postgres, MinIO, Redis, GlitchTip and
+Uptime Kuma stay on an internal Docker network and are reached through an SSH tunnel. Behind Cloudflare,
+`trusted_proxies` **and** `trusted_proxies_strict` are both required — without strict parsing a spoofed
+`X-Forwarded-For` reaches the `client_ip` matcher.
+
+**Secrets** live in a root-owned `600` env file, are rotated with a double window (`KEY_NEXT` accepted
+alongside `KEY`), and never appear in a repository, a log or a workflow file. Pin every GitHub Action to a
+full commit SHA — these workflows carry `packages: write` and an SSH key.

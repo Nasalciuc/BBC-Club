@@ -1,0 +1,33 @@
+---
+description: Rules for the backend reference packages
+globs: isolated/**/*.ts,packages/**/*.ts,apps/api/**/*.ts
+alwaysApply: false
+---
+
+This is a **modular monolith**: one process, one Postgres, modules with enforced boundaries.
+
+**Two ways modules talk, and no third.** Questions → a direct call to another module's `api/index.ts`
+facade. Facts → an event published through the journal: `platform.events.publish(tx, …)` **inside the
+caller's transaction**. Never import another module's `application/`, `infrastructure/`, `handlers/` or
+`schema.ts`. Never JOIN across Postgres schemas. Never open a transaction that writes to two modules.
+
+**Handlers are at-least-once and must be idempotent.** A delivery can arrive twice; the second one must
+produce no second effect (unique constraints, upserts, `ON CONFLICT DO NOTHING`). Check state at the moment
+of the action — the dispatcher re-reads the offer and the profile before sending, `respond` re-reads the
+offer before writing.
+
+**Authorization has two layers.** Route level: `authorize("resource:action")` on every route, registered
+with `registerRoute` (deny by default; an inventory test enforces it). Resource level: ownership lives in
+the SQL `WHERE` (`WHERE id = $1 AND member_id = $2`), never in an `if` after a `SELECT`. Someone else's
+resource is a **404**, not a 403.
+
+**The actor never comes from the client.** No `memberId`, `userId` or `ownerId` in any request schema;
+the actor is `c.get("principal")`, or `actorMemberId` from the event in a handler.
+
+**Await every side effect.** No `void send…`, no `forEach(async …)`, no fire-and-forget. Errors propagate.
+
+**Environment only through `loadEnv()`** — `process.env.X as string` is forbidden. Secrets never appear in
+logs, error messages or event payloads.
+
+**Errors:** throw `DomainError(code)` from modules; the host's error middleware turns it into the single
+API error shape. Unexpected errors return a generic message plus a `requestId` — never a database message.
