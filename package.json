@@ -30,23 +30,24 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@types/bun": "^1.4.0",
-    "turbo": "^2.5.0",
-    "typescript": "^5.8.0",
-    "eslint": "^9.20.0",
+    "@types/bun": "^1.3.4",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
-    "typescript-eslint": "^8.25.0",
+    "bun-types": "1.3.4",
+    "dependency-cruiser": "^16.10.0",
+    "eslint": "^9.20.0",
     "eslint-plugin-boundaries": "^5.0.0",
     "eslint-plugin-import": "^2.31.0",
-    "dependency-cruiser": "^16.10.0",
-    "prettier": "^3.5.0",
     "husky": "^9.1.0",
     "lint-staged": "^15.4.0",
+    "prettier": "^3.5.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.25.0",
     "yaml": "^2.7.0"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}": "prettier --write",
-    "*.{ts,tsx}": "eslint --max-warnings 0"
+    "*.{ts,tsx}": "eslint --max-warnings 0 --no-warn-ignored"
   }
 }

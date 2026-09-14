@@ -11,6 +11,11 @@ export default tseslint.config(
       "**/*.generated.*",
       "packages/ui/src/tokens.ts",
       "apps/mobile/tailwind.theme.js",
+      // Config / tooling JS is not in the TS project service.
+      "**/*.{js,cjs,mjs}",
+      "docs/examples/**",
+      ".agents/**",
+      ".expo/**",
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
@@ -110,5 +115,8 @@ export default tseslint.config(
       ],
     },
   },
-  { files: ["packages/ui/src/tokens.ts"], rules: { "bbc/no-inline-color": "off" } },
+  {
+    files: ["packages/ui/src/tokens.ts", "apps/mobile/src/constants/club.ts"],
+    rules: { "bbc/no-inline-color": "off" },
+  },
 );

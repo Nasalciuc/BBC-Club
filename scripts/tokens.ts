@@ -23,7 +23,7 @@ const y = parse(fm[1]) as {
 };
 
 const px = (v: string) => Number(String(v).replace("px", ""));
-const camel = (s: string) => s.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+const camel = (s: string) => s.replace(/-([a-z0-9])/g, (_m: string, c: string) => c.toUpperCase());
 const family = (f: string) => f.split(",")[0].trim();
 
 // ── tokens.ts ─────────────────────────────────────────────────────────────────

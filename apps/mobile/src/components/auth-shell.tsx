@@ -4,6 +4,8 @@ import { PropsWithChildren, ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import cabinImage from "@/assets/images/cabin.webp";
+import logoWelcome from "@/assets/images/logo-welcome.png";
 import { ClubIcon } from "@/components/club-icon";
 import { Club } from "@/constants/club";
 
@@ -46,7 +48,7 @@ export function AuthShell({
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={[styles.hero, { height: `${Math.round(heroPercent * 100)}%` }]}>
           <Image
-            source={require("@/assets/images/cabin.webp")}
+            source={cabinImage}
             style={[StyleSheet.absoluteFill, styles.heroImage]}
             contentFit="cover"
             blurRadius={12}
@@ -68,13 +70,13 @@ export function AuthShell({
 
           {logo === "left" ? (
             <View style={[styles.logoLeft, { top }]}>
-              <Image source={require("@/assets/images/logo-welcome.png")} style={styles.logo} contentFit="contain" />
+              <Image source={logoWelcome} style={styles.logo} contentFit="contain" />
             </View>
           ) : null}
 
           {logo === "center" ? (
             <View style={[styles.logoCenter, { top }]}>
-              <Image source={require("@/assets/images/logo-welcome.png")} style={styles.logo} contentFit="contain" />
+              <Image source={logoWelcome} style={styles.logo} contentFit="contain" />
             </View>
           ) : null}
         </View>
