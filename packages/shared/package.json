@@ -7,8 +7,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test:unit": "bun test"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "hono": "^4.7.0",

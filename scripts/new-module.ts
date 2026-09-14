@@ -36,11 +36,8 @@ const files: Record<string, string> = {
           "./module": "./src/module.ts",
           "./schema": "./src/infrastructure/schema.ts",
         },
-        scripts: {
-          "test:unit": "bun test tests/unit",
-          "test:db": "bun test tests/contract tests/handlers",
-          typecheck: "tsc --noEmit",
-        },
+        // test:unit is added by hand with the first unit test: `bun test` on an empty directory exits 1.
+        scripts: { typecheck: "tsc --noEmit", "test:db": "bun test tests/contract tests/handlers" },
         dependencies: {
           "drizzle-orm": "^1.0.0",
           zod: "^3.24.0",

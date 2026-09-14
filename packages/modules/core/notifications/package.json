@@ -9,7 +9,6 @@
     "./schema": "./src/infrastructure/schema.ts"
   },
   "scripts": {
-    "test:unit": "bun test tests/unit",
     "test:db": "bun test tests/contract tests/handlers",
     "typecheck": "tsc --noEmit"
   },
