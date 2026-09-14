@@ -11,12 +11,9 @@ export default tseslint.config(
       "**/*.generated.*",
       "packages/ui/src/tokens.ts",
       "apps/mobile/tailwind.theme.js",
+      "apps/mobile/eslint.config.js",
       // Snapshots stay under isolated/ until unpack (PR3/PR4). Not part of any package tsconfig.
       "isolated/**",
-      // Config / tooling JS is not in the TS project service.
-      "**/*.{js,cjs,mjs}",
-      // Needs @bbc/db (wired in PR4).
-      "scripts/seed-flags.ts",
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
@@ -24,6 +21,7 @@ export default tseslint.config(
 
   // ── promises: the betterauth-next bugs, forbidden ──────────────────────────
   {
+    files: ["**/*.{ts,tsx}"],
     rules: {
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { arguments: false } }],
@@ -46,6 +44,15 @@ export default tseslint.config(
       ],
     },
   },
+
+  // The Expo app is type-checked by its own tsconfig (`bun run --filter @bbc/mobile typecheck`).
+  // The root project service does not resolve apps/mobile, so type-aware rules would report every
+  // import as `any`. Syntactic rules — and our own bbc/* rules below — still apply.
+  // Placed after the typed-rule block so disableTypeChecked wins for these globs.
+  { files: ["apps/mobile/**/*.{ts,tsx}"], ...tseslint.configs.disableTypeChecked },
+
+  // Config and script files are not part of any tsconfig either.
+  { files: ["**/*.{js,mjs,cjs}", "scripts/**/*.ts"], ...tseslint.configs.disableTypeChecked },
 
   // ── intra-module layering (eslint-plugin-boundaries) ───────────────────────
   {
@@ -96,6 +103,8 @@ export default tseslint.config(
     rules: {
       "bbc/no-inline-color": "error",
       "bbc/require-test-id": "error",
+      // require() is how Metro resolves static assets in Expo; it is not a module system choice.
+      "@typescript-eslint/no-require-imports": ["error", { allow: ["\\.(png|webp|jpe?g|ttf|otf)$"] }],
       "no-restricted-imports": [
         "error",
         {
