@@ -10,7 +10,8 @@ process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret-0000";
 process.env.INTERNAL_API_SECRET ??= "internal-secret-internal-secret-0000";
 process.env.POSTMARK_FROM ??= "club@buybusinessclass.com";
 
-if (!/test/i.test(new URL(process.env.DATABASE_URL).pathname)) throw new Error("refusing to run tests against a non-test database");
+if (!/test/i.test(new URL(process.env.DATABASE_URL).pathname))
+  throw new Error("refusing to run tests against a non-test database");
 
 const migrate = spawnSync("bun", ["run", "--filter", "@bbc/db", "db:migrate"], { stdio: "inherit", env: process.env });
 if (migrate.status !== 0) throw new Error("test migrations failed");

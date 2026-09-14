@@ -5,8 +5,8 @@
 const platform = createPlatform(db, { level: env.LOG_LEVEL });
 for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
 registerPlatformJobs(platform.jobs);
-registerModules(platform);           // each module: registerConsumer(...) and jobs.register(...)
-platform.poller.start();             // one line; SKIP LOCKED makes several instances safe
+registerModules(platform); // each module: registerConsumer(...) and jobs.register(...)
+platform.poller.start(); // one line; SKIP LOCKED makes several instances safe
 ```
 
 ```ts
@@ -14,8 +14,10 @@ platform.poller.start();             // one line; SKIP LOCKED makes several inst
 await withTx(db, async (tx) => {
   const offer = await offersRepo.insert(tx, input);
   await platform.events.publish(tx, {
-    type: "offer.published", aggregateType: "offer", aggregateId: offer.id,
-    payload: { type: "offer.published", version: 1, offerId: offer.id, /* … */ },
+    type: "offer.published",
+    aggregateType: "offer",
+    aggregateId: offer.id,
+    payload: { type: "offer.published", version: 1, offerId: offer.id /* … */ },
     publishedBy: "proposals",
   });
 });

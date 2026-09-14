@@ -1,4 +1,5 @@
 # integration/push
+
 **Owns:** nothing in the database (pure adapters).
 **Publishes / Consumes:** none.
 **Ports (implements):** `PushSender.send({ platform, token, title, body, data }) → { ok, ticketId? } | { ok:false, reason: "Unregistered" | "BadDeviceToken" | "RateLimited" | "Transient" | "Fatal" }` for APNs (HTTP/2, .p8 key, `apns2`) and FCM v1 (`firebase-admin`).

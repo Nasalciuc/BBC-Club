@@ -5,7 +5,7 @@ import * as SecureStore from "expo-secure-store";
 // Roles are server-side only (ADR-IMPL-006); the app never needs the admin client.
 
 export const authClient = createAuthClient({
-  baseURL: process.env.EXPO_PUBLIC_API_URL!,      // validated at app start in lib/env.ts
+  baseURL: process.env.EXPO_PUBLIC_API_URL!, // validated at app start in lib/env.ts
   plugins: [
     expoClient({ scheme: "bbcclub", storagePrefix: "bbcclub", storage: SecureStore }),
     emailOTPClient(),

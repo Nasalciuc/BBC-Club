@@ -1,4 +1,5 @@
 # domain/campaigns (stage 3)
+
 **Owns:** schema `campaigns.*` — campaigns (name, segment definition, schedule, status), campaign_runs.
 **Publishes:** `campaign.scheduled`, `campaign.dispatched`.
 **Consumes:** `crm.mirror.synced` (segment recomputation).

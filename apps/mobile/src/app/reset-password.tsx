@@ -23,9 +23,9 @@ export default function ResetPasswordScreen() {
           disabled={!canSend}
           onPress={() =>
             router.push({
-                pathname: "/verify-code",
-                params: { email: email.trim(), purpose: "reset" },
-              })
+              pathname: "/verify-code",
+              params: { email: email.trim(), purpose: "reset" },
+            })
           }
         />
       }

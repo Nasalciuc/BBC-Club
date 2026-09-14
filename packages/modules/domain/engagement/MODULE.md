@@ -1,4 +1,5 @@
 # domain/engagement
+
 **Owns:** schema `engagement.*` — offer_responses (PK offer+member, response interested/dismissed, synced_to_crm, crm_activity_id).
 **Publishes:** `offer.responded` (same tx as upsert), `offer.viewed` (noConsumer).
 **Consumes:** none (crm and notifications consume offer.responded).

@@ -6,7 +6,8 @@ import type { Auth } from "@bbc/identity";
 export function testAuth(auth: Auth, db: any) {
   async function createMember(email: string, password = "atlantic2026!", opts: { verified?: boolean } = {}) {
     await auth.api.signUpEmail({ body: { email, password, name: "" } });
-    if (opts.verified ?? true) await db.execute(sql`UPDATE auth."user" SET email_verified = true WHERE email = ${email.toLowerCase()}`);
+    if (opts.verified ?? true)
+      await db.execute(sql`UPDATE auth."user" SET email_verified = true WHERE email = ${email.toLowerCase()}`);
     const [{ id }]: any = await db.execute(sql`SELECT id FROM auth."user" WHERE email = ${email.toLowerCase()}`);
     return { id: id as string, email, password };
   }
@@ -17,7 +18,10 @@ export function testAuth(auth: Auth, db: any) {
     if (!res.ok) throw new Error(`sign-in failed for ${email}: ${res.status}`);
     const setCookie = res.headers.get("set-cookie");
     if (!setCookie) throw new Error("no session cookie returned");
-    return setCookie.split(",").map((c) => c.split(";")[0].trim()).join("; ");
+    return setCookie
+      .split(",")
+      .map((c) => c.split(";")[0].trim())
+      .join("; ");
   }
 
   /** Operator: a member promoted by role, then a JWT from Better Auth's jwt plugin. */

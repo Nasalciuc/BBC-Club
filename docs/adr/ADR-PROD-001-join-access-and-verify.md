@@ -29,9 +29,9 @@ Anyone may request a code and complete Join. Identity **always** creates an `aut
 `crm.mirror` (normalized email) decides **status**, not whether the account exists:
 
 | CRM match | `members.profile.status` |
-| --- | --- |
-| Found | `active` |
-| Not found | `waitlist` |
+| --------- | ------------------------ |
+| Found     | `active`                 |
+| Not found | `waitlist`               |
 
 Constant-shape replies (`CONSTANT_OTP_SENT`, `CONSTANT_RESET_SENT`) are **anti-enumeration**, not a third policy. Unknown emails still receive a join code. Difference appears **after** verification, on `profile.status`.
 
@@ -71,10 +71,10 @@ The snapshot `join(email, password)` in `isolated/identity-production/.../flows.
 
 Missing or unknown `purpose` → treat as `join` (deep links). Never infer purpose from “how we got here.”
 
-| `purpose` | Verify collects | Consumes OTP | Next screen |
-| --- | --- | --- | --- |
-| `join` | 6-digit code | Yes: `signIn.emailOtp` (path A) or `verifyEmail` (path B) | Set password (skip if a credential password already exists) |
-| `reset` | 6-digit code | **No** on this screen. Optional `check-verification-otp` only. | Set password with `{ email, otp, purpose: "reset" }` → `emailOtp.resetPassword` then sign-in |
+| `purpose` | Verify collects | Consumes OTP                                                   | Next screen                                                                                  |
+| --------- | --------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `join`    | 6-digit code    | Yes: `signIn.emailOtp` (path A) or `verifyEmail` (path B)      | Set password (skip if a credential password already exists)                                  |
+| `reset`   | 6-digit code    | **No** on this screen. Optional `check-verification-otp` only. | Set password with `{ email, otp, purpose: "reset" }` → `emailOtp.resetPassword` then sign-in |
 
 Reset must not call Join's verify endpoint. Join must not call `resetPassword`.
 
@@ -97,13 +97,13 @@ flowchart TD
   gate -->|waitlist| wait["Waitlist"]
 ```
 
-| Screen | Params in | Params out | API when wired |
-| --- | --- | --- | --- |
-| Join | — | `email`, `purpose=join` | Send join OTP; UI always `CONSTANT_OTP_SENT` |
-| Reset | — | `email`, `purpose=reset` | Request reset OTP; UI always `CONSTANT_RESET_SENT` |
-| Verify | `email`, `purpose` | join: session then Set password; reset: `email`, `otp`, `purpose=reset` | See table above |
-| Set password | `email`, `purpose`, `otp` if reset | — | join: server `setPassword`; reset: `resetPassword` + sign-in |
-| Gate | session | — | `profile.status` |
+| Screen       | Params in                          | Params out                                                              | API when wired                                               |
+| ------------ | ---------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Join         | —                                  | `email`, `purpose=join`                                                 | Send join OTP; UI always `CONSTANT_OTP_SENT`                 |
+| Reset        | —                                  | `email`, `purpose=reset`                                                | Request reset OTP; UI always `CONSTANT_RESET_SENT`           |
+| Verify       | `email`, `purpose`                 | join: session then Set password; reset: `email`, `otp`, `purpose=reset` | See table above                                              |
+| Set password | `email`, `purpose`, `otp` if reset | —                                                                       | join: server `setPassword`; reset: `resetPassword` + sign-in |
+| Gate         | session                            | —                                                                       | `profile.status`                                             |
 
 Until the API exists, the screens only plumb these params. They still must not send Reset through a Join-only verify handler.
 

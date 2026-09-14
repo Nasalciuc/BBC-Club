@@ -42,11 +42,7 @@ export function ClubButton({
     >
       <Text style={[styles.label, isSecondary && styles.secondaryLabel]}>{label}</Text>
       {arrow ? (
-        <ClubIcon
-          name="arrow"
-          size={20}
-          color={isSecondary ? Club.colors.textOnDark : Club.colors.textPrimary}
-        />
+        <ClubIcon name="arrow" size={20} color={isSecondary ? Club.colors.textOnDark : Club.colors.textPrimary} />
       ) : null}
     </Pressable>
   );

@@ -1,4 +1,5 @@
 # intelligence/personalization (stage 5)
+
 **Owns:** schema `personalization.*` — member_features (nightly), member_scores (v2), proposal_candidates (suggested/accepted/rejected/expired, reasons, ranker_version).
 **Publishes:** `personalization.candidate_suggested` (operator surface, v2).
 **Consumes:** `crm.mirror.synced` → recompute features for affected members · `offer.viewed` / `offer.responded` → update engagement features · `member.profile_updated` → preference features.

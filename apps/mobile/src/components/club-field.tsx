@@ -1,12 +1,5 @@
 import { ReactNode, useState } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  TextInputProps,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
 
 import { ClubIcon } from "@/components/club-icon";
 import { Club } from "@/constants/club";
@@ -44,12 +37,7 @@ export function ClubInput({ size = "md", style, onFocus, onBlur, ...props }: Inp
         setFocused(false);
         onBlur?.(event);
       }}
-      style={[
-        styles.input,
-        size === "lg" && styles.inputLg,
-        focused && styles.inputFocused,
-        style,
-      ]}
+      style={[styles.input, size === "lg" && styles.inputLg, focused && styles.inputFocused, style]}
     />
   );
 }
@@ -86,11 +74,7 @@ export function ClubPasswordInput({
         onPress={onToggleVisibility}
         style={styles.eye}
       >
-        <ClubIcon
-          name={visible ? "eyeOff" : "eye"}
-          size={20}
-          color={Club.colors.textSecondary}
-        />
+        <ClubIcon name={visible ? "eyeOff" : "eye"} size={20} color={Club.colors.textSecondary} />
       </Pressable>
     </View>
   );

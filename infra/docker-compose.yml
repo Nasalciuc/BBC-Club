@@ -8,8 +8,8 @@ x-restart: &restart
   restart: unless-stopped
 
 networks:
-  edge: {}                                   # caddy ↔ api
-  data: { internal: true }                   # postgres, redis, minio, glitchtip, kuma — no internet, no host
+  edge: {} # caddy ↔ api
+  data: { internal: true } # postgres, redis, minio, glitchtip, kuma — no internet, no host
 
 services:
   # ── the only door ─────────────────────────────────────────────────────────
@@ -42,7 +42,13 @@ services:
       DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
     depends_on: { postgres: { condition: service_healthy } }
     healthcheck:
-      test: ["CMD", "bun", "-e", "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -51,13 +57,13 @@ services:
     deploy: { resources: { limits: { cpus: "2.0", memory: 1g } } }
 
   postgres:
-    build: { context: ./postgres }            # postgres:16 + pgbackrest in the SAME container (archive_command needs it)
+    build: { context: ./postgres } # postgres:16 + pgbackrest in the SAME container (archive_command needs it)
     image: bbc-postgres:16
     <<: [*restart, *logging]
     networks: [data]
     env_file:
       - path: "${ENV_FILE:-./env/production.env}"
-        required: false   # so `compose config` works on a checkout that only has *.example; deploy/bootstrap always pass the real 600 file
+        required: false # so `compose config` works on a checkout that only has *.example; deploy/bootstrap always pass the real 600 file
     environment:
       POSTGRES_USER: bbc
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -84,7 +90,7 @@ services:
     deploy: { resources: { limits: { cpus: "2.0", memory: 2g } } }
 
   cron:
-    image: alpine:3.20                        # busybox crond + wget, verified present
+    image: alpine:3.20 # busybox crond + wget, verified present
     <<: [*restart, *logging]
     networks: [edge]
     entrypoint: ["/bin/sh", "/etc/cron/run.sh"]
@@ -144,7 +150,7 @@ services:
   uptime-kuma:
     image: louislam/uptime-kuma:1
     <<: [*restart, *logging]
-    networks: [data, edge]                    # needs edge to probe the API; reachable by humans only via SSH tunnel
+    networks: [data, edge] # needs edge to probe the API; reachable by humans only via SSH tunnel
     volumes: ["kuma_data:/app/data"]
     deploy: { resources: { limits: { memory: 128m } } }
 
