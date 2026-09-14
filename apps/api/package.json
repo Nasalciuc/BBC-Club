@@ -14,9 +14,6 @@
     "jose": "^6.0.0",
     "zod": "^3.24.0",
     "@bbc/db": "workspace:*",
-    "@bbc/shared": "workspace:*",
-    "@bbc/platform": "workspace:*",
-    "@bbc/identity": "workspace:*",
-    "@bbc/email": "workspace:*"
+    "@bbc/platform": "workspace:*"
   }
 }
