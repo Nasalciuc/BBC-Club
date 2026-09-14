@@ -15,6 +15,7 @@ export default tseslint.config(
       "docs/examples/**",
       ".agents/**",
       ".expo/**",
+      "expo-env.d.ts",
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
