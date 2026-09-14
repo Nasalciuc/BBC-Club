@@ -14,9 +14,6 @@ export default tseslint.config(
       "apps/mobile/eslint.config.js",
       // Snapshots stay under isolated/ until unpack (PR3/PR4). Not part of any package tsconfig.
       "isolated/**",
-      // Expo app still lives at the repo root on this branch; lint it under apps/mobile after PR2.
-      "src/**",
-      "assets/**",
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
@@ -128,5 +125,8 @@ export default tseslint.config(
       ],
     },
   },
-  { files: ["packages/ui/src/tokens.ts"], rules: { "bbc/no-inline-color": "off" } },
+  {
+    files: ["packages/ui/src/tokens.ts", "apps/mobile/src/constants/club.ts"],
+    rules: { "bbc/no-inline-color": "off" },
+  },
 );

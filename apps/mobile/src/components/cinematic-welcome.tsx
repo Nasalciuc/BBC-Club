@@ -6,6 +6,8 @@ import { StyleSheet, Text, View } from "react-native";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import cabinImage from "@/assets/images/cabin.webp";
+import logoWelcome from "@/assets/images/logo-welcome.png";
 import { AnimatedEntrance } from "@/components/animated-entrance";
 import { ClubButton } from "@/components/club-button";
 import { Club } from "@/constants/club";
@@ -32,12 +34,7 @@ export function CinematicWelcome() {
     <View style={styles.root}>
       <View style={styles.background}>
         <Animated.View style={[StyleSheet.absoluteFill, kenBurns]}>
-          <Image
-            source={require("@/assets/images/cabin.webp")}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            transition={0}
-          />
+          <Image source={cabinImage} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} />
         </Animated.View>
         <LinearGradient colors={[...Club.colors.scrim]} locations={[0, 0.45, 1]} style={styles.scrim} />
       </View>
@@ -52,7 +49,7 @@ export function CinematicWelcome() {
         ]}
       >
         <AnimatedEntrance fade delay={400}>
-          <Image source={require("@/assets/images/logo-welcome.png")} style={styles.logo} contentFit="contain" />
+          <Image source={logoWelcome} style={styles.logo} contentFit="contain" />
         </AnimatedEntrance>
 
         <View style={styles.bottom}>

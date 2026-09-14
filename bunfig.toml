@@ -1,0 +1,4 @@
+# Bun >= 1.3 defaults to the isolated (pnpm-style) linker for workspaces. The Expo app resolves
+# babel-preset-expo and Metro plugins through the hoisted layout it was verified against; keep it.
+[install]
+linker = "hoisted"
