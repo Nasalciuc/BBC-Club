@@ -1,0 +1,28 @@
+name: docs-graph
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1" # Monday 03:00 UTC
+permissions:
+  contents: write
+concurrency:
+  group: docs-graph
+  cancel-in-progress: true
+jobs:
+  graph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version: "1.3.4" }
+      - run: bun install --frozen-lockfile
+      - run: sudo apt-get install -y graphviz
+      - run: bun run arch:graph
+      - name: commit if the graph changed
+        run: |
+          git config user.name bbc-bot && git config user.email bot@buybusinessclass.com
+          git add docs/architecture/modules.svg
+          git diff --cached --quiet && { echo "graph unchanged"; exit 0; }
+          git commit -m "docs(arch): regenerate module graph [skip ci]"
+          git push
