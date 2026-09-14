@@ -17,7 +17,8 @@
     "db:seed": "bun run scripts/seed-fixture.ts",
     "db:reset:test": "bun run scripts/reset-test.ts",
     "db:studio": "drizzle-kit studio",
-    "test": "bun test"
+    "test": "bun test",
+    "test:db": "bun test"
   },
   "dependencies": {
     "@bbc/platform": "workspace:*",

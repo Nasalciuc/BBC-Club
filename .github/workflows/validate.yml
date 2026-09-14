@@ -69,6 +69,6 @@ jobs:
       - if: steps.layout.outputs.db == 'true'
         run: bun run test:unit
       - if: steps.layout.outputs.db == 'true' && steps.layout.outputs.compose == 'true'
-        run: turbo run test:db
+        run: bunx turbo run test:db
       - if: steps.layout.outputs.db == 'true' && steps.layout.outputs.compose == 'true'
         run: bun run db:verify
