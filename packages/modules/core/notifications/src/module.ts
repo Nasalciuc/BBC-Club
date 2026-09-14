@@ -1,5 +1,5 @@
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
-import type { PushSender } from "@bbc/push";
+import type { PushSender } from "./ports/push";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
 
 type Exposes = {

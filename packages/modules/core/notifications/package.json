@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/api/index.ts",
     "./module": "./src/module.ts",
+    "./ports/push": "./src/ports/push.ts",
     "./schema": "./src/infrastructure/schema.ts"
   },
   "scripts": {
@@ -17,7 +18,6 @@
     "zod": "^3.24.0",
     "@bbc/shared": "workspace:*",
     "@bbc/db": "workspace:*",
-    "@bbc/platform": "workspace:*",
-    "@bbc/push": "workspace:*"
+    "@bbc/platform": "workspace:*"
   }
 }

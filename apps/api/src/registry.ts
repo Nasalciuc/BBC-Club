@@ -20,19 +20,42 @@ export class ModuleRegistry {
     return this;
   }
 
-  /** Initialise in layer order; satisfy ports from earlier facades; mount; register consumers and jobs.
-   *  A killed module is skipped entirely: no routes, no consumers (its pending deliveries pause via flags). */
+  /** Initialise in dependency order within layer order; satisfy ports from earlier facades; mount; register
+   *  consumers and jobs. Same-layer dependencies (engagement → proposals) resolve topologically, not by the order
+   *  in modules.ts. A killed module is skipped entirely: no routes, no consumers (its pending deliveries pause
+   *  via flags) — and anything that needs its port fails loudly instead of receiving undefined. */
   async boot(deps: { db: Db; platform: Platform; env: ServerEnv; mount: (basePath: string, app: Hono<any>) => void }) {
-    const ordered = [...this.modules].sort((a, b) => LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer));
-    for (const m of ordered) {
+    const layerOf = new Map(this.modules.map((m) => [m.name, m.layer] as const));
+    for (const m of this.modules)
+      for (const need of m.needs ?? []) {
+        const needLayer = layerOf.get(need);
+        if (needLayer === undefined) throw new Error(`module ${m.name} needs port "${need}" but no module exposes it`);
+        if (LAYER_ORDER.indexOf(needLayer) > LAYER_ORDER.indexOf(m.layer))
+          throw new Error(`module ${m.name} (${m.layer}) needs "${need}" from a higher layer (${needLayer})`);
+      }
+
+    const byLayer = [...this.modules].sort((a, b) => LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer));
+    const pending = new Set(byLayer);
+    const initialised = new Set<string>();
+    while (pending.size) {
+      const ready = [...pending].find((m) => (m.needs ?? []).every((n) => initialised.has(n) || this.facades.has(n)));
+      if (!ready) {
+        const stuck = [...pending].map(
+          (m) => `${m.name} needs [${(m.needs ?? []).filter((n) => !initialised.has(n)).join(", ")}]`,
+        );
+        throw new Error(`module dependency cycle or missing port:\n  ${stuck.join("\n  ")}`);
+      }
+      pending.delete(ready);
+      const m = ready;
       const ports: Record<string, unknown> = {};
       for (const need of m.needs ?? []) {
         if (!this.facades.has(need))
-          throw new Error(`module ${m.name} needs port "${need}" but no earlier module exposes it (check layers)`);
+          throw new Error(`module ${m.name} needs port "${need}" but "${need}" exposed nothing (killed or empty)`);
         ports[need] = this.facades.get(need);
       }
       if (await deps.platform.flags.isKilled(m.name)) {
         deps.platform.logger.warn({ module: m.name }, "module killed by flag: not mounted");
+        initialised.add(m.name);
         continue;
       }
       const out = await m.init({ db: deps.db, platform: deps.platform, env: deps.env, ports });
@@ -52,6 +75,7 @@ export class ModuleRegistry {
         },
         "module mounted",
       );
+      initialised.add(m.name);
     }
   }
 
