@@ -1,7 +1,9 @@
 # BBC Club — Agent Prompt Guide
+
 Quick color reference: panel/primary = `primary` (#1E293B) · page = `surface-page` (#F8FAFC) · cards/fields = `surface-card` (#FFFFFF) with `border-default` (#E2E8F0) · text on light = `text-primary` / `text-secondary` / `text-tertiary` · text on navy = `text-on-dark` / `text-on-dark-muted` · destructive only = `status-danger`.
 
 Example component prompts (use token refs, never inline hex):
+
 - "Build 'Welcome back' on `entry-panel` over the blurred cabin photo: `headline` in `text-on-dark` left-aligned; two `field` inputs with `field-label` EMAIL / PASSWORD; `text-link` 'Forgot password?' right-aligned; `button-inverted` 'Sign in →'; `divider` with label NEW TO THE CLUB; `button-outlined` 'Create account'."
 - "Create `proposal-card` for 'Your October in London': 16:9 empty lie-flat suite at dusk with `badge-for-you`; `title`; `body-sm` 'You flew this route in March.'; `facts-mono` ×2; `price` '$4,200' beside `price-published` '$7,850 published'; `caption` 'Valid until October 4'."
 - "Design `tab-bar`: `surface-card`, `divider` on top, PROPOSALS / INBOX / PROFILE in `tab-mono`; inactive `text-secondary`, active `primary`; 6px `primary` dot on Inbox."

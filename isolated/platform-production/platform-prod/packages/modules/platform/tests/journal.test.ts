@@ -17,7 +17,15 @@ function platformWith(handler: (ctx: any, p: any) => Promise<void>, consumer = "
   return p;
 }
 const emit = (p: any, value = "v") =>
-  db.transaction((tx: any) => p.events.publish(tx, { type: "test.happened", aggregateType: "test", aggregateId: `agg-${value}`, payload: { type: "test.happened", version: 1, value }, publishedBy: "tests" }));
+  db.transaction((tx: any) =>
+    p.events.publish(tx, {
+      type: "test.happened",
+      aggregateType: "test",
+      aggregateId: `agg-${value}`,
+      payload: { type: "test.happened", version: 1, value },
+      publishedBy: "tests",
+    }),
+  );
 
 beforeEach(async () => {
   await db.execute(sql`TRUNCATE platform.event_deliveries, platform.event_dlq RESTART IDENTITY`);
@@ -27,11 +35,21 @@ beforeEach(async () => {
 describe("publish", () => {
   it("writes nothing when the caller's transaction rolls back", async () => {
     const p = platformWith(async () => {});
-    await db.transaction(async (tx: any) => {
-      await p.events.publish(tx, { type: "test.happened", aggregateType: "test", aggregateId: "a", payload: { type: "test.happened", version: 1, value: "x" }, publishedBy: "tests" });
-      throw new Error("rollback");
-    }).catch(() => {});
-    const [{ n }]: any = await db.execute(sql`SELECT count(*)::int n FROM platform.domain_events WHERE type='test.happened'`);
+    await db
+      .transaction(async (tx: any) => {
+        await p.events.publish(tx, {
+          type: "test.happened",
+          aggregateType: "test",
+          aggregateId: "a",
+          payload: { type: "test.happened", version: 1, value: "x" },
+          publishedBy: "tests",
+        });
+        throw new Error("rollback");
+      })
+      .catch(() => {});
+    const [{ n }]: any = await db.execute(
+      sql`SELECT count(*)::int n FROM platform.domain_events WHERE type='test.happened'`,
+    );
     expect(n).toBe(0);
   });
 
@@ -46,18 +64,35 @@ describe("publish", () => {
 
   it("rejects an unknown type and an invalid payload at the source", async () => {
     const p = platformWith(async () => {});
-    await expect(db.transaction((tx: any) => p.events.publish(tx, { type: "nope", aggregateType: "t", aggregateId: "a", payload: {}, publishedBy: "tests" }))).rejects.toThrow(/unknown event type/);
-    await expect(db.transaction((tx: any) => p.events.publish(tx, { type: "test.happened", aggregateType: "t", aggregateId: "a", payload: { type: "test.happened", version: 1 }, publishedBy: "tests" }))).rejects.toThrow();
+    await expect(
+      db.transaction((tx: any) =>
+        p.events.publish(tx, { type: "nope", aggregateType: "t", aggregateId: "a", payload: {}, publishedBy: "tests" }),
+      ),
+    ).rejects.toThrow(/unknown event type/);
+    await expect(
+      db.transaction((tx: any) =>
+        p.events.publish(tx, {
+          type: "test.happened",
+          aggregateType: "t",
+          aggregateId: "a",
+          payload: { type: "test.happened", version: 1 },
+          publishedBy: "tests",
+        }),
+      ),
+    ).rejects.toThrow();
   });
 });
 
 describe("poller", () => {
   it("delivers once and commits handler writes with the delivery", async () => {
     let calls = 0;
-    const p = platformWith(async ({ tx }) => { calls++; await tx.execute(sql`SELECT 1`); });
+    const p = platformWith(async ({ tx }) => {
+      calls++;
+      await tx.execute(sql`SELECT 1`);
+    });
     await emit(p);
     expect(await p.poller.drainOnce()).toBe(1);
-    expect(await p.poller.drainOnce()).toBe(0);          // nothing left: delivery is done
+    expect(await p.poller.drainOnce()).toBe(0); // nothing left: delivery is done
     expect(calls).toBe(1);
   });
 
@@ -65,44 +100,69 @@ describe("poller", () => {
     let attempts = 0;
     const p = platformWith(async ({ tx, attempt }) => {
       attempts = attempt;
-      await tx.execute(sql`INSERT INTO platform.flags (key, value) VALUES ('side.effect', '{"enabled":true}') ON CONFLICT (key) DO NOTHING`);
+      await tx.execute(
+        sql`INSERT INTO platform.flags (key, value) VALUES ('side.effect', '{"enabled":true}') ON CONFLICT (key) DO NOTHING`,
+      );
       throw new Error("boom");
     });
     await emit(p);
     await p.poller.processOne();
     const [{ n }]: any = await db.execute(sql`SELECT count(*)::int n FROM platform.flags WHERE key='side.effect'`);
-    expect(n).toBe(0);                                   // side effect rolled back
+    expect(n).toBe(0); // side effect rolled back
     expect(attempts).toBe(1);
-    const [d]: any = await db.execute(sql`SELECT attempts, status, run_after > now() AS scheduled FROM platform.event_deliveries LIMIT 1`);
-    expect(d.attempts).toBe(1); expect(d.status).toBe("pending"); expect(d.scheduled).toBe(true);
+    const [d]: any = await db.execute(
+      sql`SELECT attempts, status, run_after > now() AS scheduled FROM platform.event_deliveries LIMIT 1`,
+    );
+    expect(d.attempts).toBe(1);
+    expect(d.status).toBe("pending");
+    expect(d.scheduled).toBe(true);
   });
 
   it("dead-letters after the last attempt", async () => {
-    const p = platformWith(async () => { throw new Error("always"); });
+    const p = platformWith(async () => {
+      throw new Error("always");
+    });
     await emit(p);
     for (let i = 0; i < 7; i++) {
-      await db.execute(sql`UPDATE platform.event_deliveries SET run_after = now() - interval '1 second' WHERE status='pending'`);
+      await db.execute(
+        sql`UPDATE platform.event_deliveries SET run_after = now() - interval '1 second' WHERE status='pending'`,
+      );
       await p.poller.processOne();
     }
     const [d]: any = await db.execute(sql`SELECT status, attempts FROM platform.event_deliveries LIMIT 1`);
     const [{ n }]: any = await db.execute(sql`SELECT count(*)::int n FROM platform.event_dlq`);
-    expect(d.status).toBe("dead"); expect(d.attempts).toBe(7); expect(n).toBe(1);
+    expect(d.status).toBe("dead");
+    expect(d.attempts).toBe(7);
+    expect(n).toBe(1);
   });
 
   it("replay puts a dead delivery back in the queue", async () => {
-    const p = platformWith(async () => { throw new Error("always"); });
+    const p = platformWith(async () => {
+      throw new Error("always");
+    });
     await emit(p);
-    for (let i = 0; i < 7; i++) { await db.execute(sql`UPDATE platform.event_deliveries SET run_after = now() - interval '1 second' WHERE status='pending'`); await p.poller.processOne(); }
+    for (let i = 0; i < 7; i++) {
+      await db.execute(
+        sql`UPDATE platform.event_deliveries SET run_after = now() - interval '1 second' WHERE status='pending'`,
+      );
+      await p.poller.processOne();
+    }
     const [d]: any = await db.execute(sql`SELECT id FROM platform.event_deliveries LIMIT 1`);
     await p.poller.replay(d.id);
     const [after]: any = await db.execute(sql`SELECT status, attempts FROM platform.event_deliveries LIMIT 1`);
-    expect(after.status).toBe("pending"); expect(after.attempts).toBe(0);
+    expect(after.status).toBe("pending");
+    expect(after.attempts).toBe(0);
   });
 
   it("two pollers in parallel deliver each event exactly once", async () => {
     const seen: string[] = [];
-    const mk = () => platformWith(async (_ctx, payload) => { seen.push(payload.value); await new Promise((r) => setTimeout(r, 20)); });
-    const p1 = mk(), p2 = mk();
+    const mk = () =>
+      platformWith(async (_ctx, payload) => {
+        seen.push(payload.value);
+        await new Promise((r) => setTimeout(r, 20));
+      });
+    const p1 = mk(),
+      p2 = mk();
     for (let i = 0; i < 20; i++) await emit(p1, `e${i}`);
     await Promise.all([p1.drainAll?.() ?? p1.poller.drainOnce(), p2.poller.drainOnce()]);
     expect(seen.length).toBe(20);
@@ -111,9 +171,18 @@ describe("poller", () => {
 
   it("preserves order per aggregate", async () => {
     const order: string[] = [];
-    const p = platformWith(async (ctx, payload) => { order.push(`${ctx.event.aggregateId}:${payload.value}`); });
+    const p = platformWith(async (ctx, payload) => {
+      order.push(`${ctx.event.aggregateId}:${payload.value}`);
+    });
     await db.transaction(async (tx: any) => {
-      for (const v of ["1", "2", "3"]) await p.events.publish(tx, { type: "test.happened", aggregateType: "test", aggregateId: "same", payload: { type: "test.happened", version: 1, value: v }, publishedBy: "tests" });
+      for (const v of ["1", "2", "3"])
+        await p.events.publish(tx, {
+          type: "test.happened",
+          aggregateType: "test",
+          aggregateId: "same",
+          payload: { type: "test.happened", version: 1, value: v },
+          publishedBy: "tests",
+        });
     });
     await p.poller.drainOnce();
     expect(order).toEqual(["same:1", "same:2", "same:3"]);
@@ -121,7 +190,9 @@ describe("poller", () => {
 
   it("a paused consumer stops receiving, resume puts deliveries back", async () => {
     let calls = 0;
-    const p = platformWith(async () => { calls++; });
+    const p = platformWith(async () => {
+      calls++;
+    });
     await p.flags.set("consumer.testing.onHappened.paused", { enabled: true });
     await emit(p);
     await p.poller.drainOnce();
@@ -136,14 +207,29 @@ describe("poller", () => {
 describe("versioning", () => {
   it("upcasts an old payload before validating", async () => {
     const p = createPlatform(db, { level: "silent" });
-    const V2 = z.object({ type: z.literal("test.versioned"), version: z.literal(2), value: z.string(), extra: z.string() });
-    p.events.defineEvent("test.versioned", { version: 2, schema: V2, upcasters: { 1: (old: any) => ({ ...old, version: 2, extra: "default" }) } });
+    const V2 = z.object({
+      type: z.literal("test.versioned"),
+      version: z.literal(2),
+      value: z.string(),
+      extra: z.string(),
+    });
+    p.events.defineEvent("test.versioned", {
+      version: 2,
+      schema: V2,
+      upcasters: { 1: (old: any) => ({ ...old, version: 2, extra: "default" }) },
+    });
     let got: any;
-    p.events.registerConsumer("test.versioned", "testing.onVersioned", async (_c, payload) => { got = payload; });
+    p.events.registerConsumer("test.versioned", "testing.onVersioned", async (_c, payload) => {
+      got = payload;
+    });
     await db.execute(sql`INSERT INTO platform.domain_events (type, version, aggregate_type, aggregate_id, payload, published_by)
                          VALUES ('test.versioned', 1, 'test', 'v1', '{"type":"test.versioned","version":1,"value":"old"}', 'tests')`);
-    const [e]: any = await db.execute(sql`SELECT id, occurred_at FROM platform.domain_events WHERE type='test.versioned' LIMIT 1`);
-    await db.execute(sql`INSERT INTO platform.event_deliveries (event_id, event_occurred_at, consumer, aggregate_id) VALUES (${e.id}, ${e.occurred_at}, 'testing.onVersioned', 'v1')`);
+    const [e]: any = await db.execute(
+      sql`SELECT id, occurred_at FROM platform.domain_events WHERE type='test.versioned' LIMIT 1`,
+    );
+    await db.execute(
+      sql`INSERT INTO platform.event_deliveries (event_id, event_occurred_at, consumer, aggregate_id) VALUES (${e.id}, ${e.occurred_at}, 'testing.onVersioned', 'v1')`,
+    );
     await p.poller.drainOnce();
     expect(got).toEqual({ type: "test.versioned", version: 2, value: "old", extra: "default" });
   });
@@ -152,7 +238,16 @@ describe("versioning", () => {
 describe("tombstone", () => {
   it("removes identifying payloads for a deleted member but keeps the facts", async () => {
     const p = platformWith(async () => {});
-    await db.transaction(async (tx: any) => p.events.publish(tx, { type: "test.happened", aggregateType: "test", aggregateId: "t", memberId: "m-1", payload: { type: "test.happened", version: 1, value: "alex@example.com" }, publishedBy: "tests" }));
+    await db.transaction(async (tx: any) =>
+      p.events.publish(tx, {
+        type: "test.happened",
+        aggregateType: "test",
+        aggregateId: "t",
+        memberId: "m-1",
+        payload: { type: "test.happened", version: 1, value: "alex@example.com" },
+        publishedBy: "tests",
+      }),
+    );
     await db.transaction((tx: any) => p.events.tombstoneMember(tx, "m-1"));
     const [row]: any = await db.execute(sql`SELECT type, payload FROM platform.domain_events WHERE member_id='m-1'`);
     expect(row.type).toBe("test.happened");

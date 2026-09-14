@@ -6,9 +6,13 @@ import type { ServerEnv } from "@bbc/shared/env";
 import type { EmailSender } from "../ports/email";
 import type { EventPublisher } from "../ports/events";
 import { ac, roles } from "./access";
-import * as authSchema from "./schema";   // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
+import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
 
-export type Logger = { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void; error: (o: object, m?: string) => void };
+export type Logger = {
+  info: (o: object, m?: string) => void;
+  warn: (o: object, m?: string) => void;
+  error: (o: object, m?: string) => void;
+};
 export type IdentityDeps = { env: ServerEnv; db: any; email: EmailSender; events: EventPublisher; logger: Logger };
 
 const TEN_MINUTES = 60 * 10;
@@ -28,41 +32,46 @@ export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
 
     emailAndPassword: {
       enabled: true,
-      minPasswordLength: 8,           // number/symbol rule is enforced by the shared Zod schema; breach check below
+      minPasswordLength: 8, // number/symbol rule is enforced by the shared Zod schema; breach check below
       maxPasswordLength: 128,
       requireEmailVerification: true, // no session until the code is verified
       autoSignIn: false,
       // Reset is code-based via the emailOTP plugin (no link-based sendResetPassword).
     },
-    emailVerification: { autoSignInAfterVerification: true },   // code verified → straight into the club
+    emailVerification: { autoSignInAfterVerification: true }, // code verified → straight into the club
 
     session: {
-      expiresIn: 60 * 60 * 24 * 30,   // 30 days
-      updateAge: 60 * 60 * 24,        // rolling refresh once per day
+      expiresIn: 60 * 60 * 24 * 30, // 30 days
+      updateAge: 60 * 60 * 24, // rolling refresh once per day
       cookieCache: { enabled: true, maxAge: 60 * 5 },
     },
 
     rateLimit: {
       enabled: true,
-      storage: "database",            // Postgres (auth.rateLimit) — no Redis on a security path
-      window: 60, max: 60,            // default for everything not listed
+      storage: "database", // Postgres (auth.rateLimit) — no Redis on a security path
+      window: 60,
+      max: 60, // default for everything not listed
       customRules: {
-        "/sign-in/email":                   { window: TEN_MINUTES, max: 5 },
-        "/sign-up/email":                   { window: TEN_MINUTES, max: 5 },
+        "/sign-in/email": { window: TEN_MINUTES, max: 5 },
+        "/sign-up/email": { window: TEN_MINUTES, max: 5 },
         "/email-otp/send-verification-otp": { window: TEN_MINUTES, max: 3 },
-        "/email-otp/verify-email":          { window: TEN_MINUTES, max: 10 },
-        "/email-otp/reset-password":        { window: 60 * 15,     max: 5 },
-        "/forget-password/email-otp":       { window: 60 * 15,     max: 3 },
-        "/delete-user":                     { window: 60 * 60,     max: 3 },
+        "/email-otp/verify-email": { window: TEN_MINUTES, max: 10 },
+        "/email-otp/reset-password": { window: 60 * 15, max: 5 },
+        "/forget-password/email-otp": { window: 60 * 15, max: 3 },
+        "/delete-user": { window: 60 * 60, max: 3 },
       },
     },
 
     user: {
       deleteUser: {
-        enabled: true,                // Apple 5.1.1(v); our tables are cascaded by handlers of member.deleted
+        enabled: true, // Apple 5.1.1(v); our tables are cascaded by handlers of member.deleted
         beforeDelete: async (user) => {
           await events.publish({
-            type: "member.deleted", version: 1, aggregateType: "member", aggregateId: user.id, memberId: user.id,
+            type: "member.deleted",
+            version: 1,
+            aggregateType: "member",
+            aggregateId: user.id,
+            memberId: user.id,
             payload: { type: "member.deleted", version: 1, memberId: user.id, deletedAt: new Date().toISOString() },
           });
         },
@@ -76,10 +85,17 @@ export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
           // Runs after Better Auth's insert, outside its transaction → members reconciles nightly (MODULE.md).
           after: async (user) => {
             await events.publish({
-              type: "member.registered", version: 1, aggregateType: "member", aggregateId: user.id, memberId: user.id,
+              type: "member.registered",
+              version: 1,
+              aggregateType: "member",
+              aggregateId: user.id,
+              memberId: user.id,
               payload: {
-                type: "member.registered", version: 1, memberId: user.id,
-                emailNormalized: user.email.trim().toLowerCase(), registeredAt: new Date().toISOString(),
+                type: "member.registered",
+                version: 1,
+                memberId: user.id,
+                emailNormalized: user.email.trim().toLowerCase(),
+                registeredAt: new Date().toISOString(),
               },
             });
           },
@@ -107,8 +123,10 @@ export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
           logger.info({ to: mask(to), purpose: type }, "otp sent");
         },
       }),
-      haveIBeenPwned({ customPasswordCompromisedMessage: "This password has appeared in a data breach. Please choose a different one." }),
-      jwt({ jwks: { keyPairConfig: { alg: "EdDSA", crv: "Ed25519" } } }),   // operator/system callers only
+      haveIBeenPwned({
+        customPasswordCompromisedMessage: "This password has appeared in a data breach. Please choose a different one.",
+      }),
+      jwt({ jwks: { keyPairConfig: { alg: "EdDSA", crv: "Ed25519" } } }), // operator/system callers only
       bearer(),
       admin({ ac, roles, defaultRole: "member", adminRoles: ["operator", "system"] }),
     ],
@@ -116,4 +134,7 @@ export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
 }
 export type Auth = ReturnType<typeof createAuth>;
 
-function mask(email: string) { const [u, d] = email.split("@"); return `${u.slice(0, 1)}***@${d ?? ""}`; }
+function mask(email: string) {
+  const [u, d] = email.split("@");
+  return `${u.slice(0, 1)}***@${d ?? ""}`;
+}

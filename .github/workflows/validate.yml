@@ -1,0 +1,82 @@
+name: validate
+on:
+  pull_request:
+  push:
+    branches: [main]
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: bbc, POSTGRES_PASSWORD: bbc, POSTGRES_DB: bbc_test }
+        ports: ["55432:5432"]
+        options: --health-cmd "pg_isready -U bbc -d bbc_test" --health-interval 2s --health-timeout 2s --health-retries 15
+    env:
+      DATABASE_URL: postgres://bbc:bbc@localhost:55432/bbc_test
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-0000
+      INTERNAL_API_SECRET: ci-internal-ci-internal-ci-internal-0
+      APP_ORIGIN: http://localhost:8000
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version: "1.3.4" }
+
+      # Which parts of the monorepo exist on this ref? The assembly lands in stages, so the pipeline
+      # runs the checks whose inputs are present and skips the rest instead of failing on absence.
+      - id: layout
+        run: |
+          test -d packages/db     && echo "db=true"     >> "$GITHUB_OUTPUT" || echo "db=false"     >> "$GITHUB_OUTPUT"
+          test -d packages/ui     && echo "ui=true"     >> "$GITHUB_OUTPUT" || echo "ui=false"     >> "$GITHUB_OUTPUT"
+          test -d packages/shared && echo "shared=true" >> "$GITHUB_OUTPUT" || echo "shared=false" >> "$GITHUB_OUTPUT"
+          test -f infra/compose.test.yml && echo "compose=true" >> "$GITHUB_OUTPUT" || echo "compose=false" >> "$GITHUB_OUTPUT"
+          ls packages/modules/*/*/src/api/index.ts >/dev/null 2>&1 && echo "modules=true" >> "$GITHUB_OUTPUT" || echo "modules=false" >> "$GITHUB_OUTPUT"
+
+      - run: bun install --frozen-lockfile
+      # Official binary — npm `gitleaks` / bunx stubs have no usable CLI.
+      - name: Install gitleaks
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - run: gitleaks detect --no-banner --redact
+
+      # Always: these only need the files that are already here.
+      - run: bun run format
+      - run: bun run lint
+      - run: bun run arch:check
+      - run: bun run typecheck
+
+      # tokens.ts is generated into packages/ui; before that package exists there is nothing to compare.
+      - if: steps.layout.outputs.ui == 'true'
+        run: bun run tokens:check
+      - run: bun run design:lint
+
+      # check-modules reads packages/modules/*/*/src/api/index.ts; before commit 4 the modules are MODULE.md only.
+      - if: steps.layout.outputs.modules == 'true'
+        run: bun run module:check
+
+      # The database chain needs both the package and the test compose file.
+      - if: steps.layout.outputs.db == 'true' && steps.layout.outputs.compose == 'true'
+        run: bun run --filter @bbc/db db:migrate
+      - if: steps.layout.outputs.db == 'true'
+        run: bun run test:unit
+      - if: steps.layout.outputs.db == 'true' && steps.layout.outputs.compose == 'true'
+        run: turbo run test:db
+      - if: steps.layout.outputs.db == 'true' && steps.layout.outputs.compose == 'true'
+        run: bun run db:verify
+
+      - name: architecture graph (main only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          sudo apt-get install -y graphviz
+          bun run arch:graph
+          git config user.name bbc-bot && git config user.email bot@buybusinessclass.com
+          git add docs/architecture/modules.svg && git diff --cached --quiet || git commit -m "docs(arch): regenerate module graph [skip ci]" && git push

@@ -1,2 +1,0 @@
-bunx lint-staged
-bunx gitleaks protect --staged --no-banner --redact

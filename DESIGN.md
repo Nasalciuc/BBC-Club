@@ -224,7 +224,9 @@ components:
 # BBC Club — Design System
 
 ## Overview
+
 The app should feel like a private lounge: calm, precise, expensive. Create this feeling through:
+
 - Two worlds — entry screens on `surface-panel` over a blurred cabin photograph; inside on `surface-page` with `surface-card` on `border-default` hairlines
 - Serif headlines written as invitations ("Your October in London"), body in Inter, `label-mono` uppercase for labels and flight facts
 - No accent color: exactly one light pill button (`button-inverted`) per dark screen, one `button-primary` per light screen
@@ -232,9 +234,11 @@ The app should feel like a private lounge: calm, precise, expensive. Create this
 - Photography of empty luxury spaces as the primary material; the interface recedes
 
 ## Source of Truth
+
 Tokens and components in this file are canonical. Details live in `design/components.md` (anatomy, states, rules), `design/motion.md`, `design/agent-prompts.md`. Production code in `src/constants/club.ts` and `src/components` must match; on conflict, report it — do not improvise.
 
 ## Colors
+
 - `primary` / `action-primary` (#1E293B): panels, primary buttons on light screens, badges, active tab. The only strong tone.
 - `action-inverted` (#F8FAFC): the light pill button on dark surfaces.
 - `surface-page` (#F8FAFC) canvas inside; `surface-card` (#FFFFFF) cards, rows, fields, tab bar; `surface-panel` (#1E293B) entry sheet; `surface-muted` (#334155) photo placeholders.
@@ -244,11 +248,13 @@ Tokens and components in this file are canonical. Details live in `design/compon
 - Photographic scrim: gradient from transparent to rgba(30,41,59,0.92) over the bottom 45% of any photo carrying text — the only gradient, never on UI.
 
 ## Typography
+
 - Roles never swap: every headline is serif (`display`, `headline`, `title`, `title-sm`) at weight 400; buttons are `button` (Inter 17/500); labels and flight facts are mono uppercase letterspaced.
 - Body never below `body-sm` (15px); `caption` (13px) carries only non-essential lines.
 - Fonts are bundled (Newsreader, Inter, JetBrains Mono); hold the splash until they load. Prototype tools may substitute Playfair/Georgia and Menlo — prototypes only.
 
 ## Layout and Responsiveness
+
 - Single column, phones only. Gutter 24px on both worlds; all left-aligned text shares it.
 - Entry panel top at 30–40% of screen height; 25% when the keyboard is open, content anchored to the panel top, primary button docked above the keyboard.
 - Primary action anchored in the lower third (thumb reach). No gap inside a panel exceeds `spacing.xl` except the one deliberate breathing space between the member group and the action group on Sign In.
@@ -257,15 +263,19 @@ Tokens and components in this file are canonical. Details live in `design/compon
 - Android edge-to-edge: bottom buttons and tab bar respect safe-area insets.
 
 ## Elevation and Depth
+
 - Level 0 flat text · Level 1 `border-default` hairline (cards, rows, fields) · Level 2 `surface-panel` over photograph · Level 3 full-bleed photograph under the scrim.
 - No drop shadows anywhere; depth comes from the two worlds, the scrim and 16–24px blur behind entry panels.
 
 ## Shapes
+
 - `rounded.pill` belongs to buttons only; fields and cards use `rounded.field`/`rounded.card` (12px); badges 4px; the entry panel 24px top corners. Shape is meaning: pills act, rectangles hold.
 - Photos: full-bleed portrait on Welcome and the detail hero (hero gets 12px bottom corners), 16:9 on cards, 1:1 thumbnails at 12px. No circular crops.
 
 ## Components
+
 Documented in `design/components.md`. Summary of the rules an agent most often gets wrong:
+
 - One filled button per screen; label centered with the arrow directly after it; secondary actions are `text-link`, never buttons.
 - `field` is white on both worlds with `field-label` above; focus strengthens the border to `text-secondary`; error = `status-danger` border on the field at fault only.
 - Password fields show text by default with an eye toggle; there is no confirm-password field.
@@ -275,34 +285,41 @@ Documented in `design/components.md`. Summary of the rules an agent most often g
 - Logo: white version directly on photographs and navy, dark version on `surface-page`; never inside a plate; never recolored.
 
 ## Interaction and States
+
 - Pressed: scale 0.98, arrow drifts 4px right, settles; no color flash. Focus: border strengthening only.
 - Error, empty, offline, responded and keyboard-open states are separate frames — never stacked on one screen.
 - Unread and selected states use weight plus a marker, never color alone.
 
 ## Accessibility
+
 - Tap targets ≥44pt (iOS) / 48dp (Android); text links get a 44pt hit area.
 - Contrast ≥4.5:1 for body text on both worlds; `text-tertiary` only where failure is harmless.
 - `accessibilityLabel` on every interactive element; VoiceOver/TalkBack order follows visual order.
 - Nothing communicated by color alone (the palette has no semantic hues to rely on).
 
 ## Motion
+
 - Motion explains a change of state; it never decorates, except the approved Ken Burns on Welcome's cabin photograph (once per session; `design/motion.md`). Entrance: staggered fade + 12px rise, **150ms between entrance elements** (logo → label → headline block → subline → button) and **200ms between the individual lines of the serif headline** (read sequentially, so they need more air), ease-out, last beat starts at 1.6s and finishes by 2.5s. Screen push/pop may slide horizontally; nothing inside a screen enters from the side. Press 120ms. No bounce, no spring overshoot.
 - Reduced motion: replace movement with opacity only. Details in `design/motion.md`.
 
 ## Iconography
+
 - Thin line icons, 1.5px stroke, 20px default (18px in the tab bar), from one set (SF Symbols on iOS, Material Symbols outlined on Android, or Tabler for parity). Never filled and outlined mixed; never an icon without a label for an unfamiliar action; no airplane clip-art, no emoji.
 
 ## Product Content
+
 - Sentence case; buttons start with a verb ("Sign in", "Create account", "I'm interested"); never "OK", "Submit", "Yes".
 - Titles are invitations, facts are facts (`JFK → LHR · BUSINESS`). Any sentence that could appear in any airline app is rewritten.
 - Errors say what happened and what to do next, calmly ("That doesn't match what we have. Try again, or reset it."). No urgency, no scarcity, no exclamation marks.
 - The advisor appears by name exactly where a human belongs ("Julia will call you shortly."), never as a sales badge.
 
 ## Do's and Don'ts
+
 - Do keep exactly one strong action per screen · Do write titles as invitations · Do render states as separate frames · Do use the white logo on dark surfaces.
 - Don't add gold, blue, green or any hue outside the ramp · Don't add search, filters, ratings, hearts or countdowns · Don't put buttons in cards · Don't show password dots by default · Don't invent brands, prices, cabin classes or flight data — use the fixture set.
 
 ## Maintenance and Validation
+
 - Validate on every change: `npx @google/design.md lint DESIGN.md`; compare versions with `npx @google/design.md diff`. CI fails on errors and orphaned tokens.
 - Remove anything that no longer matches `src/constants/club.ts` and `src/components`. Every rule here is reusable; screen-specific decisions live in the playbook, not in this file.
 - Known gaps: serif family pending ratification (Newsreader specified); onboarding components (`destination-card`, `stepper`) not yet tokenized; motion durations to be confirmed on device.

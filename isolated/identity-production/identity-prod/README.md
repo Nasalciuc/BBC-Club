@@ -1,4 +1,5 @@
 # identity-production — what this archive contains and how it drops into the monorepo
+
 - `packages/shared/src/{env,auth-messages}.ts`, `events/member.ts` — validated env, one voice for auth errors, event schemas
 - `packages/modules/core/identity/` — Better Auth instance (`infrastructure/auth.ts`), access control, facade + Hono middleware (`api/index.ts`), ports, tests, MODULE.md
 - `packages/modules/integration/email/src/postmark.ts` — awaited, error-propagating sender (+ console sender for dev)

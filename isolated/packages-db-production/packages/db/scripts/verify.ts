@@ -2,7 +2,16 @@
 import { sql } from "drizzle-orm";
 import { createDb } from "../src/client";
 
-const OWNED_SCHEMAS = ["platform", "auth", "members", "notifications", "proposals", "engagement", "crm", "personalization"];
+const OWNED_SCHEMAS = [
+  "platform",
+  "auth",
+  "members",
+  "notifications",
+  "proposals",
+  "engagement",
+  "crm",
+  "personalization",
+];
 const db = createDb(process.env.DATABASE_URL!, { max: 1, applicationName: "bbc-verify" });
 const problems: string[] = [];
 const q = async (s: any) => (await db.execute(s)) as any[];
@@ -35,12 +44,20 @@ try {
   for (const t of naive) problems.push(`naive timestamp ${t.table_schema}.${t.table_name}.${t.column_name}`);
 
   // 5. Every table has created_at (guide §7) — except pure junction/counter tables listed here
-  const exempt = new Set(["platform.event_cursors", "platform.flags", "platform.rate_limits", "members.notification_preferences", "personalization.member_features"]);
+  const exempt = new Set([
+    "platform.event_cursors",
+    "platform.flags",
+    "platform.rate_limits",
+    "members.notification_preferences",
+    "personalization.member_features",
+  ]);
   const noCreated = await q(sql`
     SELECT t.table_schema, t.table_name FROM information_schema.tables t
     WHERE t.table_schema = ANY(${OWNED_SCHEMAS}) AND t.table_type = 'BASE TABLE'
       AND NOT EXISTS (SELECT 1 FROM information_schema.columns c WHERE c.table_schema = t.table_schema AND c.table_name = t.table_name AND c.column_name IN ('created_at','occurred_at','started_at','processed_at','failed_at'))`);
-  for (const t of noCreated) if (!exempt.has(`${t.table_schema}.${t.table_name}`) && !t.table_name.startsWith("domain_events_")) problems.push(`no created_at: ${t.table_schema}.${t.table_name}`);
+  for (const t of noCreated)
+    if (!exempt.has(`${t.table_schema}.${t.table_name}`) && !t.table_name.startsWith("domain_events_"))
+      problems.push(`no created_at: ${t.table_schema}.${t.table_name}`);
 
   // 6. updated_at columns have the trigger (raw SQL cannot bypass $onUpdate)
   const missingTrg = await q(sql`
@@ -53,10 +70,13 @@ try {
   const textStatus = await q(sql`
     SELECT table_schema, table_name, column_name FROM information_schema.columns
     WHERE table_schema = ANY(${OWNED_SCHEMAS}) AND data_type = 'text' AND column_name IN ('status','kind','category','platform','targeting','source','response')`);
-  for (const t of textStatus) problems.push(`status column is text, not enum: ${t.table_schema}.${t.table_name}.${t.column_name}`);
+  for (const t of textStatus)
+    problems.push(`status column is text, not enum: ${t.table_schema}.${t.table_name}.${t.column_name}`);
 
   // 8. Journal is partitioned
-  const part = await q(sql`SELECT 1 FROM pg_partitioned_table p JOIN pg_class c ON c.oid = p.partrelid WHERE c.relname = 'domain_events'`);
+  const part = await q(
+    sql`SELECT 1 FROM pg_partitioned_table p JOIN pg_class c ON c.oid = p.partrelid WHERE c.relname = 'domain_events'`,
+  );
   if (!part.length) problems.push("platform.domain_events is not partitioned");
 } catch (e) {
   problems.push(`verify crashed: ${String(e)}`);
@@ -64,5 +84,8 @@ try {
   await db.close();
 }
 
-if (problems.length) { console.error("db:verify FAILED\n  - " + problems.join("\n  - ")); process.exit(1); }
+if (problems.length) {
+  console.error("db:verify FAILED\n  - " + problems.join("\n  - "));
+  process.exit(1);
+}
 console.log("db:verify OK");

@@ -3,7 +3,11 @@ import { jobRuns } from "../infrastructure/schema";
 
 export type JobContext = {
   db: any;
-  logger: { info: (o: object, m?: string) => void; warn: (o: object, m?: string) => void; error: (o: object, m?: string) => void };
+  logger: {
+    info: (o: object, m?: string) => void;
+    warn: (o: object, m?: string) => void;
+    error: (o: object, m?: string) => void;
+  };
   signal: AbortSignal;
 };
 export type JobHandler = (ctx: JobContext) => Promise<Record<string, number> | void>;
@@ -18,10 +22,24 @@ export type JobSpec = {
 /** Jobs are plain functions registered in code and triggered over HTTP by the cron container
  *  (`POST /v1/internal/run/:name`, authorized `jobs:run`). Every run is recorded in platform.job_runs —
  *  that table is the only honest answer to "did the backup run last night?". */
-export function createJobs(db: any, deps: { logger: JobContext["logger"]; metrics?: { inc(n: string, l?: Record<string, string>): void; observe(n: string, v: number, l?: Record<string, string>): void } }) {
+export function createJobs(
+  db: any,
+  deps: {
+    logger: JobContext["logger"];
+    metrics?: {
+      inc(n: string, l?: Record<string, string>): void;
+      observe(n: string, v: number, l?: Record<string, string>): void;
+    };
+  },
+) {
   const registry = new Map<string, JobSpec>();
 
-  async function run(name: string): Promise<{ status: "succeeded" | "failed" | "skipped"; durationMs: number; metrics?: Record<string, number>; error?: string }> {
+  async function run(name: string): Promise<{
+    status: "succeeded" | "failed" | "skipped";
+    durationMs: number;
+    metrics?: Record<string, number>;
+    error?: string;
+  }> {
     const spec = registry.get(name);
     if (!spec) throw new Error(`unknown job: ${name}`);
     const started = Date.now();
@@ -43,7 +61,10 @@ export function createJobs(db: any, deps: { logger: JobContext["logger"]; metric
     try {
       const metrics = (await spec.handler({ db, logger: deps.logger, signal: ac.signal })) ?? undefined;
       const durationMs = Date.now() - started;
-      await db.update(jobRuns).set({ status: "succeeded", finishedAt: sql`now()`, durationMs, metrics }).where(sql`${jobRuns.id} = ${runRow.id}`);
+      await db
+        .update(jobRuns)
+        .set({ status: "succeeded", finishedAt: sql`now()`, durationMs, metrics })
+        .where(sql`${jobRuns.id} = ${runRow.id}`);
       deps.metrics?.observe("job_duration_ms", durationMs, { job: name });
       deps.metrics?.inc("job_succeeded", { job: name });
       deps.logger.info({ job: name, durationMs, ...(metrics ?? {}) }, "job succeeded");
@@ -51,7 +72,10 @@ export function createJobs(db: any, deps: { logger: JobContext["logger"]; metric
     } catch (e: any) {
       const durationMs = Date.now() - started;
       const error = String(e?.message ?? e).slice(0, 2000);
-      await db.update(jobRuns).set({ status: "failed", finishedAt: sql`now()`, durationMs, error }).where(sql`${jobRuns.id} = ${runRow.id}`);
+      await db
+        .update(jobRuns)
+        .set({ status: "failed", finishedAt: sql`now()`, durationMs, error })
+        .where(sql`${jobRuns.id} = ${runRow.id}`);
       deps.metrics?.inc("job_failed", { job: name });
       deps.logger.error({ job: name, durationMs, err: error }, "job failed");
       return { status: "failed", durationMs, error };
@@ -74,7 +98,9 @@ export function createJobs(db: any, deps: { logger: JobContext["logger"]; metric
       const rows: any[] = await db.execute(sql`
         SELECT DISTINCT ON (job) job, status, started_at, duration_ms
         FROM platform.job_runs ORDER BY job, started_at DESC`);
-      return Object.fromEntries(rows.map((r) => [r.job, { status: r.status, at: r.started_at, durationMs: r.duration_ms }]));
+      return Object.fromEntries(
+        rows.map((r) => [r.job, { status: r.status, at: r.started_at, durationMs: r.duration_ms }]),
+      );
     },
   };
 }

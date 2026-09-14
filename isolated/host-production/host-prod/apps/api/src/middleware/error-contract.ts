@@ -18,17 +18,30 @@ export function errorContract(logger: Logger, metrics?: Metrics): ErrorHandler<a
     }
     if (err instanceof ZodError) {
       metrics?.inc("http_errors", { code: "VALIDATION" });
-      return c.json(apiError("VALIDATION", { requestId, details: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })) }), 400);
+      return c.json(
+        apiError("VALIDATION", {
+          requestId,
+          details: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+        }),
+        400,
+      );
     }
     // Better Auth surfaces APIError with a status; keep its status, use our shape.
     const anyErr = err as any;
     if (typeof anyErr?.status === "number" && anyErr.status < 500 && anyErr.body?.code) {
-      const code: ErrorCode = anyErr.status === 401 ? "UNAUTHORIZED" : anyErr.status === 403 ? "FORBIDDEN" : anyErr.status === 429 ? "RATE_LIMITED" : "VALIDATION";
+      const code: ErrorCode =
+        anyErr.status === 401
+          ? "UNAUTHORIZED"
+          : anyErr.status === 403
+            ? "FORBIDDEN"
+            : anyErr.status === 429
+              ? "RATE_LIMITED"
+              : "VALIDATION";
       metrics?.inc("http_errors", { code });
       return c.json(apiError(code, { requestId, message: anyErr.body.message }), anyErr.status);
     }
     metrics?.inc("http_errors", { code: "INTERNAL" });
     logger.error({ requestId, path: c.req.path, err: String(anyErr?.stack ?? err) }, "unhandled");
-    return c.json(apiError("INTERNAL", { requestId }), 500);     // generic message; detail only in logs
+    return c.json(apiError("INTERNAL", { requestId }), 500); // generic message; detail only in logs
   };
 }

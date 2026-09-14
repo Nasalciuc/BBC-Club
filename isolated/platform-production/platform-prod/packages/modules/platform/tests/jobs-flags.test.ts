@@ -19,7 +19,11 @@ describe("jobs", () => {
 
   it("records failures instead of throwing", async () => {
     const p = createPlatform(db, { level: "silent" });
-    p.jobs.register("bad-job", { handler: async () => { throw new Error("nope"); } });
+    p.jobs.register("bad-job", {
+      handler: async () => {
+        throw new Error("nope");
+      },
+    });
     const r = await p.jobs.run("bad-job");
     expect(r.status).toBe("failed");
     expect(r.error).toContain("nope");
@@ -27,8 +31,17 @@ describe("jobs", () => {
 
   it("singleton skips a concurrent run instead of doubling work", async () => {
     const p = createPlatform(db, { level: "silent" });
-    let running = 0, maxConcurrent = 0;
-    p.jobs.register("single", { singleton: true, handler: async () => { running++; maxConcurrent = Math.max(maxConcurrent, running); await new Promise((r) => setTimeout(r, 200)); running--; } });
+    let running = 0,
+      maxConcurrent = 0;
+    p.jobs.register("single", {
+      singleton: true,
+      handler: async () => {
+        running++;
+        maxConcurrent = Math.max(maxConcurrent, running);
+        await new Promise((r) => setTimeout(r, 200));
+        running--;
+      },
+    });
     const [a, b] = await Promise.all([p.jobs.run("single"), p.jobs.run("single")]);
     expect(maxConcurrent).toBe(1);
     expect([a.status, b.status].sort()).toEqual(["skipped", "succeeded"]);
