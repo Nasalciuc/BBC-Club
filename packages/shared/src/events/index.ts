@@ -41,6 +41,15 @@ export const EVENT_CATALOGUE = {
 } as const satisfies Record<string, CatalogueEntry>;
 
 export type EventType = keyof typeof EVENT_CATALOGUE;
+
+/** Payload type derived from the catalogue — the compiler refuses a missing field. */
+export type PayloadOf<T extends EventType> = z.infer<(typeof EVENT_CATALOGUE)[T]["schema"]>;
+
+/** Build a payload with `type` and `version` injected from the catalogue. Use this for EVERY publish;
+ *  hand-written payloads are how member.linked_to_crm shipped without them. */
+export function event<T extends EventType>(type: T, body: Omit<PayloadOf<T>, "type" | "version">): PayloadOf<T> {
+  return { type, version: EVENT_CATALOGUE[type].version, ...body } as PayloadOf<T>;
+}
 export * from "./member";
 export * from "./offer";
 export * from "./notification";

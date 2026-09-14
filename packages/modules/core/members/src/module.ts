@@ -1,5 +1,5 @@
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
-import { onMemberRegistered, reconcileMissingProfiles } from "./handlers/on-member-registered";
+import { onMemberRegistered, reconcileMissingProfiles, type IdentityUsersPort } from "./handlers/on-member-registered";
 
 type Ports = {
   crm: {
@@ -7,6 +7,7 @@ type Ports = {
       emailNormalized: string,
     ): Promise<{ crmClientId: string; fullName?: string; homeAirport?: string } | null>;
   };
+  identity: IdentityUsersPort;
 };
 /** stage 1 adds: getProfile, updateProfile, setPreferences, getStatus, timezoneOf. */
 type Exposes = Record<string, never>;
@@ -14,7 +15,7 @@ type Exposes = Record<string, never>;
 export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
   name: "members",
   layer: "core",
-  needs: ["crm"],
+  needs: ["crm", "identity"],
   init: ({ db, platform, ports }) => ({
     exposes: {},
     routes: [], // stage 1: GET/PATCH /v1/profile
@@ -45,6 +46,7 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
           handler: async () => ({
             reemitted: await reconcileMissingProfiles({
               db,
+              identity: ports.identity,
               publish: (e: any) =>
                 db.transaction((tx: unknown) => platform.events.publish(tx, { ...e, publishedBy: "members" })),
             }),

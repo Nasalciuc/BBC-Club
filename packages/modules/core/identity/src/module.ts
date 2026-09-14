@@ -23,6 +23,6 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
         },
       },
     });
-    return { exposes: { ...createIdentityFacade(auth), auth }, routes: [], consumers: [], jobs: [] };
+    return { exposes: { ...createIdentityFacade(auth, db), auth }, routes: [], consumers: [], jobs: [] };
   },
 });

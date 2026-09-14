@@ -3,6 +3,7 @@ import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { actorMemberId } from "@bbc/shared/authz/principal";
+import { event } from "@bbc/shared/events";
 import { responsesRepo } from "../infrastructure/responses.repo";
 
 export const RespondInput = z.object({ offerId: z.string().uuid(), response: z.enum(["interested", "dismissed"]) });
@@ -49,14 +50,12 @@ export async function respond(
       aggregateType: "offer",
       aggregateId: offer.id,
       memberId: actor,
-      payload: {
-        type: "offer.responded",
-        version: 1,
+      payload: event("offer.responded", {
         offerId: offer.id,
         memberId: actor,
         response: stored.response,
         at: new Date().toISOString(),
-      },
+      }),
     });
     return { ok: true, state: stored.response };
   });

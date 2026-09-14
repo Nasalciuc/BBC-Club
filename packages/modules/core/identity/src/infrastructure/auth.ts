@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, haveIBeenPwned, jwt, bearer, admin } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import type { ServerEnv } from "@bbc/shared/env";
+import { event } from "@bbc/shared/events";
 import type { EmailSender } from "../ports/email";
 import type { EventPublisher } from "../ports/events";
 import { ac, roles } from "./access";
@@ -72,7 +73,7 @@ export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
             aggregateType: "member",
             aggregateId: user.id,
             memberId: user.id,
-            payload: { type: "member.deleted", version: 1, memberId: user.id, deletedAt: new Date().toISOString() },
+            payload: event("member.deleted", { memberId: user.id, deletedAt: new Date().toISOString() }),
           });
         },
         afterDelete: async (user) => logger.info({ memberId: user.id }, "member deleted"),
@@ -90,13 +91,11 @@ export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
               aggregateType: "member",
               aggregateId: user.id,
               memberId: user.id,
-              payload: {
-                type: "member.registered",
-                version: 1,
+              payload: event("member.registered", {
                 memberId: user.id,
                 emailNormalized: user.email.trim().toLowerCase(),
                 registeredAt: new Date().toISOString(),
-              },
+              }),
             });
           },
         },
