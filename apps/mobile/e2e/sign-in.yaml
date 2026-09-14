@@ -1,0 +1,13 @@
+appId: com.buybusinessclass.club
+---
+- launchApp: { clearState: true }
+- assertVisible: { id: "welcome.signIn" }
+- tapOn: { id: "welcome.signIn" }
+- assertVisible: { id: "signIn.email" }
+- tapOn: { id: "signIn.email" }
+- inputText: "alex.morgan@company.com"
+- tapOn: { id: "signIn.password" }
+- inputText: "atlantic2026!"
+- tapOn: { id: "signIn.submit" }
+# Until Phase E wires the API this lands on the placeholder home; Phase E changes the last line to the feed.
+- assertVisible: { text: "Proposals" }

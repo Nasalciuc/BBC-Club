@@ -74,3 +74,9 @@ Highest density: `poller.ts` (20), `jobs/index.ts` (11), `builtin.ts` (10), `mig
 
 - better-auth 1.6.31 · @better-auth/expo 1.6.31 · drizzle-orm 1.0.0-rc.4 · hono 4.13.7 · postgres 3.4.9 · jose 6.2.12 · pino 9.14.0 · expo-secure-store 57.0.4 · Bun 1.3.4
 - Rate-limit probe: sign-in/email → 401×5 then **429** with **X-Retry-After: 600**; email-otp/send-verification-otp → 4th **429**.
+
+## COMMIT 4 — Maestro
+
+Flows added under `apps/mobile/e2e/`. Maestro CLI not installed on this Windows agent; run locally:
+`maestro test apps/mobile/e2e/sign-in.yaml && maestro test apps/mobile/e2e/register.yaml`
+register.yaml includes `verify.submit` (code entry alone does not navigate).
