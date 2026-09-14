@@ -1,6 +1,7 @@
 /** Applies pending migrations. Exit codes: 0 applied/nothing, 1 failure (never 0 on error).
  *  Runs as a separate job BEFORE the API restarts (expand/contract). Serialized by an advisory lock so two
- *  deploys cannot race. `0001_extras.sql` (trigger, partitions, fitness view) is applied after drizzle's DDL. */
+ *  deploys cannot race. `0001_extras.sql` (trigger, partitions, fitness view) is applied after drizzle's DDL;
+ *  `0003_platform_repair_journal_sequence.sql` always runs (idempotent) so already-migrated DBs recover. */
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { sql } from "drizzle-orm";
 import { readFileSync, existsSync } from "node:fs";
@@ -36,6 +37,20 @@ try {
       console.log("extras applied");
     }
   }
+
+  // Idempotent repair: restores domain_events_id_seq when an older 0001 CASCADE-dropped it.
+  const repair = join(migrationsDir, "0003_platform_repair_journal_sequence.sql");
+  if (existsSync(repair)) {
+    await db.execute(sql.raw(readFileSync(repair, "utf8")));
+    console.log("journal sequence repair applied");
+  }
+
+  const rateLimitFix = join(migrationsDir, "0004_auth_rate_limit_bigint.sql");
+  if (existsSync(rateLimitFix)) {
+    await db.execute(sql.raw(readFileSync(rateLimitFix, "utf8")));
+    console.log("auth.rate_limit.last_request → bigint");
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {

@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { timingSafeEqual, createHash } from "node:crypto";
-import { jwtVerify, createRemoteJWKSet } from "jose";
+import { jwtVerify, createRemoteJWKSet, customFetch } from "jose";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { err, type PrincipalVars } from "@bbc/shared/authz/authorize";
 import type { IdentityFacade } from "@bbc/identity";
@@ -16,7 +16,13 @@ type Opts = {
 
 /** Order is the security property: secret → bearer → cookie → anonymous. First match wins; nothing else is read. */
 export function resolvePrincipal(opts: Opts): MiddlewareHandler<PrincipalVars> {
-  const jwks = createRemoteJWKSet(new URL("/api/auth/jwks", opts.appOrigin));
+  const jwks = createRemoteJWKSet(new URL("/api/auth/jwks", opts.appOrigin), {
+    // Tests boot the host in-memory (no listen); fetch JWKS through the identity handler.
+    [customFetch]: async (input: string | URL | Request, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(String(input), init);
+      return opts.identity.handler(req);
+    },
+  });
   const secretHashes = opts.internalSecrets.map(sha256);
 
   return async (c, next) => {

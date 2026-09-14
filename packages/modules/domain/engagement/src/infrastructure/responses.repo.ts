@@ -26,4 +26,18 @@ export const responsesRepo = {
       .limit(1);
     return row ?? null;
   },
+  /** Scoped by actor: 0 rows if the response belongs to someone else (handler must throw). */
+  async markSynced(exec: Executor, actorMemberId: string, offerId: string, crmActivityId: string | null) {
+    const rows = await exec
+      .update(offerResponses)
+      .set({
+        syncedToCrm: true,
+        crmActivityId,
+        syncedAt: sql`now()`,
+        updatedAt: sql`now()`,
+      })
+      .where(and(eq(offerResponses.offerId, offerId), eq(offerResponses.memberId, actorMemberId)))
+      .returning({ offerId: offerResponses.offerId });
+    return rows.length;
+  },
 };

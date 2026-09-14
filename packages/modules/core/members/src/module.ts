@@ -1,6 +1,7 @@
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { createMembersFacade, type MembersFacade } from "./api";
 import { onMemberRegistered, reconcileMissingProfiles, type IdentityUsersPort } from "./handlers/on-member-registered";
+import { onMemberDeleted } from "./handlers/on-member-deleted";
 
 type Ports = {
   crm: {
@@ -36,7 +37,12 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
             payload,
           ),
       },
-      // stage 1: member.deleted → delete the profile; crm.mirror.synced → link waitlist members
+      {
+        type: "member.deleted",
+        name: "members.onMemberDeleted",
+        handler: (ctx: any, payload: any) => onMemberDeleted({ tx: ctx.tx }, payload),
+      },
+      // stage 1: crm.mirror.synced → link waitlist members
     ],
     jobs: [
       {

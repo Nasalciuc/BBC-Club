@@ -14,11 +14,19 @@ export type Logger = {
   warn: (o: object, m?: string) => void;
   error: (o: object, m?: string) => void;
 };
-export type IdentityDeps = { env: ServerEnv; db: any; email: EmailSender; events: EventPublisher; logger: Logger };
+export type IdentityDeps = {
+  env: ServerEnv;
+  db: any;
+  email: EmailSender;
+  events: EventPublisher;
+  logger: Logger;
+  /** Test-only: replace the real HIBP plugin with a predicate. Production never passes this. */
+  breachedPassword?: (password: string) => boolean | Promise<boolean>;
+};
 
 const TEN_MINUTES = 60 * 10;
 
-export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
+export function createAuth({ env, db, email, events, logger, breachedPassword }: IdentityDeps) {
   const isProd = env.NODE_ENV === "production";
 
   return betterAuth({
@@ -105,7 +113,9 @@ export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
     advanced: {
       useSecureCookies: isProd,
       cookiePrefix: "bbc",
-      database: { generateId: "uuid" },
+      // Better Auth 1.6.31: "uuid" means "the database generates it", but auth.user.id is text with no default
+      // (the CLI-generated schema, kept regen-safe). Generate in-app instead — a real UUID, no schema edit.
+      database: { generateId: () => crypto.randomUUID() },
     },
 
     plugins: [
@@ -122,9 +132,37 @@ export function createAuth({ env, db, email, events, logger }: IdentityDeps) {
           logger.info({ to: mask(to), purpose: type }, "otp sent");
         },
       }),
-      haveIBeenPwned({
-        customPasswordCompromisedMessage: "This password has appeared in a data breach. Please choose a different one.",
-      }),
+      ...(env.NODE_ENV === "test" || breachedPassword !== undefined
+        ? [
+            {
+              id: "test-hibp",
+              hooks: {
+                before: [
+                  {
+                    matcher: (ctx: { path?: string }) =>
+                      typeof ctx.path === "string" &&
+                      (ctx.path.includes("sign-up") || ctx.path.includes("change-password")),
+                    handler: async (ctx: { body?: { password?: string } }) => {
+                      const check = breachedPassword ?? (() => false);
+                      const password = ctx.body?.password;
+                      if (password && (await check(password))) {
+                        const { APIError } = await import("better-auth/api");
+                        throw new APIError("BAD_REQUEST", {
+                          message: "This password has appeared in a data breach. Please choose a different one.",
+                        });
+                      }
+                    },
+                  },
+                ],
+              },
+            },
+          ]
+        : [
+            haveIBeenPwned({
+              customPasswordCompromisedMessage:
+                "This password has appeared in a data breach. Please choose a different one.",
+            }),
+          ]),
       jwt({ jwks: { keyPairConfig: { alg: "EdDSA", crv: "Ed25519" } } }), // operator/system callers only
       bearer(),
       admin({ ac, roles, defaultRole: "member", adminRoles: ["operator", "system"] }),

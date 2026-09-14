@@ -85,6 +85,30 @@ try {
     sql`SELECT 1 FROM pg_partitioned_table p JOIN pg_class c ON c.oid = p.partrelid WHERE c.relname = 'domain_events'`,
   );
   if (!part.length) problems.push("platform.domain_events is not partitioned");
+
+  // 9. Non-PK *_id columns must not carry a nextval default (references, not generated ids)
+  const bogusNextval = await q(sql`
+    SELECT c.table_schema, c.table_name, c.column_name, c.column_default
+    FROM information_schema.columns c
+    WHERE c.table_schema IN (${schemasIn()})
+      AND c.column_name LIKE '%\\_id' ESCAPE '\\'
+      AND c.column_default LIKE 'nextval(%'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON kcu.constraint_name = tc.constraint_name
+         AND kcu.table_schema = tc.table_schema
+         AND kcu.table_name = tc.table_name
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+          AND tc.table_schema = c.table_schema
+          AND tc.table_name = c.table_name
+          AND kcu.column_name = c.column_name
+      )`);
+  for (const r of bogusNextval)
+    problems.push(
+      `non-PK *_id has nextval default (reference, not generated): ${r.table_schema}.${r.table_name}.${r.column_name}`,
+    );
 } catch (e) {
   problems.push(`verify crashed: ${String(e)}`);
 } finally {
