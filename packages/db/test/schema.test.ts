@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { createDb } from "../src/client";
 import { offers } from "../src/schema/proposals";
 import { bumpCounter } from "../src/helpers";
-import { rateLimits } from "../src/schema/platform";
+import { rateLimits } from "@bbc/platform/schema";
 
 /** The invariants live in Postgres. These tests prove the database refuses bad data without any application code. */
 const db = createDb(process.env.DATABASE_URL!, { max: 2, applicationName: "bbc-test" });
