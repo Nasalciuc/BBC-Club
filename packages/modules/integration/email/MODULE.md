@@ -1,6 +1,8 @@
 # integration/email
 
 **Owns:** nothing in the database.
+**Publishes:** none.
+**Consumes:** none.
 **Ports (implements):** `EmailSender.sendOtp({ to, otp, purpose })` — Postmark (primary), SES (fallback, same interface), console (dev), capturing (tests).
 **Facade:** `postmarkSender(opts)`, `sesSender(opts)`, `consoleSender()`.
 **Out of scope:** marketing email, templates beyond OTP (v2: React Email).

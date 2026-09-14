@@ -1,0 +1,3 @@
+# Generated from DESIGN.md by `bun run tokens` — must match generator output byte-for-byte.
+packages/ui/src/tokens.ts
+apps/mobile/tailwind.theme.js

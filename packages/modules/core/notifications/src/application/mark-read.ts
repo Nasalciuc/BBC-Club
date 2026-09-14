@@ -1,6 +1,6 @@
 import type { Executor } from "@bbc/db";
-import type { Principal } from "@bbc/platform/authz/principal";
-import { actorMemberId } from "@bbc/platform/authz/principal";
+import type { Principal } from "@bbc/shared/authz/principal";
+import { actorMemberId } from "@bbc/shared/authz/principal";
 import { notificationsRepo } from "../infrastructure/notifications.repo";
 
 export async function markRead(

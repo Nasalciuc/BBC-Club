@@ -3,7 +3,7 @@
 ## Stage 0 — Foundation (days 1–10) · DoD: validate green · app on iOS+Android · /ready on staging · restore tested
 
 - [ ] D1 fix commit 1 (PROMPT_FIX_COMMIT1 tasks 1–9) — verified on a fresh clone
-- [ ] D2 monorepo: turbo, workspaces, `apps/mobile`, `packages/{ui,shared,db}`; app runs unchanged
+- [x] D2 monorepo: turbo, workspaces, `apps/mobile`, `packages/{ui,shared,db}`; app runs unchanged
 - [ ] D3 tokens generated from DESIGN.md; Uniwind configured; `design_v3` in repo; `constants/club.ts` deleted
 - [ ] D4 contracts (api v1 + events v1 + errors) · 9 modules scaffolded · MODULE.md filled
 - [ ] D5 enforcement: cruiser, eslint boundaries, validate, CI, CODEOWNERS, PR template · a forbidden import fails CI

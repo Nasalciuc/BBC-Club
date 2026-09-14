@@ -1,37 +1,13 @@
 import type { Hono } from "hono";
 import type { Db } from "@bbc/db";
-import type { Platform, Handler } from "@bbc/platform";
+import type { Platform } from "@bbc/platform";
 import type { ServerEnv } from "@bbc/shared/env";
+import type { Layer, ModuleDescriptor, ModuleOutput } from "@bbc/shared/module-contract";
 
-export type Layer = "core" | "domain" | "intelligence" | "integration" | "presentation";
+export type { ModuleDescriptor, ModuleOutput, Layer } from "@bbc/shared/module-contract";
+
 const LAYER_ORDER: Layer[] = ["integration", "core", "domain", "intelligence", "presentation"];
 // integration first: adapters (email, push, crm) are pure implementations of ports the others need.
-
-export type ModuleInit<Ports, Exposes> = (deps: {
-  db: Db;
-  platform: Platform;
-  env: ServerEnv;
-  ports: Ports;
-}) => Promise<ModuleOutput<Exposes>> | ModuleOutput<Exposes>;
-
-export type ModuleOutput<Exposes> = {
-  /** Public facade — what other modules may receive as a port. */
-  exposes?: Exposes;
-  /** Routes mounted under /v1 (or "/" for auth/public). Already carry their own authorize(). */
-  routes?: { basePath: string; app: Hono<any> }[];
-  /** Event consumers: registered before the poller starts. */
-  consumers?: { type: string; name: string; handler: Handler }[];
-  /** Jobs exposed at /v1/internal/run/:name. */
-  jobs?: { name: string; spec: Parameters<Platform["jobs"]["register"]>[1] }[];
-};
-
-export type ModuleDescriptor<Ports = {}, Exposes = unknown> = {
-  name: string;
-  layer: Layer;
-  /** Names of facades this module needs, resolved from modules initialised earlier. A missing port fails boot. */
-  needs?: (keyof Ports & string)[];
-  init: ModuleInit<Ports, Exposes>;
-};
 
 export class ModuleRegistry {
   private modules: ModuleDescriptor<any, any>[] = [];
@@ -64,7 +40,9 @@ export class ModuleRegistry {
       if (out.exposes !== undefined) this.facades.set(m.name, out.exposes);
       for (const r of out.routes ?? []) deps.mount(r.basePath, r.app);
       for (const c of out.consumers ?? []) deps.platform.events.registerConsumer(c.type, c.name, c.handler);
-      for (const j of out.jobs ?? []) deps.platform.jobs.register(j.name, j.spec);
+      // JobSpec lives in platform; shared keeps jobs.spec as unknown to avoid shared→platform.
+      for (const j of out.jobs ?? [])
+        deps.platform.jobs.register(j.name, j.spec as Parameters<Platform["jobs"]["register"]>[1]);
       deps.platform.logger.info(
         {
           module: m.name,

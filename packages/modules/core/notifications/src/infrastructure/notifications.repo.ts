@@ -7,11 +7,11 @@ export const notificationsRepo = {
     return exec.select().from(n).where(eq(n.memberId, actorMemberId)).orderBy(desc(n.createdAt)).limit(limit);
   },
   async unreadCount(exec: Executor, actorMemberId: string) {
-    const [{ count }] = await exec
+    const [row] = await exec
       .select({ count: sql<number>`count(*)::int` })
       .from(n)
       .where(and(eq(n.memberId, actorMemberId), isNull(n.readAt)));
-    return count;
+    return row?.count ?? 0;
   },
   /** UPDATE ... WHERE id AND member_id — returns 0 for someone else's row; the route maps 0 → 404. No SELECT-then-check. */
   async markRead(exec: Executor, actorMemberId: string, id: string): Promise<number> {

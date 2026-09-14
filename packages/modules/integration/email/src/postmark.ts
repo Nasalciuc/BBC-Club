@@ -4,6 +4,7 @@ const SUBJECTS: Record<OtpPurpose, string> = {
   "email-verification": "Your BuyBusinessClass Club code",
   "forget-password": "Reset your BuyBusinessClass Club password",
   "sign-in": "Your BuyBusinessClass Club sign-in code",
+  "change-email": "Confirm your new BuyBusinessClass Club email",
 };
 
 export function postmarkSender(opts: { token: string; from: string; fetchImpl?: typeof fetch }): EmailSender {

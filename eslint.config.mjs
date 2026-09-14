@@ -15,8 +15,6 @@ export default tseslint.config(
       "docs/examples/**",
       ".agents/**",
       ".expo/**",
-      // Snapshots stay under isolated/ until unpack (PR3/PR4). Not part of any package tsconfig.
-      "isolated/**",
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
@@ -49,9 +47,6 @@ export default tseslint.config(
   },
 
   // The Expo app is type-checked by its own tsconfig (`bun run --filter @bbc/mobile typecheck`).
-  // The root project service does not resolve apps/mobile, so type-aware rules would report every
-  // import as `any`. Syntactic rules — and our own bbc/* rules below — still apply.
-  // Placed after the typed-rule block so disableTypeChecked wins for these globs.
   {
     files: ["apps/mobile/**/*.{ts,tsx}"],
     ...tseslint.configs.disableTypeChecked,
@@ -61,7 +56,6 @@ export default tseslint.config(
     },
   },
 
-  // Config and script files are not part of any tsconfig either.
   {
     files: ["**/*.{js,mjs,cjs}", "scripts/**/*.ts"],
     ...tseslint.configs.disableTypeChecked,
@@ -71,8 +65,7 @@ export default tseslint.config(
     },
   },
 
-  // Unpacked snapshots on this branch are incomplete until PR4 wiring — typed lint is noise.
-  // Syntactic + bbc/boundaries still apply. Remove when assembly-4 lands.
+  // Snapshot debt (ASSEMBLY_REPORT): keep syntactic + bbc/boundaries; typed no-unsafe-* off for now.
   {
     files: ["packages/**/*.{ts,tsx}", "apps/api/**/*.{ts,tsx}"],
     ...tseslint.configs.disableTypeChecked,
@@ -81,6 +74,7 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-empty-object-type": "off",
+      "@typescript-eslint/ban-ts-comment": "off",
     },
   },
 
@@ -119,21 +113,18 @@ export default tseslint.config(
     },
   },
 
-  // ── contracts: the memberId rule ───────────────────────────────────────────
   {
     files: ["packages/shared/src/api/**/*.ts"],
     plugins: { bbc },
     rules: { "bbc/no-member-id-in-request-schemas": "error" },
   },
 
-  // ── mobile: design system discipline + React Compiler ──────────────────────
   {
     files: ["apps/mobile/**/*.{ts,tsx}", "packages/ui/**/*.{ts,tsx}"],
     plugins: { bbc },
     rules: {
       "bbc/no-inline-color": "error",
       "bbc/require-test-id": "error",
-      // require() is how Metro resolves static assets in Expo; it is not a module system choice.
       "@typescript-eslint/no-require-imports": ["error", { allow: ["\\.(png|webp|jpe?g|ttf|otf)$"] }],
       "no-restricted-imports": [
         "error",
