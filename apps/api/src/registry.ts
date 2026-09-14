@@ -22,12 +22,7 @@ export class ModuleRegistry {
 
   /** Initialise in layer order; satisfy ports from earlier facades; mount; register consumers and jobs.
    *  A killed module is skipped entirely: no routes, no consumers (its pending deliveries pause via flags). */
-  async boot(deps: {
-    db: Db;
-    platform: Platform;
-    env: ServerEnv;
-    mount: (basePath: string, app: Hono<any>) => void;
-  }) {
+  async boot(deps: { db: Db; platform: Platform; env: ServerEnv; mount: (basePath: string, app: Hono<any>) => void }) {
     const ordered = [...this.modules].sort((a, b) => LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer));
     for (const m of ordered) {
       const ports: Record<string, unknown> = {};

@@ -19,9 +19,7 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
       logger: platform.logger,
       events: {
         publish: async (event) => {
-          await db.transaction((tx: unknown) =>
-            platform.events.publish(tx, { ...event, publishedBy: "identity" }),
-          );
+          await db.transaction((tx: unknown) => platform.events.publish(tx, { ...event, publishedBy: "identity" }));
         },
       },
     });

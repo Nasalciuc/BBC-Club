@@ -6,10 +6,7 @@ import * as SecureStore from "expo-secure-store";
 
 export const authClient = createAuthClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL!, // validated at app start in lib/env.ts
-  plugins: [
-    expoClient({ scheme: "bbcclub", storagePrefix: "bbcclub", storage: SecureStore }),
-    emailOTPClient(),
-  ],
+  plugins: [expoClient({ scheme: "bbcclub", storagePrefix: "bbcclub", storage: SecureStore }), emailOTPClient()],
 });
 export const { useSession } = authClient;
 

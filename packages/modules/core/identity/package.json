@@ -9,7 +9,10 @@
     "./ports/email": "./src/ports/email.ts",
     "./access": "./src/infrastructure/access.ts"
   },
-  "scripts": { "test:db": "bun test tests", "typecheck": "tsc --noEmit" },
+  "scripts": {
+    "test:db": "bun test tests",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@bbc/db": "workspace:*",
     "@bbc/shared": "workspace:*",

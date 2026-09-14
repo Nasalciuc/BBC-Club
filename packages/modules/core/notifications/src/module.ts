@@ -18,8 +18,8 @@ export const notificationsModule = (push?: PushSender): ModuleDescriptor<Record<
       unreadCount: (exec, actor) => notificationsRepo.unreadCount((exec ?? db) as any, actor),
       markRead: (exec, actor, id) => notificationsRepo.markRead((exec ?? db) as any, actor, id),
     },
-    routes: [],      // stage 3: /v1/inbox, /v1/devices, preferences
-    consumers: [],   // stage 3: offer.published, offer.responded, member.registered, member.deleted
-    jobs: [],        // stage 3: dispatch (uses `push`), receipts, cleanup-devices
+    routes: [], // stage 3: /v1/inbox, /v1/devices, preferences
+    consumers: [], // stage 3: offer.published, offer.responded, member.registered, member.deleted
+    jobs: [], // stage 3: dispatch (uses `push`), receipts, cleanup-devices
   }),
 });
