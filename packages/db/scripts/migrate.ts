@@ -4,6 +4,8 @@
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { sql } from "drizzle-orm";
 import { readFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { createDb } from "../src/client";
 
 const url = process.env.DATABASE_URL;
@@ -11,6 +13,8 @@ if (!url) {
   console.error("DATABASE_URL missing");
   process.exit(1);
 }
+
+const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "../migrations");
 
 const db = createDb(url, { max: 1, applicationName: "bbc-migrate" });
 try {
@@ -20,9 +24,9 @@ try {
     process.exit(1);
   }
 
-  await migrate(db, { migrationsFolder: new URL("../migrations", import.meta.url).pathname });
+  await migrate(db, { migrationsFolder: migrationsDir });
 
-  const extras = new URL("../migrations/0001_extras.sql", import.meta.url).pathname;
+  const extras = join(migrationsDir, "0001_extras.sql");
   if (existsSync(extras)) {
     const applied = (await db.execute(
       sql`SELECT 1 FROM pg_views WHERE schemaname='platform' AND viewname='cross_schema_fks'`,

@@ -28,7 +28,12 @@ export function createDb(url: string, opts: DbOptions = {}) {
     transform: { undefined: null }, // undefined → NULL, never "undefined"
     onnotice: () => {}, // quiet NOTICEs from CREATE IF NOT EXISTS etc.
   });
-  const db = drizzle(client, { schema, relations, logger: opts.logger ?? false });
+  const db = drizzle({
+    client,
+    schema,
+    relations,
+    logger: opts.logger ?? false,
+  });
   return Object.assign(db, {
     /** Close the pool (tests, scripts). */
     close: () => client.end({ timeout: 5 }),

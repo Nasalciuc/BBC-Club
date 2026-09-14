@@ -12,6 +12,13 @@ const OWNED_SCHEMAS = [
   "crm",
   "personalization",
 ];
+/** drizzle-orm@1.0.0-rc.4 does not bind JS string[] into ANY($1) correctly — expand to IN (...). */
+const schemasIn = () =>
+  sql.join(
+    OWNED_SCHEMAS.map((s) => sql`${s}`),
+    sql`, `,
+  );
+
 const db = createDb(process.env.DATABASE_URL!, { max: 1, applicationName: "bbc-verify" });
 const problems: string[] = [];
 const q = async (s: any) => (await db.execute(s)) as any[];
@@ -31,7 +38,7 @@ try {
     FROM pg_attribute a
     JOIN pg_class c ON c.oid = a.attrelid AND c.relkind = 'r'
     JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = ANY(${OWNED_SCHEMAS}) AND a.attnum > 0 AND NOT a.attisdropped
+    WHERE n.nspname IN (${schemasIn()}) AND a.attnum > 0 AND NOT a.attisdropped
       AND (a.attname LIKE '%\\_id' ESCAPE '\\' OR a.attname = 'member_id')
       AND NOT EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = c.oid AND a.attnum = ANY(i.indkey))
   `);
@@ -40,7 +47,7 @@ try {
   // 4. Every timestamp column is timestamptz (guide §15.8)
   const naive = await q(sql`
     SELECT table_schema, table_name, column_name FROM information_schema.columns
-    WHERE table_schema = ANY(${OWNED_SCHEMAS}) AND data_type = 'timestamp without time zone'`);
+    WHERE table_schema IN (${schemasIn()}) AND data_type = 'timestamp without time zone'`);
   for (const t of naive) problems.push(`naive timestamp ${t.table_schema}.${t.table_name}.${t.column_name}`);
 
   // 5. Every table has created_at (guide §7) — except pure junction/counter tables listed here
@@ -53,7 +60,7 @@ try {
   ]);
   const noCreated = await q(sql`
     SELECT t.table_schema, t.table_name FROM information_schema.tables t
-    WHERE t.table_schema = ANY(${OWNED_SCHEMAS}) AND t.table_type = 'BASE TABLE'
+    WHERE t.table_schema IN (${schemasIn()}) AND t.table_type = 'BASE TABLE'
       AND NOT EXISTS (SELECT 1 FROM information_schema.columns c WHERE c.table_schema = t.table_schema AND c.table_name = t.table_name AND c.column_name IN ('created_at','occurred_at','started_at','processed_at','failed_at'))`);
   for (const t of noCreated)
     if (!exempt.has(`${t.table_schema}.${t.table_name}`) && !t.table_name.startsWith("domain_events_"))
@@ -62,14 +69,14 @@ try {
   // 6. updated_at columns have the trigger (raw SQL cannot bypass $onUpdate)
   const missingTrg = await q(sql`
     SELECT c.table_schema, c.table_name FROM information_schema.columns c
-    WHERE c.column_name = 'updated_at' AND c.table_schema = ANY(${OWNED_SCHEMAS})
+    WHERE c.column_name = 'updated_at' AND c.table_schema IN (${schemasIn()})
       AND NOT EXISTS (SELECT 1 FROM information_schema.triggers tg WHERE tg.event_object_schema = c.table_schema AND tg.event_object_table = c.table_name AND tg.trigger_name = 'trg_updated_at')`);
   for (const t of missingTrg) problems.push(`updated_at without trigger: ${t.table_schema}.${t.table_name}`);
 
   // 7. Status-like text columns must be enums (guide §15.6 / ATS Hero lesson)
   const textStatus = await q(sql`
     SELECT table_schema, table_name, column_name FROM information_schema.columns
-    WHERE table_schema = ANY(${OWNED_SCHEMAS}) AND data_type = 'text' AND column_name IN ('status','kind','category','platform','targeting','source','response')`);
+    WHERE table_schema IN (${schemasIn()}) AND data_type = 'text' AND column_name IN ('status','kind','category','platform','targeting','source','response')`);
   for (const t of textStatus)
     problems.push(`status column is text, not enum: ${t.table_schema}.${t.table_name}.${t.column_name}`);
 

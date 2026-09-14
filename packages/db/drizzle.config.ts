@@ -5,7 +5,7 @@ import { defineConfig } from "drizzle-kit";
  *  forbidden by db:verify, not by drizzle-kit). */
 export default defineConfig({
   dialect: "postgresql",
-  schema: ["./src/schema/*.ts", "../modules/**/src/infrastructure/schema.ts"],
+  schema: ["./src/schema/index.ts"],
   out: "./migrations",
   dbCredentials: { url: process.env.DATABASE_URL! },
   casing: undefined, // column names are explicit in every table — no casing magic
