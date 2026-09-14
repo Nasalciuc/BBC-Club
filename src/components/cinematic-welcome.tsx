@@ -3,12 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AnimatedEntrance } from "@/components/animated-entrance";
@@ -57,11 +52,7 @@ export function CinematicWelcome() {
         ]}
       >
         <AnimatedEntrance fade delay={400}>
-          <Image
-            source={require("@/assets/images/logo-welcome.png")}
-            style={styles.logo}
-            contentFit="contain"
-          />
+          <Image source={require("@/assets/images/logo-welcome.png")} style={styles.logo} contentFit="contain" />
         </AnimatedEntrance>
 
         <View style={styles.bottom}>
@@ -84,12 +75,7 @@ export function CinematicWelcome() {
 
           <AnimatedEntrance delay={1600}>
             <View style={styles.actions}>
-              <ClubButton
-                testID="welcome.signIn"
-                label="Sign in"
-                arrow
-                onPress={() => router.push("/sign-in")}
-              />
+              <ClubButton testID="welcome.signIn" label="Sign in" arrow onPress={() => router.push("/sign-in")} />
               <Text style={styles.footer}>For BuyBusinessClass Clients</Text>
             </View>
           </AnimatedEntrance>

@@ -24,9 +24,9 @@ export function createDb(url: string, opts: DbOptions = {}) {
     idle_timeout: 30,
     max_lifetime: 60 * 30,
     connect_timeout: 10,
-    connection: { application_name: opts.applicationName ?? "bbc-api", statement_timeout: 15_000 },  // 15 s: nothing in request path may run longer
-    transform: { undefined: null },                     // undefined → NULL, never "undefined"
-    onnotice: () => {},                                 // quiet NOTICEs from CREATE IF NOT EXISTS etc.
+    connection: { application_name: opts.applicationName ?? "bbc-api", statement_timeout: 15_000 }, // 15 s: nothing in request path may run longer
+    transform: { undefined: null }, // undefined → NULL, never "undefined"
+    onnotice: () => {}, // quiet NOTICEs from CREATE IF NOT EXISTS etc.
   });
   const db = drizzle(client, { schema, relations, logger: opts.logger ?? false });
   return Object.assign(db, {
@@ -40,7 +40,10 @@ export function createDb(url: string, opts: DbOptions = {}) {
 /** Run `fn` inside a transaction unless already inside one — lets application code compose use cases. */
 export async function withTx<T>(exec: Executor, fn: (tx: Tx) => Promise<T>): Promise<T> {
   if ("transaction" in exec && typeof (exec as Db).transaction === "function" && !(exec as any).__isTx) {
-    return (exec as Db).transaction(async (tx) => { (tx as any).__isTx = true; return fn(tx); });
+    return (exec as Db).transaction(async (tx) => {
+      (tx as any).__isTx = true;
+      return fn(tx);
+    });
   }
   return fn(exec as Tx);
 }

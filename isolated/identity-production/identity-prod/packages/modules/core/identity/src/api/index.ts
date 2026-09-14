@@ -8,11 +8,16 @@ export type IdentityFacade = ReturnType<typeof createIdentityFacade>;
 /** The only surface other modules and the host may import. */
 export function createIdentityFacade(auth: Auth) {
   async function getSession(headers: Headers): Promise<{ member: Member; sessionId: string } | null> {
-    const s = await auth.api.getSession({ headers });   // awaited — the tutorial's dead guard, fixed
+    const s = await auth.api.getSession({ headers }); // awaited — the tutorial's dead guard, fixed
     if (!s?.user) return null;
-    if (!s.user.emailVerified) return null;              // unverified accounts have no access
+    if (!s.user.emailVerified) return null; // unverified accounts have no access
     return {
-      member: { id: s.user.id, email: s.user.email, emailVerified: true, role: (s.user as { role?: string }).role ?? "member" },
+      member: {
+        id: s.user.id,
+        email: s.user.email,
+        emailVerified: true,
+        role: (s.user as { role?: string }).role ?? "member",
+      },
       sessionId: s.session.id,
     };
   }
@@ -26,15 +31,18 @@ export function createIdentityFacade(auth: Auth) {
     await next();
   };
 
-  const requireRole = (...allowed: string[]): MiddlewareHandler<AuthVars> => async (c, next) => {
-    const m = c.get("member");
-    if (!m || !allowed.includes(m.role)) return c.json({ error: { code: "FORBIDDEN", message: "Not allowed." } }, 403);
-    await next();
-  };
+  const requireRole =
+    (...allowed: string[]): MiddlewareHandler<AuthVars> =>
+    async (c, next) => {
+      const m = c.get("member");
+      if (!m || !allowed.includes(m.role))
+        return c.json({ error: { code: "FORBIDDEN", message: "Not allowed." } }, 403);
+      await next();
+    };
 
   /** Deletion entrypoint for the BFF; the app re-asks the password in the confirmation sheet. */
   async function deleteAccount(headers: Headers): Promise<void> {
-    await auth.api.deleteUser({ headers, body: {} });    // → beforeDelete → member.deleted → cascades
+    await auth.api.deleteUser({ headers, body: {} }); // → beforeDelete → member.deleted → cascades
   }
 
   return { handler: auth.handler, getSession, requireMember, requireRole, deleteAccount };

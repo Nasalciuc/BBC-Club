@@ -9,7 +9,7 @@ import { createLogger } from "@bbc/platform/logger";
 import { createAuth, createIdentityFacade, type AuthVars } from "@bbc/identity";
 import { postmarkSender, consoleSender } from "@bbc/email";
 
-const env = loadEnv();                                   // throws with a readable list if anything is missing
+const env = loadEnv(); // throws with a readable list if anything is missing
 const logger = createLogger({ level: env.NODE_ENV === "production" ? "info" : "debug" });
 const db = createDb(env.DATABASE_URL);
 const events = createEvents(db);
@@ -24,12 +24,15 @@ const app = new Hono<AuthVars>();
 
 app.use("*", requestId());
 app.use("*", secureHeaders());
-app.use("/api/auth/*", cors({
-  origin: [env.APP_ORIGIN, `${env.MOBILE_SCHEME}://`],
-  allowHeaders: ["Content-Type", "Authorization", "Cookie"],
-  allowMethods: ["POST", "GET", "OPTIONS"],
-  credentials: true,
-}));
+app.use(
+  "/api/auth/*",
+  cors({
+    origin: [env.APP_ORIGIN, `${env.MOBILE_SCHEME}://`],
+    allowHeaders: ["Content-Type", "Authorization", "Cookie"],
+    allowMethods: ["POST", "GET", "OPTIONS"],
+    credentials: true,
+  }),
+);
 
 // Better Auth owns everything under /api/auth — we write no auth routes of our own.
 app.on(["POST", "GET"], "/api/auth/*", (c) => identity.handler(c.req.raw));
@@ -38,8 +41,8 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => identity.handler(c.req.raw));
 app.get("/health", (c) => c.json({ ok: true }));
 app.get("/ready", async (c) => {
   try {
-    await db.execute("SELECT 1 FROM auth.\"user\" LIMIT 1");
-    await identity.getSession(new Headers());              // exercises the session path against the DB
+    await db.execute('SELECT 1 FROM auth."user" LIMIT 1');
+    await identity.getSession(new Headers()); // exercises the session path against the DB
     return c.json({ ok: true });
   } catch (e) {
     logger.error({ err: String(e) }, "not ready");
@@ -63,5 +66,5 @@ app.onError((err, c) => {
   return c.json({ error: { code: "INTERNAL", message: "Something didn't go as planned." } }, 500);
 });
 
-export type AppType = typeof app;   // hc<AppType>() in the mobile client
+export type AppType = typeof app; // hc<AppType>() in the mobile client
 export default { port: 8000, fetch: app.fetch };

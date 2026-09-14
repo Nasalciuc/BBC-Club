@@ -18,14 +18,27 @@ function visibleTo(actorMemberId: string) {
 
 export const offersRepo = {
   async feed(exec: Executor, actorMemberId: string, cursor: { ts: Date; id: string } | null, limit = 20) {
-    return exec.select().from(offers)
-      .where(and(visibleTo(actorMemberId), cursor ? or(lt(offers.publishAt, cursor.ts), and(eq(offers.publishAt, cursor.ts), lt(offers.id, cursor.id))) : undefined))
+    return exec
+      .select()
+      .from(offers)
+      .where(
+        and(
+          visibleTo(actorMemberId),
+          cursor
+            ? or(lt(offers.publishAt, cursor.ts), and(eq(offers.publishAt, cursor.ts), lt(offers.id, cursor.id)))
+            : undefined,
+        ),
+      )
       .orderBy(desc(offers.publishAt), desc(offers.id))
       .limit(limit);
   },
   /** null → the route answers 404 (not 403): a member must not learn that someone else's offer exists. */
   async getVisible(exec: Executor, actorMemberId: string, offerId: string) {
-    const [row] = await exec.select().from(offers).where(and(eq(offers.id, offerId), visibleTo(actorMemberId))).limit(1);
+    const [row] = await exec
+      .select()
+      .from(offers)
+      .where(and(eq(offers.id, offerId), visibleTo(actorMemberId)))
+      .limit(1);
     return row ?? null;
   },
   /** system/operator only (route-guarded); no member scope by design */

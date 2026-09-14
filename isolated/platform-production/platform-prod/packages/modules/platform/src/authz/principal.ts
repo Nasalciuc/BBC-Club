@@ -16,4 +16,6 @@ export function actorMemberId(p: Principal): string | null {
   if (p.kind === "system" && p.actorMemberId) return p.actorMemberId;
   return null;
 }
-export function roleOf(p: Principal): Role | null { return p.kind === "anonymous" ? null : p.role; }
+export function roleOf(p: Principal): Role | null {
+  return p.kind === "anonymous" ? null : p.role;
+}

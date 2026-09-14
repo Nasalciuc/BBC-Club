@@ -3,9 +3,19 @@
   "globalDependencies": ["tsconfig.base.json", ".env.example"],
   "tasks": {
     "typecheck": { "dependsOn": ["^typecheck"], "inputs": ["src/**", "tsconfig.json", "package.json"], "outputs": [] },
-    "test:unit": { "dependsOn": ["^typecheck"], "inputs": ["src/**", "tests/unit/**", "test/**/*.unit.test.ts"], "outputs": [] },
-    "test:db":   { "dependsOn": ["^typecheck"], "inputs": ["src/**", "tests/**", "test/**", "migrations/**"], "outputs": [], "cache": false, "env": ["DATABASE_URL"] },
-    "build":     { "dependsOn": ["^build"], "outputs": ["dist/**"] },
-    "dev":       { "cache": false, "persistent": true }
+    "test:unit": {
+      "dependsOn": ["^typecheck"],
+      "inputs": ["src/**", "tests/unit/**", "test/**/*.unit.test.ts"],
+      "outputs": []
+    },
+    "test:db": {
+      "dependsOn": ["^typecheck"],
+      "inputs": ["src/**", "tests/**", "test/**", "migrations/**"],
+      "outputs": [],
+      "cache": false,
+      "env": ["DATABASE_URL"]
+    },
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "dev": { "cache": false, "persistent": true }
   }
 }

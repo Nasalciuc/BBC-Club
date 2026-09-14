@@ -54,13 +54,7 @@ export default function SetPasswordScreen() {
       heroPercent={0.25}
       onBack="/sign-in"
       footer={
-        <ClubButton
-          testID="setPassword.continue"
-          label="Continue"
-          arrow
-          disabled={!canContinue}
-          onPress={onContinue}
-        />
+        <ClubButton testID="setPassword.continue" label="Continue" arrow disabled={!canContinue} onPress={onContinue} />
       }
     >
       <View style={styles.copy}>

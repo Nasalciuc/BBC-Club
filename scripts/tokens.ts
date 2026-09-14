@@ -13,7 +13,10 @@ const fm = md.match(/^---\n([\s\S]*?)\n---/);
 if (!fm) throw new Error("DESIGN.md has no YAML front-matter");
 const y = parse(fm[1]) as {
   colors: Record<string, string>;
-  typography: Record<string, { fontFamily: string; fontSize: string; fontWeight: number; lineHeight: number; letterSpacing?: string }>;
+  typography: Record<
+    string,
+    { fontFamily: string; fontSize: string; fontWeight: number; lineHeight: number; letterSpacing?: string }
+  >;
   rounded: Record<string, string>;
   spacing: Record<string, string>;
   components: Record<string, Record<string, string>>;
@@ -25,13 +28,18 @@ const family = (f: string) => f.split(",")[0].trim();
 
 // ── tokens.ts ─────────────────────────────────────────────────────────────────
 const colors = Object.fromEntries(Object.entries(y.colors).map(([k, v]) => [camel(k), v]));
-const type = Object.fromEntries(Object.entries(y.typography).map(([k, t]) => [camel(k), {
-  fontFamily: family(t.fontFamily),
-  fontSize: px(t.fontSize),
-  fontWeight: String(t.fontWeight),
-  lineHeight: Math.round(px(t.fontSize) * t.lineHeight),
-  letterSpacing: t.letterSpacing ? Number(String(t.letterSpacing).replace("px", "")) : 0,
-}]));
+const type = Object.fromEntries(
+  Object.entries(y.typography).map(([k, t]) => [
+    camel(k),
+    {
+      fontFamily: family(t.fontFamily),
+      fontSize: px(t.fontSize),
+      fontWeight: String(t.fontWeight),
+      lineHeight: Math.round(px(t.fontSize) * t.lineHeight),
+      letterSpacing: t.letterSpacing ? Number(String(t.letterSpacing).replace("px", "")) : 0,
+    },
+  ]),
+);
 const radius = Object.fromEntries(Object.entries(y.rounded).map(([k, v]) => [camel(k), px(v) >= 9999 ? 999 : px(v)]));
 const space = Object.fromEntries(Object.entries(y.spacing).map(([k, v]) => [camel(k), px(v)]));
 
@@ -58,13 +66,22 @@ module.exports = {
 `;
 
 let changed = false;
-for (const [path, content] of [[OUT_TS, ts], [OUT_TW, tw]] as const) {
+for (const [path, content] of [
+  [OUT_TS, ts],
+  [OUT_TW, tw],
+] as const) {
   const current = existsSync(path) ? readFileSync(path, "utf8") : "";
   if (current !== content) {
     changed = true;
     if (check) console.error(`tokens out of date: ${path}`);
-    else { writeFileSync(path, content); console.log(`wrote ${path}`); }
+    else {
+      writeFileSync(path, content);
+      console.log(`wrote ${path}`);
+    }
   }
 }
-if (check && changed) { console.error("run `bun run tokens` and commit the result"); process.exit(1); }
+if (check && changed) {
+  console.error("run `bun run tokens` and commit the result");
+  process.exit(1);
+}
 if (check) console.log("tokens up to date");

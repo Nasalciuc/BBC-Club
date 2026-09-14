@@ -1,4 +1,5 @@
 # authz — how authorization is enforced in BBC Club (ADR-IMPL-006)
+
 - **Principals:** member (session cookie) · operator (Better Auth JWT, role=operator) · system (X-Internal-Secret on /v1/internal/* or JWT role=system; handlers/cron).
 - **Permissions** are `resource:action`, declared once here, mapped to roles; Better Auth's access control is derived from the same map (`toAccessControlRoles()`).
 - **Two layers:** `authorize(permission)` on every route (deny by default; `routeRegistry` + inventory test) and ownership **in the SQL WHERE** of scoped repositories (member id from the principal only). Missing/foreign resource → 404, wrong role → 403, wrong secret → 401.

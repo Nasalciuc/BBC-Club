@@ -3,6 +3,7 @@
 **Versions:** drizzle-orm 1.x (Relational Queries v2, `defineRelations`), drizzle-kit 1.x, postgres.js 3.x, PostgreSQL 16 on the VPS (uuid v4 from `gen_random_uuid()`; `uuidv7()` when we move to PG 18).
 
 ## What lives here
+
 - `src/client.ts` — one `createDb(url, opts)`; pool sizing (app 10, scripts 1), `statement_timeout` 15 s, `withTx` for composable use cases, `Executor` type so repositories accept a db **or** a transaction.
 - `src/schema/*` — one file per Postgres schema = one owning module (`platform`, `auth`, `members`, `notifications`, `proposals`, `engagement`, `crm`, `personalization`). Explicit column names everywhere; no casing magic. (After stage 0 day 4 the files move next to their modules; this package keeps the index that re-exports them.)
 - `src/relations/*` — Relational Queries v2 **parts per module**; a part may reference only its own schema's tables (`test/relations.test.ts` enforces it). Cross-module reads are facade calls or events, never relations.
@@ -13,6 +14,7 @@
 - `test/schema.test.ts` — proves Postgres refuses bad data with zero application code (CHECKs, XOR, idempotency key, enum via raw SQL, atomic counters under 25 concurrent increments).
 
 ## Rules (from the two guides + our own scars)
+
 1. PK is a synthetic uuid; **business logic is never a PK**; the auth provider's id is never a key anywhere.
 2. `created_at` on every table; `updated_at` only where rows change, always with the DB trigger; immutable tables (journal, inbox, runs) have none.
 3. Every reference column has an index; every hot query has a dedicated (often partial) index named `<table>_<purpose>`.
@@ -25,4 +27,5 @@
 10. Raw `sql` only in `infrastructure/` for what Drizzle cannot express (SKIP LOCKED, advisory locks, partition DDL). Never `forEach(async)`; every script exits 1 on error; seeds and resets are guarded.
 
 ## Commands
+
 `bun run db:generate` → review the SQL → `bun run db:migrate` → `bun run db:verify` (CI fails on any finding) · `bun run db:seed` (dev/staging) · `docker compose -f infra/compose.test.yml up -d && bun run db:reset:test && bun test`.

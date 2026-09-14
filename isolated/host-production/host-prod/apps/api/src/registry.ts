@@ -7,7 +7,12 @@ export type Layer = "core" | "domain" | "intelligence" | "integration" | "presen
 const LAYER_ORDER: Layer[] = ["integration", "core", "domain", "intelligence", "presentation"];
 // integration first: adapters (email, push, crm) are pure implementations of ports the others need.
 
-export type ModuleInit<Ports, Exposes> = (deps: { db: Db; platform: Platform; env: ServerEnv; ports: Ports }) => Promise<ModuleOutput<Exposes>> | ModuleOutput<Exposes>;
+export type ModuleInit<Ports, Exposes> = (deps: {
+  db: Db;
+  platform: Platform;
+  env: ServerEnv;
+  ports: Ports;
+}) => Promise<ModuleOutput<Exposes>> | ModuleOutput<Exposes>;
 
 export type ModuleOutput<Exposes> = {
   /** Public facade — what other modules may receive as a port. */
@@ -46,7 +51,8 @@ export class ModuleRegistry {
     for (const m of ordered) {
       const ports: Record<string, unknown> = {};
       for (const need of m.needs ?? []) {
-        if (!this.facades.has(need)) throw new Error(`module ${m.name} needs port "${need}" but no earlier module exposes it (check layers)`);
+        if (!this.facades.has(need))
+          throw new Error(`module ${m.name} needs port "${need}" but no earlier module exposes it (check layers)`);
         ports[need] = this.facades.get(need);
       }
       if (await deps.platform.flags.isKilled(m.name)) {
@@ -59,9 +65,21 @@ export class ModuleRegistry {
       for (const r of out.routes ?? []) deps.mount(r.basePath, r.app);
       for (const c of out.consumers ?? []) deps.platform.events.registerConsumer(c.type, c.name, c.handler);
       for (const j of out.jobs ?? []) deps.platform.jobs.register(j.name, j.spec);
-      deps.platform.logger.info({ module: m.name, routes: out.routes?.length ?? 0, consumers: out.consumers?.length ?? 0, jobs: out.jobs?.length ?? 0 }, "module mounted");
+      deps.platform.logger.info(
+        {
+          module: m.name,
+          routes: out.routes?.length ?? 0,
+          consumers: out.consumers?.length ?? 0,
+          jobs: out.jobs?.length ?? 0,
+        },
+        "module mounted",
+      );
     }
   }
 
-  facade<T>(name: string): T { const f = this.facades.get(name); if (!f) throw new Error(`no facade: ${name}`); return f as T; }
+  facade<T>(name: string): T {
+    const f = this.facades.get(name);
+    if (!f) throw new Error(`no facade: ${name}`);
+    return f as T;
+  }
 }
