@@ -1,0 +1,22 @@
+{
+  "name": "@bbc/platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/api/index.ts",
+    "./authz/principal": "./src/authz/principal.ts",
+    "./schema": "./src/infrastructure/schema.ts"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "drizzle-orm": "1.0.0-rc.4",
+    "pino": "^9.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.0.0"
+  }
+}

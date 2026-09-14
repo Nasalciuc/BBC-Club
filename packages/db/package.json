@@ -1,0 +1,32 @@
+{
+  "name": "@bbc/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/client.ts",
+    "./schema": "./src/schema/index.ts",
+    "./schema/*": "./src/schema/*.ts",
+    "./helpers": "./src/helpers.ts",
+    "./relations": "./src/relations/index.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun run scripts/migrate.ts",
+    "db:verify": "bun run scripts/verify.ts",
+    "db:seed": "bun run scripts/seed-fixture.ts",
+    "db:reset:test": "bun run scripts/reset-test.ts",
+    "db:studio": "drizzle-kit studio",
+    "test": "bun test",
+    "test:db": "bun test"
+  },
+  "dependencies": {
+    "@bbc/platform": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.4",
+    "postgres": "^3.4.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "1.0.0-rc.4"
+  }
+}

@@ -12,7 +12,14 @@ for (const layer of readdirSync(base)) {
   if (!statSync(lp).isDirectory()) continue;
   if (existsSync(join(lp, "package.json")))
     modules.push(lp); // platform lives at layer root
-  else for (const m of readdirSync(lp)) if (statSync(join(lp, m)).isDirectory()) modules.push(join(lp, m));
+  else
+    for (const m of readdirSync(lp)) {
+      const mp = join(lp, m);
+      if (!statSync(mp).isDirectory()) continue;
+      // MODULE.md-only scaffolds (no package.json yet) are not modules under check.
+      if (!existsSync(join(mp, "package.json"))) continue;
+      modules.push(mp);
+    }
 }
 for (const m of modules) {
   const pkg = JSON.parse(readFileSync(join(m, "package.json"), "utf8")) as {
