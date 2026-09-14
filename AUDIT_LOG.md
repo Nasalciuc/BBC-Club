@@ -9,6 +9,11 @@ Branch: `fix/bug-hunt` from `origin/fix/audit-main` (PR #14 not merged; `origin/
 | 1.3 | P3+P5   | packages/db/migrations/0002 + migrate.ts               | 0002 never applied; view heuristic; deleted 0002; ledger extras_applied                                     | commit 1   | migrate.test.ts                    |
 | 1.4 | P3      | packages/modules/platform/src/events/poller.ts         | Promise.race timeout left handler running on closed tx                                                      | commit 1   | journal.test.ts abort signal       |
 | 1.5 | P2      | packages/modules/integration/crm/src/module.ts         | CRM_ADAPTER read from process.env outside loadEnv                                                           | commit 1   | crm-adapter-env.test.ts            |
+| 2.1 | P2+P3   | scripts/check-modules.ts                               | no permanent probes for camelCase-in-SQL / serial refs                                                      | commit 2   | module:check                       |
+| 2.2 | P5      | apps/api/test/permissions.test.ts                      | authorize() perms could silently 403 everyone                                                               | commit 2   | permissions.test.ts                |
+| 2.3 | P4      | apps/api/test/ports.test.ts                            | port adapters could drift from interfaces without runtime check                                             | commit 2   | ports.test.ts                      |
+| 3.5 | P1      | identity rateLimit / clients                           | assumed Retry-After; Better Auth 1.6.31 emits X-Retry-After; route keys OK (429)                            | commit 3   | library-assumptions.test.ts        |
+| 3.6 | P1      | apps/api principal jwtVerify                           | iss/aud must equal APP_ORIGIN — plugin defaults match; locked by decodeJwt test                             | commit 3   | library-assumptions.test.ts        |
 
 ## Graph findings
 
@@ -64,3 +69,8 @@ Highest density: `poller.ts` (20), `jobs/index.ts` (11), `builtin.ts` (10), `mig
 `createPlatform` / `createDb` / `EventRegistry` / `buildApp` lead (among code symbols). Commits 1–3 touch three of them.
 
 ---
+
+## Verified against installed versions (commit 3)
+
+- better-auth 1.6.31 · @better-auth/expo 1.6.31 · drizzle-orm 1.0.0-rc.4 · hono 4.13.7 · postgres 3.4.9 · jose 6.2.12 · pino 9.14.0 · expo-secure-store 57.0.4 · Bun 1.3.4
+- Rate-limit probe: sign-in/email → 401×5 then **429** with **X-Retry-After: 600**; email-otp/send-verification-otp → 4th **429**.

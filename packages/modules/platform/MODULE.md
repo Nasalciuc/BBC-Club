@@ -9,3 +9,13 @@
 **Jobs owned:** `partitions`, `retention`, `queue-health`.
 **Invariants tested:** rollback → no event · one delivery per consumer · single delivery under two pollers · handler rollback + backoff · DLQ after 7 attempts · replay · per-aggregate order · upcast · pause/resume · abortable timeout · tombstone · job singleton/record/failure · flags fail-safe · metrics render.
 **Alerts:** oldest pending delivery > 5 min (transactional path) · any DLQ row · job without a successful run in 36 h.
+
+## Verified against installed versions
+
+Pinned: **drizzle-orm / drizzle-kit 1.0.0-rc.4**, **postgres.js 3.4.x**, **pino 9.x** (logger).
+
+| #                       | Assumption                                  | Result                             |
+| ----------------------- | ------------------------------------------- | ---------------------------------- |
+| Handler `AbortSignal`   | poller aborts waiting and handlers can stop | `journal.test.ts` timeout + signal |
+| Singleton advisory lock | reserved connection via `db.raw.reserve()`  | `jobs-singleton.test.ts`           |
+| Jobs / flags / metrics  | createPlatform surface                      | existing platform tests            |
