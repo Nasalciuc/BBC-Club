@@ -16,3 +16,5 @@ The raw `docker compose … up -d` commands are for bootstrap and operations (re
 **Operating it:** `RUNBOOK.md`. It is a deliverable, not documentation — if you cannot restore the database by reading it, it is broken.
 
 **v2 (after code review):** pgBackRest runs inside the postgres container (archive_command needs the binary); options via `PGBACKREST_*` env; one Caddy serves both domains with Cloudflare `trusted_proxies`; staging = extra services in the same project; `edge`/`data` networks (`data` is internal); host cron for backups/drill/disk; `apps/api/Dockerfile` + `api-deploy.yml` added; `eas.json` without `$VAR` interpolation.
+
+**EAS:** `eas.json` lives at `apps/mobile/eas.json` (next to the app `package.json`) — EAS CLI only looks there; `infra/` was invisible to it.
