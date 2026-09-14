@@ -16,7 +16,9 @@ const walk = (d: string): string[] =>
 describe("every authorize() permission is declared", () => {
   const used = new Set<string>();
   for (const f of [...walk(join(repoRoot, "apps/api/src")), ...walk(join(repoRoot, "packages/modules"))]) {
-    for (const m of readFileSync(f, "utf8").matchAll(/authorize\("([a-z-]+:[a-z-]+)"/g)) used.add(m[1]);
+    for (const m of readFileSync(f, "utf8").matchAll(/authorize\("([a-z-]+:[a-z-]+)"/g)) {
+      if (m[1]) used.add(m[1]);
+    }
   }
   for (const p of used) it(p, () => expect(declared.has(p as any)).toBe(true));
   it("finds at least the two routes that exist today", () => expect(used.size).toBeGreaterThanOrEqual(2));
