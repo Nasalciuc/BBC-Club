@@ -11,6 +11,16 @@ export default tseslint.config(
       "**/*.generated.*",
       "packages/ui/src/tokens.ts",
       "apps/mobile/tailwind.theme.js",
+      // Snapshots stay under isolated/ until unpack (PR3/PR4). Not part of any package tsconfig.
+      "isolated/**",
+      // Expo app still lives at the repo root on this branch; RN types resolve from apps/mobile
+      // only after the move (PR2). Lint it there, not against the half-assembled root tree.
+      "src/**",
+      "assets/**",
+      // Config / tooling JS is not in the TS project service.
+      "**/*.{js,cjs,mjs}",
+      // Needs @bbc/db (wired in PR4).
+      "scripts/seed-flags.ts",
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
