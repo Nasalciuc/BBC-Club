@@ -202,6 +202,36 @@ describe("poller", () => {
     await p.poller.drainOnce();
     expect(calls).toBe(1);
   });
+
+  it("handler timeout aborts the signal so the handler can stop working", async () => {
+    let exited = false;
+    const p = createPlatform(db, { level: "silent", handlerTimeoutMs: 200 });
+    p.events.defineEvent("test.happened", { version: 1, schema: Payload });
+    p.events.registerConsumer("test.happened", "testing.onTimeout", async (ctx) => {
+      while (!ctx.signal.aborted) await new Promise((r) => setTimeout(r, 50));
+      exited = true;
+    });
+    await db.transaction((tx: any) =>
+      p.events.publish(tx, {
+        type: "test.happened",
+        aggregateType: "test",
+        aggregateId: "timeout",
+        payload: { type: "test.happened", version: 1, value: "t" },
+        publishedBy: "tests",
+      }),
+    );
+    const t0 = Date.now();
+    await p.poller.processOne();
+    // wait for the loop to notice abort (race rejects; handler exits on next sleep tick)
+    for (let i = 0; i < 20 && !exited; i++) await new Promise((r) => setTimeout(r, 50));
+    expect(exited).toBe(true);
+    expect(Date.now() - t0).toBeLessThan(800);
+    const [d]: any = await db.execute(
+      sql`SELECT status, attempts FROM platform.event_deliveries WHERE aggregate_id='timeout' LIMIT 1`,
+    );
+    expect(d.status).toBe("pending");
+    expect(d.attempts).toBe(1);
+  });
 });
 
 describe("versioning", () => {

@@ -77,9 +77,11 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
         }
 
         const started = Date.now();
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), handlerTimeoutMs);
         try {
           const payload = registry.parse(row.type, row.version, row.payload); // upcast + validate
-          await withTimeout(
+          await Promise.race([
             handler(
               {
                 tx,
@@ -100,12 +102,12 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
                 },
                 logger: deps.logger,
                 attempt,
+                signal: ac.signal,
               },
               payload,
             ),
-            handlerTimeoutMs,
-            `${row.consumer} timed out after ${handlerTimeoutMs}ms`,
-          );
+            abortedPromise(ac.signal, `${row.consumer} timed out after ${handlerTimeoutMs}ms`),
+          ]);
 
           await tx.execute(
             sql`UPDATE platform.event_deliveries SET status='done', attempts=${attempt}, processed_at=now(), last_error=NULL WHERE id = ${row.id}`,
@@ -116,6 +118,8 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
         } catch (e: any) {
           failure = { row, attempt, message: String(e?.message ?? e).slice(0, 1000) };
           throw e; // roll back handler writes
+        } finally {
+          clearTimeout(timer);
         }
       })
       .catch((e: any) => {
@@ -220,12 +224,12 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
-  let t: any;
-  return Promise.race([
-    p.finally(() => clearTimeout(t)),
-    new Promise<T>((_, rej) => {
-      t = setTimeout(() => rej(new Error(msg)), ms);
-    }),
-  ]);
+function abortedPromise(signal: AbortSignal, msg: string): Promise<never> {
+  return new Promise((_, rej) => {
+    if (signal.aborted) {
+      rej(new Error(msg));
+      return;
+    }
+    signal.addEventListener("abort", () => rej(new Error(msg)), { once: true });
+  });
 }
