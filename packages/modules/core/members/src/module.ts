@@ -1,4 +1,5 @@
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import { createMembersFacade, type MembersFacade } from "./api";
 import { onMemberRegistered, reconcileMissingProfiles, type IdentityUsersPort } from "./handlers/on-member-registered";
 
 type Ports = {
@@ -9,16 +10,16 @@ type Ports = {
   };
   identity: IdentityUsersPort;
 };
-/** stage 1 adds: getProfile, updateProfile, setPreferences, getStatus, timezoneOf. */
-type Exposes = Record<string, never>;
+/** stage 1 adds: updateProfile, setPreferences. */
+type Exposes = MembersFacade;
 
 export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
   name: "members",
   layer: "core",
   needs: ["crm", "identity"],
   init: ({ db, platform, ports }) => ({
-    exposes: {},
-    routes: [], // stage 1: GET/PATCH /v1/profile
+    exposes: createMembersFacade(db),
+    routes: [], // GET /v1/profile is served by the BFF from this facade; stage 1: PATCH /v1/profile
     consumers: [
       {
         type: "member.registered",
