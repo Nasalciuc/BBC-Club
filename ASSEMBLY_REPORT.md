@@ -208,18 +208,17 @@ Ran 36 tests across 16 files.
 
 ## Red on purpose
 
-- **Stubs / empty facades:** members, notifications, proposals, crm `src/api/index.ts` return `{}`; `apps/api/src/registry.ts(40,42)` casts nothing because the shared contract types `routes.app`/`jobs.spec` as `unknown`.
-- **it.todo:** `packages/modules/{core/members,core/notifications,domain/proposals,domain/engagement,integration/crm}/tests/contract/facade.contract.test.ts` (5) â€” also the single tsc error in each of those packages.
-- **`// stage N` placeholders:** `packages/modules/integration/push/src/index.ts` (stage 3 adapters), crm `module.ts` (stage 5 http adapter), presentation `mobile/index.ts` (stage 2 routes).
-- **Snapshot vs. published libraries (pre-declared in DB_LAYER_DESIGN.md, "verify at install, day 6"):** `packages/db/src/client.ts(31)` + 6 relation typing errors; `db:migrate`, `db:verify` and the 29 DB-backed test failures; `identity/src/infrastructure/auth.ts(106)` (`change-email` OTP type).
-- **Snapshot gaps carried as-is:** identity `tests/helpers/test-auth.ts` never shipped (4 test files); `db/test/schema.test.ts` still imports `../src/schema/platform` (the Q3 loser); engagement `module.ts` calls `forOffers`/`markSynced` that authz's `responses.repo.ts` does not define (host-prod vs authz-prod drift); `db/test/relations.test.ts` and `db/scripts/migrate.ts` use `URL.pathname` (Windows only).
-- **Day 3:** `tokens:check` (DESIGN.md front-matter), `bbc/no-inline-color` in `apps/mobile/src/constants/club.ts`, 2 Ã— `bbc/require-test-id` in screens.
-- **Typed-lint debt in the snapshots:** 345 eslint errors, dominated by `no-unsafe-*` on `any`-typed platform/db/host code, plus parsing errors for the two packages without a tsconfig.
+Stage 1 backlog — `module:check` / `validate:quick` stay red until each contract test exists:
+
+1. `packages/modules/core/members/tests/contract/facade.contract.test.ts` — prove registered→profile once, linked ⇔ crm_client_id, transactional prefs cannot be disabled, delete cascade zero rows.
+2. `packages/modules/core/notifications/tests/contract/facade.contract.test.ts` — prove inbox / unreadCount / markRead ownership and idempotent offer.published fan-out.
+3. `packages/modules/domain/proposals/tests/contract/facade.contract.test.ts` — prove ingest idempotency, targeting XOR, price CHECKs, withdraw/expiry behaviour.
+4. `packages/modules/domain/engagement/tests/contract/facade.contract.test.ts` — prove respond ownership (actor from principal), interested/dismissed transition, CRM activity hand-off.
+5. `packages/modules/integration/crm/tests/contract/facade.contract.test.ts` — prove mock connector records offer.responded and mirror lookup by normalized email.
 
 ## Red by mistake
 
-Empty for the assembly: nothing red traces to a moved file, a lost file, a wrong winner or a bad path. Every red line above is
-either declared (`// stage`, `it.todo`, empty facade), pre-existing in a snapshot, or a version/tooling gap named in the decisions.
+Empty for Gate B3: every failing line in `validate:quick` after wire is one of the five `it.todo`s above.
 
 ## Next (= Stage 1 plan)
 
