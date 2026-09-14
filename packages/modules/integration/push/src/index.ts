@@ -1,21 +1,7 @@
 // stage 3: APNs HTTP/2 (apns2) and FCM v1 (firebase-admin) adapters implementing this port (see MODULE.md).
-export type PushResult =
-  | { ok: true; ticketId?: string }
-  | {
-      ok: false;
-      reason: "Unregistered" | "BadDeviceToken" | "RateLimited" | "Transient" | "Fatal";
-      retryAfterMs?: number;
-    };
-
-export interface PushSender {
-  send(input: {
-    platform: "ios" | "android";
-    token: string;
-    title: string;
-    body?: string;
-    data?: Record<string, string>;
-  }): Promise<PushResult>;
-}
+// The port is declared by the consumer (core/notifications); this adapter only implements it.
+import type { PushSender, PushResult } from "@bbc/notifications/ports/push";
+export type { PushSender, PushResult };
 
 /** Used by tests and by stage 0–2, where no real provider credentials exist yet. */
 export function recordingSender(): PushSender & { sent: unknown[] } {

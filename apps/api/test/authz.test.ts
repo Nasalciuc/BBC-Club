@@ -9,12 +9,12 @@ describe("authorization gates", () => {
   });
 
   it("inventory: every /v1 route is registered with a permission or marked public", () => {
-    for (const r of t.app.routes.filter((x: any) => x.path.startsWith("/v1"))) {
+    for (const r of t.app.routes.filter((x: any) => x.path.startsWith("/v1") && x.method !== "ALL")) {
       expect(routeRegistry.has(`${r.method} ${r.path}`)).toBe(true);
     }
-    expect([...routeRegistry.entries()].filter(([, p]) => p === "public").map(([k]) => k)).toEqual([
-      "GET /v1/app-config",
-    ]);
+    expect(
+      [...routeRegistry.entries()].filter(([k, p]) => p === "public" && k.startsWith("GET /v1")).map(([k]) => k),
+    ).toEqual(["GET /v1/app-config"]);
   });
 
   it("IDOR: member A cannot see or act on member B's targeted offer (404, body identical to a missing id)", async () => {

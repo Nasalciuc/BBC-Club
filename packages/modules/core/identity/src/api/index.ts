@@ -1,12 +1,14 @@
 import type { MiddlewareHandler } from "hono";
+import { desc, lt } from "drizzle-orm";
 import type { Auth } from "../infrastructure/auth";
+import { user } from "../infrastructure/schema";
 
 export type Member = { id: string; email: string; emailVerified: boolean; role: string };
 export type AuthVars = { Variables: { member: Member; sessionId: string } };
 export type IdentityFacade = ReturnType<typeof createIdentityFacade>;
 
 /** The only surface other modules and the host may import. */
-export function createIdentityFacade(auth: Auth) {
+export function createIdentityFacade(auth: Auth, db: any) {
   async function getSession(headers: Headers): Promise<{ member: Member; sessionId: string } | null> {
     const s = await auth.api.getSession({ headers }); // awaited — the tutorial's dead guard, fixed
     if (!s?.user) return null;
@@ -45,7 +47,22 @@ export function createIdentityFacade(auth: Auth) {
     await auth.api.deleteUser({ headers, body: {} }); // → beforeDelete → member.deleted → cascades
   }
 
-  return { handler: auth.handler, getSession, requireMember, requireRole, deleteAccount };
+  /** Users created before `before` — ids and emails only. Members diffs these against its profiles for the
+   *  nightly reconciliation; no module reads auth.* directly. */
+  async function listUsersCreatedBefore(
+    before: Date,
+    limit = 5000,
+  ): Promise<{ id: string; email: string; createdAt: Date }[]> {
+    const rows: { id: string; email: string; createdAt: Date }[] = await db
+      .select({ id: user.id, email: user.email, createdAt: user.createdAt })
+      .from(user)
+      .where(lt(user.createdAt, before))
+      .orderBy(desc(user.createdAt))
+      .limit(limit);
+    return rows;
+  }
+
+  return { handler: auth.handler, getSession, requireMember, requireRole, deleteAccount, listUsersCreatedBefore };
 }
 
 export type { Auth } from "../infrastructure/auth";

@@ -43,7 +43,7 @@ CREATE TABLE "platform"."domain_events" (
 --> statement-breakpoint
 CREATE TABLE "platform"."event_deliveries" (
 	"id" bigserial PRIMARY KEY,
-	"event_id" bigserial,
+	"event_id" bigint NOT NULL,
 	"event_occurred_at" timestamp with time zone NOT NULL,
 	"consumer" text NOT NULL,
 	"aggregate_id" text NOT NULL,
@@ -57,8 +57,8 @@ CREATE TABLE "platform"."event_deliveries" (
 );
 --> statement-breakpoint
 CREATE TABLE "platform"."event_dlq" (
-	"delivery_id" bigserial PRIMARY KEY,
-	"event_id" bigserial,
+	"delivery_id" bigint PRIMARY KEY,
+	"event_id" bigint NOT NULL,
 	"consumer" text NOT NULL,
 	"attempts" integer NOT NULL,
 	"last_error" text NOT NULL,

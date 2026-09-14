@@ -8,3 +8,9 @@
 **Facade (`src/api/index.ts`):** `handler` (Better Auth at /api/auth/*), `getSession(headers)`, `requireMember`, `requireRole`, `deleteAccount(headers)`, `auth` (for tests only).
 **Out of scope:** 2FA, social login, admin dashboard, avatars, passkeys (v2).
 **Invariants tested:** recipient = user.email & awaited · no dead session guard + route inventory · register→verify→exactly one event + lockout at 5 OTP attempts · delete = zero rows + journal tombstone · HIBP refusal · per-route rate limits (429 + Retry-After).
+
+## Checklist A findings (Better Auth 1.6.31)
+
+1. **`generateId: "uuid"`** on 1.6.31 means _the database_ generates the id (`gen_random_uuid()`). Our CLI-generated `auth.user.id` is `text` with no default, so inserts failed with `null value in column "id"`. Fix: `database: { generateId: () => crypto.randomUUID() }` in `src/infrastructure/auth.ts` — app-side UUIDs, schema stays regen-safe.
+2. **Rate-limit `customRules` route names** — live probe (6× `POST /api/auth/sign-in/email` with wrong password): `400 400 400 400 400 429`. **`/sign-in/email` matches Better Auth 1.6.31** (sixth response is 429).
+3. **`auth.rate_limit.last_request`** — CLI schema used `integer`; Better Auth writes `Date.now()` ms which overflows in 2026. Column is `bigint` (migration `0004_auth_rate_limit_bigint.sql`).

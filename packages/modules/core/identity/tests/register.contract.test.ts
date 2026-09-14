@@ -15,7 +15,7 @@ describe("register → code → verified session → member.registered", () => {
     const res = await ctx.auth.api.verifyEmailOTP({ body: { email, otp } });
     expect(res.status).toBe(true);
     const events = await ctx.journal.byType("member.registered");
-    expect(events.filter((e) => e.payload.emailNormalized === email).length).toBe(1);
+    expect(events.filter((e) => e.payload.emailNormalized === email.toLowerCase()).length).toBe(1);
   });
 
   it("rejects a reused code and locks after 5 wrong attempts", async () => {

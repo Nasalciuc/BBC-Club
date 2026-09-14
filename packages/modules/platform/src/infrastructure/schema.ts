@@ -4,6 +4,7 @@ import {
   jsonb,
   integer,
   bigserial,
+  bigint,
   timestamp,
   index,
   uniqueIndex,
@@ -16,7 +17,7 @@ export const platform = pgSchema("platform");
 
 export const deliveryStatus = platform.enum("delivery_status", ["pending", "done", "dead", "paused"]);
 
-/** Append-only journal. Partitioned monthly on occurred_at (see migrations/0002_platform_extras.sql).
+/** Append-only journal. Partitioned monthly on occurred_at (see migrations/0001_extras.sql).
  *  payload carries facts, never secrets; member_id is tombstoned on account deletion. */
 export const domainEvents = platform.table(
   "domain_events",
@@ -48,7 +49,7 @@ export const eventDeliveries = platform.table(
   "event_deliveries",
   {
     id: bigserial("id", { mode: "bigint" }).primaryKey(),
-    eventId: bigserial("event_id", { mode: "bigint" }).notNull(),
+    eventId: bigint("event_id", { mode: "bigint" }).notNull(), // reference — never auto-generated
     eventOccurredAt: timestamp("event_occurred_at", { withTimezone: true }).notNull(), // to reach the right partition
     consumer: text("consumer").notNull(),
     aggregateId: text("aggregate_id").notNull(), // per-aggregate ordering
@@ -76,8 +77,8 @@ export const eventDeliveries = platform.table(
 export const eventDlq = platform.table(
   "event_dlq",
   {
-    deliveryId: bigserial("delivery_id", { mode: "bigint" }).primaryKey(),
-    eventId: bigserial("event_id", { mode: "bigint" }).notNull(),
+    deliveryId: bigint("delivery_id", { mode: "bigint" }).primaryKey(), // = event_deliveries.id — supplied, not generated
+    eventId: bigint("event_id", { mode: "bigint" }).notNull(),
     consumer: text("consumer").notNull(),
     attempts: integer("attempts").notNull(),
     lastError: text("last_error").notNull(),

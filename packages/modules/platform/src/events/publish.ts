@@ -1,4 +1,5 @@
-import { domainEvents, eventDeliveries } from "../infrastructure/schema";
+import { sql } from "drizzle-orm";
+import { domainEvents } from "../infrastructure/schema";
 import type { EventRegistry } from "./registry";
 
 export type PublishInput = {
@@ -33,18 +34,20 @@ export function createPublisher(
         payload: input.payload,
         publishedBy: input.publishedBy,
       })
-      .returning({ id: domainEvents.id, occurredAt: domainEvents.occurredAt });
+      .returning({ id: domainEvents.id });
 
     const consumers = registry.consumersOf(input.type);
     if (consumers.length) {
-      await tx.insert(eventDeliveries).values(
-        consumers.map((consumer) => ({
-          eventId: evt.id,
-          eventOccurredAt: evt.occurredAt,
-          consumer,
-          aggregateId: input.aggregateId,
-        })),
-      );
+      // Copy occurred_at in SQL — JS Date only has ms precision and would break the poller JOIN.
+      await tx.execute(sql`
+        INSERT INTO platform.event_deliveries (event_id, event_occurred_at, consumer, aggregate_id)
+        SELECT e.id, e.occurred_at, v.consumer, ${input.aggregateId}
+        FROM platform.domain_events e
+        CROSS JOIN (VALUES ${sql.join(
+          consumers.map((c) => sql`(${c})`),
+          sql`, `,
+        )}) AS v(consumer)
+        WHERE e.id = ${evt.id}`);
     } else if (!def.noConsumer) {
       metrics?.inc("events_without_consumer", { type: input.type });
     }

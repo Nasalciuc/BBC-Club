@@ -36,8 +36,6 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
   const operatorJwt = await auth.operatorJwt();
   await built.platform.poller.drainOnce(); // member.registered → profiles
 
-  const json = (body: unknown) => ({ "Content-Type": "application/json", body: JSON.stringify(body) });
-
   return {
     app: built.app,
     db,
@@ -56,7 +54,12 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
       revive: (m: string) => built.platform.flags.set(`${m}.killed`, { enabled: false }),
     },
     /** Drive the queue by hand: tests never wait on timers. */
-    drainAll: () => built.platform.poller.drainOnce(),
+    drainAll: async () => {
+      for (let i = 0; i < 20; i++) {
+        const n = await built.platform.poller.drainOnce();
+        if (n === 0) break;
+      }
+    },
     /** Invoke one consumer directly with a payload (for handler-level tests). */
     runHandler: async (consumer: string, payload: any) => {
       const [type] = [payload.type];
@@ -86,24 +89,26 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
     // ── seeds (small, explicit) ──
     async seedBroadcastOffer(over: Record<string, unknown> = {}) {
       const key = `test:${crypto.randomUUID()}`;
+      const payload = {
+        source: "marketing_campaign",
+        targeting: "broadcast",
+        routeFrom: "JFK",
+        routeTo: "CDG",
+        cabin: "business",
+        price: "3850.00",
+        publishedPrice: "6900.00",
+        title: "Autumn in Paris",
+        validUntil: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        ...over,
+      };
       const r = await built.app.request("/v1/internal/offers", {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           "X-Internal-Secret": internalSecret,
           "Idempotency-Key": key,
-          ...json({
-            source: "marketing_campaign",
-            targeting: "broadcast",
-            routeFrom: "JFK",
-            routeTo: "CDG",
-            cabin: "business",
-            price: "3850.00",
-            publishedPrice: "6900.00",
-            title: "Autumn in Paris",
-            validUntil: new Date(Date.now() + 7 * 86_400_000).toISOString(),
-            ...over,
-          }),
         },
+        body: JSON.stringify(payload),
       });
       if (r.status !== 200) throw new Error(`seed offer failed: ${r.status} ${await r.text()}`);
       return ((await r.json()) as { offerId: string }).offerId;
@@ -128,7 +133,8 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
     async respondAs(m: { cookie: string }, offerId: string, response: "interested" | "dismissed") {
       return built.app.request(`/v1/proposals/${offerId}/respond`, {
         method: "POST",
-        headers: { Cookie: m.cookie, ...json({ response }) },
+        headers: { Cookie: m.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ response }),
       });
     },
     // ── assertions helpers ──

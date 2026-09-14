@@ -1,6 +1,7 @@
 import { MemberRegisteredV1 } from "@bbc/shared/events/member";
+import { event } from "@bbc/shared/events";
 import { profile } from "@bbc/db/schema/members";
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 /** Creates the profile and links it to the CRM mirror. Idempotent: platform.event_inbox gates re-delivery,
  *  and the insert is ON CONFLICT DO NOTHING on the primary key. */
@@ -49,33 +50,54 @@ export async function onMemberRegistered(
       aggregateType: "member",
       aggregateId: evt.memberId,
       memberId: evt.memberId,
-      payload: { memberId: evt.memberId, crmClientId: match.crmClientId, linkedAt: new Date().toISOString() },
+      payload: event("member.linked_to_crm", {
+        memberId: evt.memberId,
+        crmClientId: match.crmClientId,
+        linkedAt: new Date().toISOString(),
+      }),
     });
   }
 }
 
-/** Nightly reconciliation: the identity hook is post-commit; if a profile is missing, re-emit. */
-export async function reconcileMissingProfiles(deps: { db: any; publish: (e: any) => Promise<void> }) {
-  const rows: { id: string; email: string; createdAt: Date }[] = await deps.db.execute(
-    `SELECT u.id, u.email, u."createdAt" FROM auth."user" u
-     LEFT JOIN members.profile p ON p.member_id = u.id
-     WHERE p.member_id IS NULL AND u."createdAt" < now() - interval '5 minutes'`,
-  );
-  for (const u of rows) {
+export type IdentityUsersPort = {
+  listUsersCreatedBefore(before: Date): Promise<{ id: string; email: string; createdAt: Date }[]>;
+};
+
+/** Nightly: the identity hook publishes after Better Auth's insert, outside its transaction. If the event was
+ *  lost, the member has an auth user and no profile. Diff in memory — no cross-schema SQL. */
+export async function reconcileMissingProfiles(deps: {
+  db: any;
+  identity: IdentityUsersPort;
+  publish: (e: any) => Promise<void>;
+}) {
+  const users = await deps.identity.listUsersCreatedBefore(new Date(Date.now() - 5 * 60_000));
+  if (users.length === 0) return 0;
+  const rows: { id: string }[] = await deps.db
+    .select({ id: profile.memberId })
+    .from(profile)
+    .where(
+      inArray(
+        profile.memberId,
+        users.map((u) => u.id),
+      ),
+    );
+  const existing = new Set(rows.map((r) => r.id));
+  let n = 0;
+  for (const u of users) {
+    if (existing.has(u.id)) continue;
     await deps.publish({
       type: "member.registered",
       version: 1,
       aggregateType: "member",
       aggregateId: u.id,
       memberId: u.id,
-      payload: {
-        type: "member.registered",
-        version: 1,
+      payload: event("member.registered", {
         memberId: u.id,
         emailNormalized: u.email.trim().toLowerCase(),
         registeredAt: u.createdAt.toISOString(),
-      },
+      }),
     });
+    n++;
   }
-  return rows.length;
+  return n;
 }

@@ -1,9 +1,12 @@
 -- Applied by scripts/migrate.ts after drizzle-kit's DDL. Things Drizzle cannot express.
 
 -- 1) Monthly partitioning of the journal. drizzle-kit creates a plain table; convert it once, while empty.
+--    Detach the bigserial sequence before DROP so LIKE's DEFAULT nextval(...) keeps working.
+ALTER SEQUENCE platform.domain_events_id_seq OWNED BY NONE;
 ALTER TABLE platform.domain_events RENAME TO domain_events_plain;
 CREATE TABLE platform.domain_events (LIKE platform.domain_events_plain INCLUDING ALL) PARTITION BY RANGE (occurred_at);
 DROP TABLE platform.domain_events_plain;
+ALTER SEQUENCE platform.domain_events_id_seq OWNED BY platform.domain_events.id;
 
 CREATE OR REPLACE FUNCTION platform.ensure_event_partitions(months_ahead int DEFAULT 2) RETURNS void AS $$
 DECLARE m date; part text;

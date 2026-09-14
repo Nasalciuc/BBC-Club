@@ -9,7 +9,8 @@
     "./schema": "./src/infrastructure/schema.ts"
   },
   "scripts": {
-    "test": "bun test"
+    "test": "bun test",
+    "test:db": "bun test"
   },
   "dependencies": {
     "@bbc/shared": "workspace:*",
