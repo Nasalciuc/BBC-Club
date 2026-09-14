@@ -30,7 +30,12 @@ export function createDb(url: string, opts: DbOptions = {}) {
     transform: { undefined: null },
     onnotice: () => {},
   });
-  const db = drizzle(client, { schema, relations, logger: opts.logger ?? false });
+  const db = drizzle({
+    client,
+    schema,
+    relations,
+    logger: opts.logger ?? false,
+  });
   return Object.assign(db, {
     close: () => client.end({ timeout: 5 }),
     raw: client,
