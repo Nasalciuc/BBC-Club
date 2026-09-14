@@ -33,7 +33,11 @@
   "submit": {
     "production": {
       "ios": { "appleTeamId": "TEAM_ID_FROM_APPLE_DEVELOPER", "ascAppId": "ASC_APP_ID_FROM_APP_STORE_CONNECT" },
-      "android": { "serviceAccountKeyPath": "./google-play-service-account.json", "track": "internal", "releaseStatus": "draft" }
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
     }
   }
 }

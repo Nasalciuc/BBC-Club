@@ -4,7 +4,10 @@ import { createDb } from "@bbc/db";
 import { sql } from "drizzle-orm";
 
 const url = process.env.DATABASE_URL;
-if (!url) { console.error("DATABASE_URL missing"); process.exit(1); }
+if (!url) {
+  console.error("DATABASE_URL missing");
+  process.exit(1);
+}
 const db = createDb(url, { max: 1, applicationName: "bbc-seed-flags" });
 
 const FLAGS: [string, Record<string, unknown>, string][] = [
@@ -21,7 +24,7 @@ try {
   }
 } catch (e) {
   console.error("seed-flags failed:", e);
-  process.exitCode = 1;        // not exit() — finally must run
+  process.exitCode = 1; // not exit() — finally must run
 } finally {
-  await db.close();            // now this actually happens
+  await db.close(); // now this actually happens
 }

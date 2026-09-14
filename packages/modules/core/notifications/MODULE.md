@@ -1,4 +1,5 @@
 # core/notifications
+
 **Owns:** schema `notifications.*` — notifications (inbox + push queue: category, status pending/sent/delivered/failed/suppressed, scheduled_for, read_at), device_tokens (platform, native_token, active).
 **Publishes:** `notification.delivered`, `notification.failed` (noConsumer; analytics).
 **Consumes:** `offer.published` → one row per targeted member (consent + quiet hours + 1 offer push/day, UNIQUE member+offer+category) · `offer.responded` → transactional "Julia will call you shortly" · `member.registered` → welcome · `member.deleted` → delete tokens + rows.

@@ -1,4 +1,5 @@
 # integration/crm
+
 **Owns:** schema `crm.*` — mirror (read-only projection: crm_client_id PK, email_normalized UNIQUE, route_history, advisor, deleted_at soft-delete), sync_runs.
 **Publishes:** `crm.mirror.synced` (one per run), `crm.activity_created` (noConsumer).
 **Consumes:** `offer.responded` (interested only) → createActivity with external_id offerId:memberId, retry/DLQ · `member.deleted` → "account deleted" activity.

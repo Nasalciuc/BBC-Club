@@ -1,4 +1,5 @@
 # core/members
+
 **Owns:** schema `members.*` — profile (member_id = auth user id, crm_client_id opaque, status active/waitlist/deleted, timezone, preferences), notification_preferences.
 **Publishes:** `member.linked_to_crm`, `member.profile_updated`.
 **Consumes:** `member.registered` → create profile + match crm mirror by normalized email (`active` if matched, `waitlist` if not — ADR-PROD-001; `members.allow_non_crm_signups` stays off in v1); `member.deleted` → hard-delete profile + preferences; `crm.mirror.synced` → link waitlist members whose email appeared.

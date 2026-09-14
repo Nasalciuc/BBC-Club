@@ -1,4 +1,5 @@
 # domain/proposals
+
 **Owns:** schema `proposals.*` — offers (idempotency_key UNIQUE, source, targeting XOR target_member_id, route, cabin, price/published_price, flight_facts, validity, status), offer_targets (segment fan-out, PK offer+member).
 **Publishes:** `offer.published` (same tx as insert), `offer.expired`, `offer.withdrawn`.
 **Consumes:** `personalization.candidate_accepted` (v2) → publish.

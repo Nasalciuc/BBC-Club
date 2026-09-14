@@ -12,9 +12,14 @@ import { mobileBff } from "./presentation/mobile";
 /** The ordered inventory. Overrides let tests replace adapters (email → capturing, crm → mock, push → recording). */
 export function modules(overrides: Record<string, any> = {}): ModuleDescriptor<any, any>[] {
   return [
-    emailModule(overrides.email), pushModule(overrides.push), crmModule(overrides.crm),   // integration
-    identityModule(), membersModule(), notificationsModule(overrides.push),               // core
-    proposalsModule(), engagementModule(),                                                 // domain
-    mobileBff(),                                                                           // presentation
+    emailModule(overrides.email),
+    pushModule(overrides.push),
+    crmModule(overrides.crm), // integration
+    identityModule(),
+    membersModule(),
+    notificationsModule(overrides.push), // core
+    proposalsModule(),
+    engagementModule(), // domain
+    mobileBff(), // presentation
   ];
 }

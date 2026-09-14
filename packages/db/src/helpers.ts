@@ -44,7 +44,9 @@ export const cursor = {
       const [ts, id] = Buffer.from(c, "base64url").toString().split("|");
       const d = new Date(ts);
       return Number.isNaN(d.getTime()) || !id ? null : { ts: d, id };
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   },
 };
 

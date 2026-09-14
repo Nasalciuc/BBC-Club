@@ -22,12 +22,18 @@ export class ModuleRegistry {
 
   /** Initialise in layer order; satisfy ports from earlier facades; mount; register consumers and jobs.
    *  A killed module is skipped entirely: no routes, no consumers (its pending deliveries pause via flags). */
-  async boot(deps: { db: Db; platform: Platform; env: ServerEnv; mount: (basePath: string, app: Hono<any>) => void }) {
+  async boot(deps: {
+    db: Db;
+    platform: Platform;
+    env: ServerEnv;
+    mount: (basePath: string, app: Hono<any>) => void;
+  }) {
     const ordered = [...this.modules].sort((a, b) => LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer));
     for (const m of ordered) {
       const ports: Record<string, unknown> = {};
       for (const need of m.needs ?? []) {
-        if (!this.facades.has(need)) throw new Error(`module ${m.name} needs port "${need}" but no earlier module exposes it (check layers)`);
+        if (!this.facades.has(need))
+          throw new Error(`module ${m.name} needs port "${need}" but no earlier module exposes it (check layers)`);
         ports[need] = this.facades.get(need);
       }
       if (await deps.platform.flags.isKilled(m.name)) {
@@ -40,9 +46,21 @@ export class ModuleRegistry {
       for (const r of out.routes ?? []) deps.mount(r.basePath, r.app);
       for (const c of out.consumers ?? []) deps.platform.events.registerConsumer(c.type, c.name, c.handler);
       for (const j of out.jobs ?? []) deps.platform.jobs.register(j.name, j.spec);
-      deps.platform.logger.info({ module: m.name, routes: out.routes?.length ?? 0, consumers: out.consumers?.length ?? 0, jobs: out.jobs?.length ?? 0 }, "module mounted");
+      deps.platform.logger.info(
+        {
+          module: m.name,
+          routes: out.routes?.length ?? 0,
+          consumers: out.consumers?.length ?? 0,
+          jobs: out.jobs?.length ?? 0,
+        },
+        "module mounted",
+      );
     }
   }
 
-  facade<T>(name: string): T { const f = this.facades.get(name); if (!f) throw new Error(`no facade: ${name}`); return f as T; }
+  facade<T>(name: string): T {
+    const f = this.facades.get(name);
+    if (!f) throw new Error(`no facade: ${name}`);
+    return f as T;
+  }
 }

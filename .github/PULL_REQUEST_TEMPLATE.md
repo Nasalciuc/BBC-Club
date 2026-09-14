@@ -1,10 +1,13 @@
 ## What / why
+
 <!-- one paragraph; link the PLAN.md line this PR ticks -->
 
 ## PLAN.md line(s) ticked
+
 - [ ] …
 
 ## Definition of done (all must be true)
+
 - [ ] `bun run validate` green (link to the CI run)
 - [ ] tests for the module touched + the route inventory test still passes
 - [ ] `MODULE.md` reflects reality (tables, events published/consumed, ports)
@@ -14,4 +17,5 @@
 - [ ] if events: versioned schema in `packages/shared/events` + idempotent handler test (event delivered twice → one effect)
 
 ## Rollback
+
 <!-- how to undo this if it misbehaves in production (OTA republish / image rollback / flag) -->

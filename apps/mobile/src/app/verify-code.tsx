@@ -53,15 +53,7 @@ export default function VerifyCodeScreen() {
   return (
     <AuthShell
       onBack="/sign-in"
-      footer={
-        <ClubButton
-          testID="verify.submit"
-          label="Verify"
-          arrow
-          disabled={!canVerify}
-          onPress={onVerify}
-        />
-      }
+      footer={<ClubButton testID="verify.submit" label="Verify" arrow disabled={!canVerify} onPress={onVerify} />}
     >
       <View style={styles.copy}>
         <Text style={styles.headline}>Check your email</Text>
@@ -72,8 +64,7 @@ export default function VerifyCodeScreen() {
 
       <Pressable onPress={() => inputRef.current?.focus()} style={styles.boxes}>
         {digits.map((digit, index) => {
-          const focused =
-            index === code.length || (code.length === CODE_LENGTH && index === CODE_LENGTH - 1);
+          const focused = index === code.length || (code.length === CODE_LENGTH && index === CODE_LENGTH - 1);
           return (
             <View key={index} style={[styles.box, focused && styles.boxFocused]}>
               <Text style={styles.digit}>{digit}</Text>

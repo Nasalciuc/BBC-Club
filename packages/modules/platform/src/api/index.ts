@@ -14,17 +14,27 @@ export function createPlatform(db: any, opts: { level?: string; pretty?: boolean
   const flags = createFlags(db, { logger });
   const jobs = createJobs(db, { logger, metrics });
   const { publish } = createPublisher(registry, metrics);
-  const poller = createPoller(db, registry, {
-    logger, metrics,
-    isPaused: (consumer) => flags.isConsumerPaused(consumer),
-    }, { onDead: ({ consumer, eventId }) => logger.error({ consumer, eventId }, "DLQ: manual replay required") });
+  const poller = createPoller(
+    db,
+    registry,
+    {
+      logger,
+      metrics,
+      isPaused: (consumer) => flags.isConsumerPaused(consumer),
+    },
+    { onDead: ({ consumer, eventId }) => logger.error({ consumer, eventId }, "DLQ: manual replay required") },
+  );
 
   metrics.gauge("queue_pending", async () => (await poller.stats()).pending);
   metrics.gauge("queue_dead", async () => (await poller.stats()).dead);
   metrics.gauge("queue_oldest_pending_seconds", async () => (await poller.stats()).oldestPendingSeconds);
 
   return {
-    logger, metrics, flags, jobs, poller,
+    logger,
+    metrics,
+    flags,
+    jobs,
+    poller,
     events: {
       defineEvent: registry.defineEvent.bind(registry),
       registerConsumer: registry.registerConsumer.bind(registry),

@@ -1,14 +1,7 @@
 import { Image } from "expo-image";
 import { Href, useRouter } from "expo-router";
 import { PropsWithChildren, ReactNode } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ClubIcon } from "@/components/club-icon";
@@ -50,10 +43,7 @@ export function AuthShell({
 
   return (
     <View style={styles.root}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={[styles.hero, { height: `${Math.round(heroPercent * 100)}%` }]}>
           <Image
             source={require("@/assets/images/cabin.webp")}
@@ -78,28 +68,18 @@ export function AuthShell({
 
           {logo === "left" ? (
             <View style={[styles.logoLeft, { top }]}>
-              <Image
-                source={require("@/assets/images/logo-welcome.png")}
-                style={styles.logo}
-                contentFit="contain"
-              />
+              <Image source={require("@/assets/images/logo-welcome.png")} style={styles.logo} contentFit="contain" />
             </View>
           ) : null}
 
           {logo === "center" ? (
             <View style={[styles.logoCenter, { top }]}>
-              <Image
-                source={require("@/assets/images/logo-welcome.png")}
-                style={styles.logo}
-                contentFit="contain"
-              />
+              <Image source={require("@/assets/images/logo-welcome.png")} style={styles.logo} contentFit="contain" />
             </View>
           ) : null}
         </View>
 
-        <View
-          style={[styles.panel, { borderTopLeftRadius: panelRadius, borderTopRightRadius: panelRadius }]}
-        >
+        <View style={[styles.panel, { borderTopLeftRadius: panelRadius, borderTopRightRadius: panelRadius }]}>
           <ScrollView
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
@@ -109,9 +89,7 @@ export function AuthShell({
             {children}
           </ScrollView>
           {footer ? (
-            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Club.space.md) }]}>
-              {footer}
-            </View>
+            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Club.space.md) }]}>{footer}</View>
           ) : null}
         </View>
       </KeyboardAvoidingView>

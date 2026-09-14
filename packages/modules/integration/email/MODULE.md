@@ -1,4 +1,5 @@
 # integration/email
+
 **Owns:** nothing in the database.
 **Ports (implements):** `EmailSender.sendOtp({ to, otp, purpose })` — Postmark (primary), SES (fallback, same interface), console (dev), capturing (tests).
 **Facade:** `postmarkSender(opts)`, `sesSender(opts)`, `consoleSender()`.

@@ -6,7 +6,10 @@ export type FlagValue = { enabled?: boolean; variant?: string; segment?: string[
 /** Flags are read on hot paths, so they are cached in-process for 30 s and invalidated on write.
  *  Fail-safe: if the database cannot be read, killswitches report "not killed" — a read error must not
  *  take the product down; feature flags fall back to the caller's default. */
-export function createFlags(db: any, opts: { ttlMs?: number; logger?: { warn: (o: object, m?: string) => void } } = {}) {
+export function createFlags(
+  db: any,
+  opts: { ttlMs?: number; logger?: { warn: (o: object, m?: string) => void } } = {},
+) {
   const ttl = opts.ttlMs ?? 30_000;
   const cache = new Map<string, { value: FlagValue | null; at: number }>();
 
@@ -14,13 +17,17 @@ export function createFlags(db: any, opts: { ttlMs?: number; logger?: { warn: (o
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < ttl) return hit.value;
     try {
-      const [row] = await db.select({ value: flagsTable.value }).from(flagsTable).where(eq(flagsTable.key, key)).limit(1);
+      const [row] = await db
+        .select({ value: flagsTable.value })
+        .from(flagsTable)
+        .where(eq(flagsTable.key, key))
+        .limit(1);
       const value = (row?.value as FlagValue) ?? null;
       cache.set(key, { value, at: Date.now() });
       return value;
     } catch (e) {
       opts.logger?.warn({ key, err: String(e) }, "flag read failed, using fallback");
-      return hit?.value ?? null;                       // stale-if-error
+      return hit?.value ?? null; // stale-if-error
     }
   }
 
@@ -48,7 +55,9 @@ export function createFlags(db: any, opts: { ttlMs?: number; logger?: { warn: (o
       return Array.isArray(v?.segment) ? v!.segment!.includes(memberId) : false;
     },
     async set(key: string, value: FlagValue, description?: string) {
-      await db.insert(flagsTable).values({ key, value, description })
+      await db
+        .insert(flagsTable)
+        .values({ key, value, description })
         .onConflictDoUpdate({ target: flagsTable.key, set: { value, description, updatedAt: sql`now()` } });
       cache.delete(key);
     },

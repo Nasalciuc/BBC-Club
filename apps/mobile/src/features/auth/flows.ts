@@ -50,7 +50,9 @@ export async function resetPassword(email: string, otp: string, password: string
   return signedIn.error ? fail(signedIn.error) : { ok: true };
 }
 
-export async function signOut(): Promise<void> { await authClient.signOut(); }
+export async function signOut(): Promise<void> {
+  await authClient.signOut();
+}
 
 /** Account deletion (Apple 5.1.1(v)); the confirmation sheet re-asks the password before calling this. */
 export async function deleteAccount(): Promise<Result> {
