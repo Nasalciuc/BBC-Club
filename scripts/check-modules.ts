@@ -15,7 +15,9 @@ for (const layer of readdirSync(base)) {
   else for (const m of readdirSync(lp)) if (statSync(join(lp, m)).isDirectory()) modules.push(join(lp, m));
 }
 for (const m of modules) {
-  const pkg = JSON.parse(readFileSync(join(m, "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(m, "package.json"), "utf8")) as {
+    exports?: { "."?: string };
+  };
   const exp = pkg.exports?.["."];
   if (exp !== "./src/api/index.ts") problems.push(`${m}: exports["."] must be ./src/api/index.ts (got ${exp})`);
   if (!existsSync(join(m, "MODULE.md"))) problems.push(`${m}: MODULE.md missing`);

@@ -62,7 +62,7 @@ export default function VerifyCodeScreen() {
         </Text>
       </View>
 
-      <Pressable onPress={() => inputRef.current?.focus()} style={styles.boxes}>
+      <Pressable testID="verify.codeBoxes" onPress={() => inputRef.current?.focus()} style={styles.boxes}>
         {digits.map((digit, index) => {
           const focused = index === code.length || (code.length === CODE_LENGTH && index === CODE_LENGTH - 1);
           return (

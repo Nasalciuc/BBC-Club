@@ -22,11 +22,12 @@ type InputProps = TextInputProps & {
   size?: "md" | "lg";
 };
 
-export function ClubInput({ size = "md", style, onFocus, onBlur, ...props }: InputProps) {
+export function ClubInput({ size = "md", style, onFocus, onBlur, testID, ...props }: InputProps) {
   const [focused, setFocused] = useState(false);
 
   return (
     <TextInput
+      testID={testID}
       placeholderTextColor={Club.colors.textTertiary}
       {...props}
       onFocus={(event) => {

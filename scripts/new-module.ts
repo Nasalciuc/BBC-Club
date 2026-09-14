@@ -20,7 +20,7 @@ if (existsSync(root)) {
   console.error(`${root} already exists`);
   process.exit(1);
 }
-const pascal = name.replace(/(^|-)([a-z])/g, (_, __, c) => c.toUpperCase());
+const pascal = name.replace(/(^|-)([a-z])/g, (_m: string, _sep: string, c: string) => c.toUpperCase());
 const schemaName = name.replace(/-/g, "_");
 
 const files: Record<string, string> = {
@@ -103,5 +103,5 @@ for (const [rel, content] of Object.entries(files)) {
 console.log(`created ${root}\nnext: add it to apps/api/src/modules.ts, fill MODULE.md, write the contract test.`);
 
 function camel(s: string) {
-  return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  return s.replace(/-([a-z])/g, (_m: string, c: string) => c.toUpperCase());
 }
