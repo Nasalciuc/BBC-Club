@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./src/api/index.ts",
     "./module": "./src/module.ts",
     "./postmark": "./src/postmark.ts"
   },
