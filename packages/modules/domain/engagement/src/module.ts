@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
-import { authorize, registerRoute } from "@bbc/api/middleware/authorize";
+import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { respond, RespondInput } from "./application/respond";
 import { responsesRepo } from "./infrastructure/responses.repo";
@@ -49,9 +49,8 @@ export const engagementModule = (): ModuleDescriptor<Ports, ReturnType<typeof fa
 
 function facade(db: any) {
   return {
-    responsesFor: (exec: any, actorMemberId: string, offerIds: string[]) =>
-      responsesRepo.forOffers(exec ?? db, actorMemberId, offerIds),
-    markSynced: (exec: any, actorMemberId: string, offerId: string, crmActivityId: string | null) =>
-      responsesRepo.markSynced(exec ?? db, actorMemberId, offerId, crmActivityId),
+    get: (exec: any, actorMemberId: string, offerId: string) => responsesRepo.get(exec ?? db, actorMemberId, offerId),
+    upsert: (exec: any, actorMemberId: string, offerId: string, response: "interested" | "dismissed") =>
+      responsesRepo.upsert(exec ?? db, actorMemberId, offerId, response),
   };
 }

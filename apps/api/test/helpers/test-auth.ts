@@ -20,7 +20,7 @@ export function testAuth(auth: Auth, db: any) {
     if (!setCookie) throw new Error("no session cookie returned");
     return setCookie
       .split(",")
-      .map((c) => c.split(";")[0].trim())
+      .map((c) => (c.split(";")[0] ?? "").trim())
       .join("; ");
   }
 

@@ -44,12 +44,30 @@ module.exports = {
     {
       name: "no-cross-module-internals",
       severity: "error",
-      comment: "import another module only through its api/index.ts",
+      comment: "import another module only through its api/index.ts (ports/ allowed for integration adapters)",
       from: { path: `${MOD}/(?<layer>[^/]+)/(?<mod>[^/]+)/` },
       to: {
-        path: `${MOD}/(?<tolayer>[^/]+)/(?<tomod>[^/]+)/src/(application|domain|infrastructure|handlers|ports)/`,
+        path: `${MOD}/(?<tolayer>[^/]+)/(?<tomod>[^/]+)/src/(application|domain|infrastructure|handlers)/`,
         pathNot: `${MOD}/$1/$2/`,
       },
+    },
+    {
+      name: "only-integration-imports-foreign-ports",
+      severity: "error",
+      comment: "adapters implement ports declared by the module they serve; other layers use api/index.ts",
+      from: { path: `${MOD}/(?!integration/)(?<layer>[^/]+)/(?<mod>[^/]+)/` },
+      to: {
+        path: `${MOD}/[^/]+/[^/]+/src/ports/`,
+        pathNot: `${MOD}/$1/$2/`,
+      },
+    },
+    {
+      name: "integration-may-import-ports",
+      severity: "info",
+      comment:
+        "adapters implement ports declared by the module they serve; only ports/, never application/ or infrastructure/",
+      from: { path: `${MOD}/integration/` },
+      to: { path: `${MOD}/(core|domain)/[^/]+/src/ports/` },
     },
     {
       name: "no-cross-module-schema",
@@ -77,8 +95,9 @@ module.exports = {
     {
       name: "shared-no-runtime-libs",
       severity: "error",
+      comment: "contracts stay free of ORM/RN/auth runtimes; hono is allowed for shared authz middleware only",
       from: { path: "^packages/shared/" },
-      to: { path: "node_modules/(hono|drizzle-orm|expo|react-native|react|better-auth)" },
+      to: { path: "node_modules/(drizzle-orm|expo|react-native|react|better-auth)" },
     },
 
     // ── 4. mobile touches only shared + ui + its own code ────────────────────

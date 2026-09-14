@@ -1,4 +1,4 @@
-import type { Principal } from "@bbc/platform/authz/principal";
+import type { Principal } from "@bbc/shared/authz/principal";
 import { OfferRespondedV1 } from "@bbc/shared/events/offer";
 
 /** Runs as system, acts for the event's member. The repository scope uses the same actor id the request path would,

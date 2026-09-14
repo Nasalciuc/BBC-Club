@@ -17,7 +17,6 @@
     "drizzle-orm": "1.0.0-rc.4",
     "hono": "^4.7.0",
     "zod": "^3.24.0",
-    "@bbc/api": "workspace:*",
     "@bbc/shared": "workspace:*",
     "@bbc/db": "workspace:*",
     "@bbc/platform": "workspace:*"

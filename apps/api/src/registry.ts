@@ -40,7 +40,9 @@ export class ModuleRegistry {
       if (out.exposes !== undefined) this.facades.set(m.name, out.exposes);
       for (const r of out.routes ?? []) deps.mount(r.basePath, r.app);
       for (const c of out.consumers ?? []) deps.platform.events.registerConsumer(c.type, c.name, c.handler);
-      for (const j of out.jobs ?? []) deps.platform.jobs.register(j.name, j.spec);
+      // JobSpec lives in platform; shared keeps jobs.spec as unknown to avoid shared→platform.
+      for (const j of out.jobs ?? [])
+        deps.platform.jobs.register(j.name, j.spec as Parameters<Platform["jobs"]["register"]>[1]);
       deps.platform.logger.info(
         {
           module: m.name,

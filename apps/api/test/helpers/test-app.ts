@@ -106,7 +106,7 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
         },
       });
       if (r.status !== 200) throw new Error(`seed offer failed: ${r.status} ${await r.text()}`);
-      return (await r.json()).offerId as string;
+      return ((await r.json()) as { offerId: string }).offerId;
     },
     async seedTargetedOffer(memberId: string) {
       return this.seedBroadcastOffer({

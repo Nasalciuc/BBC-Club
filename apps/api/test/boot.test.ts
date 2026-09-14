@@ -46,9 +46,11 @@ describe("host boot", () => {
       body: JSON.stringify({ response: "maybe" }),
     });
     expect(bad.status).toBe(400);
-    const body = await bad.json();
+    const body = (await bad.json()) as {
+      error: { code: string; details: { path: string }[] };
+    };
     expect(body.error.code).toBe("VALIDATION");
-    expect(body.error.details.some((d: any) => d.path === "response")).toBe(true);
+    expect(body.error.details.some((d) => d.path === "response")).toBe(true);
     await t.close();
   });
 });
@@ -70,12 +72,13 @@ describe("smoke = Demo 2", () => {
       body: JSON.stringify({ email, otp }),
     });
     expect(verify.status).toBeLessThan(400);
-    const cookie = (verify.headers.get("set-cookie") ?? "").split(";")[0];
+    const cookie = (verify.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
     await t.drainAll(); // member.registered → profile
     const offerId = await t.seedBroadcastOffer();
     const feed = await t.app.request("/v1/proposals", { headers: { Cookie: cookie } });
     expect(feed.status).toBe(200);
-    expect((await feed.json()).items.some((i: any) => i.id === offerId)).toBe(true);
+    const feedBody = (await feed.json()) as { items: { id: string }[] };
+    expect(feedBody.items.some((i) => i.id === offerId)).toBe(true);
     const r = await t.app.request(`/v1/proposals/${offerId}/respond`, {
       method: "POST",
       headers: { Cookie: cookie, "Content-Type": "application/json" },

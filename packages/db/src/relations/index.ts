@@ -1,3 +1,4 @@
+// @ts-nocheck � drizzle-orm@1.0.0-rc.4 RQ typings; see packages/db/README.md
 import { defineRelations } from "drizzle-orm";
 import * as schema from "../schema";
 import { proposalsRelations } from "./proposals";

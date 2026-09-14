@@ -46,6 +46,7 @@
       "name": "@bbc/mobile",
       "version": "0.1.0",
       "dependencies": {
+        "@bbc/shared": "workspace:*",
         "@better-auth/expo": "~1.6.0",
         "@expo-google-fonts/inter": "^0.4.2",
         "@expo-google-fonts/jetbrains-mono": "^0.4.1",
@@ -140,7 +141,6 @@
       "name": "@bbc/engagement",
       "version": "0.1.0",
       "dependencies": {
-        "@bbc/api": "workspace:*",
         "@bbc/db": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/shared": "workspace:*",
@@ -190,6 +190,7 @@
       "name": "@bbc/platform",
       "version": "0.1.0",
       "dependencies": {
+        "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "pino": "^9.0.0",
         "zod": "^3.24.0",
@@ -202,6 +203,7 @@
       "name": "@bbc/shared",
       "version": "0.1.0",
       "dependencies": {
+        "hono": "^4.7.0",
         "zod": "^3.24.0",
       },
     },

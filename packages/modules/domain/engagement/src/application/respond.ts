@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
-import type { Principal } from "@bbc/platform/authz/principal";
-import { actorMemberId } from "@bbc/platform/authz/principal";
+import type { Principal } from "@bbc/shared/authz/principal";
+import { actorMemberId } from "@bbc/shared/authz/principal";
 import { responsesRepo } from "../infrastructure/responses.repo";
 
 export const RespondInput = z.object({ offerId: z.string().uuid(), response: z.enum(["interested", "dismissed"]) });
@@ -42,6 +42,7 @@ export async function respond(
     const offer = await deps.proposals.getVisible(tx, actor, input.offerId); // visibility = ownership check, in SQL
     if (!offer) return { ok: false, code: "NOT_FOUND" }; // 404, never 403 (no oracle)
     const stored = await responsesRepo.upsert(tx, actor, offer.id, input.response);
+    if (!stored) return { ok: false, code: "NOT_FOUND" };
     await deps.events.publish(tx, {
       type: "offer.responded",
       version: 1,

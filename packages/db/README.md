@@ -1,6 +1,10 @@
 # @bbc/db — the database layer, and the rules it enforces
 
-**Versions:** drizzle-orm 1.x (Relational Queries v2, `defineRelations`), drizzle-kit 1.x, postgres.js 3.x, PostgreSQL 16 on the VPS (uuid v4 from `gen_random_uuid()`; `uuidv7()` when we move to PG 18).
+**Versions:** drizzle-orm / drizzle-kit **`1.0.0-rc.4`** (pinned), postgres.js 3.x, PostgreSQL 16 on the VPS (uuid v4 from `gen_random_uuid()`; `uuidv7()` when we move to PG 18).
+
+> **Debt — stable Drizzle 1.x:** `^1.0.0` is not a published stable range yet. We pin the RC that the assembled
+> lockfile resolves. Moving to stable 1.x with Relational Queries v2 (`defineRelations`) remains an explicit
+> follow-up; see [`DB_LAYER_DESIGN.md`](./DB_LAYER_DESIGN.md). Do not bump to `^1.0.0` until that note is closed.
 
 ## What lives here
 

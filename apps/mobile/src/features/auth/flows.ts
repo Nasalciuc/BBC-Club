@@ -25,7 +25,7 @@ export async function join(email: string, password: string): Promise<Result> {
   return { ok: true, message: CONSTANT_OTP_SENT };
 }
 
-/** Verify the code sent at sign-up. autoSignInAfterVerification → session established. */
+/** Verify the code sent at sign-up. autoSignInAfterVerification ΓåÆ session established. */
 export async function verifyEmail(email: string, otp: string): Promise<Result> {
   const { error } = await authClient.emailOtp.verifyEmail({ email, otp });
   return error ? fail(error) : { ok: true };

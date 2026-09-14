@@ -136,5 +136,5 @@ export type Auth = ReturnType<typeof createAuth>;
 
 function mask(email: string) {
   const [u, d] = email.split("@");
-  return `${u.slice(0, 1)}***@${d ?? ""}`;
+  return `${(u ?? "").slice(0, 1)}***@${d ?? ""}`;
 }

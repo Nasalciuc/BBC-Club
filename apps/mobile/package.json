@@ -5,6 +5,7 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
+    "@bbc/shared": "workspace:*",
     "@better-auth/expo": "~1.6.0",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
