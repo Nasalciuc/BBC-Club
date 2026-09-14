@@ -28,19 +28,51 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with: { bun-version: "1.3.4" }
+
+      # Which parts of the monorepo exist on this ref? The assembly lands in stages, so the pipeline
+      # runs the checks whose inputs are present and skips the rest instead of failing on absence.
+      - id: layout
+        run: |
+          test -d packages/db     && echo "db=true"     >> "$GITHUB_OUTPUT" || echo "db=false"     >> "$GITHUB_OUTPUT"
+          test -d packages/ui     && echo "ui=true"     >> "$GITHUB_OUTPUT" || echo "ui=false"     >> "$GITHUB_OUTPUT"
+          test -d packages/shared && echo "shared=true" >> "$GITHUB_OUTPUT" || echo "shared=false" >> "$GITHUB_OUTPUT"
+          test -f infra/compose.test.yml && echo "compose=true" >> "$GITHUB_OUTPUT" || echo "compose=false" >> "$GITHUB_OUTPUT"
+          ls packages/modules/*/*/src/api/index.ts >/dev/null 2>&1 && echo "modules=true" >> "$GITHUB_OUTPUT" || echo "modules=false" >> "$GITHUB_OUTPUT"
+
       - run: bun install --frozen-lockfile
+      # Official binary — npm `gitleaks` / bunx stubs have no usable CLI.
       - name: Install gitleaks
         run: |
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz" \
             | sudo tar -xz -C /usr/local/bin gitleaks
           gitleaks version
-      - name: Secret scan
-        run: gitleaks detect --no-banner --redact
-      - run: bun run validate:quick
-      - run: bun run --filter @bbc/db db:migrate
-      - run: bun run test:unit
-      - run: turbo run test:db
-      - run: bun run db:verify
+      - run: gitleaks detect --no-banner --redact
+
+      # Always: these only need the files that are already here.
+      - run: bun run format
+      - run: bun run lint
+      - run: bun run arch:check
+      - run: bun run typecheck
+
+      # tokens.ts is generated into packages/ui; before that package exists there is nothing to compare.
+      - if: steps.layout.outputs.ui == 'true'
+        run: bun run tokens:check
+      - run: bun run design:lint
+
+      # check-modules reads packages/modules/*/*/src/api/index.ts; before commit 4 the modules are MODULE.md only.
+      - if: steps.layout.outputs.modules == 'true'
+        run: bun run module:check
+
+      # The database chain needs both the package and the test compose file.
+      - if: steps.layout.outputs.db == 'true' && steps.layout.outputs.compose == 'true'
+        run: bun run --filter @bbc/db db:migrate
+      - if: steps.layout.outputs.db == 'true'
+        run: bun run test:unit
+      - if: steps.layout.outputs.db == 'true' && steps.layout.outputs.compose == 'true'
+        run: turbo run test:db
+      - if: steps.layout.outputs.db == 'true' && steps.layout.outputs.compose == 'true'
+        run: bun run db:verify
+
       - name: architecture graph (main only)
         if: github.ref == 'refs/heads/main'
         run: |
