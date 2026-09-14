@@ -9,7 +9,7 @@ import { resolvePrincipal, type PrincipalVars } from "./middleware/principal";
 import { authorize, registerRoute } from "./middleware/authorize";
 import { ModuleRegistry } from "./registry";
 import { appConfig } from "./presentation/mobile/app-config";
-import { modules } from "./modules";          // the ordered list of ModuleDescriptors (identity, members, proposals, …)
+import { modules } from "./modules"; // the ordered list of ModuleDescriptors (identity, members, proposals, …)
 
 export type BuildOptions = {
   env?: ReturnType<typeof loadEnv>;
@@ -23,7 +23,10 @@ export type BuildOptions = {
 export async function buildApp(opts: BuildOptions = {}) {
   const env = opts.env ?? loadEnv();
   const db = opts.db ?? createDb(env.DATABASE_URL, { applicationName: "bbc-api" });
-  const platform = createPlatform(db, { level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug", pretty: env.NODE_ENV === "development" });
+  const platform = createPlatform(db, {
+    level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug",
+    pretty: env.NODE_ENV === "development",
+  });
 
   // 1. events: the catalogue is the only source of types
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def as any);
@@ -41,11 +44,15 @@ export async function buildApp(opts: BuildOptions = {}) {
   const identity = registry.facade<any>("identity");
 
   // 3. principal resolution — after modules exist (needs identity), before any route
-  app.use("*", resolvePrincipal({
-    identity, appOrigin: env.APP_ORIGIN,
-    internalSecrets: [env.INTERNAL_API_SECRET, (env as any).INTERNAL_API_SECRET_NEXT].filter(Boolean),
-    logger: platform.logger,
-  }));
+  app.use(
+    "*",
+    resolvePrincipal({
+      identity,
+      appOrigin: env.APP_ORIGIN,
+      internalSecrets: [env.INTERNAL_API_SECRET, (env as any).INTERNAL_API_SECRET_NEXT].filter(Boolean),
+      logger: platform.logger,
+    }),
+  );
 
   // 4. public
   registerRoute("GET", "/health", "public");
@@ -53,17 +60,26 @@ export async function buildApp(opts: BuildOptions = {}) {
   registerRoute("GET", "/ready", "public");
   app.get("/ready", async (c) => {
     const checks: Record<string, unknown> = {};
-    try { await db.execute("SELECT 1"); checks.db = true; } catch { checks.db = false; }
+    try {
+      await db.execute("SELECT 1");
+      checks.db = true;
+    } catch {
+      checks.db = false;
+    }
     const h = await platform.health().catch(() => ({ ok: false, queue: null }));
     checks.queue = h.queue;
     const runs = await platform.jobs.lastRuns().catch(() => ({}));
-    const stale = Object.entries(runs).filter(([, r]) => r.at && Date.now() - new Date(r.at).getTime() > 36 * 3600_000).map(([j]) => j);
+    const stale = Object.entries(runs)
+      .filter(([, r]) => r.at && Date.now() - new Date(r.at).getTime() > 36 * 3600_000)
+      .map(([j]) => j);
     checks.staleJobs = stale;
     const ok = checks.db === true && h.ok && stale.length === 0;
     return c.json({ ok, ...checks }, ok ? 200 : 503);
   });
   registerRoute("GET", "/metrics", "public");
-  app.get("/metrics", async (c) => c.text(await platform.metrics.render(), 200, { "Content-Type": "text/plain; version=0.0.4" }));
+  app.get("/metrics", async (c) =>
+    c.text(await platform.metrics.render(), 200, { "Content-Type": "text/plain; version=0.0.4" }),
+  );
   registerRoute("GET", "/v1/app-config", "public");
   app.get("/v1/app-config", async (c) => c.json(await appConfig(platform)));
 
@@ -85,7 +101,7 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   const shutdown = async () => {
     platform.logger.info({}, "shutting down");
-    await platform.poller.stop();       // finishes the in-flight delivery, then stops
+    await platform.poller.stop(); // finishes the in-flight delivery, then stops
     await db.close();
   };
 
@@ -98,7 +114,11 @@ if (import.meta.main) {
   const server = Bun.serve({ port: Number(process.env.PORT ?? 8000), fetch: app.fetch, idleTimeout: 30 });
   platform.logger.info({ port: server.port, env: env.NODE_ENV }, "api up");
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
-    process.on(sig, async () => { server.stop(true); await shutdown(); process.exit(0); });
+    process.on(sig, async () => {
+      server.stop(true);
+      await shutdown();
+      process.exit(0);
+    });
   }
 }
 

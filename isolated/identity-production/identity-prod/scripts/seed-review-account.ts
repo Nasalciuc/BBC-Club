@@ -13,8 +13,13 @@ const db = createDb(env.DATABASE_URL);
 const auth = createAuth({ env, db, email: consoleSender(), events: createEvents(db), logger: console as any });
 
 const existing = await db.execute(`SELECT id FROM auth."user" WHERE email = $1`, [env.REVIEW_ACCOUNT_EMAIL]);
-if (existing.length) { console.log("review account exists"); process.exit(0); }
+if (existing.length) {
+  console.log("review account exists");
+  process.exit(0);
+}
 
-await auth.api.signUpEmail({ body: { email: env.REVIEW_ACCOUNT_EMAIL, password: env.REVIEW_ACCOUNT_PASSWORD, name: "App Review" } });
+await auth.api.signUpEmail({
+  body: { email: env.REVIEW_ACCOUNT_EMAIL, password: env.REVIEW_ACCOUNT_PASSWORD, name: "App Review" },
+});
 await db.execute(`UPDATE auth."user" SET "emailVerified" = true WHERE email = $1`, [env.REVIEW_ACCOUNT_EMAIL]);
 console.log("review account created & verified — seed fixture proposals for it via the fixture script");

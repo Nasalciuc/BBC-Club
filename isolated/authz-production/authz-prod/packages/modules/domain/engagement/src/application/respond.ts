@@ -10,22 +10,52 @@ export const RespondInput = z.object({ offerId: z.string().uuid(), response: z.e
 
 export type RespondDeps = {
   db: Executor;
-  proposals: { getVisible(exec: Executor, actorMemberId: string, offerId: string): Promise<{ id: string; title: string } | null> };
-  events: { publish(tx: Executor, e: { type: string; version: number; aggregateType: string; aggregateId: string; memberId: string; payload: unknown }): Promise<void> };
+  proposals: {
+    getVisible(exec: Executor, actorMemberId: string, offerId: string): Promise<{ id: string; title: string } | null>;
+  };
+  events: {
+    publish(
+      tx: Executor,
+      e: {
+        type: string;
+        version: number;
+        aggregateType: string;
+        aggregateId: string;
+        memberId: string;
+        payload: unknown;
+      },
+    ): Promise<void>;
+  };
 };
 
-export type RespondResult = { ok: true; state: "interested" | "dismissed" } | { ok: false; code: "NOT_FOUND" | "FORBIDDEN" };
+export type RespondResult =
+  { ok: true; state: "interested" | "dismissed" } | { ok: false; code: "NOT_FOUND" | "FORBIDDEN" };
 
-export async function respond(deps: RespondDeps, principal: Principal, input: z.infer<typeof RespondInput>): Promise<RespondResult> {
+export async function respond(
+  deps: RespondDeps,
+  principal: Principal,
+  input: z.infer<typeof RespondInput>,
+): Promise<RespondResult> {
   const actor = actorMemberId(principal);
-  if (!actor) return { ok: false, code: "FORBIDDEN" };                          // operators/system without an actor cannot respond
+  if (!actor) return { ok: false, code: "FORBIDDEN" }; // operators/system without an actor cannot respond
   return withTx(deps.db, async (tx) => {
-    const offer = await deps.proposals.getVisible(tx, actor, input.offerId);    // visibility = ownership check, in SQL
-    if (!offer) return { ok: false, code: "NOT_FOUND" };                       // 404, never 403 (no oracle)
+    const offer = await deps.proposals.getVisible(tx, actor, input.offerId); // visibility = ownership check, in SQL
+    if (!offer) return { ok: false, code: "NOT_FOUND" }; // 404, never 403 (no oracle)
     const stored = await responsesRepo.upsert(tx, actor, offer.id, input.response);
     await deps.events.publish(tx, {
-      type: "offer.responded", version: 1, aggregateType: "offer", aggregateId: offer.id, memberId: actor,
-      payload: { type: "offer.responded", version: 1, offerId: offer.id, memberId: actor, response: stored.response, at: new Date().toISOString() },
+      type: "offer.responded",
+      version: 1,
+      aggregateType: "offer",
+      aggregateId: offer.id,
+      memberId: actor,
+      payload: {
+        type: "offer.responded",
+        version: 1,
+        offerId: offer.id,
+        memberId: actor,
+        response: stored.response,
+        at: new Date().toISOString(),
+      },
     });
     return { ok: true, state: stored.response };
   });

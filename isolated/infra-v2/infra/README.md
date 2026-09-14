@@ -1,11 +1,11 @@
 # infra/ — one machine, one compose file, three modes
 
-| Mode | Command |
-|---|---|
+| Mode                                    | Command                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------- |
 | dev (Postgres only; API on your laptop) | `docker compose -f infra/docker-compose.yml --profile dev up -d postgres` |
-| test (throwaway, tmpfs) | `docker compose -f infra/compose.test.yml up -d --wait` |
-| staging | `bash infra/deploy.sh staging ghcr.io/nasalciuc/bbc-api:<sha>` |
-| production (release) | `bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>` |
+| test (throwaway, tmpfs)                 | `docker compose -f infra/compose.test.yml up -d --wait`                   |
+| staging                                 | `bash infra/deploy.sh staging ghcr.io/nasalciuc/bbc-api:<sha>`            |
+| production (release)                    | `bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>`         |
 
 The raw `docker compose … up -d` commands are for bootstrap and operations (restart, inspect). Releases always go through `deploy.sh`, which takes a pre-deploy dump, runs migrations as a separate job, waits for `/ready`, and rolls back automatically.
 

@@ -19,9 +19,10 @@ export const responsesRepo = {
     return rows[0] ?? (await this.get(exec, actorMemberId, offerId));
   },
   async get(exec: Executor, actorMemberId: string, offerId: string) {
-    const [row] = await exec.select({ response: offerResponses.response, createdAt: offerResponses.createdAt })
+    const [row] = await exec
+      .select({ response: offerResponses.response, createdAt: offerResponses.createdAt })
       .from(offerResponses)
-      .where(and(eq(offerResponses.offerId, offerId), eq(offerResponses.memberId, actorMemberId)))   // ← ownership is the query
+      .where(and(eq(offerResponses.offerId, offerId), eq(offerResponses.memberId, actorMemberId))) // ← ownership is the query
       .limit(1);
     return row ?? null;
   },

@@ -1,8 +1,5 @@
 import { MaterialSymbols_400Regular } from "@expo-google-fonts/material-symbols";
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-} from "@expo-google-fonts/inter";
+import { Inter_400Regular, Inter_500Medium } from "@expo-google-fonts/inter";
 import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
 import { SourceSerif4_400Regular } from "@expo-google-fonts/source-serif-4";
 import { useFonts } from "expo-font";

@@ -8,8 +8,18 @@ export default defineConfig({
   schema: ["./src/schema/*.ts", "../modules/**/src/infrastructure/schema.ts"],
   out: "./migrations",
   dbCredentials: { url: process.env.DATABASE_URL! },
-  casing: undefined,          // column names are explicit in every table — no casing magic
+  casing: undefined, // column names are explicit in every table — no casing magic
   strict: true,
   verbose: true,
-  schemaFilter: ["platform", "auth", "members", "notifications", "proposals", "engagement", "crm", "personalization", "campaigns"],
+  schemaFilter: [
+    "platform",
+    "auth",
+    "members",
+    "notifications",
+    "proposals",
+    "engagement",
+    "crm",
+    "personalization",
+    "campaigns",
+  ],
 });

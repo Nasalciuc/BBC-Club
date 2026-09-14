@@ -47,9 +47,8 @@ export default function JoinScreen() {
       <View style={styles.copy}>
         <Text style={styles.headline}>Join the club</Text>
         <Text style={styles.body}>
-          If you've flown with us, use the email your advisor has on file — we'll
-          recognise you and set things up. If you're new, we'll add you to the
-          list.
+          If you've flown with us, use the email your advisor has on file — we'll recognise you and set things up. If
+          you're new, we'll add you to the list.
         </Text>
       </View>
 
