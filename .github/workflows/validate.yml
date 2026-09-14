@@ -6,6 +6,8 @@ on:
 concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
+permissions:
+  contents: read
 jobs:
   validate:
     runs-on: ubuntu-latest
