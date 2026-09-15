@@ -13,7 +13,20 @@
 7. **Mobile:** React Compiler is ON — no `useMemo`/`useCallback`/`memo`. Reanimated only (no RN `Animated`). Colors/sizes only from `tokens`. Every interactive element has `testID="screen.element"`. Never run the app yourself; give the commands.
 8. **New things have a shape.** New module → `bun run new-module`. New event → schema in `packages/shared/events` + catalogue entry + at least one consumer (or `noConsumer`). New route → `registerRoute(...)` + `authorize(permission)`. New table → migration `NNNN_<module>_<desc>.sql`.
 9. **Do not touch without an ADR:** `packages/shared`, `packages/modules/platform`, existing migrations, `.dependency-cruiser.cjs`, `eslint.config.mjs`, `DESIGN.md`. Open the PR; the integrator decides.
-10. **Done means `bun run validate` is green** on a fresh checkout, `MODULE.md` matches the code, and the PR template is filled. A todo left in a contract test keeps the build red on purpose.
+10. **Done means `bun run validate` is green** on a fresh checkout, `MODULE.md` matches the code, and the PR template is filled. A todo left in a contract test keeps the build red on purpose. Pre-push runs `validate:prepush` (quick + `turbo test:db`) so DB/inventory failures surface locally; CI still runs full `validate`.
+
+## Stacked PRs / merge hotspots
+
+After merging or rebasing onto `main`, run `bun run --filter @bbc/api typecheck`. If you touched a hotspot, also run the matching tests (preload `packages/db/src/testing/preload.ts`):
+
+- `apps/api/src/registry.ts` → `test/boot.test.ts`
+- `registerRoute` / host `/v1` routes → `test/authz.test.ts` + `test/guard.test.ts`
+- proposals schema / ingest / CHECK → `@bbc/proposals` contract + `test/proposals.test.ts`
+- identity password Path A → `test/password.test.ts`
+
+Hotspot files: `apps/api/src/registry.ts`, `packages/shared/src/authz/authorize.ts` (`routeRegistry`), `apps/api/test/helpers/test-app.ts`, proposals `offers_*` CHECKs, identity `POST /v1/account/password`.
+
+**Killswitch:** a killed module still exposes its facade so dependents boot; its routes/consumers/jobs are not registered (HTTP 404). Canonical assertion: `test/boot.test.ts`. Do not reintroduce cascade-skip of dependents.
 
 ## When something is unclear
 

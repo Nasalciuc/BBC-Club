@@ -15,6 +15,10 @@
 - [ ] if UI: `testID` on every interactive element + screenshot on iOS **and** Android
 - [ ] if schema: numbered migration + `db:verify` green
 - [ ] if events: versioned schema in `packages/shared/events` + idempotent handler test (event delivered twice → one effect)
+- [ ] after merge/rebase onto `main`: `bun run --filter @bbc/api typecheck`
+- [ ] if `registry.ts` touched: `bun test --cwd apps/api test/boot.test.ts --preload ../../packages/db/src/testing/preload.ts`
+- [ ] if `registerRoute` / host `/v1` routes touched: `authz.test` + `guard.test`
+- [ ] if proposals ingest/schema touched: proposals contract + `proposals.test`
 
 ## Rollback
 

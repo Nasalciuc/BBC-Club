@@ -90,16 +90,7 @@ describe("GET /v1/proposals/:id", () => {
 
   it("410 GONE for own expired offer", async () => {
     const t = await testApp({ suite: "proposal-gone" });
-    // valid_until must stay > publish_at (CHECK); expire by status after seeding a still-valid window.
-    const offerId = await t.seedBroadcastOffer({
-      validUntil: new Date(Date.now() + 86_400_000).toISOString(),
-    });
-    await t.db.execute(
-      (await import("drizzle-orm")).sql`
-        UPDATE proposals.offers
-        SET status = 'expired', valid_until = now() - interval '1 hour', publish_at = now() - interval '2 hours'
-        WHERE id = ${offerId}`,
-    );
+    const offerId = await t.seedExpiredOffer();
     const r = await t.app.request(`/v1/proposals/${offerId}`, { headers: { Cookie: t.memberA.cookie } });
     expect(r.status).toBe(410);
     await t.close();

@@ -8,7 +8,10 @@ import { testAuth } from "./test-auth";
 
 /** The whole host, in-memory (no port), against an isolated clone of the test template, with capturing adapters.
  *  Every suite that needs the system uses this — nobody builds their own wiring.
- *  Pass `suite` to name the isolated DB (and to isolate fixture emails when suites share a process). */
+ *  Pass `suite` to name the isolated DB (and to isolate fixture emails when suites share a process).
+ *
+ *  Seed rules: never pass validUntil < now to ingest (CHECK offers_valid_after_publish); targeting=user needs
+ *  targetMemberId in the same payload; Path A password tests use withPathAPassword (no credential yet). */
 export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[0]; suite?: string } = {}) {
   const iso = await isolatedDb(opts.suite ?? "api", { max: 6 });
   const env = loadEnv({ ...process.env, DATABASE_URL: iso.url });
@@ -151,6 +154,22 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
         price: "4200.00",
         publishedPrice: "7850.00",
       });
+    },
+    /** Active ingest then mark expired — never seed with validUntil in the past (CHECK). */
+    async seedExpiredOffer() {
+      const offerId = await this.seedBroadcastOffer();
+      await db.execute(
+        sql`UPDATE proposals.offers
+            SET status = 'expired',
+                valid_until = now() - interval '1 hour',
+                publish_at = now() - interval '2 hours'
+            WHERE id = ${offerId}`,
+      );
+      return offerId;
+    },
+    /** Strip credential so setPassword matches Path A (session without password yet). */
+    async withPathAPassword(memberId: string) {
+      await db.execute(sql`DELETE FROM auth.account WHERE user_id = ${memberId} AND provider_id = 'credential'`);
     },
     async seedNotification(memberId: string) {
       const [{ id }]: any = await db.execute(

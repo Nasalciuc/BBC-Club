@@ -25,6 +25,7 @@
     "test:db": "docker compose -f infra/compose.test.yml up -d --wait && turbo run test:db",
     "db:verify": "bun run --filter @bbc/db db:verify",
     "validate:quick": "bun run format && bun run lint && bun run arch:check && bun run typecheck && bun run tokens:check && bun run design:lint && bun run module:check",
+    "validate:prepush": "bun run validate:quick && bunx turbo run test:db",
     "validate": "bun run validate:quick && bun run test:unit && bun run test:db && bun run db:verify",
     "e2e": "maestro test apps/mobile/e2e",
     "prepare": "husky"

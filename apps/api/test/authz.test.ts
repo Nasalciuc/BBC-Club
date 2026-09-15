@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { routeRegistry } from "../src/middleware/authorize";
+import { assertPublicGetV1Policy, publicGetV1Keys } from "./helpers/route-inventory";
 import { testApp } from "./helpers/test-app"; // boots the host against postgres-test with two members (A, B), one operator JWT, the internal secret
 
 describe("authorization gates", () => {
@@ -15,9 +16,15 @@ describe("authorization gates", () => {
     for (const r of t.app.routes.filter((x: any) => x.path.startsWith("/v1") && x.method !== "ALL")) {
       expect(routeRegistry.has(`${r.method} ${r.path}`)).toBe(true);
     }
-    expect(
-      [...routeRegistry.entries()].filter(([k, p]) => p === "public" && k.startsWith("GET /v1")).map(([k]) => k),
-    ).toEqual(["GET /v1/app-config", "GET /v1/test/last-otp"]);
+    const publicKeys = publicGetV1Keys();
+    expect(publicKeys.length).toBeGreaterThan(0);
+    expect(() => assertPublicGetV1Policy(publicKeys)).not.toThrow();
+    const mountedGetV1 = new Set(
+      t.app.routes.filter((x: any) => x.method === "GET" && x.path.startsWith("/v1")).map((x: any) => `GET ${x.path}`),
+    );
+    for (const key of publicKeys) {
+      expect(mountedGetV1.has(key)).toBe(true);
+    }
   });
 
   it("IDOR: member A cannot see or act on member B's targeted offer (404, body identical to a missing id)", async () => {
