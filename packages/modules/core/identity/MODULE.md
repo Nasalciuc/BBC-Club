@@ -22,8 +22,23 @@ Pinned at verification: **better-auth 1.6.31**, **@better-auth/expo 1.6.31**, **
 | 5   | `rateLimit.customRules` keys `/sign-in/email` and `/email-otp/send-verification-otp`       | 6th sign-in → **429** + **`X-Retry-After`** (1.6.31 does not set standard `Retry-After`); 4th OTP send → **429** (`library-assumptions.test.ts`) |
 | 6   | JWT `iss`/`aud` = `APP_ORIGIN`                                                             | Plugin defaults to `baseURL` origin; `jwtVerify` in `principal.ts` keeps both; decode + bearer probe green                                       |
 
-## Checklist A findings (Better Auth 1.6.31)
+## Checklist A findings (schema / rate-limit — Better Auth 1.6.31)
 
 1. **`generateId: "uuid"`** on 1.6.31 means _the database_ generates the id (`gen_random_uuid()`). Our CLI-generated `auth.user.id` is `text` with no default, so inserts failed with `null value in column "id"`. Fix: `database: { generateId: () => crypto.randomUUID() }` in `src/infrastructure/auth.ts` — app-side UUIDs, schema stays regen-safe.
 2. **Rate-limit `customRules` route names** — live probe (6× `POST /api/auth/sign-in/email` with wrong password): `400 400 400 400 400 429`. **`/sign-in/email` matches Better Auth 1.6.31** (sixth response is 429).
 3. **`auth.rate_limit.last_request`** — CLI schema used `integer`; Better Auth writes `Date.now()` ms which overflows in 2026. Column is `bigint` (migration `0004_auth_rate_limit_bigint.sql`).
+
+## Checklist A — verified against better-auth 1.6.31
+
+**Decision: path A** (OTP sign-in creates the account without a password; Set Password is a later club route).
+Pinned by `apps/api/test/register-path.test.ts` and the in-process probe below (same Better Auth 1.6.31 handlers as `bun run --filter @bbc/api dev`).
+
+| #   | Question                                | Command / check                                                               | Result                                                                |
+| --- | --------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 1   | Send OTP for unknown email              | `POST /api/auth/email-otp/send-verification-otp` `{ email, type: "sign-in" }` | **200**, OTP captured in capturing sender                             |
+| 2   | Sign-in with OTP creates user + session | `POST /api/auth/sign-in/email-otp` `{ email, otp }`                           | **200**, `Set-Cookie` present; no credential password on the new user |
+| 3   | `email_verified`                        | `SELECT email_verified FROM auth."user" WHERE email = …`                      | **true**                                                              |
+| 4   | `member.registered` → profile           | drain poller; `SELECT count(*) FROM members.profile WHERE member_id = …`      | **1** (databaseHooks.user.create.after fired on OTP path)             |
+| 5   | `name`                                  | `SELECT name FROM auth."user" …`                                              | **`""`** (empty string, no complaint)                                 |
+
+Path B (`signUp.email` + throwaway password) is **not** required. Mobile Block 4 keeps join → OTP → `POST /v1/account/password`.

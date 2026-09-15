@@ -90,6 +90,8 @@ export const engagementModule = (): ModuleDescriptor<Ports, ReturnType<typeof fa
 function facade(db: any) {
   return {
     get: (exec: any, actorMemberId: string, offerId: string) => responsesRepo.get(exec ?? db, actorMemberId, offerId),
+    responsesFor: (exec: any, actorMemberId: string, offerIds: string[]) =>
+      responsesRepo.responsesFor(exec ?? db, actorMemberId, offerIds),
     upsert: (exec: any, actorMemberId: string, offerId: string, response: "interested" | "dismissed") =>
       responsesRepo.upsert(exec ?? db, actorMemberId, offerId, response),
     markSynced: (exec: any, actorMemberId: string, offerId: string, crmActivityId: string | null) =>

@@ -5,16 +5,17 @@ import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import { offersRepo } from "./infrastructure/offers.repo";
 import { ingest, IngestInput } from "./application/ingest";
+import { expireOffers } from "./application/expire-offers";
 
 type Exposes = {
   getVisible(exec: unknown, actorMemberId: string, offerId: string): Promise<unknown | null>;
+  getAny(exec: unknown, offerId: string): Promise<unknown | null>;
   feed(
     exec: unknown,
     actorMemberId: string,
     cursor: { ts: Date; id: string } | null,
     limit?: number,
   ): Promise<unknown[]>;
-  getAny(exec: unknown, offerId: string): Promise<unknown | null>;
   ingest(
     input: unknown,
     idempotencyKey: string,
@@ -36,39 +37,6 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
     };
 
     const routes = new Hono<any>();
-
-    registerRoute("GET", "/v1/proposals", "proposals:read");
-    routes.get(
-      "/proposals",
-      authorize("proposals:read", {
-        module: "proposals",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const actor = actorMemberId(c.get("principal"));
-        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const items = await expose.feed(undefined, actor, null);
-        return c.json({ items });
-      },
-    );
-
-    registerRoute("GET", "/v1/proposals/:id", "proposals:read");
-    routes.get(
-      "/proposals/:id",
-      authorize("proposals:read", {
-        module: "proposals",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const actor = actorMemberId(c.get("principal"));
-        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const row = await expose.getVisible(undefined, actor, c.req.param("id"));
-        if (!row) return c.json(apiError("NOT_FOUND"), 404);
-        return c.json(row);
-      },
-    );
 
     registerRoute("POST", "/v1/internal/offers", "proposals:ingest");
     routes.post(
@@ -102,7 +70,18 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
       exposes: expose,
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [],
-      jobs: [],
+      jobs: [
+        {
+          name: "expire-offers",
+          spec: {
+            /** Cron: every 5 minutes. Idempotent — safe to run on multiple replicas. */
+            cron: "*/5 * * * *",
+            singleton: true,
+            timeoutMs: 30_000,
+            handler: async () => expireOffers({ db, events }),
+          },
+        },
+      ],
     };
   },
 });
