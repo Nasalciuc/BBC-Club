@@ -9,8 +9,8 @@
     "./schema": "./src/infrastructure/schema.ts"
   },
   "scripts": {
-    "test": "bun test",
-    "test:db": "bun test"
+    "test": "bun test --preload ../../db/src/testing/preload.ts",
+    "test:db": "bun test --preload ../../db/src/testing/preload.ts"
   },
   "dependencies": {
     "@bbc/shared": "workspace:*",

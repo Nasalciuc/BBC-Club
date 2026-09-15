@@ -1,12 +1,17 @@
-import { describe, it, expect, beforeEach, afterAll } from "bun:test";
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from "bun:test";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
-import { createDb } from "@bbc/db";
+import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createPlatform } from "../src/api";
 
 /** These tests are the contract of the whole system: every module's correctness rests on them. */
-const db = createDb(process.env.DATABASE_URL!, { max: 4, applicationName: "platform-test" });
-afterAll(() => db.close());
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("platform-journal", { max: 4 });
+  db = iso.db;
+});
+afterAll(() => iso.drop());
 
 const Payload = z.object({ type: z.literal("test.happened"), version: z.literal(1), value: z.string() });
 

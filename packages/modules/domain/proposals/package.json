@@ -9,7 +9,7 @@
     "./schema": "./src/infrastructure/schema.ts"
   },
   "scripts": {
-    "test:db": "bun test tests/contract tests/handlers",
+    "test:db": "bun test tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

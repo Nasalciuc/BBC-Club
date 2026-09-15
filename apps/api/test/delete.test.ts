@@ -5,7 +5,7 @@ import { testApp } from "./helpers/test-app";
 /** Host integration: account deletion cascades across schemas via member.deleted consumers. */
 describe("account deletion — zero rows everywhere", () => {
   it("removes auth rows, cascades our schemas via member.deleted, tombstones the journal", async () => {
-    const t = await testApp();
+    const t = await testApp({ suite: "delete" });
     const email = t.memberA.email;
     const memberId = t.memberA.id;
 

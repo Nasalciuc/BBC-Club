@@ -5,7 +5,7 @@ import { EVENT_CATALOGUE } from "@bbc/shared/events";
 
 describe("host boot", () => {
   it("mounts every module, satisfies every port, and every consumed event has a handler", async () => {
-    const t = await testApp();
+    const t = await testApp({ suite: "boot" });
     const registry = t.platform.events.registry;
     const owed: string[] = [];
     for (const [type, def] of Object.entries(EVENT_CATALOGUE)) {
@@ -23,7 +23,7 @@ describe("host boot", () => {
   });
 
   it("/ready explains what is wrong; /health is always cheap", async () => {
-    const t = await testApp();
+    const t = await testApp({ suite: "boot" });
     const ready = await t.app.request("/ready");
     const body = await ready.json();
     expect(body).toHaveProperty("db");
@@ -34,10 +34,9 @@ describe("host boot", () => {
   });
 
   it("a killed module is not mounted and its routes answer 404, other modules unaffected", async () => {
-    const t0 = await testApp();
-    await t0.flags.kill("engagement");
-    await t0.close();
-    const t = await testApp();
+    const t = await testApp({ suite: "boot" });
+    await t.flags.kill("engagement");
+    await t.restart();
     const broadcast = await t.seedBroadcastOffer();
     expect((await t.respondAs(t.memberA, broadcast, "interested")).status).toBe(404);
     expect((await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
@@ -46,7 +45,7 @@ describe("host boot", () => {
   });
 
   it("errors have one shape: validation → 400 with details, unknown → 500 without internals", async () => {
-    const t = await testApp();
+    const t = await testApp({ suite: "boot" });
     const bad = await t.app.request("/v1/proposals/not-a-uuid/respond", {
       method: "POST",
       headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
@@ -64,7 +63,7 @@ describe("host boot", () => {
 
 describe("smoke = Demo 2", () => {
   it("register → code → feed → interested → drained → CRM has the activity", async () => {
-    const t = await testApp();
+    const t = await testApp({ suite: "boot" });
     const email = "new.member@test.dev";
     const signUp = await t.app.request("/api/auth/sign-up/email", {
       method: "POST",

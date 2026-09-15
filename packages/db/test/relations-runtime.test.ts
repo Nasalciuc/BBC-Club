@@ -1,10 +1,15 @@
-import { describe, it, expect, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createDb } from "../src/client";
 import { offers, offerTargets } from "../src/schema/proposals";
+import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
 
-const db = createDb(process.env.DATABASE_URL!, { max: 2, applicationName: "bbc-relations-runtime" });
-afterAll(() => db.close());
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("db-relations", { max: 2 });
+  db = iso.db;
+});
+afterAll(() => iso.drop());
 
 describe("drizzle relations (1.0.0-rc.4)", () => {
   it("defineRelations + db.query.offers.findMany({ with: { targets: true } }) returns nested rows", async () => {

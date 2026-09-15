@@ -10,7 +10,7 @@
     "./access": "./src/infrastructure/access.ts"
   },
   "scripts": {
-    "test:db": "bun test tests",
+    "test:db": "bun test tests --preload ../../../db/src/testing/preload.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
