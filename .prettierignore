@@ -1,3 +1,6 @@
 # Generated from DESIGN.md by `bun run tokens` — must match generator output byte-for-byte.
 packages/ui/src/tokens.ts
 apps/mobile/tailwind.theme.js
+
+# Agent scratch / local worktrees — not part of the product tree.
+.claude/**

@@ -9,5 +9,11 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "signIn.password" }
 - inputText: "atlantic2026!"
 - tapOn: { id: "signIn.submit" }
-# Active member lands on the Block 5 proposals feed.
 - assertVisible: { id: "feed.root" }
+- tapOn: { id: "tabs.profile" }
+- assertVisible: { id: "profile.root" }
+- tapOn: { id: "profile.delete" }
+- assertVisible: { id: "profile.deleteConfirm" }
+- tapOn: { id: "profile.deleteConfirm.confirm" }
+# After delete → join (Path A entry), not the feed.
+- assertVisible: { id: "join.email" }
