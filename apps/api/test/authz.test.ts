@@ -17,7 +17,7 @@ describe("authorization gates", () => {
     }
     expect(
       [...routeRegistry.entries()].filter(([k, p]) => p === "public" && k.startsWith("GET /v1")).map(([k]) => k),
-    ).toEqual(["GET /v1/app-config"]);
+    ).toEqual(["GET /v1/app-config", "GET /v1/test/last-otp"]);
   });
 
   it("IDOR: member A cannot see or act on member B's targeted offer (404, body identical to a missing id)", async () => {
