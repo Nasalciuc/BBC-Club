@@ -42,7 +42,7 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
   memberA.cookie = await auth.cookieFor(memberA.email);
   const memberB = { ...(await auth.createMember(emailB)), cookie: "" };
   memberB.cookie = await auth.cookieFor(memberB.email);
-  const operatorJwt = await auth.operatorJwt(opts.suite ? `ops.${opts.suite}@test.dev` : undefined);
+  const operatorJwt = await auth.operatorJwt(opts.suite ? `ops.${opts.suite}@test.dev` : "ops@test.dev");
   await built.platform.poller.drainOnce(); // member.registered → profiles
 
   const api = {
