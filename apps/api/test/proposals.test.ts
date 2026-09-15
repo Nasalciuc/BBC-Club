@@ -90,9 +90,8 @@ describe("GET /v1/proposals/:id", () => {
 
   it("410 GONE for own expired offer", async () => {
     const t = await testApp({ suite: "proposal-gone" });
-    // Seed a broadcast offer with validUntil in the past
-    const offerId = await t.seedBroadcastOffer({ validUntil: new Date(Date.now() - 1000).toISOString() });
-    // Force status to expired
+    // Ingest rejects validUntil < publish_at (CHECK offers_valid_after_publish). Seed active, then expire.
+    const offerId = await t.seedBroadcastOffer();
     await t.db.execute(
       (await import("drizzle-orm")).sql`UPDATE proposals.offers SET status = 'expired' WHERE id = ${offerId}`,
     );
