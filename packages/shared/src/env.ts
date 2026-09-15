@@ -12,6 +12,7 @@ export const ServerEnv = z.object({
   REVIEW_ACCOUNT_EMAIL: z.string().email().optional(),
   REVIEW_ACCOUNT_PASSWORD: z.string().min(12).optional(),
   INTERNAL_API_SECRET: z.string().min(32),
+  CRM_ADAPTER: z.enum(["mock", "http"]).default("mock"),
 });
 export type ServerEnv = z.infer<typeof ServerEnv>;
 

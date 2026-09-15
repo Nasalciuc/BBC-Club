@@ -39,6 +39,7 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
   return {
     app: built.app,
     db,
+    appOrigin: env.APP_ORIGIN,
     platform: built.platform,
     registry: built.registry,
     email,
@@ -81,6 +82,7 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
             principal: { kind: "system", role: "system", source: "handler", actorMemberId: payload.memberId },
             logger: built.platform.logger,
             attempt: 1,
+            signal: new AbortController().signal,
           },
           payload,
         ),
