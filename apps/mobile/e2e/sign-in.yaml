@@ -9,5 +9,5 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "signIn.password" }
 - inputText: "atlantic2026!"
 - tapOn: { id: "signIn.submit" }
-# Until Phase E wires the API this lands on the placeholder home; Phase E changes the last line to the feed.
+# Active member lands on the Block 5 placeholder home.
 - assertVisible: { text: "Proposals" }

@@ -4,6 +4,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { setPendingOtp } from "@/features/auth/otp-holder";
+import { resendCode, verifyJoin } from "@/features/auth/flows";
+import { Otp } from "@/features/auth/schemas";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { Club } from "@/constants/club";
@@ -21,6 +23,8 @@ export default function VerifyCodeScreen() {
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState("");
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -29,31 +33,60 @@ export default function VerifyCodeScreen() {
   }, [seconds]);
 
   const digits = Array.from({ length: CODE_LENGTH }, (_, index) => code[index] ?? "");
-  const canVerify = code.length === CODE_LENGTH;
+  const canVerify = code.length === CODE_LENGTH && !busy;
   const destination = email?.trim() || "your email";
 
-  function onVerify() {
+  async function onVerify() {
+    const otpResult = Otp.safeParse(code);
+    if (!otpResult.success) {
+      setError(otpResult.error.issues[0]?.message ?? "Enter the 6-digit code.");
+      return;
+    }
+    const normalizedEmail = email?.trim().toLowerCase() ?? "";
+    if (!normalizedEmail) {
+      router.replace("/sign-in");
+      return;
+    }
+
     if (purpose === "reset") {
-      setPendingOtp(code);
+      setPendingOtp(otpResult.data);
       router.replace({
         pathname: "/set-password",
-        params: { purpose: "reset", email: email ?? "" },
+        params: { purpose: "reset", email: normalizedEmail },
       });
       return;
     }
 
-    // TODO(identity): signIn.emailOtp({ email, otp }) — creates the
-    // account and the session on the server (ADR-PROD-001 path A)
+    setBusy(true);
+    setError(null);
+    const result = await verifyJoin(normalizedEmail, otpResult.data);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
     router.replace({
       pathname: "/set-password",
       params: { purpose: "join" },
     });
   }
 
+  async function onResend() {
+    const normalizedEmail = email?.trim().toLowerCase() ?? "";
+    if (!normalizedEmail || seconds > 0) return;
+    setSeconds(RESEND_SECONDS);
+    setCode("");
+    setError(null);
+    const result = await resendCode(normalizedEmail, purpose);
+    if (!result.ok) setError(result.message);
+  }
+
   return (
     <AuthShell
       onBack="/sign-in"
-      footer={<ClubButton testID="verify.submit" label="Verify" arrow disabled={!canVerify} onPress={onVerify} />}
+      footer={
+        <ClubButton testID="verify.submit" label="Verify" arrow disabled={!canVerify} onPress={() => void onVerify()} />
+      }
     >
       <View style={styles.copy}>
         <Text style={styles.headline}>Check your email</Text>
@@ -75,7 +108,10 @@ export default function VerifyCodeScreen() {
           ref={inputRef}
           testID="verify.code"
           value={code}
-          onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, CODE_LENGTH))}
+          onChangeText={(value) => {
+            setCode(value.replace(/\D/g, "").slice(0, CODE_LENGTH));
+            setError(null);
+          }}
           keyboardType="number-pad"
           textContentType="oneTimeCode"
           autoComplete="one-time-code"
@@ -86,15 +122,18 @@ export default function VerifyCodeScreen() {
         />
       </Pressable>
 
+      {error ? (
+        <Text testID="verify.error" style={styles.error}>
+          {error}
+        </Text>
+      ) : null}
+
       <Pressable
         testID="verify.resend"
         accessibilityRole="link"
         hitSlop={Club.space.sm}
         disabled={seconds > 0}
-        onPress={() => {
-          setSeconds(RESEND_SECONDS);
-          setCode("");
-        }}
+        onPress={() => void onResend()}
         style={styles.resendWrap}
       >
         <Text style={styles.resend}>
@@ -156,5 +195,10 @@ const styles = StyleSheet.create({
     ...Club.type.labelMono,
     color: Club.colors.textOnDarkMuted,
     textTransform: "uppercase",
+  },
+  error: {
+    ...Club.type.bodySm,
+    color: Club.colors.statusDanger,
+    marginTop: Club.space.sm,
   },
 });

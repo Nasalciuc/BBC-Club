@@ -7,6 +7,18 @@ const SUBJECTS: Record<OtpPurpose, string> = {
   "change-email": "Confirm your new BuyBusinessClass Club email",
 };
 
+/** In-memory last OTP per email for non-production Maestro / local helpers. Never log the code. */
+const lastOtpByEmail = new Map<string, string>();
+
+export function rememberDevOtp(to: string, otp: string): void {
+  lastOtpByEmail.set(to.trim().toLowerCase(), otp);
+}
+
+/** Test/dev helper: returns the last OTP for an email, or null. */
+export function lastDevOtp(to: string): string | null {
+  return lastOtpByEmail.get(to.trim().toLowerCase()) ?? null;
+}
+
 export function postmarkSender(opts: { token: string; from: string; fetchImpl?: typeof fetch }): EmailSender {
   const f = opts.fetchImpl ?? fetch;
   return {
@@ -35,11 +47,12 @@ export function postmarkSender(opts: { token: string; from: string; fetchImpl?: 
   };
 }
 
-/** Development: log instead of send. Never used when NODE_ENV=production (env.ts enforces the token). */
+/** Development: store OTP for the test helper; log purpose + recipient only (never the code). */
 export function consoleSender(log: (m: string) => void = console.log): EmailSender {
   return {
     async sendOtp({ to, otp, purpose }) {
-      log(`[dev-email] ${purpose} → ${to}: ${otp}`);
+      rememberDevOtp(to, otp);
+      log(`[dev-email] ${purpose} → ${to}`);
     },
   };
 }

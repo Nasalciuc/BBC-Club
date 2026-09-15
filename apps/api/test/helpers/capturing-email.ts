@@ -1,4 +1,5 @@
 import type { EmailSender, OtpPurpose } from "@bbc/identity/ports/email";
+import { rememberDevOtp } from "@bbc/email";
 
 /** Captures OTPs instead of sending. Tests read the code the way a member would from their inbox. */
 export function capturingEmail(): EmailSender & {
@@ -16,6 +17,7 @@ export function capturingEmail(): EmailSender & {
         throw new Error("Postmark 503: simulated outage");
       }
       sent.push(input);
+      rememberDevOtp(input.to, input.otp);
     },
     lastOtp(to) {
       const m = [...sent].reverse().find((s) => s.to === to.toLowerCase() || s.to === to);

@@ -6,11 +6,38 @@ import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { ClubField, ClubInput } from "@/components/club-field";
 import { Club } from "@/constants/club";
+import { join } from "@/features/auth/flows";
+import { Email } from "@/features/auth/schemas";
+import { authMessage } from "@bbc/shared/auth-messages";
 
 export default function JoinScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
-  const canContinue = email.includes("@") && email.includes(".");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const parsed = Email.safeParse(email);
+  const canContinue = parsed.success && !busy;
+
+  async function onContinue() {
+    const emailResult = Email.safeParse(email);
+    if (!emailResult.success) {
+      setError(emailResult.error.issues[0]?.message ?? authMessage("INVALID_EMAIL"));
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const result = await join(emailResult.data);
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    router.push({
+      pathname: "/verify-code",
+      params: { email: emailResult.data, purpose: "join" },
+    });
+  }
 
   return (
     <AuthShell
@@ -23,12 +50,7 @@ export default function JoinScreen() {
             label="Continue"
             arrow
             disabled={!canContinue}
-            onPress={() =>
-              router.push({
-                pathname: "/verify-code",
-                params: { email: email.trim(), purpose: "join" },
-              })
-            }
+            onPress={() => void onContinue()}
           />
           <View style={styles.memberRow}>
             <Text style={styles.member}>Already a member? </Text>
@@ -61,9 +83,17 @@ export default function JoinScreen() {
           keyboardType="email-address"
           placeholder="Email address"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(value) => {
+            setEmail(value);
+            setError(null);
+          }}
         />
       </ClubField>
+      {error ? (
+        <Text testID="join.error" style={styles.error}>
+          {error}
+        </Text>
+      ) : null}
     </AuthShell>
   );
 }
@@ -94,5 +124,10 @@ const styles = StyleSheet.create({
   memberLink: {
     ...Club.type.bodySm,
     color: Club.colors.textOnDark,
+  },
+  error: {
+    ...Club.type.bodySm,
+    color: Club.colors.statusDanger,
+    marginTop: Club.space.sm,
   },
 });

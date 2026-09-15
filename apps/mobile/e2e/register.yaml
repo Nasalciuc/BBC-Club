@@ -8,11 +8,19 @@ appId: com.buybusinessclass.club
 - inputText: "new.member@test.dev"
 - tapOn: { id: "join.continue" }
 - assertVisible: { id: "verify.code" }
+# Fetch OTP from test-only helper — never log the code, never put it in the URL.
+- evalScript: |
+    const base = 'http://localhost:8000';
+    const email = encodeURIComponent('new.member@test.dev');
+    const res = http.get(base + '/v1/test/last-otp?email=' + email);
+    const body = json(res.body);
+    output.otp = body.otp;
 - tapOn: { id: "verify.code" }
-- inputText: "123456"
+- inputText: ${output.otp}
 - tapOn: { id: "verify.submit" }
 - assertVisible: { id: "setPassword.password" }
 - tapOn: { id: "setPassword.password" }
 - inputText: "atlantic2026!"
 - tapOn: { id: "setPassword.continue" }
-- assertVisible: { text: "Proposals" }
+# Unknown CRM email → waitlist (ADR-PROD-001); not the proposals feed.
+- assertVisible: { id: "waitlist.root" }
