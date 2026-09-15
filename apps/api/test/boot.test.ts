@@ -39,8 +39,8 @@ describe("host boot", () => {
     await t.restart();
     const broadcast = await t.seedBroadcastOffer();
     expect((await t.respondAs(t.memberA, broadcast, "interested")).status).toBe(404);
-    // Feed lives on mobile-bff (needs engagement) so it is cascade-skipped; inbox does not.
-    expect((await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } })).status).toBe(404);
+    // Killed module keeps its facade so dependents (mobile-bff) still boot; only its routes are gone.
+    expect((await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
     expect((await t.app.request("/v1/inbox", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
     await t.flags.revive("engagement");
     await t.close();

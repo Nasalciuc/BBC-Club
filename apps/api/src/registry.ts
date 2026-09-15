@@ -47,29 +47,16 @@ export class ModuleRegistry {
       }
       pending.delete(ready);
       const m = ready;
-      if (await deps.platform.flags.isKilled(m.name)) {
-        deps.platform.logger.warn({ module: m.name }, "module killed by flag: not mounted");
-        initialised.add(m.name);
-        continue;
-      }
       const ports: Record<string, unknown> = {};
-      let cascadeSkip: string | null = null;
       for (const need of m.needs ?? []) {
-        if (!this.facades.has(need)) {
-          // A killed (or empty) dependency: skip this module too rather than boot with undefined ports.
-          if (initialised.has(need)) {
-            cascadeSkip = need;
-            break;
-          }
-          throw new Error(`module ${m.name} needs port "${need}" but no module exposes it`);
-        }
+        if (!this.facades.has(need))
+          throw new Error(`module ${m.name} needs port "${need}" but "${need}" exposed nothing (killed or empty)`);
         ports[need] = this.facades.get(need);
       }
-      if (cascadeSkip) {
-        deps.platform.logger.warn(
-          { module: m.name, missing: cascadeSkip },
-          "module skipped: dependency killed or exposed nothing",
-        );
+      const out = await m.init({ db: deps.db, platform: deps.platform, env: deps.env, ports });
+      if (out.exposes !== undefined) this.facades.set(m.name, out.exposes);
+      if (await deps.platform.flags.isKilled(m.name)) {
+        deps.platform.logger.warn({ module: m.name }, "module killed by flag: facade only, not mounted");
         initialised.add(m.name);
         continue;
       }
