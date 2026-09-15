@@ -1,1 +1,1 @@
-bun run validate:quick
+bun run validate:prepush

@@ -82,6 +82,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   app.get("/metrics", async (c) =>
     c.text(await platform.metrics.render(), 200, { "Content-Type": "text/plain; version=0.0.4" }),
   );
+  // Inventory tests read routeRegistry — do not maintain a parallel allow-list in authz/guard.
   registerRoute("GET", "/v1/app-config", "public");
   app.get("/v1/app-config", async (c) => c.json(await appConfig(platform)));
 
