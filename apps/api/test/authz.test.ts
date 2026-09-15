@@ -1,11 +1,14 @@
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { routeRegistry } from "../src/middleware/authorize";
 import { testApp } from "./helpers/test-app"; // boots the host against postgres-test with two members (A, B), one operator JWT, the internal secret
 
 describe("authorization gates", () => {
   let t: Awaited<ReturnType<typeof testApp>>;
   beforeAll(async () => {
-    t = await testApp();
+    t = await testApp({ suite: "authz" });
+  });
+  afterAll(async () => {
+    await t.close();
   });
 
   it("inventory: every /v1 route is registered with a permission or marked public", () => {

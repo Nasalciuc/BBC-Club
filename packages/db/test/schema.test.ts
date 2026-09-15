@@ -1,9 +1,9 @@
-import { describe, it, expect, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createDb } from "../src/client";
 import { offers } from "../src/schema/proposals";
 import { bumpCounter } from "../src/helpers";
 import { rateLimits } from "@bbc/platform/schema";
+import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
 
 /** drizzle-orm@1.0.0-rc.4 query builders are thenables but Bun's expect().rejects does not always
  *  recognise them — await inside try/catch instead. */
@@ -19,8 +19,13 @@ async function expectDbReject(run: () => PromiseLike<unknown>, re: RegExp) {
 }
 
 /** The invariants live in Postgres. These tests prove the database refuses bad data without any application code. */
-const db = createDb(process.env.DATABASE_URL!, { max: 2, applicationName: "bbc-test" });
-afterAll(() => db.close());
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("db-schema", { max: 2 });
+  db = iso.db;
+});
+afterAll(() => iso.drop());
 
 describe("proposals.offers invariants", () => {
   const base = {

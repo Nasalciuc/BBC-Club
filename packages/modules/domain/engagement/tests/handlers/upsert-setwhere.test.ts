@@ -1,10 +1,15 @@
-import { describe, it, expect, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createDb } from "@bbc/db";
+import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { responsesRepo } from "../../src/infrastructure/responses.repo";
 
-const db = createDb(process.env.DATABASE_URL!, { max: 2, applicationName: "engagement-upsert-test" });
-afterAll(() => db.close());
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("engagement-upsert", { max: 2 });
+  db = iso.db;
+});
+afterAll(() => iso.drop());
 
 describe("responses.repo.upsert setWhere (drizzle onConflictDoUpdate)", () => {
   it("second identical upsert returns the same row with no change", async () => {

@@ -1,10 +1,15 @@
-import { describe, it, expect, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createDb } from "@bbc/db";
+import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createPlatform } from "../src/api";
 
-const db = createDb(process.env.DATABASE_URL!, { max: 4, applicationName: "platform-test-jobs" });
-afterAll(() => db.close());
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("platform-jobs-flags", { max: 4 });
+  db = iso.db;
+});
+afterAll(() => iso.drop());
 
 describe("jobs", () => {
   it("records every run and returns metrics", async () => {
