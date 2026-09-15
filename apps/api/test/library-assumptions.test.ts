@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { decodeJwt } from "jose";
 import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
@@ -7,7 +7,10 @@ import { testApp } from "./helpers/test-app";
 describe("JWT claims (Better Auth jwt plugin)", () => {
   let t: Awaited<ReturnType<typeof testApp>>;
   beforeAll(async () => {
-    t = await testApp();
+    t = await testApp({ suite: "library" });
+  });
+  afterAll(async () => {
+    await t.close();
   });
 
   it("getToken emits iss and aud equal to APP_ORIGIN; resolvePrincipal accepts the bearer", async () => {
@@ -35,7 +38,10 @@ describe("JWT claims (Better Auth jwt plugin)", () => {
 describe("Better Auth rate-limit customRules", () => {
   let t: Awaited<ReturnType<typeof testApp>>;
   beforeAll(async () => {
-    t = await testApp();
+    t = await testApp({ suite: "library" });
+  });
+  afterAll(async () => {
+    await t.close();
   });
 
   it("6th POST /api/auth/sign-in/email is 429 with retry-after header", async () => {

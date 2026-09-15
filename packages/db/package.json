@@ -8,7 +8,8 @@
     "./schema": "./src/schema/index.ts",
     "./schema/*": "./src/schema/*.ts",
     "./helpers": "./src/helpers.ts",
-    "./relations": "./src/relations/index.ts"
+    "./relations": "./src/relations/index.ts",
+    "./testing/isolated-db": "./src/testing/isolated-db.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
@@ -16,9 +17,10 @@
     "db:verify": "bun run scripts/verify.ts",
     "db:seed": "bun run scripts/seed-fixture.ts",
     "db:reset:test": "bun run scripts/reset-test.ts",
+    "db:test:clean": "bun run scripts/test-clean.ts",
     "db:studio": "drizzle-kit studio",
     "test": "bun test",
-    "test:db": "bun test"
+    "test:db": "bun test --preload ./src/testing/preload.ts"
   },
   "dependencies": {
     "@bbc/platform": "workspace:*",

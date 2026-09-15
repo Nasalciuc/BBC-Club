@@ -1,7 +1,7 @@
 /** Identity-module test harness. Builds createAuth against postgres-test with a capturing email sender.
  *  No host, no registry — module contracts only. Account-deletion cascades live in apps/api/test/delete.test.ts. */
 import { sql } from "drizzle-orm";
-import { createDb } from "@bbc/db";
+import { isolatedDb } from "@bbc/db/testing/isolated-db";
 import { loadEnv } from "@bbc/shared/env";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { createPlatform } from "@bbc/platform";
@@ -40,8 +40,9 @@ export async function testAuth(opts: IdentityTestOpts = {}) {
   process.env.INTERNAL_API_SECRET ??= "internal-secret-internal-secret-0000";
   process.env.POSTMARK_FROM ??= "club@buybusinessclass.com";
 
-  const env = loadEnv(process.env);
-  const db = createDb(env.DATABASE_URL, { max: 4, applicationName: "bbc-identity-test" });
+  const iso = await isolatedDb("identity", { max: 4 });
+  const env = loadEnv({ ...process.env, DATABASE_URL: iso.url });
+  const db = iso.db;
   const platform = createPlatform(db, { level: "silent" });
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def as any);
 
@@ -72,7 +73,7 @@ export async function testAuth(opts: IdentityTestOpts = {}) {
         }[],
     },
     close: async () => {
-      await db.close();
+      await iso.drop();
     },
   };
 }

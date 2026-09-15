@@ -1,13 +1,17 @@
-import { describe, it, expect, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createDb } from "../src/client";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
 
-const url = process.env.DATABASE_URL!;
-const db = createDb(url, { max: 1, applicationName: "bbc-migrate-test" });
-afterAll(() => db.close());
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("db-migrate", { fromTemplate: false, max: 1 });
+  db = iso.db;
+});
+afterAll(() => iso.drop());
 
 const pkgRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -15,7 +19,7 @@ function runMigrate(): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
     const child = spawn("bun", ["run", "scripts/migrate.ts"], {
       cwd: pkgRoot,
-      env: { ...process.env, DATABASE_URL: url },
+      env: { ...process.env, DATABASE_URL: iso.url },
       shell: true,
     });
     let out = "";
