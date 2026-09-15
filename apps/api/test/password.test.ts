@@ -1,10 +1,14 @@
 /** POST /v1/account/password: set a new password, publishes member.password_changed. */
 import { describe, it, expect } from "bun:test";
+import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 
 describe("POST /v1/account/password", () => {
   it("accepts a valid new password and publishes member.password_changed", async () => {
     const t = await testApp({ suite: "pw-change" });
+    // Path A: OTP sign-in creates a user without a credential password; strip the test signup password
+    // so setPassword (first-time) matches the club route.
+    await t.db.execute(sql`DELETE FROM auth.account WHERE user_id = ${t.memberA.id} AND provider_id = 'credential'`);
     const r = await t.app.request("/v1/account/password", {
       method: "POST",
       headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },

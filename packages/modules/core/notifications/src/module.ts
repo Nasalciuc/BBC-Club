@@ -11,7 +11,17 @@ import type { PushSender } from "./ports/push";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
 import { devicesRepo } from "./infrastructure/devices.repo";
 import { markRead } from "./application/mark-read";
+import { dispatch } from "./application/dispatch";
+import { reconcileReceipts } from "./application/receipts";
+import { cleanupDevices } from "./application/cleanup-devices";
+import { onOfferPublished, type MembersPort } from "./handlers/on-offer-published";
+import { onOfferExpired, onOfferWithdrawn } from "./handlers/on-offer-lifecycle";
 import { DeviceBody } from "@bbc/shared/api/v1/proposals";
+
+type Ports = {
+  members: MembersPort;
+  push: PushSender;
+};
 
 type Exposes = {
   inbox(exec: unknown, actorMemberId: string, limit?: number): Promise<unknown[]>;
@@ -19,12 +29,13 @@ type Exposes = {
   markRead(exec: unknown, actorMemberId: string, id: string): Promise<number>;
 };
 
-/** needs: [] for now — quieter hours / consent at dispatch land with stage 3 push. */
-export const notificationsModule = (_push?: PushSender): ModuleDescriptor<Record<string, never>, Exposes> => ({
+export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
   name: "notifications",
   layer: "core",
-  init: ({ db, platform }) => {
+  needs: ["members", "push"],
+  init: ({ db, platform, ports }) => {
     const routes = new Hono<any>();
+    const publish = (tx: any, e: any) => platform.events.publish(tx, { ...e, publishedBy: "notifications" });
 
     registerRoute("GET", "/v1/inbox", "inbox:read");
     routes.get(
@@ -121,6 +132,22 @@ export const notificationsModule = (_push?: PushSender): ModuleDescriptor<Record
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [
         {
+          type: "offer.published",
+          name: "notifications.onOfferPublished",
+          handler: (ctx: any, raw: any) =>
+            onOfferPublished({ tx: ctx.tx, members: ports.members, sourceEventId: String(ctx.event.id) }, raw),
+        },
+        {
+          type: "offer.withdrawn",
+          name: "notifications.onOfferWithdrawn",
+          handler: (ctx: any, raw: any) => onOfferWithdrawn({ tx: ctx.tx }, raw),
+        },
+        {
+          type: "offer.expired",
+          name: "notifications.onOfferExpired",
+          handler: (ctx: any, raw: any) => onOfferExpired({ tx: ctx.tx }, raw),
+        },
+        {
           type: "offer.responded",
           name: "notifications.onOfferResponded",
           handler: async (ctx: any, raw: any) => {
@@ -147,7 +174,42 @@ export const notificationsModule = (_push?: PushSender): ModuleDescriptor<Record
           },
         },
       ],
-      jobs: [],
+      jobs: [
+        {
+          name: "dispatch",
+          spec: {
+            cron: "* * * * *",
+            singleton: true,
+            timeoutMs: 55_000,
+            handler: async (ctx: any) =>
+              dispatch({
+                db,
+                push: ports.push,
+                members: ports.members,
+                publish,
+                signal: ctx.signal,
+              }),
+          },
+        },
+        {
+          name: "receipts",
+          spec: {
+            cron: "15 * * * *",
+            singleton: true,
+            timeoutMs: 30_000,
+            handler: async () => reconcileReceipts(db),
+          },
+        },
+        {
+          name: "cleanup-devices",
+          spec: {
+            cron: "0 4 * * *",
+            singleton: true,
+            timeoutMs: 60_000,
+            handler: async () => cleanupDevices(db),
+          },
+        },
+      ],
     };
   },
 });

@@ -39,7 +39,9 @@ describe("host boot", () => {
     await t.restart();
     const broadcast = await t.seedBroadcastOffer();
     expect((await t.respondAs(t.memberA, broadcast, "interested")).status).toBe(404);
-    expect((await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
+    // Feed lives on mobile-bff (needs engagement) so it is cascade-skipped; inbox does not.
+    expect((await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } })).status).toBe(404);
+    expect((await t.app.request("/v1/inbox", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
     await t.flags.revive("engagement");
     await t.close();
   });

@@ -17,6 +17,12 @@ export type ProfileView = {
   };
   crmLinked: boolean;
 };
+
+export type NotificationPrefView = {
+  offers_personal: boolean;
+  offers_broadcast: boolean;
+};
+
 export type MembersFacade = ReturnType<typeof createMembersFacade>;
 
 export function createMembersFacade(db: any) {
@@ -42,6 +48,28 @@ export function createMembersFacade(db: any) {
   }
   async function timezoneOf(exec: any, memberId: string): Promise<string> {
     return (await getProfile(exec, memberId))?.timezone ?? "America/New_York";
+  }
+
+  /** Active members only — waitlist/deleted are never push/broadcast targets. */
+  async function activeMemberIds(exec?: any): Promise<string[]> {
+    const rows = await (exec ?? db)
+      .select({ memberId: profile.memberId })
+      .from(profile)
+      .where(eq(profile.status, "active"));
+    return rows.map((r: { memberId: string }) => r.memberId);
+  }
+
+  /** Missing preference rows default to enabled (opt-out). Transactional is always on and not returned. */
+  async function preferencesOf(exec: any, memberId: string): Promise<NotificationPrefView> {
+    const rows = await (exec ?? db)
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.memberId, memberId));
+    const map = Object.fromEntries(rows.map((r: { category: string; enabled: boolean }) => [r.category, r.enabled]));
+    return {
+      offers_personal: map.offers_personal !== false,
+      offers_broadcast: map.offers_broadcast !== false,
+    };
   }
 
   /** PATCH /v1/profile — partial update, actor-scoped. Returns updated view. */
@@ -84,5 +112,13 @@ export function createMembersFacade(db: any) {
     }
   }
 
-  return { getProfile, getStatus, timezoneOf, updateProfile, setNotificationPreferences };
+  return {
+    getProfile,
+    getStatus,
+    timezoneOf,
+    activeMemberIds,
+    preferencesOf,
+    updateProfile,
+    setNotificationPreferences,
+  };
 }
