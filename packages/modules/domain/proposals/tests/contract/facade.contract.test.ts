@@ -1,18 +1,18 @@
 /** Proposals facade contract: visibility rules, feed filtering.
- *  Runs against postgres-test. Inserts fresh offers per test. */
+ *  Runs against an isolated clone of the test template. Inserts fresh offers per test. */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createDb } from "@bbc/db";
-import { loadEnv } from "@bbc/shared/env";
+import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { offersRepo } from "../../src/infrastructure/offers.repo";
 
-let db: ReturnType<typeof createDb>;
-beforeAll(() => {
-  const env = loadEnv(process.env);
-  db = createDb(env.DATABASE_URL, { max: 3, applicationName: "bbc-proposals-contract" });
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("proposals-contract", { max: 3 });
+  db = iso.db;
 });
 afterAll(async () => {
-  await db.close();
+  await iso.drop();
 });
 
 const ACTOR = "contract-member-" + crypto.randomUUID();

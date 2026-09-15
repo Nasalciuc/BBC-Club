@@ -1,19 +1,19 @@
 /** Engagement facade contract: idempotent respond, state transitions, IDOR guard.
- *  Runs against postgres-test. */
+ *  Runs against an isolated clone of the test template. */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createDb } from "@bbc/db";
-import { loadEnv } from "@bbc/shared/env";
+import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { responsesRepo } from "../../src/infrastructure/responses.repo";
 import { respond } from "../../src/application/respond";
 
-let db: ReturnType<typeof createDb>;
-beforeAll(() => {
-  const env = loadEnv(process.env);
-  db = createDb(env.DATABASE_URL, { max: 3, applicationName: "bbc-engagement-contract" });
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("engagement-contract", { max: 3 });
+  db = iso.db;
 });
 afterAll(async () => {
-  await db.close();
+  await iso.drop();
 });
 
 const ACTOR = "engagement-actor-" + crypto.randomUUID();
