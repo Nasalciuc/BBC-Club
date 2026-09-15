@@ -13,7 +13,7 @@ services:
         "-c",
         "full_page_writes=off",
         "-c",
-        "max_connections=50",
+        "max_connections=200",
       ]
     tmpfs: ["/var/lib/postgresql/data"]
     ports: ["55432:5432"]

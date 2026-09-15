@@ -53,10 +53,26 @@ function assertNoSerialReferences(files: string[]) {
   }
 }
 
+/** Tests must never share bbc_test: a test file that opens DATABASE_URL directly is a flaky-CI generator. */
+function assertTestsUseIsolatedDb(files: string[]) {
+  for (const f of files.filter((x) => /\.test\.tsx?$/.test(x) || /[\\/]tests?[\\/]helpers[\\/]/.test(x))) {
+    const norm = f.replace(/\\/g, "/");
+    if (norm.includes("packages/db/src/testing/")) continue;
+    const src = readFileSync(f, "utf8");
+    if (/createDb\(\s*(process\.env\.DATABASE_URL|env\.DATABASE_URL)/.test(src))
+      problems.push(`${norm}: opens DATABASE_URL directly — use isolatedDb() from @bbc/db/testing/isolated-db`);
+  }
+}
+
 const probeRoots = ["packages/modules", "packages/db/src", "apps/api/src"].filter((d) => existsSync(d));
 const probeFiles = probeRoots.flatMap((d) => walk(d));
 assertNoCamelCaseInRawSql(probeFiles);
 assertNoSerialReferences(probeFiles);
+
+const isolationRoots = ["apps", "packages"].filter((d) => existsSync(d));
+assertTestsUseIsolatedDb(
+  isolationRoots.flatMap((d) => walk(d)).filter((f) => !f.replace(/\\/g, "/").includes("/node_modules/")),
+);
 
 const modules: string[] = [];
 for (const layer of readdirSync(base)) {
@@ -122,6 +138,7 @@ console.log(`module:check OK (${moduleCount} modules)`);
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
+    if (f === "node_modules" || f === ".git" || f === "dist" || f === ".turbo") return [];
     const p = join(dir, f);
     return statSync(p).isDirectory() ? walk(p) : p.endsWith(".ts") ? [p] : [];
   });

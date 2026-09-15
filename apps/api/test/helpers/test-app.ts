@@ -1,17 +1,18 @@
 import { sql } from "drizzle-orm";
-import { createDb } from "@bbc/db";
+import { isolatedDb } from "@bbc/db/testing/isolated-db";
 import { loadEnv } from "@bbc/shared/env";
 import { buildApp } from "../../src/index";
 import { capturingEmail } from "./capturing-email";
 import { mockCrm } from "./mock-crm";
 import { testAuth } from "./test-auth";
 
-/** The whole host, in-memory (no port), against postgres-test, with capturing adapters.
+/** The whole host, in-memory (no port), against an isolated clone of the test template, with capturing adapters.
  *  Every suite that needs the system uses this — nobody builds their own wiring.
- *  Pass `suite` to isolate fixture emails/CRM clients when tests share `bbc_test`. */
+ *  Pass `suite` to name the isolated DB (and to isolate fixture emails when suites share a process). */
 export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[0]; suite?: string } = {}) {
-  const env = loadEnv(process.env);
-  const db = createDb(env.DATABASE_URL, { max: 6, applicationName: "bbc-test" });
+  const iso = await isolatedDb(opts.suite ?? "api", { max: 6 });
+  const env = loadEnv({ ...process.env, DATABASE_URL: iso.url });
+  const db = iso.db;
   const email = capturingEmail();
   const emailA = opts.suite ? `alex.${opts.suite}@test.dev` : "alex.morgan@company.com";
   const emailB = opts.suite ? `bob.${opts.suite}@test.dev` : "bob@test.dev";
@@ -33,8 +34,8 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
     },
   };
 
-  const built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
-  const auth = testAuth(built.registry.facade<any>("identity").auth, db);
+  let built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
+  let auth = testAuth(built.registry.facade<any>("identity").auth, db);
   const internalSecret = env.INTERNAL_API_SECRET;
 
   const memberA = { ...(await auth.createMember(emailA)), cookie: "" };
@@ -44,16 +45,24 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
   const operatorJwt = await auth.operatorJwt(opts.suite ? `ops.${opts.suite}@test.dev` : "ops@test.dev");
   await built.platform.poller.drainOnce(); // member.registered → profiles
 
-  return {
-    app: built.app,
+  const api = {
+    get app() {
+      return built.app;
+    },
     db,
     appOrigin: env.APP_ORIGIN,
-    platform: built.platform,
-    registry: built.registry,
+    get platform() {
+      return built.platform;
+    },
+    get registry() {
+      return built.registry;
+    },
     email,
     crm,
     push,
-    auth,
+    get auth() {
+      return auth;
+    },
     memberA,
     memberB,
     operatorJwt,
@@ -61,6 +70,15 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
     flags: {
       kill: (m: string) => built.platform.flags.set(`${m}.killed`, { enabled: true }),
       revive: (m: string) => built.platform.flags.set(`${m}.killed`, { enabled: false }),
+    },
+    /** Rebuild the host on the same isolated DB (killswitch / boot-time flags). */
+    async restart() {
+      // Do not call built.shutdown() — that closes the shared db pool.
+      await built.platform.poller.stop();
+      built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
+      auth = testAuth(built.registry.facade<any>("identity").auth, db);
+      memberA.cookie = await auth.cookieFor(memberA.email);
+      memberB.cookie = await auth.cookieFor(memberB.email);
     },
     /** Drive the queue by hand: tests never wait on timers. */
     drainAll: async () => {
@@ -182,6 +200,8 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
     },
     close: async () => {
       await built.shutdown();
+      await iso.drop();
     },
   };
+  return api;
 }
