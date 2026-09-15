@@ -5,7 +5,8 @@ import { testApp } from "./helpers/test-app";
 describe("registration path (ADR-PROD-001)", () => {
   it("email → OTP → session, then a profile exists and the journal has member.registered", async () => {
     const t = await testApp({ suite: "regpath" });
-    const email = "regpath@test.dev";
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    const email = `regpath.${crypto.randomUUID().slice(0, 8)}@test.dev`;
     const send = await t.app.request("/api/auth/email-otp/send-verification-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
