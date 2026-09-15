@@ -1,0 +1,18 @@
+appId: com.buybusinessclass.club
+---
+- launchApp: { clearState: true }
+- tapOn: { id: "welcome.signIn" }
+- tapOn: { id: "signIn.createAccount" }
+- assertVisible: { id: "join.email" }
+- tapOn: { id: "join.email" }
+- inputText: "new.member@test.dev"
+- tapOn: { id: "join.continue" }
+- assertVisible: { id: "verify.code" }
+- tapOn: { id: "verify.code" }
+- inputText: "123456"
+- tapOn: { id: "verify.submit" }
+- assertVisible: { id: "setPassword.password" }
+- tapOn: { id: "setPassword.password" }
+- inputText: "atlantic2026!"
+- tapOn: { id: "setPassword.continue" }
+- assertVisible: { text: "Proposals" }

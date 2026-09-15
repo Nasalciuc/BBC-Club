@@ -50,6 +50,33 @@ function assertTestsHaveAScript(pkgDir: string, pkg: { scripts?: Record<string, 
     problems.push(`${pkgDir}: test:unit points at an empty tests/unit (bun exits 1)`);
 }
 
+/** P2: a quoted camelCase identifier inside raw SQL is almost always a Drizzle property name that leaked into a
+ *  query (the createdAt bug). Postgres columns here are snake_case. */
+function assertNoCamelCaseInRawSql(files: string[]) {
+  const re = /\b(SELECT|FROM|WHERE|UPDATE|INSERT|JOIN|SET)\b[^;`]*"[a-z]+[A-Z][A-Za-z]*"/;
+  for (const f of files) {
+    const src = readFileSync(f, "utf8");
+    if (!/sql`|\.execute\(/.test(src)) continue;
+    const m = src.match(re);
+    if (m) problems.push(`${f}: quoted camelCase identifier in raw SQL (${m[0].slice(-40)}) — columns are snake_case`);
+  }
+}
+
+/** P3: bigserial on a non-PK column silently invents ids for forgotten references. */
+function assertNoSerialReferences(files: string[]) {
+  for (const f of files.filter((x) => x.endsWith("schema.ts"))) {
+    for (const line of readFileSync(f, "utf8").split("\n")) {
+      if (/bigserial\("[a-z_]*_id"/.test(line) && !/primaryKey\(\)/.test(line))
+        problems.push(`${f}: bigserial on reference column — use bigint`);
+    }
+  }
+}
+
+const probeRoots = ["packages/modules", "packages/db/src", "apps/api/src"].filter((d) => existsSync(d));
+const probeFiles = probeRoots.flatMap((d) => walk(d));
+assertNoCamelCaseInRawSql(probeFiles);
+assertNoSerialReferences(probeFiles);
+
 const modules: string[] = [];
 for (const layer of readdirSync(base)) {
   const lp = join(base, layer);

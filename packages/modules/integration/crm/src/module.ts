@@ -30,9 +30,8 @@ export function mockCrm(
 export const crmModule = (override?: CrmConnector): ModuleDescriptor<Record<string, never>, CrmConnector> => ({
   name: "crm",
   layer: "integration",
-  init: () => {
-    // CRM_ADAPTER is not in ServerEnv yet (it joins env.ts in stage 5); read it directly with a safe default.
-    const adapter = process.env.CRM_ADAPTER ?? "mock";
+  init: ({ env }) => {
+    const adapter = env.CRM_ADAPTER as "mock" | "http";
     if (!override && adapter === "http") throw new Error("CRM http adapter is stage 5; set CRM_ADAPTER=mock");
     return { exposes: override ?? mockCrm(), routes: [], consumers: [], jobs: [] };
   },

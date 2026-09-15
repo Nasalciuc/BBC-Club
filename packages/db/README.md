@@ -33,3 +33,14 @@
 ## Commands
 
 `bun run db:generate` → review the SQL → `bun run db:migrate` → `bun run db:verify` (CI fails on any finding) · `bun run db:seed` (dev/staging) · `docker compose -f infra/compose.test.yml up -d && bun run db:reset:test && bun test`.
+
+## Verified against installed versions
+
+Pinned: **drizzle-orm 1.0.0-rc.4**, **drizzle-kit 1.0.0-rc.4**, **postgres.js 3.4.9**.
+
+| #   | Assumption                                                                                                        | Result                                                                                         |
+| --- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| 7   | `drizzle(client, { schema, relations })`                                                                          | Accepted by this RC (`src/client.ts`); typings disagree → `@ts-nocheck` debt, not dead runtime |
+| 8   | `defineRelations` / `r.many.offerTargets({ from, to })` + `db.query.offers.findMany({ with: { targets: true } })` | Compiles; runtime nested rows in `test/relations-runtime.test.ts`                              |
+| 9   | `onConflictDoUpdate({ setWhere })`                                                                                | Accepted; `bumpCounter` + `responses.repo.upsert` tests                                        |
+| 12  | `postgres(url, { connection: { statement_timeout }, transform: { undefined: null } })`                            | `current_setting('statement_timeout')` → `15s` (`relations-runtime.test.ts`)                   |

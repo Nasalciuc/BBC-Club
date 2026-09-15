@@ -44,10 +44,15 @@ export function createJobs(
     if (!spec) throw new Error(`unknown job: ${name}`);
     const started = Date.now();
 
-    // singleton: a second concurrent run is a no-op, not an error (cron overlap is normal)
+    // singleton: hold the lock on ONE reserved connection for the whole run. A session advisory lock taken
+    // through the pool can be "unlocked" on a different connection, which silently does nothing.
+    let reserved: any = null;
     if (spec.singleton) {
-      const rows: any[] = await db.execute(sql`SELECT pg_try_advisory_lock(hashtext(${"job:" + name})) AS ok`);
-      if (!rows[0]?.ok) {
+      reserved = await db.raw.reserve();
+      const [{ ok }] = await reserved`SELECT pg_try_advisory_lock(hashtext(${"job:" + name})) AS ok`;
+      if (!ok) {
+        reserved.release();
+        reserved = null;
         deps.logger.warn({ job: name }, "job already running, skipped");
         await db.insert(jobRuns).values({ job: name, status: "skipped", finishedAt: sql`now()`, durationMs: 0 });
         return { status: "skipped", durationMs: 0 };
@@ -81,7 +86,13 @@ export function createJobs(
       return { status: "failed", durationMs, error };
     } finally {
       clearTimeout(timeout);
-      if (spec.singleton) await db.execute(sql`SELECT pg_advisory_unlock(hashtext(${"job:" + name}))`);
+      if (reserved) {
+        try {
+          await reserved`SELECT pg_advisory_unlock(hashtext(${"job:" + name}))`;
+        } finally {
+          reserved.release();
+        }
+      }
     }
   }
 

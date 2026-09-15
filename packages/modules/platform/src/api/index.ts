@@ -7,7 +7,7 @@ export type Platform = ReturnType<typeof createPlatform>;
 
 /** The only surface other modules and the host may import from platform.
  *  Modules get `events.publish`, `flags`, `jobs.register`; the host also gets the poller and metrics. */
-export function createPlatform(db: any, opts: { level?: string; pretty?: boolean } = {}) {
+export function createPlatform(db: any, opts: { level?: string; pretty?: boolean; handlerTimeoutMs?: number } = {}) {
   const logger = createLogger(opts);
   const metrics = createMetrics();
   const registry = new EventRegistry();
@@ -22,7 +22,10 @@ export function createPlatform(db: any, opts: { level?: string; pretty?: boolean
       metrics,
       isPaused: (consumer) => flags.isConsumerPaused(consumer),
     },
-    { onDead: ({ consumer, eventId }) => logger.error({ consumer, eventId }, "DLQ: manual replay required") },
+    {
+      handlerTimeoutMs: opts.handlerTimeoutMs,
+      onDead: ({ consumer, eventId }) => logger.error({ consumer, eventId }, "DLQ: manual replay required"),
+    },
   );
 
   metrics.gauge("queue_pending", async () => (await poller.stats()).pending);

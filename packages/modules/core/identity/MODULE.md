@@ -9,6 +9,19 @@
 **Out of scope:** 2FA, social login, admin dashboard, avatars, passkeys (v2).
 **Invariants tested:** recipient = user.email & awaited · no dead session guard + route inventory · register→verify→exactly one event + lockout at 5 OTP attempts · delete = zero rows + journal tombstone · HIBP refusal · per-route rate limits (429 + Retry-After).
 
+## Verified against installed versions
+
+Pinned at verification: **better-auth 1.6.31**, **@better-auth/expo 1.6.31**, **jose 6.2.x**.
+
+| #   | Assumption                                                                                 | Result                                                                                                                                           |
+| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `emailOTP({ sendVerificationOnSignUp, allowedAttempts, otpLength, expiresIn })`            | Accepted by 1.6.31 (API boots; options typed in plugin)                                                                                          |
+| 2   | `haveIBeenPwned({ customPasswordCompromisedMessage })` from `better-auth/plugins`          | Exported; used in production path                                                                                                                |
+| 3   | `jwt({ jwks: { keyPairConfig: { alg: "EdDSA", crv: "Ed25519" } } })`; `GET /api/auth/jwks` | Accepted; JWKS returns keys (`library-assumptions.test.ts`)                                                                                      |
+| 4   | `admin({ ac, roles, defaultRole, adminRoles })`                                            | Accepted                                                                                                                                         |
+| 5   | `rateLimit.customRules` keys `/sign-in/email` and `/email-otp/send-verification-otp`       | 6th sign-in → **429** + **`X-Retry-After`** (1.6.31 does not set standard `Retry-After`); 4th OTP send → **429** (`library-assumptions.test.ts`) |
+| 6   | JWT `iss`/`aud` = `APP_ORIGIN`                                                             | Plugin defaults to `baseURL` origin; `jwtVerify` in `principal.ts` keeps both; decode + bearer probe green                                       |
+
 ## Checklist A findings (Better Auth 1.6.31)
 
 1. **`generateId: "uuid"`** on 1.6.31 means _the database_ generates the id (`gen_random_uuid()`). Our CLI-generated `auth.user.id` is `text` with no default, so inserts failed with `null value in column "id"`. Fix: `database: { generateId: () => crypto.randomUUID() }` in `src/infrastructure/auth.ts` — app-side UUIDs, schema stays regen-safe.

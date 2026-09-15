@@ -1,10 +1,10 @@
 /** Applies pending migrations. Exit codes: 0 applied/nothing, 1 failure (never 0 on error).
  *  Runs as a separate job BEFORE the API restarts (expand/contract). Serialized by an advisory lock so two
- *  deploys cannot race. `0001_extras.sql` (trigger, partitions, fitness view) is applied after drizzle's DDL;
- *  `0003_platform_repair_journal_sequence.sql` always runs (idempotent) so already-migrated DBs recover. */
+ *  deploys cannot race. `NNNN_*extras.sql` files are applied via `platform.extras_applied` (one file, one
+ *  marker); repair scripts that are not `*extras*` still run idempotently after. */
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { sql } from "drizzle-orm";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createDb } from "../src/client";
@@ -27,15 +27,37 @@ try {
 
   await migrate(db, { migrationsFolder: migrationsDir });
 
-  const extras = join(migrationsDir, "0001_extras.sql");
-  if (existsSync(extras)) {
-    const applied = (await db.execute(
-      sql`SELECT 1 FROM pg_views WHERE schemaname='platform' AND viewname='cross_schema_fks'`,
-    )) as any[];
-    if (!applied.length) {
-      await db.execute(sql.raw(readFileSync(extras, "utf8")));
-      console.log("extras applied");
-    }
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS platform.extras_applied (
+      name text PRIMARY KEY,
+      applied_at timestamptz NOT NULL DEFAULT now(),
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`);
+  // Expand path for DBs that already have the table without created_at (verify § created_at).
+  await db.execute(sql`
+    ALTER TABLE platform.extras_applied ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()`);
+
+  // DBs that already ran 0001 via the old view heuristic: record without re-running (partition rename is not idempotent).
+  const alreadyExtras = (await db.execute(
+    sql`SELECT 1 FROM pg_views WHERE schemaname='platform' AND viewname='cross_schema_fks'`,
+  )) as any[];
+  if (alreadyExtras.length) {
+    await db.execute(
+      sql`INSERT INTO platform.extras_applied (name) VALUES ('0001_extras.sql') ON CONFLICT (name) DO NOTHING`,
+    );
+  }
+
+  const extrasFiles = readdirSync(migrationsDir)
+    .filter((f) => /^\d{4}_.*extras\.sql$/.test(f))
+    .sort();
+  for (const f of extrasFiles) {
+    const done = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${f}`)) as any[];
+    if (done.length) continue;
+    await db.transaction(async (tx: any) => {
+      await tx.execute(sql.raw(readFileSync(join(migrationsDir, f), "utf8")));
+      await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES (${f})`);
+    });
+    console.log(`extras applied: ${f}`);
   }
 
   // Idempotent repair: restores domain_events_id_seq when an older 0001 CASCADE-dropped it.

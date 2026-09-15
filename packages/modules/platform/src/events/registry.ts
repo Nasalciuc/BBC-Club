@@ -31,6 +31,9 @@ export type HandlerContext = {
     error: (o: object, m?: string) => void;
   };
   attempt: number;
+  /** Fired when the poller's handler timeout elapses. The timeout stops *waiting*; the handler must check
+   *  `signal.aborted` before each expensive step to stop *working* on a closed transaction. */
+  signal: AbortSignal;
 };
 export type Handler = (ctx: HandlerContext, payload: any) => Promise<void>;
 
