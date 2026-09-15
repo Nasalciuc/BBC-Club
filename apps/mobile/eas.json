@@ -1,12 +1,7 @@
 {
   "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
   "build": {
-    "base": {
-      "node": "22.14.0",
-      "env": {
-        "EAS_SKIP_AUTO_FINGERPRINT": "1"
-      }
-    },
+    "base": { "node": "22.14.0" },
     "development": {
       "extends": "base",
       "developmentClient": true,
@@ -14,8 +9,7 @@
       "channel": "development",
       "env": {
         "EXPO_PUBLIC_API_URL": "http://10.0.2.2:8000",
-        "EXPO_PUBLIC_APP_ENV": "development",
-        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+        "EXPO_PUBLIC_APP_ENV": "development"
       },
       "android": { "buildType": "apk" }
     },
@@ -24,8 +18,7 @@
       "ios": { "simulator": true },
       "env": {
         "EXPO_PUBLIC_API_URL": "http://localhost:8000",
-        "EXPO_PUBLIC_APP_ENV": "development",
-        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+        "EXPO_PUBLIC_APP_ENV": "development"
       }
     },
     "preview": {

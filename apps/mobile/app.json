@@ -10,7 +10,7 @@
     "userInterfaceStyle": "dark",
     "platforms": ["ios", "android", "web"],
     "runtimeVersion": {
-      "policy": "fingerprint"
+      "policy": "appVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/2b5d951a-4c19-4141-9829-0ba480b24a47"
