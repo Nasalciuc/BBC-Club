@@ -25,11 +25,11 @@ export async function loadProfileAfterAuth(): Promise<Profile | null> {
   return last.ok ? last.data : null;
 }
 
-/** ADR-PROD-001: active → proposals home; waitlist → waitlist; no dump of waitlist onto /home. */
+/** ADR-PROD-001: active → proposals feed; waitlist → waitlist; no dump of waitlist onto the feed. */
 export function routeForProfile(profile: Profile | null): Href {
   if (!profile || profile.status === "deleted") return "/sign-in";
   if (profile.status === "waitlist" || profile.status === "pending") return "/waitlist";
-  return "/home";
+  return "/(tabs)/proposals";
 }
 
 export async function resolvePostAuthRoute(): Promise<Href> {

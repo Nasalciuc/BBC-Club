@@ -9,5 +9,13 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "signIn.password" }
 - inputText: "atlantic2026!"
 - tapOn: { id: "signIn.submit" }
-# Active member lands on the Block 5 proposals feed.
 - assertVisible: { id: "feed.root" }
+- assertVisible: { id: "tabs.proposals" }
+# Seeded offer → open first card → I'm interested (no secrets in params).
+- extendedWaitUntil:
+    visible: { id: "feed.card" }
+    timeout: 15000
+- tapOn: { id: "feed.card" }
+- assertVisible: { id: "detail.root" }
+- tapOn: { id: "detail.interested" }
+- assertVisible: { id: "detail.done" }

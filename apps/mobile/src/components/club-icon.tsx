@@ -33,6 +33,26 @@ const icons = {
     android: "radio_button_unchecked",
     web: "radio_button_unchecked",
   },
+  proposals: {
+    ios: "airplane",
+    android: "flight",
+    web: "flight",
+  },
+  inbox: {
+    ios: "tray",
+    android: "inbox",
+    web: "inbox",
+  },
+  profile: {
+    ios: "person",
+    android: "person",
+    web: "person",
+  },
+  chevron: {
+    ios: "chevron.right",
+    android: "chevron_right",
+    web: "chevron_right",
+  },
 } as const;
 
 type Props = {
