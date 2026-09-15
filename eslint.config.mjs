@@ -12,6 +12,8 @@ export default tseslint.config(
       "packages/ui/src/tokens.ts",
       "apps/mobile/tailwind.theme.js",
       "apps/mobile/eslint.config.js",
+      "apps/mobile/metro.config.js",
+      "apps/mobile/babel.config.js",
       "docs/examples/**",
       ".agents/**",
       ".expo/**",

@@ -1,17 +1,27 @@
 {
   "expo": {
     "name": "BuyBusinessClass Club",
-    "slug": "buybusinessclass-club",
+    "slug": "bbc-club",
+    "owner": "mrordos-team",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bbcclub",
     "userInterfaceStyle": "dark",
     "platforms": ["ios", "android", "web"],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2b5d951a-4c19-4141-9829-0ba480b24a47"
+    },
     "ios": {
       "bundleIdentifier": "com.buybusinessclass.club",
       "supportsTablet": false,
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.buybusinessclass.club",
