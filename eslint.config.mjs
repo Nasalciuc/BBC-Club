@@ -16,6 +16,7 @@ export default tseslint.config(
       "apps/mobile/babel.config.js",
       "docs/examples/**",
       ".agents/**",
+      ".claude/**",
       ".expo/**",
       "expo-env.d.ts",
     ],

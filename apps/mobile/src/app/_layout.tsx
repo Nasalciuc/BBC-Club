@@ -3,6 +3,7 @@ import { Inter_400Regular, Inter_500Medium } from "@expo-google-fonts/inter";
 import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
 import { SourceSerif4_400Regular } from "@expo-google-fonts/source-serif-4";
 import { useFonts } from "expo-font";
+import * as Linking from "expo-linking";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -14,6 +15,8 @@ import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
+import { routeFromDeepLink } from "@/lib/deeplinks";
+import { registerPushDevice } from "@/lib/push";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -22,6 +25,7 @@ export const unstable_settings = {
 };
 
 const AUTH_ENTRY = new Set(["sign-in", "join", "reset-password"]);
+const INTERIOR = new Set(["(tabs)", "proposal", "home"]);
 
 export default function RootLayout() {
   const router = useRouter();
@@ -46,7 +50,7 @@ export default function RootLayout() {
 
   useEffect(() => () => clearPendingOtp(), []);
 
-  // Restore session → waitlist vs home. Do not interrupt mid join/reset (set-password still needed).
+  // Restore session → waitlist vs feed. Do not interrupt mid join/reset (set-password still needed).
   useEffect(() => {
     if (sessionPending || (!loaded && !error)) return;
 
@@ -76,10 +80,12 @@ export default function RootLayout() {
       if (cancelled) return;
       if (leaf === "index") {
         router.replace(dest);
-      } else if (leaf === "home" && dest === "/waitlist") {
+      } else if (INTERIOR.has(leaf) && dest === "/waitlist") {
         router.replace("/waitlist");
-      } else if (leaf === "waitlist" && dest === "/home") {
-        router.replace("/home");
+      } else if (leaf === "waitlist" && dest === "/(tabs)/proposals") {
+        router.replace("/(tabs)/proposals");
+      } else if (leaf === "home" && dest === "/(tabs)/proposals") {
+        router.replace("/(tabs)/proposals");
       }
       setGateReady(true);
     }
@@ -89,6 +95,30 @@ export default function RootLayout() {
       cancelled = true;
     };
   }, [session, sessionPending, loaded, error, segments, router]);
+
+  // Push device registration once an active session is present.
+  useEffect(() => {
+    if (!session || !gateReady) return;
+    void registerPushDevice();
+  }, [session, gateReady]);
+
+  // Deep links: bbcclub://proposal/<id> | bbcclub://inbox — no secrets in the URL.
+  useEffect(() => {
+    if (!session || !gateReady) return;
+
+    function handle(url: string) {
+      const dest = routeFromDeepLink(url);
+      if (dest) router.push(dest);
+    }
+
+    const initial = Linking.getInitialURL();
+    void initial.then((url) => {
+      if (url) handle(url);
+    });
+
+    const sub = Linking.addEventListener("url", (event) => handle(event.url));
+    return () => sub.remove();
+  }, [session, gateReady, router]);
 
   if ((!loaded && !error) || sessionPending || !gateReady) {
     return null;
@@ -111,6 +141,11 @@ export default function RootLayout() {
           <Stack.Screen name="verify-code" />
           <Stack.Screen name="set-password" />
           <Stack.Screen name="reset-password" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen
+            name="proposal/[id]"
+            options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+          />
           <Stack.Screen name="home" />
           <Stack.Screen name="waitlist" />
         </Stack>
