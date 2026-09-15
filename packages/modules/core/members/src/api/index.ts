@@ -1,6 +1,6 @@
 /** The only import surface of @bbc/members. Other modules and the host see nothing else. */
-import { eq } from "drizzle-orm";
-import { profile } from "@bbc/db/schema/members";
+import { eq, sql } from "drizzle-orm";
+import { profile, notificationPreferences } from "@bbc/db/schema/members";
 
 export type ProfileView = {
   memberId: string;
@@ -8,6 +8,13 @@ export type ProfileView = {
   displayName: string | null;
   homeAirport: string | null;
   timezone: string;
+  phone: string | null;
+  preferences: {
+    destinations?: string[];
+    cabin?: "business" | "first";
+    frequency?: "monthly" | "quarterly" | "rarely";
+    notes?: string;
+  };
   crmLinked: boolean;
 };
 export type MembersFacade = ReturnType<typeof createMembersFacade>;
@@ -23,6 +30,8 @@ export function createMembersFacade(db: any) {
       displayName: row.displayName,
       homeAirport: row.homeAirport,
       timezone: row.timezone,
+      phone: row.phone,
+      preferences: (row.preferences as any) ?? {},
       crmLinked: row.crmClientId != null,
     };
   }
@@ -34,5 +43,46 @@ export function createMembersFacade(db: any) {
   async function timezoneOf(exec: any, memberId: string): Promise<string> {
     return (await getProfile(exec, memberId))?.timezone ?? "America/New_York";
   }
-  return { getProfile, getStatus, timezoneOf };
+
+  /** PATCH /v1/profile — partial update, actor-scoped. Returns updated view. */
+  async function updateProfile(
+    exec: any,
+    actorMemberId: string,
+    data: {
+      displayName?: string;
+      homeAirport?: string;
+      timezone?: string;
+      phone?: string;
+      preferences?: Record<string, unknown>;
+    },
+  ): Promise<ProfileView | null> {
+    const set: Record<string, unknown> = { updatedAt: sql`now()` };
+    if (data.displayName !== undefined) set.displayName = data.displayName;
+    if (data.homeAirport !== undefined) set.homeAirport = data.homeAirport.toUpperCase();
+    if (data.timezone !== undefined) set.timezone = data.timezone;
+    if (data.phone !== undefined) set.phone = data.phone;
+    if (data.preferences !== undefined) set.preferences = data.preferences;
+    await (exec ?? db).update(profile).set(set).where(eq(profile.memberId, actorMemberId));
+    return getProfile(exec, actorMemberId);
+  }
+
+  /** PUT /v1/profile/preferences — replaces notification preferences for the actor.
+   *  Transactional category is always enabled (DB CHECK constraint enforces it). */
+  async function setNotificationPreferences(
+    exec: any,
+    actorMemberId: string,
+    prefs: Array<{ category: "offers_personal" | "offers_broadcast"; enabled: boolean }>,
+  ): Promise<void> {
+    for (const p of prefs) {
+      await (exec ?? db)
+        .insert(notificationPreferences)
+        .values({ memberId: actorMemberId, category: p.category, enabled: p.enabled })
+        .onConflictDoUpdate({
+          target: [notificationPreferences.memberId, notificationPreferences.category],
+          set: { enabled: p.enabled, updatedAt: sql`now()` },
+        });
+    }
+  }
+
+  return { getProfile, getStatus, timezoneOf, updateProfile, setNotificationPreferences };
 }

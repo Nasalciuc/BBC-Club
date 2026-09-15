@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { offerResponses } from "@bbc/db/schema/engagement";
 
@@ -25,6 +25,19 @@ export const responsesRepo = {
       .where(and(eq(offerResponses.offerId, offerId), eq(offerResponses.memberId, actorMemberId))) // ← ownership is the query
       .limit(1);
     return row ?? null;
+  },
+  /** Batch fetch: returns a map of offerId → response for the given actor. Unknown offerIds are absent. */
+  async responsesFor(
+    exec: Executor,
+    actorMemberId: string,
+    offerIds: string[],
+  ): Promise<Record<string, "interested" | "dismissed">> {
+    if (!offerIds.length) return {};
+    const rows = await exec
+      .select({ offerId: offerResponses.offerId, response: offerResponses.response })
+      .from(offerResponses)
+      .where(and(eq(offerResponses.memberId, actorMemberId), inArray(offerResponses.offerId, offerIds)));
+    return Object.fromEntries(rows.map((r) => [r.offerId, r.response]));
   },
   /** Scoped by actor: 0 rows if the response belongs to someone else (handler must throw). */
   async markSynced(exec: Executor, actorMemberId: string, offerId: string, crmActivityId: string | null) {

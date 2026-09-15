@@ -22,8 +22,8 @@ export class ModuleRegistry {
 
   /** Initialise in dependency order within layer order; satisfy ports from earlier facades; mount; register
    *  consumers and jobs. Same-layer dependencies (engagement → proposals) resolve topologically, not by the order
-   *  in modules.ts. A killed module is skipped entirely: no routes, no consumers (its pending deliveries pause
-   *  via flags) — and anything that needs its port fails loudly instead of receiving undefined. */
+   *  in modules.ts. A killed module still inits its facade so dependents can boot, but routes/consumers/jobs
+   *  are not registered (HTTP → 404; its pending deliveries pause via flags). */
   async boot(deps: { db: Db; platform: Platform; env: ServerEnv; mount: (basePath: string, app: Hono<any>) => void }) {
     const layerOf = new Map(this.modules.map((m) => [m.name, m.layer] as const));
     for (const m of this.modules)
@@ -53,14 +53,14 @@ export class ModuleRegistry {
           throw new Error(`module ${m.name} needs port "${need}" but "${need}" exposed nothing (killed or empty)`);
         ports[need] = this.facades.get(need);
       }
+      const out = await m.init({ db: deps.db, platform: deps.platform, env: deps.env, ports });
+      if (out.exposes !== undefined) this.facades.set(m.name, out.exposes);
       if (await deps.platform.flags.isKilled(m.name)) {
-        deps.platform.logger.warn({ module: m.name }, "module killed by flag: not mounted");
+        deps.platform.logger.warn({ module: m.name }, "module killed by flag: facade only, not mounted");
         initialised.add(m.name);
         continue;
       }
-      const out = await m.init({ db: deps.db, platform: deps.platform, env: deps.env, ports });
       this.outputs.set(m.name, out);
-      if (out.exposes !== undefined) this.facades.set(m.name, out.exposes);
       for (const r of out.routes ?? []) deps.mount(r.basePath, r.app);
       for (const c of out.consumers ?? []) deps.platform.events.registerConsumer(c.type, c.name, c.handler);
       // JobSpec lives in platform; shared keeps jobs.spec as unknown to avoid shared→platform.
