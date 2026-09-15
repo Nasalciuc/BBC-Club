@@ -16,13 +16,18 @@ export type CrmConnector = {
 export function mockCrm(
   known: { email: string; crmClientId: string; fullName?: string; homeAirport?: string }[] = [],
 ): CrmConnector {
+  const activities = new Map<string, { id: string }>();
   return {
     async findByEmail(e) {
       const k = known.find((c) => c.email.toLowerCase() === e);
       return k ? { crmClientId: k.crmClientId, fullName: k.fullName, homeAirport: k.homeAirport } : null;
     },
     async createActivity(i) {
-      return { id: `mock_${i.externalId}` };
+      const existing = activities.get(i.externalId);
+      if (existing) return existing;
+      const created = { id: `mock_${i.externalId}` };
+      activities.set(i.externalId, created);
+      return created;
     },
   };
 }

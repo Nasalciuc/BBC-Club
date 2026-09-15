@@ -58,10 +58,10 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
             body: { newPassword: parsed.data.newPassword },
           });
         } catch (err: any) {
-          const status = err?.status ?? 500;
+          const status = err?.statusCode ?? (err?.status === "BAD_REQUEST" ? 400 : err?.status) ?? 500;
           if (status === 400)
             return c.json(apiError("VALIDATION", { message: err?.body?.message ?? "Invalid password" }), 400);
-          if (status === 401) return c.json(apiError("UNAUTHORIZED"), 401);
+          if (status === 401 || err?.status === "UNAUTHORIZED") return c.json(apiError("UNAUTHORIZED"), 401);
           throw err;
         }
         await db.transaction((tx: unknown) =>

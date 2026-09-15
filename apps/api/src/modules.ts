@@ -17,7 +17,7 @@ export function modules(overrides: Record<string, any> = {}): ModuleDescriptor<a
     crmModule(overrides.crm), // integration
     identityModule(),
     membersModule(),
-    notificationsModule(overrides.push), // core
+    notificationsModule(), // core — push via needs; override lands on pushModule
     proposalsModule(),
     engagementModule(), // domain
     mobileBff(), // presentation

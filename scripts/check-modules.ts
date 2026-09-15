@@ -10,12 +10,7 @@ const base = "packages/modules";
 /** Contract tests that are still todo, with the phase that must finish them.
  *  A todo in a file that is NOT on this list fails immediately — that is the point of the rule.
  *  A file on this list whose phase has shipped also fails: the debt has a deadline, not an excuse. */
-const TODO_ALLOWLIST: Record<string, { owedBy: string; contract: string }> = {
-  "packages/modules/integration/crm/tests/contract/facade.contract.test.ts": {
-    owedBy: "stage-5",
-    contract: "findByEmail returns null for an unknown email; createActivity is idempotent by externalId",
-  },
-};
+const TODO_ALLOWLIST: Record<string, { owedBy: string; contract: string }> = {};
 
 /** A package that has tests but no script to run them is a silent skip in CI — worse than a red build. */
 function assertTestsHaveAScript(pkgDir: string, pkg: { scripts?: Record<string, string> }) {
