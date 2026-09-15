@@ -6,12 +6,45 @@ import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { ClubField, ClubInput, ClubPasswordInput } from "@/components/club-field";
 import { Club } from "@/constants/club";
+import { signIn } from "@/features/auth/flows";
+import { Email } from "@/features/auth/schemas";
+import { resolvePostAuthRoute } from "@/features/auth/session-gate";
+import { authMessage } from "@bbc/shared/auth-messages";
 
 export default function SignInScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = Email.safeParse(email).success && password.length > 0 && !busy;
+
+  async function onSubmit() {
+    const emailResult = Email.safeParse(email);
+    if (!emailResult.success) {
+      setError(emailResult.error.issues[0]?.message ?? authMessage("INVALID_EMAIL"));
+      return;
+    }
+    // Sign-in validates remotely; local Password refine is for set/reset screens.
+    if (!password) {
+      setError(authMessage("INVALID_EMAIL_OR_PASSWORD"));
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    const result = await signIn(emailResult.data, password);
+    if (!result.ok) {
+      setBusy(false);
+      setError(result.message);
+      return;
+    }
+    const dest = await resolvePostAuthRoute();
+    setBusy(false);
+    router.replace(dest);
+  }
 
   return (
     <AuthShell
@@ -22,10 +55,8 @@ export default function SignInScreen() {
             testID="signIn.submit"
             label="Sign in"
             arrow
-            onPress={() => {
-              // TODO(identity): wire to Better Auth
-              router.replace("/home");
-            }}
+            disabled={!canSubmit}
+            onPress={() => void onSubmit()}
           />
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
@@ -53,7 +84,10 @@ export default function SignInScreen() {
             keyboardType="email-address"
             placeholder="Email address"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => {
+              setEmail(value);
+              setError(null);
+            }}
           />
         </ClubField>
 
@@ -65,7 +99,10 @@ export default function SignInScreen() {
             autoComplete="password"
             placeholder="Password"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(value) => {
+              setPassword(value);
+              setError(null);
+            }}
             visible={showPassword}
             onToggleVisibility={() => setShowPassword((value) => !value)}
           />
@@ -79,6 +116,12 @@ export default function SignInScreen() {
             <Text style={styles.forgot}>Forgot password?</Text>
           </Pressable>
         </ClubField>
+
+        {error ? (
+          <Text testID="signIn.error" style={styles.error}>
+            {error}
+          </Text>
+        ) : null}
       </View>
     </AuthShell>
   );
@@ -117,5 +160,9 @@ const styles = StyleSheet.create({
     ...Club.type.labelMono,
     color: Club.colors.textOnDarkMuted,
     textTransform: "uppercase",
+  },
+  error: {
+    ...Club.type.bodySm,
+    color: Club.colors.statusDanger,
   },
 });

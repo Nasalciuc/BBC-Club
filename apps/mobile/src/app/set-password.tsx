@@ -4,6 +4,9 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { clearPendingOtp, takePendingOtp } from "@/features/auth/otp-holder";
+import { resetPassword, setPassword } from "@/features/auth/flows";
+import { Password } from "@/features/auth/schemas";
+import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { ClubField, ClubPasswordInput } from "@/components/club-field";
@@ -21,32 +24,54 @@ export default function SetPasswordScreen() {
     purpose?: string;
   }>();
   const purpose = parseAuthPurpose(purposeParam);
-  const [password, setPassword] = useState("");
+  const [password, setPasswordValue] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => () => clearPendingOtp(), []);
 
   const longEnough = password.length >= 8;
   const complexEnough = hasNumberOrSymbol(password);
-  const canContinue = longEnough && complexEnough;
+  const canContinue = longEnough && complexEnough && !busy;
 
-  function onContinue() {
-    if (purpose === "reset") {
-      // TODO(identity): the reset call needs the code; see Task 1b
-      // emailOtp.resetPassword({ email, otp, password }) — otp from
-      // takePendingOtp(); must not enter navigation state or the URL.
-      if (!email) {
-        clearPendingOtp();
-        router.replace("/sign-in");
-        return;
-      }
-      takePendingOtp();
-      router.replace("/home");
+  async function onContinue() {
+    const parsed = Password.safeParse(password);
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? "Choose a stronger password.");
       return;
     }
 
-    // TODO(identity): setPassword on the session (ADR-PROD-001 path A)
-    router.replace("/home");
+    setBusy(true);
+    setError(null);
+
+    if (purpose === "reset") {
+      const otp = takePendingOtp();
+      const normalizedEmail = email?.trim().toLowerCase() ?? "";
+      if (!otp || !normalizedEmail) {
+        clearPendingOtp();
+        setBusy(false);
+        router.replace("/sign-in");
+        return;
+      }
+      const result = await resetPassword(normalizedEmail, otp, parsed.data);
+      if (!result.ok) {
+        setBusy(false);
+        setError(result.message);
+        return;
+      }
+    } else {
+      const result = await setPassword(parsed.data);
+      if (!result.ok) {
+        setBusy(false);
+        setError(result.message);
+        return;
+      }
+    }
+
+    const dest = await resolvePostAuthRoute();
+    setBusy(false);
+    router.replace(dest);
   }
 
   return (
@@ -54,7 +79,13 @@ export default function SetPasswordScreen() {
       heroPercent={0.25}
       onBack="/sign-in"
       footer={
-        <ClubButton testID="setPassword.continue" label="Continue" arrow disabled={!canContinue} onPress={onContinue} />
+        <ClubButton
+          testID="setPassword.continue"
+          label="Continue"
+          arrow
+          disabled={!canContinue}
+          onPress={() => void onContinue()}
+        />
       }
     >
       <View style={styles.copy}>
@@ -70,7 +101,10 @@ export default function SetPasswordScreen() {
           autoComplete="new-password"
           placeholder="Password"
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(value) => {
+            setPasswordValue(value);
+            setError(null);
+          }}
           visible={showPassword}
           onToggleVisibility={() => setShowPassword((value) => !value)}
         />
@@ -80,6 +114,12 @@ export default function SetPasswordScreen() {
         <PasswordRule ok={longEnough} label="At least 8 characters" />
         <PasswordRule ok={complexEnough} label="One number or symbol" />
       </View>
+
+      {error ? (
+        <Text testID="setPassword.error" style={styles.error}>
+          {error}
+        </Text>
+      ) : null}
     </AuthShell>
   );
 }
@@ -106,5 +146,10 @@ const styles = StyleSheet.create({
   rules: {
     marginTop: Club.space.lg,
     gap: Club.space.sm,
+  },
+  error: {
+    ...Club.type.bodySm,
+    color: Club.colors.statusDanger,
+    marginTop: Club.space.md,
   },
 });

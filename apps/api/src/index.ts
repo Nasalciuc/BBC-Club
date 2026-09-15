@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import { loadEnv } from "@bbc/shared/env";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
+import { apiError } from "@bbc/shared/errors";
 import { createDb } from "@bbc/db";
 import { createPlatform, registerPlatformJobs } from "@bbc/platform";
+import { lastDevOtp } from "@bbc/email";
 import { installBaseMiddleware } from "./middleware/base";
 import { errorContract } from "./middleware/error-contract";
 import { resolvePrincipal, type PrincipalVars } from "./middleware/principal";
@@ -82,6 +84,18 @@ export async function buildApp(opts: BuildOptions = {}) {
   );
   registerRoute("GET", "/v1/app-config", "public");
   app.get("/v1/app-config", async (c) => c.json(await appConfig(platform)));
+
+  // Test/dev only: Maestro reads the last OTP without logging it. Never mounted in production.
+  if (env.NODE_ENV !== "production") {
+    registerRoute("GET", "/v1/test/last-otp", "public");
+    app.get("/v1/test/last-otp", (c) => {
+      const email = c.req.query("email")?.trim();
+      if (!email) return c.json(apiError("VALIDATION", { message: "email is required" }), 400);
+      const otp = lastDevOtp(email);
+      if (!otp) return c.json(apiError("NOT_FOUND"), 404);
+      return c.json({ otp });
+    });
+  }
 
   // 5. Better Auth owns /api/auth/*
   app.on(["POST", "GET"], "/api/auth/*", (c) => identity.handler(c.req.raw));

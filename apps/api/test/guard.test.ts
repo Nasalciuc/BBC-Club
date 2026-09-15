@@ -21,7 +21,7 @@ describe("requireMember — no dead guards", () => {
 describe("route inventory — everything under /v1 is protected", () => {
   it("every /v1 route except the allow-list refuses anonymous requests", async () => {
     const t = await testApp({ suite: "guard" });
-    const allow = new Set(["/v1/app-config"]);
+    const allow = new Set(["/v1/app-config", "/v1/test/last-otp"]);
     const routes = (t.app as any).routes as { path: string; method: string }[];
     const guarded = routes.filter((x) => x.path.startsWith("/v1") && !allow.has(x.path));
     expect(guarded.length).toBeGreaterThan(0); // an empty inventory would pass vacuously
