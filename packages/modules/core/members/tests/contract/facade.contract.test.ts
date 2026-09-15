@@ -1,19 +1,19 @@
 /** Members facade contract: idempotent profile creation and CRM linking.
- *  Runs against postgres-test. Uses a random memberId to avoid cross-test pollution. */
+ *  Runs against an isolated clone of the test template. */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
-import { createDb } from "@bbc/db";
-import { loadEnv } from "@bbc/shared/env";
+import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createMembersFacade } from "../../src/api";
 import { onMemberRegistered } from "../../src/handlers/on-member-registered";
 
-let db: ReturnType<typeof createDb>;
-beforeAll(() => {
-  const env = loadEnv(process.env);
-  db = createDb(env.DATABASE_URL, { max: 3, applicationName: "bbc-members-contract" });
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("members-contract", { max: 3 });
+  db = iso.db;
 });
 afterAll(async () => {
-  await db.close();
+  await iso.drop();
 });
 
 function randomId() {
