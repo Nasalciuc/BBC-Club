@@ -3,7 +3,7 @@ import { testApp } from "./helpers/test-app";
 
 describe("GET /v1/profile", () => {
   it("returns the caller's profile and never another member's", async () => {
-    const t = await testApp();
+    const t = await testApp({ suite: "profile" });
     const a = await t.app.request("/v1/profile", { headers: { Cookie: t.memberA.cookie } });
     expect(a.status).toBe(200);
     const body = (await a.json()) as { memberId: string; status: string };

@@ -22,7 +22,7 @@
     "module:check": "bun run scripts/check-modules.ts",
     "new-module": "bun run scripts/new-module.ts",
     "test:unit": "turbo run test:unit",
-    "test:db": "docker compose -f infra/compose.test.yml up -d --wait && turbo run test:db --concurrency=1",
+    "test:db": "docker compose -f infra/compose.test.yml up -d --wait && turbo run test:db",
     "db:verify": "bun run --filter @bbc/db db:verify",
     "validate:quick": "bun run format && bun run lint && bun run arch:check && bun run typecheck && bun run tokens:check && bun run design:lint && bun run module:check",
     "validate": "bun run validate:quick && bun run test:unit && bun run test:db && bun run db:verify",

@@ -1,9 +1,14 @@
-import { describe, it, expect, afterAll } from "bun:test";
-import { createDb } from "@bbc/db";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createPlatform } from "../src/api";
 
-const db = createDb(process.env.DATABASE_URL!, { max: 10, applicationName: "platform-singleton-test" });
-afterAll(() => db.close());
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("platform-jobs-singleton", { max: 10 });
+  db = iso.db;
+});
+afterAll(() => iso.drop());
 
 describe("singleton jobs on a connection pool", () => {
   it("runs on every consecutive call, not just the first", async () => {
