@@ -7,14 +7,22 @@ import { mockCrm } from "./mock-crm";
 import { testAuth } from "./test-auth";
 
 /** The whole host, in-memory (no port), against postgres-test, with capturing adapters.
- *  Every suite that needs the system uses this — nobody builds their own wiring. */
-export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[0] } = {}) {
+ *  Every suite that needs the system uses this — nobody builds their own wiring.
+ *  Pass `suite` to isolate fixture emails/CRM clients when tests share `bbc_test`. */
+export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[0]; suite?: string } = {}) {
   const env = loadEnv(process.env);
   const db = createDb(env.DATABASE_URL, { max: 6, applicationName: "bbc-test" });
   const email = capturingEmail();
+  const emailA = opts.suite ? `alex.${opts.suite}@test.dev` : "alex.morgan@company.com";
+  const emailB = opts.suite ? `bob.${opts.suite}@test.dev` : "bob@test.dev";
   const crm = mockCrm(
     opts.knownClients ?? [
-      { email: "alex.morgan@company.com", crmClientId: "crm_alex", fullName: "Alex Morgan", homeAirport: "JFK" },
+      {
+        email: emailA,
+        crmClientId: opts.suite ? `crm_alex_${opts.suite}` : "crm_alex",
+        fullName: "Alex Morgan",
+        homeAirport: "JFK",
+      },
     ],
   );
   const push = {
@@ -29,11 +37,11 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
   const auth = testAuth(built.registry.facade<any>("identity").auth, db);
   const internalSecret = env.INTERNAL_API_SECRET;
 
-  const memberA = { ...(await auth.createMember("alex.morgan@company.com")), cookie: "" };
+  const memberA = { ...(await auth.createMember(emailA)), cookie: "" };
   memberA.cookie = await auth.cookieFor(memberA.email);
-  const memberB = { ...(await auth.createMember("bob@test.dev")), cookie: "" };
+  const memberB = { ...(await auth.createMember(emailB)), cookie: "" };
   memberB.cookie = await auth.cookieFor(memberB.email);
-  const operatorJwt = await auth.operatorJwt();
+  const operatorJwt = await auth.operatorJwt(opts.suite ? `ops.${opts.suite}@test.dev` : "ops@test.dev");
   await built.platform.poller.drainOnce(); // member.registered → profiles
 
   return {

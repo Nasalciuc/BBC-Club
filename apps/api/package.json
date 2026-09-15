@@ -11,8 +11,8 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
-    "test": "bun test --preload ./test/helpers/global-setup.ts",
-    "test:db": "bun test --preload ./test/helpers/global-setup.ts",
+    "test": "bun test --concurrency=1 --preload ./test/helpers/global-setup.ts",
+    "test:db": "bun test --concurrency=1 --preload ./test/helpers/global-setup.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
