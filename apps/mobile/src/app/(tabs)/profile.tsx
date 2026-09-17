@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fixture } from "@bbc/shared/fixture";
-import { Button, ListRow, SectionLabel, tokens, rn } from "@bbc/ui";
+import { Button, SectionLabel, tokens, rn } from "@bbc/ui";
 
+import { ListRow } from "@/components/list-row";
 import { deleteAccount, signOut } from "@/features/auth/flows";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 
