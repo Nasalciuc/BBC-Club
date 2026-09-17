@@ -35,7 +35,6 @@ import {
 
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
-import * as mock from "@/lib/mock";
 
 /**
  * Hono RPC client. `AppType` cannot be imported from `@bbc/api` (arch: mobile-no-backend);
@@ -297,7 +296,6 @@ export type HomeResult = { home: HomeVMType; etag: string | null; notModified: b
 
 /** GET /v1/home — ETag, 5-minute private cache. */
 export async function fetchHome(etag?: string | null): Promise<ApiResult<HomeResult>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchHome(etag);
   const res = await apiFetch("/v1/home", {
     headers: etag ? { "If-None-Match": etag } : {},
   });
@@ -328,7 +326,6 @@ export async function searchFares(q: {
   to: string;
   cabin: "business" | "first";
 }): Promise<ApiResult<SearchResultVMType>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.searchFares(q);
   const params = new URLSearchParams({ from: q.from, to: q.to, cabin: q.cabin });
   const res = await apiFetch(`/v1/search?${params}`);
   if (!res.ok) {
@@ -344,7 +341,6 @@ export async function searchFares(q: {
 
 /** GET /v1/airports?q= — max 8. */
 export async function fetchAirports(query: string): Promise<ApiResult<AirportVMType[]>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchAirports(query);
   const res = await apiFetch(`/v1/airports?q=${encodeURIComponent(query)}`);
   if (!res.ok) {
     return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
@@ -363,7 +359,6 @@ export async function fetchAirports(query: string): Promise<ApiResult<AirportVMT
 
 /** GET /v1/fares/:id — 410 when expired. */
 export async function fetchFare(id: string): Promise<ApiResult<FareVMType>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchFare(id);
   const res = await apiFetch(`/v1/fares/${encodeURIComponent(id)}`);
   if (!res.ok) {
     return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
@@ -378,7 +373,6 @@ export async function fetchFare(id: string): Promise<ApiResult<FareVMType>> {
 
 /** POST /v1/requests — Idempotency-Key required. */
 export async function submitRequest(body: RequestBodyType, idempotencyKey: string): Promise<ApiResult<RequestVMType>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.submitRequest(body, idempotencyKey);
   const parsed = RequestBody.safeParse(body);
   if (!parsed.success) {
     return {
@@ -411,7 +405,6 @@ export async function submitRequest(body: RequestBodyType, idempotencyKey: strin
 
 /** GET /v1/requests */
 export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[] }>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchRequests();
   const res = await apiFetch("/v1/requests");
   if (!res.ok) {
     return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
@@ -433,7 +426,6 @@ export type AppConfig = { minSupportedVersion: string; maintenance: string | nul
 
 /** GET /v1/app-config — cold start, public. */
 export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchAppConfig();
   const res = await apiFetch("/v1/app-config");
   if (!res.ok) {
     return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
