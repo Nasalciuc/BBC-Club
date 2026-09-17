@@ -87,6 +87,20 @@ try {
     }
   }
 
+  const catalogSchema = join(migrationsDir, "0006_catalog.sql");
+  if (existsSync(catalogSchema)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0006_catalog.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(catalogSchema, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0006_catalog.sql')`);
+      });
+      console.log("catalog schema applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {

@@ -30,7 +30,7 @@ function runMigrate(): Promise<{ code: number; out: string }> {
 }
 
 describe("extras ledger", () => {
-  it("second migrate applies nothing; ensure_event_partitions exists; ledger has 0001 and 0005", async () => {
+  it("second migrate applies nothing; ensure_event_partitions exists; ledger has 0001, 0005 and 0006", async () => {
     const first = await runMigrate();
     expect(first.code).toBe(0);
 
@@ -38,10 +38,11 @@ describe("extras ledger", () => {
     expect(second.code).toBe(0);
     expect(second.out).not.toMatch(/extras applied: 0001/);
     expect(second.out).not.toMatch(/requests schema applied/);
+    expect(second.out).not.toMatch(/catalog schema applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
     const names: any[] = await db.execute(sql`SELECT name FROM platform.extras_applied ORDER BY name`);
-    expect(names.map((r) => r.name)).toEqual(["0001_extras.sql", "0005_requests.sql"]);
+    expect(names.map((r) => r.name)).toEqual(["0001_extras.sql", "0005_requests.sql", "0006_catalog.sql"]);
   });
 });
