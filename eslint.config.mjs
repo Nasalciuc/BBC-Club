@@ -19,6 +19,8 @@ export default tseslint.config(
       ".claude/**",
       ".expo/**",
       "expo-env.d.ts",
+      // Reference-only design / backend snapshots — not product code.
+      "isolated/**",
     ],
   },
   ...tseslint.configs.recommendedTypeChecked,
