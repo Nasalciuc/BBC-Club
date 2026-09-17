@@ -22,5 +22,5 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "setPassword.password" }
 - inputText: "atlantic2026!"
 - tapOn: { id: "setPassword.continue" }
-# Unknown CRM email → waitlist (ADR-PROD-001); not the proposals feed.
-- assertVisible: { id: "waitlist.root" }
+# Unknown CRM email → waitlist status in DB; Branch 5 routes every living profile to Explore.
+- assertVisible: { id: "explore.root" }

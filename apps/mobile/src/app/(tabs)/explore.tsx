@@ -85,6 +85,16 @@ export default function ExploreScreen() {
         }
       } else if (home?.home) {
         setDefaultFrom(home.home);
+      } else {
+        // Pending / null profile: treat as active with JFK defaults (85 % of clients).
+        setDefaultFrom({
+          code: "JFK",
+          city: "New York",
+          name: "John F Kennedy International",
+          countryCode: "US",
+          lat: 40.6413,
+          lng: -73.7781,
+        });
       }
     })();
   }, [home]);
@@ -92,6 +102,33 @@ export default function ExploreScreen() {
   useEffect(() => {
     void loadHome();
   }, []);
+
+  // One profile refetch after 2s — pending catch-up without an 8-poll splash.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void (async () => {
+        const profile = await fetchProfile();
+        if (!profile.ok || !profile.data.homeAirport) return;
+        const code = profile.data.homeAirport;
+        if (home?.home?.code === code) {
+          setDefaultFrom(home.home);
+          return;
+        }
+        const match = home?.destinations.find((d) => d.code === code);
+        if (match) {
+          setDefaultFrom({
+            code: match.code,
+            city: match.city,
+            name: match.name,
+            countryCode: match.countryCode,
+            lat: match.lat,
+            lng: match.lng,
+          });
+        }
+      })();
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [home]);
 
   async function loadHome() {
     setHomeLoading(true);
