@@ -10,19 +10,33 @@ const TABS: { key: TabKey; label: string; icon: IconName }[] = [
   { key: "profile", label: "PROFILE", icon: "profile" },
 ];
 
-type Props = { active: TabKey; unread: number; onPress: (key: TabKey) => void; testID?: string };
+const DEFAULT_TEST_IDS: Record<TabKey, string> = {
+  explore: "tab.explore",
+  requests: "tab.requests",
+  profile: "tabs.profile",
+};
+
+type Props = {
+  active: TabKey;
+  unread: number;
+  onPress: (key: TabKey) => void;
+  testID?: string;
+  /** Override per-tab testIDs. Profile defaults to `tabs.profile` for Maestro. */
+  testIDs?: Partial<Record<TabKey, string>>;
+};
 
 /** Dot lights only for quote_ready count — caller passes that, not unread inbox. */
-export function TabBar({ active, unread, onPress, testID }: Props) {
+export function TabBar({ active, unread, onPress, testID, testIDs }: Props) {
   return (
     <View style={styles.bar} testID={testID}>
       {TABS.map((tab) => {
         const on = tab.key === active;
         const color = on ? tokens.colors.textPrimary : tokens.colors.textTertiary;
+        const id = testIDs?.[tab.key] ?? DEFAULT_TEST_IDS[tab.key];
         return (
           <Pressable
             key={tab.key}
-            testID={`tab.${tab.key}`}
+            testID={id}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             accessibilityLabel={tab.key === "requests" && unread > 0 ? `${tab.label}, ${unread} ready` : tab.label}
