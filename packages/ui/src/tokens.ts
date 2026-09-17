@@ -14,7 +14,8 @@ export const tokens = {
   "textOnDark": "#F8FAFC",
   "textOnDarkMuted": "#94A3B8",
   "borderDefault": "#E2E8F0",
-  "statusDanger": "#B42318"
+  "statusDanger": "#B42318",
+  "scrim": "rgba(15,23,42,0.78)"
 },
   type: {
   "display": {

@@ -5,6 +5,8 @@ import { z } from "zod";
 export const PricePair = z.object({
   offer: z.number().positive(),
   published: z.number().positive().optional(),
+  /** FTC evidence for a reference price — required whenever `published` is set (enforced at write sites). */
+  publishedSource: z.string().optional(),
   currency: z.string().length(3),
 });
 export type PricePair = z.infer<typeof PricePair>;

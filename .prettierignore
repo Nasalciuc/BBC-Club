@@ -7,3 +7,6 @@ apps/mobile/tailwind.theme.js
 
 # Reference-only design snapshots — not product code; keep source formatting as-is.
 isolated/**
+
+# Design artefacts (HTML wireframes) — not source; keep author formatting.
+docs/design/*.html

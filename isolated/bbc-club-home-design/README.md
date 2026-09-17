@@ -1,5 +1,7 @@
 # BBC Club — Home design (reference only)
 
+> Frozen reference for the Home screen, 17 Sep 2026. Values are copied by hand into `packages/ui`; this app is never built, deployed or imported.
+
 Hi-fi Next.js prototype for the in-app **Explore / Home** shell and the visual language used for the next product pages (fare detail, request sheet, requests, profile).
 
 ## Rules
