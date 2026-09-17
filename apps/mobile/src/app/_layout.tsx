@@ -40,6 +40,10 @@ export default function RootLayout() {
     JetBrainsMono_400Regular,
     JetBrainsMono_500Medium,
     MaterialSymbols_400Regular,
+    // Aliases so @bbc/ui rn() family names resolve without rewriting entry screens.
+    Inter: Inter_400Regular,
+    Newsreader: SourceSerif4_400Regular,
+    "JetBrains Mono": JetBrainsMono_400Regular,
   });
 
   useEffect(() => {

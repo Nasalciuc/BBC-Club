@@ -156,4 +156,8 @@ export default tseslint.config(
     files: ["packages/ui/src/tokens.ts", "apps/mobile/src/constants/club.ts"],
     rules: { "bbc/no-inline-color": "off" },
   },
+  {
+    files: ["packages/ui/src/globe/constants.ts"],
+    rules: { "bbc/no-inline-color": "off" },
+  },
 );

@@ -8,7 +8,9 @@
       "@/*": ["./src/*"],
       "@/assets/*": ["./assets/*"],
       "@bbc/shared/*": ["../../packages/shared/src/*"],
-      "@bbc/ui": ["../../packages/ui/src/index.ts"]
+      "@bbc/ui": ["../../packages/ui/src/index.ts"],
+      "@bbc/ui/tokens": ["../../packages/ui/src/tokens.ts"],
+      "@bbc/ui/icons": ["../../packages/ui/src/icons.tsx"]
     },
     "noUncheckedIndexedAccess": false,
     "verbatimModuleSyntax": false

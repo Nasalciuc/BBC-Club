@@ -1,66 +1,18 @@
-import { SymbolView } from "expo-symbols";
+import { Icon, type IconName, type IconSize } from "@bbc/ui/icons";
 
 import { Club } from "@/constants/club";
 
-const icons = {
-  back: {
-    ios: "chevron.left",
-    android: "chevron_left",
-    web: "chevron_left",
-  },
-  arrow: {
-    ios: "arrow.right",
-    android: "arrow_forward",
-    web: "arrow_forward",
-  },
-  eye: {
-    ios: "eye",
-    android: "visibility",
-    web: "visibility",
-  },
-  eyeOff: {
-    ios: "eye.slash",
-    android: "visibility_off",
-    web: "visibility_off",
-  },
-  check: {
-    ios: "checkmark.circle.fill",
-    android: "check_circle",
-    web: "check_circle",
-  },
-  circle: {
-    ios: "circle",
-    android: "radio_button_unchecked",
-    web: "radio_button_unchecked",
-  },
-  proposals: {
-    ios: "airplane",
-    android: "flight",
-    web: "flight",
-  },
-  inbox: {
-    ios: "tray",
-    android: "inbox",
-    web: "inbox",
-  },
-  profile: {
-    ios: "person",
-    android: "person",
-    web: "person",
-  },
-  chevron: {
-    ios: "chevron.right",
-    android: "chevron_right",
-    web: "chevron_right",
-  },
-} as const;
-
-type Props = {
-  name: keyof typeof icons;
-  size?: number;
+/** Kept so the entry screens keep their imports. New code imports `Icon` from @bbc/ui/icons. */
+export function ClubIcon({
+  name,
+  size = 24,
+  color = Club.colors.textOnDark,
+}: {
+  name: IconName;
+  size?: IconSize | number;
   color?: string;
-};
-
-export function ClubIcon({ name, size = 24, color = Club.colors.textOnDark }: Props) {
-  return <SymbolView name={icons[name]} size={size} tintColor={color} />;
+}) {
+  return <Icon name={name} size={size as IconSize} color={color} />;
 }
+
+export type { IconName };
