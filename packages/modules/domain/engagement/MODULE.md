@@ -1,9 +1,9 @@
 # domain/engagement
 
-**Owns:** schema `engagement.*` — offer_responses (PK offer+member, response interested/dismissed, synced_to_crm, crm_activity_id).
-**Publishes:** `offer.responded` (same tx as upsert), `offer.viewed` (noConsumer).
-**Consumes:** none (crm and notifications consume offer.responded).
-**Ports:** `Proposals.getVisible` (domain/proposals).
-**Facade:** `respond(principal, input)`, `recordView(principal, offerId)`, `responsesFor(actor, offerIds)`, `markSynced(actor, offerId, crmActivityId)`.
-**Out of scope:** any CRM call (crm consumes the event), analytics aggregation (journal).
-**Invariants tested:** second identical tap → no-op, same state · dismissed after interested → updated · closed offer → NOT_FOUND/GONE · memberId in body ignored · handler with wrong actor cannot markSynced (0 rows → throws).
+**Owns:** schema `engagement.*` — offer_responses (kept expand-only; respond HTTP path removed in Branch 3).
+**Publishes:** none (offer.responded retired with respond).
+**Consumes:** `member.deleted` → wipe offer_responses + tombstone journal.
+**Ports:** none.
+**Facade:** `get`, `responsesFor`, `upsert`, `markSynced` — feed enrichment for legacy offer cards until Branch 5.
+**Out of scope:** CRM sync, respond-to-offer (requests module), analytics.
+**Invariants tested:** upsert setWhere; member delete cascade.

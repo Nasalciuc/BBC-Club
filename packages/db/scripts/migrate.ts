@@ -73,6 +73,20 @@ try {
     console.log("auth.rate_limit.last_request → bigint");
   }
 
+  const requestsSchema = join(migrationsDir, "0005_requests.sql");
+  if (existsSync(requestsSchema)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0005_requests.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(requestsSchema, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0005_requests.sql')`);
+      });
+      console.log("requests schema applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {

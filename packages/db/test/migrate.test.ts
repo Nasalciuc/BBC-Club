@@ -30,19 +30,18 @@ function runMigrate(): Promise<{ code: number; out: string }> {
 }
 
 describe("extras ledger", () => {
-  it("second migrate applies nothing; ensure_event_partitions exists; ledger has 0001", async () => {
+  it("second migrate applies nothing; ensure_event_partitions exists; ledger has 0001 and 0005", async () => {
     const first = await runMigrate();
     expect(first.code).toBe(0);
 
     const second = await runMigrate();
     expect(second.code).toBe(0);
     expect(second.out).not.toMatch(/extras applied: 0001/);
+    expect(second.out).not.toMatch(/requests schema applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
-    const rows: any[] = await db.execute(sql`SELECT count(*)::int AS n FROM platform.extras_applied`);
-    expect(rows[0].n).toBe(1);
-    const names: any[] = await db.execute(sql`SELECT name FROM platform.extras_applied`);
-    expect(names.map((r) => r.name)).toEqual(["0001_extras.sql"]);
+    const names: any[] = await db.execute(sql`SELECT name FROM platform.extras_applied ORDER BY name`);
+    expect(names.map((r) => r.name)).toEqual(["0001_extras.sql", "0005_requests.sql"]);
   });
 });

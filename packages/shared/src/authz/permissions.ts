@@ -3,7 +3,7 @@
  *  - apps/api authorize() middleware → route checks
  *  Adding a permission without adding it to a role is allowed (nobody has it); adding a role without listing it here is not. */
 export const statement = {
-  proposals: ["read", "respond", "ingest", "publish", "withdraw"],
+  proposals: ["read", "ingest", "publish", "withdraw"],
   inbox: ["read", "mark-read", "manage-preferences"],
   devices: ["register", "unregister"],
   profile: ["read-self", "update-self", "delete-self", "read-any", "update-any"],
@@ -24,7 +24,6 @@ export type Role = "member" | "operator" | "system";
 export const rolePermissions: Record<Role, readonly Permission[]> = {
   member: [
     "proposals:read",
-    "proposals:respond",
     "inbox:read",
     "inbox:mark-read",
     "inbox:manage-preferences",

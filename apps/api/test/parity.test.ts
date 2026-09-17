@@ -58,15 +58,14 @@ describe("fixture parity (london offer)", () => {
     await t.close();
   });
 
-  it("after responding 'interested' the state in feed updates", async () => {
+  it("after upserting interested the state in feed updates", async () => {
     const t = await testApp({ suite: "parity-state" });
     const offerId = await t.seedBroadcastOffer({
       routing: "broadcast",
       title: london.title,
       validUntil: london.validUntil,
     });
-    await t.respondAs(t.memberA, offerId, "interested");
-    await t.drainAll();
+    await t.upsertResponse(t.memberA.id, offerId, "interested");
     const feedRes = await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } });
     const feed = (await feedRes.json()) as any;
     const card = feed.items.find((i: any) => i.id === offerId);

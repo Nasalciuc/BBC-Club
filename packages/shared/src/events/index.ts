@@ -39,7 +39,7 @@ export const EVENT_CATALOGUE = {
   "notification.failed": { version: 1, schema: NotificationFailedV1, noConsumer: true },
   "crm.mirror.synced": { version: 1, schema: CrmMirrorSyncedV1, consumerOwedBy: "stage-5" },
   "crm.activity_created": { version: 1, schema: CrmActivityCreatedV1, noConsumer: true },
-  "request.submitted": { version: 1, schema: RequestSubmittedV1, consumerOwedBy: "stage-3" },
+  "request.submitted": { version: 1, schema: RequestSubmittedV1 },
   "request.status_changed": { version: 1, schema: RequestStatusChangedV1, consumerOwedBy: "stage-5" },
   "campaign.run_started": { version: 1, schema: CampaignRunStartedV1, consumerOwedBy: "stage-5" },
 } as const satisfies Record<string, CatalogueEntry>;
