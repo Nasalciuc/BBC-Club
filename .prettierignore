@@ -4,3 +4,6 @@ apps/mobile/tailwind.theme.js
 
 # Agent scratch / local worktrees — not part of the product tree.
 .claude/**
+
+# Reference-only design snapshots — not product code; keep source formatting as-is.
+isolated/**
