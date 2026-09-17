@@ -36,6 +36,7 @@
         "@bbc/platform": "workspace:*",
         "@bbc/proposals": "workspace:*",
         "@bbc/push": "workspace:*",
+        "@bbc/requests": "workspace:*",
         "@bbc/shared": "workspace:*",
         "hono": "^4.7.0",
         "jose": "^6.0.0",
@@ -163,6 +164,18 @@
         "@bbc/platform": "workspace:*",
         "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
+        "zod": "^3.24.0",
+      },
+    },
+    "packages/modules/domain/requests": {
+      "name": "@bbc/requests",
+      "version": "0.1.0",
+      "dependencies": {
+        "@bbc/db": "workspace:*",
+        "@bbc/platform": "workspace:*",
+        "@bbc/shared": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
+        "hono": "^4.7.0",
         "zod": "^3.24.0",
       },
     },
@@ -387,6 +400,8 @@
     "@bbc/proposals": ["@bbc/proposals@workspace:packages/modules/domain/proposals"],
 
     "@bbc/push": ["@bbc/push@workspace:packages/modules/integration/push"],
+
+    "@bbc/requests": ["@bbc/requests@workspace:packages/modules/domain/requests"],
 
     "@bbc/shared": ["@bbc/shared@workspace:packages/shared"],
 

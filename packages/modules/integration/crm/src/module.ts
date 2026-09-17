@@ -10,6 +10,7 @@ export type CrmConnector = {
     offerId: string;
     kind: "interested" | "dismissed";
   }): Promise<{ id: string | null }>;
+  submitRequest(payload: unknown): Promise<{ crmRequestId: string }>;
 };
 
 /** Mock until Dan grants access. The http adapter and the mirror sync are stage 5. */
@@ -17,6 +18,7 @@ export function mockCrm(
   known: { email: string; crmClientId: string; fullName?: string; homeAirport?: string }[] = [],
 ): CrmConnector {
   const activities = new Map<string, { id: string }>();
+  let submitCount = 0;
   return {
     async findByEmail(e) {
       const k = known.find((c) => c.email.toLowerCase() === e);
@@ -28,6 +30,10 @@ export function mockCrm(
       const created = { id: `mock_${i.externalId}` };
       activities.set(i.externalId, created);
       return created;
+    },
+    async submitRequest(_payload: unknown) {
+      submitCount += 1;
+      return { crmRequestId: `mock_req_${submitCount}` };
     },
   };
 }
