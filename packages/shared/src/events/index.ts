@@ -10,6 +10,7 @@ import {
 import { OfferPublishedV1, OfferExpiredV1, OfferWithdrawnV1, OfferViewedV1, OfferRespondedV1 } from "./offer";
 import { NotificationDeliveredV1, NotificationFailedV1 } from "./notification";
 import { CrmMirrorSyncedV1, CrmActivityCreatedV1 } from "./crm";
+import { RequestSubmittedV1, RequestStatusChangedV1, CampaignRunStartedV1 } from "./request";
 
 type CatalogueEntry = {
   version: number;
@@ -38,6 +39,9 @@ export const EVENT_CATALOGUE = {
   "notification.failed": { version: 1, schema: NotificationFailedV1, noConsumer: true },
   "crm.mirror.synced": { version: 1, schema: CrmMirrorSyncedV1, consumerOwedBy: "stage-5" },
   "crm.activity_created": { version: 1, schema: CrmActivityCreatedV1, noConsumer: true },
+  "request.submitted": { version: 1, schema: RequestSubmittedV1, consumerOwedBy: "stage-3" },
+  "request.status_changed": { version: 1, schema: RequestStatusChangedV1, consumerOwedBy: "stage-5" },
+  "campaign.run_started": { version: 1, schema: CampaignRunStartedV1, consumerOwedBy: "stage-5" },
 } as const satisfies Record<string, CatalogueEntry>;
 
 export type EventType = keyof typeof EVENT_CATALOGUE;
@@ -54,3 +58,4 @@ export * from "./member";
 export * from "./offer";
 export * from "./notification";
 export * from "./crm";
+export * from "./request";

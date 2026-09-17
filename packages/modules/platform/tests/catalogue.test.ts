@@ -58,6 +58,30 @@ const EXAMPLES: Record<EventType, Record<string, unknown>> = {
     crmActivityId: null,
     at: new Date().toISOString(),
   },
+  "request.submitted": {
+    requestId: "00000000-0000-4000-8000-00000000b001",
+    memberId: "m1",
+    reference: "R-4F2A",
+    route: "JFK → LHR",
+    cabin: "business",
+    fareId: "00000000-0000-4000-8000-00000000fa01",
+    offerId: null,
+    submittedAt: new Date().toISOString(),
+  },
+  "request.status_changed": {
+    requestId: "00000000-0000-4000-8000-00000000b001",
+    memberId: "m1",
+    from: "received",
+    to: "quoted",
+    changedAt: new Date().toISOString(),
+  },
+  "campaign.run_started": {
+    runId: "00000000-0000-4000-8000-00000000c001",
+    segmentId: "00000000-0000-4000-8000-00000000d001",
+    offerId: "00000000-0000-4000-8000-000000000001",
+    targeted: 120,
+    startedAt: new Date().toISOString(),
+  },
 };
 
 describe("event catalogue", () => {

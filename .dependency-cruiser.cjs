@@ -108,7 +108,16 @@ module.exports = {
       to: { path: "^(apps/api|packages/modules|packages/db)/", pathNot: "^apps/api/src/index\\.ts$" },
     },
 
-    // ── 5. hygiene ───────────────────────────────────────────────────────────
+    // ── 5. isolated prototypes stay frozen ───────────────────────────────────
+    {
+      name: "no-isolated-import",
+      severity: "error",
+      comment: "isolated/ holds frozen reference prototypes. Copy values out by hand; never import.",
+      from: { pathNot: "^isolated/" },
+      to: { path: "^isolated/" },
+    },
+
+    // ── 6. hygiene ───────────────────────────────────────────────────────────
     { name: "no-circular", severity: "error", from: {}, to: { circular: true } },
     {
       name: "no-orphans",

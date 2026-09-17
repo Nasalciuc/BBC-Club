@@ -10,6 +10,10 @@ export const statement = {
   conversions: ["ingest"],
   jobs: ["run"],
   ops: ["read", "act"],
+  fares: ["read"],
+  requests: ["create", "read-self", "read-any", "update-any"],
+  campaigns: ["manage"],
+  catalog: ["import"],
 } as const;
 
 export type Resource = keyof typeof statement;
@@ -29,6 +33,9 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
     "profile:read-self",
     "profile:update-self",
     "profile:delete-self",
+    "fares:read",
+    "requests:create",
+    "requests:read-self",
   ],
   operator: [
     "proposals:read",
@@ -38,8 +45,21 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
     "profile:update-any",
     "ops:read",
     "ops:act",
+    "fares:read",
+    "requests:read-any",
+    "requests:update-any",
+    "campaigns:manage",
   ],
-  system: ["proposals:ingest", "proposals:withdraw", "conversions:ingest", "jobs:run", "ops:act"],
+  system: [
+    "proposals:ingest",
+    "proposals:withdraw",
+    "conversions:ingest",
+    "jobs:run",
+    "ops:act",
+    "catalog:import",
+    "campaigns:manage",
+    "requests:update-any",
+  ],
 };
 
 export function roleHas(role: Role, permission: Permission): boolean {

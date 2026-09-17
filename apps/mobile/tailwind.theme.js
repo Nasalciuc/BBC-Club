@@ -14,7 +14,8 @@ module.exports = {
   "text-on-dark": "#F8FAFC",
   "text-on-dark-muted": "#94A3B8",
   "border-default": "#E2E8F0",
-  "status-danger": "#B42318"
+  "status-danger": "#B42318",
+  "scrim": "rgba(15,23,42,0.78)"
 },
   fontFamily: {
   "newsreader": [
