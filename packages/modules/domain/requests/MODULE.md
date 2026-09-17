@@ -6,4 +6,4 @@
 **Ports:** `crm.submitRequest(payload) → { crmRequestId }`.
 **Facade:** `listForMember`, `get`, `toRequestVM`.
 **Out of scope:** catalog/fares, campaigns, respond-to-offer (deleted — one request path only).
-**Invariants tested:** Idempotency-Key → one row · IDOR → 404 · ownership in WHERE · send-requests stops after six · CRM mock records payload.
+**Invariants tested:** Idempotency-Key → one row · another member reusing the key → 409 · IDOR → 404 · ownership in WHERE · send-requests stops after six · CRM mock records payload.

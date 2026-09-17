@@ -66,10 +66,15 @@ export async function submit(
 
   return withTx(exec, async (tx) => {
     const existing = await tx.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
-    if (existing.length > 0) return { ok: true as const, request: existing[0]!, created: false as const };
+    if (existing.length > 0) {
+      const row = existing[0]!;
+      // Key is globally unique; another member must not receive this row (PII).
+      if (row.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
+      return { ok: true as const, request: row, created: false as const };
+    }
 
     const id = randomUUID();
-    const reference = `R-${id.replace(/-/g, "").slice(0, 4).toUpperCase()}`;
+    const reference = `R-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
     const route = `${body.legs[0]!.from} → ${body.legs[body.legs.length - 1]!.to}`;
 
     const [row] = await tx

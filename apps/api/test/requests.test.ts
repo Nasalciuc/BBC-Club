@@ -37,6 +37,20 @@ describe("POST /v1/requests", () => {
     await t.close();
   });
 
+  it("another member reusing Idempotency-Key gets 409, not the original row", async () => {
+    const t = await testApp({ suite: "requests-idor-key" });
+    const key = crypto.randomUUID();
+    const a = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { idempotencyKey: key });
+    expect(a.status).toBe(201);
+    const b = await t.submitRequestAs(
+      t.memberB,
+      t.sampleRequestBody({ contact: { name: "Bob", phone: "+12125550222", email: "bob@test.dev" } }),
+      { idempotencyKey: key },
+    );
+    expect(b.status).toBe(409);
+    await t.close();
+  });
+
   it("requires Idempotency-Key", async () => {
     const t = await testApp({ suite: "requests-key" });
     const r = await t.app.request("/v1/requests", {

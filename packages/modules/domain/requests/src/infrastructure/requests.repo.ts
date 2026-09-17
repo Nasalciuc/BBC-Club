@@ -45,6 +45,7 @@ export function createRequestsRepo(db: Executor) {
         WHERE sent_to_crm = false
           AND send_attempts < 6
           AND (sent_at IS NULL OR sent_at < now() - interval '5 minutes')
+          AND (send_attempts > 0 OR created_at < now() - interval '2 minutes')
         ORDER BY created_at
         FOR UPDATE SKIP LOCKED
         LIMIT ${limit}`);

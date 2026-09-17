@@ -65,6 +65,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         }
         if (!result.ok) {
           if (result.code === "RATE_LIMITED") return c.json(apiError("RATE_LIMITED"), 429);
+          if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
           return c.json(apiError("VALIDATION"), 400);
         }
         return c.json(toRequestVM(result.request), result.created ? 201 : 200);
@@ -115,7 +116,20 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
       }),
       async (c) => {
         const body = await c.req.json().catch(() => ({}));
-        const r = await setStatus(db, { ...body, requestId: c.req.param("id") }, { repo, publish });
+        let r;
+        try {
+          r = await setStatus(db, { ...body, requestId: c.req.param("id") }, { repo, publish });
+        } catch (err: any) {
+          if (err?.name === "ZodError") {
+            return c.json(
+              apiError("VALIDATION", {
+                details: err.issues?.map((i: any) => ({ path: i.path.join("."), message: i.message })),
+              }),
+              400,
+            );
+          }
+          throw err;
+        }
         if (!r.ok) return c.json(apiError("NOT_FOUND"), 404);
         return c.json({ ok: true, unchanged: r.unchanged });
       },
