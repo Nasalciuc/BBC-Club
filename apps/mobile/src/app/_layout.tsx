@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
@@ -133,40 +134,42 @@ export default function RootLayout() {
     <View style={styles.shell}>
       <GestureHandlerRootView style={styles.phone}>
         <BottomSheetModalProvider>
-          <StatusBar style="light" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: Club.colors.black },
-              animation: "fade",
-            }}
-          >
-            <Stack.Screen name="index" />
-            <Stack.Screen name="sign-in" />
-            <Stack.Screen name="join" />
-            <Stack.Screen name="verify-code" />
-            <Stack.Screen name="set-password" />
-            <Stack.Screen name="reset-password" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="proposal/[id]"
-              options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
-            />
-            <Stack.Screen
-              name="fare/[id]"
-              options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
-            />
-            <Stack.Screen
-              name="notifications"
-              options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
-            />
-            <Stack.Screen name="home" />
-            <Stack.Screen name="waitlist" />
-            <Stack.Screen
-              name="dev/gallery"
-              options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
-            />
-          </Stack>
+          <AppGate>
+            <StatusBar style="light" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: Club.colors.black },
+                animation: "fade",
+              }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="sign-in" />
+              <Stack.Screen name="join" />
+              <Stack.Screen name="verify-code" />
+              <Stack.Screen name="set-password" />
+              <Stack.Screen name="reset-password" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="proposal/[id]"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+              <Stack.Screen
+                name="fare/[id]"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+              <Stack.Screen
+                name="notifications"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+              <Stack.Screen name="home" />
+              <Stack.Screen name="waitlist" />
+              <Stack.Screen
+                name="dev/gallery"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+            </Stack>
+          </AppGate>
         </BottomSheetModalProvider>
       </GestureHandlerRootView>
     </View>

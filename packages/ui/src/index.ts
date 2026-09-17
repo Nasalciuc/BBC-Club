@@ -15,6 +15,7 @@ export { SearchField } from "./fields/SearchField";
 export { CarouselRow, OfferCard } from "./cards/OfferCard";
 export { FareRow } from "./cards/FareRow";
 export { fareFacts } from "./cards/fare-facts";
+export { RequestRow } from "./cards/RequestRow";
 
 export { HomeSheet } from "./layout/HomeSheet";
 export { TabBar } from "./layout/TabBar";
