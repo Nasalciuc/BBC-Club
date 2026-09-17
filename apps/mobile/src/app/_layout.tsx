@@ -152,6 +152,10 @@ export default function RootLayout() {
           />
           <Stack.Screen name="home" />
           <Stack.Screen name="waitlist" />
+          <Stack.Screen
+            name="dev/gallery"
+            options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+          />
         </Stack>
       </GestureHandlerRootView>
     </View>
