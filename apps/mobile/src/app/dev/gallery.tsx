@@ -14,6 +14,7 @@ import {
   OfferCard,
   CarouselRow,
   PricePair,
+  RequestRow,
   SearchField,
   SectionLabel,
   StatusBadge,
@@ -160,6 +161,48 @@ export default function GalleryScreen() {
           hasOffer: d.hasOffer,
           fromPrice: `from $${d.fromPrice.toLocaleString()}`,
         }))}
+      />
+
+      <SectionLabel label="RequestRow" />
+      <RequestRow
+        testID="gallery.request.received"
+        route="JFK → LHR"
+        meta="Oct 12–19 · Business · 1 adult · from $4,200"
+        badgeStatus="received"
+        onPress={noop}
+      />
+      <RequestRow
+        testID="gallery.request.quote"
+        route="JFK → CDG"
+        meta="Nov 3–10 · Business · 2 adults · from $3,850"
+        badgeStatus="quote_ready"
+        onPress={noop}
+        onCall={noop}
+        callTestID="gallery.request.call"
+      />
+      <RequestRow
+        testID="gallery.request.booked"
+        route="JFK → HND"
+        meta="Dec 1–12 · Business · 1 adult · from $4,650"
+        badgeStatus="booked"
+        muted
+        onPress={noop}
+      />
+      <RequestRow
+        testID="gallery.request.notSent"
+        route="JFK → DXB"
+        meta="Oct 20–27 · Business · 1 adult · from $3,900"
+        badgeStatus="not_sent"
+        onPress={noop}
+        onRetry={noop}
+        retryTestID="gallery.request.retry"
+      />
+      <RequestRow
+        testID="gallery.request.long"
+        route="JFK → Singapore Changi via Frankfurt"
+        meta="Very long meta line with cabin and passenger and price details that should truncate"
+        badgeStatus="received"
+        onPress={noop}
       />
 
       <SectionLabel label="ErrorState" />

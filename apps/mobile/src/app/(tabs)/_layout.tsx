@@ -1,126 +1,54 @@
-import { Tabs } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Tabs, usePathname, useRouter, type Href } from "expo-router";
+import { useEffect, useState } from "react";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { TabBar } from "@bbc/ui";
 
-import { ClubIcon } from "@/components/club-icon";
-import { Club } from "@/constants/club";
+import { fetchRequests } from "@/lib/api";
 
-function TabLabel({ label, focused }: { label: string; focused: boolean }) {
-  return <Text style={[styles.label, focused && styles.labelActive]}>{label}</Text>;
+type TabKey = "explore" | "requests" | "profile";
+
+function activeFromPath(pathname: string): TabKey {
+  if (pathname.includes("requests")) return "requests";
+  if (pathname.includes("profile")) return "profile";
+  return "explore";
 }
 
-function TabIcon({ name, focused }: { name: "proposals" | "inbox" | "profile"; focused: boolean }) {
-  return (
-    <View style={styles.iconWrap}>
-      <ClubIcon name={name} size={18} color={focused ? Club.colors.primary : Club.colors.textSecondary} />
-    </View>
-  );
-}
+const ROUTES: Record<TabKey, Href> = {
+  explore: "/(tabs)/explore" as Href,
+  requests: "/(tabs)/requests" as Href,
+  profile: "/(tabs)/profile" as Href,
+};
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const pathname = usePathname();
+  const active = activeFromPath(pathname);
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    void (async () => {
+      const result = await fetchRequests();
+      if (!result.ok) return;
+      setUnread(result.data.items.filter((r) => r.status === "quoted").length);
+    })();
+  }, [pathname]);
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: Club.colors.surfaceCard,
-          borderTopColor: Club.colors.borderDefault,
-          borderTopWidth: 1,
-          height: 84 + Math.max(insets.bottom - 8, 0),
-          paddingTop: Club.space.xs,
-          paddingBottom: Math.max(insets.bottom, Club.space.sm),
-        },
-        tabBarActiveTintColor: Club.colors.primary,
-        tabBarInactiveTintColor: Club.colors.textSecondary,
-        tabBarShowLabel: true,
-      }}
-    >
-      <Tabs.Screen
-        name="proposals"
-        options={{
-          title: "Proposals",
-          tabBarAccessibilityLabel: "Proposals",
-          tabBarButton: (props) => (
-            <Pressable
-              testID="tabs.proposals"
-              accessibilityRole="button"
-              accessibilityState={props.accessibilityState}
-              accessibilityLabel={props.accessibilityLabel}
-              onPress={props.onPress}
-              onLongPress={props.onLongPress}
-              style={props.style}
-            >
-              {props.children}
-            </Pressable>
-          ),
-          tabBarLabel: ({ focused }) => <TabLabel label="PROPOSALS" focused={focused} />,
-          tabBarIcon: ({ focused }) => <TabIcon name="proposals" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="inbox"
-        options={{
-          title: "Inbox",
-          tabBarAccessibilityLabel: "Inbox",
-          tabBarButton: (props) => (
-            <Pressable
-              testID="tabs.inbox"
-              accessibilityRole="button"
-              accessibilityState={props.accessibilityState}
-              accessibilityLabel={props.accessibilityLabel}
-              onPress={props.onPress}
-              onLongPress={props.onLongPress}
-              style={props.style}
-            >
-              {props.children}
-            </Pressable>
-          ),
-          tabBarLabel: ({ focused }) => <TabLabel label="INBOX" focused={focused} />,
-          tabBarIcon: ({ focused }) => <TabIcon name="inbox" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarAccessibilityLabel: "Profile",
-          tabBarButton: (props) => (
-            <Pressable
-              testID="tabs.profile"
-              accessibilityRole="button"
-              accessibilityState={props.accessibilityState}
-              accessibilityLabel={props.accessibilityLabel}
-              onPress={props.onPress}
-              onLongPress={props.onLongPress}
-              style={props.style}
-            >
-              {props.children}
-            </Pressable>
-          ),
-          tabBarLabel: ({ focused }) => <TabLabel label="PROFILE" focused={focused} />,
-          tabBarIcon: ({ focused }) => <TabIcon name="profile" focused={focused} />,
-        }}
-      />
-    </Tabs>
+    <View style={{ flex: 1, paddingBottom: insets.bottom }}>
+      <Tabs
+        tabBar={() => (
+          <TabBar testID="tabs.bar" active={active} unread={unread} onPress={(key) => router.push(ROUTES[key])} />
+        )}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tabs.Screen name="explore" options={{ title: "Explore" }} />
+        <Tabs.Screen name="requests" options={{ title: "Requests" }} />
+        <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+        <Tabs.Screen name="proposals" options={{ href: null }} />
+        <Tabs.Screen name="inbox" options={{ href: null }} />
+      </Tabs>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  label: {
-    ...Club.type.tabMono,
-    color: Club.colors.textSecondary,
-    textTransform: "uppercase",
-    marginTop: 2,
-  },
-  labelActive: {
-    color: Club.colors.primary,
-  },
-  iconWrap: {
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});

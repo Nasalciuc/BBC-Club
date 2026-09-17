@@ -16,9 +16,26 @@ import {
   type ProfilePatchBody as ProfilePatchBodyType,
   type ProposalDetailVM as ProposalDetailVMType,
 } from "@bbc/shared/api/v1/proposals";
+import {
+  AirportVM,
+  FareVM,
+  HomeVM,
+  SearchResultVM,
+  type AirportVM as AirportVMType,
+  type FareVM as FareVMType,
+  type HomeVM as HomeVMType,
+  type SearchResultVM as SearchResultVMType,
+} from "@bbc/shared/api/v1/fares";
+import {
+  RequestBody,
+  RequestVM,
+  type RequestBody as RequestBodyType,
+  type RequestVM as RequestVMType,
+} from "@bbc/shared/api/v1/requests";
 
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
+import * as mock from "@/lib/mock";
 
 /**
  * Hono RPC client. `AppType` cannot be imported from `@bbc/api` (arch: mobile-no-backend);
@@ -274,4 +291,159 @@ export async function fetchLastOtpForTest(email: string): Promise<string | null>
   if (!res.ok) return null;
   const body = (await parseJson(res)) as { otp?: string } | null;
   return typeof body?.otp === "string" ? body.otp : null;
+}
+
+export type HomeResult = { home: HomeVMType; etag: string | null; notModified: boolean };
+
+/** GET /v1/home — ETag, 5-minute private cache. */
+export async function fetchHome(etag?: string | null): Promise<ApiResult<HomeResult>> {
+  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchHome(etag);
+  const res = await apiFetch("/v1/home", {
+    headers: etag ? { "If-None-Match": etag } : {},
+  });
+  if (res.status === 304) {
+    return {
+      ok: true,
+      data: {
+        home: { home: null, destinations: [], sections: [] },
+        etag: etag ?? null,
+        notModified: true,
+      },
+    };
+  }
+  if (!res.ok) {
+    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+  }
+  const raw = await parseJson(res);
+  const parsed = HomeVM.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+  }
+  return { ok: true, data: { home: parsed.data, etag: res.headers.get("ETag"), notModified: false } };
+}
+
+/** GET /v1/search?from&to&cabin */
+export async function searchFares(q: {
+  from: string;
+  to: string;
+  cabin: "business" | "first";
+}): Promise<ApiResult<SearchResultVMType>> {
+  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.searchFares(q);
+  const params = new URLSearchParams({ from: q.from, to: q.to, cabin: q.cabin });
+  const res = await apiFetch(`/v1/search?${params}`);
+  if (!res.ok) {
+    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+  }
+  const raw = await parseJson(res);
+  const parsed = SearchResultVM.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+  }
+  return { ok: true, data: parsed.data };
+}
+
+/** GET /v1/airports?q= — max 8. */
+export async function fetchAirports(query: string): Promise<ApiResult<AirportVMType[]>> {
+  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchAirports(query);
+  const res = await apiFetch(`/v1/airports?q=${encodeURIComponent(query)}`);
+  if (!res.ok) {
+    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+  }
+  const raw = await parseJson(res);
+  if (!Array.isArray(raw)) {
+    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+  }
+  const items: AirportVMType[] = [];
+  for (const row of raw) {
+    const parsed = AirportVM.safeParse(row);
+    if (parsed.success) items.push(parsed.data);
+  }
+  return { ok: true, data: items };
+}
+
+/** GET /v1/fares/:id — 410 when expired. */
+export async function fetchFare(id: string): Promise<ApiResult<FareVMType>> {
+  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchFare(id);
+  const res = await apiFetch(`/v1/fares/${encodeURIComponent(id)}`);
+  if (!res.ok) {
+    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+  }
+  const raw = await parseJson(res);
+  const parsed = FareVM.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+  }
+  return { ok: true, data: parsed.data };
+}
+
+/** POST /v1/requests — Idempotency-Key required. */
+export async function submitRequest(body: RequestBodyType, idempotencyKey: string): Promise<ApiResult<RequestVMType>> {
+  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.submitRequest(body, idempotencyKey);
+  const parsed = RequestBody.safeParse(body);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? authMessage("VALIDATION"),
+      code: "VALIDATION",
+      status: 400,
+    };
+  }
+  const res = await apiFetch("/v1/requests", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": idempotencyKey,
+      "X-App-Platform": "ios",
+      "X-App-Version": "0.1.0",
+    },
+    body: JSON.stringify(parsed.data),
+  });
+  if (!res.ok) {
+    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+  }
+  const raw = await parseJson(res);
+  const vm = RequestVM.safeParse(raw);
+  if (!vm.success) {
+    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+  }
+  return { ok: true, data: vm.data };
+}
+
+/** GET /v1/requests */
+export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[] }>> {
+  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchRequests();
+  const res = await apiFetch("/v1/requests");
+  if (!res.ok) {
+    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+  }
+  const raw = await parseJson(res);
+  const items = (raw as { items?: unknown })?.items;
+  if (!Array.isArray(items)) {
+    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+  }
+  const parsed: RequestVMType[] = [];
+  for (const row of items) {
+    const v = RequestVM.safeParse(row);
+    if (v.success) parsed.push(v.data);
+  }
+  return { ok: true, data: { items: parsed } };
+}
+
+export type AppConfig = { minSupportedVersion: string; maintenance: string | null };
+
+/** GET /v1/app-config — cold start, public. */
+export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
+  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchAppConfig();
+  const res = await apiFetch("/v1/app-config");
+  if (!res.ok) {
+    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+  }
+  const raw = (await parseJson(res)) as AppConfig;
+  return {
+    ok: true,
+    data: {
+      minSupportedVersion: raw.minSupportedVersion ?? "0.1.0",
+      maintenance: raw.maintenance ?? null,
+    },
+  };
 }

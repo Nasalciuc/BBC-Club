@@ -10,7 +10,7 @@ appId: com.buybusinessclass.club
 - inputText: "atlantic2026!"
 - tapOn: { id: "signIn.submit" }
 - assertVisible: { id: "feed.root" }
-- tapOn: { id: "tabs.profile" }
+- tapOn: { id: "tab.profile" }
 - assertVisible: { id: "profile.root" }
 - tapOn: { id: "profile.delete" }
 - assertVisible: { id: "profile.deleteConfirm" }
