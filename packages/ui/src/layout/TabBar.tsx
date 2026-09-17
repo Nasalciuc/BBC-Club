@@ -13,7 +13,7 @@ const TABS: { key: TabKey; label: string; icon: IconName }[] = [
 const DEFAULT_TEST_IDS: Record<TabKey, string> = {
   explore: "tab.explore",
   requests: "tab.requests",
-  profile: "tabs.profile",
+  profile: "tab.profile",
 };
 
 type Props = {
@@ -21,7 +21,7 @@ type Props = {
   unread: number;
   onPress: (key: TabKey) => void;
   testID?: string;
-  /** Override per-tab testIDs. Profile defaults to `tabs.profile` for Maestro. */
+  /** Override per-tab testIDs. Defaults are `tab.explore` / `tab.requests` / `tab.profile`. */
   testIDs?: Partial<Record<TabKey, string>>;
 };
 
