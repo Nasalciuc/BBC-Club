@@ -9,6 +9,7 @@ const OWNED_SCHEMAS = [
   "notifications",
   "proposals",
   "engagement",
+  "catalog",
   "crm",
   "personalization",
 ];

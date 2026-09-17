@@ -4,11 +4,11 @@ import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute, type PrincipalVars } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
-import { toCard, toDetail } from "./view-models";
+import { toCard, toDetail, toAirportVM, toDestinationPin } from "./view-models";
 
 type Ports = {
   members: {
-    getProfile(exec: unknown, actor: string): Promise<unknown | null>;
+    getProfile(exec: unknown, actor: string): Promise<{ homeAirport: string | null } | null>;
   };
   proposals: {
     feed(exec: unknown, actorMemberId: string, cursor: { ts: Date; id: string } | null, limit?: number): Promise<any[]>;
@@ -27,27 +27,127 @@ type Ports = {
       offerId: string,
     ): Promise<{ response: "interested" | "dismissed" } | null>;
   };
+  catalog: {
+    destinations(
+      exec: unknown,
+      home: string,
+    ): Promise<
+      Array<{
+        code: string;
+        name: string;
+        city: string;
+        countryCode: string;
+        region: string;
+        lat: number;
+        lng: number;
+        fromPrice: number;
+      }>
+    >;
+    getAirport(
+      exec: unknown,
+      code: string,
+    ): Promise<{
+      code: string;
+      name: string;
+      city: string;
+      countryCode: string;
+      region: string;
+      lat: string;
+      lng: string;
+    } | null>;
+  };
 };
 
-/** The mobile BFF. Composes proposals + engagement → view-models. /v1/app-config stays in the host. */
+const SECTION_ORDER: Array<{ key: string; title: string; region: string | null }> = [
+  { key: "inspire", title: "Inspiration", region: null },
+  { key: "europe", title: "Europe", region: "europe" },
+  { key: "asia", title: "Asia", region: "asia" },
+  { key: "middle_east", title: "Middle East", region: "middle_east" },
+];
+
+/** The mobile BFF. Composes proposals + engagement + catalog → view-models. /v1/app-config stays in the host. */
 export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => ({
   name: "mobile-bff",
   layer: "presentation",
-  needs: ["members", "proposals", "engagement"],
+  needs: ["members", "proposals", "engagement", "catalog"],
   init: ({ platform, ports }) => {
     const routes = new Hono<PrincipalVars>();
 
     // ── Profile ──────────────────────────────────────────────────────────────
 
-    // The session gate routes by profile.status: active → proposals, waitlist → waitlist, pending → keep the splash.
     registerRoute("GET", "/v1/profile", "profile:read-self");
     routes.get("/profile", authorize("profile:read-self", { module: "members", flags: platform.flags }), async (c) => {
       const actor = actorMemberId(c.get("principal"));
       if (!actor) return c.json(apiError("FORBIDDEN"), 403);
       const p = await ports.members.getProfile(undefined, actor);
-      // 200 with status "pending" (not 404): the member exists, the profile event is in flight
       return c.json(p ?? { memberId: actor, status: "pending" });
     });
+
+    // ── Home ─────────────────────────────────────────────────────────────────
+
+    registerRoute("GET", "/v1/home", "fares:read");
+    routes.get(
+      "/home",
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const actor = actorMemberId(c.get("principal"));
+        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+
+        const profile = await ports.members.getProfile(undefined, actor);
+        const homeCode = (profile?.homeAirport ?? "JFK").toUpperCase();
+        const homeRow = await ports.catalog.getAirport(undefined, homeCode);
+
+        const [destRows, offerRows] = await Promise.all([
+          ports.catalog.destinations(undefined, homeCode),
+          ports.proposals.feed(undefined, actor, null, 50),
+        ]);
+
+        const offerRouteTos = new Set(offerRows.map((o: any) => String(o.routeTo).toUpperCase()));
+        const destinations = destRows.map((d) => toDestinationPin(d, offerRouteTos.has(d.code.toUpperCase())));
+
+        const regionByCode = new Map(destRows.map((d) => [d.code.toUpperCase(), d.region]));
+        for (const o of offerRows) {
+          const code = String(o.routeTo).toUpperCase();
+          if (regionByCode.has(code)) continue;
+          const apt = await ports.catalog.getAirport(undefined, code);
+          if (apt?.region) regionByCode.set(code, apt.region);
+        }
+
+        const offerIds = offerRows.map((r: any) => r.id as string);
+        const states = offerIds.length > 0 ? await ports.engagement.responsesFor(undefined, actor, offerIds) : {};
+        const cards = offerRows.map((r: any) => toCard(r, states[r.id]));
+
+        const sections = SECTION_ORDER.map(({ key, title, region }) => {
+          const items =
+            region == null
+              ? cards.slice(0, 6)
+              : cards.filter((card) => regionByCode.get(card.route.to.toUpperCase()) === region);
+          return { key, title, items };
+        }).filter((s) => s.items.length > 0 || s.key === "inspire");
+
+        const body = {
+          home: homeRow ? toAirportVM(homeRow) : null,
+          destinations,
+          sections,
+        };
+
+        const etag = `"${createHash("sha1")
+          .update(JSON.stringify({ homeCode, destinations: destinations.map((d) => d.code), offerIds, states }))
+          .digest("hex")
+          .slice(0, 16)}"`;
+        const ifNoneMatch = c.req.header("If-None-Match");
+        if (ifNoneMatch === etag) return c.body(null, 304);
+
+        return c.json(body, 200, {
+          ETag: etag,
+          "Cache-Control": "private, max-age=300",
+        });
+      },
+    );
 
     // ── Proposals feed ───────────────────────────────────────────────────────
 
@@ -70,10 +170,8 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const items = rows.map((r: any) => toCard(r, states[r.id]));
         const personal = items.filter((i) => i.targeting === "personal").length;
 
-        // ETag: hash of offer ids + response states (changes when new offers appear or user responds)
         const etag = `"${createHash("sha1").update(JSON.stringify({ offerIds, states })).digest("hex").slice(0, 16)}"`;
 
-        // 304 Not Modified
         const ifNoneMatch = c.req.header("If-None-Match");
         if (ifNoneMatch === etag) return c.body(null, 304);
 
@@ -106,7 +204,6 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
 
         const row = await ports.proposals.getVisible(undefined, actor, id);
         if (!row) {
-          // Check if it exists but is expired/withdrawn → 410 GONE
           const any = (await ports.proposals.getAny(undefined, id)) as any | null;
           if (
             any &&

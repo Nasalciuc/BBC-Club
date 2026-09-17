@@ -6,6 +6,7 @@ export * from "./members";
 export * from "./notifications";
 export * from "./proposals";
 export * from "./engagement";
+export * from "./catalog";
 export * from "./crm";
 export * from "./personalization";
 export * from "./auth";

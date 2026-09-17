@@ -177,6 +177,58 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
       );
       return id as string;
     },
+    /** Airports + 3 JFK→LHR business fares for catalog Gate 4. */
+    async seedCatalogBasics() {
+      await db.execute(sql`
+        INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng, popularity) VALUES
+          ('JFK', 'John F Kennedy International', 'New York', 'United States', 'US', 'americas', 40.6413, -73.7781, 100),
+          ('LHR', 'Heathrow', 'London', 'United Kingdom', 'GB', 'europe', 51.47, -0.4543, 98),
+          ('CDG', 'Charles de Gaulle', 'Paris', 'France', 'FR', 'europe', 49.0097, 2.5479, 95),
+          ('HND', 'Haneda', 'Tokyo', 'Japan', 'JP', 'asia', 35.5494, 139.7798, 94),
+          ('DXB', 'Dubai International', 'Dubai', 'United Arab Emirates', 'AE', 'middle_east', 25.2532, 55.3657, 92)
+        ON CONFLICT (code) DO NOTHING`);
+      const until = new Date(Date.now() + 30 * 86_400_000).toISOString();
+      const from = new Date(Date.now() - 86_400_000).toISOString();
+      const carriers = [
+        { c: "BA", n: "British Airways", p: "4200.00", pub: "7850.00" },
+        { c: "VS", n: "Virgin Atlantic", p: "4350.00", pub: "7900.00" },
+        { c: "AA", n: "American Airlines", p: "4490.00", pub: "8100.00" },
+      ];
+      for (const x of carriers) {
+        await db.execute(sql`
+          INSERT INTO catalog.fares (
+            route_from, route_to, cabin, carrier, carrier_name, product, nonstop, duration_minutes,
+            price, published_price, published_source, currency, source, valid_from, valid_until, published
+          ) VALUES (
+            'JFK', 'LHR', 'business', ${x.c}, ${x.n}, 'Lie-flat', true, 425,
+            ${x.p}, ${x.pub}, 'Sabre · test', 'USD', 'manual', ${from}::timestamptz, ${until}::timestamptz, true
+          )
+          ON CONFLICT DO NOTHING`);
+      }
+      await db.execute(sql`
+        INSERT INTO catalog.fares (
+          route_from, route_to, cabin, carrier, carrier_name, product, nonstop, duration_minutes,
+          price, published_price, published_source, currency, source, valid_from, valid_until, published
+        ) VALUES (
+          'JFK', 'CDG', 'business', 'AF', 'Air France', 'Lie-flat', true, 440,
+          '3850.00', '6900.00', 'Sabre · test', 'USD', 'manual', ${from}::timestamptz, ${until}::timestamptz, true
+        )
+        ON CONFLICT DO NOTHING`);
+    },
+    async seedExpiredFare() {
+      await this.seedCatalogBasics();
+      const [{ id }]: any = await db.execute(sql`
+        INSERT INTO catalog.fares (
+          route_from, route_to, cabin, carrier, carrier_name, nonstop,
+          price, currency, source, valid_from, valid_until, published
+        ) VALUES (
+          'JFK', 'LHR', 'business', 'DL', 'Delta', true,
+          '5000.00', 'USD', 'manual',
+          now() - interval '10 days', now() - interval '1 day', true
+        )
+        RETURNING id`);
+      return id as string;
+    },
     async respondAs(m: { cookie: string }, offerId: string, response: "interested" | "dismissed") {
       return built.app.request(`/v1/proposals/${offerId}/respond`, {
         method: "POST",
