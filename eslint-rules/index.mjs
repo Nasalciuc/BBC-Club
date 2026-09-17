@@ -54,6 +54,12 @@ export default {
           "ListRow",
           "ProposalCard",
           "ProposalRow",
+          "Chip",
+          "SearchField",
+          "AirportRow",
+          "FareRow",
+          "OfferCard",
+          "TabBar",
         ]);
         return {
           JSXOpeningElement(node) {

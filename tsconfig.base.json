@@ -18,6 +18,8 @@
       "@bbc/db": ["./packages/db/src/client.ts"],
       "@bbc/db/*": ["./packages/db/src/*"],
       "@bbc/ui": ["./packages/ui/src/index.ts"],
+      "@bbc/ui/tokens": ["./packages/ui/src/tokens.ts"],
+      "@bbc/ui/icons": ["./packages/ui/src/icons.tsx"],
       "@bbc/platform": ["./packages/modules/platform/src/api/index.ts"],
       "@bbc/identity": ["./packages/modules/core/identity/src/api/index.ts"],
       "@bbc/members": ["./packages/modules/core/members/src/api/index.ts"],
