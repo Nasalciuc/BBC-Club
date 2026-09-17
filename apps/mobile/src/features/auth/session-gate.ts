@@ -28,7 +28,7 @@ export async function loadProfileAfterAuth(): Promise<Profile | null> {
 /** Living profiles (active, waitlist, pending) land on Explore. Waitlist is a status, not a screen. */
 export function routeForProfile(profile: Profile | null): Href {
   if (!profile || profile.status === "deleted") return "/sign-in";
-  return "/(tabs)/explore";
+  return "/(tabs)/explore" as Href;
 }
 
 export async function resolvePostAuthRoute(): Promise<Href> {

@@ -12,16 +12,16 @@ export function routeFromDeepLink(url: string): Href | null {
   const segments = [host, ...path.split("/")].filter(Boolean);
 
   if (segments[0] === "proposal" && segments[1]) {
-    return "/(tabs)/explore";
+    return "/(tabs)/explore" as Href;
   }
   if (segments[0] === "inbox") {
-    return "/(tabs)/requests";
+    return "/(tabs)/requests" as Href;
   }
   if (segments[0] === "fare" && segments[1]) {
-    return { pathname: "/fare/[id]", params: { id: segments[1] } };
+    return { pathname: "/fare/[id]", params: { id: segments[1] } } as unknown as Href;
   }
   if (segments[0] === "requests") {
-    return "/(tabs)/requests";
+    return "/(tabs)/requests" as Href;
   }
   return null;
 }
