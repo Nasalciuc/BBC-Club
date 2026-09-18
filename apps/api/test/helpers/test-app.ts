@@ -177,12 +177,41 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
       );
       return id as string;
     },
-    async respondAs(m: { cookie: string }, offerId: string, response: "interested" | "dismissed") {
-      return built.app.request(`/v1/proposals/${offerId}/respond`, {
+    /** Direct upsert into engagement.offer_responses (respond HTTP path removed in Branch 3). */
+    async upsertResponse(memberId: string, offerId: string, response: "interested" | "dismissed") {
+      return built.registry.facade<any>("engagement").upsert(undefined, memberId, offerId, response);
+    },
+    async submitRequestAs(
+      m: { cookie: string },
+      body: Record<string, unknown>,
+      opts: { idempotencyKey?: string; ip?: string } = {},
+    ) {
+      return built.app.request("/v1/requests", {
         method: "POST",
-        headers: { Cookie: m.cookie, "Content-Type": "application/json" },
-        body: JSON.stringify({ response }),
+        headers: {
+          Cookie: m.cookie,
+          "Content-Type": "application/json",
+          "Idempotency-Key": opts.idempotencyKey ?? crypto.randomUUID(),
+          ...(opts.ip ? { "cf-connecting-ip": opts.ip } : {}),
+          "X-App-Platform": "ios",
+          "X-App-Version": "1.0.0",
+        },
+        body: JSON.stringify(body),
       });
+    },
+    sampleRequestBody(over: Record<string, unknown> = {}) {
+      return {
+        tripType: "round",
+        cabin: "business",
+        legs: [
+          { from: "JFK", to: "LHR", date: "2026-10-12" },
+          { from: "LHR", to: "JFK", date: "2026-10-19" },
+        ],
+        passengers: { adult: 1, child: 0, infant: 0 },
+        contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
+        priceAtRequest: 4200,
+        ...over,
+      };
     },
     // ── assertions helpers ──
     countResponses: async (offerId: string) =>

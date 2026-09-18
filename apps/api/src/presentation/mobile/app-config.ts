@@ -1,6 +1,6 @@
 import type { Platform } from "@bbc/platform";
 
-const KILLABLE = ["proposals", "engagement", "notifications", "personalization", "members"];
+const KILLABLE = ["proposals", "engagement", "requests", "notifications", "personalization", "members"];
 let lastGood: any = { minSupportedVersion: "0.1.0", recommendedVersion: "0.1.0", killSwitches: {}, maintenance: null };
 
 /** First request of every cold start, before login. Must answer even if the DB is down → serve the last good value. */

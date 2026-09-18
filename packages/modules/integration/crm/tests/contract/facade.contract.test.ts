@@ -24,4 +24,10 @@ describe("@bbc/crm facade", () => {
     expect(a.id).toBe(b.id);
     expect(a.id).toBe("mock_offer-1:member-1");
   });
+
+  it("submitRequest returns a crmRequestId", async () => {
+    const crm = mockCrm();
+    const a = await crm.submitRequest({ cabin: "business" });
+    expect(a.crmRequestId).toMatch(/^mock_req_/);
+  });
 });

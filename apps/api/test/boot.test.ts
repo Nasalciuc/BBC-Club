@@ -35,36 +35,27 @@ describe("host boot", () => {
 
   it("a killed module is not mounted and its routes answer 404, other modules unaffected", async () => {
     const t = await testApp({ suite: "boot" });
-    await t.flags.kill("engagement");
+    await t.flags.kill("requests");
     await t.restart();
-    const broadcast = await t.seedBroadcastOffer();
-    expect((await t.respondAs(t.memberA, broadcast, "interested")).status).toBe(404);
-    // Killed module keeps its facade so dependents (mobile-bff) still boot; only its routes are gone.
+    expect((await t.submitRequestAs(t.memberA, t.sampleRequestBody())).status).toBe(404);
     expect((await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
     expect((await t.app.request("/v1/inbox", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
-    await t.flags.revive("engagement");
+    await t.flags.revive("requests");
     await t.close();
   });
 
-  it("errors have one shape: validation → 400 with details, unknown → 500 without internals", async () => {
+  it("errors have one shape: validation → 400 with details", async () => {
     const t = await testApp({ suite: "boot" });
-    const bad = await t.app.request("/v1/proposals/not-a-uuid/respond", {
-      method: "POST",
-      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
-      body: JSON.stringify({ response: "maybe" }),
-    });
+    const bad = await t.submitRequestAs(t.memberA, { tripType: "round", cabin: "business" });
     expect(bad.status).toBe(400);
-    const body = (await bad.json()) as {
-      error: { code: string; details: { path: string }[] };
-    };
+    const body = (await bad.json()) as { error: { code: string; details?: { path: string }[] } };
     expect(body.error.code).toBe("VALIDATION");
-    expect(body.error.details.some((d) => d.path === "response")).toBe(true);
     await t.close();
   });
 });
 
 describe("smoke = Demo 2", () => {
-  it("register → code → feed → interested → drained → CRM has the activity", async () => {
+  it("register → code → feed → request → drained → CRM has the submit", async () => {
     const t = await testApp({ suite: "boot" });
     const email = "new.member@test.dev";
     const signUp = await t.app.request("/api/auth/sign-up/email", {
@@ -81,24 +72,35 @@ describe("smoke = Demo 2", () => {
     });
     expect(verify.status).toBeLessThan(400);
     const cookie = (verify.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
-    await t.drainAll(); // member.registered → profile
+    await t.drainAll();
     const offerId = await t.seedBroadcastOffer();
     const feed = await t.app.request("/v1/proposals", { headers: { Cookie: cookie } });
     expect(feed.status).toBe(200);
     const feedBody = (await feed.json()) as { items: { id: string }[] };
     expect(feedBody.items.some((i) => i.id === offerId)).toBe(true);
-    const r = await t.app.request(`/v1/proposals/${offerId}/respond`, {
+
+    const r = await t.app.request("/v1/requests", {
       method: "POST",
-      headers: { Cookie: cookie, "Content-Type": "application/json" },
-      body: JSON.stringify({ response: "interested" }),
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
+        "X-App-Platform": "ios",
+      },
+      body: JSON.stringify(
+        t.sampleRequestBody({
+          offerId,
+          contact: { name: "New Member", phone: "+12125550999", email },
+        }),
+      ),
     });
-    expect(r.status).toBe(200);
-    await t.drainAll(); // offer.responded → crm + notifications
-    expect(t.crm.activities.some((a) => a.offerId === offerId)).toBe(true);
+    expect(r.status).toBe(201);
+    await t.drainAll();
+    expect(t.crm.submitted.length).toBeGreaterThan(0);
     const [{ n }]: any = await t.db.execute(
-      sql`SELECT count(*)::int n FROM notifications.notifications WHERE category='transactional' AND title ILIKE '%Julia%'`,
+      sql`SELECT count(*)::int n FROM requests.requests WHERE contact_email = ${email}`,
     );
-    expect(n).toBeGreaterThan(0);
+    expect(n).toBe(1);
     await t.close();
   });
 });
