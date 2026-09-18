@@ -5,6 +5,7 @@ type Logger = { warn: (obj: object, msg: string) => void };
 
 type ClaimedRow = {
   id: string;
+  reference: string;
   contact_name: string;
   contact_phone: string;
   contact_email: string;
@@ -31,6 +32,7 @@ export function createSendRequestsJob(deps: {
     for (const row of rows) {
       try {
         const { crmRequestId } = await deps.crm.submitRequest({
+          reference: row.reference,
           client: { name: row.contact_name, phone: row.contact_phone, email: row.contact_email },
           flights: row.legs,
           trip_type: row.trip_type,

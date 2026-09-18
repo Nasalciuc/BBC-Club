@@ -4,6 +4,7 @@ import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import { RequestSubmittedV1 } from "@bbc/shared/events/request";
+import type { HandlerContext } from "@bbc/platform";
 import { createRequestsRepo } from "./infrastructure/requests.repo";
 import { submit } from "./application/submit";
 import { setStatus } from "./application/set-status";
@@ -142,31 +143,12 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         {
           type: "request.submitted",
           name: "requests.onRequestSubmitted",
-          /** Eager CRM attempt; send-requests job retries failures. */
-          handler: async (ctx: any, raw: any) => {
+          /** Records that the request is ready to send. The network call belongs to `send-requests`, which owns
+           *  its own connection, its own timeout and its own retry budget. A consumer holds the poller's
+           *  transaction: anything slow in here is a connection the rest of the API cannot have. */
+          handler: async (ctx: HandlerContext, raw: unknown) => {
             const evt = RequestSubmittedV1.parse(raw);
-            const row = await repo.getById(ctx.tx, evt.requestId);
-            if (!row || row.sentToCrm) return;
-            try {
-              const { crmRequestId } = await ports.crm.submitRequest({
-                client: {
-                  name: row.contactName,
-                  phone: row.contactPhone,
-                  email: row.contactEmail,
-                },
-                flights: row.legs,
-                trip_type: row.tripType,
-                cabin_class: row.cabin === "business" ? "Business Class" : "First Class",
-                passengers: row.passengers,
-                phone_valid: true,
-                _source: row.source,
-                _app_version: row.appVersion,
-              });
-              await repo.markSent(ctx.tx, row.id, crmRequestId);
-            } catch (err) {
-              await repo.markFailed(ctx.tx, row.id, String(err));
-              platform.logger.warn({ requestId: row.id, err }, "request submit consumer CRM failed");
-            }
+            ctx.logger.info({ requestId: evt.requestId }, "request queued for CRM");
           },
         },
       ],

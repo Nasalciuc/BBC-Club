@@ -96,6 +96,7 @@ describe("smoke = Demo 2", () => {
     });
     expect(r.status).toBe(201);
     await t.drainAll();
+    await t.platform.jobs.run("send-requests");
     expect(t.crm.submitted.length).toBeGreaterThan(0);
     const [{ n }]: any = await t.db.execute(
       sql`SELECT count(*)::int n FROM requests.requests WHERE contact_email = ${email}`,

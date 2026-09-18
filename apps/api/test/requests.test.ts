@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 
 describe("POST /v1/requests", () => {
-  it("creates a row, publishes request.submitted, CRM mock records via consumer", async () => {
+  it("creates a row, publishes request.submitted; send-requests is the CRM path", async () => {
     const t = await testApp({ suite: "requests-create" });
     const r = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
     expect(r.status).toBe(201);
@@ -11,7 +11,10 @@ describe("POST /v1/requests", () => {
     expect(body.status).toBe("not_sent");
     expect(body.reference).toBe("");
     await t.drainAll();
+    expect(t.crm.submitted.length).toBe(0);
+    await t.platform.jobs.run("send-requests");
     expect(t.crm.submitted.length).toBe(1);
+    expect((t.crm.submitted[0] as { reference?: string }).reference).toMatch(/^R-/);
     const [{ sent_to_crm, reference }]: any = await t.db.execute(
       sql`SELECT sent_to_crm, reference FROM requests.requests WHERE id = ${body.id}`,
     );
@@ -19,6 +22,25 @@ describe("POST /v1/requests", () => {
     expect(reference).toMatch(/^R-/);
     const journal = await t.journal.byType("request.submitted");
     expect(journal.length).toBeGreaterThan(0);
+    await t.close();
+  });
+
+  it("a slow CRM does not hold the poller transaction or starve the pool", async () => {
+    const t = await testApp({ suite: "requests-pool", poolMax: 10 });
+    t.crm.setSubmitDelayMs(10_000);
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    expect(created.status).toBe(201);
+    const frees: number[] = [];
+    frees.push(t.poolMax - (await t.poolBusy()));
+    const started = Date.now();
+    await t.drainAll();
+    frees.push(t.poolMax - (await t.poolBusy()));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(t.crm.submitted.length).toBe(0);
+    expect(Math.min(...frees)).toBeGreaterThanOrEqual(8);
+    t.crm.setSubmitDelayMs(0);
+    await t.platform.jobs.run("send-requests");
+    expect(t.crm.submitted.length).toBe(1);
     await t.close();
   });
 
@@ -144,8 +166,8 @@ describe("send-requests job", () => {
     t.crm.setSubmitFails(1);
     const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
     const { id } = (await created.json()) as { id: string };
-    await t.drainAll(); // consumer fails once
-    await t.platform.jobs.run("send-requests"); // may still be in backoff window
+    await t.drainAll();
+    await t.platform.jobs.run("send-requests"); // first attempt fails; row now in backoff
     // Force claim by clearing sent_at
     await t.db.execute(sql`UPDATE requests.requests SET sent_at = now() - interval '10 minutes' WHERE id = ${id}`);
     await t.platform.jobs.run("send-requests");
