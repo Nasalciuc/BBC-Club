@@ -13,7 +13,7 @@ export const engagementModule = (): ModuleDescriptor<Record<string, never>, Retu
   name: "engagement",
   layer: "domain",
   needs: [],
-  init: ({ db, platform }) => {
+  init: ({ db }) => {
     return {
       exposes: facade(db),
       routes: [],
@@ -24,7 +24,6 @@ export const engagementModule = (): ModuleDescriptor<Record<string, never>, Retu
           handler: async (ctx: HandlerContext, raw: unknown) => {
             const evt = MemberDeletedV1.parse(raw);
             await ctx.tx.delete(offerResponses).where(eq(offerResponses.memberId, evt.memberId));
-            await platform.events.tombstoneMember(ctx.tx, evt.memberId);
           },
         },
       ],

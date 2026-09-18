@@ -2,7 +2,7 @@
 
 **Owns:** schema `requests.*` — `requests` (member fare/offer requests), `request_events` (status timeline).
 **Publishes:** `request.submitted` (same tx as insert), `request.status_changed` (CRM webhook).
-**Consumes:** `request.submitted` → `requests.onRequestSubmitted` (records that the row is ready to send; no network). The partner call lives in `send-requests`.
+**Consumes:** `request.submitted` → `requests.onRequestSubmitted` (records that the row is ready to send; no network). The partner call lives in `send-requests`. `member.deleted` → redact contact fields, null `member_id`, close the row (operator may still have a CRM lead).
 **Ports:** `crm.submitRequest(payload) → { crmRequestId }`.
 **Facade:** `listForMember`, `get`, `toRequestVM`.
 **Out of scope:** catalog/fares, campaigns, respond-to-offer (deleted — one request path only).

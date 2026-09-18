@@ -2,9 +2,9 @@
 
 **Owns:** schema `personalization.*` — member_features (nightly), member_scores (v2), proposal_candidates (suggested/accepted/rejected/expired, reasons, ranker_version).
 **Publishes:** `personalization.candidate_suggested` (operator surface, v2).
-**Consumes:** `crm.mirror.synced` → recompute features for affected members · `offer.viewed` / `offer.responded` → update engagement features · `member.profile_updated` → preference features.
+**Consumes:** `member.deleted` → wipe `member_features` + `proposal_candidates`, then tombstone the journal (last consumer so siblings still see the payload). Ranker consumers (`crm.mirror.synced`, `offer.viewed`) remain out of scope.
 **Ports:** none in v1 (reads its own tables; features built from journal + crm facade `mirrorFor(memberId)`).
-**Facade:** `rank(memberId, candidates) → scored[] with reasons`, `contextLines(memberId, offerIds)` (BFF, 300 ms budget, null on failure), `suggestCandidates(memberId)` (agent-in-loop).
-**Jobs:** `nightly-features`, `generate-candidates`.
+**Facade:** `redactMember(tx, memberId)` (account deletion). Ranker (`rank`, `contextLines`, `suggestCandidates`) is stage 5.
+**Jobs:** `nightly-features`, `generate-candidates` (not registered in this branch).
 **Out of scope:** auto-publishing to members (agent decides), online inference (v2 = batch scores table), any model in the request path.
-**Invariants tested:** rules ranker deterministic for same features · reasons never empty for score > 0 · killswitch → rank refuses, BFF falls back · candidate accepted ⇒ published_offer_id set (CHECK).
+**Invariants tested:** `member.deleted` leaves zero `member_features` and `proposal_candidates` for that member · candidate accepted ⇒ published_offer_id set (CHECK).

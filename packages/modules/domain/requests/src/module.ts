@@ -10,6 +10,7 @@ import { submit } from "./application/submit";
 import { setStatus } from "./application/set-status";
 import { toRequestVM } from "./application/to-request-vm";
 import { createSendRequestsJob } from "./jobs/send-requests";
+import { onMemberDeleted } from "./handlers/on-member-deleted";
 
 type Ports = {
   crm: {
@@ -147,6 +148,15 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
           handler: async (ctx: HandlerContext, raw: unknown) => {
             const evt = RequestSubmittedV1.parse(raw);
             ctx.logger.info({ requestId: evt.requestId }, "request queued for CRM");
+          },
+        },
+        {
+          type: "member.deleted",
+          name: "requests.onMemberDeleted",
+          handler: (ctx: HandlerContext) => {
+            const memberId = ctx.event.memberId;
+            if (!memberId) return Promise.resolve();
+            return onMemberDeleted({ tx: ctx.tx, memberId });
           },
         },
       ],

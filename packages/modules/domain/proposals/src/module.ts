@@ -1,12 +1,13 @@
 import type { Executor } from "@bbc/db";
 import { Hono } from "hono";
-import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { offersRepo } from "./infrastructure/offers.repo";
 import { ingest, IngestInput } from "./application/ingest";
 import { expireOffers } from "./application/expire-offers";
+import { onMemberDeleted } from "./handlers/on-member-deleted";
 
 type Exposes = {
   getVisible(exec: unknown, actorMemberId: string, offerId: string): Promise<unknown | null>;
@@ -80,7 +81,17 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
     return {
       exposes: expose,
       routes: [{ basePath: "/v1", app: routes }],
-      consumers: [],
+      consumers: [
+        {
+          type: "member.deleted",
+          name: "proposals.onMemberDeleted",
+          handler: (ctx: HandlerContext) => {
+            const memberId = ctx.event.memberId;
+            if (!memberId) return Promise.resolve();
+            return onMemberDeleted({ tx: ctx.tx, memberId });
+          },
+        },
+      ],
       jobs: [
         {
           name: "expire-offers",

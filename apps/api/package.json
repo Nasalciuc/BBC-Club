@@ -30,6 +30,7 @@
     "@bbc/engagement": "workspace:*",
     "@bbc/requests": "workspace:*",
     "@bbc/catalog": "workspace:*",
+    "@bbc/personalization": "workspace:*",
     "@bbc/crm": "workspace:*",
     "@bbc/push": "workspace:*"
   }
