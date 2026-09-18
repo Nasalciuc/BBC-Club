@@ -1,3 +1,4 @@
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MaterialSymbols_400Regular } from "@expo-google-fonts/material-symbols";
 import { Inter_400Regular, Inter_500Medium } from "@expo-google-fonts/inter";
 import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
@@ -11,6 +12,7 @@ import { useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
@@ -25,7 +27,7 @@ export const unstable_settings = {
 };
 
 const AUTH_ENTRY = new Set(["sign-in", "join", "reset-password"]);
-const INTERIOR = new Set(["(tabs)", "proposal", "home"]);
+const INTERIOR = new Set(["(tabs)", "proposal", "home", "fare", "notifications"]);
 
 export default function RootLayout() {
   const router = useRouter();
@@ -40,6 +42,10 @@ export default function RootLayout() {
     JetBrainsMono_400Regular,
     JetBrainsMono_500Medium,
     MaterialSymbols_400Regular,
+    // Aliases so @bbc/ui rn() family names resolve without rewriting entry screens.
+    Inter: Inter_400Regular,
+    Newsreader: SourceSerif4_400Regular,
+    "JetBrains Mono": JetBrainsMono_400Regular,
   });
 
   useEffect(() => {
@@ -127,28 +133,44 @@ export default function RootLayout() {
   return (
     <View style={styles.shell}>
       <GestureHandlerRootView style={styles.phone}>
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: Club.colors.black },
-            animation: "fade",
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="sign-in" />
-          <Stack.Screen name="join" />
-          <Stack.Screen name="verify-code" />
-          <Stack.Screen name="set-password" />
-          <Stack.Screen name="reset-password" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen
-            name="proposal/[id]"
-            options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
-          />
-          <Stack.Screen name="home" />
-          <Stack.Screen name="waitlist" />
-        </Stack>
+        <BottomSheetModalProvider>
+          <AppGate>
+            <StatusBar style="light" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: Club.colors.black },
+                animation: "fade",
+              }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="sign-in" />
+              <Stack.Screen name="join" />
+              <Stack.Screen name="verify-code" />
+              <Stack.Screen name="set-password" />
+              <Stack.Screen name="reset-password" />
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen
+                name="proposal/[id]"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+              <Stack.Screen
+                name="fare/[id]"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+              <Stack.Screen
+                name="notifications"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+              <Stack.Screen name="home" />
+              <Stack.Screen name="waitlist" />
+              <Stack.Screen
+                name="dev/gallery"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+            </Stack>
+          </AppGate>
+        </BottomSheetModalProvider>
       </GestureHandlerRootView>
     </View>
   );

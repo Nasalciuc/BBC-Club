@@ -1,0 +1,16 @@
+appId: com.buybusinessclass.club
+---
+- launchApp: { clearState: false }
+- tapOn: { id: "tab.explore" }
+- assertVisible: { id: "explore.root" }
+- tapOn: { id: "globe.pin.LHR" }
+- assertVisible: { id: "explore.fare.00000000-0000-4000-8000-00000000fa01" }
+- tapOn: { id: "explore.fare.00000000-0000-4000-8000-00000000fa01" }
+- assertVisible: { id: "fare.root" }
+- tapOn: { id: "fare.request" }
+- tapOn: { id: "request.phone" }
+- inputText: "2125550148"
+- tapOn: { id: "request.submit" }
+- assertVisible: { text: "Request received." }
+- tapOn: { text: "See it in Requests" }
+- assertVisible: { id: "requests.root" }

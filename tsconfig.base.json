@@ -18,6 +18,8 @@
       "@bbc/db": ["./packages/db/src/client.ts"],
       "@bbc/db/*": ["./packages/db/src/*"],
       "@bbc/ui": ["./packages/ui/src/index.ts"],
+      "@bbc/ui/tokens": ["./packages/ui/src/tokens.ts"],
+      "@bbc/ui/icons": ["./packages/ui/src/icons.tsx"],
       "@bbc/platform": ["./packages/modules/platform/src/api/index.ts"],
       "@bbc/identity": ["./packages/modules/core/identity/src/api/index.ts"],
       "@bbc/members": ["./packages/modules/core/members/src/api/index.ts"],
@@ -28,7 +30,12 @@
       "@bbc/personalization": ["./packages/modules/intelligence/personalization/src/api/index.ts"],
       "@bbc/crm": ["./packages/modules/integration/crm/src/api/index.ts"],
       "@bbc/email": ["./packages/modules/integration/email/src/index.ts"],
-      "@bbc/push": ["./packages/modules/integration/push/src/index.ts"]
+      "@bbc/push": ["./packages/modules/integration/push/src/index.ts"],
+      "@bbc/platform/schema": ["./packages/modules/platform/src/infrastructure/schema.ts"],
+      "@bbc/proposals/module": ["./packages/modules/domain/proposals/src/module.ts"],
+      "@bbc/engagement/module": ["./packages/modules/domain/engagement/src/module.ts"],
+      "@bbc/requests/module": ["./packages/modules/domain/requests/src/module.ts"],
+      "@bbc/crm/module": ["./packages/modules/integration/crm/src/module.ts"]
     }
   },
   "exclude": ["node_modules", "dist", "**/graphify-out"]

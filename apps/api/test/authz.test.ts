@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { routeRegistry } from "../src/middleware/authorize";
 import { assertPublicGetV1Policy, publicGetV1Keys } from "./helpers/route-inventory";
-import { testApp } from "./helpers/test-app"; // boots the host against postgres-test with two members (A, B), one operator JWT, the internal secret
+import { testApp } from "./helpers/test-app";
 
 describe("authorization gates", () => {
   let t: Awaited<ReturnType<typeof testApp>>;
@@ -27,7 +27,7 @@ describe("authorization gates", () => {
     }
   });
 
-  it("IDOR: member A cannot see or act on member B's targeted offer (404, body identical to a missing id)", async () => {
+  it("IDOR: member A cannot see member B's targeted offer (404, body identical to a missing id)", async () => {
     const offerForB = await t.seedTargetedOffer(t.memberB.id);
     const asA = await t.app.request(`/v1/proposals/${offerForB}`, { headers: { Cookie: t.memberA.cookie } });
     const missing = await t.app.request(`/v1/proposals/00000000-0000-4000-8000-000000000000`, {
@@ -35,23 +35,17 @@ describe("authorization gates", () => {
     });
     expect(asA.status).toBe(404);
     expect(await asA.text()).toBe(await missing.text());
-    const respondAsA = await t.app.request(`/v1/proposals/${offerForB}/respond`, {
-      method: "POST",
-      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
-      body: JSON.stringify({ response: "interested" }),
-    });
-    expect(respondAsA.status).toBe(404);
-    expect(await t.countResponses(offerForB)).toBe(0);
   });
 
-  it("memberId in the body is ignored: A responding 'as B' records A", async () => {
-    const broadcast = await t.seedBroadcastOffer();
-    await t.app.request(`/v1/proposals/${broadcast}/respond`, {
-      method: "POST",
-      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
-      body: JSON.stringify({ response: "interested", memberId: t.memberB.id }),
-    });
-    expect(await t.responseOwner(broadcast)).toBe(t.memberA.id);
+  it("IDOR: member A cannot GET member B's request (404)", async () => {
+    const created = await t.submitRequestAs(
+      t.memberB,
+      t.sampleRequestBody({ contact: { name: "Bob", phone: "+12125550199", email: "bob@test.dev" } }),
+    );
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as { id: string };
+    const asA = await t.app.request(`/v1/requests/${body.id}`, { headers: { Cookie: t.memberA.cookie } });
+    expect(asA.status).toBe(404);
   });
 
   it("mark-read on someone else's notification → 404 and no change", async () => {
@@ -84,8 +78,14 @@ describe("authorization gates", () => {
     );
   });
 
-  it("killswitch: engagement disabled → 503 SERVICE_DISABLED, feed still 200", async () => {
-    await t.flags.kill("engagement");
+  it("killswitch: requests disabled → 503 SERVICE_DISABLED, feed still 200", async () => {
+    await t.flags.kill("requests");
+    expect((await t.submitRequestAs(t.memberA, t.sampleRequestBody())).status).toBe(503);
+    expect((await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
+    await t.flags.revive("requests");
+  });
+
+  it("respond route is gone (404)", async () => {
     const broadcast = await t.seedBroadcastOffer();
     expect(
       (
@@ -95,23 +95,6 @@ describe("authorization gates", () => {
           body: JSON.stringify({ response: "interested" }),
         })
       ).status,
-    ).toBe(503);
-    expect((await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } })).status).toBe(200);
-    await t.flags.revive("engagement");
-  });
-
-  it("handler acting for member A cannot mark B's response as synced", async () => {
-    const broadcast = await t.seedBroadcastOffer();
-    await t.respondAs(t.memberB, broadcast, "interested");
-    await expect(
-      t.runHandler("crm.onOfferResponded", {
-        type: "offer.responded",
-        version: 1,
-        offerId: broadcast,
-        memberId: t.memberA.id,
-        response: "interested",
-        at: new Date().toISOString(),
-      }),
-    ).rejects.toThrow(/affected 0 rows/);
+    ).toBe(404);
   });
 });

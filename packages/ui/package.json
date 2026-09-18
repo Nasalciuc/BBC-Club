@@ -5,9 +5,23 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./icons": "./src/icons.tsx"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:unit": "bun test src"
+  },
+  "dependencies": {
+    "@bbc/shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*",
+    "lucide-react-native": "*",
+    "@gorhom/bottom-sheet": "*",
+    "expo-image": "*",
+    "expo-linear-gradient": "*",
+    "react-native-svg": "*"
   }
 }

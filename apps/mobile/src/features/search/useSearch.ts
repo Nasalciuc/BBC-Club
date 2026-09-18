@@ -1,0 +1,118 @@
+import { useEffect, useReducer, useRef } from "react";
+import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
+
+import { searchFares } from "@/lib/api";
+
+export type SearchState = {
+  from: AirportVM | null;
+  to: AirportVM | null;
+  dates: { depart: string | null; return: string | null; flexible: boolean };
+  cabin: "business" | "first";
+  passengers: { adult: number; child: number; infant: number };
+  results: FareVM[] | null;
+  status: "idle" | "searching" | "done" | "empty" | "error";
+  errorMessage: string | null;
+};
+
+export type SearchAction =
+  | { type: "selectDestination"; airport: AirportVM }
+  | { type: "selectOrigin"; airport: AirportVM }
+  | { type: "clearDestination" }
+  | { type: "setDates"; dates: SearchState["dates"] }
+  | { type: "setCabin"; cabin: SearchState["cabin"] }
+  | { type: "setPassengers"; passengers: SearchState["passengers"] }
+  | { type: "searchStarted" }
+  | { type: "searchDone"; results: FareVM[] }
+  | { type: "searchFailed"; message: string };
+
+const INITIAL: SearchState = {
+  from: null,
+  to: null,
+  dates: { depart: null, return: null, flexible: true },
+  cabin: "business",
+  passengers: { adult: 1, child: 0, infant: 0 },
+  results: null,
+  status: "idle",
+  errorMessage: null,
+};
+
+function reducer(state: SearchState, action: SearchAction): SearchState {
+  switch (action.type) {
+    case "selectDestination":
+      return { ...state, to: action.airport, status: state.from ? "searching" : state.status };
+    case "selectOrigin":
+      return { ...state, from: action.airport };
+    case "clearDestination":
+      return { ...state, to: null, results: null, status: "idle", errorMessage: null };
+    case "setDates":
+      return { ...state, dates: action.dates };
+    case "setCabin":
+      return { ...state, cabin: action.cabin };
+    case "setPassengers":
+      return { ...state, passengers: action.passengers };
+    case "searchStarted":
+      return { ...state, status: "searching", errorMessage: null };
+    case "searchDone":
+      return {
+        ...state,
+        results: action.results,
+        status: action.results.length === 0 ? "empty" : "done",
+        errorMessage: null,
+      };
+    case "searchFailed":
+      return { ...state, status: "error", errorMessage: action.message, results: null };
+    default:
+      return state;
+  }
+}
+
+type Options = {
+  defaultFrom?: AirportVM | null;
+};
+
+/** One reducer, two subscribers — globe and field both read `state.to`. Neither owns selection. */
+export function useSearch(options: Options = {}) {
+  const [state, dispatch] = useReducer(reducer, INITIAL);
+  const abortRef = useRef<AbortController | null>(null);
+  const seeded = useRef(false);
+
+  useEffect(() => {
+    if (seeded.current) return;
+    if (options.defaultFrom) {
+      seeded.current = true;
+      dispatch({ type: "selectOrigin", airport: options.defaultFrom });
+    }
+  }, [options.defaultFrom]);
+
+  useEffect(() => {
+    if (!state.from || !state.to) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    dispatch({ type: "searchStarted" });
+    const timer = setTimeout(() => {
+      void (async () => {
+        const result = await searchFares({
+          from: state.from!.code,
+          to: state.to!.code,
+          cabin: state.cabin,
+        });
+        if (controller.signal.aborted) return;
+        if (!result.ok) {
+          dispatch({ type: "searchFailed", message: result.message });
+          return;
+        }
+        dispatch({ type: "searchDone", results: result.data.items });
+      })();
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [state.from, state.to, state.cabin, state.dates]);
+
+  return { state, dispatch };
+}

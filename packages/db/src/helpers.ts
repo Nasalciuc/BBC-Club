@@ -42,8 +42,9 @@ export const cursor = {
   decode: (c: string): { ts: Date; id: string } | null => {
     try {
       const [ts, id] = Buffer.from(c, "base64url").toString().split("|");
+      if (!ts || !id) return null;
       const d = new Date(ts);
-      return Number.isNaN(d.getTime()) || !id ? null : { ts: d, id };
+      return Number.isNaN(d.getTime()) ? null : { ts: d, id };
     } catch {
       return null;
     }

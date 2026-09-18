@@ -48,8 +48,7 @@ describe("GET /v1/proposals", () => {
   it("feed items include state field", async () => {
     const t = await testApp({ suite: "proposals-state" });
     const offerId = await t.seedBroadcastOffer();
-    await t.respondAs(t.memberA, offerId, "interested");
-    await t.drainAll();
+    await t.upsertResponse(t.memberA.id, offerId, "interested");
     const r = await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } });
     const body = (await r.json()) as any;
     const item = body.items.find((i: any) => i.id === offerId);
