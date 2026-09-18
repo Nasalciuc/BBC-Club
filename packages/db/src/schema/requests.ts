@@ -13,6 +13,7 @@ export const requestStatus = requestsSchema.enum("request_status", [
 ]);
 export const tripType = requestsSchema.enum("trip_type", ["round", "oneway", "multi"]);
 export const requestCabin = requestsSchema.enum("request_cabin", ["business", "first"]);
+export const requestSource = requestsSchema.enum("request_source", ["ios", "android"]);
 
 export type RequestLeg = { from: string; to: string; date: string };
 export type Passengers = { adult: number; child: number; infant: number };
@@ -36,7 +37,7 @@ export const requests = requestsSchema.table(
     contactEmail: text("contact_email").notNull(),
     note: text("note"),
     status: requestStatus("status").notNull().default("received"),
-    source: text("source").notNull(),
+    source: requestSource("source").notNull(),
     appVersion: text("app_version"),
     sentToCrm: boolean("sent_to_crm").notNull().default(false),
     crmRequestId: text("crm_request_id"),
@@ -59,6 +60,15 @@ export const requests = requestsSchema.table(
     index("requests_open")
       .on(t.status)
       .where(sql`${t.status} <> 'closed' AND ${t.status} <> 'booked'`),
+    index("requests_fare")
+      .on(t.fareId)
+      .where(sql`${t.fareId} IS NOT NULL`),
+    index("requests_offer")
+      .on(t.offerId)
+      .where(sql`${t.offerId} IS NOT NULL`),
+    index("requests_crm")
+      .on(t.crmRequestId)
+      .where(sql`${t.crmRequestId} IS NOT NULL`),
     check("requests_legs_nonempty", sql`jsonb_array_length(${t.legs}) >= 1`),
     check("requests_one_source", sql`NOT (${t.fareId} IS NOT NULL AND ${t.offerId} IS NOT NULL)`),
     check(

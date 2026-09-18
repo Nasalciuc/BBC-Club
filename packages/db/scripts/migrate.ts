@@ -101,6 +101,20 @@ try {
     }
   }
 
+  const verifyFitness = join(migrationsDir, "0007_db_verify_fitness.sql");
+  if (existsSync(verifyFitness)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0007_db_verify_fitness.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(verifyFitness, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0007_db_verify_fitness.sql')`);
+      });
+      console.log("db:verify fitness fixes applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {
