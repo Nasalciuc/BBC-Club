@@ -1,6 +1,6 @@
 # domain/requests
 
-**Owns:** schema `requests.*` — `requests` (member fare/offer requests), `request_events` (status timeline).
+**Owns:** schema `requests.*` — `requests` (member fare/offer requests), `request_events` (status timeline). `source` is `request_source` (`ios`|`android`); `fare_id`/`offer_id`/`crm_request_id` are indexed (db:verify extras `0007_requests_verify_fitness.sql`).
 **Publishes:** `request.submitted` (same tx as insert), `request.status_changed` (CRM webhook).
 **Consumes:** `request.submitted` → `requests.onRequestSubmitted` (eager CRM `submitRequest`; job retries).
 **Ports:** `crm.submitRequest(payload) → { crmRequestId }`.
