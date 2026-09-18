@@ -87,6 +87,20 @@ try {
     }
   }
 
+  const requestsFitness = join(migrationsDir, "0007_requests_verify_fitness.sql");
+  if (existsSync(requestsFitness)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0007_requests_verify_fitness.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(requestsFitness, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0007_requests_verify_fitness.sql')`);
+      });
+      console.log("requests db:verify fitness applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {
