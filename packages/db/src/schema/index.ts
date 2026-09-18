@@ -7,6 +7,7 @@ export * from "./notifications";
 export * from "./proposals";
 export * from "./engagement";
 export * from "./catalog";
+export * from "./requests";
 export * from "./crm";
 export * from "./personalization";
 export * from "./auth";

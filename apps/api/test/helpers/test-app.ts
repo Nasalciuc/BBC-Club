@@ -229,8 +229,16 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
         RETURNING id`);
       return id as string;
     },
-    async respondAs(m: { cookie: string }, offerId: string, response: "interested" | "dismissed") {
-      return built.app.request(`/v1/proposals/${offerId}/respond`, {
+    /** Direct upsert into engagement.offer_responses (respond HTTP path removed in Branch 3). */
+    async upsertResponse(memberId: string, offerId: string, response: "interested" | "dismissed") {
+      return built.registry.facade<any>("engagement").upsert(undefined, memberId, offerId, response);
+    },
+    async submitRequestAs(
+      m: { cookie: string },
+      body: Record<string, unknown>,
+      opts: { idempotencyKey?: string; ip?: string } = {},
+    ) {
+      return built.app.request("/v1/requests", {
         method: "POST",
         headers: {
           Cookie: m.cookie,
