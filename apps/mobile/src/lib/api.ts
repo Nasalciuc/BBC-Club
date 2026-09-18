@@ -22,6 +22,7 @@ import {
 } from "@bbc/shared/api/v1/fares";
 import {
   RequestBody,
+  RequestList,
   RequestVM,
   type RequestBody as RequestBodyType,
   type RequestVM as RequestVMType,
@@ -371,7 +372,7 @@ export async function submitRequest(body: RequestBodyType, idempotencyKey: strin
 }
 
 /** GET /v1/requests */
-export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[] }>> {
+export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[]; hasMore: boolean }>> {
   return asResult(async () => {
     const res = await apiFetch("/v1/requests");
     if (!res.ok) {
@@ -387,7 +388,8 @@ export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[
       const v = RequestVM.safeParse(row);
       if (v.success) parsed.push(v.data);
     }
-    return { ok: true, data: { items: parsed } };
+    const hasMore = RequestList.shape.hasMore.catch(false).parse((raw as { hasMore?: unknown })?.hasMore);
+    return { ok: true, data: { items: parsed, hasMore } };
   });
 }
 

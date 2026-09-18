@@ -46,6 +46,8 @@ jobs:
       - run: bun run test:unit
       - run: bunx turbo run test:db
       - run: bun run db:verify
+      - name: Graph shape (G9-G11)
+        run: python3 scripts/graph-shape.py
 
       # Last: five it.todo contract tests keep this red by design (ASSEMBLY_REPORT).
       - run: bun run module:check

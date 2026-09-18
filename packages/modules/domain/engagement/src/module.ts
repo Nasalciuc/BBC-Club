@@ -14,8 +14,9 @@ export const engagementModule = (): ModuleDescriptor<Record<string, never>, Retu
   layer: "domain",
   needs: [],
   init: ({ db }) => {
+    const conn = db as unknown as Executor;
     return {
-      exposes: facade(db),
+      exposes: facade(conn),
       routes: [],
       consumers: [
         {

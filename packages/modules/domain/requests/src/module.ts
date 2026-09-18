@@ -23,7 +23,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
   layer: "domain",
   needs: ["crm"],
   init: ({ db, platform, ports }) => {
-    const repo = createRequestsRepo(db);
+    const conn = db as unknown as Executor;
+    const repo = createRequestsRepo(conn);
     const publish = (
       tx: Executor,
       e: {
@@ -35,7 +36,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         payload: unknown;
       },
     ) => platform.events.publish(tx, { ...e, publishedBy: "requests" });
-    const expose = facade(db, repo);
+    const expose = facade(conn, repo);
 
     const routes = new Hono<{ Variables: { principal: Principal } }>();
 
@@ -63,7 +64,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         const body = await c.req.json().catch(() => ({}));
         let result;
         try {
-          result = await submit(db, body, actor, key, { publish });
+          result = await submit(conn, body, actor, key, { publish });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
           if (details) return c.json(apiError("VALIDATION", { details }), 400);
@@ -90,7 +91,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         const memberId = actorMemberId(c.get("principal"));
         if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
         const rows = await repo.listForMember(undefined, memberId);
-        return c.json({ items: rows.map((r) => toRequestVM(r)) });
+        const hasMore = rows.length > 50;
+        return c.json({ items: rows.slice(0, 50).map((r) => toRequestVM(r)), hasMore });
       },
     );
 
@@ -124,7 +126,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         const body = await c.req.json().catch(() => ({}));
         let r;
         try {
-          r = await setStatus(db, { ...body, requestId: c.req.param("id") }, { repo, publish });
+          r = await setStatus(conn, { ...body, requestId: c.req.param("id") }, { repo, publish });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
           if (details) return c.json(apiError("VALIDATION", { details }), 400);
@@ -168,7 +170,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
             singleton: true,
             timeoutMs: 60_000,
             handler: createSendRequestsJob({
-              db,
+              db: conn,
               repo,
               crm: ports.crm,
               logger: platform.logger,

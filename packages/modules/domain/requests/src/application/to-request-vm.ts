@@ -1,4 +1,4 @@
-import type { RequestVM } from "@bbc/shared/api/v1/requests";
+import { RequestVM as RequestVMSchema, type RequestVM } from "@bbc/shared/api/v1/requests";
 
 type RequestRow = {
   id: string;
@@ -24,22 +24,31 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 function formatDates(legs: { date: string }[]): string {
   if (!legs.length) return "";
   const fmt = (iso: string) => {
-    const [y, m, d] = iso.split("-").map(Number);
+    const parts = iso.split("-").map(Number);
+    const y = parts[0];
+    const m = parts[1];
+    const d = parts[2];
     if (!y || !m || !d) return iso;
-    return `${MONTHS[m - 1]} ${d}`;
+    const month = MONTHS[m - 1];
+    return month ? `${month} ${d}` : iso;
   };
-  if (legs.length === 1) return fmt(legs[0]!.date);
-  return `${fmt(legs[0]!.date)}–${fmt(legs[legs.length - 1]!.date)}`;
+  const first = legs[0];
+  const last = legs[legs.length - 1];
+  if (!first || !last) return "";
+  if (legs.length === 1) return fmt(first.date);
+  return `${fmt(first.date)}–${fmt(last.date)}`;
 }
 
 /** Map a DB row (+ optional timeline) to the shared RequestVM. Reference is blank until CRM echoes. */
 export function toRequestVM(row: RequestRow, timeline: EventRow[] = []): RequestVM {
-  const status: RequestVM["status"] = !row.sentToCrm ? "not_sent" : (row.status as RequestVM["status"]);
+  const status = RequestVMSchema.shape.status.parse(!row.sentToCrm ? "not_sent" : row.status);
+  const first = row.legs[0];
+  const last = row.legs[row.legs.length - 1];
 
   return {
     id: row.id,
     reference: row.sentToCrm ? row.reference : "",
-    route: row.legs.length ? `${row.legs[0]!.from} → ${row.legs[row.legs.length - 1]!.to}` : "",
+    route: first && last ? `${first.from} → ${last.to}` : "",
     dates: formatDates(row.legs),
     cabin: row.cabin,
     passengers: row.passengers,

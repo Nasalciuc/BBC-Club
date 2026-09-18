@@ -20,12 +20,7 @@ describe("requests.onMemberDeleted", () => {
           'Alex Morgan', '+12125550148', 'alex@test.dev',
           'received', 'ios'
         ) RETURNING id`);
-      await iso.db.transaction((tx: any) =>
-        onMemberDeleted(
-          { tx, memberId },
-          { type: "member.deleted", version: 1, memberId, deletedAt: new Date().toISOString() },
-        ),
-      );
+      await iso.db.transaction((tx: any) => onMemberDeleted({ tx, memberId }));
       const [row]: any = await iso.db.execute(
         sql`SELECT member_id, contact_name, contact_email, contact_phone, status FROM requests.requests WHERE id = ${id}`,
       );

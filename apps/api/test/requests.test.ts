@@ -129,6 +129,36 @@ describe("GET /v1/requests", () => {
     expect(body.items.length).toBe(1);
     await t.close();
   });
+
+  it("sets hasMore when the member has more than 50 requests", async () => {
+    const t = await testApp({ suite: "requests-hasmore" });
+    const memberId = t.memberA.id;
+    await t.db.execute(sql`
+      INSERT INTO requests.requests (
+        reference, member_id, idempotency_key, trip_type, cabin, legs, passengers,
+        contact_name, contact_phone, contact_email, phone_valid, source
+      )
+      SELECT
+        'R-HM' || g::text,
+        ${memberId},
+        'idem-hm-' || g::text,
+        'oneway',
+        'business',
+        '[{"from":"JFK","to":"LHR","date":"2026-10-01"}]'::jsonb,
+        '{"adult":1,"child":0,"infant":0}'::jsonb,
+        'Alex',
+        '+12125550100',
+        'alex@test.dev',
+        true,
+        'ios'
+      FROM generate_series(1, 51) AS g`);
+    const r = await t.app.request("/v1/requests", { headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { items: { id: string }[]; hasMore: boolean };
+    expect(body.items.length).toBe(50);
+    expect(body.hasMore).toBe(true);
+    await t.close();
+  });
 });
 
 describe("POST /v1/internal/requests/:id/status", () => {

@@ -134,6 +134,7 @@ for (const m of modules) {
 assertMobileFetchHasSignal();
 assertMobileJsonParseValidated();
 assertMobileVoidLoadHomeAndGateCatch();
+assertSchemaEnumsHaveZod();
 
 if (problems.length) {
   console.error("module:check FAILED\n  - " + problems.join("\n  - "));
@@ -263,4 +264,49 @@ function findExpressionEnd(src: string, start: number): number {
     } else if ((c === "," || c === "\n") && depth === 0) return i;
   }
   return src.length;
+}
+
+/** F6: every packages/db schema enum has a matching z.enum in shared, or an explicit allow-list row. */
+function assertSchemaEnumsHaveZod() {
+  const EXTRA: Record<string, string[]> = { request_status: ["not_sent"] };
+  const UNMAPPED = new Set([
+    "offer_status",
+    "offer_source",
+    "member_status",
+    "sync_status",
+    "candidate_status",
+    "notification_status",
+    "fare_source",
+  ]);
+  const drizzle = new Map<string, string[]>();
+  const enumRe = /\.enum\(\s*"([^"]+)"\s*,\s*\[([^\]]+)\]/gs;
+  for (const f of walk(join("packages", "db", "src", "schema"))) {
+    const src = readFileSync(f, "utf8");
+    for (const m of src.matchAll(enumRe)) {
+      const name = m[1]!;
+      const members = [...m[2]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!);
+      drizzle.set(name, members);
+    }
+  }
+  const zodSets: string[][] = [];
+  for (const f of walk(join("packages", "shared", "src"))) {
+    const src = readFileSync(f, "utf8");
+    for (const m of src.matchAll(/z\.enum\(\s*\[([^\]]+)\]/gs)) {
+      zodSets.push([...m[1]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!));
+    }
+  }
+  for (const [name, members] of drizzle) {
+    if (UNMAPPED.has(name)) continue;
+    const extra = new Set(EXTRA[name] ?? []);
+    const ok = zodSets.some((z) => {
+      const zs = new Set(z);
+      if (!members.every((m) => zs.has(m))) return false;
+      for (const s of zs) if (!members.includes(s) && !extra.has(s)) return false;
+      return true;
+    });
+    if (!ok)
+      problems.push(
+        `schema enum "${name}" [${members.join(", ")}] has no matching z.enum in packages/shared (add one or UNMAPPED)`,
+      );
+  }
 }

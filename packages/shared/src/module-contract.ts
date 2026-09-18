@@ -1,6 +1,7 @@
 /** The module contract lives in shared so modules never import from apps/api (that would be a cycle:
  *  apps/api imports the modules). Pure types — nothing here runs. */
 import type { Hono } from "hono";
+import type { ServerEnv } from "./env";
 
 export type Layer = "platform" | "integration" | "core" | "domain" | "intelligence" | "presentation";
 
@@ -44,6 +45,25 @@ export type HandlerContext = {
   signal: AbortSignal;
 };
 
+export type ModuleDb = {
+  transaction: (fn: (tx: any) => any) => Promise<any>;
+};
+
+export type ModulePlatform = {
+  logger: HandlerLogger;
+  flags: {
+    isEnabled: (key: string, fallback?: boolean) => Promise<boolean>;
+    isKilled: (module: string) => Promise<boolean>;
+    isConsumerPaused: (consumer: string) => Promise<boolean>;
+  };
+  events: {
+    publish: (...args: any[]) => any;
+    tombstoneMember: (...args: any[]) => any;
+    registerConsumer: (...args: any[]) => void;
+  };
+  jobs: { register: (...args: any[]) => void };
+};
+
 export type ModuleOutput<Exposes> = {
   /** The public facade other modules may receive as a port. */
   exposes?: Exposes;
@@ -55,7 +75,12 @@ export type ModuleOutput<Exposes> = {
   jobs?: { name: string; spec: unknown }[];
 };
 
-export type ModuleInitDeps<Ports> = { db: any; platform: any; env: any; ports: Ports };
+export type ModuleInitDeps<Ports> = {
+  db: ModuleDb;
+  platform: ModulePlatform;
+  env: ServerEnv;
+  ports: Ports;
+};
 
 export type ModuleDescriptor<Ports = Record<string, never>, Exposes = unknown> = {
   name: string;

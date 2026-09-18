@@ -30,6 +30,7 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
   name: "proposals",
   layer: "domain",
   init: ({ db, platform }) => {
+    const conn = db as unknown as Executor;
     const events = {
       publish: (
         tx: Executor,
@@ -44,11 +45,12 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
       ) => platform.events.publish(tx, { ...e, publishedBy: "proposals" }),
     };
     const expose: Exposes = {
-      getVisible: (exec, actor, id) => offersRepo.getVisible((exec ?? db) as any, actor, id),
-      feed: (exec, actor, cursor, limit) => offersRepo.feed((exec ?? db) as any, actor, cursor, limit),
-      getAny: (exec, id) => offersRepo.getAny((exec ?? db) as any, id),
-      ingest: (input, key) => ingest({ db, events }, IngestInput.parse(input), key),
-      withdraw: (offerId, reason) => withdraw({ db, events }, offerId, reason),
+      getVisible: (exec, actor, id) => offersRepo.getVisible((exec as Executor | undefined) ?? conn, actor, id),
+      feed: (exec, actor, cursor, limit) =>
+        offersRepo.feed((exec as Executor | undefined) ?? conn, actor, cursor, limit),
+      getAny: (exec, id) => offersRepo.getAny((exec as Executor | undefined) ?? conn, id),
+      ingest: (input, key) => ingest({ db: conn, events }, IngestInput.parse(input), key),
+      withdraw: (offerId, reason) => withdraw({ db: conn, events }, offerId, reason),
     };
 
     const routes = new Hono<{ Variables: { principal: Principal } }>();
@@ -124,7 +126,7 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
             cron: "*/5 * * * *",
             singleton: true,
             timeoutMs: 30_000,
-            handler: async () => expireOffers({ db, events }),
+            handler: async () => expireOffers({ db: conn, events }),
           },
         },
       ],

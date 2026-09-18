@@ -13,7 +13,7 @@ export function createRequestsRepo(db: Executor) {
         .from(requests)
         .where(eq(requests.memberId, memberId))
         .orderBy(desc(requests.createdAt))
-        .limit(50);
+        .limit(51);
     },
 
     async getForMember(exec: Executor | undefined, memberId: string, id: string) {
@@ -41,7 +41,22 @@ export function createRequestsRepo(db: Executor) {
     /** Claims unsent requests. FOR UPDATE SKIP LOCKED so two workers never take the same row. */
     async claimUnsent(tx: Executor, limit = 20) {
       return tx.execute(sql`
-        SELECT * FROM requests.requests
+        SELECT
+          id,
+          reference,
+          contact_name,
+          contact_phone,
+          contact_email,
+          legs,
+          trip_type,
+          cabin,
+          passengers,
+          source,
+          app_version,
+          send_attempts,
+          phone_valid,
+          phone_e164
+        FROM requests.requests
         WHERE sent_to_crm = false
           AND send_attempts < 6
           AND (sent_at IS NULL OR sent_at < now() - interval '5 minutes')

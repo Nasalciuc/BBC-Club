@@ -7,6 +7,24 @@ import type { IdentityFacade } from "@bbc/identity";
 
 export type { PrincipalVars };
 
+/** Pure: operator JWT without an email is 401 (JWKS mint is hard to unit-test through the host). */
+export function principalFromJwtPayload(payload: {
+  role?: unknown;
+  sub?: unknown;
+  email?: unknown;
+}): { ok: true; principal: Principal } | { ok: false; status: 401 | 403 } {
+  const role = payload.role;
+  if (role === "operator") {
+    if (typeof payload.email !== "string" || payload.email.length === 0) return { ok: false, status: 401 };
+    return {
+      ok: true,
+      principal: { kind: "operator", role: "operator", operatorId: String(payload.sub ?? ""), email: payload.email },
+    };
+  }
+  if (role === "system") return { ok: true, principal: { kind: "system", role: "system", source: "jwt" } };
+  return { ok: false, status: 403 };
+}
+
 type Opts = {
   identity: IdentityFacade;
   appOrigin: string;
@@ -40,16 +58,9 @@ export function resolvePrincipal(opts: Opts): MiddlewareHandler<PrincipalVars> {
     if (bearer) {
       try {
         const { payload } = await jwtVerify(bearer, jwks, { issuer: opts.appOrigin, audience: opts.appOrigin });
-        const role = payload.role as string | undefined;
-        if (role === "operator")
-          c.set("principal", {
-            kind: "operator",
-            role,
-            operatorId: String(payload.sub),
-            email: String(payload.email ?? ""),
-          });
-        else if (role === "system") c.set("principal", { kind: "system", role, source: "jwt" });
-        else return c.json(err("FORBIDDEN"), 403);
+        const resolved = principalFromJwtPayload(payload);
+        if (!resolved.ok) return c.json(err(resolved.status === 401 ? "UNAUTHORIZED" : "FORBIDDEN"), resolved.status);
+        c.set("principal", resolved.principal);
         return next();
       } catch {
         return c.json(err("UNAUTHORIZED"), 401);

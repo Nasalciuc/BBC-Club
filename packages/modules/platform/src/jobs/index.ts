@@ -61,7 +61,8 @@ export function createJobs(
 
     const [runRow] = await db.insert(jobRuns).values({ job: name, status: "running" }).returning({ id: jobRuns.id });
     const ac = new AbortController();
-    const timeout = setTimeout(() => ac.abort(), spec.timeoutMs ?? 10 * 60_000);
+    const DEFAULT_JOB_TIMEOUT_MS = 10 * 60_000;
+    const timeout = setTimeout(() => ac.abort(), spec.timeoutMs ?? DEFAULT_JOB_TIMEOUT_MS);
 
     try {
       const metrics = (await spec.handler({ db, logger: deps.logger, signal: ac.signal })) ?? undefined;

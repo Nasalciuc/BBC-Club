@@ -51,6 +51,7 @@ print(
         and f not in imported
         and "/app/" not in f
         and not f.endswith(".d.ts")
+        and not f.endswith(".test.ts")
     ],
     "(must be [])",
 )
