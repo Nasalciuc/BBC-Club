@@ -26,6 +26,11 @@ const REDACT = [
   "*.token",
   "*.email",
   "*.phone",
+  "*.*.email",
+  "*.*.phone",
+  "*.body",
+  "*.request",
+  "*.client",
 ];
 
 export function createLogger(opts: { level?: string; pretty?: boolean } = {}) {

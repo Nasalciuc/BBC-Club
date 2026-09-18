@@ -208,4 +208,19 @@ describe("send-requests job", () => {
     expect(row.crm_request_id).toBeTruthy();
     await t.close();
   });
+
+  it("stores only the Error message in last_error, never a dumped object with email", async () => {
+    const t = await testApp({ suite: "requests-job-pii" });
+    t.crm.submitRequest = async () => {
+      throw new Error("boom", { cause: { email: "hidden@test.dev", client: { phone: "+12125550148" } } });
+    };
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const { id } = (await created.json()) as { id: string };
+    await t.drainAll();
+    await t.platform.jobs.run("send-requests");
+    const [row]: any = await t.db.execute(sql`SELECT last_error FROM requests.requests WHERE id = ${id}`);
+    expect(row.last_error).toBe("boom");
+    expect(String(row.last_error)).not.toContain("hidden@");
+    await t.close();
+  });
 });
