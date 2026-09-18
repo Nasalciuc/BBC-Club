@@ -2,7 +2,7 @@ import type { Href } from "expo-router";
 
 import { fetchProfile, type Profile } from "@/lib/api";
 
-const PENDING_ATTEMPTS = 8;
+const PENDING_ATTEMPTS = 2;
 const PENDING_DELAY_MS = 250;
 
 function sleep(ms: number) {
@@ -25,11 +25,10 @@ export async function loadProfileAfterAuth(): Promise<Profile | null> {
   return last.ok ? last.data : null;
 }
 
-/** ADR-PROD-001: active → proposals feed; waitlist → waitlist; no dump of waitlist onto the feed. */
+/** Living profiles (active, waitlist, pending) land on Explore. Waitlist is a status, not a screen. */
 export function routeForProfile(profile: Profile | null): Href {
   if (!profile || profile.status === "deleted") return "/sign-in";
-  if (profile.status === "waitlist" || profile.status === "pending") return "/waitlist";
-  return "/(tabs)/proposals";
+  return "/(tabs)/explore" as Href;
 }
 
 export async function resolvePostAuthRoute(): Promise<Href> {

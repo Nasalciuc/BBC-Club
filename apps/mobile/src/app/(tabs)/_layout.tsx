@@ -46,8 +46,6 @@ export default function TabsLayout() {
         <Tabs.Screen name="explore" options={{ title: "Explore" }} />
         <Tabs.Screen name="requests" options={{ title: "Requests" }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
-        <Tabs.Screen name="proposals" options={{ href: null }} />
-        <Tabs.Screen name="inbox" options={{ href: null }} />
       </Tabs>
     </View>
   );

@@ -43,6 +43,8 @@ Copy on Join (English, sentence case) must not imply a closed club:
 
 **After success:** session exists → `GET /v1/profile` (or equivalent facade). `active` → tabs (Proposals). `waitlist` → waitlist screen. That screen is Stage 4; until it ships, waitlist members **must not** land on the member feed. A stub waitlist route is allowed. `/home` as a shared dump is not.
 
+> Superseded in part by branch 5: waitlist no longer routes to a screen. `profile.status === "waitlist"` remains the membership fact; `session-gate` sends every living profile to `/(tabs)/explore`. The missing waitlist screen is intentional.
+
 Sign-in validation (`Email` / `Password` in `schemas.ts`, voice from `auth-messages.ts`) ships with API wiring, not before.
 
 ### 2. Join order — email → code → password. Backend adapts. Screens do not.

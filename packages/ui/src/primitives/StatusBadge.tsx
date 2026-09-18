@@ -11,10 +11,11 @@ const COPY = {
 
 type Status = keyof typeof COPY;
 
-/** Unknown statuses render as received and warn — never a blank badge. */
+/** `quoted` (API) maps to quote_ready (UI). Unknown statuses render as received and warn. */
 export function StatusBadge({ status }: { status: string }) {
-  const known = (status in COPY ? status : "received") as Status;
-  if (!(status in COPY)) console.warn(`[StatusBadge] unknown status "${status}"`);
+  const normalized = status === "quoted" ? "quote_ready" : status;
+  const known = (normalized in COPY ? normalized : "received") as Status;
+  if (!(normalized in COPY)) console.warn(`[StatusBadge] unknown status "${status}"`);
 
   return (
     <View

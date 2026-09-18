@@ -73,34 +73,6 @@ try {
     console.log("auth.rate_limit.last_request → bigint");
   }
 
-  const catalogSchema = join(migrationsDir, "0006_catalog.sql");
-  if (existsSync(catalogSchema)) {
-    const done = (await db.execute(
-      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0006_catalog.sql'`,
-    )) as any[];
-    if (!done.length) {
-      await db.transaction(async (tx: any) => {
-        await tx.execute(sql.raw(readFileSync(catalogSchema, "utf8")));
-        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0006_catalog.sql')`);
-      });
-      console.log("catalog schema applied");
-    }
-  }
-
-  const catalogFitness = join(migrationsDir, "0007_catalog_verify_fitness.sql");
-  if (existsSync(catalogFitness)) {
-    const done = (await db.execute(
-      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0007_catalog_verify_fitness.sql'`,
-    )) as any[];
-    if (!done.length) {
-      await db.transaction(async (tx: any) => {
-        await tx.execute(sql.raw(readFileSync(catalogFitness, "utf8")));
-        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0007_catalog_verify_fitness.sql')`);
-      });
-      console.log("catalog db:verify fitness applied");
-    }
-  }
-
   const requestsSchema = join(migrationsDir, "0005_requests.sql");
   if (existsSync(requestsSchema)) {
     const done = (await db.execute(
@@ -115,17 +87,31 @@ try {
     }
   }
 
-  const requestsFitness = join(migrationsDir, "0007_requests_verify_fitness.sql");
-  if (existsSync(requestsFitness)) {
+  const catalogSchema = join(migrationsDir, "0006_catalog.sql");
+  if (existsSync(catalogSchema)) {
     const done = (await db.execute(
-      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0007_requests_verify_fitness.sql'`,
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0006_catalog.sql'`,
     )) as any[];
     if (!done.length) {
       await db.transaction(async (tx: any) => {
-        await tx.execute(sql.raw(readFileSync(requestsFitness, "utf8")));
-        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0007_requests_verify_fitness.sql')`);
+        await tx.execute(sql.raw(readFileSync(catalogSchema, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0006_catalog.sql')`);
       });
-      console.log("requests db:verify fitness applied");
+      console.log("catalog schema applied");
+    }
+  }
+
+  const verifyFitness = join(migrationsDir, "0007_db_verify_fitness.sql");
+  if (existsSync(verifyFitness)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0007_db_verify_fitness.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(verifyFitness, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0007_db_verify_fitness.sql')`);
+      });
+      console.log("db:verify fitness fixes applied");
     }
   }
 

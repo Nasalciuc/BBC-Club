@@ -27,7 +27,6 @@ export const unstable_settings = {
 };
 
 const AUTH_ENTRY = new Set(["sign-in", "join", "reset-password"]);
-const INTERIOR = new Set(["(tabs)", "proposal", "home", "fare", "notifications"]);
 
 export default function RootLayout() {
   const router = useRouter();
@@ -56,7 +55,7 @@ export default function RootLayout() {
 
   useEffect(() => () => clearPendingOtp(), []);
 
-  // Restore session → waitlist vs feed. Do not interrupt mid join/reset (set-password still needed).
+  // Restore session → Explore. Do not interrupt mid join/reset (set-password still needed).
   useEffect(() => {
     if (sessionPending || (!loaded && !error)) return;
 
@@ -86,12 +85,6 @@ export default function RootLayout() {
       if (cancelled) return;
       if (leaf === "index") {
         router.replace(dest);
-      } else if (INTERIOR.has(leaf) && dest === "/waitlist") {
-        router.replace("/waitlist");
-      } else if (leaf === "waitlist" && dest === "/(tabs)/proposals") {
-        router.replace("/(tabs)/proposals");
-      } else if (leaf === "home" && dest === "/(tabs)/proposals") {
-        router.replace("/(tabs)/proposals");
       }
       setGateReady(true);
     }
@@ -151,10 +144,6 @@ export default function RootLayout() {
               <Stack.Screen name="reset-password" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen
-                name="proposal/[id]"
-                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
-              />
-              <Stack.Screen
                 name="fare/[id]"
                 options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
               />
@@ -162,8 +151,6 @@ export default function RootLayout() {
                 name="notifications"
                 options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
               />
-              <Stack.Screen name="home" />
-              <Stack.Screen name="waitlist" />
               <Stack.Screen
                 name="dev/gallery"
                 options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}

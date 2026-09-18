@@ -177,6 +177,10 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
       );
       return id as string;
     },
+    /** Direct upsert into engagement.offer_responses (respond HTTP path removed in Branch 3). */
+    async upsertResponse(memberId: string, offerId: string, response: "interested" | "dismissed") {
+      return built.registry.facade<any>("engagement").upsert(undefined, memberId, offerId, response);
+    },
     /** Airports + 3 JFK→LHR business fares for catalog Gate 4. */
     async seedCatalogBasics() {
       await db.execute(sql`
@@ -228,10 +232,6 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
         )
         RETURNING id`);
       return id as string;
-    },
-    /** Direct upsert into engagement.offer_responses (respond HTTP path removed in Branch 3). */
-    async upsertResponse(memberId: string, offerId: string, response: "interested" | "dismissed") {
-      return built.registry.facade<any>("engagement").upsert(undefined, memberId, offerId, response);
     },
     async submitRequestAs(
       m: { cookie: string },

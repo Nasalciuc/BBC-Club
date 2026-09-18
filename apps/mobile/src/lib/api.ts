@@ -3,18 +3,12 @@ import type { Hono } from "hono";
 import { authMessage } from "@bbc/shared/auth-messages";
 import {
   DeviceBody,
-  FeedVM,
-  InboxVM,
   NotificationPreferencesBody,
   PasswordBody,
   ProfilePatchBody,
-  ProposalDetailVM,
   type DeviceBody as DeviceBodyType,
-  type FeedVM as FeedVMType,
-  type InboxVM as InboxVMType,
   type NotificationPreferencesBody as NotificationPreferencesBodyType,
   type ProfilePatchBody as ProfilePatchBodyType,
-  type ProposalDetailVM as ProposalDetailVMType,
 } from "@bbc/shared/api/v1/proposals";
 import {
   AirportVM,
@@ -35,7 +29,6 @@ import {
 
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
-import * as mock from "@/lib/mock";
 
 /**
  * Hono RPC client. `AppType` cannot be imported from `@bbc/api` (arch: mobile-no-backend);
@@ -181,86 +174,6 @@ export async function postAccountPassword(newPassword: string): Promise<ApiResul
   return { ok: true, data: { ok: true } };
 }
 
-export type FeedResult = { feed: FeedVMType; etag: string | null; notModified: boolean };
-
-/** GET /v1/proposals — supports If-None-Match → 304. */
-export async function fetchFeed(etag?: string | null): Promise<ApiResult<FeedResult>> {
-  const res = await apiFetch("/v1/proposals", {
-    headers: etag ? { "If-None-Match": etag } : {},
-  });
-  if (res.status === 304) {
-    return {
-      ok: true,
-      data: { feed: { items: [], summary: { total: 0, personal: 0 } }, etag: etag ?? null, notModified: true },
-    };
-  }
-  if (!res.ok) {
-    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
-  }
-  const raw = await parseJson(res);
-  const parsed = FeedVM.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
-  }
-  return { ok: true, data: { feed: parsed.data, etag: res.headers.get("ETag"), notModified: false } };
-}
-
-/** GET /v1/proposals/:id — 410 expired, 404 IDOR-safe. */
-export async function fetchProposal(id: string): Promise<ApiResult<ProposalDetailVMType>> {
-  const res = await apiFetch(`/v1/proposals/${encodeURIComponent(id)}`);
-  if (!res.ok) {
-    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
-  }
-  const raw = await parseJson(res);
-  const parsed = ProposalDetailVM.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
-  }
-  return { ok: true, data: parsed.data };
-}
-
-export type RespondState = "interested" | "dismissed";
-
-/** POST /v1/proposals/:id/respond */
-export async function respondToProposal(
-  id: string,
-  response: RespondState,
-): Promise<ApiResult<{ state: RespondState; advisor?: string }>> {
-  const res = await apiFetch(`/v1/proposals/${encodeURIComponent(id)}/respond`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ response }),
-  });
-  if (!res.ok) {
-    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
-  }
-  const data = (await parseJson(res)) as { state: RespondState; advisor?: string };
-  return { ok: true, data };
-}
-
-/** GET /v1/inbox */
-export async function fetchInbox(): Promise<ApiResult<InboxVMType>> {
-  const res = await apiFetch("/v1/inbox");
-  if (!res.ok) {
-    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
-  }
-  const raw = await parseJson(res);
-  const parsed = InboxVM.safeParse(raw);
-  if (!parsed.success) {
-    return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
-  }
-  return { ok: true, data: parsed.data };
-}
-
-/** POST /v1/inbox/:id/read */
-export async function markInboxRead(id: string): Promise<ApiResult<{ ok: true }>> {
-  const res = await apiFetch(`/v1/inbox/${encodeURIComponent(id)}/read`, { method: "POST" });
-  if (!res.ok) {
-    return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
-  }
-  return { ok: true, data: { ok: true } };
-}
-
 /** POST /v1/devices */
 export async function registerDevice(body: DeviceBodyType): Promise<ApiResult<{ ok: true }>> {
   const parsed = DeviceBody.safeParse(body);
@@ -297,7 +210,6 @@ export type HomeResult = { home: HomeVMType; etag: string | null; notModified: b
 
 /** GET /v1/home — ETag, 5-minute private cache. */
 export async function fetchHome(etag?: string | null): Promise<ApiResult<HomeResult>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchHome(etag);
   const res = await apiFetch("/v1/home", {
     headers: etag ? { "If-None-Match": etag } : {},
   });
@@ -328,7 +240,6 @@ export async function searchFares(q: {
   to: string;
   cabin: "business" | "first";
 }): Promise<ApiResult<SearchResultVMType>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.searchFares(q);
   const params = new URLSearchParams({ from: q.from, to: q.to, cabin: q.cabin });
   const res = await apiFetch(`/v1/search?${params}`);
   if (!res.ok) {
@@ -344,7 +255,6 @@ export async function searchFares(q: {
 
 /** GET /v1/airports?q= — max 8. */
 export async function fetchAirports(query: string): Promise<ApiResult<AirportVMType[]>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchAirports(query);
   const res = await apiFetch(`/v1/airports?q=${encodeURIComponent(query)}`);
   if (!res.ok) {
     return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
@@ -363,7 +273,6 @@ export async function fetchAirports(query: string): Promise<ApiResult<AirportVMT
 
 /** GET /v1/fares/:id — 410 when expired. */
 export async function fetchFare(id: string): Promise<ApiResult<FareVMType>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchFare(id);
   const res = await apiFetch(`/v1/fares/${encodeURIComponent(id)}`);
   if (!res.ok) {
     return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
@@ -378,7 +287,6 @@ export async function fetchFare(id: string): Promise<ApiResult<FareVMType>> {
 
 /** POST /v1/requests — Idempotency-Key required. */
 export async function submitRequest(body: RequestBodyType, idempotencyKey: string): Promise<ApiResult<RequestVMType>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.submitRequest(body, idempotencyKey);
   const parsed = RequestBody.safeParse(body);
   if (!parsed.success) {
     return {
@@ -411,7 +319,6 @@ export async function submitRequest(body: RequestBodyType, idempotencyKey: strin
 
 /** GET /v1/requests */
 export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[] }>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchRequests();
   const res = await apiFetch("/v1/requests");
   if (!res.ok) {
     return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
@@ -433,7 +340,6 @@ export type AppConfig = { minSupportedVersion: string; maintenance: string | nul
 
 /** GET /v1/app-config — cold start, public. */
 export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
-  if (env.EXPO_PUBLIC_MOCK_API === "1") return mock.fetchAppConfig();
   const res = await apiFetch("/v1/app-config");
   if (!res.ok) {
     return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);

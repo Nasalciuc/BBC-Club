@@ -74,6 +74,7 @@ export default function ProfileScreen() {
   const version = Constants.expoConfig?.version ?? "0.1.0";
   const build = Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? "24";
   const initials = monogram(profile?.displayName ?? fixture.member.name);
+  const showClientSince = profile != null && profile.status !== "pending";
 
   return (
     <ScrollView
@@ -90,14 +91,16 @@ export default function ProfileScreen() {
           {initials ? <Text style={styles.monogramText}>{initials}</Text> : <Text style={styles.monogramText}>·</Text>}
         </View>
         <Text style={styles.name}>{profile?.displayName ?? fixture.member.name}</Text>
-        <Pressable
-          testID="profile.since"
-          accessibilityRole="button"
-          onPress={() => setSinceOpen(true)}
-          style={({ pressed }) => [styles.pill, pressed && styles.pressed]}
-        >
-          <Text style={styles.pillText}>Client since {fixture.member.memberSince}</Text>
-        </Pressable>
+        {showClientSince ? (
+          <Pressable
+            testID="profile.since"
+            accessibilityRole="button"
+            onPress={() => setSinceOpen(true)}
+            style={({ pressed }) => [styles.pill, pressed && styles.pressed]}
+          >
+            <Text style={styles.pillText}>Client since {fixture.member.memberSince}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

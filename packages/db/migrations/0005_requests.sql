@@ -16,11 +16,6 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
-DO $$ BEGIN
-  CREATE TYPE requests.request_source AS ENUM ('ios', 'android');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
 CREATE TABLE IF NOT EXISTS requests.requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   reference text NOT NULL,
@@ -38,7 +33,7 @@ CREATE TABLE IF NOT EXISTS requests.requests (
   contact_email text NOT NULL,
   note text,
   status requests.request_status DEFAULT 'received' NOT NULL,
-  source requests.request_source NOT NULL,
+  source text NOT NULL,
   app_version text,
   sent_to_crm boolean DEFAULT false NOT NULL,
   crm_request_id text,
@@ -67,9 +62,6 @@ CREATE INDEX IF NOT EXISTS requests_unsent ON requests.requests (created_at)
   WHERE sent_to_crm = false;
 CREATE INDEX IF NOT EXISTS requests_open ON requests.requests (status)
   WHERE status <> 'closed' AND status <> 'booked';
-CREATE INDEX IF NOT EXISTS requests_fare ON requests.requests (fare_id) WHERE fare_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS requests_offer ON requests.requests (offer_id) WHERE offer_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS requests_crm ON requests.requests (crm_request_id) WHERE crm_request_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS requests.request_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

@@ -9,5 +9,5 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "signIn.password" }
 - inputText: "atlantic2026!"
 - tapOn: { id: "signIn.submit" }
-# Active member lands on the Block 5 proposals feed.
-- assertVisible: { id: "feed.root" }
+# Active member lands on Explore.
+- assertVisible: { id: "explore.root" }

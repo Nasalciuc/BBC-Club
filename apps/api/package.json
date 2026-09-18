@@ -28,8 +28,8 @@
     "@bbc/notifications": "workspace:*",
     "@bbc/proposals": "workspace:*",
     "@bbc/engagement": "workspace:*",
-    "@bbc/catalog": "workspace:*",
     "@bbc/requests": "workspace:*",
+    "@bbc/catalog": "workspace:*",
     "@bbc/crm": "workspace:*",
     "@bbc/push": "workspace:*"
   }
