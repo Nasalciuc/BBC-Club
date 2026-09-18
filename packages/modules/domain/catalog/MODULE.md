@@ -1,6 +1,6 @@
 # domain/catalog
 
-**Owns:** schema `catalog.*` — `fares` (route/cabin/price catalogue) and `airports` (IATA reference for pins + autocomplete).
+**Owns:** schema `catalog.*` — `fares` (route/cabin/price catalogue) and `airports` (IATA reference for pins + autocomplete). Airports have `created_at`; fares `updated_at` trigger is `trg_updated_at` (db:verify extras `0007_catalog_verify_fitness.sql`).
 **Publishes:** none.
 **Consumes:** none.
 **Ports:** none (`needs: []`). Repository surface is the port — a Sabre / company-API adapter can replace `fares.repo` later without route changes.
