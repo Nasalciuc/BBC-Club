@@ -82,6 +82,10 @@ describe("POST /v1/requests", () => {
       sql`SELECT count(*)::int n FROM requests.requests WHERE idempotency_key = ${key}`,
     );
     expect(n).toBe(1);
+    const [{ count }]: any = await t.db.execute(
+      sql`SELECT count FROM platform.rate_limits WHERE key = ${"requests:member:" + t.memberA.id}`,
+    );
+    expect(Number(count)).toBe(1);
     await t.close();
   });
 
