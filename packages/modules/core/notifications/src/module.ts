@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
-import { OfferRespondedV1 } from "@bbc/shared/events/offer";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
+import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import type { PushSender } from "./ports/push";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
@@ -148,20 +148,21 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
           handler: (ctx: any, raw: any) => onOfferExpired({ tx: ctx.tx }, raw),
         },
         {
-          type: "offer.responded",
-          name: "notifications.onOfferResponded",
-          handler: async (ctx: any, raw: any) => {
-            const evt = OfferRespondedV1.parse(raw);
-            if (evt.response !== "interested") return;
-            await ctx.tx.insert(notificationsTable).values({
-              memberId: evt.memberId,
-              category: "transactional",
-              title: "Julia will call you shortly",
-              body: "Your advisor has your interest and will be in touch.",
-              offerId: evt.offerId,
-              status: "sent",
-              sentAt: new Date(),
-            });
+          type: "request.status_changed",
+          name: "notifications.onRequestStatusChanged",
+          handler: async (ctx: any, raw: unknown) => {
+            const evt = RequestStatusChangedV1.parse(raw);
+            if (evt.to !== "quoted" || !evt.memberId) return;
+            const body = `${evt.route ?? "Your trip"} — tap to call your specialist`;
+            const deepLink = `bbcclub://requests/${evt.requestId}`;
+            await ctx.tx.execute(sql`
+              INSERT INTO notifications.notifications
+                (member_id, category, title, body, deep_link, request_id, source_event_id, status, scheduled_for)
+              VALUES
+                (${evt.memberId}, 'transactional', 'Your quote is ready', ${body}, ${deepLink},
+                 ${evt.requestId}::uuid, ${String(ctx.event.id)}, 'pending', now())
+              ON CONFLICT (member_id, request_id, category) WHERE request_id IS NOT NULL
+              DO NOTHING`);
           },
         },
         {

@@ -9,6 +9,8 @@ export type EventDefinition = {
   upcasters?: Record<number, (payload: any) => any>;
   /** Declared when a type intentionally has no consumer (analytics-only). Checked by a test. */
   noConsumer?: boolean;
+  /** Retired type; implies no live consumer. Schema is kept so historical journal rows still parse. */
+  deprecated?: string;
 };
 
 export type HandlerContext = {

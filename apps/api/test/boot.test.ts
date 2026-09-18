@@ -10,8 +10,8 @@ describe("host boot", () => {
     const owed: string[] = [];
     for (const [type, def] of Object.entries(EVENT_CATALOGUE)) {
       const consumers = registry.consumersOf(type);
-      const d = def as { noConsumer?: boolean; consumerOwedBy?: string };
-      if (d.noConsumer) continue;
+      const d = def as { noConsumer?: boolean; consumerOwedBy?: string; deprecated?: string };
+      if (d.noConsumer || d.deprecated) continue;
       if (consumers.length === 0 && d.consumerOwedBy) {
         owed.push(`${type} (${d.consumerOwedBy})`);
         continue;
