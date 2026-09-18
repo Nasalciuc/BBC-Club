@@ -41,7 +41,10 @@ export default function ProfileScreen() {
         setOpenRequests(requestsResult.data.items.filter((r) => r.status !== "booked" && r.status !== "closed").length);
       }
       setLoading(false);
-    })();
+    })().catch(() => {
+      setError("Something went wrong.");
+      setLoading(false);
+    });
   }, []);
 
   async function onSignOut() {

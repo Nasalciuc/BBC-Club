@@ -133,6 +133,7 @@ for (const m of modules) {
 
 assertMobileFetchHasSignal();
 assertMobileJsonParseValidated();
+assertMobileVoidLoadHomeAndGateCatch();
 
 if (problems.length) {
   console.error("module:check FAILED\n  - " + problems.join("\n  - "));
@@ -168,6 +169,25 @@ function assertMobileFetchHasSignal() {
       const call = sliceBalanced(src, open, "(", ")");
       if (!/\bsignal\s*:/.test(call)) {
         problems.push(`${f.replace(/\\/g, "/")}: fetch( without signal: — add timeoutSignal (F2)`);
+      }
+    }
+  }
+}
+
+/** loadHome / gate must declare how they handle rejection (F3). */
+function assertMobileVoidLoadHomeAndGateCatch() {
+  const root = join("apps", "mobile", "src");
+  if (!existsSync(root)) return;
+  for (const f of walk(root)) {
+    const src = readFileSync(f, "utf8");
+    const re = /void\s+(loadHome|gate)\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      const slice = src.slice(m.index, m.index + 80);
+      if (!slice.includes(".catch(")) {
+        problems.push(
+          `${f.replace(/\\/g, "/")}: void ${m[1]}() without .catch — a rejection leaves the screen stuck (F3)`,
+        );
       }
     }
   }

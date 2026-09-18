@@ -49,7 +49,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loaded || error) {
-      void SplashScreen.hideAsync();
+      void SplashScreen.hideAsync().catch(() => {
+        // already hidden, or never shown
+      });
     }
   }, [loaded, error]);
 
@@ -89,7 +91,9 @@ export default function RootLayout() {
       setGateReady(true);
     }
 
-    void gate();
+    void gate().catch(() => {
+      if (!cancelled) setGateReady(true);
+    });
     return () => {
       cancelled = true;
     };
@@ -98,7 +102,9 @@ export default function RootLayout() {
   // Push device registration once an active session is present.
   useEffect(() => {
     if (!session || !gateReady) return;
-    void registerPushDevice();
+    void registerPushDevice().catch(() => {
+      // push is best-effort; the rest of the app works without a token
+    });
   }, [session, gateReady]);
 
   // Deep links: bbcclub://proposal/<id> | bbcclub://inbox — no secrets in the URL.

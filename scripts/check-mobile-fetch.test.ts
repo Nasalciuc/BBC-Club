@@ -58,3 +58,24 @@ const r = QueuedRequestList.safeParse(parsed);`),
     ).toBe(0);
   });
 });
+
+function voidLoadHomeOrGateWithoutCatch(src: string): number {
+  const re = /void\s+(loadHome|gate)\s*\(/g;
+  let n = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src))) {
+    const slice = src.slice(m.index, m.index + 80);
+    if (!slice.includes(".catch(")) n += 1;
+  }
+  return n;
+}
+
+describe("check-modules: void loadHome/gate must catch", () => {
+  it("flags a bare retry", () => {
+    expect(voidLoadHomeOrGateWithoutCatch(`onPress: () => void loadHome()`)).toBe(1);
+  });
+
+  it("allows void loadHome().catch", () => {
+    expect(voidLoadHomeOrGateWithoutCatch(`void loadHome().catch((e) => setHomeError(e.message))`)).toBe(0);
+  });
+});
