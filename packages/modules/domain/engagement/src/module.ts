@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
-import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
+import type { Executor } from "@bbc/db";
 import { offerResponses } from "@bbc/db/schema/engagement";
 import { responsesRepo } from "./infrastructure/responses.repo";
 
@@ -20,7 +21,7 @@ export const engagementModule = (): ModuleDescriptor<Record<string, never>, Retu
         {
           type: "member.deleted",
           name: "engagement.onMemberDeleted",
-          handler: async (ctx: any, raw: any) => {
+          handler: async (ctx: HandlerContext, raw: unknown) => {
             const evt = MemberDeletedV1.parse(raw);
             await ctx.tx.delete(offerResponses).where(eq(offerResponses.memberId, evt.memberId));
             await platform.events.tombstoneMember(ctx.tx, evt.memberId);
@@ -32,14 +33,19 @@ export const engagementModule = (): ModuleDescriptor<Record<string, never>, Retu
   },
 });
 
-function facade(db: any) {
+function facade(db: Executor) {
   return {
-    get: (exec: any, actorMemberId: string, offerId: string) => responsesRepo.get(exec ?? db, actorMemberId, offerId),
-    responsesFor: (exec: any, actorMemberId: string, offerIds: string[]) =>
+    get: (exec: Executor | undefined, actorMemberId: string, offerId: string) =>
+      responsesRepo.get(exec ?? db, actorMemberId, offerId),
+    responsesFor: (exec: Executor | undefined, actorMemberId: string, offerIds: string[]) =>
       responsesRepo.responsesFor(exec ?? db, actorMemberId, offerIds),
-    upsert: (exec: any, actorMemberId: string, offerId: string, response: "interested" | "dismissed") =>
-      responsesRepo.upsert(exec ?? db, actorMemberId, offerId, response),
-    markSynced: (exec: any, actorMemberId: string, offerId: string, crmActivityId: string | null) =>
+    upsert: (
+      exec: Executor | undefined,
+      actorMemberId: string,
+      offerId: string,
+      response: "interested" | "dismissed",
+    ) => responsesRepo.upsert(exec ?? db, actorMemberId, offerId, response),
+    markSynced: (exec: Executor | undefined, actorMemberId: string, offerId: string, crmActivityId: string | null) =>
       responsesRepo.markSynced(exec ?? db, actorMemberId, offerId, crmActivityId),
   };
 }

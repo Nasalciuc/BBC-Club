@@ -1,4 +1,5 @@
 import type { ZodTypeAny } from "zod";
+import type { HandlerContext } from "@bbc/shared/module-contract";
 
 export type EventDefinition = {
   /** Latest version of this event type. */
@@ -6,38 +7,15 @@ export type EventDefinition = {
   /** Schema of the LATEST version; the poller validates after upcasting. */
   schema: ZodTypeAny;
   /** upcasters[n] converts a v(n) payload into v(n+1). Must form a continuous chain 1..version-1. */
-  upcasters?: Record<number, (payload: any) => any>;
+  upcasters?: Record<number, (payload: unknown) => unknown>;
   /** Declared when a type intentionally has no consumer (analytics-only). Checked by a test. */
   noConsumer?: boolean;
   /** Retired type; implies no live consumer. Schema is kept so historical journal rows still parse. */
   deprecated?: string;
 };
 
-export type HandlerContext = {
-  /** Transaction that also marks the delivery done — handler writes and delivery state commit together. */
-  tx: any;
-  event: {
-    id: string;
-    type: string;
-    version: number;
-    aggregateType: string;
-    aggregateId: string;
-    memberId: string | null;
-    occurredAt: Date;
-  };
-  /** system principal acting for the event's member (see authz/principal). */
-  principal: { kind: "system"; role: "system"; source: "handler"; actorMemberId?: string };
-  logger: {
-    info: (o: object, m?: string) => void;
-    warn: (o: object, m?: string) => void;
-    error: (o: object, m?: string) => void;
-  };
-  attempt: number;
-  /** Fired when the poller's handler timeout elapses. The timeout stops *waiting*; the handler must check
-   *  `signal.aborted` before each expensive step to stop *working* on a closed transaction. */
-  signal: AbortSignal;
-};
-export type Handler = (ctx: HandlerContext, payload: any) => Promise<void>;
+export type { HandlerContext };
+export type Handler = (ctx: HandlerContext, payload: unknown) => Promise<void>;
 
 export class EventRegistry {
   private defs = new Map<string, EventDefinition>();

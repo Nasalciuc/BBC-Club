@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId } from "@bbc/shared/authz/principal";
+import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
 import { createAuth, createIdentityFacade, type Auth } from "./api";
 import type { EmailSender } from "./ports/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
@@ -30,7 +30,7 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
       },
     });
 
-    const routes = new Hono<any>();
+    const routes = new Hono<{ Variables: { principal: Principal } }>();
 
     registerRoute("POST", "/v1/account/password", "profile:update-self");
     routes.post(
@@ -57,11 +57,28 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
             headers: c.req.raw.headers,
             body: { newPassword: parsed.data.newPassword },
           });
-        } catch (err: any) {
-          const status = err?.statusCode ?? (err?.status === "BAD_REQUEST" ? 400 : err?.status) ?? 500;
+        } catch (err: unknown) {
+          const status =
+            err && typeof err === "object"
+              ? ((err as { statusCode?: number; status?: number | string }).statusCode ??
+                ((err as { status?: string }).status === "BAD_REQUEST" ? 400 : (err as { status?: number }).status) ??
+                500)
+              : 500;
           if (status === 400)
-            return c.json(apiError("VALIDATION", { message: err?.body?.message ?? "Invalid password" }), 400);
-          if (status === 401 || err?.status === "UNAUTHORIZED") return c.json(apiError("UNAUTHORIZED"), 401);
+            return c.json(
+              apiError("VALIDATION", {
+                message:
+                  err && typeof err === "object"
+                    ? ((err as { body?: { message?: string } }).body?.message ?? "Invalid password")
+                    : "Invalid password",
+              }),
+              400,
+            );
+          if (
+            status === 401 ||
+            (err && typeof err === "object" && (err as { status?: string }).status === "UNAUTHORIZED")
+          )
+            return c.json(apiError("UNAUTHORIZED"), 401);
           throw err;
         }
         await db.transaction((tx: unknown) =>

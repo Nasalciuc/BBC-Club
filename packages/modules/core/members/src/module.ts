@@ -1,13 +1,14 @@
 import { Hono } from "hono";
-import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId } from "@bbc/shared/authz/principal";
+import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
 import { createMembersFacade, type MembersFacade } from "./api";
 import { onMemberRegistered, reconcileMissingProfiles, type IdentityUsersPort } from "./handlers/on-member-registered";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import { ProfilePatchBody, NotificationPreferencesBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
+import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
 
 type Ports = {
@@ -27,9 +28,19 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
   needs: ["crm", "identity"],
   init: ({ db, platform, ports }) => {
     const facade = createMembersFacade(db);
-    const publish = (tx: any, e: any) => platform.events.publish(tx, { ...e, publishedBy: "members" });
+    const publish = (
+      tx: Executor,
+      e: {
+        type: string;
+        version: number;
+        aggregateType: string;
+        aggregateId: string;
+        memberId: string | null;
+        payload: unknown;
+      },
+    ) => platform.events.publish(tx, { ...e, publishedBy: "members" });
 
-    const routes = new Hono<any>();
+    const routes = new Hono<{ Variables: { principal: Principal } }>();
 
     registerRoute("PATCH", "/v1/profile", "profile:update-self");
     routes.patch(
@@ -106,14 +117,14 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
         {
           type: "member.registered",
           name: "members.onMemberRegistered",
-          handler: (ctx: any, payload: any) =>
+          handler: (ctx: HandlerContext, payload: unknown) =>
             onMemberRegistered(
               {
                 tx: ctx.tx,
                 crm: ports.crm,
                 // ADR-PROD-001: seeded false by scripts/seed-flags.ts — an unknown CRM email is waitlist.
                 flags: { get: (k: string) => platform.flags.isEnabled(k, false) },
-                publish: (e: any) => platform.events.publish(ctx.tx, { ...e, publishedBy: "members" }),
+                publish: (e) => platform.events.publish(ctx.tx, { ...e, publishedBy: "members" }),
               },
               payload,
             ),
@@ -121,7 +132,7 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
         {
           type: "member.deleted",
           name: "members.onMemberDeleted",
-          handler: (ctx: any, payload: any) => onMemberDeleted({ tx: ctx.tx }, payload),
+          handler: (ctx: HandlerContext, payload: unknown) => onMemberDeleted({ tx: ctx.tx }, payload),
         },
         // stage 1: crm.mirror.synced → link waitlist members
       ],
@@ -135,7 +146,7 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
               reemitted: await reconcileMissingProfiles({
                 db,
                 identity: ports.identity,
-                publish: (e: any) =>
+                publish: (e) =>
                   db.transaction((tx: unknown) => platform.events.publish(tx, { ...e, publishedBy: "members" })),
               }),
             }),

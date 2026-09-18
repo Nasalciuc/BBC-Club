@@ -97,4 +97,19 @@ describe("event catalogue", () => {
     const { type: _t, version: _v, ...bare } = event("member.linked_to_crm", EXAMPLES["member.linked_to_crm"] as any);
     expect(() => EVENT_CATALOGUE["member.linked_to_crm"].schema.parse(bare)).toThrow();
   });
+
+  it("offer.responded is deprecated only — noConsumer is redundant once deprecated implies no live consumer", () => {
+    const entry = EVENT_CATALOGUE["offer.responded"];
+    expect(entry.deprecated).toBe("branch-3");
+    expect("noConsumer" in entry).toBe(false);
+  });
+
+  /** Boot inventory (`apps/api/test/boot.test.ts`) skips with OR, not XOR. Both flags together still skip. */
+  it("consumer inventory treats noConsumer and deprecated as OR, not XOR", () => {
+    const excused = (d: { noConsumer?: boolean; deprecated?: string }) => Boolean(d.noConsumer || d.deprecated);
+    expect(excused({ noConsumer: true })).toBe(true);
+    expect(excused({ deprecated: "branch-3" })).toBe(true);
+    expect(excused({ noConsumer: true, deprecated: "branch-3" })).toBe(true);
+    expect(excused({})).toBe(false);
+  });
 });

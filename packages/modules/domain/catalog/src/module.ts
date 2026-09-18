@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
+import type { Principal } from "@bbc/shared/authz/principal";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { expireFares } from "./application/expire-fares";
@@ -37,7 +38,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes
       importCsv: (input) => importCatalog({ db }, ImportBody.parse(input)),
     };
 
-    const routes = new Hono<any>();
+    const routes = new Hono<{ Variables: { principal: Principal } }>();
 
     registerRoute("GET", "/v1/search", "fares:read");
     routes.get(
@@ -136,8 +137,8 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes
         try {
           const r = await expose.importCsv(parsed.data);
           return c.json(r);
-        } catch (e: any) {
-          return c.json(apiError("VALIDATION", { message: e?.message ?? "import failed" }), 400);
+        } catch (e: unknown) {
+          return c.json(apiError("VALIDATION", { message: e instanceof Error ? e.message : "import failed" }), 400);
         }
       },
     );

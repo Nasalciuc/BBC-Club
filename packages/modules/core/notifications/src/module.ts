@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { eq, sql } from "drizzle-orm";
-import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId } from "@bbc/shared/authz/principal";
+import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
+import type { Executor } from "@bbc/db";
+import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
 import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
@@ -34,8 +36,18 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
   layer: "core",
   needs: ["members", "push"],
   init: ({ db, platform, ports }) => {
-    const routes = new Hono<any>();
-    const publish = (tx: any, e: any) => platform.events.publish(tx, { ...e, publishedBy: "notifications" });
+    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const publish = (
+      tx: Executor,
+      e: {
+        type: string;
+        version: number;
+        aggregateType: string;
+        aggregateId: string;
+        memberId?: string | null;
+        payload: unknown;
+      },
+    ) => platform.events.publish(tx, { ...e, publishedBy: "notifications" });
 
     registerRoute("GET", "/v1/inbox", "inbox:read");
     routes.get(
@@ -52,7 +64,18 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
           notificationsRepo.inbox(db, actor),
           notificationsRepo.unreadCount(db, actor),
         ]);
-        const vms = (items as any[]).map((n: any) => ({
+        const vms = (
+          items as {
+            id: string;
+            title: string;
+            body: string | null;
+            deepLink: string | null;
+            offerId: string | null;
+            category: string;
+            readAt: Date | null;
+            createdAt: Date;
+          }[]
+        ).map((n) => ({
           id: n.id,
           title: n.title,
           ...(n.body ? { body: n.body } : {}),
@@ -134,23 +157,23 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
         {
           type: "offer.published",
           name: "notifications.onOfferPublished",
-          handler: (ctx: any, raw: any) =>
+          handler: (ctx: HandlerContext, raw: unknown) =>
             onOfferPublished({ tx: ctx.tx, members: ports.members, sourceEventId: String(ctx.event.id) }, raw),
         },
         {
           type: "offer.withdrawn",
           name: "notifications.onOfferWithdrawn",
-          handler: (ctx: any, raw: any) => onOfferWithdrawn({ tx: ctx.tx }, raw),
+          handler: (ctx: HandlerContext, raw: unknown) => onOfferWithdrawn({ tx: ctx.tx }, raw),
         },
         {
           type: "offer.expired",
           name: "notifications.onOfferExpired",
-          handler: (ctx: any, raw: any) => onOfferExpired({ tx: ctx.tx }, raw),
+          handler: (ctx: HandlerContext, raw: unknown) => onOfferExpired({ tx: ctx.tx }, raw),
         },
         {
           type: "request.status_changed",
           name: "notifications.onRequestStatusChanged",
-          handler: async (ctx: any, raw: unknown) => {
+          handler: async (ctx: HandlerContext, raw: unknown) => {
             const evt = RequestStatusChangedV1.parse(raw);
             if (evt.to !== "quoted" || !evt.memberId) return;
             const body = `${evt.route ?? "Your trip"} — tap to call your specialist`;
@@ -168,7 +191,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
         {
           type: "member.deleted",
           name: "notifications.onMemberDeleted",
-          handler: async (ctx: any, raw: any) => {
+          handler: async (ctx: HandlerContext, raw: unknown) => {
             const evt = MemberDeletedV1.parse(raw);
             await ctx.tx.delete(deviceTokens).where(eq(deviceTokens.memberId, evt.memberId));
             await ctx.tx.delete(notificationsTable).where(eq(notificationsTable.memberId, evt.memberId));
@@ -182,7 +205,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
             cron: "* * * * *",
             singleton: true,
             timeoutMs: 55_000,
-            handler: async (ctx: any) =>
+            handler: async (ctx: JobContext) =>
               dispatch({
                 db,
                 push: ports.push,

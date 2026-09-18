@@ -1,8 +1,9 @@
+import type { Executor } from "@bbc/db";
 import { Hono } from "hono";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId } from "@bbc/shared/authz/principal";
+import type { Principal } from "@bbc/shared/authz/principal";
 import { offersRepo } from "./infrastructure/offers.repo";
 import { ingest, IngestInput } from "./application/ingest";
 import { expireOffers } from "./application/expire-offers";
@@ -27,7 +28,17 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
   layer: "domain",
   init: ({ db, platform }) => {
     const events = {
-      publish: (tx: any, e: any) => platform.events.publish(tx, { ...e, publishedBy: "proposals" }),
+      publish: (
+        tx: Executor,
+        e: {
+          type: string;
+          version: number;
+          aggregateType: string;
+          aggregateId: string;
+          memberId?: string | null;
+          payload: unknown;
+        },
+      ) => platform.events.publish(tx, { ...e, publishedBy: "proposals" }),
     };
     const expose: Exposes = {
       getVisible: (exec, actor, id) => offersRepo.getVisible((exec ?? db) as any, actor, id),
@@ -36,7 +47,7 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
       ingest: (input, key) => ingest({ db, events }, IngestInput.parse(input), key),
     };
 
-    const routes = new Hono<any>();
+    const routes = new Hono<{ Variables: { principal: Principal } }>();
 
     registerRoute("POST", "/v1/internal/offers", "proposals:ingest");
     routes.post(

@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
-import { apiError } from "@bbc/shared/errors";
-import { actorMemberId } from "@bbc/shared/authz/principal";
+import { apiError, zodFieldErrors } from "@bbc/shared/errors";
+import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
 import { RequestSubmittedV1 } from "@bbc/shared/events/request";
-import type { HandlerContext } from "@bbc/platform";
+import type { Executor } from "@bbc/db";
 import { createRequestsRepo } from "./infrastructure/requests.repo";
 import { submit } from "./application/submit";
 import { setStatus } from "./application/set-status";
@@ -23,10 +23,20 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
   needs: ["crm"],
   init: ({ db, platform, ports }) => {
     const repo = createRequestsRepo(db);
-    const publish = (tx: any, e: any) => platform.events.publish(tx, { ...e, publishedBy: "requests" });
+    const publish = (
+      tx: Executor,
+      e: {
+        type: string;
+        version: number;
+        aggregateType: string;
+        aggregateId: string;
+        memberId: string | null;
+        payload: unknown;
+      },
+    ) => platform.events.publish(tx, { ...e, publishedBy: "requests" });
     const expose = facade(db, repo);
 
-    const routes = new Hono<any>();
+    const routes = new Hono<{ Variables: { principal: Principal } }>();
 
     registerRoute("POST", "/v1/requests", "requests:create");
     routes.post(
@@ -53,15 +63,9 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         let result;
         try {
           result = await submit(db, body, actor, key, { publish });
-        } catch (err: any) {
-          if (err?.name === "ZodError") {
-            return c.json(
-              apiError("VALIDATION", {
-                details: err.issues?.map((i: any) => ({ path: i.path.join("."), message: i.message })),
-              }),
-              400,
-            );
-          }
+        } catch (err: unknown) {
+          const details = zodFieldErrors(err);
+          if (details) return c.json(apiError("VALIDATION", { details }), 400);
           throw err;
         }
         if (!result.ok) {
@@ -120,15 +124,9 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         let r;
         try {
           r = await setStatus(db, { ...body, requestId: c.req.param("id") }, { repo, publish });
-        } catch (err: any) {
-          if (err?.name === "ZodError") {
-            return c.json(
-              apiError("VALIDATION", {
-                details: err.issues?.map((i: any) => ({ path: i.path.join("."), message: i.message })),
-              }),
-              400,
-            );
-          }
+        } catch (err: unknown) {
+          const details = zodFieldErrors(err);
+          if (details) return c.json(apiError("VALIDATION", { details }), 400);
           throw err;
         }
         if (!r.ok) return c.json(apiError("NOT_FOUND"), 404);
@@ -172,10 +170,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
   },
 });
 
-function facade(db: any, repo: ReturnType<typeof createRequestsRepo>) {
+function facade(db: Executor, repo: ReturnType<typeof createRequestsRepo>) {
   return {
-    listForMember: (exec: any, memberId: string) => repo.listForMember(exec ?? db, memberId),
-    get: (exec: any, memberId: string, id: string) => repo.getForMember(exec ?? db, memberId, id),
+    listForMember: (exec: Executor | undefined, memberId: string) => repo.listForMember(exec ?? db, memberId),
+    get: (exec: Executor | undefined, memberId: string, id: string) => repo.getForMember(exec ?? db, memberId, id),
     toRequestVM,
   };
 }

@@ -11,6 +11,7 @@ describe("host boot", () => {
     for (const [type, def] of Object.entries(EVENT_CATALOGUE)) {
       const consumers = registry.consumersOf(type);
       const d = def as { noConsumer?: boolean; consumerOwedBy?: string; deprecated?: string };
+      // OR, not XOR: deprecated already implies no live consumer. Setting both is redundant but still excused.
       if (d.noConsumer || d.deprecated) continue;
       if (consumers.length === 0 && d.consumerOwedBy) {
         owed.push(`${type} (${d.consumerOwedBy})`);

@@ -9,9 +9,9 @@ const OUT_TW = "apps/mobile/tailwind.theme.js";
 const check = process.argv.includes("--check");
 
 const md = readFileSync(DESIGN, "utf8");
-const fm = md.match(/^---\n([\s\S]*?)\n---/);
+const fm = md.match(/^---\r?\n([\s\S]*?)\r?\n---/);
 if (!fm) throw new Error("DESIGN.md has no YAML front-matter");
-const y = parse(fm[1]) as {
+const y = parse(fm[1].replace(/\r/g, "")) as {
   colors: Record<string, string>;
   typography: Record<
     string,
@@ -70,7 +70,7 @@ for (const [path, content] of [
   [OUT_TS, ts],
   [OUT_TW, tw],
 ] as const) {
-  const current = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const current = existsSync(path) ? readFileSync(path, "utf8").replace(/\r\n/g, "\n") : "";
   if (current !== content) {
     changed = true;
     if (check) console.error(`tokens out of date: ${path}`);

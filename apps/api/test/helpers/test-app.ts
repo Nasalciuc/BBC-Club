@@ -112,6 +112,7 @@ export async function testApp(
               occurredAt: new Date(),
             },
             principal: { kind: "system", role: "system", source: "handler", actorMemberId: payload.memberId },
+            deliveryId: "0",
             logger: built.platform.logger,
             attempt: 1,
             signal: new AbortController().signal,

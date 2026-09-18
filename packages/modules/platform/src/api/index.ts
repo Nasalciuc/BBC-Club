@@ -55,7 +55,7 @@ export function createPlatform(db: any, opts: { level?: string; pretty?: boolean
 
 export { type Handler, type HandlerContext, type EventDefinition } from "../events/registry";
 export { type Flags } from "../flags";
-export { type Jobs } from "../jobs";
+export { type Jobs, type JobContext } from "../jobs";
 export { type Logger, type Metrics } from "../telemetry";
 
 /** The host imports this from "@bbc/platform"; it is defined in jobs/builtin.ts. */

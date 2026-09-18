@@ -85,6 +85,7 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
             handler(
               {
                 tx,
+                deliveryId: String(row.id),
                 event: {
                   id: String(row.event_id),
                   type: row.type,
