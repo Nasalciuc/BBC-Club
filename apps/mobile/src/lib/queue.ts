@@ -1,25 +1,19 @@
 import { createMMKV } from "react-native-mmkv";
 import type { RequestBody } from "@bbc/shared/api/v1/requests";
+import { flushItems, parseQueue, type QueuedRequest, type SubmitResult } from "./queue-logic";
 
 const storage = createMMKV({ id: "bbc-request-queue" });
 const KEY = "pending";
 
-export type QueuedRequest = {
-  id: string;
-  body: RequestBody;
-  idempotencyKey: string;
-  enqueuedAt: string;
-};
+export type { QueuedRequest };
 
 function readAll(): QueuedRequest[] {
   const raw = storage.getString(KEY);
   if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as QueuedRequest[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const parsed = parseQueue(raw);
+  if (parsed.ok) return parsed.items;
+  storage.set(`${KEY}.corrupt.${Date.now()}`, raw);
+  return [];
 }
 
 function writeAll(items: QueuedRequest[]): void {
@@ -32,6 +26,7 @@ export function enqueueRequest(body: RequestBody, idempotencyKey: string): Queue
     body,
     idempotencyKey,
     enqueuedAt: new Date().toISOString(),
+    attempts: 0,
   };
   writeAll([item, ...readAll()]);
   return item;
@@ -45,21 +40,12 @@ export function removeQueued(id: string): void {
   writeAll(readAll().filter((q) => q.id !== id));
 }
 
-/** Flush the queue. Caller must await each submit — no fire-and-forget. */
+/** Flush the queue. One item's failure must not stop the others. Caller must await. */
 export async function flushQueue(
-  submit: (body: RequestBody, key: string) => Promise<{ ok: boolean }>,
-): Promise<{ sent: number; failed: number }> {
+  submit: (body: RequestBody, key: string) => Promise<SubmitResult>,
+): Promise<{ sent: number; failed: number; dropped: number }> {
   const pending = readAll();
-  let sent = 0;
-  let failed = 0;
-  for (const item of pending) {
-    const result = await submit(item.body, item.idempotencyKey);
-    if (result.ok) {
-      removeQueued(item.id);
-      sent += 1;
-    } else {
-      failed += 1;
-    }
-  }
-  return { sent, failed };
+  const { sent, failed, dropped, remaining } = await flushItems(pending, submit);
+  writeAll(remaining);
+  return { sent, failed, dropped };
 }

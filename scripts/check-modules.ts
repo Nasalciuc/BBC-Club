@@ -130,6 +130,10 @@ for (const m of modules) {
       }
     }
 }
+
+assertMobileFetchHasSignal();
+assertMobileJsonParseValidated();
+
 if (problems.length) {
   console.error("module:check FAILED\n  - " + problems.join("\n  - "));
   process.exit(1);
@@ -142,12 +146,48 @@ if (owed.length)
 const moduleCount = modules.filter((m) => m.replace(/\\/g, "/").startsWith("packages/modules/")).length;
 console.log(`module:check OK (${moduleCount} modules)`);
 
-function walk(dir: string): string[] {
+function walk(dir: string, ext = ".ts"): string[] {
   return readdirSync(dir).flatMap((f) => {
     if (f === "node_modules" || f === ".git" || f === "dist" || f === ".turbo") return [];
     const p = join(dir, f);
-    return statSync(p).isDirectory() ? walk(p) : p.endsWith(".ts") ? [p] : [];
+    if (statSync(p).isDirectory()) return walk(p, ext);
+    return p.endsWith(ext) || (ext === ".ts" && p.endsWith(".tsx")) ? [p] : [];
   });
+}
+
+/** Every HTTP `fetch(` in the app must carry a timeout signal. NetInfo.fetch is excluded (method call). */
+function assertMobileFetchHasSignal() {
+  const root = join("apps", "mobile", "src");
+  if (!existsSync(root)) return;
+  for (const f of [...walk(root, ".ts"), ...walk(root, ".tsx")].filter((x, i, a) => a.indexOf(x) === i)) {
+    const src = readFileSync(f, "utf8");
+    const re = /(?<!\.)\bfetch\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      const open = src.indexOf("(", m.index);
+      const call = sliceBalanced(src, open, "(", ")");
+      if (!/\bsignal\s*:/.test(call)) {
+        problems.push(`${f.replace(/\\/g, "/")}: fetch( without signal: — add timeoutSignal (F2)`);
+      }
+    }
+  }
+}
+
+function assertMobileJsonParseValidated() {
+  const root = join("apps", "mobile", "src");
+  if (!existsSync(root)) return;
+  for (const f of [...walk(root, ".ts"), ...walk(root, ".tsx")].filter((x, i, a) => a.indexOf(x) === i)) {
+    const lines = readFileSync(f, "utf8").split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i]!.includes("JSON.parse(")) continue;
+      const window = lines.slice(Math.max(0, i - 2), i + 16).join("\n");
+      if (!window.includes("safeParse")) {
+        problems.push(
+          `${f.replace(/\\/g, "/")}:${i + 1}: JSON.parse without safeParse nearby — validate the blob (F1c)`,
+        );
+      }
+    }
+  }
 }
 
 /** A consumer handler runs inside the poller's delivery transaction. An await on an integration port there

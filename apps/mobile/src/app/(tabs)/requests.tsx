@@ -24,7 +24,11 @@ export default function RequestsScreen() {
     let cancelled = false;
     void (async () => {
       setLoading(true);
-      await flushQueue((body, key) => submitRequest(body, key));
+      try {
+        await flushQueue((body, key) => submitRequest(body, key));
+      } catch {
+        // flushQueue isolates per item; this keeps fetchRequests running
+      }
       const result = await fetchRequests();
       if (cancelled) return;
       setLoading(false);
@@ -34,7 +38,12 @@ export default function RequestsScreen() {
       }
       setItems(result.data.items);
       setError(null);
-    })();
+    })().catch(() => {
+      if (!cancelled) {
+        setLoading(false);
+        setError("Something went wrong.");
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -101,9 +110,15 @@ export default function RequestsScreen() {
                           ? () => {
                               void (async () => {
                                 void listQueued();
-                                await flushQueue((body, key) => submitRequest(body, key));
+                                try {
+                                  await flushQueue((body, key) => submitRequest(body, key));
+                                } catch {
+                                  // per-item isolation lives in flushQueue
+                                }
                                 setReloadToken((n) => n + 1);
-                              })();
+                              })().catch(() => {
+                                setReloadToken((n) => n + 1);
+                              });
                             }
                           : undefined
                       }
