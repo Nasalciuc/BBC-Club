@@ -25,6 +25,32 @@ describe("POST /v1/requests", () => {
     await t.close();
   });
 
+  it("stores E.164 and phone_valid from libphonenumber, never a literal", async () => {
+    const t = await testApp({ suite: "requests-phone" });
+    const r = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    expect(r.status).toBe(201);
+    const { id } = (await r.json()) as { id: string };
+    const [row]: any = await t.db.execute(sql`SELECT phone_e164, phone_valid FROM requests.requests WHERE id = ${id}`);
+    expect(row.phone_e164).toBe("+12125550148");
+    expect(row.phone_valid).toBe(true);
+    await t.platform.jobs.run("send-requests");
+    expect((t.crm.submitted[0] as { phone_valid: boolean }).phone_valid).toBe(true);
+    await t.close();
+  });
+
+  it("rejects an invalid phone with the field named", async () => {
+    const t = await testApp({ suite: "requests-phone-bad" });
+    const r = await t.submitRequestAs(
+      t.memberA,
+      t.sampleRequestBody({ contact: { name: "Alex Morgan", phone: "1234567", email: "alex@test.dev" } }),
+    );
+    expect(r.status).toBe(400);
+    const body = (await r.json()) as { error: { code: string; details?: { path: string }[] } };
+    expect(body.error.code).toBe("VALIDATION");
+    expect(body.error.details?.some((d) => d.path === "contact.phone")).toBe(true);
+    await t.close();
+  });
+
   it("a slow CRM does not hold the poller transaction or starve the pool", async () => {
     const t = await testApp({ suite: "requests-pool", poolMax: 10 });
     t.crm.setSubmitDelayMs(10_000);

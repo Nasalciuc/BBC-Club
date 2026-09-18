@@ -4,6 +4,7 @@ import { withTx, type Executor } from "@bbc/db";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
+import { parseMemberPhone } from "@bbc/shared/phone";
 import { bumpCounter } from "@bbc/db/helpers";
 import { rateLimits } from "@bbc/platform/schema";
 
@@ -35,6 +36,8 @@ export async function submit(
   deps: { publish: Publish },
 ) {
   const body = RequestBody.parse(raw);
+  const phone = parseMemberPhone(body.contact.phone);
+  if (!phone.valid) return { ok: false as const, code: "VALIDATION" as const };
 
   // Rate limits before the write — 5/h per member, 3/h per IP (reCAPTCHA deferred).
   const windowStart = new Date();
@@ -94,6 +97,8 @@ export async function submit(
         contactName: body.contact.name,
         contactPhone: body.contact.phone,
         contactEmail: body.contact.email,
+        phoneE164: phone.e164,
+        phoneValid: phone.valid,
         note: body.note ?? null,
         source: actor.source,
         appVersion: actor.appVersion,
