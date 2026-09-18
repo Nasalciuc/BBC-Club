@@ -1,0 +1,81 @@
+code,name,city,country,country_code,region,lat,lng,popularity
+JFK,John F Kennedy International,New York,United States,US,americas,40.641300,-73.778100,100
+LHR,Heathrow,London,United Kingdom,GB,europe,51.470000,-0.454300,98
+CDG,Charles de Gaulle,Paris,France,FR,europe,49.009700,2.547900,95
+HND,Haneda,Tokyo,Japan,JP,asia,35.549400,139.779800,94
+DXB,Dubai International,Dubai,United Arab Emirates,AE,middle_east,25.253200,55.365700,92
+SIN,Changi,Singapore,Singapore,SG,asia,1.364400,103.991500,90
+FRA,Frankfurt am Main,Frankfurt,Germany,DE,europe,50.037900,8.562200,88
+ZRH,Zurich Airport,Zurich,Switzerland,CH,europe,47.458200,8.555500,80
+MAD,Adolfo Suárez Madrid–Barajas,Madrid,Spain,ES,europe,40.498300,-3.567600,82
+FCO,Leonardo da Vinci–Fiumicino,Rome,Italy,IT,europe,41.800300,12.238900,78
+IST,Istanbul Airport,Istanbul,Turkey,TR,europe,41.275300,28.751900,85
+NRT,Narita International,Tokyo,Japan,JP,asia,35.772000,140.392900,86
+EWR,Newark Liberty International,Newark,United States,US,americas,40.689500,-74.174500,70
+LAX,Los Angeles International,Los Angeles,United States,US,americas,33.942500,-118.408100,96
+ORD,O'Hare International,Chicago,United States,US,americas,41.974200,-87.907300,91
+SFO,San Francisco International,San Francisco,United States,US,americas,37.621300,-122.379000,89
+MIA,Miami International,Miami,United States,US,americas,25.795900,-80.287000,84
+BOS,Logan International,Boston,United States,US,americas,42.365600,-71.009600,75
+SEA,Seattle-Tacoma International,Seattle,United States,US,americas,47.450200,-122.308800,74
+ATL,Hartsfield-Jackson Atlanta,Atlanta,United States,US,americas,33.640700,-84.427700,93
+DFW,Dallas/Fort Worth International,Dallas,United States,US,americas,32.899800,-97.040300,87
+IAH,George Bush Intercontinental,Houston,United States,US,americas,29.990200,-95.336800,72
+DEN,Denver International,Denver,United States,US,americas,39.856100,-104.673700,76
+YYZ,Toronto Pearson,Toronto,Canada,CA,americas,43.677700,-79.624800,81
+YVR,Vancouver International,Vancouver,Canada,CA,americas,49.196700,-123.181500,68
+MEX,Mexico City International,Mexico City,Mexico,MX,americas,19.436300,-99.072100,77
+GRU,São Paulo–Guarulhos,São Paulo,Brazil,BR,americas,-23.435600,-46.473100,79
+GIG,Rio de Janeiro–Galeão,Rio de Janeiro,Brazil,BR,americas,-22.809900,-43.250500,65
+AMS,Amsterdam Airport Schiphol,Amsterdam,Netherlands,NL,europe,52.310500,4.768300,94
+MUC,Munich Airport,Munich,Germany,DE,europe,48.353800,11.786100,83
+BCN,Barcelona–El Prat,Barcelona,Spain,ES,europe,41.297100,2.078500,81
+LIS,Humberto Delgado,Lisbon,Portugal,PT,europe,38.774200,-9.134200,70
+DUB,Dublin Airport,Dublin,Ireland,IE,europe,53.421300,-6.270100,73
+CPH,Copenhagen Airport,Copenhagen,Denmark,DK,europe,55.618100,12.656000,71
+ARN,Stockholm Arlanda,Stockholm,Sweden,SE,europe,59.651900,17.918600,69
+OSL,Oslo Gardermoen,Oslo,Norway,NO,europe,60.193900,11.100400,66
+VIE,Vienna International,Vienna,Austria,AT,europe,48.110300,16.569700,74
+BRU,Brussels Airport,Brussels,Belgium,BE,europe,50.901400,4.484400,67
+MXP,Milan Malpensa,Milan,Italy,IT,europe,45.630600,8.728100,72
+ATH,Athens International,Athens,Greece,GR,europe,37.936400,23.944500,70
+WAW,Warsaw Chopin,Warsaw,Poland,PL,europe,52.165700,20.967100,64
+PRG,Václav Havel Prague,Prague,Czechia,CZ,europe,50.100800,14.260000,68
+BUD,Budapest Ferenc Liszt,Budapest,Hungary,HU,europe,47.429800,19.261100,62
+HEL,Helsinki-Vantaa,Helsinki,Finland,FI,europe,60.317200,24.963300,65
+DOH,Hamad International,Doha,Qatar,QA,middle_east,25.273100,51.608100,88
+AUH,Abu Dhabi International,Abu Dhabi,United Arab Emirates,AE,middle_east,24.433000,54.651100,75
+RUH,King Khalid International,Riyadh,Saudi Arabia,SA,middle_east,24.957600,46.698800,73
+CAI,Cairo International,Cairo,Egypt,EG,africa,30.121900,31.405600,76
+JNB,O. R. Tambo International,Johannesburg,South Africa,ZA,africa,-26.139200,28.246000,78
+NBO,Jomo Kenyatta International,Nairobi,Kenya,KE,africa,-1.319200,36.927800,60
+ADD,Addis Ababa Bole,Addis Ababa,Ethiopia,ET,africa,8.977900,38.799300,58
+HKG,Hong Kong International,Hong Kong,China,HK,asia,22.308000,113.918500,91
+ICN,Incheon International,Seoul,South Korea,KR,asia,37.460200,126.440700,89
+PVG,Shanghai Pudong,Shanghai,China,CN,asia,31.144300,121.808300,90
+PEK,Beijing Capital,Beijing,China,CN,asia,40.079900,116.603100,87
+BKK,Suvarnabhumi,Bangkok,Thailand,TH,asia,13.690000,100.750100,86
+KUL,Kuala Lumpur International,Kuala Lumpur,Malaysia,MY,asia,2.745600,101.709900,80
+MNL,Ninoy Aquino International,Manila,Philippines,PH,asia,14.508600,121.019400,74
+CGK,Soekarno–Hatta,Jakarta,Indonesia,ID,asia,-6.125600,106.655800,77
+DEL,Indira Gandhi International,Delhi,India,IN,asia,28.556200,77.100000,85
+BOM,Chhatrapati Shivaji Maharaj,Mumbai,India,IN,asia,19.089600,72.865600,82
+SYD,Sydney Kingsford Smith,Sydney,Australia,AU,oceania,-33.939900,151.175300,88
+MEL,Melbourne Airport,Melbourne,Australia,AU,oceania,-37.673300,144.843300,79
+AKL,Auckland Airport,Auckland,New Zealand,NZ,oceania,-37.008200,174.785000,70
+BNE,Brisbane Airport,Brisbane,Australia,AU,oceania,-27.384200,153.117500,68
+PER,Perth Airport,Perth,Australia,AU,oceania,-31.940300,115.966900,64
+LGW,Gatwick,London,United Kingdom,GB,europe,51.153700,-0.182100,84
+STN,London Stansted,London,United Kingdom,GB,europe,51.886000,0.238900,60
+ORY,Paris Orly,Paris,France,FR,europe,48.723300,2.379400,72
+NCE,Nice Côte d'Azur,Nice,France,FR,europe,43.658400,7.215900,61
+GVA,Geneva Airport,Geneva,Switzerland,CH,europe,46.238100,6.108900,70
+EDI,Edinburgh Airport,Edinburgh,United Kingdom,GB,europe,55.950000,-3.372500,63
+MAN,Manchester Airport,Manchester,United Kingdom,GB,europe,53.353700,-2.274950,71
+TLV,Ben Gurion,Tel Aviv,Israel,IL,middle_east,32.011400,34.886700,80
+BEY,Beirut–Rafic Hariri,Beirut,Lebanon,LB,middle_east,33.820900,35.488400,55
+CMN,Mohammed V International,Casablanca,Morocco,MA,africa,33.367500,-7.589800,62
+LOS,Murtala Muhammed,Lagos,Nigeria,NG,africa,6.577400,3.321200,66
+ACC,Kotoka International,Accra,Ghana,GH,africa,5.605200,-0.166800,52
+PPT,Faa'a International,Papeete,French Polynesia,PF,oceania,-17.553700,-149.606400,40
+HNL,Daniel K. Inouye International,Honolulu,United States,US,americas,21.318700,-157.922500,73

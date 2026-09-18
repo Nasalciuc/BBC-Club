@@ -7,6 +7,7 @@ import { membersModule } from "@bbc/members/module";
 import { notificationsModule } from "@bbc/notifications/module";
 import { proposalsModule } from "@bbc/proposals/module";
 import { engagementModule } from "@bbc/engagement/module";
+import { catalogModule } from "@bbc/catalog/module";
 import { requestsModule } from "@bbc/requests/module";
 import { mobileBff } from "./presentation/mobile";
 
@@ -20,7 +21,8 @@ export function modules(overrides: Record<string, any> = {}): ModuleDescriptor<a
     membersModule(),
     notificationsModule(), // core — push via needs; override lands on pushModule
     proposalsModule(),
-    engagementModule(), // domain — implicit signals only after Branch 3
+    engagementModule(), // domain
+    catalogModule(),
     requestsModule(), // domain — member requests → CRM
     mobileBff(), // presentation
   ];
