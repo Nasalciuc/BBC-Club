@@ -59,16 +59,16 @@ CREATE TABLE IF NOT EXISTS catalog.airports (
   region text NOT NULL,
   lat numeric(9, 6) NOT NULL,
   lng numeric(9, 6) NOT NULL,
-  popularity integer DEFAULT 0 NOT NULL
+  popularity integer DEFAULT 0 NOT NULL,
+  created_at timestamptz DEFAULT now() NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS airports_city ON catalog.airports (city);
 CREATE INDEX IF NOT EXISTS airports_region ON catalog.airports (region);
 
--- updated_at trigger (same as other owned tables)
-DO $$ BEGIN
-  CREATE TRIGGER fares_set_updated_at
-    BEFORE UPDATE ON catalog.fares
-    FOR EACH ROW EXECUTE FUNCTION platform.set_updated_at();
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+-- updated_at trigger (verify §6 requires exact name trg_updated_at)
+DROP TRIGGER IF EXISTS fares_set_updated_at ON catalog.fares;
+DROP TRIGGER IF EXISTS trg_updated_at ON catalog.fares;
+CREATE TRIGGER trg_updated_at
+  BEFORE UPDATE ON catalog.fares
+  FOR EACH ROW EXECUTE FUNCTION platform.set_updated_at();

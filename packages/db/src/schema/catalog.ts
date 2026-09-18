@@ -54,7 +54,7 @@ export const fares = catalog.table(
   ],
 );
 
-/** Airports for pins and autocomplete. OpenFlights subset; no created_at (static reference). */
+/** Airports for pins and autocomplete. OpenFlights subset. */
 export const airports = catalog.table(
   "airports",
   {
@@ -67,6 +67,7 @@ export const airports = catalog.table(
     lat: numeric("lat", { precision: 9, scale: 6 }).notNull(),
     lng: numeric("lng", { precision: 9, scale: 6 }).notNull(),
     popularity: integer("popularity").notNull().default(0),
+    createdAt: createdAt(),
   },
   (t) => [index("airports_city").on(t.city), index("airports_region").on(t.region)],
 );
