@@ -105,3 +105,53 @@ describe("notifications fan-out + dispatch", () => {
     await t.close();
   });
 });
+
+describe("quote-ready push", () => {
+  it("quoted creates one inbox row and one dispatch attempt; assigned creates none", async () => {
+    const t = await testApp({ suite: "notif-quote" });
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const { id } = (await created.json()) as { id: string };
+    const headers = {
+      "Content-Type": "application/json",
+      "X-Internal-Secret": t.internalSecret,
+    };
+
+    const assigned = await t.app.request(`/v1/internal/requests/${id}/status`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ status: "assigned" }),
+    });
+    expect(assigned.status).toBe(200);
+    await t.drainAll();
+    const afterAssigned: any[] = await t.db.execute(sql`
+      SELECT id FROM notifications.notifications
+      WHERE member_id = ${t.memberA.id} AND request_id = ${id}`);
+    expect(afterAssigned.length).toBe(0);
+
+    const quoted = await t.app.request(`/v1/internal/requests/${id}/status`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ status: "quoted" }),
+    });
+    expect(quoted.status).toBe(200);
+    await t.drainAll();
+    const inbox: any[] = await t.db.execute(sql`
+      SELECT id, title, status, attempts FROM notifications.notifications
+      WHERE member_id = ${t.memberA.id} AND request_id = ${id} AND category = 'transactional'`);
+    expect(inbox.length).toBe(1);
+    expect(inbox[0].title).toBe("Your quote is ready");
+
+    await t.db.execute(sql`
+      UPDATE notifications.notifications SET scheduled_for = now() - interval '1 second' WHERE id = ${inbox[0].id}`);
+    const job = await t.app.request("/v1/internal/run/dispatch", {
+      method: "POST",
+      headers: { "X-Internal-Secret": t.internalSecret },
+    });
+    expect(job.status).toBe(200);
+    const after: any[] = await t.db.execute(sql`
+      SELECT status, attempts FROM notifications.notifications WHERE id = ${inbox[0].id}`);
+    expect(Number(after[0].attempts)).toBeGreaterThanOrEqual(1);
+    expect(["sent", "delivered"]).toContain(after[0].status);
+    await t.close();
+  });
+});

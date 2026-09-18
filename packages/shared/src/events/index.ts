@@ -17,6 +17,8 @@ type CatalogueEntry = {
   schema: z.ZodTypeAny;
   upcasters?: Record<number, (p: any) => any>;
   noConsumer?: boolean;
+  /** Retired type: schema stays so historical journal rows parse. Implies no live consumer. */
+  deprecated?: string;
   /** Set while the consuming module is not written yet; boot warns instead of failing. Remove when the consumer lands. */
   consumerOwedBy?: "stage-1" | "stage-2" | "stage-3" | "stage-5";
 };
@@ -34,13 +36,13 @@ export const EVENT_CATALOGUE = {
   "offer.expired": { version: 1, schema: OfferExpiredV1 },
   "offer.withdrawn": { version: 1, schema: OfferWithdrawnV1 },
   "offer.viewed": { version: 1, schema: OfferViewedV1, noConsumer: true },
-  "offer.responded": { version: 1, schema: OfferRespondedV1 },
+  "offer.responded": { version: 1, schema: OfferRespondedV1, deprecated: "branch-3" },
   "notification.delivered": { version: 1, schema: NotificationDeliveredV1, noConsumer: true },
   "notification.failed": { version: 1, schema: NotificationFailedV1, noConsumer: true },
   "crm.mirror.synced": { version: 1, schema: CrmMirrorSyncedV1, consumerOwedBy: "stage-5" },
   "crm.activity_created": { version: 1, schema: CrmActivityCreatedV1, noConsumer: true },
   "request.submitted": { version: 1, schema: RequestSubmittedV1 },
-  "request.status_changed": { version: 1, schema: RequestStatusChangedV1, consumerOwedBy: "stage-5" },
+  "request.status_changed": { version: 1, schema: RequestStatusChangedV1 },
   "campaign.run_started": { version: 1, schema: CampaignRunStartedV1, consumerOwedBy: "stage-5" },
 } as const satisfies Record<string, CatalogueEntry>;
 

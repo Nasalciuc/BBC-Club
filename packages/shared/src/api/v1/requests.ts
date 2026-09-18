@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isMemberPhone } from "../../phone";
 
 /** date = YYYY-MM-DD only — never an ISO timestamp (a local 21:00 must not become tomorrow). */
 export const RequestLeg = z.object({
@@ -27,7 +28,9 @@ export const RequestBody = z
     passengers: Passengers,
     contact: z.object({
       name: z.string().min(2).max(80),
-      phone: z.string().min(7).max(20),
+      phone: z.string().min(7).max(20).refine(isMemberPhone, {
+        message: "That phone number doesn't look right.",
+      }),
       email: z.string().email(),
     }),
     note: z.string().max(500).optional(),

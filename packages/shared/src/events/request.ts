@@ -20,6 +20,8 @@ export const RequestStatusChangedV1 = z.object({
   memberId: z.string().nullable(),
   from: z.string(),
   to: z.string(),
+  /** Present on new publishes; optional so historical journal rows still parse. */
+  route: z.string().optional(),
   changedAt: z.string().datetime(),
 });
 

@@ -115,6 +115,34 @@ try {
     }
   }
 
+  const requestsPhone = join(migrationsDir, "0008_requests_phone.sql");
+  if (existsSync(requestsPhone)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0008_requests_phone.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(requestsPhone, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0008_requests_phone.sql')`);
+      });
+      console.log("requests phone_e164/phone_valid applied");
+    }
+  }
+
+  const notifRequestId = join(migrationsDir, "0009_notifications_request_id.sql");
+  if (existsSync(notifRequestId)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0009_notifications_request_id.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(notifRequestId, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0009_notifications_request_id.sql')`);
+      });
+      console.log("notifications request_id applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {

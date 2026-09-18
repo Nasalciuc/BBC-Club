@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z, ZodError } from "zod";
 
 /** One error shape for every API response. The app maps `code` to a RequestState; `message` is already
  *  in the club's voice; `details` is only ever field-level validation information. */
@@ -68,6 +68,11 @@ export function apiError(
       retryAfterSeconds: opts.retryAfterSeconds,
     },
   };
+}
+
+export function zodFieldErrors(err: unknown): { path: string; message: string }[] | null {
+  if (err instanceof ZodError) return err.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+  return null;
 }
 
 /** Thrown inside modules; the host's error middleware turns it into the shape above with the right status. */

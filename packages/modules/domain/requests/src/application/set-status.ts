@@ -35,6 +35,9 @@ export async function setStatus(exec: Executor, raw: unknown, deps: { repo: Requ
     const row = await deps.repo.setStatus(tx, evt.requestId, evt.status, evt.note ?? null, evt.agentId ?? "crm");
     if (!row) return { ok: false as const, code: "NOT_FOUND" as const };
 
+    const legs = current.legs as { from: string; to: string }[];
+    const route = legs?.length ? `${legs[0]!.from} → ${legs[legs.length - 1]!.to}` : undefined;
+
     await deps.publish(tx, {
       type: "request.status_changed",
       version: 1,
@@ -46,6 +49,7 @@ export async function setStatus(exec: Executor, raw: unknown, deps: { repo: Requ
         memberId: current.memberId,
         from,
         to: evt.status,
+        route,
         changedAt: new Date().toISOString(),
       }),
     });

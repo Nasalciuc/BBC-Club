@@ -48,7 +48,7 @@ export function createPublisher(
           sql`, `,
         )}) AS v(consumer)
         WHERE e.id = ${evt.id}`);
-    } else if (!def.noConsumer) {
+    } else if (!def.noConsumer && !def.deprecated) {
       metrics?.inc("events_without_consumer", { type: input.type });
     }
     metrics?.inc("events_published", { type: input.type });

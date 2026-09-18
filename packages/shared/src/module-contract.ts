@@ -4,13 +4,53 @@ import type { Hono } from "hono";
 
 export type Layer = "platform" | "integration" | "core" | "domain" | "intelligence" | "presentation";
 
+/** Delivery transaction. `ctx.db` is a type error — a handler that escapes the poller's tx used to compile. */
+type TxChain = {
+  values: (v: unknown) => TxChain;
+  where: (c: unknown) => unknown;
+  returning: (sel?: unknown) => unknown;
+  onConflictDoNothing: (opts?: unknown) => unknown;
+};
+export type HandlerTx = {
+  execute: (...args: unknown[]) => Promise<unknown>;
+  insert: (table: unknown) => TxChain;
+  delete: (table: unknown) => TxChain;
+  select: (...args: unknown[]) => unknown;
+  update: (table: unknown) => TxChain;
+};
+
+export type HandlerLogger = {
+  debug?: (o: object, m?: string) => void;
+  info: (o: object, m?: string) => void;
+  warn: (o: object, m?: string) => void;
+  error: (o: object, m?: string) => void;
+};
+
+export type HandlerContext = {
+  tx: HandlerTx;
+  logger: HandlerLogger;
+  deliveryId: string;
+  event: {
+    id: string;
+    type: string;
+    version: number;
+    aggregateType: string;
+    aggregateId: string;
+    memberId: string | null;
+    occurredAt: Date;
+  };
+  principal: { kind: "system"; role: "system"; source: "handler"; actorMemberId?: string };
+  attempt: number;
+  signal: AbortSignal;
+};
+
 export type ModuleOutput<Exposes> = {
   /** The public facade other modules may receive as a port. */
   exposes?: Exposes;
   /** Routes mounted under their basePath; each already carries its own authorize(). */
   routes?: { basePath: string; app: Hono<any> }[];
   /** Event consumers, registered before the poller starts. */
-  consumers?: { type: string; name: string; handler: (ctx: any, payload: any) => Promise<void> }[];
+  consumers?: { type: string; name: string; handler: (ctx: HandlerContext, payload: unknown) => Promise<void> }[];
   /** Jobs exposed at /v1/internal/run/:name. Spec shape is owned by platform.jobs. */
   jobs?: { name: string; spec: unknown }[];
 };

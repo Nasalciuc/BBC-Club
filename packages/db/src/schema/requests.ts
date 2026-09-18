@@ -35,6 +35,8 @@ export const requests = requestsSchema.table(
     contactName: text("contact_name").notNull(),
     contactPhone: text("contact_phone").notNull(),
     contactEmail: text("contact_email").notNull(),
+    phoneE164: text("phone_e164"),
+    phoneValid: boolean("phone_valid").notNull().default(false),
     note: text("note"),
     status: requestStatus("status").notNull().default("received"),
     source: requestSource("source").notNull(),

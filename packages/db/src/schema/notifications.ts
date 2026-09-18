@@ -29,6 +29,7 @@ export const notificationsTable = notifications.table(
     body: text("body"),
     deepLink: text("deep_link"), // bbcclub://proposal/<id>
     offerId: uuid("offer_id"), // opaque, no FK across schemas
+    requestId: uuid("request_id"),
     sourceEventId: text("source_event_id"), // journal id that created it (dedupe/debug)
     status: notificationStatus("status").notNull().default("pending"),
     scheduledFor: tz("scheduled_for").notNull().defaultNow(), // quiet hours push it forward
@@ -57,6 +58,12 @@ export const notificationsTable = notifications.table(
     uniqueIndex("notif_member_offer_cat")
       .on(t.memberId, t.offerId, t.category)
       .where(sql`${t.offerId} IS NOT NULL`),
+    uniqueIndex("notif_member_request_cat")
+      .on(t.memberId, t.requestId, t.category)
+      .where(sql`${t.requestId} IS NOT NULL`),
+    index("notif_request")
+      .on(t.requestId)
+      .where(sql`${t.requestId} IS NOT NULL`),
     check("notif_attempts_nonneg", sql`${t.attempts} >= 0`),
     check("notif_sent_has_ticket_or_error", sql`${t.status} <> 'failed' OR ${t.lastError} IS NOT NULL`),
   ],

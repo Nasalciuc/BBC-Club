@@ -12,8 +12,11 @@ import { testAuth } from "./test-auth";
  *
  *  Seed rules: never pass validUntil < now to ingest (CHECK offers_valid_after_publish); targeting=user needs
  *  targetMemberId in the same payload; Path A password tests use withPathAPassword (no credential yet). */
-export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[0]; suite?: string } = {}) {
-  const iso = await isolatedDb(opts.suite ?? "api", { max: 6 });
+export async function testApp(
+  opts: { knownClients?: Parameters<typeof mockCrm>[0]; suite?: string; poolMax?: number } = {},
+) {
+  const poolMax = opts.poolMax ?? 6;
+  const iso = await isolatedDb(opts.suite ?? "api", { max: poolMax });
   const env = loadEnv({ ...process.env, DATABASE_URL: iso.url });
   const db = iso.db;
   const email = capturingEmail();
@@ -109,6 +112,7 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
               occurredAt: new Date(),
             },
             principal: { kind: "system", role: "system", source: "handler", actorMemberId: payload.memberId },
+            deliveryId: "0",
             logger: built.platform.logger,
             attempt: 1,
             signal: new AbortController().signal,
@@ -298,6 +302,17 @@ export async function testApp(opts: { knownClients?: Parameters<typeof mockCrm>[
       forMember: async (memberId: string) =>
         (await db.execute(sql`SELECT payload FROM platform.domain_events WHERE member_id = ${memberId}`)) as any[],
     },
+    /** Connections in the pool that are not idle — used to assert a consumer is not holding SKIP LOCKED. */
+    poolBusy: async () => {
+      const [{ busy }]: any = await db.execute(sql`
+        SELECT count(*)::int AS busy
+        FROM pg_stat_activity
+        WHERE datname = current_database()
+          AND pid <> pg_backend_pid()
+          AND state IS DISTINCT FROM 'idle'`);
+      return Number(busy);
+    },
+    poolMax,
     close: async () => {
       await built.shutdown();
       await iso.drop();

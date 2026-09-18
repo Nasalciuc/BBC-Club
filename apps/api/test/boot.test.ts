@@ -10,8 +10,9 @@ describe("host boot", () => {
     const owed: string[] = [];
     for (const [type, def] of Object.entries(EVENT_CATALOGUE)) {
       const consumers = registry.consumersOf(type);
-      const d = def as { noConsumer?: boolean; consumerOwedBy?: string };
-      if (d.noConsumer) continue;
+      const d = def as { noConsumer?: boolean; consumerOwedBy?: string; deprecated?: string };
+      // OR, not XOR: deprecated already implies no live consumer. Setting both is redundant but still excused.
+      if (d.noConsumer || d.deprecated) continue;
       if (consumers.length === 0 && d.consumerOwedBy) {
         owed.push(`${type} (${d.consumerOwedBy})`);
         continue;
@@ -96,6 +97,7 @@ describe("smoke = Demo 2", () => {
     });
     expect(r.status).toBe(201);
     await t.drainAll();
+    await t.platform.jobs.run("send-requests");
     expect(t.crm.submitted.length).toBeGreaterThan(0);
     const [{ n }]: any = await t.db.execute(
       sql`SELECT count(*)::int n FROM requests.requests WHERE contact_email = ${email}`,

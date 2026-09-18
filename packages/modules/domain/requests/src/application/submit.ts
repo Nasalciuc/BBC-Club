@@ -4,6 +4,7 @@ import { withTx, type Executor } from "@bbc/db";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
+import { parseMemberPhone } from "@bbc/shared/phone";
 import { bumpCounter } from "@bbc/db/helpers";
 import { rateLimits } from "@bbc/platform/schema";
 
@@ -35,8 +36,20 @@ export async function submit(
   deps: { publish: Publish },
 ) {
   const body = RequestBody.parse(raw);
+  const phone = parseMemberPhone(body.contact.phone);
+  if (!phone.valid) return { ok: false as const, code: "VALIDATION" as const };
 
-  // Rate limits before the write — 5/h per member, 3/h per IP (reCAPTCHA deferred).
+  // Idempotency first: a replay is not a new request and must not cost quota.
+  const existing = await exec.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
+  if (existing.length > 0) {
+    const row = existing[0]!;
+    // Key is globally unique; another member must not receive this row (PII).
+    if (row.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
+    return { ok: true as const, request: row, created: false as const };
+  }
+
+  // Clock-hour window, not rolling: five at 10:58 and five at 11:01 is ten in three minutes.
+  // Acceptable at this volume; a rolling window would be the other trade-off, not silence.
   const windowStart = new Date();
   windowStart.setMinutes(0, 0, 0);
   const expiresAt = new Date(windowStart.getTime() + 3_600_000);
@@ -94,6 +107,8 @@ export async function submit(
         contactName: body.contact.name,
         contactPhone: body.contact.phone,
         contactEmail: body.contact.email,
+        phoneE164: phone.e164,
+        phoneValid: phone.valid,
         note: body.note ?? null,
         source: actor.source,
         appVersion: actor.appVersion,

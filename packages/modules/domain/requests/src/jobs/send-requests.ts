@@ -5,6 +5,7 @@ type Logger = { warn: (obj: object, msg: string) => void };
 
 type ClaimedRow = {
   id: string;
+  reference: string;
   contact_name: string;
   contact_phone: string;
   contact_email: string;
@@ -15,6 +16,8 @@ type ClaimedRow = {
   source: string;
   app_version: string | null;
   send_attempts: number;
+  phone_valid: boolean;
+  phone_e164: string | null;
 };
 
 /** Every minute. CRM call lives here, outside submit tx. Six attempts; then stays not_sent for member retry. */
@@ -31,12 +34,17 @@ export function createSendRequestsJob(deps: {
     for (const row of rows) {
       try {
         const { crmRequestId } = await deps.crm.submitRequest({
-          client: { name: row.contact_name, phone: row.contact_phone, email: row.contact_email },
+          reference: row.reference,
+          client: {
+            name: row.contact_name,
+            phone: row.phone_e164 ?? row.contact_phone,
+            email: row.contact_email,
+          },
           flights: row.legs,
           trip_type: row.trip_type,
           cabin_class: row.cabin === "business" ? "Business Class" : "First Class",
           passengers: row.passengers,
-          phone_valid: true,
+          phone_valid: row.phone_valid,
           _source: row.source,
           _app_version: row.app_version,
         });

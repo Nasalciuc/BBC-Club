@@ -4,6 +4,7 @@ export function mockCrm(known: { email: string; crmClientId: string; fullName?: 
   const submitted: unknown[] = [];
   let down = false;
   let submitFails = 0;
+  let submitDelayMs = 0;
   return {
     activities,
     submitted,
@@ -12,6 +13,9 @@ export function mockCrm(known: { email: string; crmClientId: string; fullName?: 
     },
     setSubmitFails: (n: number) => {
       submitFails = n;
+    },
+    setSubmitDelayMs: (ms: number) => {
+      submitDelayMs = ms;
     },
     async findByEmail(emailNormalized: string) {
       const k = known.find((c) => c.email.toLowerCase() === emailNormalized);
@@ -28,6 +32,7 @@ export function mockCrm(known: { email: string; crmClientId: string; fullName?: 
       return { id: `act_${input.externalId}` };
     },
     async submitRequest(payload: unknown) {
+      if (submitDelayMs > 0) await new Promise((r) => setTimeout(r, submitDelayMs));
       if (down) throw new Error("CRM 503");
       if (submitFails > 0) {
         submitFails -= 1;
