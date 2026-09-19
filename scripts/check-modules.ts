@@ -130,6 +130,12 @@ for (const m of modules) {
       }
     }
 }
+
+assertMobileFetchHasSignal();
+assertMobileJsonParseValidated();
+assertMobileVoidLoadHomeAndGateCatch();
+assertSchemaEnumsHaveZod();
+
 if (problems.length) {
   console.error("module:check FAILED\n  - " + problems.join("\n  - "));
   process.exit(1);
@@ -142,12 +148,67 @@ if (owed.length)
 const moduleCount = modules.filter((m) => m.replace(/\\/g, "/").startsWith("packages/modules/")).length;
 console.log(`module:check OK (${moduleCount} modules)`);
 
-function walk(dir: string): string[] {
+function walk(dir: string, ext = ".ts"): string[] {
   return readdirSync(dir).flatMap((f) => {
     if (f === "node_modules" || f === ".git" || f === "dist" || f === ".turbo") return [];
     const p = join(dir, f);
-    return statSync(p).isDirectory() ? walk(p) : p.endsWith(".ts") ? [p] : [];
+    if (statSync(p).isDirectory()) return walk(p, ext);
+    return p.endsWith(ext) || (ext === ".ts" && p.endsWith(".tsx")) ? [p] : [];
   });
+}
+
+/** Every HTTP `fetch(` in the app must carry a timeout signal. NetInfo.fetch is excluded (method call). */
+function assertMobileFetchHasSignal() {
+  const root = join("apps", "mobile", "src");
+  if (!existsSync(root)) return;
+  for (const f of [...walk(root, ".ts"), ...walk(root, ".tsx")].filter((x, i, a) => a.indexOf(x) === i)) {
+    const src = readFileSync(f, "utf8");
+    const re = /(?<!\.)\bfetch\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      const open = src.indexOf("(", m.index);
+      const call = sliceBalanced(src, open, "(", ")");
+      if (!/\bsignal\s*:/.test(call)) {
+        problems.push(`${f.replace(/\\/g, "/")}: fetch( without signal: — add timeoutSignal (F2)`);
+      }
+    }
+  }
+}
+
+/** loadHome / gate must declare how they handle rejection (F3). */
+function assertMobileVoidLoadHomeAndGateCatch() {
+  const root = join("apps", "mobile", "src");
+  if (!existsSync(root)) return;
+  for (const f of walk(root)) {
+    const src = readFileSync(f, "utf8");
+    const re = /void\s+(loadHome|gate)\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      const slice = src.slice(m.index, m.index + 80);
+      if (!slice.includes(".catch(")) {
+        problems.push(
+          `${f.replace(/\\/g, "/")}: void ${m[1]}() without .catch — a rejection leaves the screen stuck (F3)`,
+        );
+      }
+    }
+  }
+}
+
+function assertMobileJsonParseValidated() {
+  const root = join("apps", "mobile", "src");
+  if (!existsSync(root)) return;
+  for (const f of [...walk(root, ".ts"), ...walk(root, ".tsx")].filter((x, i, a) => a.indexOf(x) === i)) {
+    const lines = readFileSync(f, "utf8").split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      if (!lines[i]!.includes("JSON.parse(")) continue;
+      const window = lines.slice(Math.max(0, i - 2), i + 16).join("\n");
+      if (!window.includes("safeParse")) {
+        problems.push(
+          `${f.replace(/\\/g, "/")}:${i + 1}: JSON.parse without safeParse nearby — validate the blob (F1c)`,
+        );
+      }
+    }
+  }
 }
 
 /** A consumer handler runs inside the poller's delivery transaction. An await on an integration port there
@@ -203,4 +264,49 @@ function findExpressionEnd(src: string, start: number): number {
     } else if ((c === "," || c === "\n") && depth === 0) return i;
   }
   return src.length;
+}
+
+/** F6: every packages/db schema enum has a matching z.enum in shared, or an explicit allow-list row. */
+function assertSchemaEnumsHaveZod() {
+  const EXTRA: Record<string, string[]> = { request_status: ["not_sent"] };
+  const UNMAPPED = new Set([
+    "offer_status",
+    "offer_source",
+    "member_status",
+    "sync_status",
+    "candidate_status",
+    "notification_status",
+    "fare_source",
+  ]);
+  const drizzle = new Map<string, string[]>();
+  const enumRe = /\.enum\(\s*"([^"]+)"\s*,\s*\[([^\]]+)\]/gs;
+  for (const f of walk(join("packages", "db", "src", "schema"))) {
+    const src = readFileSync(f, "utf8");
+    for (const m of src.matchAll(enumRe)) {
+      const name = m[1]!;
+      const members = [...m[2]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!);
+      drizzle.set(name, members);
+    }
+  }
+  const zodSets: string[][] = [];
+  for (const f of walk(join("packages", "shared", "src"))) {
+    const src = readFileSync(f, "utf8");
+    for (const m of src.matchAll(/z\.enum\(\s*\[([^\]]+)\]/gs)) {
+      zodSets.push([...m[1]!.matchAll(/"([^"]+)"/g)].map((x) => x[1]!));
+    }
+  }
+  for (const [name, members] of drizzle) {
+    if (UNMAPPED.has(name)) continue;
+    const extra = new Set(EXTRA[name] ?? []);
+    const ok = zodSets.some((z) => {
+      const zs = new Set(z);
+      if (!members.every((m) => zs.has(m))) return false;
+      for (const s of zs) if (!members.includes(s) && !extra.has(s)) return false;
+      return true;
+    });
+    if (!ok)
+      problems.push(
+        `schema enum "${name}" [${members.join(", ")}] has no matching z.enum in packages/shared (add one or UNMAPPED)`,
+      );
+  }
 }

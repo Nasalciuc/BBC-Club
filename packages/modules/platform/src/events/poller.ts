@@ -37,7 +37,7 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
   /** Claim one delivery (SKIP LOCKED), run the handler and mark the delivery in the SAME transaction.
    *  Failure path runs in its own transaction so the handler's writes are rolled back first. */
   async function processOne(): Promise<"done" | "empty"> {
-    let failure: { row: any; attempt: number; message: string } | null = null;
+    let failure: any = null;
 
     const outcome = await db
       .transaction(async (tx: any) => {
@@ -129,8 +129,8 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
       });
 
     if (outcome !== "failed") return outcome;
-
-    const { row, attempt, message } = failure!;
+    if (!failure) throw new Error("delivery failed without a recorded error");
+    const { row, attempt, message } = failure as { row: any; attempt: number; message: string };
     if (attempt >= MAX_ATTEMPTS) {
       await db.transaction(async (tx: any) => {
         await tx.execute(

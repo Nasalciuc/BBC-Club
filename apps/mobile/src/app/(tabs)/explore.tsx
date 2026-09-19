@@ -100,7 +100,7 @@ export default function ExploreScreen() {
   }, [home]);
 
   useEffect(() => {
-    void loadHome();
+    retryHome();
   }, []);
 
   // One profile refetch after 2s — pending catch-up without an 8-poll splash.
@@ -143,6 +143,13 @@ export default function ExploreScreen() {
       setHome(result.data.home);
       setHomeEtag(result.data.etag);
     }
+  }
+
+  function retryHome() {
+    void loadHome().catch((e) => {
+      setHomeLoading(false);
+      setHomeError(e instanceof Error ? e.message : "Something went wrong.");
+    });
   }
 
   useEffect(() => {
@@ -236,7 +243,7 @@ export default function ExploreScreen() {
             variant="error"
             title="Something went wrong."
             body={homeError}
-            primary={{ label: "Try again", onPress: () => void loadHome() }}
+            primary={{ label: "Try again", onPress: retryHome }}
             testID="explore.error"
           />
         ) : (
@@ -365,7 +372,7 @@ export default function ExploreScreen() {
                 variant="error"
                 title="Something went wrong."
                 body={state.errorMessage}
-                primary={{ label: "Try again", onPress: () => void loadHome() }}
+                primary={{ label: "Try again", onPress: retryHome }}
                 testID="explore.searchError"
               />
             ) : null}

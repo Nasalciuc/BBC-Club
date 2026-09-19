@@ -41,18 +41,18 @@ export async function submit(
 
   // Idempotency first: a replay is not a new request and must not cost quota.
   const existing = await exec.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
-  if (existing.length > 0) {
-    const row = existing[0]!;
-    // Key is globally unique; another member must not receive this row (PII).
-    if (row.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
-    return { ok: true as const, request: row, created: false as const };
+  const replay = existing[0];
+  if (replay) {
+    if (replay.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
+    return { ok: true as const, request: replay, created: false as const };
   }
 
   // Clock-hour window, not rolling: five at 10:58 and five at 11:01 is ten in three minutes.
   // Acceptable at this volume; a rolling window would be the other trade-off, not silence.
   const windowStart = new Date();
   windowStart.setMinutes(0, 0, 0);
-  const expiresAt = new Date(windowStart.getTime() + 3_600_000);
+  const RATE_LIMIT_WINDOW_MS = 3_600_000;
+  const expiresAt = new Date(windowStart.getTime() + RATE_LIMIT_WINDOW_MS);
 
   if (actor.memberId) {
     const n = await bumpCounter(
@@ -79,16 +79,18 @@ export async function submit(
 
   return withTx(exec, async (tx) => {
     const existing = await tx.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
-    if (existing.length > 0) {
-      const row = existing[0]!;
-      // Key is globally unique; another member must not receive this row (PII).
-      if (row.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
-      return { ok: true as const, request: row, created: false as const };
+    const replay = existing[0];
+    if (replay) {
+      if (replay.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
+      return { ok: true as const, request: replay, created: false as const };
     }
 
     const id = randomUUID();
     const reference = `R-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-    const route = `${body.legs[0]!.from} → ${body.legs[body.legs.length - 1]!.to}`;
+    const firstLeg = body.legs[0];
+    const lastLeg = body.legs[body.legs.length - 1];
+    if (!firstLeg || !lastLeg) return { ok: false as const, code: "VALIDATION" as const };
+    const route = `${firstLeg.from} → ${lastLeg.to}`;
 
     const [row] = await tx
       .insert(requests)
@@ -135,6 +137,7 @@ export async function submit(
       }),
     });
 
-    return { ok: true as const, request: row!, created: true as const };
+    if (!row) throw new Error("request insert returned no row");
+    return { ok: true as const, request: row, created: true as const };
   });
 }

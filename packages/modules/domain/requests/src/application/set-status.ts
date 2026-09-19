@@ -36,7 +36,9 @@ export async function setStatus(exec: Executor, raw: unknown, deps: { repo: Requ
     if (!row) return { ok: false as const, code: "NOT_FOUND" as const };
 
     const legs = current.legs as { from: string; to: string }[];
-    const route = legs?.length ? `${legs[0]!.from} → ${legs[legs.length - 1]!.to}` : undefined;
+    const firstLeg = legs?.[0];
+    const lastLeg = legs?.[legs.length - 1];
+    const route = firstLeg && lastLeg ? `${firstLeg.from} → ${lastLeg.to}` : undefined;
 
     await deps.publish(tx, {
       type: "request.status_changed",

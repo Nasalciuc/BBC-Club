@@ -36,6 +36,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
   layer: "core",
   needs: ["members", "push"],
   init: ({ db, platform, ports }) => {
+    const conn = db as unknown as Executor;
     const routes = new Hono<{ Variables: { principal: Principal } }>();
     const publish = (
       tx: Executor,
@@ -61,8 +62,8 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
         const [items, unreadCount] = await Promise.all([
-          notificationsRepo.inbox(db, actor),
-          notificationsRepo.unreadCount(db, actor),
+          notificationsRepo.inbox(conn, actor),
+          notificationsRepo.unreadCount(conn, actor),
         ]);
         const vms = (
           items as {
@@ -98,7 +99,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const r = await markRead(db, c.get("principal"), c.req.param("id"));
+        const r = await markRead(conn, c.get("principal"), c.req.param("id"));
         if (r === "ok") return c.json({ ok: true });
         return c.json(apiError(r === "not_found" ? "NOT_FOUND" : "FORBIDDEN"), r === "not_found" ? 404 : 403);
       },
@@ -124,7 +125,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
             400,
           );
         }
-        await devicesRepo.register(db, actor, parsed.data);
+        await devicesRepo.register(conn, actor, parsed.data);
         return c.json({ ok: true }, 201);
       },
     );
@@ -140,7 +141,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
       async (c) => {
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const ok = await devicesRepo.deactivate(db, actor, c.req.param("deviceId"));
+        const ok = await devicesRepo.deactivate(conn, actor, c.req.param("deviceId"));
         if (!ok) return c.json(apiError("NOT_FOUND"), 404);
         return c.json({ ok: true });
       },
@@ -148,9 +149,9 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
 
     return {
       exposes: {
-        inbox: (exec, actor, limit) => notificationsRepo.inbox((exec ?? db) as any, actor, limit),
-        unreadCount: (exec, actor) => notificationsRepo.unreadCount((exec ?? db) as any, actor),
-        markRead: (exec, actor, id) => notificationsRepo.markRead((exec ?? db) as any, actor, id),
+        inbox: (exec, actor, limit) => notificationsRepo.inbox((exec ?? conn) as Executor, actor, limit),
+        unreadCount: (exec, actor) => notificationsRepo.unreadCount((exec ?? conn) as Executor, actor),
+        markRead: (exec, actor, id) => notificationsRepo.markRead((exec ?? conn) as Executor, actor, id),
       },
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [
@@ -207,7 +208,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
             timeoutMs: 55_000,
             handler: async (ctx: JobContext) =>
               dispatch({
-                db,
+                db: conn,
                 push: ports.push,
                 members: ports.members,
                 publish,
@@ -221,7 +222,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
             cron: "15 * * * *",
             singleton: true,
             timeoutMs: 30_000,
-            handler: async () => reconcileReceipts(db),
+            handler: async () => reconcileReceipts(conn),
           },
         },
         {
@@ -230,7 +231,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
             cron: "0 4 * * *",
             singleton: true,
             timeoutMs: 60_000,
-            handler: async () => cleanupDevices(db),
+            handler: async () => cleanupDevices(conn),
           },
         },
       ],

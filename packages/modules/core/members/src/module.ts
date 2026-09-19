@@ -27,7 +27,8 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
   layer: "core",
   needs: ["crm", "identity"],
   init: ({ db, platform, ports }) => {
-    const facade = createMembersFacade(db);
+    const conn = db as unknown as Executor;
+    const facade = createMembersFacade(conn);
     const publish = (
       tx: Executor,
       e: {
@@ -62,7 +63,7 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
             400,
           );
         }
-        const updated = await withTx(db, async (tx) => {
+        const updated = await withTx(conn, async (tx) => {
           const p = await facade.updateProfile(tx, actor, parsed.data);
           if (!p) return null;
           const fields = Object.keys(parsed.data);
@@ -144,7 +145,7 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
             timeoutMs: 120_000,
             handler: async () => ({
               reemitted: await reconcileMissingProfiles({
-                db,
+                db: conn,
                 identity: ports.identity,
                 publish: (e) =>
                   db.transaction((tx: unknown) => platform.events.publish(tx, { ...e, publishedBy: "members" })),

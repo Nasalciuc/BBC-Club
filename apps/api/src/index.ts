@@ -126,7 +126,7 @@ export async function buildApp(opts: BuildOptions = {}) {
 /** Process entry: builds, serves, dies cleanly on SIGTERM (compose gives 10 s). */
 if (import.meta.main) {
   const { app, shutdown, env, platform } = await buildApp();
-  const server = Bun.serve({ port: Number(process.env.PORT ?? 8000), fetch: app.fetch, idleTimeout: 30 });
+  const server = Bun.serve({ port: env.PORT, fetch: app.fetch, idleTimeout: 30 });
   platform.logger.info({ port: server.port, env: env.NODE_ENV }, "api up");
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, async () => {

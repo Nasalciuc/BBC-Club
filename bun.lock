@@ -34,6 +34,7 @@
         "@bbc/identity": "workspace:*",
         "@bbc/members": "workspace:*",
         "@bbc/notifications": "workspace:*",
+        "@bbc/personalization": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/proposals": "workspace:*",
         "@bbc/push": "workspace:*",
@@ -62,6 +63,7 @@
         "@react-native-community/netinfo": "12.0.1",
         "better-auth": "~1.6.0",
         "expo": "~57.0.21",
+        "expo-application": "~57.0.3",
         "expo-blur": "~57.0.2",
         "expo-constants": "~57.0.17",
         "expo-dev-client": "~57.0.19",
@@ -225,6 +227,17 @@
       "dependencies": {
         "@bbc/notifications": "workspace:*",
         "@bbc/shared": "workspace:*",
+      },
+    },
+    "packages/modules/intelligence/personalization": {
+      "name": "@bbc/personalization",
+      "version": "0.1.0",
+      "dependencies": {
+        "@bbc/db": "workspace:*",
+        "@bbc/platform": "workspace:*",
+        "@bbc/shared": "workspace:*",
+        "drizzle-orm": "1.0.0-rc.4",
+        "zod": "^3.24.0",
       },
     },
     "packages/modules/platform": {
@@ -430,6 +443,8 @@
     "@bbc/mobile": ["@bbc/mobile@workspace:apps/mobile"],
 
     "@bbc/notifications": ["@bbc/notifications@workspace:packages/modules/core/notifications"],
+
+    "@bbc/personalization": ["@bbc/personalization@workspace:packages/modules/intelligence/personalization"],
 
     "@bbc/platform": ["@bbc/platform@workspace:packages/modules/platform"],
 

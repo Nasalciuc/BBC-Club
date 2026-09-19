@@ -1,5 +1,7 @@
 /** Fitness functions on the LIVE database. Fails CI (exit 1) on any violation. Run after migrate. */
 import { sql } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createDb } from "../src/client";
 
 const OWNED_SCHEMAS = [
@@ -111,6 +113,24 @@ try {
     problems.push(
       `non-PK *_id has nextval default (reference, not generated): ${r.table_schema}.${r.table_name}.${r.column_name}`,
     );
+
+  // 12. Every table with member_id is named in delete.test.ts (G11 — no allow-list).
+  // Skip partition children (domain_events_YYYY_MM); the parent name is what the test mentions.
+  const deleteTest = readFileSync(join(import.meta.dir, "../../../apps/api/test/delete.test.ts"), "utf8");
+  const memberIdTables = await q(sql`
+    SELECT n.nspname AS table_schema, c.relname AS table_name
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE a.attname = 'member_id' AND a.attnum > 0 AND NOT a.attisdropped
+      AND n.nspname IN (${schemasIn()})
+      AND c.relkind IN ('r', 'p')
+      AND NOT c.relispartition`);
+  for (const t of memberIdTables) {
+    if (!deleteTest.includes(t.table_name as string)) {
+      problems.push(`member_id table ${t.table_schema}.${t.table_name} is not named in delete.test.ts`);
+    }
+  }
 } catch (e) {
   problems.push(`verify crashed: ${String(e)}`);
 } finally {

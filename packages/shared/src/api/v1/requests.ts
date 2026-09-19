@@ -60,3 +60,9 @@ export const RequestVM = z.object({
   ),
 });
 export type RequestVM = z.infer<typeof RequestVM>;
+
+export const RequestList = z.object({
+  items: z.array(RequestVM),
+  hasMore: z.boolean(),
+});
+export type RequestList = z.infer<typeof RequestList>;

@@ -16,6 +16,7 @@ export default function RequestsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<RequestVM[]>([]);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -24,7 +25,11 @@ export default function RequestsScreen() {
     let cancelled = false;
     void (async () => {
       setLoading(true);
-      await flushQueue((body, key) => submitRequest(body, key));
+      try {
+        await flushQueue((body, key) => submitRequest(body, key));
+      } catch {
+        // flushQueue isolates per item; this keeps fetchRequests running
+      }
       const result = await fetchRequests();
       if (cancelled) return;
       setLoading(false);
@@ -33,8 +38,14 @@ export default function RequestsScreen() {
         return;
       }
       setItems(result.data.items);
+      setHasMore(result.data.hasMore);
       setError(null);
-    })();
+    })().catch(() => {
+      if (!cancelled) {
+        setLoading(false);
+        setError("Something went wrong.");
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -63,6 +74,11 @@ export default function RequestsScreen() {
   return (
     <View testID="requests.root" style={[styles.root, { paddingTop: insets.top + tokens.space.md }]}>
       <Text style={styles.title}>Requests</Text>
+      {hasMore ? (
+        <Text testID="requests.hasMore" style={styles.hint}>
+          Showing your 50 most recent
+        </Text>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {items.length === 0 ? (
@@ -101,9 +117,15 @@ export default function RequestsScreen() {
                           ? () => {
                               void (async () => {
                                 void listQueued();
-                                await flushQueue((body, key) => submitRequest(body, key));
+                                try {
+                                  await flushQueue((body, key) => submitRequest(body, key));
+                                } catch {
+                                  // per-item isolation lives in flushQueue
+                                }
                                 setReloadToken((n) => n + 1);
-                              })();
+                              })().catch(() => {
+                                setReloadToken((n) => n + 1);
+                              });
                             }
                           : undefined
                       }
@@ -140,5 +162,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage, paddingHorizontal: tokens.space.lg },
   centered: { alignItems: "center", justifyContent: "center" },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, marginBottom: tokens.space.sm },
+  hint: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
   error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger },
 });

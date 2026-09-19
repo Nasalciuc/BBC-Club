@@ -1,12 +1,14 @@
 import type { Executor } from "@bbc/db";
 import { Hono } from "hono";
-import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { offersRepo } from "./infrastructure/offers.repo";
 import { ingest, IngestInput } from "./application/ingest";
 import { expireOffers } from "./application/expire-offers";
+import { withdraw } from "./application/withdraw";
+import { onMemberDeleted } from "./handlers/on-member-deleted";
 
 type Exposes = {
   getVisible(exec: unknown, actorMemberId: string, offerId: string): Promise<unknown | null>;
@@ -21,12 +23,14 @@ type Exposes = {
     input: unknown,
     idempotencyKey: string,
   ): Promise<{ ok: true; offerId: string } | { ok: false; code: "CONFLICT" | "BAD_KEY" }>;
+  withdraw(offerId: string, reason?: string): Promise<{ ok: true } | { ok: false; code: "NOT_FOUND" | "NOT_ACTIVE" }>;
 };
 
 export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Exposes> => ({
   name: "proposals",
   layer: "domain",
   init: ({ db, platform }) => {
+    const conn = db as unknown as Executor;
     const events = {
       publish: (
         tx: Executor,
@@ -41,10 +45,12 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
       ) => platform.events.publish(tx, { ...e, publishedBy: "proposals" }),
     };
     const expose: Exposes = {
-      getVisible: (exec, actor, id) => offersRepo.getVisible((exec ?? db) as any, actor, id),
-      feed: (exec, actor, cursor, limit) => offersRepo.feed((exec ?? db) as any, actor, cursor, limit),
-      getAny: (exec, id) => offersRepo.getAny((exec ?? db) as any, id),
-      ingest: (input, key) => ingest({ db, events }, IngestInput.parse(input), key),
+      getVisible: (exec, actor, id) => offersRepo.getVisible((exec as Executor | undefined) ?? conn, actor, id),
+      feed: (exec, actor, cursor, limit) =>
+        offersRepo.feed((exec as Executor | undefined) ?? conn, actor, cursor, limit),
+      getAny: (exec, id) => offersRepo.getAny((exec as Executor | undefined) ?? conn, id),
+      ingest: (input, key) => ingest({ db: conn, events }, IngestInput.parse(input), key),
+      withdraw: (offerId, reason) => withdraw({ db: conn, events }, offerId, reason),
     };
 
     const routes = new Hono<{ Variables: { principal: Principal } }>();
@@ -77,10 +83,41 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
       },
     );
 
+    registerRoute("POST", "/v1/internal/offers/:id/withdraw", "proposals:withdraw");
+    routes.post(
+      "/internal/offers/:id/withdraw",
+      authorize("proposals:withdraw", {
+        module: "proposals",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const id = c.req.param("id");
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          return c.json(apiError("NOT_FOUND"), 404);
+        }
+        const body = (await c.req.json().catch(() => ({}))) as { reason?: unknown };
+        const reason = typeof body.reason === "string" ? body.reason.slice(0, 200) : undefined;
+        const r = await expose.withdraw(id, reason);
+        if (!r.ok) return c.json(apiError("NOT_FOUND"), 404);
+        return c.json({ ok: true });
+      },
+    );
+
     return {
       exposes: expose,
       routes: [{ basePath: "/v1", app: routes }],
-      consumers: [],
+      consumers: [
+        {
+          type: "member.deleted",
+          name: "proposals.onMemberDeleted",
+          handler: (ctx: HandlerContext) => {
+            const memberId = ctx.event.memberId;
+            if (!memberId) return Promise.resolve();
+            return onMemberDeleted({ tx: ctx.tx, memberId });
+          },
+        },
+      ],
       jobs: [
         {
           name: "expire-offers",
@@ -89,7 +126,7 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
             cron: "*/5 * * * *",
             singleton: true,
             timeoutMs: 30_000,
-            handler: async () => expireOffers({ db, events }),
+            handler: async () => expireOffers({ db: conn, events }),
           },
         },
       ],

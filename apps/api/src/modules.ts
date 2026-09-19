@@ -9,6 +9,7 @@ import { proposalsModule } from "@bbc/proposals/module";
 import { engagementModule } from "@bbc/engagement/module";
 import { requestsModule } from "@bbc/requests/module";
 import { catalogModule } from "@bbc/catalog/module";
+import { personalizationModule } from "@bbc/personalization/module";
 import { mobileBff } from "./presentation/mobile";
 
 /** The ordered inventory. Overrides let tests replace adapters (email → capturing, crm → mock, push → recording). */
@@ -24,6 +25,7 @@ export function modules(overrides: Record<string, any> = {}): ModuleDescriptor<a
     engagementModule(), // domain — implicit signals only after Branch 3
     requestsModule(), // domain — member requests → CRM
     catalogModule(),
+    personalizationModule(),
     mobileBff(), // presentation
   ];
 }

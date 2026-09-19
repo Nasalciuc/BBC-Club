@@ -54,12 +54,24 @@ describe("jobs", () => {
 });
 
 describe("flags", () => {
-  it("killswitch defaults to false and survives a read error", async () => {
+  it("killswitch defaults to false when the row is missing", async () => {
     const p = createPlatform(db, { level: "silent" });
     expect(await p.flags.isKilled("nonexistent")).toBe(false);
     await p.flags.set("engagement.killed", { enabled: true });
     expect(await p.flags.isKilled("engagement")).toBe(true);
     await p.flags.set("engagement.killed", { enabled: false });
+  });
+
+  it("kill and pause fail closed when the flag table cannot be read; isEnabled still falls back", async () => {
+    const broken = {
+      select() {
+        throw new Error("db down");
+      },
+    };
+    const p = createPlatform(broken as any, { level: "silent" });
+    expect(await p.flags.isKilled("engagement")).toBe(true);
+    expect(await p.flags.isConsumerPaused("x.onY")).toBe(true);
+    expect(await p.flags.isEnabled("x", false)).toBe(false);
   });
 
   it("caches reads and invalidates on write", async () => {

@@ -4,6 +4,7 @@ import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute, type PrincipalVars } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
+import { DEFAULT_HOME_AIRPORT } from "@bbc/shared/defaults";
 import { toCard, toDetail, toAirportVM, toDestinationPin } from "./view-models";
 
 type Ports = {
@@ -98,7 +99,7 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
 
         const profile = await ports.members.getProfile(undefined, actor);
-        const homeCode = (profile?.homeAirport ?? "JFK").toUpperCase();
+        const homeCode = (profile?.homeAirport ?? DEFAULT_HOME_AIRPORT).toUpperCase();
         const homeRow = await ports.catalog.getAirport(undefined, homeCode);
 
         const [destRows, offerRows] = await Promise.all([

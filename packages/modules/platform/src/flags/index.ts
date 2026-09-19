@@ -1,11 +1,24 @@
 import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import { flags as flagsTable } from "../infrastructure/schema";
 
 export type FlagValue = { enabled?: boolean; variant?: string; segment?: string[]; [k: string]: unknown };
 
-/** Flags are read on hot paths, so they are cached in-process for 30 s and invalidated on write.
- *  Fail-safe: if the database cannot be read, killswitches report "not killed" — a read error must not
- *  take the product down; feature flags fall back to the caller's default. */
+const FlagValueSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    variant: z.string().optional(),
+    segment: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+function parseValue(raw: unknown): FlagValue | null {
+  const r = FlagValueSchema.safeParse(raw);
+  return r.success ? (r.data as FlagValue) : null;
+}
+
+/** Feature flags cache 30s. Kill/pause skip the cache. A read error on kill/pause is fail-closed (treat as killed).
+ *  A missing row is not killed. isEnabled/variant still fall back to the caller default. */
 export function createFlags(
   db: any,
   opts: { ttlMs?: number; logger?: { warn: (o: object, m?: string) => void } } = {},
@@ -22,13 +35,18 @@ export function createFlags(
         .from(flagsTable)
         .where(eq(flagsTable.key, key))
         .limit(1);
-      const value = (row?.value as FlagValue) ?? null;
+      const value = parseValue(row?.value);
       cache.set(key, { value, at: Date.now() });
       return value;
     } catch (e) {
       opts.logger?.warn({ key, err: String(e) }, "flag read failed, using fallback");
-      return hit?.value ?? null; // stale-if-error
+      return hit?.value ?? null;
     }
+  }
+
+  async function readKill(key: string): Promise<FlagValue | null> {
+    const [row] = await db.select({ value: flagsTable.value }).from(flagsTable).where(eq(flagsTable.key, key)).limit(1);
+    return parseValue(row?.value);
   }
 
   return {
@@ -40,19 +58,28 @@ export function createFlags(
       const v = await read(key);
       return typeof v?.variant === "string" ? v.variant : fallback;
     },
-    /** Module killswitch: `module.killed = { enabled: true }` disables the module. Never throws. */
     async isKilled(module: string): Promise<boolean> {
-      const v = await read(`${module}.killed`);
-      return v?.enabled === true;
+      try {
+        const v = await readKill(`${module}.killed`);
+        return v?.enabled === true;
+      } catch (e) {
+        opts.logger?.warn({ module, err: String(e) }, "kill flag unreadable, failing closed");
+        return true;
+      }
     },
-    /** Consumer pause, used by the poller. */
     async isConsumerPaused(consumer: string): Promise<boolean> {
-      const v = await read(`consumer.${consumer}.paused`);
-      return v?.enabled === true;
+      try {
+        const v = await readKill(`consumer.${consumer}.paused`);
+        return v?.enabled === true;
+      } catch (e) {
+        opts.logger?.warn({ consumer, err: String(e) }, "pause flag unreadable, failing closed");
+        return true;
+      }
     },
     async inSegment(key: string, memberId: string): Promise<boolean> {
       const v = await read(key);
-      return Array.isArray(v?.segment) ? v!.segment!.includes(memberId) : false;
+      const seg = v?.segment;
+      return Array.isArray(seg) ? seg.includes(memberId) : false;
     },
     async set(key: string, value: FlagValue, description?: string) {
       await db
@@ -62,7 +89,6 @@ export function createFlags(
       cache.delete(key);
     },
     invalidate: (key?: string) => (key ? cache.delete(key) : cache.clear()),
-    /** For /v1/app-config: the killswitches the app needs to know about. */
     async killSwitches(modules: string[]): Promise<Record<string, boolean>> {
       const out: Record<string, boolean> = {};
       for (const m of modules) out[m] = await this.isKilled(m);

@@ -91,7 +91,16 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
 
       let anyOk = false;
       let lastFail: string | null = null;
-      let lastPlatform: "ios" | "android" = tokens[0]!.platform;
+      const firstToken = tokens[0];
+      if (!firstToken) {
+        await tx
+          .update(notificationsTable)
+          .set({ status: "sent", sentAt: sql`now()`, attempts: sql`${notificationsTable.attempts} + 1` })
+          .where(eq(notificationsTable.id, notificationId));
+        metrics.sent++;
+        return "done" as const;
+      }
+      let lastPlatform: "ios" | "android" = firstToken.platform;
 
       for (const tok of tokens) {
         const result = await deps.push.send({

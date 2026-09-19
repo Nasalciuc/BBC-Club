@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Db, Executor } from "@bbc/db";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
@@ -29,13 +30,14 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes
   name: "catalog",
   layer: "domain",
   init: ({ db, platform }) => {
+    const conn = db as unknown as Executor;
     const expose: Exposes = {
-      searchFares: (exec, q) => faresRepo.search((exec ?? db) as any, q),
-      getFare: (exec, id) => faresRepo.getAny((exec ?? db) as any, id),
-      destinations: (exec, home) => faresRepo.destinations((exec ?? db) as any, home),
-      searchAirports: (exec, q) => airportsRepo.search((exec ?? db) as any, q),
-      getAirport: (exec, code) => airportsRepo.get((exec ?? db) as any, code),
-      importCsv: (input) => importCatalog({ db }, ImportBody.parse(input)),
+      searchFares: (exec, q) => faresRepo.search((exec as Executor | undefined) ?? conn, q),
+      getFare: (exec, id) => faresRepo.getAny((exec as Executor | undefined) ?? conn, id),
+      destinations: (exec, home) => faresRepo.destinations((exec as Executor | undefined) ?? conn, home),
+      searchAirports: (exec, q) => airportsRepo.search((exec as Executor | undefined) ?? conn, q),
+      getAirport: (exec, code) => airportsRepo.get((exec as Executor | undefined) ?? conn, code),
+      importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
     const routes = new Hono<{ Variables: { principal: Principal } }>();
@@ -62,9 +64,9 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes
         }
 
         const [fromApt, toApt, rows] = await Promise.all([
-          airportsRepo.get(db, from),
-          airportsRepo.get(db, to),
-          faresRepo.search(db, { from, to, cabin, ...(when ? { when } : {}) }),
+          airportsRepo.get(conn, from),
+          airportsRepo.get(conn, to),
+          faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }),
         ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
 
@@ -88,13 +90,13 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes
       }),
       async (c) => {
         const id = c.req.param("id");
-        const row = await faresRepo.getAny(db, id);
+        const row = await faresRepo.getAny(conn, id);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
         if (!isVisible(row as any)) return c.json(apiError("GONE"), 410);
 
         const [fromApt, toApt] = await Promise.all([
-          airportsRepo.get(db, (row as any).routeFrom),
-          airportsRepo.get(db, (row as any).routeTo),
+          airportsRepo.get(conn, (row as any).routeFrom),
+          airportsRepo.get(conn, (row as any).routeTo),
         ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND"), 404);
         return c.json(toFareVM(row as any, { from: fromApt, to: toApt }, false));
@@ -111,7 +113,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes
       }),
       async (c) => {
         const q = c.req.query("q") ?? "";
-        const rows = await airportsRepo.search(db, q);
+        const rows = await airportsRepo.search(conn, q);
         return c.json(rows.map((r) => toAirportVM(r)));
       },
     );
@@ -154,7 +156,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes
             cron: "*/15 * * * *",
             singleton: true,
             timeoutMs: 30_000,
-            handler: async () => expireFares({ db }),
+            handler: async () => expireFares({ db: conn }),
           },
         },
       ],

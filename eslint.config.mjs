@@ -18,6 +18,7 @@ export default tseslint.config(
       ".agents/**",
       ".claude/**",
       ".expo/**",
+      "**/.expo/**",
       "expo-env.d.ts",
       // Reference-only design / backend snapshots — not product code.
       "isolated/**",
@@ -159,5 +160,12 @@ export default tseslint.config(
   {
     files: ["packages/ui/src/globe/constants.ts"],
     rules: { "bbc/no-inline-color": "off" },
+  },
+  {
+    files: ["packages/modules/**/src/**/*.ts", "apps/api/src/**/*.ts"],
+    ignores: ["**/*.test.ts", "**/seed-fixture.ts"],
+    rules: {
+      "@typescript-eslint/no-non-null-assertion": "error",
+    },
   },
 );
