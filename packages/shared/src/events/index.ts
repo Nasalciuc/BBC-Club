@@ -61,3 +61,4 @@ export * from "./offer";
 export * from "./notification";
 export * from "./crm";
 export * from "./request";
+export type { PublishInput } from "./publish-input";

@@ -1,8 +1,8 @@
-import type { EmailSender, OtpPurpose } from "@bbc/identity/ports/email";
+import type { EmailFacade, OtpPurpose } from "@bbc/email";
 import { rememberDevOtp } from "@bbc/email";
 
 /** Captures OTPs instead of sending. Tests read the code the way a member would from their inbox. */
-export function capturingEmail(): EmailSender & {
+export function capturingEmail(): EmailFacade & {
   lastOtp(to: string): string;
   sent: { to: string; otp: string; purpose: OtpPurpose }[];
   failNext(times?: number): void;
@@ -20,7 +20,7 @@ export function capturingEmail(): EmailSender & {
       rememberDevOtp(input.to, input.otp);
     },
     lastOtp(to) {
-      const m = [...sent].reverse().find((s) => s.to === to.toLowerCase() || s.to === to);
+      const m = [...sent].reverse().find((s) => s.to.toLowerCase() === to.toLowerCase() || s.to === to);
       if (!m) throw new Error(`no OTP captured for ${to}`);
       return m.otp;
     },

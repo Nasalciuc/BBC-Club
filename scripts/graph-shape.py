@@ -172,6 +172,42 @@ def g12() -> None:
     print("G12 any-count top files:", top, "total", sum(counts.values()))
 
 
+def pascal(name: str) -> str:
+    return name[:1].upper() + name[1:] if name else name
+
+
+def g13() -> list[str]:
+    """A consumer that declares needs: ["x"] must import XFacade from @bbc/x in the same file.
+    Inspects module.ts and the BFF only — a ports/ alias does not count."""
+    fails: list[str] = []
+    files: list[Path] = []
+    mod_root = ROOT / "packages" / "modules"
+    if mod_root.is_dir():
+        for layer in mod_root.iterdir():
+            if not layer.is_dir():
+                continue
+            for mod in layer.iterdir():
+                mt = mod / "src" / "module.ts"
+                if mt.is_file():
+                    files.append(mt)
+    bff = ROOT / "apps" / "api" / "src" / "presentation" / "mobile" / "index.ts"
+    if bff.is_file():
+        files.append(bff)
+
+    for f in files:
+        s = f.read_text(encoding="utf-8", errors="replace")
+        for need_block in re.findall(r"needs:\s*\[([^\]]*)\]", s):
+            for port in re.findall(r'"(\w+)"', need_block):
+                want = f"{pascal(port)}Facade"
+                if not re.search(
+                    rf'import type \{{[^}}]*\b{want}\b[^}}]*\}} from "@bbc/{port}"',
+                    s,
+                ):
+                    fails.append(f"G13: {rel(f)} needs {port} but does not import {want} — is it a hand-written copy?")
+    print("G13 hand-written port types:", fails, "(want [])")
+    return ["G13"] if fails else []
+
+
 def main() -> int:
     os.chdir(ROOT)
     g7_g8_from_graph()
@@ -179,6 +215,7 @@ def main() -> int:
     fails.extend(g9_g10())
     fails.extend(g11())
     g12()
+    fails.extend(g13())
     if fails:
         print("graph-shape FAILED:", ", ".join(fails))
         return 1

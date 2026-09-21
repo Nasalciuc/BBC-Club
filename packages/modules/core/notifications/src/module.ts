@@ -3,41 +3,38 @@ import { eq, sql } from "drizzle-orm";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
+import { actorMemberId } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 import type { Executor } from "@bbc/db";
 import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
 import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
-import type { PushSender } from "./ports/push";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
 import { devicesRepo } from "./infrastructure/devices.repo";
 import { markRead } from "./application/mark-read";
 import { dispatch } from "./application/dispatch";
 import { reconcileReceipts } from "./application/receipts";
 import { cleanupDevices } from "./application/cleanup-devices";
-import { onOfferPublished, type MembersPort } from "./handlers/on-offer-published";
+import { onOfferPublished } from "./handlers/on-offer-published";
 import { onOfferExpired, onOfferWithdrawn } from "./handlers/on-offer-lifecycle";
 import { DeviceBody } from "@bbc/shared/api/v1/proposals";
+import type { NotificationsFacade } from "./api";
+import type { MembersFacade } from "@bbc/members";
+import type { PushFacade } from "@bbc/push";
 
 type Ports = {
-  members: MembersPort;
-  push: PushSender;
+  members: MembersFacade;
+  push: PushFacade;
 };
 
-type Exposes = {
-  inbox(exec: unknown, actorMemberId: string, limit?: number): Promise<unknown[]>;
-  unreadCount(exec: unknown, actorMemberId: string): Promise<number>;
-  markRead(exec: unknown, actorMemberId: string, id: string): Promise<number>;
-};
-
-export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
+export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFacade> => ({
   name: "notifications",
   layer: "core",
   needs: ["members", "push"],
   init: ({ db, platform, ports }) => {
     const conn = db as unknown as Executor;
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
     const publish = (
       tx: Executor,
       e: {
@@ -152,7 +149,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
         inbox: (exec, actor, limit) => notificationsRepo.inbox((exec ?? conn) as Executor, actor, limit),
         unreadCount: (exec, actor) => notificationsRepo.unreadCount((exec ?? conn) as Executor, actor),
         markRead: (exec, actor, id) => notificationsRepo.markRead((exec ?? conn) as Executor, actor, id),
-      },
+      } satisfies NotificationsFacade,
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [
         {

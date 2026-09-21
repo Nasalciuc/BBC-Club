@@ -5,6 +5,8 @@ import { buildApp } from "../../src/index";
 import { capturingEmail } from "./capturing-email";
 import { mockCrm } from "./mock-crm";
 import { testAuth } from "./test-auth";
+import type { IdentityFacade } from "@bbc/identity";
+import type { EngagementFacade } from "@bbc/engagement";
 
 /** The whole host, in-memory (no port), against an isolated clone of the test template, with capturing adapters.
  *  Every suite that needs the system uses this — nobody builds their own wiring.
@@ -41,7 +43,7 @@ export async function testApp(
   };
 
   let built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
-  let auth = testAuth(built.registry.facade<any>("identity").auth, db);
+  let auth = testAuth(built.registry.facade<IdentityFacade>("identity").auth, db);
   const internalSecret = env.INTERNAL_API_SECRET;
 
   const memberA = { ...(await auth.createMember(emailA)), cookie: "" };
@@ -82,7 +84,7 @@ export async function testApp(
       // Do not call built.shutdown() — that closes the shared db pool.
       await built.platform.poller.stop();
       built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
-      auth = testAuth(built.registry.facade<any>("identity").auth, db);
+      auth = testAuth(built.registry.facade<IdentityFacade>("identity").auth, db);
       memberA.cookie = await auth.cookieFor(memberA.email);
       memberB.cookie = await auth.cookieFor(memberB.email);
     },
@@ -183,7 +185,7 @@ export async function testApp(
     },
     /** Direct upsert into engagement.offer_responses (respond HTTP path removed in Branch 3). */
     async upsertResponse(memberId: string, offerId: string, response: "interested" | "dismissed") {
-      return built.registry.facade<any>("engagement").upsert(undefined, memberId, offerId, response);
+      return built.registry.facade<EngagementFacade>("engagement").upsert(undefined, memberId, offerId, response);
     },
     /** Airports + 3 JFK→LHR business fares for catalog Gate 4. */
     async seedCatalogBasics() {

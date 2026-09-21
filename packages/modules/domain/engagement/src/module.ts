@@ -4,12 +4,13 @@ import { MemberDeletedV1 } from "@bbc/shared/events/member";
 import type { Executor } from "@bbc/db";
 import { offerResponses } from "@bbc/db/schema/engagement";
 import { responsesRepo } from "./infrastructure/responses.repo";
+import type { EngagementFacade } from "./api";
 
 /**
  * Implicit signals only (views / stored responses). Member requests live in domain/requests.
  * offer_responses table is kept expand-only — do not DROP in this branch.
  */
-export const engagementModule = (): ModuleDescriptor<Record<string, never>, ReturnType<typeof facade>> => ({
+export const engagementModule = (): ModuleDescriptor<Record<string, never>, EngagementFacade> => ({
   name: "engagement",
   layer: "domain",
   needs: [],
@@ -33,19 +34,13 @@ export const engagementModule = (): ModuleDescriptor<Record<string, never>, Retu
   },
 });
 
-function facade(db: Executor) {
+function facade(db: Executor): EngagementFacade {
   return {
-    get: (exec: Executor | undefined, actorMemberId: string, offerId: string) =>
-      responsesRepo.get(exec ?? db, actorMemberId, offerId),
-    responsesFor: (exec: Executor | undefined, actorMemberId: string, offerIds: string[]) =>
-      responsesRepo.responsesFor(exec ?? db, actorMemberId, offerIds),
-    upsert: (
-      exec: Executor | undefined,
-      actorMemberId: string,
-      offerId: string,
-      response: "interested" | "dismissed",
-    ) => responsesRepo.upsert(exec ?? db, actorMemberId, offerId, response),
-    markSynced: (exec: Executor | undefined, actorMemberId: string, offerId: string, crmActivityId: string | null) =>
+    get: (exec, actorMemberId, offerId) => responsesRepo.get(exec ?? db, actorMemberId, offerId),
+    responsesFor: (exec, actorMemberId, offerIds) => responsesRepo.responsesFor(exec ?? db, actorMemberId, offerIds),
+    upsert: (exec, actorMemberId, offerId, response) =>
+      responsesRepo.upsert(exec ?? db, actorMemberId, offerId, response),
+    markSynced: (exec, actorMemberId, offerId, crmActivityId) =>
       responsesRepo.markSynced(exec ?? db, actorMemberId, offerId, crmActivityId),
   };
 }

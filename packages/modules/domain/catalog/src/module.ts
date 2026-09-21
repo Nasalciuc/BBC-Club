@@ -3,44 +3,33 @@ import type { Db, Executor } from "@bbc/db";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import type { Principal } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { expireFares } from "./application/expire-fares";
 import { importCatalog, ImportBody } from "./application/import";
 import { toAirportVM, toFareVM } from "./application/to-fare-vm";
-
-type Exposes = {
-  searchFares(
-    exec: unknown,
-    q: { from: string; to: string; cabin: "business" | "first"; when?: Date },
-  ): Promise<unknown[]>;
-  getFare(exec: unknown, id: string): Promise<unknown | null>;
-  destinations(exec: unknown, home: string): Promise<unknown[]>;
-  searchAirports(exec: unknown, q: string): Promise<unknown[]>;
-  getAirport(exec: unknown, code: string): Promise<unknown | null>;
-  importCsv(input: unknown): Promise<{ imported: number }>;
-};
+import type { CatalogFacade } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
   return row.published && row.validFrom <= now && row.validUntil > now;
 }
 
-export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes> => ({
+export const catalogModule = (): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
   name: "catalog",
   layer: "domain",
   init: ({ db, platform }) => {
     const conn = db as unknown as Executor;
-    const expose: Exposes = {
-      searchFares: (exec, q) => faresRepo.search((exec as Executor | undefined) ?? conn, q),
-      getFare: (exec, id) => faresRepo.getAny((exec as Executor | undefined) ?? conn, id),
-      destinations: (exec, home) => faresRepo.destinations((exec as Executor | undefined) ?? conn, home),
-      searchAirports: (exec, q) => airportsRepo.search((exec as Executor | undefined) ?? conn, q),
-      getAirport: (exec, code) => airportsRepo.get((exec as Executor | undefined) ?? conn, code),
+    const expose: CatalogFacade = {
+      searchFares: (exec, q) => faresRepo.search(exec ?? conn, q),
+      getFare: (exec, id) => faresRepo.getAny(exec ?? conn, id),
+      destinations: (exec, home) => faresRepo.destinations(exec ?? conn, home),
+      searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
+      getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
 
     registerRoute("GET", "/v1/search", "fares:read");
     routes.get(

@@ -2,22 +2,26 @@ import { Hono } from "hono";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
-import { createAuth, createIdentityFacade, type Auth } from "./api";
-import type { EmailSender } from "./ports/email";
+import { actorMemberId } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
+import type { Executor } from "@bbc/db";
+import { createAuth } from "./api";
+import { createIdentityFacade } from "./application/facade";
+import type { IdentityFacade } from "./api";
+import type { EmailFacade } from "@bbc/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
 
-type Ports = { email: EmailSender };
-type Exposes = ReturnType<typeof createIdentityFacade> & { auth: Auth };
+type Ports = { email: EmailFacade };
 
 /** Wiring only. Better Auth's hooks have no transaction of their own, so the EventPublisher port takes a
  *  single argument; we open a transaction here and drop platform's return value to satisfy Promise<void>. */
-export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
+export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
   name: "identity",
   layer: "core",
   needs: ["email"],
   init: ({ env, db, platform, ports }) => {
+    const conn = db as unknown as Executor;
     const auth = createAuth({
       env,
       db,
@@ -30,7 +34,7 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
       },
     });
 
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
 
     registerRoute("POST", "/v1/account/password", "profile:update-self");
     routes.post(
@@ -84,7 +88,6 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
         await db.transaction((tx: unknown) =>
           platform.events.publish(tx, {
             type: "member.password_changed",
-            version: 1,
             aggregateType: "member",
             aggregateId: actor,
             memberId: actor,
@@ -101,7 +104,7 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
     );
 
     return {
-      exposes: { ...createIdentityFacade(auth, db), auth },
+      exposes: { ...createIdentityFacade(auth, conn), auth },
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [],
       jobs: [],

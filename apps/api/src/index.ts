@@ -5,6 +5,7 @@ import { apiError } from "@bbc/shared/errors";
 import { createDb } from "@bbc/db";
 import { createPlatform, registerPlatformJobs } from "@bbc/platform";
 import { lastDevOtp } from "@bbc/email";
+import type { IdentityFacade } from "@bbc/identity";
 import { installBaseMiddleware } from "./middleware/base";
 import { errorContract } from "./middleware/error-contract";
 import { resolvePrincipal, type PrincipalVars } from "./middleware/principal";
@@ -43,7 +44,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   for (const m of modules(opts.overrides ?? {})) registry.add(m);
   const mounted: { basePath: string; app: Hono<any> }[] = [];
   await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
-  const identity = registry.facade<any>("identity");
+  const identity = registry.facade<IdentityFacade>("identity");
 
   // 3. principal resolution — after modules exist (needs identity), before any route
   app.use(

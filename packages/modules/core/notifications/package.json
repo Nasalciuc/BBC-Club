@@ -18,6 +18,8 @@
     "zod": "^3.24.0",
     "@bbc/shared": "workspace:*",
     "@bbc/db": "workspace:*",
-    "@bbc/platform": "workspace:*"
+    "@bbc/platform": "workspace:*",
+    "@bbc/push": "workspace:*",
+    "@bbc/members": "workspace:*"
   }
 }

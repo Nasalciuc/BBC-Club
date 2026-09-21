@@ -1,4 +1,4 @@
-import type { EmailSender, OtpPurpose } from "@bbc/identity/ports/email";
+import type { EmailFacade, OtpPurpose } from "./api/types";
 
 const SUBJECTS: Record<OtpPurpose, string> = {
   "email-verification": "Your BuyBusinessClass Club code",
@@ -19,7 +19,7 @@ export function lastDevOtp(to: string): string | null {
   return lastOtpByEmail.get(to.trim().toLowerCase()) ?? null;
 }
 
-export function postmarkSender(opts: { token: string; from: string; fetchImpl?: typeof fetch }): EmailSender {
+export function postmarkSender(opts: { token: string; from: string; fetchImpl?: typeof fetch }): EmailFacade {
   const f = opts.fetchImpl ?? fetch;
   return {
     async sendOtp({ to, otp, purpose }) {
@@ -48,7 +48,7 @@ export function postmarkSender(opts: { token: string; from: string; fetchImpl?: 
 }
 
 /** Development: store OTP for the test helper; log purpose + recipient only (never the code). */
-export function consoleSender(log: (m: string) => void = console.log): EmailSender {
+export function consoleSender(log: (m: string) => void = console.log): EmailFacade {
   return {
     async sendOtp({ to, otp, purpose }) {
       rememberDevOtp(to, otp);

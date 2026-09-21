@@ -12,7 +12,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bbc/identity": "workspace:*",
     "@bbc/shared": "workspace:*"
   }
 }

@@ -1,31 +1,7 @@
 import type { ProposalCardVM, ProposalDetailVM, ResponseState } from "@bbc/shared/api/v1/proposals";
 import type { AirportVM, DestinationPinVM, FareVM } from "@bbc/shared/api/v1/fares";
-
-type OfferRow = {
-  id: string;
-  title: string;
-  contextLine: string | null;
-  routeFrom: string;
-  routeTo: string;
-  cabin: "business" | "first";
-  price: string;
-  publishedPrice: string | null;
-  currency: string;
-  mediaUrl: string | null;
-  mediaBlurhash: string | null;
-  validUntil: Date;
-  targeting: "user" | "segment" | "broadcast";
-  body: string | null;
-  flightFacts: {
-    nonstop: boolean;
-    durationMinutes: number;
-    product?: string;
-    carrier?: string;
-    flightNumber?: string;
-    departLocal?: string;
-    arriveLocal?: string;
-  } | null;
-};
+import type { OfferRow } from "@bbc/proposals";
+import type { DestinationPin } from "@bbc/catalog";
 
 function resolveState(raw: "interested" | "dismissed" | null | undefined): ResponseState {
   if (raw === "interested") return "interested";
@@ -58,44 +34,42 @@ export function toDetail(row: OfferRow, state: "interested" | "dismissed" | null
   return {
     ...card,
     ...(row.body ? { body: row.body } : {}),
-    ...(row.flightFacts ? { flightFacts: row.flightFacts } : {}),
+    ...(row.flightFacts
+      ? {
+          flightFacts: {
+            nonstop: row.flightFacts.nonstop,
+            durationMinutes: row.flightFacts.durationMinutes,
+            ...(row.flightFacts.product ? { product: row.flightFacts.product } : {}),
+            ...(row.flightFacts.carrier ? { carrier: row.flightFacts.carrier } : {}),
+            ...(row.flightFacts.flightNumber ? { flightNumber: row.flightFacts.flightNumber } : {}),
+            ...(row.flightFacts.departLocal ? { departLocal: row.flightFacts.departLocal } : {}),
+            ...(row.flightFacts.arriveLocal ? { arriveLocal: row.flightFacts.arriveLocal } : {}),
+          },
+        }
+      : {}),
     advisorName: "Julia Reed",
   };
 }
 
-type AirportRow = {
+export function toAirportVM(row: {
   code: string;
   name: string;
   city: string;
   countryCode: string;
   lat: string | number;
   lng: string | number;
-};
-
-export function toAirportVM(row: AirportRow): AirportVM {
+}): AirportVM {
   return {
     code: row.code,
     city: row.city,
     name: row.name,
     countryCode: row.countryCode,
-    lat: typeof row.lat === "number" ? row.lat : parseFloat(row.lat),
-    lng: typeof row.lng === "number" ? row.lng : parseFloat(row.lng),
+    lat: typeof row.lat === "number" ? row.lat : parseFloat(String(row.lat)),
+    lng: typeof row.lng === "number" ? row.lng : parseFloat(String(row.lng)),
   };
 }
 
-export function toDestinationPin(
-  row: {
-    code: string;
-    name: string;
-    city: string;
-    countryCode: string;
-    region: string;
-    lat: number;
-    lng: number;
-    fromPrice: number;
-  },
-  hasOffer: boolean,
-): DestinationPinVM {
+export function toDestinationPin(row: DestinationPin, hasOffer: boolean): DestinationPinVM {
   return {
     code: row.code,
     name: row.name,
@@ -128,7 +102,28 @@ type FareRow = {
   validUntil: Date;
 };
 
-export function toFareVM(row: FareRow, airports: { from: AirportRow; to: AirportRow }, hasOffer: boolean): FareVM {
+export function toFareVM(
+  row: FareRow,
+  airports: {
+    from: {
+      code: string;
+      city: string;
+      name?: string;
+      countryCode?: string;
+      lat?: string | number;
+      lng?: string | number;
+    };
+    to: {
+      code: string;
+      city: string;
+      name?: string;
+      countryCode?: string;
+      lat?: string | number;
+      lng?: string | number;
+    };
+  },
+  hasOffer: boolean,
+): FareVM {
   return {
     id: row.id,
     carrier: {

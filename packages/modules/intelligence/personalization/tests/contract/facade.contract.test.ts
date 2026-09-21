@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb } from "@bbc/db/testing/isolated-db";
-import { createPersonalizationFacade } from "../../src/api";
+import { createPersonalizationFacade } from "../../src/application/facade";
 
 describe("@bbc/personalization facade", () => {
   it("redactMember deletes features and candidates for that member only", async () => {

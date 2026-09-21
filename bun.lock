@@ -124,6 +124,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@bbc/db": "workspace:*",
+        "@bbc/email": "workspace:*",
         "@bbc/shared": "workspace:*",
         "@better-auth/expo": "~1.6.0",
         "better-auth": "~1.6.0",
@@ -136,7 +137,9 @@
       "name": "@bbc/members",
       "version": "0.1.0",
       "dependencies": {
+        "@bbc/crm": "workspace:*",
         "@bbc/db": "workspace:*",
+        "@bbc/identity": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
@@ -148,7 +151,9 @@
       "version": "0.1.0",
       "dependencies": {
         "@bbc/db": "workspace:*",
+        "@bbc/members": "workspace:*",
         "@bbc/platform": "workspace:*",
+        "@bbc/push": "workspace:*",
         "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "zod": "^3.24.0",
@@ -193,6 +198,7 @@
       "name": "@bbc/requests",
       "version": "0.1.0",
       "dependencies": {
+        "@bbc/crm": "workspace:*",
         "@bbc/db": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/shared": "workspace:*",
@@ -217,7 +223,6 @@
       "name": "@bbc/email",
       "version": "0.1.0",
       "dependencies": {
-        "@bbc/identity": "workspace:*",
         "@bbc/shared": "workspace:*",
       },
     },
@@ -225,7 +230,6 @@
       "name": "@bbc/push",
       "version": "0.1.0",
       "dependencies": {
-        "@bbc/notifications": "workspace:*",
         "@bbc/shared": "workspace:*",
       },
     },

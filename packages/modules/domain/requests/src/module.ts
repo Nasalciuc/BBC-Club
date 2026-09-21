@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError, zodFieldErrors } from "@bbc/shared/errors";
-import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
+import { actorMemberId } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 import { RequestSubmittedV1 } from "@bbc/shared/events/request";
 import type { Executor } from "@bbc/db";
 import { createRequestsRepo } from "./infrastructure/requests.repo";
@@ -11,21 +12,21 @@ import { setStatus } from "./application/set-status";
 import { toRequestVM } from "./application/to-request-vm";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
+import type { RequestsFacade } from "./api";
+import type { CrmFacade } from "@bbc/crm";
 
 type Ports = {
-  crm: {
-    submitRequest(payload: unknown): Promise<{ crmRequestId: string }>;
-  };
+  crm: CrmFacade;
 };
 
-export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof facade>> => ({
+export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
   name: "requests",
   layer: "domain",
   needs: ["crm"],
   init: ({ db, platform, ports }) => {
     const conn = db as unknown as Executor;
     const repo = createRequestsRepo(conn);
-    const publish = (
+    const publish = async (
       tx: Executor,
       e: {
         type: string;
@@ -35,10 +36,12 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
         memberId: string | null;
         payload: unknown;
       },
-    ) => platform.events.publish(tx, { ...e, publishedBy: "requests" });
+    ): Promise<void> => {
+      await platform.events.publish(tx, { ...e, publishedBy: "requests" });
+    };
     const expose = facade(conn, repo);
 
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
 
     registerRoute("POST", "/v1/requests", "requests:create");
     routes.post(
@@ -182,10 +185,9 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
   },
 });
 
-function facade(db: Executor, repo: ReturnType<typeof createRequestsRepo>) {
+function facade(db: Executor, repo: ReturnType<typeof createRequestsRepo>): RequestsFacade {
   return {
-    listForMember: (exec: Executor | undefined, memberId: string) => repo.listForMember(exec ?? db, memberId),
-    get: (exec: Executor | undefined, memberId: string, id: string) => repo.getForMember(exec ?? db, memberId, id),
-    toRequestVM,
+    listForMember: (exec, memberId) => repo.listForMember(exec ?? db, memberId),
+    get: (exec, memberId, id) => repo.getForMember(exec ?? db, memberId, id),
   };
 }

@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
-import { createMembersFacade } from "../../src/api";
+import { createMembersFacade } from "../../src/application/facade";
 import { onMemberRegistered } from "../../src/handlers/on-member-registered";
 
 let iso: IsolatedDb;

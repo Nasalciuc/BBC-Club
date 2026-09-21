@@ -1,8 +1,10 @@
 import type { MiddlewareHandler } from "hono";
 import { roleHas, type Permission } from "@bbc/shared/authz/permissions";
-import { roleOf, type Principal } from "@bbc/shared/authz/principal";
+import { roleOf } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 
-export type PrincipalVars = { Variables: { principal: Principal; requestId: string } };
+/** Alias of AppEnv — existing middleware and the host keep compiling. */
+export type PrincipalVars = AppEnv;
 
 /** Every protected route registers here at mount time; the inventory test asserts every /v1 route is present. */
 export const routeRegistry = new Map<string, Permission | "public">();
