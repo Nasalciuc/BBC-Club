@@ -3,7 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
+import { actorMemberId } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 import type { Executor } from "@bbc/db";
 import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
@@ -37,7 +38,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
   needs: ["members", "push"],
   init: ({ db, platform, ports }) => {
     const conn = db as unknown as Executor;
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
     const publish = (
       tx: Executor,
       e: {

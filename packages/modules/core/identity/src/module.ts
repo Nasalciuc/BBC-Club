@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
+import { actorMemberId } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 import { createAuth, createIdentityFacade, type Auth } from "./api";
 import type { EmailSender } from "./ports/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
@@ -30,7 +31,7 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
       },
     });
 
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
 
     registerRoute("POST", "/v1/account/password", "profile:update-self");
     routes.post(
@@ -84,7 +85,6 @@ export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
         await db.transaction((tx: unknown) =>
           platform.events.publish(tx, {
             type: "member.password_changed",
-            version: 1,
             aggregateType: "member",
             aggregateId: actor,
             memberId: actor,

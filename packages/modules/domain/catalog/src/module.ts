@@ -3,7 +3,7 @@ import type { Db, Executor } from "@bbc/db";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import type { Principal } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { expireFares } from "./application/expire-fares";
@@ -40,7 +40,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Exposes
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
 
     registerRoute("GET", "/v1/search", "fares:read");
     routes.get(

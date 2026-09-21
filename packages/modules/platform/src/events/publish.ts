@@ -1,15 +1,9 @@
 import { sql } from "drizzle-orm";
+import type { PublishInput } from "@bbc/shared/events";
 import { domainEvents } from "../infrastructure/schema";
 import type { EventRegistry } from "./registry";
 
-export type PublishInput = {
-  type: string;
-  aggregateType: string;
-  aggregateId: string;
-  memberId?: string | null;
-  payload: Record<string, unknown>;
-  publishedBy: string;
-};
+export type { PublishInput };
 export type Publisher = ReturnType<typeof createPublisher>;
 
 export function createPublisher(

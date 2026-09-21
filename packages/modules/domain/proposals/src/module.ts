@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import type { Principal } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 import { offersRepo } from "./infrastructure/offers.repo";
 import { ingest, IngestInput } from "./application/ingest";
 import { expireOffers } from "./application/expire-offers";
@@ -32,7 +32,7 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
   init: ({ db, platform }) => {
     const conn = db as unknown as Executor;
     const events = {
-      publish: (
+      publish: async (
         tx: Executor,
         e: {
           type: string;
@@ -42,7 +42,9 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
           memberId?: string | null;
           payload: unknown;
         },
-      ) => platform.events.publish(tx, { ...e, publishedBy: "proposals" }),
+      ): Promise<void> => {
+        await platform.events.publish(tx, { ...e, publishedBy: "proposals" });
+      },
     };
     const expose: Exposes = {
       getVisible: (exec, actor, id) => offersRepo.getVisible((exec as Executor | undefined) ?? conn, actor, id),
@@ -53,7 +55,7 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
       withdraw: (offerId, reason) => withdraw({ db: conn, events }, offerId, reason),
     };
 
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
 
     registerRoute("POST", "/v1/internal/offers", "proposals:ingest");
     routes.post(

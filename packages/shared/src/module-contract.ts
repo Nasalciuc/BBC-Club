@@ -2,6 +2,9 @@
  *  apps/api imports the modules). Pure types — nothing here runs. */
 import type { Hono } from "hono";
 import type { ServerEnv } from "./env";
+import type { PublishInput } from "./events/publish-input";
+import type { AppEnv } from "./http/app-env";
+import type { ConsumerSpec, JobSpec } from "./platform-specs";
 
 export type Layer = "platform" | "integration" | "core" | "domain" | "intelligence" | "presentation";
 
@@ -46,7 +49,9 @@ export type HandlerContext = {
 };
 
 export type ModuleDb = {
-  transaction: (fn: (tx: any) => any) => Promise<any>;
+  /** Modules cast this once at their boundary: `db as unknown as Executor`. `unknown` is honest about
+   *  what shared can know; the previous catch-all type let that cast be skipped. */
+  transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 };
 
 export type ModulePlatform = {
@@ -57,22 +62,22 @@ export type ModulePlatform = {
     isConsumerPaused: (consumer: string) => Promise<boolean>;
   };
   events: {
-    publish: (...args: any[]) => any;
-    tombstoneMember: (...args: any[]) => any;
-    registerConsumer: (...args: any[]) => void;
+    publish: (exec: unknown, input: PublishInput) => Promise<unknown>;
+    tombstoneMember: (exec: unknown, memberId: string) => Promise<unknown>;
+    registerConsumer: (type: string, name: string, handler: ConsumerSpec["handler"]) => void;
   };
-  jobs: { register: (...args: any[]) => void };
+  jobs: { register: (name: string, spec: JobSpec) => void };
 };
 
 export type ModuleOutput<Exposes> = {
   /** The public facade other modules may receive as a port. */
   exposes?: Exposes;
   /** Routes mounted under their basePath; each already carries its own authorize(). */
-  routes?: { basePath: string; app: Hono<any> }[];
+  routes?: { basePath: string; app: Hono<AppEnv> }[];
   /** Event consumers, registered before the poller starts. */
   consumers?: { type: string; name: string; handler: (ctx: HandlerContext, payload: unknown) => Promise<void> }[];
   /** Jobs exposed at /v1/internal/run/:name. Spec shape is owned by platform.jobs. */
-  jobs?: { name: string; spec: unknown }[];
+  jobs?: { name: string; spec: JobSpec }[];
 };
 
 export type ModuleInitDeps<Ports> = {

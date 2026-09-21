@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { JobSpec } from "@bbc/shared/platform-specs";
 import { jobRuns } from "../infrastructure/schema";
 
 export type JobContext = {
@@ -11,13 +12,7 @@ export type JobContext = {
   signal: AbortSignal;
 };
 export type JobHandler = (ctx: JobContext) => Promise<Record<string, number> | void>;
-export type JobSpec = {
-  handler: JobHandler;
-  /** Only one run at a time across all API instances (advisory lock on the job name). */
-  singleton?: boolean;
-  timeoutMs?: number;
-  description?: string;
-};
+export type { JobSpec };
 
 /** Jobs are plain functions registered in code and triggered over HTTP by the cron container
  *  (`POST /v1/internal/run/:name`, authorized `jobs:run`). Every run is recorded in platform.job_runs —
@@ -65,7 +60,8 @@ export function createJobs(
     const timeout = setTimeout(() => ac.abort(), spec.timeoutMs ?? DEFAULT_JOB_TIMEOUT_MS);
 
     try {
-      const metrics = (await spec.handler({ db, logger: deps.logger, signal: ac.signal })) ?? undefined;
+      const raw = await spec.handler({ db, logger: deps.logger, signal: ac.signal });
+      const metrics = raw && typeof raw === "object" ? (raw as Record<string, number>) : undefined;
       const durationMs = Date.now() - started;
       await db
         .update(jobRuns)

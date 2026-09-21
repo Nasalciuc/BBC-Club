@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
-import { actorMemberId, type Principal } from "@bbc/shared/authz/principal";
+import { actorMemberId } from "@bbc/shared/authz/principal";
+import type { AppEnv } from "@bbc/shared/http/app-env";
 import { createMembersFacade, type MembersFacade } from "./api";
 import { onMemberRegistered, reconcileMissingProfiles, type IdentityUsersPort } from "./handlers/on-member-registered";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
@@ -29,7 +30,7 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
   init: ({ db, platform, ports }) => {
     const conn = db as unknown as Executor;
     const facade = createMembersFacade(conn);
-    const publish = (
+    const publish = async (
       tx: Executor,
       e: {
         type: string;
@@ -39,9 +40,11 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
         memberId: string | null;
         payload: unknown;
       },
-    ) => platform.events.publish(tx, { ...e, publishedBy: "members" });
+    ): Promise<void> => {
+      await platform.events.publish(tx, { ...e, publishedBy: "members" });
+    };
 
-    const routes = new Hono<{ Variables: { principal: Principal } }>();
+    const routes = new Hono<AppEnv>();
 
     registerRoute("PATCH", "/v1/profile", "profile:update-self");
     routes.patch(
@@ -125,7 +128,9 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
                 crm: ports.crm,
                 // ADR-PROD-001: seeded false by scripts/seed-flags.ts — an unknown CRM email is waitlist.
                 flags: { get: (k: string) => platform.flags.isEnabled(k, false) },
-                publish: (e) => platform.events.publish(ctx.tx, { ...e, publishedBy: "members" }),
+                publish: async (e) => {
+                  await platform.events.publish(ctx.tx, { ...e, publishedBy: "members" });
+                },
               },
               payload,
             ),
@@ -147,8 +152,9 @@ export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
               reemitted: await reconcileMissingProfiles({
                 db: conn,
                 identity: ports.identity,
-                publish: (e) =>
-                  db.transaction((tx: unknown) => platform.events.publish(tx, { ...e, publishedBy: "members" })),
+                publish: async (e) => {
+                  await db.transaction((tx: unknown) => platform.events.publish(tx, { ...e, publishedBy: "members" }));
+                },
               }),
             }),
           },
