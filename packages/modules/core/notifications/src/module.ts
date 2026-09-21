@@ -20,19 +20,14 @@ import { cleanupDevices } from "./application/cleanup-devices";
 import { onOfferPublished, type MembersPort } from "./handlers/on-offer-published";
 import { onOfferExpired, onOfferWithdrawn } from "./handlers/on-offer-lifecycle";
 import { DeviceBody } from "@bbc/shared/api/v1/proposals";
+import type { NotificationsFacade } from "./api";
 
 type Ports = {
   members: MembersPort;
   push: PushSender;
 };
 
-type Exposes = {
-  inbox(exec: unknown, actorMemberId: string, limit?: number): Promise<unknown[]>;
-  unreadCount(exec: unknown, actorMemberId: string): Promise<number>;
-  markRead(exec: unknown, actorMemberId: string, id: string): Promise<number>;
-};
-
-export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
+export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFacade> => ({
   name: "notifications",
   layer: "core",
   needs: ["members", "push"],
@@ -153,7 +148,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, Exposes> => ({
         inbox: (exec, actor, limit) => notificationsRepo.inbox((exec ?? conn) as Executor, actor, limit),
         unreadCount: (exec, actor) => notificationsRepo.unreadCount((exec ?? conn) as Executor, actor),
         markRead: (exec, actor, id) => notificationsRepo.markRead((exec ?? conn) as Executor, actor, id),
-      },
+      } satisfies NotificationsFacade,
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [
         {

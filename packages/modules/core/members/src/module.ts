@@ -4,7 +4,8 @@ import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
-import { createMembersFacade, type MembersFacade } from "./api";
+import { createMembersFacade } from "./application/facade";
+import type { MembersFacade } from "./api";
 import { onMemberRegistered, reconcileMissingProfiles, type IdentityUsersPort } from "./handlers/on-member-registered";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import { ProfilePatchBody, NotificationPreferencesBody } from "@bbc/shared/api/v1/proposals";
@@ -20,10 +21,8 @@ type Ports = {
   };
   identity: IdentityUsersPort;
 };
-/** stage 1 adds: updateProfile, setPreferences. */
-type Exposes = MembersFacade;
 
-export const membersModule = (): ModuleDescriptor<Ports, Exposes> => ({
+export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
   name: "members",
   layer: "core",
   needs: ["crm", "identity"],

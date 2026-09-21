@@ -1,5 +1,5 @@
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
-import { createPersonalizationFacade } from "../api";
+import { createPersonalizationFacade } from "../application/facade";
 
 export async function onMemberDeleted(
   deps: { tx: any; memberId?: string | null; tombstone?: (tx: any, memberId: string) => Promise<unknown> },

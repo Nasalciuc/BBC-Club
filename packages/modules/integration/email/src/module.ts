@@ -1,10 +1,10 @@
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
-import type { EmailSender } from "@bbc/identity/ports/email";
+import type { EmailFacade } from "./api";
 import { postmarkSender, consoleSender } from "./postmark";
 
-/** Adapter module: exposes the EmailSender port. Postmark when a token exists, console otherwise
+/** Adapter module: exposes the EmailFacade port. Postmark when a token exists, console otherwise
  *  (env.ts refuses to boot in production without a token, so console can never reach a member). */
-export const emailModule = (override?: EmailSender): ModuleDescriptor<Record<string, never>, EmailSender> => ({
+export const emailModule = (override?: EmailFacade): ModuleDescriptor<Record<string, never>, EmailFacade> => ({
   name: "email",
   layer: "integration",
   init: ({ env, platform }) => ({

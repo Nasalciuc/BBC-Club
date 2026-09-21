@@ -4,17 +4,18 @@ import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
-import { createAuth, createIdentityFacade, type Auth } from "./api";
+import { createAuth } from "./api";
+import { createIdentityFacade } from "./application/facade";
+import type { IdentityFacade } from "./api";
 import type { EmailSender } from "./ports/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
 
 type Ports = { email: EmailSender };
-type Exposes = ReturnType<typeof createIdentityFacade> & { auth: Auth };
 
 /** Wiring only. Better Auth's hooks have no transaction of their own, so the EventPublisher port takes a
  *  single argument; we open a transaction here and drop platform's return value to satisfy Promise<void>. */
-export const identityModule = (): ModuleDescriptor<Ports, Exposes> => ({
+export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
   name: "identity",
   layer: "core",
   needs: ["email"],

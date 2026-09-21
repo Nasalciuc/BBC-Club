@@ -9,24 +9,9 @@ import { ingest, IngestInput } from "./application/ingest";
 import { expireOffers } from "./application/expire-offers";
 import { withdraw } from "./application/withdraw";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
+import type { ProposalsFacade } from "./api";
 
-type Exposes = {
-  getVisible(exec: unknown, actorMemberId: string, offerId: string): Promise<unknown | null>;
-  getAny(exec: unknown, offerId: string): Promise<unknown | null>;
-  feed(
-    exec: unknown,
-    actorMemberId: string,
-    cursor: { ts: Date; id: string } | null,
-    limit?: number,
-  ): Promise<unknown[]>;
-  ingest(
-    input: unknown,
-    idempotencyKey: string,
-  ): Promise<{ ok: true; offerId: string } | { ok: false; code: "CONFLICT" | "BAD_KEY" }>;
-  withdraw(offerId: string, reason?: string): Promise<{ ok: true } | { ok: false; code: "NOT_FOUND" | "NOT_ACTIVE" }>;
-};
-
-export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Exposes> => ({
+export const proposalsModule = (): ModuleDescriptor<Record<string, never>, ProposalsFacade> => ({
   name: "proposals",
   layer: "domain",
   init: ({ db, platform }) => {
@@ -46,11 +31,10 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Expos
         await platform.events.publish(tx, { ...e, publishedBy: "proposals" });
       },
     };
-    const expose: Exposes = {
-      getVisible: (exec, actor, id) => offersRepo.getVisible((exec as Executor | undefined) ?? conn, actor, id),
-      feed: (exec, actor, cursor, limit) =>
-        offersRepo.feed((exec as Executor | undefined) ?? conn, actor, cursor, limit),
-      getAny: (exec, id) => offersRepo.getAny((exec as Executor | undefined) ?? conn, id),
+    const expose: ProposalsFacade = {
+      getVisible: (exec, actor, id) => offersRepo.getVisible(exec ?? conn, actor, id),
+      feed: (exec, actor, cursor, limit) => offersRepo.feed(exec ?? conn, actor, cursor, limit),
+      getAny: (exec, id) => offersRepo.getAny(exec ?? conn, id),
       ingest: (input, key) => ingest({ db: conn, events }, IngestInput.parse(input), key),
       withdraw: (offerId, reason) => withdraw({ db: conn, events }, offerId, reason),
     };

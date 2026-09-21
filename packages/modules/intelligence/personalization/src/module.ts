@@ -1,11 +1,9 @@
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
-import { createPersonalizationFacade } from "./api";
+import { createPersonalizationFacade } from "./application/facade";
+import type { PersonalizationFacade } from "./api";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 
-export const personalizationModule = (): ModuleDescriptor<
-  Record<string, never>,
-  ReturnType<typeof createPersonalizationFacade>
-> => ({
+export const personalizationModule = (): ModuleDescriptor<Record<string, never>, PersonalizationFacade> => ({
   name: "personalization",
   layer: "intelligence",
   needs: [],

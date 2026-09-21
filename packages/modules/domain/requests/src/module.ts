@@ -12,6 +12,7 @@ import { setStatus } from "./application/set-status";
 import { toRequestVM } from "./application/to-request-vm";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
+import type { RequestsFacade } from "./api";
 
 type Ports = {
   crm: {
@@ -19,7 +20,7 @@ type Ports = {
   };
 };
 
-export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof facade>> => ({
+export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
   name: "requests",
   layer: "domain",
   needs: ["crm"],
@@ -185,10 +186,9 @@ export const requestsModule = (): ModuleDescriptor<Ports, ReturnType<typeof faca
   },
 });
 
-function facade(db: Executor, repo: ReturnType<typeof createRequestsRepo>) {
+function facade(db: Executor, repo: ReturnType<typeof createRequestsRepo>): RequestsFacade {
   return {
-    listForMember: (exec: Executor | undefined, memberId: string) => repo.listForMember(exec ?? db, memberId),
-    get: (exec: Executor | undefined, memberId: string, id: string) => repo.getForMember(exec ?? db, memberId, id),
-    toRequestVM,
+    listForMember: (exec, memberId) => repo.listForMember(exec ?? db, memberId),
+    get: (exec, memberId, id) => repo.getForMember(exec ?? db, memberId, id),
   };
 }

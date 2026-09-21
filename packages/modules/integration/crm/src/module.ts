@@ -1,23 +1,9 @@
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import type { CrmFacade, CrmCallOpts } from "./api";
 
-export type CrmCallOpts = { signal?: AbortSignal };
-
-export type CrmConnector = {
-  findByEmail(
-    emailNormalized: string,
-    opts?: CrmCallOpts,
-  ): Promise<{ crmClientId: string; fullName?: string; homeAirport?: string } | null>;
-  createActivity(
-    input: {
-      externalId: string;
-      memberId: string;
-      offerId: string;
-      kind: "interested" | "dismissed";
-    },
-    opts?: CrmCallOpts,
-  ): Promise<{ id: string | null }>;
-  submitRequest(payload: unknown, opts?: CrmCallOpts): Promise<{ crmRequestId: string }>;
-};
+export type { CrmFacade, CrmCallOpts };
+/** @deprecated Prefer CrmFacade — same shape. */
+export type CrmConnector = CrmFacade;
 
 const CRM_TIMEOUT_MS = 5000;
 
@@ -45,7 +31,7 @@ async function raceAbort<T>(method: string, signal: AbortSignal, work: Promise<T
 }
 
 /** Every outbound CRM call gets a ceiling, including mocks — a hanging adapter is an outage. */
-export function withCrmTimeout(adapter: CrmConnector, ms = CRM_TIMEOUT_MS): CrmConnector {
+export function withCrmTimeout(adapter: CrmFacade, ms = CRM_TIMEOUT_MS): CrmFacade {
   const run = <T>(method: string, opts: CrmCallOpts | undefined, work: (signal: AbortSignal) => Promise<T>) => {
     const signal = opts?.signal ?? AbortSignal.timeout(ms);
     return raceAbort(method, signal, work(signal), ms);
@@ -61,7 +47,7 @@ export function withCrmTimeout(adapter: CrmConnector, ms = CRM_TIMEOUT_MS): CrmC
 /** Mock until Dan grants access. The http adapter and the mirror sync are stage 5. */
 export function mockCrm(
   known: { email: string; crmClientId: string; fullName?: string; homeAirport?: string }[] = [],
-): CrmConnector {
+): CrmFacade {
   const activities = new Map<string, { id: string }>();
   let submitCount = 0;
   return {
@@ -83,7 +69,7 @@ export function mockCrm(
   };
 }
 
-export const crmModule = (override?: CrmConnector): ModuleDescriptor<Record<string, never>, CrmConnector> => ({
+export const crmModule = (override?: CrmFacade): ModuleDescriptor<Record<string, never>, CrmFacade> => ({
   name: "crm",
   layer: "integration",
   init: ({ env }) => {
