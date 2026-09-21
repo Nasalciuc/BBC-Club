@@ -61,7 +61,13 @@ export function createJobs(
 
     try {
       const raw = await spec.handler({ db, logger: deps.logger, signal: ac.signal });
-      const metrics = raw && typeof raw === "object" ? (raw as Record<string, number>) : undefined;
+      const metrics =
+        raw !== null &&
+        typeof raw === "object" &&
+        !Array.isArray(raw) &&
+        Object.values(raw).every((v) => typeof v === "number" && Number.isFinite(v))
+          ? (raw as Record<string, number>)
+          : undefined;
       const durationMs = Date.now() - started;
       await db
         .update(jobRuns)

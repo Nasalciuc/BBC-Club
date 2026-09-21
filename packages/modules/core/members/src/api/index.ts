@@ -1,3 +1,5 @@
+import type { Executor } from "@bbc/db";
+
 export type ProfileRow = {
   memberId: string;
   status: "active" | "waitlist" | "deleted";
@@ -26,13 +28,13 @@ export type NotificationPrefView = {
 
 /** The only import surface of @bbc/members. module.ts implements it; consumers import it. */
 export type MembersFacade = {
-  getProfile(exec: unknown, actorMemberId: string): Promise<ProfileRow | null>;
-  getStatus(exec: unknown, memberId: string): Promise<MemberStatus>;
-  timezoneOf(exec: unknown, memberId: string): Promise<string>;
-  activeMemberIds(exec?: unknown): Promise<string[]>;
-  preferencesOf(exec: unknown, memberId: string): Promise<NotificationPrefView>;
+  getProfile(exec: Executor | undefined, actorMemberId: string): Promise<ProfileRow | null>;
+  getStatus(exec: Executor | undefined, memberId: string): Promise<MemberStatus>;
+  timezoneOf(exec: Executor | undefined, memberId: string): Promise<string>;
+  activeMemberIds(exec: Executor | undefined): Promise<string[]>;
+  preferencesOf(exec: Executor | undefined, memberId: string): Promise<NotificationPrefView>;
   updateProfile(
-    exec: unknown,
+    exec: Executor | undefined,
     actorMemberId: string,
     data: {
       displayName?: string;
@@ -43,7 +45,7 @@ export type MembersFacade = {
     },
   ): Promise<ProfileRow | null>;
   setNotificationPreferences(
-    exec: unknown,
+    exec: Executor | undefined,
     actorMemberId: string,
     prefs: Array<{ category: "offers_personal" | "offers_broadcast"; enabled: boolean }>,
   ): Promise<void>;

@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { desc, lt } from "drizzle-orm";
+import type { Executor } from "@bbc/db";
 import type { Auth } from "../infrastructure/auth";
 import { user } from "../infrastructure/schema";
 import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
@@ -7,7 +8,7 @@ import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
 export type { Member, AuthVars, SessionInfo, IdentityFacade };
 
 /** Implementation — imported by module.ts, not by other packages via api/index.ts. */
-export function createIdentityFacade(auth: Auth, db: any): Omit<IdentityFacade, "auth"> {
+export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFacade, "auth"> {
   async function getSession(headers: Headers): Promise<SessionInfo | null> {
     const s = await auth.api.getSession({ headers });
     if (!s?.user) return null;

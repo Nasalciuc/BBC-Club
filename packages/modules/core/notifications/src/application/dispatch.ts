@@ -1,19 +1,19 @@
 import { and, eq, lte, sql } from "drizzle-orm";
-import { withTx } from "@bbc/db";
+import { withTx, type Executor } from "@bbc/db";
 import { event } from "@bbc/shared/events";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
+import type { MembersFacade } from "@bbc/members";
 import type { PushSender } from "../ports/push";
-import type { MembersPort } from "../handlers/on-offer-published";
 
 const BATCH = 100;
 const MIN_GAP_MS = 50; // ≤20/s
 
 export type DispatchDeps = {
-  db: any;
+  db: Executor;
   push: PushSender;
-  members: MembersPort;
+  members: MembersFacade;
   publish: (
-    tx: any,
+    tx: Executor,
     e: {
       type: string;
       version: number;

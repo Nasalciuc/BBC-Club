@@ -4,6 +4,7 @@ import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
+import type { Executor } from "@bbc/db";
 import { createAuth } from "./api";
 import { createIdentityFacade } from "./application/facade";
 import type { IdentityFacade } from "./api";
@@ -20,6 +21,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
   layer: "core",
   needs: ["email"],
   init: ({ env, db, platform, ports }) => {
+    const conn = db as unknown as Executor;
     const auth = createAuth({
       env,
       db,
@@ -102,7 +104,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
     );
 
     return {
-      exposes: { ...createIdentityFacade(auth, db), auth },
+      exposes: { ...createIdentityFacade(auth, conn), auth },
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [],
       jobs: [],

@@ -4,6 +4,7 @@ import { mockCrm } from "./helpers/mock-crm";
 import { recordingSender } from "@bbc/push";
 import type { EmailFacade } from "@bbc/email";
 import type { PushFacade } from "@bbc/push";
+import type { CrmFacade } from "@bbc/crm";
 
 describe("ports round-trip", () => {
   it("EmailFacade", async () => {
@@ -19,7 +20,7 @@ describe("ports round-trip", () => {
   });
 
   it("CrmFacade", async () => {
-    const c = mockCrm([{ email: "k@x.com", crmClientId: "crm_k" }]);
+    const c: CrmFacade = mockCrm([{ email: "k@x.com", crmClientId: "crm_k" }]);
     expect(await c.findByEmail("k@x.com")).toMatchObject({ crmClientId: "crm_k" });
     expect(await c.findByEmail("n@x.com")).toBeNull();
     const a1 = await c.createActivity({

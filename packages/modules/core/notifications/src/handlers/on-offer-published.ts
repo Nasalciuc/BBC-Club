@@ -1,20 +1,14 @@
 import { sql } from "drizzle-orm";
 import { OfferPublishedV1 } from "@bbc/shared/events/offer";
+import type { MembersFacade } from "@bbc/members";
 import { scheduleAfterQuietHours } from "../application/quiet-hours";
-
-export type MembersPort = {
-  activeMemberIds(exec?: unknown): Promise<string[]>;
-  preferencesOf(exec: unknown, memberId: string): Promise<{ offers_personal: boolean; offers_broadcast: boolean }>;
-  timezoneOf(exec: unknown, memberId: string): Promise<string>;
-  getStatus(exec: unknown, memberId: string): Promise<"active" | "waitlist" | "deleted" | "pending">;
-};
 
 /** Fan-out `offer.published` → one pending inbox/push row per eligible member.
  *  Idempotent via UNIQUE (member_id, offer_id, category) + ON CONFLICT DO NOTHING. */
 export async function onOfferPublished(
   deps: {
     tx: any;
-    members: MembersPort;
+    members: MembersFacade;
     sourceEventId: string;
   },
   raw: unknown,

@@ -1,4 +1,6 @@
+import type { Executor } from "@bbc/db";
+
 /** The only import surface of @bbc/personalization. module.ts implements it; consumers import it. */
 export type PersonalizationFacade = {
-  redactMember(tx: unknown, memberId: string): Promise<void>;
+  redactMember(tx: Executor | undefined, memberId: string): Promise<void>;
 };

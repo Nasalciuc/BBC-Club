@@ -1,13 +1,14 @@
 /** The only import surface of @bbc/members. Other modules and the host see nothing else. */
 import { eq, sql } from "drizzle-orm";
+import type { Executor } from "@bbc/db";
 import { profile, notificationPreferences } from "@bbc/db/schema/members";
 import type { MembersFacade, ProfileRow, NotificationPrefView } from "../api";
 
 export type { ProfileRow, NotificationPrefView, MembersFacade };
 
 /** Implementation — imported by module.ts and contract tests, not by other packages. */
-export function createMembersFacade(db: any): MembersFacade {
-  async function getProfile(exec: any, actorMemberId: string): Promise<ProfileRow | null> {
+export function createMembersFacade(db: Executor): MembersFacade {
+  async function getProfile(exec: Executor | undefined, actorMemberId: string): Promise<ProfileRow | null> {
     const [row] = await (exec ?? db).select().from(profile).where(eq(profile.memberId, actorMemberId)).limit(1);
     if (!row) return null;
     return {
@@ -21,15 +22,15 @@ export function createMembersFacade(db: any): MembersFacade {
       crmLinked: row.crmClientId != null,
     };
   }
-  async function getStatus(exec: any, memberId: string): Promise<ProfileRow["status"] | "pending"> {
+  async function getStatus(exec: Executor | undefined, memberId: string): Promise<ProfileRow["status"] | "pending"> {
     const p = await getProfile(exec, memberId);
     return p?.status ?? "pending";
   }
-  async function timezoneOf(exec: any, memberId: string): Promise<string> {
+  async function timezoneOf(exec: Executor | undefined, memberId: string): Promise<string> {
     return (await getProfile(exec, memberId))?.timezone ?? "America/New_York";
   }
 
-  async function activeMemberIds(exec?: any): Promise<string[]> {
+  async function activeMemberIds(exec: Executor | undefined): Promise<string[]> {
     const rows = await (exec ?? db)
       .select({ memberId: profile.memberId })
       .from(profile)
@@ -37,7 +38,7 @@ export function createMembersFacade(db: any): MembersFacade {
     return rows.map((r: { memberId: string }) => r.memberId);
   }
 
-  async function preferencesOf(exec: any, memberId: string): Promise<NotificationPrefView> {
+  async function preferencesOf(exec: Executor | undefined, memberId: string): Promise<NotificationPrefView> {
     const rows = await (exec ?? db)
       .select()
       .from(notificationPreferences)
@@ -50,7 +51,7 @@ export function createMembersFacade(db: any): MembersFacade {
   }
 
   async function updateProfile(
-    exec: any,
+    exec: Executor | undefined,
     actorMemberId: string,
     data: {
       displayName?: string;
@@ -71,7 +72,7 @@ export function createMembersFacade(db: any): MembersFacade {
   }
 
   async function setNotificationPreferences(
-    exec: any,
+    exec: Executor | undefined,
     actorMemberId: string,
     prefs: Array<{ category: "offers_personal" | "offers_broadcast"; enabled: boolean }>,
   ): Promise<void> {
