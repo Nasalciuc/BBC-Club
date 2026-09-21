@@ -19,6 +19,7 @@
     "@bbc/shared": "workspace:*",
     "@bbc/db": "workspace:*",
     "@bbc/platform": "workspace:*",
-    "@bbc/push": "workspace:*"
+    "@bbc/push": "workspace:*",
+    "@bbc/members": "workspace:*"
   }
 }

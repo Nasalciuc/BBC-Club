@@ -6,7 +6,9 @@ import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { createMembersFacade } from "./application/facade";
 import type { MembersFacade } from "./api";
-import { onMemberRegistered, reconcileMissingProfiles, type IdentityUsersPort } from "./handlers/on-member-registered";
+import type { CrmFacade } from "@bbc/crm";
+import type { IdentityFacade } from "@bbc/identity";
+import { onMemberRegistered, reconcileMissingProfiles } from "./handlers/on-member-registered";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import { ProfilePatchBody, NotificationPreferencesBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
@@ -14,12 +16,8 @@ import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
 
 type Ports = {
-  crm: {
-    findByEmail(
-      emailNormalized: string,
-    ): Promise<{ crmClientId: string; fullName?: string; homeAirport?: string } | null>;
-  };
-  identity: IdentityUsersPort;
+  crm: CrmFacade;
+  identity: IdentityFacade;
 };
 
 export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({

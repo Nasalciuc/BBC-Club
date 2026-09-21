@@ -13,11 +13,10 @@ import { toRequestVM } from "./application/to-request-vm";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
+import type { CrmFacade } from "@bbc/crm";
 
 type Ports = {
-  crm: {
-    submitRequest(payload: unknown): Promise<{ crmRequestId: string }>;
-  };
+  crm: CrmFacade;
 };
 
 export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({

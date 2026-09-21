@@ -7,11 +7,11 @@ import type { AppEnv } from "@bbc/shared/http/app-env";
 import { createAuth } from "./api";
 import { createIdentityFacade } from "./application/facade";
 import type { IdentityFacade } from "./api";
-import type { EmailSender } from "./ports/email";
+import type { EmailFacade } from "@bbc/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
 
-type Ports = { email: EmailSender };
+type Ports = { email: EmailFacade };
 
 /** Wiring only. Better Auth's hooks have no transaction of their own, so the EventPublisher port takes a
  *  single argument; we open a transaction here and drop platform's return value to satisfy Promise<void>. */

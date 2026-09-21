@@ -10,21 +10,22 @@ import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
 import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
-import type { PushSender } from "./ports/push";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
 import { devicesRepo } from "./infrastructure/devices.repo";
 import { markRead } from "./application/mark-read";
 import { dispatch } from "./application/dispatch";
 import { reconcileReceipts } from "./application/receipts";
 import { cleanupDevices } from "./application/cleanup-devices";
-import { onOfferPublished, type MembersPort } from "./handlers/on-offer-published";
+import { onOfferPublished } from "./handlers/on-offer-published";
 import { onOfferExpired, onOfferWithdrawn } from "./handlers/on-offer-lifecycle";
 import { DeviceBody } from "@bbc/shared/api/v1/proposals";
 import type { NotificationsFacade } from "./api";
+import type { MembersFacade } from "@bbc/members";
+import type { PushFacade } from "@bbc/push";
 
 type Ports = {
-  members: MembersPort;
-  push: PushSender;
+  members: MembersFacade;
+  push: PushFacade;
 };
 
 export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFacade> => ({

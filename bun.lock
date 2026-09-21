@@ -137,7 +137,9 @@
       "name": "@bbc/members",
       "version": "0.1.0",
       "dependencies": {
+        "@bbc/crm": "workspace:*",
         "@bbc/db": "workspace:*",
+        "@bbc/identity": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
@@ -149,6 +151,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@bbc/db": "workspace:*",
+        "@bbc/members": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/push": "workspace:*",
         "@bbc/shared": "workspace:*",
@@ -195,6 +198,7 @@
       "name": "@bbc/requests",
       "version": "0.1.0",
       "dependencies": {
+        "@bbc/crm": "workspace:*",
         "@bbc/db": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/shared": "workspace:*",
