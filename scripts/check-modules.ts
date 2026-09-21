@@ -104,6 +104,23 @@ for (const m of modules) {
       for (const s of REQUIRED_SECTIONS) if (!md.includes(s)) problems.push(`${m}: MODULE.md lacks ${s}`);
     }
     if (!existsSync(join(m, "src/api/index.ts"))) problems.push(`${m}: src/api/index.ts missing`);
+    else {
+      // Eleven domain modules live at packages/modules/<layer>/<name>. Platform is one level up — skip.
+      const norm = m.replace(/\\/g, "/");
+      const parts = norm.split("/");
+      const modIdx = parts.indexOf("modules");
+      if (modIdx >= 0 && parts.length === modIdx + 3) {
+        const name = parts[modIdx + 2]!;
+        const pascal = name.charAt(0).toUpperCase() + name.slice(1);
+        const apiSrc = readFileSync(join(m, "src/api/index.ts"), "utf8");
+        if (/return\s*\{\s*\}/.test(apiSrc))
+          problems.push(`${m}/src/api/index.ts: facade is a stub — see fix/typed-facades`);
+        if (!new RegExp(`export type ${pascal}Facade\\b`).test(apiSrc))
+          problems.push(`${m}/src/api/index.ts: must export type ${pascal}Facade`);
+        if (/export (async )?function create\w+Facade/.test(apiSrc))
+          problems.push(`${m}/src/api/index.ts: api/index.ts exports the type; module.ts implements it`);
+      }
+    }
     const moduleTs = join(m, "src/module.ts");
     if (existsSync(moduleTs)) {
       const src = readFileSync(moduleTs, "utf8");
