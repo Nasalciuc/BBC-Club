@@ -259,6 +259,7 @@ export const fixture = {
       arriveAt: "2026-10-13T06:00:00.000Z",
       price: { offer: 4200, published: 7850, publishedSource: "Sabre · 16 Sep", currency: "USD" },
       validUntil: "2026-10-04T23:59:59.000Z",
+      offerId: null,
       hasOffer: true,
     },
     {
@@ -274,6 +275,7 @@ export const fixture = {
       arriveAt: "2026-10-13T07:25:00.000Z",
       price: { offer: 4350, published: 7900, publishedSource: "Sabre · 16 Sep", currency: "USD" },
       validUntil: "2026-10-04T23:59:59.000Z",
+      offerId: null,
       hasOffer: true,
     },
     {
@@ -289,6 +291,7 @@ export const fixture = {
       arriveAt: null,
       price: { offer: 3850, published: 6900, publishedSource: "Sabre · 16 Sep", currency: "USD" },
       validUntil: "2026-10-31T23:59:59.000Z",
+      offerId: null,
       hasOffer: true,
     },
     {
@@ -304,6 +307,7 @@ export const fixture = {
       arriveAt: "2026-11-11T16:30:00.000Z",
       price: { offer: 4650, published: 8400, publishedSource: "Sabre · 16 Sep", currency: "USD" },
       validUntil: "2026-11-30T23:59:59.000Z",
+      offerId: null,
       hasOffer: true,
     },
     {
@@ -319,6 +323,7 @@ export const fixture = {
       arriveAt: null,
       price: { offer: 3900.5, currency: "USD" },
       validUntil: "2026-12-15T23:59:59.000Z",
+      offerId: null,
       hasOffer: false,
     },
     {
@@ -334,6 +339,7 @@ export const fixture = {
       arriveAt: "2026-11-22T06:40:00.000Z",
       price: { offer: 5100, published: 9200, publishedSource: "Sabre · 16 Sep", currency: "USD" },
       validUntil: "2026-12-01T23:59:59.000Z",
+      offerId: null,
       hasOffer: false,
     },
     {
@@ -349,6 +355,7 @@ export const fixture = {
       arriveAt: "2026-09-02T06:00:00.000Z",
       price: { offer: 4100, published: 7800, publishedSource: "Sabre · 1 Sep", currency: "USD" },
       validUntil: "2026-09-10T23:59:59.000Z",
+      offerId: null,
       hasOffer: false,
     },
   ],
