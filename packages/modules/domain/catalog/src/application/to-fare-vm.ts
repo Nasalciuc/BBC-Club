@@ -1,5 +1,8 @@
 import type { AirportVM, DestinationPinVM, FareVM } from "@bbc/shared/api/v1/fares";
-import type { AirportRow, FareRow } from "../api";
+import type { airports, fares } from "@bbc/db/schema/catalog";
+
+type FareRow = typeof fares.$inferSelect;
+type AirportRow = typeof airports.$inferSelect;
 
 export function toAirportVM(row: AirportRow): AirportVM {
   return {
