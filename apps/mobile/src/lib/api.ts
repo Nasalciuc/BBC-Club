@@ -6,9 +6,11 @@ import {
   NotificationPreferencesBody,
   PasswordBody,
   ProfilePatchBody,
+  TravelPreferencesBody,
   type DeviceBody as DeviceBodyType,
   type NotificationPreferencesBody as NotificationPreferencesBodyType,
   type ProfilePatchBody as ProfilePatchBodyType,
+  type TravelPreferencesBody as TravelPreferencesBodyType,
 } from "@bbc/shared/api/v1/proposals";
 import {
   AirportVM,
@@ -127,6 +129,30 @@ export async function patchProfile(body: ProfilePatchBodyType): Promise<ApiResul
   return asResult(async () => {
     const res = await apiFetch("/v1/profile", {
       method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    return { ok: true, data: (await parseJson(res)) as Profile };
+  });
+}
+
+/** PUT /v1/profile/travel — cabin, passengers, destinations (merged, never replaced). */
+export async function putTravelPreferences(body: TravelPreferencesBodyType): Promise<ApiResult<Profile>> {
+  const parsed = TravelPreferencesBody.safeParse(body);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? authMessage("VALIDATION"),
+      code: "VALIDATION",
+      status: 400,
+    };
+  }
+  return asResult(async () => {
+    const res = await apiFetch("/v1/profile/travel", {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.data),
     });

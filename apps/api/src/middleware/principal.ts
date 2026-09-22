@@ -68,7 +68,13 @@ export function resolvePrincipal(opts: Opts): MiddlewareHandler<PrincipalVars> {
     }
     const s = await opts.identity.getSession(c.req.raw.headers);
     if (s) {
-      c.set("principal", { kind: "member", role: "member", memberId: s.member.id, sessionId: s.sessionId });
+      c.set("principal", {
+        kind: "member",
+        role: "member",
+        memberId: s.member.id,
+        sessionId: s.sessionId,
+        email: s.member.email,
+      });
       return next();
     }
     c.set("principal", { kind: "anonymous" });

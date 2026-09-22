@@ -2,7 +2,7 @@ import type { Role } from "@bbc/shared/authz/permissions";
 
 /** Exactly one per request or per handler invocation. Pure type — lives in shared, not the host. */
 export type Principal =
-  | { kind: "member"; memberId: string; role: "member"; sessionId: string }
+  | { kind: "member"; memberId: string; role: "member"; sessionId: string; email: string }
   | { kind: "operator"; operatorId: string; role: "operator"; email: string }
   | { kind: "system"; role: "system"; source: "internal-secret" | "jwt" | "handler" | "cron"; actorMemberId?: string }
   | { kind: "anonymous"; role?: undefined };

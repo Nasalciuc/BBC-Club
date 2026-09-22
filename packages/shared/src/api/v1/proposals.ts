@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Passengers } from "./requests";
 
 // -- Price -------------------------------------------------------------------
 
@@ -109,6 +110,7 @@ export const TravelPreferencesBody = z.object({
   destinations: z.array(z.string().length(3)).max(3).optional(),
   cabin: z.enum(["business", "first"]).optional(),
   frequency: z.enum(["monthly", "quarterly", "rarely"]).optional(),
+  passengers: Passengers.optional(),
   notes: z.string().max(500).optional(),
 });
 export type TravelPreferencesBody = z.infer<typeof TravelPreferencesBody>;

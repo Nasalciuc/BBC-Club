@@ -1,4 +1,5 @@
 import type { Executor } from "@bbc/db";
+import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
 
 export type ProfileRow = {
   memberId: string;
@@ -11,6 +12,7 @@ export type ProfileRow = {
     destinations?: string[];
     cabin?: "business" | "first";
     frequency?: "monthly" | "quarterly" | "rarely";
+    passengers?: { adult: number; child: number; infant: number };
     notes?: string;
   };
   memberSince: Date;
@@ -27,6 +29,8 @@ export type NotificationPrefView = {
   offers_personal: boolean;
   offers_broadcast: boolean;
 };
+
+export { toProfileVM } from "../application/to-profile-vm";
 
 /** The only import surface of @bbc/members. module.ts implements it; consumers import it. */
 export type MembersFacade = {
@@ -45,6 +49,12 @@ export type MembersFacade = {
       phone?: string;
       preferences?: Record<string, unknown>;
     },
+  ): Promise<ProfileRow | null>;
+  /** Merges, never replaces. A client that sends only { cabin } must not wipe passengers. */
+  setTravelPreferences(
+    exec: Executor | undefined,
+    actorMemberId: string,
+    patch: TravelPreferencesBody,
   ): Promise<ProfileRow | null>;
   setNotificationPreferences(
     exec: Executor | undefined,

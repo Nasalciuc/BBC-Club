@@ -4,21 +4,26 @@ import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
-import { createMembersFacade } from "./application/facade";
+import { createMembersFacade, toProfileVM } from "./application/facade";
 import type { MembersFacade } from "./api";
 import type { CrmFacade } from "@bbc/crm";
 import type { IdentityFacade } from "@bbc/identity";
 import { onMemberRegistered, reconcileMissingProfiles } from "./handlers/on-member-registered";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
-import { ProfilePatchBody, NotificationPreferencesBody } from "@bbc/shared/api/v1/proposals";
+import { ProfilePatchBody, NotificationPreferencesBody, TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
 import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
+import type { Principal } from "@bbc/shared/authz/principal";
 
 type Ports = {
   crm: CrmFacade;
   identity: IdentityFacade;
 };
+
+function memberEmail(p: Principal): string | null {
+  return p.kind === "member" ? p.email : null;
+}
 
 export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
   name: "members",
@@ -83,6 +88,49 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
         });
         if (!updated) return c.json(apiError("NOT_FOUND"), 404);
         return c.json(updated);
+      },
+    );
+
+    registerRoute("PUT", "/v1/profile/travel", "profile:update-self");
+    routes.put(
+      "/profile/travel",
+      authorize("profile:update-self", {
+        module: "members",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const principal = c.get("principal");
+        const actor = actorMemberId(principal);
+        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+        const parsed = TravelPreferencesBody.safeParse(await c.req.json().catch(() => ({})));
+        if (!parsed.success) {
+          return c.json(
+            apiError("VALIDATION", {
+              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+            }),
+            400,
+          );
+        }
+        const updated = await withTx(conn, async (tx) => {
+          const p = await facade.setTravelPreferences(tx, actor, parsed.data);
+          if (!p) return null;
+          await publish(tx, {
+            type: "member.profile_updated",
+            version: 1,
+            aggregateType: "member",
+            aggregateId: actor,
+            memberId: actor,
+            payload: event("member.profile_updated", {
+              memberId: actor,
+              fields: Object.keys(parsed.data),
+              updatedAt: new Date().toISOString(),
+            }),
+          });
+          return p;
+        });
+        if (!updated) return c.json(apiError("NOT_FOUND"), 404);
+        return c.json(toProfileVM(updated, memberEmail(principal), actor));
       },
     );
 

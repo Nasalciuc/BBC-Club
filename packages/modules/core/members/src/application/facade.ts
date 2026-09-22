@@ -1,10 +1,12 @@
 /** The only import surface of @bbc/members. Other modules and the host see nothing else. */
 import { eq, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
-import { profile, notificationPreferences } from "@bbc/db/schema/members";
+import { profile, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
+import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
 import type { MembersFacade, ProfileRow, NotificationPrefView } from "../api";
 
 export type { ProfileRow, NotificationPrefView, MembersFacade };
+export { toProfileVM } from "./to-profile-vm";
 
 /** Implementation — imported by module.ts and contract tests, not by other packages. */
 export function createMembersFacade(db: Executor): MembersFacade {
@@ -73,6 +75,26 @@ export function createMembersFacade(db: Executor): MembersFacade {
     return getProfile(exec, actorMemberId);
   }
 
+  /** Merges, never replaces. A client that sends only { cabin } must not wipe passengers. */
+  async function setTravelPreferences(
+    exec: Executor | undefined,
+    actorMemberId: string,
+    patch: TravelPreferencesBody,
+  ): Promise<ProfileRow | null> {
+    const [row] = await (exec ?? db)
+      .select({ preferences: profile.preferences })
+      .from(profile)
+      .where(eq(profile.memberId, actorMemberId))
+      .limit(1);
+    if (!row) return null;
+    const merged: TravelPreferences = { ...(row.preferences ?? {}), ...patch };
+    await (exec ?? db)
+      .update(profile)
+      .set({ preferences: merged, updatedAt: sql`now()` })
+      .where(eq(profile.memberId, actorMemberId));
+    return getProfile(exec, actorMemberId);
+  }
+
   async function setNotificationPreferences(
     exec: Executor | undefined,
     actorMemberId: string,
@@ -96,6 +118,7 @@ export function createMembersFacade(db: Executor): MembersFacade {
     activeMemberIds,
     preferencesOf,
     updateProfile,
+    setTravelPreferences,
     setNotificationPreferences,
   };
 }

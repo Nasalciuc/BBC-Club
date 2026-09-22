@@ -1,9 +1,8 @@
 import type { ProposalCardVM, ProposalDetailVM, ResponseState } from "@bbc/shared/api/v1/proposals";
 import type { DestinationPinVM } from "@bbc/shared/api/v1/fares";
-import type { ProfileVM } from "@bbc/shared/api/v1/profile";
 import type { OfferRow } from "@bbc/proposals";
 import type { DestinationPin } from "@bbc/catalog";
-import type { ProfileRow } from "@bbc/members";
+export { toProfileVM } from "@bbc/members";
 
 function resolveState(raw: "interested" | "dismissed" | null | undefined): ResponseState {
   if (raw === "interested") return "interested";
@@ -64,37 +63,5 @@ export function toDestinationPin(row: DestinationPin, hasOffer: boolean): Destin
     fromPrice: row.fromPrice,
     hasOffer,
     region: row.region,
-  };
-}
-
-/** Always returns a parseable ProfileVM. Null row → complete pending stub with defaults. */
-export function toProfileVM(row: ProfileRow | null, email: string | null, memberId: string): ProfileVM {
-  if (!row) {
-    return {
-      memberId,
-      status: "pending",
-      email,
-      displayName: null,
-      homeAirport: null,
-      timezone: "America/New_York",
-      phone: null,
-      memberSince: null,
-      crmLinkedAt: null,
-      crmLinked: false,
-      preferences: {},
-    };
-  }
-  return {
-    memberId: row.memberId,
-    status: row.status,
-    email,
-    displayName: row.displayName,
-    homeAirport: row.homeAirport,
-    timezone: row.timezone,
-    phone: row.phone,
-    memberSince: row.memberSince.toISOString(),
-    crmLinkedAt: row.crmLinkedAt ? row.crmLinkedAt.toISOString() : null,
-    crmLinked: row.crmLinked,
-    preferences: row.preferences ?? {},
   };
 }
