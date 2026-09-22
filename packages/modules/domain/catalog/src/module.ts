@@ -59,7 +59,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
 
-        const items = rows.map((r) => toFareVM(r as any, { from: fromApt, to: toApt }, false));
+        const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
         return c.json({
           from: toAirportVM(fromApt),
           to: toAirportVM(toApt),
@@ -81,14 +81,14 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         const id = c.req.param("id");
         const row = await faresRepo.getAny(conn, id);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
-        if (!isVisible(row as any)) return c.json(apiError("GONE"), 410);
+        if (!isVisible(row)) return c.json(apiError("GONE"), 410);
 
         const [fromApt, toApt] = await Promise.all([
-          airportsRepo.get(conn, (row as any).routeFrom),
-          airportsRepo.get(conn, (row as any).routeTo),
+          airportsRepo.get(conn, row.routeFrom),
+          airportsRepo.get(conn, row.routeTo),
         ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND"), 404);
-        return c.json(toFareVM(row as any, { from: fromApt, to: toApt }, false));
+        return c.json(toFareVM(row, { from: fromApt, to: toApt }, false));
       },
     );
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { testApp } from "./helpers/test-app";
 import { FareVM, AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
-import { toFareVM } from "../src/presentation/mobile/view-models";
+import { toFareVM } from "@bbc/catalog";
 import { fixture } from "@bbc/shared/fixture";
 
 describe("catalog routes", () => {
@@ -110,6 +110,7 @@ describe("GET /v1/home", () => {
 describe("fare parity", () => {
   it("fixture fare round-trips through toFareVM", () => {
     const f = fixture.fares[0]!;
+    const now = new Date();
     const vm = toFareVM(
       {
         id: f.id,
@@ -127,11 +128,38 @@ describe("fare parity", () => {
         publishedPrice: f.price.published != null ? String(f.price.published) : null,
         publishedSource: f.price.publishedSource ?? null,
         currency: f.price.currency,
+        source: "manual",
+        validFrom: now,
         validUntil: new Date(f.validUntil),
+        published: true,
+        createdAt: now,
+        updatedAt: now,
       },
       {
-        from: { code: f.from.code, city: f.from.city, name: "JFK", countryCode: "US", lat: 0, lng: 0 },
-        to: { code: f.to.code, city: f.to.city, name: "LHR", countryCode: "GB", lat: 0, lng: 0 },
+        from: {
+          code: f.from.code,
+          city: f.from.city,
+          name: "JFK",
+          country: "United States",
+          countryCode: "US",
+          region: "north_america",
+          lat: "0",
+          lng: "0",
+          popularity: 0,
+          createdAt: now,
+        },
+        to: {
+          code: f.to.code,
+          city: f.to.city,
+          name: "LHR",
+          country: "United Kingdom",
+          countryCode: "GB",
+          region: "europe",
+          lat: "0",
+          lng: "0",
+          popularity: 0,
+          createdAt: now,
+        },
       },
       f.hasOffer,
     );

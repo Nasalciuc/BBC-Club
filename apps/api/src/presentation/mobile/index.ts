@@ -9,7 +9,8 @@ import type { MembersFacade } from "@bbc/members";
 import type { ProposalsFacade } from "@bbc/proposals";
 import type { EngagementFacade } from "@bbc/engagement";
 import type { CatalogFacade } from "@bbc/catalog";
-import { toCard, toDetail, toAirportVM, toDestinationPin, toProfileVM } from "./view-models";
+import { toAirportVM } from "@bbc/catalog";
+import { toCard, toDetail, toDestinationPin, toProfileVM } from "./view-models";
 
 type Ports = {
   members: MembersFacade;

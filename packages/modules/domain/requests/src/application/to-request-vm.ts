@@ -1,23 +1,8 @@
 import { RequestVM as RequestVMSchema, type RequestVM } from "@bbc/shared/api/v1/requests";
+import type { requests, requestEvents } from "@bbc/db/schema/requests";
 
-type RequestRow = {
-  id: string;
-  reference: string;
-  memberId: string | null;
-  legs: { from: string; to: string; date: string }[];
-  passengers: { adult: number; child: number; infant: number };
-  cabin: "business" | "first";
-  priceAtRequest: string | null;
-  status: string;
-  sentToCrm: boolean;
-  createdAt: Date;
-};
-
-type EventRow = {
-  status: string;
-  createdAt: Date;
-  note: string | null;
-};
+type RequestRow = typeof requests.$inferSelect;
+type EventRow = typeof requestEvents.$inferSelect;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 

@@ -1,8 +1,11 @@
 import type { Executor } from "@bbc/db";
 import type { fares, airports } from "@bbc/db/schema/catalog";
+import { toAirportVM, toFareVM } from "../application/to-fare-vm";
 
 export type FareRow = typeof fares.$inferSelect;
 export type AirportRow = typeof airports.$inferSelect;
+
+export { toAirportVM, toFareVM };
 
 /** Cheapest published fare per destination from home — shape of destinations(). */
 export type DestinationPin = {
