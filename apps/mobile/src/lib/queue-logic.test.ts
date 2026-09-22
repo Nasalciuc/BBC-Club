@@ -15,7 +15,7 @@ const body: RequestBody = {
 
 function item(over: Partial<QueuedRequest> = {}): QueuedRequest {
   return {
-    id: over.id ?? "00000000-0000-4000-8000-000000000001",
+    id: over.id ?? "q_00000000-0000-4000-8000-000000000001",
     body,
     idempotencyKey: over.idempotencyKey ?? "key-1",
     enqueuedAt: over.enqueuedAt ?? "2026-09-18T12:00:00.000Z",
@@ -62,9 +62,9 @@ describe("afterAttempt", () => {
 
 describe("flushItems", () => {
   it("still attempts the third item when the second throws", async () => {
-    const a = item({ id: "00000000-0000-4000-8000-000000000001", idempotencyKey: "a" });
-    const b = item({ id: "00000000-0000-4000-8000-000000000002", idempotencyKey: "b" });
-    const c = item({ id: "00000000-0000-4000-8000-000000000003", idempotencyKey: "c" });
+    const a = item({ id: "q_00000000-0000-4000-8000-000000000001", idempotencyKey: "a" });
+    const b = item({ id: "q_00000000-0000-4000-8000-000000000002", idempotencyKey: "b" });
+    const c = item({ id: "q_00000000-0000-4000-8000-000000000003", idempotencyKey: "c" });
     const seen: string[] = [];
     const r = await flushItems([a, b, c], async (_body, key) => {
       seen.push(key);
@@ -76,5 +76,20 @@ describe("flushItems", () => {
     expect(r.failed).toBe(1);
     expect(r.remaining).toHaveLength(1);
     expect(r.remaining[0]?.idempotencyKey).toBe("b");
+  });
+});
+
+describe("q_ id schema", () => {
+  it("rejects a bare UUID without the q_ prefix", () => {
+    const raw = JSON.stringify([
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        body,
+        idempotencyKey: "k",
+        enqueuedAt: "2026-09-18T12:00:00.000Z",
+        attempts: 0,
+      },
+    ]);
+    expect(parseQueue(raw).ok).toBe(false);
   });
 });

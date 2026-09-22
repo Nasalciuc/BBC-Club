@@ -154,6 +154,10 @@ export default function RootLayout() {
                 options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
               />
               <Stack.Screen
+                name="request/[id]"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+              <Stack.Screen
                 name="notifications"
                 options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
               />

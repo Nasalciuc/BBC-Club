@@ -466,6 +466,22 @@ export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[
   });
 }
 
+/** GET /v1/requests/:id */
+export async function fetchRequest(id: string): Promise<ApiResult<RequestVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/requests/${encodeURIComponent(id)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const raw = await parseJson(res);
+    const parsed = RequestVM.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
+  });
+}
+
 export type AppConfig = { minSupportedVersion: string; maintenance: string | null };
 
 /** GET /v1/app-config — cold start, public. */

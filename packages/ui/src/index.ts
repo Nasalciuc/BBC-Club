@@ -9,6 +9,7 @@ export { PricePair } from "./primitives/PricePair";
 export { SectionLabel } from "./primitives/SectionLabel";
 export { StatusBadge } from "./primitives/StatusBadge";
 export { Stepper } from "./primitives/Stepper";
+export { Timeline } from "./primitives/Timeline";
 
 export { AirportRow } from "./fields/AirportRow";
 export { SearchField } from "./fields/SearchField";

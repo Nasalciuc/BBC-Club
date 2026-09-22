@@ -20,6 +20,7 @@ import {
   StatusBadge,
   Stepper,
   TabBar,
+  Timeline,
   tokens,
   rn,
 } from "@bbc/ui";
@@ -158,6 +159,18 @@ export default function GalleryScreen() {
         <StatusBadge status="not_sent" />
         <StatusBadge status="mystery_future_status" />
       </View>
+
+      <SectionLabel label="Timeline" />
+      <Timeline
+        testID="gallery.timeline.partial"
+        status="assigned"
+        events={[
+          { status: "received", at: "2026-09-18T12:00:00.000Z" },
+          { status: "assigned", at: "2026-09-18T14:30:00.000Z" },
+        ]}
+      />
+      <View style={styles.gap} />
+      <Timeline testID="gallery.timeline.empty" status="queued" events={[]} />
 
       <SectionLabel
         label="SectionLabel"

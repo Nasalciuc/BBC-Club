@@ -1,0 +1,248 @@
+import type { RequestVM } from "@bbc/shared/api/v1/requests";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, ErrorState, Icon, StatusBadge, Timeline, tokens, rn } from "@bbc/ui";
+
+import { badgeStatus, requestMeta } from "@/features/requests/status";
+import { fetchRequest, submitRequest } from "@/lib/api";
+import { env } from "@/lib/env";
+import { getQueued, sendOne, type QueuedRequest } from "@/lib/queue";
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function isQueuedId(id: string): boolean {
+  return id.startsWith("q_");
+}
+
+function formatLegDates(legs: { date: string }[]): string {
+  const fmt = (iso: string) => {
+    const parts = iso.split("-").map(Number);
+    const y = parts[0];
+    const m = parts[1];
+    const d = parts[2];
+    if (!y || !m || !d) return iso;
+    const month = MONTHS[m - 1];
+    return month ? `${month} ${d}` : iso;
+  };
+  const first = legs[0];
+  const last = legs[legs.length - 1];
+  if (!first) return "";
+  if (!last || legs.length === 1) return fmt(first.date);
+  return `${fmt(first.date)}–${fmt(last.date)}`;
+}
+
+function queuedToView(q: QueuedRequest): RequestVM {
+  const first = q.body.legs[0];
+  const last = q.body.legs[q.body.legs.length - 1];
+  return {
+    id: q.id,
+    reference: "",
+    route: first && last ? `${first.from} → ${last.to}` : "",
+    dates: formatLegDates(q.body.legs),
+    cabin: q.body.cabin,
+    passengers: q.body.passengers,
+    priceAtRequest: q.body.priceAtRequest ?? null,
+    status: "not_sent",
+    createdAt: q.enqueuedAt,
+    timeline: [],
+  };
+}
+
+function dialSupport() {
+  const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  if (!phone) return;
+  void Linking.openURL(`tel:${phone}`);
+}
+
+export default function RequestDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [vm, setVm] = useState<RequestVM | null>(null);
+  const [queued, setQueued] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    if (!id || typeof id !== "string") {
+      setError("This request could not be found.");
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      if (isQueuedId(id)) {
+        const item = getQueued(id);
+        if (cancelled) return;
+        if (!item) {
+          setError("This request is no longer in your queue.");
+          setVm(null);
+          setQueued(false);
+          setLoading(false);
+          return;
+        }
+        setVm(queuedToView(item));
+        setQueued(true);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      const result = await fetchRequest(id);
+      if (cancelled) return;
+      if (!result.ok) {
+        setError(result.message);
+        setVm(null);
+        setQueued(false);
+        setLoading(false);
+        return;
+      }
+      setVm(result.data);
+      setQueued(false);
+      setError(null);
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, reloadToken]);
+
+  async function onSendNow() {
+    if (!id || typeof id !== "string") return;
+    setSending(true);
+    try {
+      const result = await sendOne(id, (body, key) => submitRequest(body, key));
+      if (result.sent > 0) {
+        router.replace("/(tabs)/requests" as Href);
+        return;
+      }
+      setReloadToken((n) => n + 1);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.root, styles.centered]}>
+        <ActivityIndicator color={tokens.colors.primary} />
+      </View>
+    );
+  }
+
+  if (error || !vm) {
+    return (
+      <View testID="request.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
+        <ErrorState
+          testID="request.error"
+          variant="error"
+          title="Something went wrong."
+          body={error ?? "This request could not be found."}
+          primary={{ label: "Back", onPress: () => router.back() }}
+        />
+      </View>
+    );
+  }
+
+  const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  const showCall = vm.status === "quoted" && Boolean(supportPhone);
+  const showSend = queued;
+
+  return (
+    <View testID="request.root" style={styles.root}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingTop: insets.top + tokens.space.md,
+          paddingHorizontal: tokens.space.lg,
+          paddingBottom: insets.bottom + tokens.space.xxl,
+        }}
+      >
+        <Pressable
+          testID="request.back"
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          hitSlop={12}
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <Icon name="back" size={20} color={tokens.colors.textPrimary} />
+          <Text style={styles.backText}>Back</Text>
+        </Pressable>
+
+        <View style={styles.header}>
+          <Text style={styles.route}>{vm.route}</Text>
+          <StatusBadge status={badgeStatus(vm.status)} />
+        </View>
+        <Text style={styles.meta}>{requestMeta(vm)}</Text>
+
+        {vm.reference.trim().length > 0 ? (
+          <Text testID="request.reference" style={styles.reference}>
+            Ref {vm.reference}
+          </Text>
+        ) : null}
+
+        <Text style={styles.section}>Status</Text>
+        <Timeline testID="request.timeline" status={queued ? "queued" : vm.status} events={vm.timeline} />
+
+        {showCall ? (
+          <Button
+            testID="request.call"
+            label="Call your specialist"
+            shape="card"
+            variant="primary"
+            onPress={dialSupport}
+            style={styles.cta}
+          />
+        ) : null}
+
+        {showSend ? (
+          <Button
+            testID="request.send"
+            label="Send now"
+            shape="card"
+            variant="primary"
+            busy={sending}
+            onPress={() => {
+              void onSendNow().catch(() => {
+                setSending(false);
+                setReloadToken((n) => n + 1);
+              });
+            }}
+            style={styles.cta}
+          />
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
+  centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
+  back: { flexDirection: "row", alignItems: "center", gap: tokens.space.xxs, marginBottom: tokens.space.md },
+  backText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.space.sm,
+    marginBottom: tokens.space.xs,
+  },
+  route: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, flex: 1 },
+  meta: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.md },
+  reference: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary, marginBottom: tokens.space.md },
+  section: {
+    ...rn(tokens.type.titleSm),
+    color: tokens.colors.textPrimary,
+    marginBottom: tokens.space.sm,
+    marginTop: tokens.space.sm,
+  },
+  cta: { marginTop: tokens.space.xl },
+});
