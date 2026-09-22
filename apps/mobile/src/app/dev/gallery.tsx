@@ -18,6 +18,7 @@ import {
   SearchField,
   SectionLabel,
   StatusBadge,
+  Stepper,
   TabBar,
   tokens,
   rn,
@@ -31,6 +32,10 @@ export default function GalleryScreen() {
   const [chipOn, setChipOn] = useState(false);
   const [tab, setTab] = useState<"explore" | "requests" | "profile">("explore");
   const [pin, setPin] = useState<string | null>("LHR");
+  const [stepperAdult, setStepperAdult] = useState(1);
+  const [stepperChild, setStepperChild] = useState(0);
+  const [stepperInfant, setStepperInfant] = useState(0);
+  const [editableQuery, setEditableQuery] = useState("");
   const noop = () => undefined;
 
   const fareTimed = fixture.fares[0]!;
@@ -70,6 +75,41 @@ export default function GalleryScreen() {
         disabled
         disabledReason="Search needs a connection"
         onPress={noop}
+      />
+      <View style={styles.gap} />
+      <SearchField
+        testID="gallery.search.editable"
+        placeholder="City or code"
+        editable
+        value={editableQuery ? { text: editableQuery } : null}
+        onChangeText={setEditableQuery}
+        onClear={() => setEditableQuery("")}
+      />
+
+      <SectionLabel label="Stepper" />
+      <Stepper
+        testID="gallery.stepper.adult"
+        label="Adults"
+        value={stepperAdult}
+        min={1}
+        max={9}
+        onChange={setStepperAdult}
+      />
+      <Stepper
+        testID="gallery.stepper.child"
+        label="Children"
+        value={stepperChild}
+        min={0}
+        max={8}
+        onChange={setStepperChild}
+      />
+      <Stepper
+        testID="gallery.stepper.infant"
+        label="Infants"
+        value={stepperInfant}
+        min={0}
+        max={4}
+        onChange={setStepperInfant}
       />
 
       <SectionLabel label="AirportRow" />
@@ -143,6 +183,8 @@ export default function GalleryScreen() {
       <ListRow testID="gallery.list.value" label="Home airport" value="JFK · New York" onPress={noop} />
       <ListRow testID="gallery.list.icon" label="Call support" icon="call" trailing="none" onPress={noop} />
       <ListRow testID="gallery.list.danger" label="Delete account" danger chevron={false} onPress={noop} />
+      <ListRow testID="gallery.list.static" label="Email" value="member@example.com" />
+      <ListRow testID="gallery.list.comingSoon" label="Privacy policy" value="Coming soon" />
 
       <SectionLabel label="TabBar" />
       <TabBar testID="gallery.tabbar" active={tab} unread={0} onPress={setTab} />

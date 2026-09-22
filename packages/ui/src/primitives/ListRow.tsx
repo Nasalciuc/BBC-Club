@@ -5,7 +5,7 @@ import { tokens } from "../tokens";
 
 type Props = {
   label: string;
-  onPress: () => void;
+  onPress?: () => void;
   value?: string;
   icon?: IconName;
   /** Prefer `trailing`; `chevron` kept so existing screens compile unchanged. */
@@ -16,17 +16,12 @@ type Props = {
 };
 
 export function ListRow({ label, onPress, value, icon, trailing, chevron = true, danger = false, testID }: Props) {
-  const showChevron = trailing != null ? trailing === "chevron" : chevron;
+  const pressable = onPress != null;
+  const showChevron = trailing != null ? trailing === "chevron" : pressable && chevron;
   const compact = value != null;
 
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={value ? `${label}, ${value}` : label}
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, compact && styles.compact, pressed && styles.pressed]}
-    >
+  const body = (
+    <>
       {icon ? <Icon name={icon} size={20} color={tokens.colors.textSecondary} /> : null}
       <View style={styles.body}>
         <Text style={[styles.label, danger && styles.danger]} numberOfLines={1}>
@@ -39,6 +34,30 @@ export function ListRow({ label, onPress, value, icon, trailing, chevron = true,
         ) : null}
       </View>
       {showChevron ? <Icon name="chevron" size={18} color={tokens.colors.textTertiary} /> : null}
+    </>
+  );
+
+  if (!pressable) {
+    return (
+      <View
+        testID={testID}
+        style={[styles.row, compact && styles.compact]}
+        accessibilityLabel={value ? `${label}, ${value}` : label}
+      >
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={value ? `${label}, ${value}` : label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, compact && styles.compact, pressed && styles.pressed]}
+    >
+      {body}
     </Pressable>
   );
 }

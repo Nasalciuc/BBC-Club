@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Icon } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
@@ -6,16 +6,63 @@ import { tokens } from "../tokens";
 type Props = {
   placeholder: string;
   value?: { prefix?: string; text: string } | null;
-  onPress: () => void;
+  onPress?: () => void;
   onClear?: () => void;
   disabled?: boolean;
   disabledReason?: string;
+  /** When true, renders a TextInput so sheets can type a query. */
+  editable?: boolean;
+  onChangeText?: (text: string) => void;
   testID: string;
 };
 
-/** Not a TextInput: tapping raises a sheet. Disabled is never hidden. */
-export function SearchField({ placeholder, value, onPress, onClear, disabled = false, disabledReason, testID }: Props) {
-  const filled = value != null;
+/** Default: not a TextInput — tapping raises a sheet. Set `editable` for inline typing. Disabled is never hidden. */
+export function SearchField({
+  placeholder,
+  value,
+  onPress,
+  onClear,
+  disabled = false,
+  disabledReason,
+  editable = false,
+  onChangeText,
+  testID,
+}: Props) {
+  const filled = value != null && value.text.length > 0;
+
+  if (editable) {
+    return (
+      <View
+        style={[styles.field, filled && styles.filled, disabled && styles.disabled]}
+        accessibilityState={{ disabled }}
+      >
+        <Icon name={filled ? "departure" : "search"} size={20} />
+        <TextInput
+          testID={testID}
+          editable={!disabled}
+          value={value?.text ?? ""}
+          onChangeText={onChangeText}
+          placeholder={disabled ? (disabledReason ?? placeholder) : placeholder}
+          placeholderTextColor={tokens.colors.textTertiary}
+          style={styles.input}
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        {filled && onClear ? (
+          <Pressable
+            testID={`${testID}.clear`}
+            accessibilityRole="button"
+            accessibilityLabel="Clear"
+            hitSlop={12}
+            onPress={onClear}
+            style={styles.clear}
+          >
+            <Icon name="clear" size={16} />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <Pressable
@@ -78,6 +125,13 @@ const styles = StyleSheet.create({
   placeholder: { ...rn(tokens.type.body), color: tokens.colors.textTertiary, flex: 1 },
   text: { ...rn(tokens.type.body), color: tokens.colors.textPrimary, flex: 1 },
   prefix: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  input: {
+    ...rn(tokens.type.body),
+    color: tokens.colors.textPrimary,
+    flex: 1,
+    padding: 0,
+    margin: 0,
+  },
   clear: {
     width: 24,
     height: 24,

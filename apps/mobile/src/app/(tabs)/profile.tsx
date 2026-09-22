@@ -1,12 +1,18 @@
 import Constants from "expo-constants";
 import { useRouter, type Href } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, SectionLabel, tokens, rn } from "@bbc/ui";
 
 import { ListRow } from "@/components/list-row";
 import { deleteAccount, signOut } from "@/features/auth/flows";
+import { CabinSheet } from "@/features/profile/CabinSheet";
+import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
+import { PasswordSheet } from "@/features/profile/PasswordSheet";
+import { PhoneSheet } from "@/features/profile/PhoneSheet";
+import { TravelersSheet } from "@/features/profile/TravelersSheet";
+import type { ProfileSheetHandle } from "@/features/profile/types";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
 
@@ -43,6 +49,12 @@ export default function ProfileScreen() {
   const [busy, setBusy] = useState(false);
   const [openRequests, setOpenRequests] = useState(0);
   const [sinceOpen, setSinceOpen] = useState(false);
+
+  const homeAirportRef = useRef<ProfileSheetHandle>(null);
+  const cabinRef = useRef<ProfileSheetHandle>(null);
+  const travelersRef = useRef<ProfileSheetHandle>(null);
+  const passwordRef = useRef<ProfileSheetHandle>(null);
+  const phoneRef = useRef<ProfileSheetHandle>(null);
 
   useEffect(() => {
     void (async () => {
@@ -97,7 +109,14 @@ export default function ProfileScreen() {
   const sinceYear = clientSinceYear(profile?.memberSince);
   const showClientSince = profile?.crmLinkedAt != null && sinceYear != null;
   const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  const privacyUrl = env.EXPO_PUBLIC_PRIVACY_URL;
+  const termsUrl = env.EXPO_PUBLIC_TERMS_URL;
   const cabinLabel = profile?.preferences?.cabin === "first" ? "First" : "Business";
+
+  function onSheetSaved(next: Profile) {
+    setProfile(next);
+    setError(null);
+  }
 
   return (
     <ScrollView
@@ -133,26 +152,31 @@ export default function ProfileScreen() {
         testID="profile.homeAirport"
         label="Home airport"
         value={profile?.homeAirport ?? "Not set"}
-        onPress={() => undefined}
+        onPress={() => homeAirportRef.current?.present()}
       />
-      <ListRow testID="profile.cabin" label="Cabin" value={cabinLabel} onPress={() => undefined} />
+      <ListRow testID="profile.cabin" label="Cabin" value={cabinLabel} onPress={() => cabinRef.current?.present()} />
       <ListRow
         testID="profile.travelers"
         label="Travelers"
         value={travelersLabel(profile?.preferences)}
-        onPress={() => undefined}
+        onPress={() => travelersRef.current?.present()}
       />
 
       <SectionLabel label="Account" />
+      <ListRow testID="profile.email" label="Email" value={profile?.email ?? "—"} />
+      <Text style={styles.hint}>Contact support if you need to change your email.</Text>
       <ListRow
-        testID="profile.email"
-        label="Email"
-        value={profile?.email ?? "—"}
-        trailing="none"
-        onPress={() => undefined}
+        testID="profile.phone"
+        label="Phone"
+        value={profile?.phone ?? "Add phone"}
+        onPress={() => phoneRef.current?.present()}
       />
-      <ListRow testID="profile.phone" label="Phone" value={profile?.phone ?? "Add phone"} onPress={() => undefined} />
-      <ListRow testID="profile.password" label="Password" value="On file" trailing="none" onPress={() => undefined} />
+      <ListRow
+        testID="profile.password"
+        label="Password"
+        value="On file"
+        onPress={() => passwordRef.current?.present()}
+      />
       <ListRow
         testID="profile.notifications"
         label="Notifications"
@@ -161,7 +185,22 @@ export default function ProfileScreen() {
       />
 
       <SectionLabel label="Legal & support" />
-      <ListRow testID="profile.legal" label="Privacy policy · Terms" onPress={() => undefined} />
+      {privacyUrl || termsUrl ? (
+        <>
+          {privacyUrl ? (
+            <ListRow testID="profile.privacy" label="Privacy policy" onPress={() => void Linking.openURL(privacyUrl)} />
+          ) : (
+            <ListRow testID="profile.privacy" label="Privacy policy" value="Coming soon" />
+          )}
+          {termsUrl ? (
+            <ListRow testID="profile.terms" label="Terms" onPress={() => void Linking.openURL(termsUrl)} />
+          ) : (
+            <ListRow testID="profile.terms" label="Terms" value="Coming soon" />
+          )}
+        </>
+      ) : (
+        <ListRow testID="profile.legal" label="Privacy policy · Terms" value="Coming soon" />
+      )}
       {supportPhone ? (
         <ListRow
           testID="profile.callSupport"
@@ -171,13 +210,7 @@ export default function ProfileScreen() {
           onPress={() => void Linking.openURL(`tel:${supportPhone}`)}
         />
       ) : (
-        <ListRow
-          testID="profile.callSupport"
-          label="Call support"
-          value="Coming soon"
-          trailing="none"
-          onPress={() => undefined}
-        />
+        <ListRow testID="profile.callSupport" label="Call support" value="Coming soon" icon="call" />
       )}
 
       <Button
@@ -240,6 +273,16 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {profile ? (
+        <>
+          <HomeAirportSheet ref={homeAirportRef} profile={profile} onSaved={onSheetSaved} />
+          <CabinSheet ref={cabinRef} profile={profile} onSaved={onSheetSaved} />
+          <TravelersSheet ref={travelersRef} profile={profile} onSaved={onSheetSaved} />
+          <PasswordSheet ref={passwordRef} profile={profile} onSaved={onSheetSaved} />
+          <PhoneSheet ref={phoneRef} profile={profile} onSaved={onSheetSaved} />
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -266,6 +309,12 @@ const styles = StyleSheet.create({
   },
   pillText: { ...rn(tokens.type.caption), color: tokens.colors.textPrimary },
   error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger, marginBottom: tokens.space.sm },
+  hint: {
+    ...rn(tokens.type.caption),
+    color: tokens.colors.textTertiary,
+    marginTop: -tokens.space.xs,
+    marginBottom: tokens.space.sm,
+  },
   deleteLink: { marginTop: tokens.space.xl, alignItems: "center" },
   deleteText: { ...rn(tokens.type.body), color: tokens.colors.statusDanger },
   version: {
