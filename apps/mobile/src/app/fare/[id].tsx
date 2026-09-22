@@ -1,16 +1,16 @@
-import { fixture } from "@bbc/shared/fixture";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
+import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, ErrorState, Icon, ListRow, PricePair, SectionLabel, tokens, rn } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
-import { fetchFare, fetchProfile, type Profile } from "@/lib/api";
+import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
+import { env } from "@/lib/env";
 import { formatPrice, formatValidUntil } from "@/lib/format";
 
-const SUPPORT = "+18000000000";
 const CTA_RESERVE = 56 + 24 + 18;
 
 function hhmm(iso: string) {
@@ -49,15 +49,22 @@ function TimeBlock({ fare }: { fare: FareVM }) {
   );
 }
 
+function dialSupport() {
+  const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  if (!phone) return;
+  void Linking.openURL(`tel:${phone}`);
+}
+
 export default function FareDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, offerId: offerIdParam } = useLocalSearchParams<{ id: string; offerId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<RequestSheetHandle>(null);
   const [fare, setFare] = useState<FareVM | null>(null);
+  const [offer, setOffer] = useState<ProposalDetailVM | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [gone, setGone] = useState(false);
+  const [gone, setGone] = useState<FareGoneContext | true | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [whyOpen, setWhyOpen] = useState(false);
 
@@ -71,15 +78,24 @@ export default function FareDetailScreen() {
       const [fareResult, profileResult] = await Promise.all([fetchFare(id), fetchProfile()]);
       if (profileResult.ok) setProfile(profileResult.data);
       if (!fareResult.ok) {
-        if (fareResult.status === 410) setGone(true);
-        else setError(fareResult.message);
+        if (fareResult.status === 410) {
+          setGone(fareResult.gone ?? true);
+        } else {
+          setError(fareResult.message);
+        }
         setLoading(false);
         return;
       }
       setFare(fareResult.data);
+      const resolvedOfferId =
+        (typeof offerIdParam === "string" && offerIdParam.length > 0 ? offerIdParam : null) ?? fareResult.data.offerId;
+      if (resolvedOfferId) {
+        const offerResult = await fetchProposal(resolvedOfferId);
+        if (offerResult.ok) setOffer(offerResult.data);
+      }
       setLoading(false);
     })();
-  }, [id]);
+  }, [id, offerIdParam]);
 
   if (loading) {
     return (
@@ -90,7 +106,7 @@ export default function FareDetailScreen() {
   }
 
   if (gone) {
-    const closed = fixture.fares.find((f) => f.id === id);
+    const closed = gone === true ? null : gone;
     return (
       <View testID="fare.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
         <ErrorState
@@ -99,16 +115,16 @@ export default function FareDetailScreen() {
           title="This fare has closed."
           body={
             closed
-              ? `Was ${formatPrice(closed.price.offer, closed.price.currency)} · valid until ${new Date(closed.validUntil).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+              ? `Was ${formatPrice(closed.price, closed.currency)} · valid until ${new Date(closed.validUntil).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
               : "The price you saw is no longer available."
           }
           primary={{
-            label: closed ? `Request ${closed.from.code} → ${closed.to.code}` : "Request this route",
+            label: closed ? `Request ${closed.from} → ${closed.to}` : "Request this route",
             onPress: () =>
               sheetRef.current?.present({
                 profile,
-                fromCode: closed?.from.code,
-                toCode: closed?.to.code,
+                fromCode: closed?.from,
+                toCode: closed?.to,
               }),
           }}
           secondary={{
@@ -136,20 +152,16 @@ export default function FareDetailScreen() {
   }
 
   const savings = fare.price.published != null ? Math.round(fare.price.published - fare.price.offer) : null;
-  const offerFacts = fixture.offers.find((o) => o.to === fare.to.code);
-  const flightNumber = offerFacts?.facts && "flightNumber" in offerFacts.facts ? offerFacts.facts.flightNumber : null;
+  const flightNumber = offer?.flightFacts?.flightNumber ?? null;
   const included = [
     fare.nonstop ? "Nonstop" : "One stop",
     fare.product ?? (fare.cabin === "business" ? "Business class" : "First class"),
     "Lounge access",
   ];
-  const factsLine = [
-    fare.nonstop ? "NONSTOP" : "1 STOP",
-    fare.product?.toUpperCase(),
-    offerFacts?.facts && "carrier" in offerFacts.facts ? undefined : undefined,
-  ]
+  const factsLine = [fare.nonstop ? "NONSTOP" : "1 STOP", fare.product?.toUpperCase(), offer?.flightFacts?.carrier]
     .filter(Boolean)
     .join(" · ");
+  const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
 
   return (
     <View testID="fare.root" style={styles.root}>
@@ -171,6 +183,15 @@ export default function FareDetailScreen() {
           <Icon name="chevron" size={20} color={tokens.colors.textPrimary} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
+
+        {offer?.mediaUrl ? (
+          <Image
+            source={{ uri: offer.mediaUrl }}
+            style={styles.hero}
+            accessibilityIgnoresInvertColors
+            testID="fare.media"
+          />
+        ) : null}
 
         <Text style={styles.display}>
           {fare.from.city} → {fare.to.city}
@@ -207,16 +228,18 @@ export default function FareDetailScreen() {
           />
         ) : null}
 
-        <Text style={styles.caption}>{formatValidUntil(fare.validUntil)} · a specialist books it for you</Text>
-        <Pressable
-          testID="fare.callSpecialist"
-          accessibilityRole="button"
-          accessibilityLabel={`Call specialist ${fixture.advisor.name}`}
-          onPress={() => void Linking.openURL(`tel:${SUPPORT}`)}
-          style={({ pressed }) => pressed && styles.pressed}
-        >
-          <Text style={styles.caption}>Your specialist · {fixture.advisor.name} · Call</Text>
-        </Pressable>
+        <Text style={styles.caption}>{formatValidUntil(fare.validUntil)} · A specialist books it for you</Text>
+        {supportPhone ? (
+          <Pressable
+            testID="fare.callSpecialist"
+            accessibilityRole="button"
+            accessibilityLabel="Call a specialist"
+            onPress={dialSupport}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Text style={styles.caption}>Call a specialist</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.sticky, { paddingBottom: insets.bottom + tokens.space.sm }]}>
@@ -252,6 +275,13 @@ const styles = StyleSheet.create({
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
   back: { flexDirection: "row", alignItems: "center", gap: tokens.space.xxs, marginBottom: tokens.space.md },
   backText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  hero: {
+    width: "100%",
+    height: 180,
+    borderRadius: tokens.radius.panel,
+    marginBottom: tokens.space.md,
+    backgroundColor: tokens.colors.surfaceMuted,
+  },
   display: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, marginBottom: tokens.space.md },
   carrierRow: { flexDirection: "row", alignItems: "center", gap: tokens.space.sm, marginBottom: tokens.space.md },
   logo: {

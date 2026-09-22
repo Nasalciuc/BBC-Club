@@ -38,8 +38,11 @@ function asOffers(items: unknown[]): OfferItem[] {
   });
 }
 
-function fareHref(id: string): Href {
-  return { pathname: "/fare/[id]", params: { id } } as unknown as Href;
+function fareHref(id: string, offerId?: string | null): Href {
+  return {
+    pathname: "/fare/[id]",
+    params: offerId ? { id, offerId } : { id },
+  } as unknown as Href;
 }
 
 export default function ExploreScreen() {
@@ -202,11 +205,11 @@ export default function ExploreScreen() {
       tokyo: "00000000-0000-4000-8000-00000000fa04",
     };
     const fareId = fareByOffer[offerId];
-    if (fareId) router.push(fareHref(fareId));
+    if (fareId) router.push(fareHref(fareId, offerId));
   }
 
-  function onFarePress(id: string) {
-    router.push(fareHref(id));
+  function onFarePress(id: string, offerId?: string | null) {
+    router.push(fareHref(id, offerId));
   }
 
   function onQuotePress() {
@@ -343,7 +346,7 @@ export default function ExploreScreen() {
                     key={fare.id}
                     testID={`explore.fare.${fare.id}`}
                     fare={fare}
-                    onPress={() => onFarePress(fare.id)}
+                    onPress={() => onFarePress(fare.id, fare.offerId)}
                   />
                 ))}
                 <Pressable

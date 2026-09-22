@@ -6,10 +6,12 @@ import {
   NotificationPreferencesBody,
   PasswordBody,
   ProfilePatchBody,
+  ProposalDetailVM,
   TravelPreferencesBody,
   type DeviceBody as DeviceBodyType,
   type NotificationPreferencesBody as NotificationPreferencesBodyType,
   type ProfilePatchBody as ProfilePatchBodyType,
+  type ProposalDetailVM as ProposalDetailVMType,
   type TravelPreferencesBody as TravelPreferencesBodyType,
 } from "@bbc/shared/api/v1/proposals";
 import {
@@ -49,7 +51,38 @@ export const api = hc<AppType>(env.EXPO_PUBLIC_API_URL, {
 
 export type { Profile };
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; message: string; code?: string; status: number };
+export type ApiResult<T> =
+  { ok: true; data: T } | { ok: false; message: string; code?: string; status: number; gone?: FareGoneContext };
+
+/** Closed-fare facts from a 410 body — only when the server sent `error.context`. */
+export type FareGoneContext = {
+  price: number;
+  currency: string;
+  validUntil: string;
+  from: string;
+  to: string;
+};
+
+function parseFareGoneContext(raw: unknown): FareGoneContext | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o.price !== "number" ||
+    typeof o.currency !== "string" ||
+    typeof o.validUntil !== "string" ||
+    typeof o.from !== "string" ||
+    typeof o.to !== "string"
+  ) {
+    return undefined;
+  }
+  return {
+    price: o.price,
+    currency: o.currency,
+    validUntil: o.validUntil,
+    from: o.from,
+    to: o.to,
+  };
+}
 
 async function parseJson(res: Response): Promise<unknown> {
   return res.json().catch(() => null);
@@ -332,15 +365,44 @@ export async function fetchAirports(query: string): Promise<ApiResult<AirportVMT
   });
 }
 
-/** GET /v1/fares/:id — 410 when expired. */
+/** GET /v1/fares/:id — 410 when expired; may include optional `error.context` closed-fare facts. */
 export async function fetchFare(id: string): Promise<ApiResult<FareVMType>> {
   return asResult(async () => {
     const res = await apiFetch(`/v1/fares/${encodeURIComponent(id)}`);
     if (!res.ok) {
-      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+      const body = (await parseJson(res)) as {
+        error?: { code?: string; message?: string; context?: Record<string, unknown> };
+      } | null;
+      if (res.status === 410) {
+        const gone = parseFareGoneContext(body?.error?.context);
+        return {
+          ok: false,
+          message: body?.error?.message ?? "This fare has closed.",
+          code: body?.error?.code ?? "GONE",
+          status: 410,
+          ...(gone ? { gone } : {}),
+        };
+      }
+      return failFromBody(res, body);
     }
     const raw = await parseJson(res);
     const parsed = FareVM.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
+  });
+}
+
+/** GET /v1/proposals/:id — offer media / flight facts for fare detail. */
+export async function fetchProposal(id: string): Promise<ApiResult<ProposalDetailVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/proposals/${encodeURIComponent(id)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const raw = await parseJson(res);
+    const parsed = ProposalDetailVM.safeParse(raw);
     if (!parsed.success) {
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }

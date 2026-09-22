@@ -21,6 +21,8 @@ export const ApiError = z.object({
     message: z.string(),
     requestId: z.string().optional(),
     details: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+    /** Optional machine facts (e.g. GONE closed-fare). Never set on 401/403. */
+    context: z.record(z.unknown()).optional(),
     retryAfterSeconds: z.number().int().positive().optional(),
   }),
 });
@@ -44,7 +46,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   FORBIDDEN: "Not allowed.",
   NOT_FOUND: "Not found.",
   CONFLICT: "That doesn't match what we already have.",
-  GONE: "This proposal has closed. Julia can find you the next one.",
+  GONE: "This fare has closed.",
   RATE_LIMITED: "Let's slow down for a moment. Please try again shortly.",
   SERVICE_DISABLED: "This part of the club is briefly unavailable.",
   INTERNAL: "Something didn't go as planned. Please try again.",
@@ -56,6 +58,7 @@ export function apiError(
     message?: string;
     requestId?: string;
     details?: { path: string; message: string }[];
+    context?: Record<string, unknown>;
     retryAfterSeconds?: number;
   } = {},
 ): ApiError {
@@ -65,6 +68,7 @@ export function apiError(
       message: opts.message ?? DEFAULT_MESSAGES[code],
       requestId: opts.requestId,
       details: opts.details,
+      context: opts.context,
       retryAfterSeconds: opts.retryAfterSeconds,
     },
   };

@@ -24,6 +24,8 @@ export const FareVM = z.object({
   validUntil: z.string().datetime(),
   /** A promotional offer exists on this route. */
   hasOffer: z.boolean(),
+  /** Linked offer when composed; catalog HTTP routes pass null. */
+  offerId: z.string().uuid().nullable(),
 });
 export type FareVM = z.infer<typeof FareVM>;
 

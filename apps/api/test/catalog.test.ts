@@ -25,6 +25,29 @@ describe("catalog routes", () => {
     const id = await t.seedExpiredFare();
     const r = await t.app.request(`/v1/fares/${id}`, { headers: { Cookie: t.memberA.cookie } });
     expect(r.status).toBe(410);
+    const body = (await r.json()) as { error?: { code?: string; context?: Record<string, unknown> } };
+    expect(body.error?.code).toBe("GONE");
+    expect(body.error?.context).toBeDefined();
+    expect(typeof body.error?.context?.price).toBe("number");
+    expect(typeof body.error?.context?.from).toBe("string");
+    await t.close();
+  });
+
+  it("401/403 responses do not carry error.context", async () => {
+    const t = await testApp({ suite: "catalog-authz-context" });
+    const anon = await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business");
+    expect(anon.status).toBe(401);
+    const anonBody = (await anon.json()) as { error?: { context?: unknown } };
+    expect(anonBody.error?.context).toBeUndefined();
+
+    const forbidden = await t.app.request("/v1/internal/catalog/import", {
+      method: "POST",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect([401, 403]).toContain(forbidden.status);
+    const forbiddenBody = (await forbidden.json()) as { error?: { context?: unknown } };
+    expect(forbiddenBody.error?.context).toBeUndefined();
     await t.close();
   });
 
@@ -165,5 +188,6 @@ describe("fare parity", () => {
     );
     expect(FareVM.parse(vm).price.offer).toBe(f.price.offer);
     expect(vm.carrier.code).toBe("BA");
+    expect(vm.offerId).toBeNull();
   });
 });
