@@ -27,6 +27,8 @@ export const unstable_settings = {
 };
 
 const AUTH_ENTRY = new Set(["sign-in", "join", "reset-password"]);
+/** Screens that own their own post-auth navigation (password, OTP, first-run prefs). */
+const GATE_HOLD = new Set(["set-password", "verify-code", "onboarding"]);
 
 export default function RootLayout() {
   const router = useRouter();
@@ -71,8 +73,8 @@ export default function RootLayout() {
         return;
       }
 
-      // Mid Path A / reset: session may exist before password is set.
-      if (leaf === "set-password" || leaf === "verify-code") {
+      // Mid Path A / reset / first-run prefs: stay put until the screen navigates.
+      if (GATE_HOLD.has(leaf)) {
         if (!cancelled) setGateReady(true);
         return;
       }
@@ -148,6 +150,10 @@ export default function RootLayout() {
               <Stack.Screen name="verify-code" />
               <Stack.Screen name="set-password" />
               <Stack.Screen name="reset-password" />
+              <Stack.Screen
+                name="onboarding"
+                options={{ contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen
                 name="fare/[id]"

@@ -1,12 +1,17 @@
 import type { Href } from "expo-router";
 
 import { fetchProfile, type Profile } from "@/lib/api";
+import { appStorage, ONBOARDED_KEY } from "@/lib/storage-keys";
 
 const PENDING_ATTEMPTS = 2;
 const PENDING_DELAY_MS = 250;
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function isOnboarded(): boolean {
+  return appStorage.getBoolean(ONBOARDED_KEY) === true;
 }
 
 /** Poll briefly while members.profile is still catching up after member.registered. */
@@ -25,9 +30,13 @@ export async function loadProfileAfterAuth(): Promise<Profile | null> {
   return last.ok ? last.data : null;
 }
 
-/** Living profiles (active, waitlist, pending) land on Explore. Waitlist is a status, not a screen. */
+/**
+ * Living profiles land on Explore — unless home airport is unset and this device
+ * has not finished (or skipped) onboarding yet.
+ */
 export function routeForProfile(profile: Profile | null): Href {
   if (!profile || profile.status === "deleted") return "/sign-in";
+  if (profile.homeAirport == null && !isOnboarded()) return "/onboarding";
   return "/(tabs)/explore" as Href;
 }
 

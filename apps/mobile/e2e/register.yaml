@@ -22,5 +22,8 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "setPassword.password" }
 - inputText: "atlantic2026!"
 - tapOn: { id: "setPassword.continue" }
-# Unknown CRM email → waitlist status in DB; Branch 5 routes every living profile to Explore.
+# New member has no homeAirport → onboarding once per device; skip leaves JFK via DEFAULT_HOME_AIRPORT.
+- assertVisible: { id: "onboarding.root" }
+- tapOn: { id: "onboarding.skip" }
+# Unknown CRM email → waitlist status in DB; living profiles land on Explore after onboarding/skip.
 - assertVisible: { id: "explore.root" }
