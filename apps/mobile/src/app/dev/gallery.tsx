@@ -39,9 +39,9 @@ export default function GalleryScreen() {
   const [editableQuery, setEditableQuery] = useState("");
   const noop = () => undefined;
 
-  const fareTimed = fixture.fares[0]!;
-  const fareNoTimes = fixture.fares[2]!;
-  const fareOffer = fixture.fares[1]!;
+  const fareTimed = { ...fixture.fares[0]!, offerId: null };
+  const fareNoTimes = { ...fixture.fares[2]!, offerId: null };
+  const fareOffer = { ...fixture.fares[1]!, offerId: null };
 
   return (
     <ScrollView
