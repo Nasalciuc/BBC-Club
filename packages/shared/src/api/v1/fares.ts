@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PricePair } from "./proposals";
+import { PricePair, ProposalCardVM } from "./proposals";
 
 // Prices are numeric(10,2) in Postgres → string from Drizzle → parseFloat in the mapper.
 // No .int() on any price: fares have cents. PricePair lives in proposals.ts — never a second price shape.
@@ -48,8 +48,8 @@ export const SearchResultVM = z.object({
   from: AirportVM,
   to: AirportVM,
   items: z.array(FareVM),
-  /** OfferCardVM when a promotion exists on the route; kept loose until that contract lands. */
-  offer: z.lazy(() => z.any()).nullable(),
+  /** ProposalCardVM when a promotion exists on the route. */
+  offer: ProposalCardVM.nullable(),
 });
 export type SearchResultVM = z.infer<typeof SearchResultVM>;
 
@@ -60,7 +60,7 @@ export const HomeVM = z.object({
     z.object({
       key: z.string(),
       title: z.string(),
-      items: z.array(z.any()),
+      items: z.array(ProposalCardVM),
     }),
   ),
 });

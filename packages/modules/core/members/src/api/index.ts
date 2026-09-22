@@ -13,6 +13,8 @@ export type ProfileRow = {
     frequency?: "monthly" | "quarterly" | "rarely";
     notes?: string;
   };
+  memberSince: Date;
+  crmLinkedAt: Date | null;
   crmLinked: boolean;
 };
 

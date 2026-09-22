@@ -20,6 +20,7 @@ import {
   type HomeVM as HomeVMType,
   type SearchResultVM as SearchResultVMType,
 } from "@bbc/shared/api/v1/fares";
+import type { ProfileVM as Profile } from "@bbc/shared/api/v1/profile";
 import {
   RequestBody,
   RequestList,
@@ -44,23 +45,7 @@ export const api = hc<AppType>(env.EXPO_PUBLIC_API_URL, {
   headers: () => authHeaders(),
 });
 
-export type ProfileStatus = "active" | "waitlist" | "deleted" | "pending";
-
-export type Profile = {
-  memberId: string;
-  status: ProfileStatus;
-  displayName?: string | null;
-  homeAirport?: string | null;
-  timezone?: string;
-  phone?: string | null;
-  crmLinked?: boolean;
-  preferences?: {
-    destinations?: string[];
-    cabin?: "business" | "first";
-    frequency?: "monthly" | "quarterly" | "rarely";
-    notes?: string;
-  };
-};
+export type { Profile };
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; message: string; code?: string; status: number };
 
