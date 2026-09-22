@@ -277,6 +277,17 @@ export async function registerDevice(body: DeviceBodyType): Promise<ApiResult<{ 
   });
 }
 
+/** DELETE /v1/devices/:deviceId — deactivate this device's push token. */
+export async function unregisterDevice(deviceId: string): Promise<ApiResult<{ ok: true }>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    return { ok: true, data: { ok: true } };
+  });
+}
+
 /** Test/dev only — Maestro fetches OTP without putting it in logs or route params. */
 export async function fetchLastOtpForTest(email: string): Promise<string | null> {
   if (env.EXPO_PUBLIC_APP_ENV === "production") return null;

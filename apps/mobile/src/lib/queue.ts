@@ -7,6 +7,11 @@ const KEY = "pending";
 
 export type { QueuedRequest };
 
+type FlushResult = { sent: number; failed: number; dropped: number };
+
+/** Single-flight guard — concurrent flushQueue callers share one in-flight run. */
+let inFlight: Promise<FlushResult> | null = null;
+
 function readAll(): QueuedRequest[] {
   const raw = storage.getString(KEY);
   if (!raw) return [];
@@ -44,13 +49,29 @@ export function removeQueued(id: string): void {
   writeAll(readAll().filter((q) => q.id !== id));
 }
 
+/** Drop only the live `pending` blob — leave `.corrupt.*` backups for forensics. */
+export function clearQueue(): void {
+  storage.remove(KEY);
+}
+
 export type FlushOpts = { only?: string };
 
 /** Flush the queue. One item's failure must not stop the others. Caller must await. */
 export async function flushQueue(
   submit: (body: RequestBody, key: string) => Promise<SubmitResult>,
   opts?: FlushOpts,
-): Promise<{ sent: number; failed: number; dropped: number }> {
+): Promise<FlushResult> {
+  if (inFlight) return inFlight;
+  inFlight = runFlush(submit, opts).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function runFlush(
+  submit: (body: RequestBody, key: string) => Promise<SubmitResult>,
+  opts?: FlushOpts,
+): Promise<FlushResult> {
   const pending = readAll();
   const targets = opts?.only ? pending.filter((q) => q.id === opts.only) : pending;
   if (targets.length === 0) return { sent: 0, failed: 0, dropped: 0 };
@@ -69,6 +90,6 @@ export async function flushQueue(
 export async function sendOne(
   id: string,
   submit: (body: RequestBody, key: string) => Promise<SubmitResult>,
-): Promise<{ sent: number; failed: number; dropped: number }> {
+): Promise<FlushResult> {
   return flushQueue(submit, { only: id });
 }
