@@ -15,11 +15,16 @@ import type { EngagementFacade } from "@bbc/engagement";
  *  Seed rules: never pass validUntil < now to ingest (CHECK offers_valid_after_publish); targeting=user needs
  *  targetMemberId in the same payload; Path A password tests use withPathAPassword (no credential yet). */
 export async function testApp(
-  opts: { knownClients?: Parameters<typeof mockCrm>[0]; suite?: string; poolMax?: number } = {},
+  opts: {
+    knownClients?: Parameters<typeof mockCrm>[0];
+    suite?: string;
+    poolMax?: number;
+    env?: Record<string, string>;
+  } = {},
 ) {
   const poolMax = opts.poolMax ?? 6;
   const iso = await isolatedDb(opts.suite ?? "api", { max: poolMax });
-  const env = loadEnv({ ...process.env, DATABASE_URL: iso.url });
+  const env = loadEnv({ ...process.env, DATABASE_URL: iso.url, ...opts.env });
   const db = iso.db;
   const email = capturingEmail();
   const emailA = opts.suite ? `alex.${opts.suite}@test.dev` : "alex.morgan@company.com";
