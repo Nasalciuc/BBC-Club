@@ -80,3 +80,16 @@ Highest density: `poller.ts` (20), `jobs/index.ts` (11), `builtin.ts` (10), `mig
 Flows added under `apps/mobile/e2e/`. Maestro CLI not installed on this Windows agent; run locally:
 `maestro test apps/mobile/e2e/sign-in.yaml && maestro test apps/mobile/e2e/register.yaml`
 register.yaml includes `verify.submit` (code entry alone does not navigate).
+
+## COMMIT 8 — Maestro ids + CI
+
+`bun run maestro:ids` (`scripts/check-maestro-ids.ts`) is part of `validate:quick`. Four flows run locally
+(API + installed app required):
+
+```
+maestro test apps/mobile/e2e
+# or: bun run e2e
+# sign-in · register · search-and-request · delete-account
+```
+
+CI: `.github/workflows/validate.yml` job `maestro` on `macos-latest` (`continue-on-error: true`).
