@@ -36,7 +36,13 @@ import {
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
 import { appPlatform, appVersion } from "@/lib/app-meta";
+import { emitSessionRevoked } from "@/lib/session-events";
 import { API_TIMEOUT_MS, NetworkError, networkFail, timeoutSignal } from "@/lib/timeout";
+
+/** Better Auth routes — wrong password/OTP must not trigger global sign-out bounce. */
+function isAuthApiPath(path: string): boolean {
+  return path === "/api/auth" || path.startsWith("/api/auth/");
+}
 
 /**
  * Hono RPC client. `AppType` cannot be imported from `@bbc/api` (arch: mobile-no-backend);
@@ -115,7 +121,7 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     cancel = own.cancel;
   }
   try {
-    return await fetch(`${env.EXPO_PUBLIC_API_URL}${path}`, {
+    const res = await fetch(`${env.EXPO_PUBLIC_API_URL}${path}`, {
       ...init,
       signal: signal,
       headers: {
@@ -124,6 +130,10 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
         ...(init?.headers ?? {}),
       },
     });
+    if (res.status === 401 && !isAuthApiPath(path)) {
+      emitSessionRevoked();
+    }
+    return res;
   } catch (e) {
     const timeout = e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError");
     throw new NetworkError(timeout ? "TIMEOUT" : "OFFLINE");

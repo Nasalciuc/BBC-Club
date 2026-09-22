@@ -15,10 +15,12 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
+import { signOut } from "@/features/auth/flows";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { routeFromDeepLink } from "@/lib/deeplinks";
 import { registerPushDevice } from "@/lib/push";
+import { onSessionRevoked } from "@/lib/session-events";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -58,6 +60,28 @@ export default function RootLayout() {
   }, [loaded, error]);
 
   useEffect(() => () => clearPendingOtp(), []);
+
+  // Revoked session (apiFetch 401 on non-auth routes) → same clear as profile sign-out.
+  useEffect(() => {
+    let active = true;
+    let handling = false;
+    const unsubscribe = onSessionRevoked(() => {
+      if (handling) return;
+      handling = true;
+      void (async () => {
+        try {
+          await signOut();
+          if (active) router.replace("/sign-in");
+        } finally {
+          handling = false;
+        }
+      })();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [router]);
 
   // Restore session → Explore. Do not interrupt mid join/reset (set-password still needed).
   useEffect(() => {
