@@ -2,7 +2,7 @@ import { z } from "zod";
 import { PricePair, ProposalCardVM } from "./proposals";
 
 // Prices are numeric(10,2) in Postgres → string from Drizzle → parseFloat in the mapper.
-// No .int() on any price: fares have cents. PricePair lives in proposals.ts — never a second price shape.
+// No .int() on prices: fares have cents. PricePair lives in proposals.ts — never a second price shape.
 
 export const FareVM = z.object({
   id: z.string().uuid(),
