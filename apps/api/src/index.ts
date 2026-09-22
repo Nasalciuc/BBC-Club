@@ -32,7 +32,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   });
 
   // 1. events: the catalogue is the only source of types
-  for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def as any);
+  for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
   registerPlatformJobs(platform.jobs);
 
   const app = new Hono<PrincipalVars>();
@@ -52,7 +52,9 @@ export async function buildApp(opts: BuildOptions = {}) {
     resolvePrincipal({
       identity,
       appOrigin: env.APP_ORIGIN,
-      internalSecrets: [env.INTERNAL_API_SECRET, (env as any).INTERNAL_API_SECRET_NEXT].filter(Boolean),
+      internalSecrets: [env.INTERNAL_API_SECRET, env.INTERNAL_API_SECRET_NEXT].filter(
+        (s): s is string => typeof s === "string" && s.length > 0,
+      ),
       logger: platform.logger,
     }),
   );

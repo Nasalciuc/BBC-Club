@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Graph protocol G7–G12. Exit 1 iff G9, G10, or G11 fail."""
+"""Graph protocol G7–G13. Exit 1 iff G9, G10, G11, G12 (contracts), or G13 fail."""
 from __future__ import annotations
 
 import json
@@ -156,9 +156,12 @@ def g11() -> list[str]:
     return ["G11"] if missing else []
 
 
-def g12() -> None:
+def g12() -> list[str]:
+    """Count type-`any` only — permission suffixes like `read-any` are not hits.
+    Fail if any file under packages/shared/src/api/ still matches."""
     counts: Counter[str] = Counter()
-    any_re = re.compile(r"\bany\b")
+    # Not \bany\b: that matches inside read-any / update-any (permission names).
+    any_re = re.compile(r"""(?<![\w"'-])any(?![\w"'-])""")
     for p in walk_src((".ts",)):
         r = rel(p)
         if not (r.startswith("packages/") or r.startswith("apps/")):
@@ -170,6 +173,10 @@ def g12() -> None:
             counts[r] = n
     top = counts.most_common(12)
     print("G12 any-count top files:", top, "total", sum(counts.values()))
+
+    contract_hits = {r: n for r, n in counts.items() if r.startswith("packages/shared/src/api/")}
+    print("G12 any in contracts (shared/src/api):", contract_hits if contract_hits else "{}")
+    return ["G12"] if contract_hits else []
 
 
 def pascal(name: str) -> str:
@@ -214,7 +221,7 @@ def main() -> int:
     fails = []
     fails.extend(g9_g10())
     fails.extend(g11())
-    g12()
+    fails.extend(g12())
     fails.extend(g13())
     if fails:
         print("graph-shape FAILED:", ", ".join(fails))

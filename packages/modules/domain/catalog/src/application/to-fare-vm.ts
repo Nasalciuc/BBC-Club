@@ -1,32 +1,8 @@
 import type { AirportVM, DestinationPinVM, FareVM } from "@bbc/shared/api/v1/fares";
+import type { airports, fares } from "@bbc/db/schema/catalog";
 
-type FareRow = {
-  id: string;
-  routeFrom: string;
-  routeTo: string;
-  cabin: "business" | "first";
-  carrier: string | null;
-  carrierName: string | null;
-  product: string | null;
-  nonstop: boolean;
-  durationMinutes: number | null;
-  departAt: Date | null;
-  arriveAt: Date | null;
-  price: string;
-  publishedPrice: string | null;
-  publishedSource: string | null;
-  currency: string;
-  validUntil: Date;
-};
-
-type AirportRow = {
-  code: string;
-  name: string;
-  city: string;
-  countryCode: string;
-  lat: string | number;
-  lng: string | number;
-};
+type FareRow = typeof fares.$inferSelect;
+type AirportRow = typeof airports.$inferSelect;
 
 export function toAirportVM(row: AirportRow): AirportVM {
   return {
@@ -34,8 +10,8 @@ export function toAirportVM(row: AirportRow): AirportVM {
     city: row.city,
     name: row.name,
     countryCode: row.countryCode,
-    lat: typeof row.lat === "number" ? row.lat : parseFloat(row.lat),
-    lng: typeof row.lng === "number" ? row.lng : parseFloat(row.lng),
+    lat: typeof row.lat === "number" ? row.lat : parseFloat(String(row.lat)),
+    lng: typeof row.lng === "number" ? row.lng : parseFloat(String(row.lng)),
   };
 }
 

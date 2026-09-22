@@ -12,6 +12,8 @@ export type EventDefinition = {
   noConsumer?: boolean;
   /** Retired type; implies no live consumer. Schema is kept so historical journal rows still parse. */
   deprecated?: string;
+  /** Set while the consuming module is not written yet; boot warns instead of failing. */
+  consumerOwedBy?: "stage-1" | "stage-2" | "stage-3" | "stage-5";
 };
 
 export type { HandlerContext };

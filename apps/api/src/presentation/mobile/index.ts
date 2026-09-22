@@ -9,7 +9,8 @@ import type { MembersFacade } from "@bbc/members";
 import type { ProposalsFacade } from "@bbc/proposals";
 import type { EngagementFacade } from "@bbc/engagement";
 import type { CatalogFacade } from "@bbc/catalog";
-import { toCard, toDetail, toAirportVM, toDestinationPin } from "./view-models";
+import { toAirportVM } from "@bbc/catalog";
+import { toCard, toDetail, toDestinationPin, toProfileVM } from "./view-models";
 
 type Ports = {
   members: MembersFacade;
@@ -40,7 +41,7 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
       const actor = actorMemberId(c.get("principal"));
       if (!actor) return c.json(apiError("FORBIDDEN"), 403);
       const p = await ports.members.getProfile(undefined, actor);
-      return c.json(p ?? { memberId: actor, status: "pending" });
+      return c.json(toProfileVM(p, null, actor));
     });
 
     // ── Home ─────────────────────────────────────────────────────────────────

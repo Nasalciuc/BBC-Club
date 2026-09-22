@@ -19,6 +19,8 @@ export function createMembersFacade(db: Executor): MembersFacade {
       timezone: row.timezone,
       phone: row.phone,
       preferences: (row.preferences as ProfileRow["preferences"]) ?? {},
+      memberSince: row.memberSince,
+      crmLinkedAt: row.linkedAt,
       crmLinked: row.crmClientId != null,
     };
   }

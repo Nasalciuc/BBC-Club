@@ -2,8 +2,18 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
-import { offers } from "@bbc/db/schema/proposals";
+import { offers, type FlightFacts } from "@bbc/db/schema/proposals";
 import { event } from "@bbc/shared/events";
+
+const FlightFactsInput = z.object({
+  nonstop: z.boolean(),
+  durationMinutes: z.number().int().positive(),
+  product: z.string().optional(),
+  carrier: z.string().optional(),
+  flightNumber: z.string().optional(),
+  departLocal: z.string().optional(),
+  arriveLocal: z.string().optional(),
+}) satisfies z.ZodType<FlightFacts>;
 
 export const IngestInput = z
   .object({
@@ -23,7 +33,7 @@ export const IngestInput = z
     body: z.string().optional(),
     validUntil: z.string().datetime(),
     publishAt: z.string().datetime().optional(),
-    flightFacts: z.record(z.unknown()).optional(),
+    flightFacts: FlightFactsInput.optional(),
     mediaUrl: z.string().url().optional(),
     createdBy: z.string().optional(),
   })
@@ -98,7 +108,7 @@ export async function ingest(
         currency: input.currency ?? "USD",
         title: input.title,
         body: input.body ?? null,
-        flightFacts: (input.flightFacts as any) ?? null,
+        flightFacts: input.flightFacts ?? null,
         mediaUrl: input.mediaUrl ?? null,
         publishAt,
         validUntil,
