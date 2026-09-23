@@ -14,12 +14,12 @@ function isOnboarded(): boolean {
   return appStorage.getBoolean(ONBOARDED_KEY) === true;
 }
 
-/** Poll briefly while members.profile is still catching up after member.registered. */
+/** Poll briefly while members.profile is still catching up after member.registered.
+ *  Also retries a short 401 window — Expo may not have written the session cookie yet. */
 export async function loadProfileAfterAuth(): Promise<Profile | null> {
   for (let i = 0; i < PENDING_ATTEMPTS; i++) {
     const result = await fetchProfile();
     if (!result.ok) {
-      if (result.status === 401) return null;
       await sleep(PENDING_DELAY_MS);
       continue;
     }

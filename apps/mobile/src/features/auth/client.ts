@@ -16,3 +16,21 @@ export function authHeaders(): Record<string, string> {
   const cookie = authClient.getCookie();
   return cookie ? { Cookie: cookie } : {};
 }
+
+const COOKIE_WAIT_MS = 1000;
+const COOKIE_POLL_MS = 50;
+
+/**
+ * Expo plugin writes the session cookie to SecureStore asynchronously after sign-in.
+ * Poll briefly so /v1/* calls do not race an empty getCookie() → 401 → bounce to sign-in.
+ */
+export async function waitForSessionCookie(): Promise<boolean> {
+  const deadline = Date.now() + COOKIE_WAIT_MS;
+  while (Date.now() < deadline) {
+    if (authClient.getCookie()) return true;
+    await authClient.getSession().catch(() => undefined);
+    if (authClient.getCookie()) return true;
+    await new Promise<void>((resolve) => setTimeout(resolve, COOKIE_POLL_MS));
+  }
+  return Boolean(authClient.getCookie());
+}

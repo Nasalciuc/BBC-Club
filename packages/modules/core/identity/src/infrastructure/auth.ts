@@ -25,6 +25,8 @@ export type IdentityDeps = {
 };
 
 const TEN_MINUTES = 60 * 10;
+/** OTP lifetime and send window — one live code per IP; aligned with verify UI countdown. */
+const FIFTEEN_MINUTES = 60 * 15;
 
 export function createAuth({ env, db, email, events, logger, breachedPassword }: IdentityDeps) {
   const isProd = env.NODE_ENV === "production";
@@ -63,7 +65,7 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       customRules: {
         "/sign-in/email": { window: TEN_MINUTES, max: 5 },
         "/sign-up/email": { window: TEN_MINUTES, max: 5 },
-        "/email-otp/send-verification-otp": { window: TEN_MINUTES, max: 3 },
+        "/email-otp/send-verification-otp": { window: FIFTEEN_MINUTES, max: 1 },
         "/email-otp/verify-email": { window: TEN_MINUTES, max: 10 },
         "/email-otp/reset-password": { window: 60 * 15, max: 5 },
         "/forget-password/email-otp": { window: 60 * 15, max: 3 },
@@ -122,8 +124,10 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       expo(),
       emailOTP({
         otpLength: 6,
-        expiresIn: TEN_MINUTES,
+        expiresIn: FIFTEEN_MINUTES,
         allowedAttempts: 5,
+        // Same digits on a permitted second send (other IP / cleared rate_limit); 429 stops the mail.
+        resendStrategy: "reuse",
         sendVerificationOnSignUp: true,
         // The tutorial's fatal bug made impossible: recipient = the user's email, the call is awaited,
         // and a provider failure propagates → Better Auth returns an error → the app shows it.

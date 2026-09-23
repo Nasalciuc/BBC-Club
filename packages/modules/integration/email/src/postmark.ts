@@ -34,7 +34,7 @@ export function postmarkSender(opts: { token: string; from: string; fetchImpl?: 
           From: opts.from,
           To: to, // ← the member's address, never a constant
           Subject: SUBJECTS[purpose],
-          TextBody: `Your code is ${otp}. It expires in 10 minutes.\n\nIf you didn't request it, you can ignore this email.`,
+          TextBody: `Your code is ${otp}. It expires in 15 minutes.\n\nIf you didn't request it, you can ignore this email.`,
           MessageStream: "outbound",
           Tag: purpose,
         }),

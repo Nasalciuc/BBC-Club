@@ -154,7 +154,13 @@ try {
       },
     ];
     for (const f of fareSeeds) {
-      await tx.insert(fares).values(f).onConflictDoNothing({ target: fares.id });
+      // Prefer skip on natural key — two fixture rows can share route/cabin/carrier/validFrom with different ids.
+      await tx
+        .insert(fares)
+        .values(f)
+        .onConflictDoNothing({
+          target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom],
+        });
     }
   });
   console.log("fixture seeded");

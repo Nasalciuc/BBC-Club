@@ -121,16 +121,19 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     cancel = own.cancel;
   }
   try {
+    const headers: Record<string, string> = {
+      ...authHeaders(),
+      Accept: "application/json",
+      ...(init?.headers as Record<string, string> | undefined),
+    };
+    const sentCookie = typeof headers.Cookie === "string" && headers.Cookie.length > 0;
     const res = await fetch(`${env.EXPO_PUBLIC_API_URL}${path}`, {
       ...init,
       signal: signal,
-      headers: {
-        ...authHeaders(),
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
-      },
+      headers,
     });
-    if (res.status === 401 && !isAuthApiPath(path)) {
+    // 401 without a Cookie is a race (SecureStore not ready), not a revoked session.
+    if (res.status === 401 && !isAuthApiPath(path) && sentCookie) {
       emitSessionRevoked();
     }
     return res;

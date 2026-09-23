@@ -73,7 +73,7 @@ Highest density: `poller.ts` (20), `jobs/index.ts` (11), `builtin.ts` (10), `mig
 ## Verified against installed versions (commit 3)
 
 - better-auth 1.6.31 · @better-auth/expo 1.6.31 · drizzle-orm 1.0.0-rc.4 · hono 4.13.7 · postgres 3.4.9 · jose 6.2.12 · pino 9.14.0 · expo-secure-store 57.0.4 · Bun 1.3.4
-- Rate-limit probe: sign-in/email → 401×5 then **429** with **X-Retry-After: 600**; email-otp/send-verification-otp → 4th **429**.
+- Rate-limit probe: sign-in/email → 401×5 then **429** with **X-Retry-After: 600**; email-otp/send-verification-otp → 2nd **429** (1 / 15 min); `resendStrategy: "reuse"`.
 
 ## COMMIT 4 — Maestro
 
