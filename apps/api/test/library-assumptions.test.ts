@@ -64,10 +64,10 @@ describe("Better Auth rate-limit customRules", () => {
     expect(retryAfter).toBeTruthy();
   });
 
-  it("4th POST /api/auth/email-otp/send-verification-otp is 429", async () => {
+  it("2nd POST /api/auth/email-otp/send-verification-otp is 429", async () => {
     await t.db.execute(sql`DELETE FROM auth.rate_limit`);
     const statuses: number[] = [];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 2; i++) {
       const r = await t.app.request("/api/auth/email-otp/send-verification-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -75,6 +75,29 @@ describe("Better Auth rate-limit customRules", () => {
       });
       statuses.push(r.status);
     }
-    expect(statuses[3]).toBe(429);
+    expect(statuses[0]).toBe(200);
+    expect(statuses[1]).toBe(429);
+  });
+
+  it("resendStrategy reuse: second send after clearing rate_limit returns the same OTP", async () => {
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    const email = `otp.reuse.${crypto.randomUUID().slice(0, 8)}@test.dev`;
+    const send = async () =>
+      t.app.request("/api/auth/email-otp/send-verification-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
+        body: JSON.stringify({ email, type: "sign-in" }),
+      });
+    expect((await send()).status).toBe(200);
+    const first = t.email.lastOtp(email);
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    expect((await send()).status).toBe(200);
+    expect(t.email.lastOtp(email)).toBe(first);
+    const verify = await t.app.request("/api/auth/sign-in/email-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
+      body: JSON.stringify({ email, otp: first }),
+    });
+    expect(verify.status).toBeLessThan(400);
   });
 });

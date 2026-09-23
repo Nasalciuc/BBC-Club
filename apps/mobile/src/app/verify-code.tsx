@@ -11,7 +11,14 @@ import { ClubButton } from "@/components/club-button";
 import { Club } from "@/constants/club";
 
 const CODE_LENGTH = 6;
-const RESEND_SECONDS = 30;
+/** Matches identity OTP expiresIn / send window (one live code). */
+const RESEND_SECONDS = 15 * 60;
+
+function formatResendCountdown(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 export default function VerifyCodeScreen() {
   const router = useRouter();
@@ -137,7 +144,7 @@ export default function VerifyCodeScreen() {
         style={styles.resendWrap}
       >
         <Text style={styles.resend}>
-          {seconds > 0 ? `Resend code (0:${String(seconds).padStart(2, "0")})` : "Resend code"}
+          {seconds > 0 ? `Resend code (${formatResendCountdown(seconds)})` : "Resend code"}
         </Text>
       </Pressable>
     </AuthShell>

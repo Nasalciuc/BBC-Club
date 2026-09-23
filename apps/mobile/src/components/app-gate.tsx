@@ -29,9 +29,11 @@ function formatMaintenance(raw: string): string {
   });
 }
 
-/** Cold-start gate — forced update and maintenance. Mounts around the Stack after fonts. */
+/**
+ * Forced update / maintenance overlay. Children (Stack) stay mounted while config loads —
+ * never return null / empty boot over the navigator (Expo Router: root must keep Stack).
+ */
 export function AppGate({ children }: { children: ReactNode }) {
-  const [ready, setReady] = useState(false);
   const [blocked, setBlocked] = useState<"update" | "maintenance" | null>(null);
   const [maintenanceCopy, setMaintenanceCopy] = useState<string | null>(null);
   const current = Constants.expoConfig?.version ?? "0.1.0";
@@ -40,21 +42,15 @@ export function AppGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     void (async () => {
       const result = await fetchAppConfig();
-      if (!result.ok) {
-        setReady(true);
-        return;
-      }
+      if (!result.ok) return;
       if (compareSemver(result.data.minSupportedVersion, current) > 0) {
         setBlocked("update");
       } else if (result.data.maintenance) {
         setBlocked("maintenance");
         setMaintenanceCopy(formatMaintenance(result.data.maintenance));
       }
-      setReady(true);
     })();
   }, [current]);
-
-  if (!ready) return null;
 
   if (blocked === "update") {
     return (
