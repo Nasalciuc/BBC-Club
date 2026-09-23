@@ -92,4 +92,5 @@ maestro test apps/mobile/e2e
 # sign-in · register · search-and-request · delete-account
 ```
 
-CI: `.github/workflows/validate.yml` job `maestro` on `macos-latest` (`continue-on-error: true`).
+CI: `bun run maestro:ids` in the `validate` job only. Emulator E2E is local until APK + API
+bootstrap exists (`ubuntu-latest` + KVM); do not reintroduce a macos emulator job.
