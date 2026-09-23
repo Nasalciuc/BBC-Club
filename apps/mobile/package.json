@@ -67,7 +67,7 @@
     "ios": "expo run:ios",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:unit": "bun test src/lib/queue-logic.test.ts src/lib/app-meta.test.ts src/lib/timeout.test.ts",
+    "test:unit": "bun test src/lib/queue-logic.test.ts src/lib/app-meta.test.ts src/lib/timeout.test.ts src/lib/deeplink-logic.test.ts",
     "export": "expo export --platform ios"
   }
 }

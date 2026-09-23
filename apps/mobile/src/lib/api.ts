@@ -6,9 +6,13 @@ import {
   NotificationPreferencesBody,
   PasswordBody,
   ProfilePatchBody,
+  ProposalDetailVM,
+  TravelPreferencesBody,
   type DeviceBody as DeviceBodyType,
   type NotificationPreferencesBody as NotificationPreferencesBodyType,
   type ProfilePatchBody as ProfilePatchBodyType,
+  type ProposalDetailVM as ProposalDetailVMType,
+  type TravelPreferencesBody as TravelPreferencesBodyType,
 } from "@bbc/shared/api/v1/proposals";
 import {
   AirportVM,
@@ -32,7 +36,13 @@ import {
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
 import { appPlatform, appVersion } from "@/lib/app-meta";
+import { emitSessionRevoked } from "@/lib/session-events";
 import { API_TIMEOUT_MS, NetworkError, networkFail, timeoutSignal } from "@/lib/timeout";
+
+/** Better Auth routes — wrong password/OTP must not trigger global sign-out bounce. */
+function isAuthApiPath(path: string): boolean {
+  return path === "/api/auth" || path.startsWith("/api/auth/");
+}
 
 /**
  * Hono RPC client. `AppType` cannot be imported from `@bbc/api` (arch: mobile-no-backend);
@@ -47,7 +57,38 @@ export const api = hc<AppType>(env.EXPO_PUBLIC_API_URL, {
 
 export type { Profile };
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; message: string; code?: string; status: number };
+export type ApiResult<T> =
+  { ok: true; data: T } | { ok: false; message: string; code?: string; status: number; gone?: FareGoneContext };
+
+/** Closed-fare facts from a 410 body — only when the server sent `error.context`. */
+export type FareGoneContext = {
+  price: number;
+  currency: string;
+  validUntil: string;
+  from: string;
+  to: string;
+};
+
+function parseFareGoneContext(raw: unknown): FareGoneContext | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o.price !== "number" ||
+    typeof o.currency !== "string" ||
+    typeof o.validUntil !== "string" ||
+    typeof o.from !== "string" ||
+    typeof o.to !== "string"
+  ) {
+    return undefined;
+  }
+  return {
+    price: o.price,
+    currency: o.currency,
+    validUntil: o.validUntil,
+    from: o.from,
+    to: o.to,
+  };
+}
 
 async function parseJson(res: Response): Promise<unknown> {
   return res.json().catch(() => null);
@@ -80,7 +121,7 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     cancel = own.cancel;
   }
   try {
-    return await fetch(`${env.EXPO_PUBLIC_API_URL}${path}`, {
+    const res = await fetch(`${env.EXPO_PUBLIC_API_URL}${path}`, {
       ...init,
       signal: signal,
       headers: {
@@ -89,6 +130,10 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
         ...(init?.headers ?? {}),
       },
     });
+    if (res.status === 401 && !isAuthApiPath(path)) {
+      emitSessionRevoked();
+    }
+    return res;
   } catch (e) {
     const timeout = e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError");
     throw new NetworkError(timeout ? "TIMEOUT" : "OFFLINE");
@@ -127,6 +172,30 @@ export async function patchProfile(body: ProfilePatchBodyType): Promise<ApiResul
   return asResult(async () => {
     const res = await apiFetch("/v1/profile", {
       method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed.data),
+    });
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    return { ok: true, data: (await parseJson(res)) as Profile };
+  });
+}
+
+/** PUT /v1/profile/travel — cabin, passengers, destinations (merged, never replaced). */
+export async function putTravelPreferences(body: TravelPreferencesBodyType): Promise<ApiResult<Profile>> {
+  const parsed = TravelPreferencesBody.safeParse(body);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues[0]?.message ?? authMessage("VALIDATION"),
+      code: "VALIDATION",
+      status: 400,
+    };
+  }
+  return asResult(async () => {
+    const res = await apiFetch("/v1/profile/travel", {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.data),
     });
@@ -211,6 +280,17 @@ export async function registerDevice(body: DeviceBodyType): Promise<ApiResult<{ 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.data),
     });
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    return { ok: true, data: { ok: true } };
+  });
+}
+
+/** DELETE /v1/devices/:deviceId — deactivate this device's push token. */
+export async function unregisterDevice(deviceId: string): Promise<ApiResult<{ ok: true }>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
     if (!res.ok) {
       return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
     }
@@ -306,15 +386,44 @@ export async function fetchAirports(query: string): Promise<ApiResult<AirportVMT
   });
 }
 
-/** GET /v1/fares/:id — 410 when expired. */
+/** GET /v1/fares/:id — 410 when expired; may include optional `error.context` closed-fare facts. */
 export async function fetchFare(id: string): Promise<ApiResult<FareVMType>> {
   return asResult(async () => {
     const res = await apiFetch(`/v1/fares/${encodeURIComponent(id)}`);
     if (!res.ok) {
-      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+      const body = (await parseJson(res)) as {
+        error?: { code?: string; message?: string; context?: Record<string, unknown> };
+      } | null;
+      if (res.status === 410) {
+        const gone = parseFareGoneContext(body?.error?.context);
+        return {
+          ok: false,
+          message: body?.error?.message ?? "This fare has closed.",
+          code: body?.error?.code ?? "GONE",
+          status: 410,
+          ...(gone ? { gone } : {}),
+        };
+      }
+      return failFromBody(res, body);
     }
     const raw = await parseJson(res);
     const parsed = FareVM.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
+  });
+}
+
+/** GET /v1/proposals/:id — offer media / flight facts for fare detail. */
+export async function fetchProposal(id: string): Promise<ApiResult<ProposalDetailVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/proposals/${encodeURIComponent(id)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const raw = await parseJson(res);
+    const parsed = ProposalDetailVM.safeParse(raw);
     if (!parsed.success) {
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }
@@ -375,6 +484,22 @@ export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[
     }
     const hasMore = RequestList.shape.hasMore.catch(false).parse((raw as { hasMore?: unknown })?.hasMore);
     return { ok: true, data: { items: parsed, hasMore } };
+  });
+}
+
+/** GET /v1/requests/:id */
+export async function fetchRequest(id: string): Promise<ApiResult<RequestVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/requests/${encodeURIComponent(id)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const raw = await parseJson(res);
+    const parsed = RequestVM.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
   });
 }
 

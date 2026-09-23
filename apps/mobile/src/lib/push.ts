@@ -4,7 +4,7 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
 
-import { registerDevice } from "@/lib/api";
+import { registerDevice, unregisterDevice } from "@/lib/api";
 
 const DEVICE_ID_KEY = "bbcclub.deviceId";
 
@@ -59,4 +59,14 @@ export async function registerPushDevice(): Promise<void> {
   if (!result.ok) {
     // Non-fatal: member can still use the app without push.
   }
+}
+
+/**
+ * DELETE /v1/devices/:deviceId for the stored DEVICE_ID_KEY.
+ * No-op when no id; failures swallowed so sign-out always proceeds.
+ */
+export async function unregisterPushDevice(): Promise<void> {
+  const deviceId = await SecureStore.getItemAsync(DEVICE_ID_KEY);
+  if (!deviceId) return;
+  await unregisterDevice(deviceId).catch(() => undefined);
 }

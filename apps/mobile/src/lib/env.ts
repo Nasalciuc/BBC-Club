@@ -4,11 +4,18 @@ import { z } from "zod";
 const Schema = z.object({
   EXPO_PUBLIC_API_URL: z.string().url(),
   EXPO_PUBLIC_APP_ENV: z.enum(["development", "staging", "production"]).default("development"),
+  /** E.164 support line; empty → Call support / specialist dial is disabled. */
+  EXPO_PUBLIC_SUPPORT_PHONE: z.string().min(1).optional(),
+  EXPO_PUBLIC_PRIVACY_URL: z.string().url().optional(),
+  EXPO_PUBLIC_TERMS_URL: z.string().url().optional(),
 });
 
 const parsed = Schema.safeParse({
   EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
   EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV,
+  EXPO_PUBLIC_SUPPORT_PHONE: process.env.EXPO_PUBLIC_SUPPORT_PHONE || undefined,
+  EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL || undefined,
+  EXPO_PUBLIC_TERMS_URL: process.env.EXPO_PUBLIC_TERMS_URL || undefined,
 });
 
 if (!parsed.success) {

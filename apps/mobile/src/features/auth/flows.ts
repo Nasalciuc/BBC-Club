@@ -1,8 +1,18 @@
 import { authClient } from "./client";
 import { authMessage, CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
 import { postAccountPassword } from "@/lib/api";
+import { unregisterPushDevice } from "@/lib/push";
+import { clearQueue } from "@/lib/queue";
+import { appStorage, ONBOARDED_KEY } from "@/lib/storage-keys";
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
+
+/** Unregister push, drop pending queue, clear onboarded — then auth ends. */
+async function clearLocalSession(): Promise<void> {
+  await unregisterPushDevice().catch(() => undefined);
+  clearQueue();
+  appStorage.remove(ONBOARDED_KEY);
+}
 
 type Result = { ok: true; message?: string } | { ok: false; message: string; code?: string };
 
@@ -82,12 +92,14 @@ export async function setPassword(newPassword: string): Promise<Result> {
 }
 
 export async function signOut(): Promise<void> {
+  await clearLocalSession();
   await withAuthTimeout(authClient.signOut()).catch(() => undefined);
 }
 
 /** Account deletion (Apple 5.1.1(v)); the confirmation sheet re-asks the password before calling this. */
 export async function deleteAccount(): Promise<Result> {
   try {
+    await clearLocalSession();
     const { error } = await withAuthTimeout(authClient.deleteUser({}));
     return error ? fail(error) : { ok: true };
   } catch (e) {

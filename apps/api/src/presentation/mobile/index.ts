@@ -41,7 +41,8 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
       const actor = actorMemberId(c.get("principal"));
       if (!actor) return c.json(apiError("FORBIDDEN"), 403);
       const p = await ports.members.getProfile(undefined, actor);
-      return c.json(toProfileVM(p, null, actor));
+      const principal = c.get("principal");
+      return c.json(toProfileVM(p, principal.kind === "member" ? principal.email : null, actor));
     });
 
     // ── Home ─────────────────────────────────────────────────────────────────

@@ -81,7 +81,21 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         const id = c.req.param("id");
         const row = await faresRepo.getAny(conn, id);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
-        if (!isVisible(row)) return c.json(apiError("GONE"), 410);
+        if (!isVisible(row)) {
+          return c.json(
+            apiError("GONE", {
+              message: "This fare has closed.",
+              context: {
+                price: parseFloat(row.price),
+                currency: row.currency,
+                validUntil: row.validUntil.toISOString(),
+                from: row.routeFrom,
+                to: row.routeTo,
+              },
+            }),
+            410,
+          );
+        }
 
         const [fromApt, toApt] = await Promise.all([
           airportsRepo.get(conn, row.routeFrom),

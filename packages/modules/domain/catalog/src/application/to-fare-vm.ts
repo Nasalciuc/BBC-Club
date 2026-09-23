@@ -15,7 +15,12 @@ export function toAirportVM(row: AirportRow): AirportVM {
   };
 }
 
-export function toFareVM(row: FareRow, airports: { from: AirportRow; to: AirportRow }, hasOffer: boolean): FareVM {
+export function toFareVM(
+  row: FareRow,
+  airports: { from: AirportRow; to: AirportRow },
+  hasOffer: boolean,
+  offerId: string | null = null,
+): FareVM {
   return {
     id: row.id,
     carrier: {
@@ -43,6 +48,7 @@ export function toFareVM(row: FareRow, airports: { from: AirportRow; to: Airport
     },
     validUntil: row.validUntil.toISOString(),
     hasOffer,
+    offerId,
   };
 }
 

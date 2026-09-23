@@ -83,6 +83,20 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
     const result = await submitRequest(body, keyRef.current);
     setBusy(false);
     if (!result.ok) {
+      // Timeout / mid-flight offline: same idempotency key → queue + saved confirm.
+      // Real 4xx stays an error (no queue).
+      if (result.code === "TIMEOUT" || result.code === "OFFLINE") {
+        enqueueRequest(body, keyRef.current);
+        const route = `${body.legs[0]!.from} → ${body.legs[body.legs.length - 1]!.to}`;
+        dispatch({
+          type: "confirm",
+          phone: phone.e164,
+          route,
+          dates: body.legs.map((l) => l.date).join(" · "),
+          saved: true,
+        });
+        return;
+      }
       dispatch({ type: "setSubmitError", error: result.message });
       return;
     }

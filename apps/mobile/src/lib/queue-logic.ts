@@ -3,8 +3,9 @@ import { RequestBody } from "@bbc/shared/api/v1/requests";
 
 export const MAX_QUEUE_ATTEMPTS = 6;
 
+/** Local queue ids are `q_` + UUID so they never collide with server request ids. */
 export const QueuedRequestSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().regex(/^q_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
   body: RequestBody,
   idempotencyKey: z.string().min(1),
   enqueuedAt: z.string().datetime(),

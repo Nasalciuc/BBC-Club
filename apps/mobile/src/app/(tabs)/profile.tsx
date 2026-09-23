@@ -1,20 +1,42 @@
 import Constants from "expo-constants";
 import { useRouter, type Href } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fixture } from "@bbc/shared/fixture";
 import { Button, SectionLabel, tokens, rn } from "@bbc/ui";
 
 import { ListRow } from "@/components/list-row";
 import { deleteAccount, signOut } from "@/features/auth/flows";
+import { CabinSheet } from "@/features/profile/CabinSheet";
+import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
+import { PasswordSheet } from "@/features/profile/PasswordSheet";
+import { PhoneSheet } from "@/features/profile/PhoneSheet";
+import { TravelersSheet } from "@/features/profile/TravelersSheet";
+import type { ProfileSheetHandle } from "@/features/profile/types";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
+import { env } from "@/lib/env";
 
 function monogram(name: string | null | undefined): string {
   if (!name?.trim()) return "";
   const parts = name.trim().split(/\s+/);
   if (parts.length >= 2) return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
   return name.slice(0, 2).toUpperCase();
+}
+
+function travelersLabel(prefs: Profile["preferences"] | undefined): string {
+  const p = prefs?.passengers;
+  if (!p) return "1 adult";
+  const parts: string[] = [];
+  parts.push(`${p.adult} adult${p.adult === 1 ? "" : "s"}`);
+  if (p.child > 0) parts.push(`${p.child} child${p.child === 1 ? "" : "ren"}`);
+  if (p.infant > 0) parts.push(`${p.infant} infant${p.infant === 1 ? "" : "s"}`);
+  return parts.join(", ");
+}
+
+function clientSinceYear(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const y = new Date(iso).getFullYear();
+  return Number.isFinite(y) ? String(y) : null;
 }
 
 export default function ProfileScreen() {
@@ -27,6 +49,12 @@ export default function ProfileScreen() {
   const [busy, setBusy] = useState(false);
   const [openRequests, setOpenRequests] = useState(0);
   const [sinceOpen, setSinceOpen] = useState(false);
+
+  const homeAirportRef = useRef<ProfileSheetHandle>(null);
+  const cabinRef = useRef<ProfileSheetHandle>(null);
+  const travelersRef = useRef<ProfileSheetHandle>(null);
+  const passwordRef = useRef<ProfileSheetHandle>(null);
+  const phoneRef = useRef<ProfileSheetHandle>(null);
 
   useEffect(() => {
     void (async () => {
@@ -76,8 +104,19 @@ export default function ProfileScreen() {
 
   const version = Constants.expoConfig?.version ?? "0.1.0";
   const build = Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? "24";
-  const initials = monogram(profile?.displayName ?? fixture.member.name);
-  const showClientSince = profile != null && profile.status !== "pending";
+  const displayName = profile?.displayName?.trim() || "Member";
+  const initials = monogram(profile?.displayName);
+  const sinceYear = clientSinceYear(profile?.memberSince);
+  const showClientSince = profile?.crmLinkedAt != null && sinceYear != null;
+  const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  const privacyUrl = env.EXPO_PUBLIC_PRIVACY_URL;
+  const termsUrl = env.EXPO_PUBLIC_TERMS_URL;
+  const cabinLabel = profile?.preferences?.cabin === "first" ? "First" : "Business";
+
+  function onSheetSaved(next: Profile) {
+    setProfile(next);
+    setError(null);
+  }
 
   return (
     <ScrollView
@@ -93,7 +132,7 @@ export default function ProfileScreen() {
         <View style={styles.monogram}>
           {initials ? <Text style={styles.monogramText}>{initials}</Text> : <Text style={styles.monogramText}>·</Text>}
         </View>
-        <Text style={styles.name}>{profile?.displayName ?? fixture.member.name}</Text>
+        <Text style={styles.name}>{displayName}</Text>
         {showClientSince ? (
           <Pressable
             testID="profile.since"
@@ -101,7 +140,7 @@ export default function ProfileScreen() {
             onPress={() => setSinceOpen(true)}
             style={({ pressed }) => [styles.pill, pressed && styles.pressed]}
           >
-            <Text style={styles.pillText}>Client since {fixture.member.memberSince}</Text>
+            <Text style={styles.pillText}>Client since {sinceYear}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -112,32 +151,32 @@ export default function ProfileScreen() {
       <ListRow
         testID="profile.homeAirport"
         label="Home airport"
-        value={profile?.homeAirport ? `${profile.homeAirport}` : "JFK · New York"}
-        onPress={() => undefined}
+        value={profile?.homeAirport ?? "Not set"}
+        onPress={() => homeAirportRef.current?.present()}
       />
+      <ListRow testID="profile.cabin" label="Cabin" value={cabinLabel} onPress={() => cabinRef.current?.present()} />
       <ListRow
-        testID="profile.cabin"
-        label="Cabin"
-        value={profile?.preferences?.cabin === "first" ? "First" : "Business"}
-        onPress={() => undefined}
+        testID="profile.travelers"
+        label="Travelers"
+        value={travelersLabel(profile?.preferences)}
+        onPress={() => travelersRef.current?.present()}
       />
-      <ListRow testID="profile.travelers" label="Travelers" value="1 adult" onPress={() => undefined} />
 
       <SectionLabel label="Account" />
-      <ListRow
-        testID="profile.email"
-        label="Email"
-        value={fixture.member.email}
-        trailing="none"
-        onPress={() => undefined}
-      />
+      <ListRow testID="profile.email" label="Email" value={profile?.email ?? "—"} />
+      <Text style={styles.hint}>Contact support if you need to change your email.</Text>
       <ListRow
         testID="profile.phone"
         label="Phone"
-        value={profile?.phone ?? fixture.member.phone}
-        onPress={() => undefined}
+        value={profile?.phone ?? "Add phone"}
+        onPress={() => phoneRef.current?.present()}
       />
-      <ListRow testID="profile.password" label="Password" value="On file" trailing="none" onPress={() => undefined} />
+      <ListRow
+        testID="profile.password"
+        label="Password"
+        value="On file"
+        onPress={() => passwordRef.current?.present()}
+      />
       <ListRow
         testID="profile.notifications"
         label="Notifications"
@@ -146,14 +185,33 @@ export default function ProfileScreen() {
       />
 
       <SectionLabel label="Legal & support" />
-      <ListRow testID="profile.legal" label="Privacy policy · Terms" onPress={() => undefined} />
-      <ListRow
-        testID="profile.callSupport"
-        label="Call support"
-        icon="call"
-        trailing="none"
-        onPress={() => void Linking.openURL("tel:+18000000000")}
-      />
+      {privacyUrl || termsUrl ? (
+        <>
+          {privacyUrl ? (
+            <ListRow testID="profile.privacy" label="Privacy policy" onPress={() => void Linking.openURL(privacyUrl)} />
+          ) : (
+            <ListRow testID="profile.privacy" label="Privacy policy" value="Coming soon" />
+          )}
+          {termsUrl ? (
+            <ListRow testID="profile.terms" label="Terms" onPress={() => void Linking.openURL(termsUrl)} />
+          ) : (
+            <ListRow testID="profile.terms" label="Terms" value="Coming soon" />
+          )}
+        </>
+      ) : (
+        <ListRow testID="profile.legal" label="Privacy policy · Terms" value="Coming soon" />
+      )}
+      {supportPhone ? (
+        <ListRow
+          testID="profile.callSupport"
+          label="Call support"
+          icon="call"
+          trailing="none"
+          onPress={() => void Linking.openURL(`tel:${supportPhone}`)}
+        />
+      ) : (
+        <ListRow testID="profile.callSupport" label="Call support" value="Coming soon" icon="call" />
+      )}
 
       <Button
         testID="profile.signOut"
@@ -179,9 +237,9 @@ export default function ProfileScreen() {
       <Modal visible={sinceOpen} transparent animationType="fade" onRequestClose={() => setSinceOpen(false)}>
         <Pressable testID="profile.since.scrim" style={styles.scrim} onPress={() => setSinceOpen(false)}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Client since {fixture.member.memberSince}</Text>
+            <Text style={styles.modalTitle}>Client since {sinceYear}</Text>
             <Text style={styles.modalBody}>
-              {`You've been with BuyBusinessClass since ${fixture.member.memberSince}. That year is when your advisor first opened your file — not a membership tier.`}
+              {`You've been with BuyBusinessClass since ${sinceYear}. That year is when your advisor first opened your file — not a membership tier.`}
             </Text>
             <Button testID="profile.since.close" label="Got it" shape="card" onPress={() => setSinceOpen(false)} />
           </View>
@@ -215,6 +273,16 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {profile ? (
+        <>
+          <HomeAirportSheet ref={homeAirportRef} profile={profile} onSaved={onSheetSaved} />
+          <CabinSheet ref={cabinRef} profile={profile} onSaved={onSheetSaved} />
+          <TravelersSheet ref={travelersRef} profile={profile} onSaved={onSheetSaved} />
+          <PasswordSheet ref={passwordRef} profile={profile} onSaved={onSheetSaved} />
+          <PhoneSheet ref={phoneRef} profile={profile} onSaved={onSheetSaved} />
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -241,6 +309,12 @@ const styles = StyleSheet.create({
   },
   pillText: { ...rn(tokens.type.caption), color: tokens.colors.textPrimary },
   error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger, marginBottom: tokens.space.sm },
+  hint: {
+    ...rn(tokens.type.caption),
+    color: tokens.colors.textTertiary,
+    marginTop: -tokens.space.xs,
+    marginBottom: tokens.space.sm,
+  },
   deleteLink: { marginTop: tokens.space.xl, alignItems: "center" },
   deleteText: { ...rn(tokens.type.body), color: tokens.colors.statusDanger },
   version: {

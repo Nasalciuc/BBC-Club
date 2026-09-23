@@ -51,3 +51,6 @@ jobs:
 
       # Last: five it.todo contract tests keep this red by design (ASSEMBLY_REPORT).
       - run: bun run module:check
+      # Static Maestro testID check only. Emulator E2E stays local until APK + API are
+      # wired (macos-latest is ARM and cannot boot x86_64 AVD; nested virt unsupported).
+      - run: bun run maestro:ids

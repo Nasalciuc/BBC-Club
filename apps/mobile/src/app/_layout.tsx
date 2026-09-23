@@ -15,10 +15,12 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
+import { signOut } from "@/features/auth/flows";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { routeFromDeepLink } from "@/lib/deeplinks";
 import { registerPushDevice } from "@/lib/push";
+import { onSessionRevoked } from "@/lib/session-events";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -27,6 +29,8 @@ export const unstable_settings = {
 };
 
 const AUTH_ENTRY = new Set(["sign-in", "join", "reset-password"]);
+/** Screens that own their own post-auth navigation (password, OTP, first-run prefs). */
+const GATE_HOLD = new Set(["set-password", "verify-code", "onboarding"]);
 
 export default function RootLayout() {
   const router = useRouter();
@@ -57,6 +61,28 @@ export default function RootLayout() {
 
   useEffect(() => () => clearPendingOtp(), []);
 
+  // Revoked session (apiFetch 401 on non-auth routes) → same clear as profile sign-out.
+  useEffect(() => {
+    let active = true;
+    let handling = false;
+    const unsubscribe = onSessionRevoked(() => {
+      if (handling) return;
+      handling = true;
+      void (async () => {
+        try {
+          await signOut();
+          if (active) router.replace("/sign-in");
+        } finally {
+          handling = false;
+        }
+      })();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [router]);
+
   // Restore session → Explore. Do not interrupt mid join/reset (set-password still needed).
   useEffect(() => {
     if (sessionPending || (!loaded && !error)) return;
@@ -71,8 +97,8 @@ export default function RootLayout() {
         return;
       }
 
-      // Mid Path A / reset: session may exist before password is set.
-      if (leaf === "set-password" || leaf === "verify-code") {
+      // Mid Path A / reset / first-run prefs: stay put until the screen navigates.
+      if (GATE_HOLD.has(leaf)) {
         if (!cancelled) setGateReady(true);
         return;
       }
@@ -148,9 +174,17 @@ export default function RootLayout() {
               <Stack.Screen name="verify-code" />
               <Stack.Screen name="set-password" />
               <Stack.Screen name="reset-password" />
+              <Stack.Screen
+                name="onboarding"
+                options={{ contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen
                 name="fare/[id]"
+                options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+              />
+              <Stack.Screen
+                name="request/[id]"
                 options={{ animation: "slide_from_right", contentStyle: { backgroundColor: Club.colors.surfacePage } }}
               />
               <Stack.Screen

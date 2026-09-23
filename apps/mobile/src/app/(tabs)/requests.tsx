@@ -8,14 +8,54 @@ import { EmptyState, RequestRow, SectionLabel, tokens, rn } from "@bbc/ui";
 
 import { badgeStatus, isOpen, requestMeta } from "@/features/requests/status";
 import { fetchRequests, submitRequest } from "@/lib/api";
-import { flushQueue, listQueued } from "@/lib/queue";
+import { env } from "@/lib/env";
+import { flushQueue, listQueued, type QueuedRequest } from "@/lib/queue";
 
-const SUPPORT = "+18000000000";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+type ListItem =
+  { kind: "server"; request: RequestVM } | { kind: "queued"; queued: QueuedRequest; route: string; meta: string };
+
+function formatLegDates(legs: { date: string }[]): string {
+  const fmt = (iso: string) => {
+    const parts = iso.split("-").map(Number);
+    const y = parts[0];
+    const m = parts[1];
+    const d = parts[2];
+    if (!y || !m || !d) return iso;
+    const month = MONTHS[m - 1];
+    return month ? `${month} ${d}` : iso;
+  };
+  const first = legs[0];
+  const last = legs[legs.length - 1];
+  if (!first) return "";
+  if (!last || legs.length === 1) return fmt(first.date);
+  return `${fmt(first.date)}–${fmt(last.date)}`;
+}
+
+function queuedMeta(q: QueuedRequest): { route: string; meta: string } {
+  const first = q.body.legs[0];
+  const last = q.body.legs[q.body.legs.length - 1];
+  const route = first && last ? `${first.from} → ${last.to}` : "";
+  const cabin = q.body.cabin === "business" ? "Business" : "First";
+  const adults = q.body.passengers.adult === 1 ? "1 adult" : `${q.body.passengers.adult} adults`;
+  const price =
+    q.body.priceAtRequest != null
+      ? `from ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(q.body.priceAtRequest)}`
+      : null;
+  const meta = [formatLegDates(q.body.legs), cabin, adults, price].filter(Boolean).join(" · ");
+  return { route, meta };
+}
+
+function openUrl(url: string) {
+  void Linking.openURL(url);
+}
 
 export default function RequestsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState<RequestVM[]>([]);
+  const [queued, setQueued] = useState<QueuedRequest[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +73,7 @@ export default function RequestsScreen() {
       const result = await fetchRequests();
       if (cancelled) return;
       setLoading(false);
+      setQueued(listQueued());
       if (!result.ok) {
         setError(result.message);
         return;
@@ -60,8 +101,17 @@ export default function RequestsScreen() {
     return () => sub();
   }, []);
 
-  const open = items.filter((r) => isOpen(r.status));
+  const openServer = items.filter((r) => isOpen(r.status));
   const closed = items.filter((r) => !isOpen(r.status));
+  const open: ListItem[] = [
+    ...queued.map((q) => {
+      const { route, meta } = queuedMeta(q);
+      return { kind: "queued" as const, queued: q, route, meta };
+    }),
+    ...openServer.map((request) => ({ kind: "server" as const, request })),
+  ];
+  const empty = open.length === 0 && closed.length === 0;
+  const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
 
   if (loading) {
     return (
@@ -81,7 +131,7 @@ export default function RequestsScreen() {
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {items.length === 0 ? (
+      {empty ? (
         <EmptyState
           testID="requests.empty"
           title="No requests yet."
@@ -98,42 +148,74 @@ export default function RequestsScreen() {
           contentContainerStyle={{ paddingBottom: tokens.space.xxl }}
           renderItem={({ item }) => {
             if (item.key === "open") {
+              if (open.length === 0) return null;
               return (
                 <View>
                   <SectionLabel label="Open" />
-                  {open.map((r) => (
-                    <RequestRow
-                      key={r.id}
-                      testID={`requests.row.${r.id}`}
-                      callTestID={`requests.call.${r.id}`}
-                      retryTestID={`requests.retry.${r.id}`}
-                      route={r.route}
-                      meta={requestMeta(r)}
-                      badgeStatus={badgeStatus(r.status)}
-                      onPress={() => undefined}
-                      onCall={r.status === "quoted" ? () => void Linking.openURL(`tel:${SUPPORT}`) : undefined}
-                      onRetry={
-                        r.status === "not_sent"
-                          ? () => {
-                              void (async () => {
-                                void listQueued();
-                                try {
-                                  await flushQueue((body, key) => submitRequest(body, key));
-                                } catch {
-                                  // per-item isolation lives in flushQueue
-                                }
-                                setReloadToken((n) => n + 1);
-                              })().catch(() => {
-                                setReloadToken((n) => n + 1);
-                              });
-                            }
-                          : undefined
-                      }
-                    />
-                  ))}
+                  {open.map((row) => {
+                    if (row.kind === "queued") {
+                      const id = row.queued.id;
+                      return (
+                        <RequestRow
+                          key={id}
+                          testID={`requests.row.${id}`}
+                          retryTestID={`requests.retry.${id}`}
+                          route={row.route}
+                          meta={row.meta}
+                          badgeStatus="not_sent"
+                          onPress={() => router.push({ pathname: "/request/[id]", params: { id } } as Href)}
+                          onRetry={() => {
+                            void (async () => {
+                              try {
+                                await flushQueue((body, key) => submitRequest(body, key), { only: id });
+                              } catch {
+                                // per-item isolation lives in flushQueue
+                              }
+                              setReloadToken((n) => n + 1);
+                            })().catch(() => {
+                              setReloadToken((n) => n + 1);
+                            });
+                          }}
+                        />
+                      );
+                    }
+                    const r = row.request;
+                    return (
+                      <RequestRow
+                        key={r.id}
+                        testID={`requests.row.${r.id}`}
+                        callTestID={`requests.call.${r.id}`}
+                        retryTestID={`requests.retry.${r.id}`}
+                        route={r.route}
+                        meta={requestMeta(r)}
+                        badgeStatus={badgeStatus(r.status)}
+                        onPress={() => router.push({ pathname: "/request/[id]", params: { id: r.id } } as Href)}
+                        onCall={
+                          r.status === "quoted" && supportPhone ? () => openUrl(`tel:${supportPhone}`) : undefined
+                        }
+                        onRetry={
+                          r.status === "not_sent"
+                            ? () => {
+                                void (async () => {
+                                  try {
+                                    await flushQueue((body, key) => submitRequest(body, key));
+                                  } catch {
+                                    // per-item isolation lives in flushQueue
+                                  }
+                                  setReloadToken((n) => n + 1);
+                                })().catch(() => {
+                                  setReloadToken((n) => n + 1);
+                                });
+                              }
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
                 </View>
               );
             }
+            if (closed.length === 0) return null;
             return (
               <View>
                 <SectionLabel label="Closed" />
@@ -145,7 +227,7 @@ export default function RequestsScreen() {
                     meta={requestMeta(r)}
                     badgeStatus={badgeStatus(r.status)}
                     muted
-                    onPress={() => undefined}
+                    onPress={() => router.push({ pathname: "/request/[id]", params: { id: r.id } } as Href)}
                   />
                 ))}
               </View>

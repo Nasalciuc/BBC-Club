@@ -16,6 +16,7 @@ export type TravelPreferences = {
   destinations?: string[]; // IATA city codes, max 3 (enforced at boundary by Zod)
   cabin?: "business" | "first";
   frequency?: "monthly" | "quarterly" | "rarely";
+  passengers?: { adult: number; child: number; infant: number };
   notes?: string;
 };
 
