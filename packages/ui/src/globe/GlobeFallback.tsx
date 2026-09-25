@@ -47,7 +47,12 @@ export function GlobeFallback({ pins, home, selected, onSelect, size = 520 }: Pr
       {pins.map((pin) => {
         const { x, y } = project(pin.lat, pin.lng);
         const spec = pin.code === selected ? GLOBE.pin.selected : pin.hasOffer ? GLOBE.pin.offer : GLOBE.pin.fare;
-        const fill = pin.hasOffer || pin.code === selected ? tokens.colors.textOnDark : tokens.colors.textTertiary;
+        const fill =
+          pin.code === selected
+            ? tokens.colors.accentWarm
+            : pin.hasOffer
+              ? tokens.colors.textOnDark
+              : tokens.colors.textTertiary;
         return (
           <Pressable
             key={pin.code}

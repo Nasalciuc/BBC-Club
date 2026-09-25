@@ -4,7 +4,7 @@ export const tokens = {
   "primary": "#1E293B",
   "actionPrimary": "#1E293B",
   "actionInverted": "#F8FAFC",
-  "surfacePage": "#F8FAFC",
+  "surfacePage": "#F4F5F4",
   "surfaceCard": "#FFFFFF",
   "surfacePanel": "#1E293B",
   "surfaceMuted": "#334155",
@@ -15,6 +15,7 @@ export const tokens = {
   "textOnDarkMuted": "#94A3B8",
   "borderDefault": "#E2E8F0",
   "statusDanger": "#B42318",
+  "accentWarm": "#9A7B4F",
   "scrim": "rgba(15,23,42,0.78)"
 },
   type: {

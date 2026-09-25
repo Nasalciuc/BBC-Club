@@ -42,7 +42,7 @@ export function FareRow({ fare, onPress, testID }: Props) {
             <Text style={styles.badgeText}>OFFER</Text>
           </View>
         ) : null}
-        <PricePair price={fare.price} size="sm" />
+        <PricePair price={fare.price} size="sm" color={fare.hasOffer ? tokens.colors.accentWarm : undefined} />
       </View>
     </Pressable>
   );

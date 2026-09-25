@@ -74,6 +74,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: tokens.colors.primary,
+    backgroundColor: tokens.colors.accentWarm,
   },
 });

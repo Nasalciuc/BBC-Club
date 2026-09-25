@@ -126,6 +126,9 @@ export default function GalleryScreen() {
         />
       ))}
 
+      <SectionLabel label="Bronze — the three places it lives" />
+      <Text style={styles.note}>Selected globe pin · offer price on FareRow · Requests unread dot</Text>
+
       <SectionLabel label="FareRow" />
       <FareRow testID="gallery.fare.timed" fare={fareTimed} onPress={noop} />
       <FareRow testID="gallery.fare.notimes" fare={fareNoTimes} onPress={noop} />
@@ -308,6 +311,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   content: { paddingHorizontal: tokens.space.lg, gap: tokens.space.xs },
   h1: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, marginBottom: tokens.space.md },
+  note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
   row: { flexDirection: "row", flexWrap: "wrap", gap: tokens.space.xs, alignItems: "center" },
   gap: { height: tokens.space.sm },
 });

@@ -1,13 +1,13 @@
 ---
 version: alpha
 name: BBC-Club
-description: Private travel-club app in two worlds. Entry is a cinematic night cabin — full-bleed photograph of empty lie-flat suites under a navy scrim, with a rising navy panel carrying serif headlines, white fields and one light pill button. Inside, the club is daylight — off-white canvas, white cards on hairlines, serif invitations, monospace flight facts, one quiet action per screen. Monochrome navy-to-grey, no accent color; hierarchy comes from light, weight, shape and photography.
+description: Private travel-club app in two worlds. Entry is a cinematic night cabin — full-bleed photograph of empty lie-flat suites under a navy scrim, with a rising navy panel carrying serif headlines, white fields and one light pill button. Inside, the club is daylight — porcelain canvas, white cards on hairlines, serif invitations, monospace flight facts, one quiet action per screen. Navy ink on porcelain; one warm accent — bronze — used once per screen; red only for danger. Hierarchy comes from light, weight, shape and photography.
 
 colors:
   primary: "#1E293B"
   action-primary: "#1E293B"
   action-inverted: "#F8FAFC"
-  surface-page: "#F8FAFC"
+  surface-page: "#F4F5F4"
   surface-card: "#FFFFFF"
   surface-panel: "#1E293B"
   surface-muted: "#334155"
@@ -18,6 +18,7 @@ colors:
   text-on-dark-muted: "#94A3B8"
   border-default: "#E2E8F0"
   status-danger: "#B42318"
+  accent-warm: "#9A7B4F"
   scrim: "rgba(15,23,42,0.78)"
 
 typography:
@@ -230,7 +231,7 @@ The app should feel like a private lounge: calm, precise, expensive. Create this
 
 - Two worlds — entry screens on `surface-panel` over a blurred cabin photograph; inside on `surface-page` with `surface-card` on `border-default` hairlines
 - Serif headlines written as invitations ("Your October in London"), body in Geist, `label-mono` uppercase for labels and flight facts
-- No accent color: exactly one light pill button (`button-inverted`) per dark screen, one `button-primary` per light screen
+- One accent: bronze (`accent-warm`), once per screen, only on the selected pin, the offer price and the Requests dot. Exactly one light pill button (`button-inverted`) per dark screen, one `button-primary` per light screen
 - Generous `spacing.lg`–`spacing.xl` between groups, compact `spacing.xs` inside cards; no shadows, no gradients on UI surfaces, no urgency devices
 - Photography of empty luxury spaces as the primary material; the interface recedes
 
@@ -242,7 +243,8 @@ Tokens and components in this file are canonical. Details live in `design/compon
 
 - `primary` / `action-primary` (#1E293B): panels, primary buttons on light screens, badges, active tab. The only strong tone.
 - `action-inverted` (#F8FAFC): the light pill button on dark surfaces.
-- `surface-page` (#F8FAFC) canvas inside; `surface-card` (#FFFFFF) cards, rows, fields, tab bar; `surface-panel` (#1E293B) entry sheet; `surface-muted` (#334155) photo placeholders.
+- `surface-page` (#F4F5F4) porcelain canvas inside; `surface-card` (#FFFFFF) cards, rows, fields, tab bar; `surface-panel` (#1E293B) entry sheet; `surface-muted` (#334155) photo placeholders.
+- `accent-warm` (#9A7B4F): bronze; selected globe pin, offer price on a fare row, Requests unread dot. Nowhere else.
 - `text-primary` / `text-secondary` / `text-tertiary` on light; `text-on-dark` / `text-on-dark-muted` on navy. `text-tertiary` only for non-essential lines (validity, footers, struck prices).
 - `border-default` (#E2E8F0): the single 1px border color.
 - `status-danger` (#B42318): error border on the field at fault and the account-deletion confirmation. Never for headlines, messages or urgency. No success/warning/info colors exist.
@@ -281,7 +283,7 @@ Documented in `design/components.md`. Summary of the rules an agent most often g
 - `field` is white on both worlds with `field-label` above; focus strengthens the border to `text-secondary`; error = `status-danger` border on the field at fault only.
 - Password fields show text by default with an eye toggle; there is no confirm-password field.
 - `proposal-card` and `proposal-row` have no buttons and no chevrons — the whole surface is the tap target; prices appear as `price` beside `price-published` struck through, never as percentage chips.
-- `tab-bar` shows PROPOSALS / INBOX / PROFILE; inactive labels in `text-secondary` (AA contrast), active in `primary`; unread = 6px `primary` dot.
+- `tab-bar` shows EXPLORE / REQUESTS / PROFILE; inactive labels in `text-secondary` (AA contrast), active in `primary`; unread = 6px `accent-warm` dot.
 - `button-destructive` appears only inside the account-deletion confirmation sheet, labeled with the action ("Delete my account").
 - Logo: white version directly on photographs and navy, dark version on `surface-page`; never inside a plate; never recolored.
 
