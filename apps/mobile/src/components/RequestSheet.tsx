@@ -9,6 +9,7 @@ import { PhoneField } from "@/components/phone-field";
 import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
 import { enqueueRequest } from "@/lib/queue";
+import { env } from "@/lib/env";
 import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
 
 export type RequestSheetHandle = {
@@ -21,7 +22,6 @@ type Props = {
   onSeeRequests?: () => void;
 };
 
-const SUPPORT = "+1 (800) 000-0000";
 const SNAP = ["90%"] as const;
 
 export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function RequestSheet(
@@ -165,7 +165,9 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
             >
               <Text style={styles.link}>See it in Requests</Text>
             </Pressable>
-            <Text style={styles.caption}>{`Don't want to wait? Call ${SUPPORT}`}</Text>
+            {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
+              <Text style={styles.caption}>{`Don't want to wait? Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}</Text>
+            ) : null}
           </>
         ) : (
           <>

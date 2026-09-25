@@ -5,8 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button, tokens, rn } from "@bbc/ui";
 
 import { fetchAppConfig } from "@/lib/api";
-
-const SUPPORT = "+18000000000";
+import { env } from "@/lib/env";
 
 function compareSemver(a: string, b: string): number {
   const pa = a.split(".").map((n) => Number(n) || 0);
@@ -64,13 +63,15 @@ export function AppGate({ children }: { children: ReactNode }) {
           shape="card"
           onPress={() => void Linking.openURL("https://buybusinessclass.com")}
         />
-        <Pressable
-          testID="appGate.update.call"
-          accessibilityRole="button"
-          onPress={() => void Linking.openURL(`tel:${SUPPORT}`)}
-        >
-          <Text style={styles.link}>Need a fare now? Call +1 (800) 000-0000</Text>
-        </Pressable>
+        {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
+          <Pressable
+            testID="appGate.update.call"
+            accessibilityRole="button"
+            onPress={() => void Linking.openURL(`tel:${env.EXPO_PUBLIC_SUPPORT_PHONE}`)}
+          >
+            <Text style={styles.link}>{`Need a fare now? Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}</Text>
+          </Pressable>
+        ) : null}
         <Text style={styles.version}>{`VERSION ${current} (${build})`}</Text>
       </View>
     );
@@ -84,13 +85,15 @@ export function AppGate({ children }: { children: ReactNode }) {
         <Text style={styles.body}>
           {maintenanceCopy ? `Expected back at ${maintenanceCopy}` : "We're making a quick improvement."}
         </Text>
-        <Button
-          testID="appGate.maintenance.call"
-          label="Call +1 (800) 000-0000"
-          variant="ghost"
-          shape="card"
-          onPress={() => void Linking.openURL(`tel:${SUPPORT}`)}
-        />
+        {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
+          <Button
+            testID="appGate.maintenance.call"
+            label={`Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}
+            variant="ghost"
+            shape="card"
+            onPress={() => void Linking.openURL(`tel:${env.EXPO_PUBLIC_SUPPORT_PHONE}`)}
+          />
+        ) : null}
         <Text style={styles.caption}>Specialists answer 24/7, even now.</Text>
       </View>
     );
