@@ -3,7 +3,7 @@ import NetInfo from "@react-native-community/netinfo";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
-import { Button, Chip, Icon, tokens, rn } from "@bbc/ui";
+import { Button, Chip, CloseButton, Icon, tokens, rn } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
 import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
@@ -173,15 +173,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
           <>
             <View style={styles.header}>
               <Text style={styles.title}>Request this fare</Text>
-              <Pressable
-                testID="request.close"
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                hitSlop={12}
-                onPress={() => modalRef.current?.dismiss()}
-              >
-                <Icon name="clear" size={20} />
-              </Pressable>
+              <CloseButton testID="request.close" onPress={() => modalRef.current?.dismiss()} />
             </View>
             <Text style={styles.mono}>{monoLine}</Text>
 

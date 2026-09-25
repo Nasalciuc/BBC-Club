@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, ErrorState, Icon, ListRow, PricePair, SectionLabel, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, ErrorState, Icon, ListRow, PricePair, SectionLabel, tokens, rn } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
@@ -173,17 +173,7 @@ export default function FareDetailScreen() {
           paddingBottom: insets.bottom + CTA_RESERVE + tokens.space.xl,
         }}
       >
-        <Pressable
-          testID="fare.back"
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          hitSlop={12}
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Icon name="chevron" size={20} color={tokens.colors.textPrimary} />
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
+        <BackButton testID="fare.back" onPress={() => router.back()} style={styles.back} />
 
         {offer?.mediaUrl ? (
           <Image
@@ -272,8 +262,7 @@ export default function FareDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
-  back: { flexDirection: "row", alignItems: "center", gap: tokens.space.xxs, marginBottom: tokens.space.md },
-  backText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  back: { marginBottom: tokens.space.md },
   hero: {
     width: "100%",
     height: 180,

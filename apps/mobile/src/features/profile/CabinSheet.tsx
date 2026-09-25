@@ -1,7 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Button, Chip, Icon, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text, View } from "react-native";
+import { Button, Chip, CloseButton, tokens, rn } from "@bbc/ui";
 
 import { putTravelPreferences, type Profile } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
@@ -55,15 +55,7 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
       <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.cabin.sheet">
         <View style={styles.header}>
           <Text style={styles.title}>Cabin</Text>
-          <Pressable
-            testID="profile.cabin.close"
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={12}
-            onPress={() => modalRef.current?.dismiss()}
-          >
-            <Icon name="clear" size={20} />
-          </Pressable>
+          <CloseButton testID="profile.cabin.close" onPress={() => modalRef.current?.dismiss()} />
         </View>
 
         <View style={styles.chips}>

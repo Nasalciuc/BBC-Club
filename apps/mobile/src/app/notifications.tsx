@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Icon, tokens, rn } from "@bbc/ui";
+import { BackButton, tokens, rn } from "@bbc/ui";
 
 import { putNotificationPreferences } from "@/lib/api";
 
@@ -27,17 +27,7 @@ export default function NotificationsScreen() {
 
   return (
     <View testID="notifications.root" style={[styles.root, { paddingTop: insets.top + tokens.space.md }]}>
-      <Pressable
-        testID="notifications.back"
-        accessibilityRole="button"
-        accessibilityLabel="Back"
-        hitSlop={12}
-        onPress={() => router.back()}
-        style={styles.back}
-      >
-        <Icon name="chevron" size={20} />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
+      <BackButton testID="notifications.back" onPress={() => router.back()} style={styles.back} />
       <Text style={styles.title}>Notifications</Text>
       {busy ? <ActivityIndicator color={tokens.colors.primary} /> : null}
 
@@ -65,8 +55,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage, paddingHorizontal: tokens.space.lg },
-  back: { flexDirection: "row", alignItems: "center", gap: tokens.space.xxs, marginBottom: tokens.space.md },
-  backText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  back: { marginBottom: tokens.space.md },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, marginBottom: tokens.space.lg },
   row: {
     flexDirection: "row",

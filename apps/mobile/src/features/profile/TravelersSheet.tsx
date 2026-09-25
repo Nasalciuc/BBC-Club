@@ -1,7 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Button, Icon, Stepper, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text, View } from "react-native";
+import { Button, CloseButton, Stepper, tokens, rn } from "@bbc/ui";
 
 import { putTravelPreferences, type Profile } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
@@ -58,15 +58,7 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
       <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.travelers.sheet">
         <View style={styles.header}>
           <Text style={styles.title}>Travelers</Text>
-          <Pressable
-            testID="profile.travelers.close"
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={12}
-            onPress={() => modalRef.current?.dismiss()}
-          >
-            <Icon name="clear" size={20} />
-          </Pressable>
+          <CloseButton testID="profile.travelers.close" onPress={() => modalRef.current?.dismiss()} />
         </View>
 
         <Stepper testID="profile.travelers.adult" label="Adults" value={adult} min={1} max={9} onChange={setAdult} />
