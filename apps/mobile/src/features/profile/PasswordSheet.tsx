@@ -50,8 +50,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
     }
     setBusy(true);
     setError(null);
-    // API accepts only `{ newPassword }` — current password is UX confirmation only.
-    const result = await postAccountPassword(newPassword);
+    const result = await postAccountPassword(newPassword, currentPassword);
     setBusy(false);
     if (!result.ok) {
       setError(result.message);

@@ -235,9 +235,15 @@ export async function putNotificationPreferences(
   });
 }
 
-/** POST /v1/account/password — first-time password after Path A OTP session. */
-export async function postAccountPassword(newPassword: string): Promise<ApiResult<{ ok: true }>> {
-  const parsed = PasswordBody.safeParse({ newPassword });
+/** POST /v1/account/password — Path A set, or change when currentPassword is sent. */
+export async function postAccountPassword(
+  newPassword: string,
+  currentPassword?: string,
+): Promise<ApiResult<{ ok: true }>> {
+  const parsed = PasswordBody.safeParse({
+    newPassword,
+    ...(currentPassword ? { currentPassword } : {}),
+  });
   if (!parsed.success) {
     return {
       ok: false,

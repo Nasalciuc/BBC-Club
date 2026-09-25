@@ -90,6 +90,8 @@ export type InboxVM = z.infer<typeof InboxVM>;
 
 export const PasswordBody = z.object({
   newPassword: z.string().min(8).max(128),
+  /** Required when the member already has a credential. Path A (first set) omits it. */
+  currentPassword: z.string().min(1).max(128).optional(),
 });
 export type PasswordBody = z.infer<typeof PasswordBody>;
 
