@@ -281,7 +281,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
               shape="card"
               onPress={() => void onSubmit()}
             />
-            <Text style={styles.caption}>A specialist will call you shortly · 24/7</Text>
+            <Text style={styles.caption}>A specialist will call you shortly.</Text>
           </>
         )}
       </BottomSheetScrollView>

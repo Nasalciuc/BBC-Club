@@ -254,11 +254,9 @@ export default function FareDetailScreen() {
       <Modal visible={whyOpen} transparent animationType="fade" onRequestClose={() => setWhyOpen(false)}>
         <Pressable testID="fare.whyScrim" style={styles.modalScrim} onPress={() => setWhyOpen(false)}>
           <View style={styles.modalCard} testID="fare.whySheet">
-            <Text style={styles.title}>Why it's lower</Text>
+            <Text style={styles.title}>{`Why it's ${formatPrice(savings ?? 0, fare.price.currency)} lower`}</Text>
             <Text style={styles.body}>
-              Published fares are what the airline lists. We find inventory and consolidator rates that specialists can
-              ticket for you — often 30–50% under that published number. The source on the struck price is the FTC
-              reference for what you would have paid.
+              {`${formatPrice(fare.price.published!, fare.price.currency)} published − ${formatPrice(fare.price.offer, fare.price.currency)} club fare = ${formatPrice(savings ?? 0, fare.price.currency)}.`}
             </Text>
             <Button testID="fare.whyClose" label="Got it" shape="card" onPress={() => setWhyOpen(false)} />
           </View>

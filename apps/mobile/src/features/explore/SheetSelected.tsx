@@ -91,8 +91,8 @@ export function SheetSelected({ state, dispatch, onRetry }: Props) {
       {state.status === "empty" ? (
         <EmptyState
           testID="explore.empty"
-          title={`We don't publish fares for ${state.from?.code ?? "JFK"} → ${state.to!.code}.`}
-          body="We find them. Tell us your dates and a specialist calls you with options — usually 30–50 % under the published fare."
+          title="Let us find your fare."
+          body="No fares match this route right now. Tell us your plans and a specialist will call you shortly."
           primary={{
             label: "Request a quote",
             onPress: () => router.push(fareHref("00000000-0000-4000-8000-00000000fa01")),

@@ -54,7 +54,7 @@ export function AppGate({ children }: { children: ReactNode }) {
   if (blocked === "update") {
     return (
       <View testID="appGate.update" style={styles.root}>
-        <Text style={styles.wordmark}>BuyBusinessClass Club</Text>
+        <Text style={styles.wordmark}>BUYBUSINESSCLASS</Text>
         <Text style={styles.title}>{"We've improved the app."}</Text>
         <Text style={styles.body}>Please update to keep requesting fares.</Text>
         <Button
@@ -80,7 +80,7 @@ export function AppGate({ children }: { children: ReactNode }) {
   if (blocked === "maintenance") {
     return (
       <View testID="appGate.maintenance" style={styles.root}>
-        <Text style={styles.wordmark}>BuyBusinessClass Club</Text>
+        <Text style={styles.wordmark}>BUYBUSINESSCLASS</Text>
         <Text style={styles.title}>Back in a moment.</Text>
         <Text style={styles.body}>
           {maintenanceCopy ? `Expected back at ${maintenanceCopy}` : "We're making a quick improvement."}
@@ -94,7 +94,6 @@ export function AppGate({ children }: { children: ReactNode }) {
             onPress={() => void Linking.openURL(`tel:${env.EXPO_PUBLIC_SUPPORT_PHONE}`)}
           />
         ) : null}
-        <Text style={styles.caption}>Specialists answer 24/7, even now.</Text>
       </View>
     );
   }
@@ -110,7 +109,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: tokens.space.md,
   },
-  wordmark: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, textAlign: "center" },
+  wordmark: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary, textAlign: "center" },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, textAlign: "center" },
   body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary, textAlign: "center" },
   link: { ...rn(tokens.type.bodySm), color: tokens.colors.primary, textAlign: "center" },
