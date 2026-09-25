@@ -24,7 +24,9 @@ jobs:
         with: { bun-version: "1.3.4" }
 
       - name: Start test Postgres
-        run: docker compose -f infra/compose.test.yml up -d --wait
+        run: |
+          docker compose -f infra/compose.test.yml down --remove-orphans || true
+          docker compose -f infra/compose.test.yml up -d --wait
 
       - run: bun install --frozen-lockfile
       # Official binary — npm `gitleaks` / bunx stubs have no usable CLI.
