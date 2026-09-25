@@ -1,24 +1,19 @@
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import type { Dispatch } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Chip, EmptyState, ErrorState, FareRow, SectionLabel, tokens, rn } from "@bbc/ui";
 
+import { fareHref } from "@/features/explore/open-offer";
 import type { SearchAction, SearchState } from "@/features/search/useSearch";
-
-function fareHref(id: string, offerId?: string | null): Href {
-  return {
-    pathname: "/fare/[id]",
-    params: offerId ? { id, offerId } : { id },
-  } as unknown as Href;
-}
 
 type Props = {
   state: SearchState;
   dispatch: Dispatch<SearchAction>;
   onRetry: () => void;
+  onQuote: () => void;
 };
 
-export function SheetSelected({ state, dispatch, onRetry }: Props) {
+export function SheetSelected({ state, dispatch, onRetry, onQuote }: Props) {
   const router = useRouter();
 
   return (
@@ -80,7 +75,7 @@ export function SheetSelected({ state, dispatch, onRetry }: Props) {
             testID="explore.quote"
             accessibilityRole="button"
             accessibilityLabel="Request a quote"
-            onPress={() => router.push(fareHref("00000000-0000-4000-8000-00000000fa01"))}
+            onPress={onQuote}
             style={({ pressed }) => [styles.quote, pressed && styles.pressed]}
           >
             <Text style={styles.quoteText}>Nothing that fits? Request a quote →</Text>
@@ -95,7 +90,7 @@ export function SheetSelected({ state, dispatch, onRetry }: Props) {
           body="No fares match this route right now. Tell us your plans and a specialist will call you shortly."
           primary={{
             label: "Request a quote",
-            onPress: () => router.push(fareHref("00000000-0000-4000-8000-00000000fa01")),
+            onPress: onQuote,
           }}
         />
       ) : null}
