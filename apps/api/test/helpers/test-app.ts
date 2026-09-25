@@ -24,7 +24,13 @@ export async function testApp(
 ) {
   const poolMax = opts.poolMax ?? 6;
   const iso = await isolatedDb(opts.suite ?? "api", { max: poolMax });
-  const env = loadEnv({ ...process.env, DATABASE_URL: iso.url, ...opts.env });
+  const env = loadEnv({
+    ...process.env,
+    DATABASE_URL: iso.url,
+    // Host .env Metro extras must not leak into NODE_ENV=production suites.
+    CORS_ORIGINS: "",
+    ...opts.env,
+  });
   const db = iso.db;
   const email = capturingEmail();
   const emailA = opts.suite ? `alex.${opts.suite}@test.dev` : "alex.morgan@company.com";

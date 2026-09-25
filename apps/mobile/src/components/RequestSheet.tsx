@@ -5,10 +5,11 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 import { Button, Chip, Icon, tokens, rn } from "@bbc/ui";
 
+import { PhoneField } from "@/components/phone-field";
 import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
 import { enqueueRequest } from "@/lib/queue";
-import { validatePhone } from "@/lib/phone";
+import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
 
 export type RequestSheetHandle = {
   present: (opts: { fare?: FareVM | null; profile?: Profile | null; fromCode?: string; toCode?: string }) => void;
@@ -31,6 +32,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [phoneCountry, setPhoneCountry] = useState<CountryCode>(() => defaultPhoneCountry());
   const [seed] = useState<RequestDraft>(() => buildDraft({}));
   const { state, dispatch } = useRequestDraft(seed);
   const keyRef = useRef(idempotencyKey);
@@ -42,7 +44,12 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
   useImperativeHandle(ref, () => ({
     present(opts) {
       const next = buildDraft(opts);
-      dispatch({ type: "reset", draft: next });
+      const split = splitStoredPhone(next.contact.phone, defaultPhoneCountry());
+      dispatch({
+        type: "reset",
+        draft: { ...next, contact: { ...next.contact, phone: split.national } },
+      });
+      setPhoneCountry(split.country);
       setIdempotencyKey(crypto.randomUUID());
       setBusy(false);
       setNoteOpen(false);
@@ -54,7 +61,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
   }));
 
   async function onSubmit() {
-    const phone = validatePhone(state.contact.phone);
+    const phone = validatePhone(state.contact.phone, phoneCountry);
     if (!phone.valid) {
       dispatch({ type: "setPhoneError", error: phone.error });
       return;
@@ -222,13 +229,17 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
               onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
               empty={!state.contact.name}
             />
-            <Field
+            <PhoneField
               testID="request.phone"
-              label="PHONE"
+              countryTestID="phone.country"
               value={state.contact.phone}
-              onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
+              country={phoneCountry}
               empty={!state.contact.phone}
-              keyboardType="phone-pad"
+              onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
+              onCountryChange={(c) => {
+                setPhoneCountry(c);
+                dispatch({ type: "setPhoneError", error: null });
+              }}
             />
             {state.phoneError ? <Text style={styles.error}>{state.phoneError}</Text> : null}
             <Field

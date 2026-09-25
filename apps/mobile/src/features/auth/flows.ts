@@ -16,6 +16,9 @@ async function clearLocalSession(): Promise<void> {
 
 type Result = { ok: true; message?: string } | { ok: false; message: string; code?: string };
 
+/** Cookie not in SecureStore yet (or lost) — set-password would 401 with "Please sign in." */
+const SESSION_NOT_READY = "Your session isn't ready. Verify your email code again.";
+
 const RATE_LIMIT_CODES = new Set(["RATE_LIMITED", "TOO_MANY_REQUESTS", "TOO_MANY_ATTEMPTS"]);
 
 function fail(err: { code?: string; message?: string; status?: number } | null | undefined): Result {
@@ -29,13 +32,17 @@ function fromNetwork(e: unknown): Result {
   return { ok: false, message: n.message, code: n.code };
 }
 
+async function requireSessionCookie(): Promise<Result | null> {
+  if (await waitForSessionCookie()) return null;
+  return { ok: false, message: SESSION_NOT_READY, code: "UNAUTHORIZED" };
+}
+
 /** Sign In: email + password. */
 export async function signIn(email: string, password: string): Promise<Result> {
   try {
     const { error } = await withAuthTimeout(authClient.signIn.email({ email, password }));
     if (error) return fail(error);
-    await waitForSessionCookie();
-    return { ok: true };
+    return (await requireSessionCookie()) ?? { ok: true };
   } catch (e) {
     return fromNetwork(e);
   }
@@ -55,8 +62,8 @@ export async function verifyJoin(email: string, otp: string): Promise<Result> {
   try {
     const { error } = await withAuthTimeout(authClient.signIn.emailOtp({ email, otp }));
     if (error) return fail(error);
-    await waitForSessionCookie();
-    return { ok: true };
+    // Without a SecureStore cookie, set-password's POST /v1/account/password is 401 "Please sign in."
+    return (await requireSessionCookie()) ?? { ok: true };
   } catch (e) {
     return fromNetwork(e);
   }
@@ -87,8 +94,7 @@ export async function resetPassword(email: string, otp: string, password: string
     if (error) return fail(error);
     const signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
     if (signedIn.error) return fail(signedIn.error);
-    await waitForSessionCookie();
-    return { ok: true };
+    return (await requireSessionCookie()) ?? { ok: true };
   } catch (e) {
     return fromNetwork(e);
   }
@@ -96,8 +102,15 @@ export async function resetPassword(email: string, otp: string, password: string
 
 /** First-time password after Path A OTP session — club route, not Better Auth client setPassword. */
 export async function setPassword(newPassword: string): Promise<Result> {
+  const missing = await requireSessionCookie();
+  if (missing) return missing;
   const result = await postAccountPassword(newPassword);
-  if (!result.ok) return { ok: false, message: result.message, code: result.code };
+  if (!result.ok) {
+    if (result.code === "UNAUTHORIZED" || result.status === 401) {
+      return { ok: false, message: SESSION_NOT_READY, code: "UNAUTHORIZED" };
+    }
+    return { ok: false, message: result.message, code: result.code };
+  }
   return { ok: true };
 }
 
