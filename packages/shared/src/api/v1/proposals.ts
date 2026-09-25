@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isMemberPhone } from "../../phone";
 import { Passengers } from "./requests";
 
 // -- Price -------------------------------------------------------------------
@@ -99,7 +100,13 @@ export const ProfilePatchBody = z
     displayName: z.string().min(1).max(120).optional(),
     homeAirport: z.string().length(3).optional(),
     timezone: z.string().min(1).max(80).optional(),
-    phone: z.string().min(1).max(30).optional(),
+    // Same E.164 rule as requests contact.phone — client sends E.164; refuse bare digit junk.
+    phone: z
+      .string()
+      .min(1)
+      .max(30)
+      .refine(isMemberPhone, { message: "That phone number doesn't look right." })
+      .optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "At least one field must be present",

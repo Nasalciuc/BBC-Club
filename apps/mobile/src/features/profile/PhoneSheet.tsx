@@ -1,10 +1,11 @@
-import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button, Icon, tokens, rn } from "@bbc/ui";
 
+import { PhoneField } from "@/components/phone-field";
 import { patchProfile, type Profile } from "@/lib/api";
-import { validatePhone } from "@/lib/phone";
+import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
 import type { ProfileSheetHandle } from "./types";
 
 type Props = {
@@ -17,12 +18,15 @@ const SNAP = ["50%"] as const;
 export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSheet({ profile, onSaved }, ref) {
   const modalRef = useRef<BottomSheetModal>(null);
   const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState<CountryCode>(() => defaultPhoneCountry());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useImperativeHandle(ref, () => ({
     present() {
-      setPhone(profile.phone ?? "");
+      const split = splitStoredPhone(profile.phone, defaultPhoneCountry());
+      setPhone(split.national);
+      setCountry(split.country);
       setBusy(false);
       setError(null);
       modalRef.current?.present();
@@ -33,7 +37,7 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
   }));
 
   async function onSave() {
-    const parsed = validatePhone(phone);
+    const parsed = validatePhone(phone, country);
     if (!parsed.valid) {
       setError(parsed.error);
       return;
@@ -73,20 +77,20 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
           </Pressable>
         </View>
 
-        <View style={styles.fieldWrap}>
-          <Text style={styles.fieldLabel}>PHONE</Text>
-          <BottomSheetTextInput
-            testID="profile.phone.input"
-            value={phone}
-            onChangeText={(v) => {
-              setPhone(v);
-              setError(null);
-            }}
-            keyboardType="phone-pad"
-            style={styles.field}
-            placeholderTextColor={tokens.colors.textTertiary}
-          />
-        </View>
+        <PhoneField
+          testID="profile.phone.input"
+          countryTestID="phone.country"
+          value={phone}
+          country={country}
+          onChangeText={(v) => {
+            setPhone(v);
+            setError(null);
+          }}
+          onCountryChange={(c) => {
+            setCountry(c);
+            setError(null);
+          }}
+        />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -112,18 +116,5 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.sm },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  fieldWrap: { gap: tokens.space.xxs },
-  fieldLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
-  field: {
-    minHeight: 56,
-    borderRadius: tokens.radius.field,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.sm,
-    ...rn(tokens.type.body),
-    color: tokens.colors.textPrimary,
-    backgroundColor: tokens.colors.surfaceCard,
-  },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });
