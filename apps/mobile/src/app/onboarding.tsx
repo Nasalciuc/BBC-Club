@@ -22,8 +22,6 @@ export default function OnboardingScreen() {
   const [hits, setHits] = useState<AirportVM[]>([]);
   const [cabin, setCabin] = useState<"business" | "first">("business");
   const [adult, setAdult] = useState(1);
-  const [child, setChild] = useState(0);
-  const [infant, setInfant] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +58,7 @@ export default function OnboardingScreen() {
 
     const prefsResult = await putTravelPreferences({
       cabin,
-      passengers: { adult, child, infant },
+      passengers: { adult, child: 0, infant: 0 },
     });
     if (!prefsResult.ok) {
       setBusy(false);
@@ -143,22 +141,7 @@ export default function OnboardingScreen() {
 
         <Text style={styles.section}>Travelers</Text>
         <Stepper testID="onboarding.travelers.adult" label="Adults" value={adult} min={1} max={9} onChange={setAdult} />
-        <Stepper
-          testID="onboarding.travelers.child"
-          label="Children"
-          value={child}
-          min={0}
-          max={8}
-          onChange={setChild}
-        />
-        <Stepper
-          testID="onboarding.travelers.infant"
-          label="Infants"
-          value={infant}
-          min={0}
-          max={4}
-          onChange={setInfant}
-        />
+        <Text style={styles.caption}>Travelling with children? Add their ages in a note when you request.</Text>
 
         {error ? (
           <Text testID="onboarding.error" style={styles.error}>
@@ -225,6 +208,10 @@ const styles = StyleSheet.create({
   chips: {
     flexDirection: "row",
     gap: tokens.space.xs,
+  },
+  caption: {
+    ...rn(tokens.type.caption),
+    color: tokens.colors.textSecondary,
   },
   error: {
     ...rn(tokens.type.caption),
