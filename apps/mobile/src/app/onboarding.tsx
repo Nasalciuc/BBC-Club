@@ -2,7 +2,7 @@ import { useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AirportRow, Button, Chip, SearchField, Stepper, tokens, rn } from "@bbc/ui";
+import { AirportRow, Button, Chip, ProgressLine, SearchField, Stepper, tokens, rn } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
 import { fetchAirports, patchProfile, putTravelPreferences } from "@/lib/api";
@@ -83,11 +83,9 @@ export default function OnboardingScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <Text style={styles.kicker}>Welcome</Text>
-          <Text style={styles.title}>Set your travel defaults</Text>
-          <Text style={styles.body}>
-            Home airport, cabin, and who you usually fly with. You can change these later.
-          </Text>
+          <ProgressLine fraction={1} />
+          <Text style={styles.title}>Where do you usually fly from?</Text>
+          <Text style={styles.body}>So we start with the right fares. You can change this later.</Text>
         </View>
 
         <Text style={styles.section}>Home airport</Text>
@@ -139,7 +137,7 @@ export default function OnboardingScreen() {
           />
         </View>
 
-        <Text style={styles.section}>Travelers</Text>
+        <Text style={styles.section}>Who usually travels</Text>
         <Stepper testID="onboarding.travelers.adult" label="Adults" value={adult} min={1} max={9} onChange={setAdult} />
         <Text style={styles.caption}>Travelling with children? Add their ages in a note when you request.</Text>
 
@@ -161,12 +159,12 @@ export default function OnboardingScreen() {
         <Pressable
           testID="onboarding.skip"
           accessibilityRole="button"
-          accessibilityLabel="Skip for now"
+          accessibilityLabel="Skip"
           disabled={busy}
           onPress={onSkip}
           style={styles.skip}
         >
-          <Text style={styles.skipLabel}>Skip for now</Text>
+          <Text style={styles.skipLabel}>Skip</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -186,23 +184,17 @@ const styles = StyleSheet.create({
     marginBottom: tokens.space.md,
     gap: tokens.space.xs,
   },
-  kicker: {
-    ...rn(tokens.type.labelMono),
-    color: tokens.colors.textSecondary,
-    textTransform: "uppercase",
-  },
   title: {
-    ...rn(tokens.type.title),
+    ...rn(tokens.type.headline),
     color: tokens.colors.textPrimary,
   },
   body: {
-    ...rn(tokens.type.body),
+    ...rn(tokens.type.bodySm),
     color: tokens.colors.textSecondary,
   },
   section: {
-    ...rn(tokens.type.labelMono),
+    ...rn(tokens.type.caption),
     color: tokens.colors.textSecondary,
-    textTransform: "uppercase",
     marginTop: tokens.space.md,
   },
   chips: {

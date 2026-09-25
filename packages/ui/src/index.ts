@@ -3,6 +3,7 @@ export { Icon, icons, type IconName, type IconSize } from "./icons";
 export { rn } from "./rn-type";
 
 export { Button } from "./primitives/Button";
+export { ProgressLine } from "./primitives/ProgressLine";
 export { Chip } from "./primitives/Chip";
 export { ListRow } from "./primitives/ListRow";
 export { PricePair } from "./primitives/PricePair";
