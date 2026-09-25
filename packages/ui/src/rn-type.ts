@@ -4,11 +4,14 @@ import type { tokens } from "./tokens";
 type TokenType = (typeof tokens)["type"][keyof (typeof tokens)["type"]];
 
 /**
- * DESIGN.md / bun run tokens emit CSS family names ("Inter", "Newsreader").
+ * DESIGN.md / bun run tokens emit CSS family names ("Geist", "Fraunces").
  * Expo `useFonts` registers file-based names. Map once here so components never
  * spread raw tokens.type into StyleSheet.
  */
 const FAMILY: Record<string, Record<string, string>> = {
+  Fraunces: { "400": "Fraunces_400Regular", "600": "Fraunces_600SemiBold" },
+  Geist: { "400": "Geist_400Regular", "500": "Geist_500Medium" },
+  "Geist Mono": { "400": "GeistMono_400Regular", "500": "GeistMono_500Medium" },
   Newsreader: { "400": "SourceSerif4_400Regular" },
   Inter: { "400": "Inter_400Regular", "500": "Inter_500Medium" },
   "JetBrains Mono": { "400": "JetBrainsMono_400Regular", "500": "JetBrainsMono_500Medium" },

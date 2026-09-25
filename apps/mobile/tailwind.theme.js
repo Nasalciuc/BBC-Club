@@ -18,14 +18,14 @@ module.exports = {
   "scrim": "rgba(15,23,42,0.78)"
 },
   fontFamily: {
-  "newsreader": [
-    "Newsreader"
+  "fraunces": [
+    "Fraunces"
   ],
-  "inter": [
-    "Inter"
+  "geist": [
+    "Geist"
   ],
-  "jetbrains-mono": [
-    "JetBrains Mono"
+  "geist-mono": [
+    "Geist Mono"
   ]
 },
   fontSize: {

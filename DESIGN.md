@@ -22,72 +22,72 @@ colors:
 
 typography:
   display:
-    fontFamily: "Newsreader, Georgia, serif"
+    fontFamily: "Fraunces, Georgia, serif"
     fontSize: 34px
     fontWeight: 400
     lineHeight: 1.1
     letterSpacing: -0.4px
   headline:
-    fontFamily: "Newsreader, Georgia, serif"
+    fontFamily: "Fraunces, Georgia, serif"
     fontSize: 28px
     fontWeight: 400
     lineHeight: 1.15
     letterSpacing: -0.3px
   title:
-    fontFamily: "Newsreader, Georgia, serif"
+    fontFamily: "Fraunces, Georgia, serif"
     fontSize: 20px
     fontWeight: 400
     lineHeight: 1.2
   title-sm:
-    fontFamily: "Newsreader, Georgia, serif"
+    fontFamily: "Fraunces, Georgia, serif"
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.25
   body:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Geist, system-ui, sans-serif"
     fontSize: 17px
     fontWeight: 400
     lineHeight: 1.45
   body-sm:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Geist, system-ui, sans-serif"
     fontSize: 15px
     fontWeight: 400
     lineHeight: 1.4
   caption:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Geist, system-ui, sans-serif"
     fontSize: 13px
     fontWeight: 400
     lineHeight: 1.35
   price:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Geist, system-ui, sans-serif"
     fontSize: 24px
     fontWeight: 500
     lineHeight: 1.1
     letterSpacing: -0.2px
   price-struck:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Geist, system-ui, sans-serif"
     fontSize: 14px
     fontWeight: 400
     lineHeight: 1.2
   button:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Geist, system-ui, sans-serif"
     fontSize: 17px
     fontWeight: 500
     lineHeight: 1.0
   label-mono:
-    fontFamily: "JetBrains Mono, Menlo, monospace"
+    fontFamily: "Geist Mono, Menlo, monospace"
     fontSize: 11px
     fontWeight: 500
     lineHeight: 1.3
     letterSpacing: 1.5px
   facts-mono:
-    fontFamily: "JetBrains Mono, Menlo, monospace"
+    fontFamily: "Geist Mono, Menlo, monospace"
     fontSize: 12px
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: 1px
   tab-mono:
-    fontFamily: "JetBrains Mono, Menlo, monospace"
+    fontFamily: "Geist Mono, Menlo, monospace"
     fontSize: 9px
     fontWeight: 500
     lineHeight: 1.0
@@ -229,7 +229,7 @@ components:
 The app should feel like a private lounge: calm, precise, expensive. Create this feeling through:
 
 - Two worlds — entry screens on `surface-panel` over a blurred cabin photograph; inside on `surface-page` with `surface-card` on `border-default` hairlines
-- Serif headlines written as invitations ("Your October in London"), body in Inter, `label-mono` uppercase for labels and flight facts
+- Serif headlines written as invitations ("Your October in London"), body in Geist, `label-mono` uppercase for labels and flight facts
 - No accent color: exactly one light pill button (`button-inverted`) per dark screen, one `button-primary` per light screen
 - Generous `spacing.lg`–`spacing.xl` between groups, compact `spacing.xs` inside cards; no shadows, no gradients on UI surfaces, no urgency devices
 - Photography of empty luxury spaces as the primary material; the interface recedes
@@ -250,9 +250,9 @@ Tokens and components in this file are canonical. Details live in `design/compon
 
 ## Typography
 
-- Roles never swap: every headline is serif (`display`, `headline`, `title`, `title-sm`) at weight 400; buttons are `button` (Inter 17/500); labels and flight facts are mono uppercase letterspaced.
+- Roles never swap: every headline is serif (`display`, `headline`, `title`, `title-sm`) at weight 400; buttons are `button` (Geist 17/500); labels and flight facts are mono uppercase letterspaced.
 - Body never below `body-sm` (15px); `caption` (13px) carries only non-essential lines.
-- Fonts are bundled (Newsreader, Inter, JetBrains Mono); hold the splash until they load. Prototype tools may substitute Playfair/Georgia and Menlo — prototypes only.
+- Interior fonts are bundled (Fraunces, Geist, Geist Mono). Entry keeps Inter, Source Serif 4, and JetBrains Mono. Hold the splash until they load. Prototype tools may substitute Playfair/Georgia and Menlo — prototypes only.
 
 ## Layout and Responsiveness
 
@@ -323,4 +323,4 @@ Documented in `design/components.md`. Summary of the rules an agent most often g
 
 - Validate on every change: `npx @google/design.md lint DESIGN.md`; compare versions with `npx @google/design.md diff`. CI fails on errors and orphaned tokens.
 - Remove anything that no longer matches `src/constants/club.ts` and `src/components`. Every rule here is reusable; screen-specific decisions live in the playbook, not in this file.
-- Known gaps: serif family pending ratification (Newsreader specified); onboarding components (`destination-card`, `stepper`) not yet tokenized; motion durations to be confirmed on device.
+- Known gaps: onboarding components (`destination-card`, `stepper`) not yet tokenized; motion durations to be confirmed on device.

@@ -19,91 +19,91 @@ export const tokens = {
 },
   type: {
   "display": {
-    "fontFamily": "Newsreader",
+    "fontFamily": "Fraunces",
     "fontSize": 34,
     "fontWeight": "400",
     "lineHeight": 37,
     "letterSpacing": -0.4
   },
   "headline": {
-    "fontFamily": "Newsreader",
+    "fontFamily": "Fraunces",
     "fontSize": 28,
     "fontWeight": "400",
     "lineHeight": 32,
     "letterSpacing": -0.3
   },
   "title": {
-    "fontFamily": "Newsreader",
+    "fontFamily": "Fraunces",
     "fontSize": 20,
     "fontWeight": "400",
     "lineHeight": 24,
     "letterSpacing": 0
   },
   "titleSm": {
-    "fontFamily": "Newsreader",
+    "fontFamily": "Fraunces",
     "fontSize": 16,
     "fontWeight": "400",
     "lineHeight": 20,
     "letterSpacing": 0
   },
   "body": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 17,
     "fontWeight": "400",
     "lineHeight": 25,
     "letterSpacing": 0
   },
   "bodySm": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 15,
     "fontWeight": "400",
     "lineHeight": 21,
     "letterSpacing": 0
   },
   "caption": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 13,
     "fontWeight": "400",
     "lineHeight": 18,
     "letterSpacing": 0
   },
   "price": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 24,
     "fontWeight": "500",
     "lineHeight": 26,
     "letterSpacing": -0.2
   },
   "priceStruck": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 14,
     "fontWeight": "400",
     "lineHeight": 17,
     "letterSpacing": 0
   },
   "button": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 17,
     "fontWeight": "500",
     "lineHeight": 17,
     "letterSpacing": 0
   },
   "labelMono": {
-    "fontFamily": "JetBrains Mono",
+    "fontFamily": "Geist Mono",
     "fontSize": 11,
     "fontWeight": "500",
     "lineHeight": 14,
     "letterSpacing": 1.5
   },
   "factsMono": {
-    "fontFamily": "JetBrains Mono",
+    "fontFamily": "Geist Mono",
     "fontSize": 12,
     "fontWeight": "400",
     "lineHeight": 17,
     "letterSpacing": 1
   },
   "tabMono": {
-    "fontFamily": "JetBrains Mono",
+    "fontFamily": "Geist Mono",
     "fontSize": 9,
     "fontWeight": "500",
     "lineHeight": 9,
