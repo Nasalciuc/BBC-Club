@@ -13,37 +13,38 @@ import { formatPrice, formatValidUntil } from "@/lib/format";
 
 const CTA_RESERVE = 56 + 24 + 18;
 
-function hhmm(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
 function TimeBlock({ fare }: { fare: FareVM }) {
-  if (!fare.departAt || !fare.arriveAt) {
+  if (!fare.departLocal || !fare.arriveLocal) {
     return <Text style={styles.factsMono}>{fare.nonstop ? "NONSTOP" : "1 STOP"} · TIMES ON REQUEST</Text>;
   }
   const dur =
     fare.durationMinutes != null
       ? `${Math.floor(fare.durationMinutes / 60)}H ${String(fare.durationMinutes % 60).padStart(2, "0")}`
       : null;
+  const arriveClock = fare.arriveDayOffset > 0 ? `${fare.arriveLocal} +${fare.arriveDayOffset}` : fare.arriveLocal;
   return (
     <View style={styles.timeBlock}>
       <View style={styles.timeCol}>
-        <Text style={styles.timeDisplay}>{hhmm(fare.departAt)}</Text>
+        <Text style={styles.timeDisplay}>{fare.departLocal}</Text>
         <Text style={styles.factsMono}>{fare.from.code}</Text>
-        <Text style={styles.caption}>
-          {new Date(fare.departAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        </Text>
+        {fare.departAt ? (
+          <Text style={styles.caption}>
+            {new Date(fare.departAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </Text>
+        ) : null}
       </View>
       <View style={styles.timeMid}>
         <View style={styles.hairline} />
         {dur ? <Text style={styles.dur}>{dur}</Text> : null}
       </View>
       <View style={[styles.timeCol, styles.timeRight]}>
-        <Text style={styles.timeDisplay}>{hhmm(fare.arriveAt)}</Text>
+        <Text style={styles.timeDisplay}>{arriveClock}</Text>
         <Text style={styles.factsMono}>{fare.to.code}</Text>
-        <Text style={styles.caption}>
-          {new Date(fare.arriveAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        </Text>
+        {fare.arriveAt ? (
+          <Text style={styles.caption}>
+            {new Date(fare.arriveAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </Text>
+        ) : null}
       </View>
     </View>
   );

@@ -9,9 +9,9 @@ import { fareFacts } from "./fare-facts";
 type Fare = z.infer<typeof FareVM>;
 type Props = { fare: Fare; onPress: () => void; testID: string };
 
-/** Two renders on departAt. No chevron — the price is the affordance. */
+/** Two renders on departLocal. No chevron — the price is the affordance. */
 export function FareRow({ fare, onPress, testID }: Props) {
-  const timed = fare.departAt != null && fare.arriveAt != null;
+  const timed = fare.departLocal != null && fare.arriveLocal != null;
   const facts = fareFacts(fare);
 
   return (

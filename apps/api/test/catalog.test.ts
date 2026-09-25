@@ -169,6 +169,7 @@ describe("fare parity", () => {
           lat: "0",
           lng: "0",
           popularity: 0,
+          tz: "America/New_York",
           createdAt: now,
         },
         to: {
@@ -181,6 +182,7 @@ describe("fare parity", () => {
           lat: "0",
           lng: "0",
           popularity: 0,
+          tz: "Europe/London",
           createdAt: now,
         },
       },
@@ -189,5 +191,8 @@ describe("fare parity", () => {
     expect(FareVM.parse(vm).price.offer).toBe(f.price.offer);
     expect(vm.carrier.code).toBe("BA");
     expect(vm.offerId).toBeNull();
+    expect(vm.departLocal).toBe("18:55");
+    expect(vm.arriveLocal).toBe("07:00");
+    expect(vm.arriveDayOffset).toBe(1);
   });
 });

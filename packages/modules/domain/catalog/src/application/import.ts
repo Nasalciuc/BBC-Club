@@ -2,6 +2,7 @@ import { z } from "zod";
 import { withTx, type Db } from "@bbc/db";
 import { airportsRepo } from "../infrastructure/airports.repo";
 import { faresRepo } from "../infrastructure/fares.repo";
+import { assertIanaZone } from "./flight-local";
 
 const FareCsvRow = z.object({
   route_from: z.string().length(3),
@@ -39,6 +40,7 @@ const AirportCsvRow = z.object({
     .string()
     .optional()
     .transform((v) => (v && v.length ? Number(v) : 0)),
+  tz: z.string().min(1),
 });
 
 function parseCsv(raw: string): string[][] {
@@ -83,6 +85,7 @@ export async function importCatalog(deps: { db: Db }, input: ImportBody): Promis
   return withTx(deps.db, async (tx) => {
     if (input.kind === "airports") {
       const rows = rowsFromCsv(input.csv).map((r) => AirportCsvRow.parse(r));
+      for (const r of rows) assertIanaZone(r.tz);
       const n = await airportsRepo.upsertMany(
         tx,
         rows.map((r) => ({
@@ -95,6 +98,7 @@ export async function importCatalog(deps: { db: Db }, input: ImportBody): Promis
           lat: r.lat,
           lng: r.lng,
           popularity: r.popularity,
+          tz: r.tz,
         })),
       );
       return { imported: n };
