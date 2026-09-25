@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, haveIBeenPwned, jwt, bearer, admin } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
-import type { ServerEnv } from "@bbc/shared/env";
+import { authOrigins, type ServerEnv } from "@bbc/shared/env";
 import { event } from "@bbc/shared/events";
 import type { EmailSender } from "../ports/email";
 import type { EventPublisher } from "../ports/events";
@@ -38,8 +38,8 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
     secret: env.BETTER_AUTH_SECRET,
     database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
 
-    // Mobile presents the custom scheme as origin (Expo plugin); the operator web app (later) its https origin.
-    trustedOrigins: [`${env.MOBILE_SCHEME}://`, env.APP_ORIGIN],
+    // Mobile scheme + APP_ORIGIN + CORS_ORIGINS extras — same list as host CORS.
+    trustedOrigins: authOrigins(env),
 
     emailAndPassword: {
       enabled: true,

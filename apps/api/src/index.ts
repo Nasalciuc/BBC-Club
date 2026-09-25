@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { loadEnv } from "@bbc/shared/env";
+import { authOrigins, loadEnv } from "@bbc/shared/env";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { apiError } from "@bbc/shared/errors";
 import { createDb } from "@bbc/db";
@@ -36,7 +36,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   registerPlatformJobs(platform.jobs);
 
   const app = new Hono<PrincipalVars>();
-  installBaseMiddleware(app, { appOrigin: env.APP_ORIGIN, mobileScheme: env.MOBILE_SCHEME, metrics: platform.metrics });
+  installBaseMiddleware(app, { origins: authOrigins(env), metrics: platform.metrics });
   app.onError(errorContract(platform.logger, platform.metrics));
 
   // 2. modules, in layer order, with typed ports; identity's facade is needed by the principal middleware

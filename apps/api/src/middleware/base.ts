@@ -9,8 +9,8 @@ import { timing } from "hono/timing";
 export function installBaseMiddleware(
   app: Hono<any>,
   opts: {
-    appOrigin: string;
-    mobileScheme: string;
+    /** Same list as Better Auth trustedOrigins — build with authOrigins(env). */
+    origins: string[];
     metrics: {
       inc(n: string, l?: Record<string, string>): void;
       observe(n: string, v: number, l?: Record<string, string>): void;
@@ -23,7 +23,7 @@ export function installBaseMiddleware(
   app.use(
     "/api/auth/*",
     cors({
-      origin: [opts.appOrigin, `${opts.mobileScheme}://`],
+      origin: opts.origins,
       allowHeaders: ["Content-Type", "Authorization", "Cookie"],
       allowMethods: ["POST", "GET", "OPTIONS"],
       credentials: true,
