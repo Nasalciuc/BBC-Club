@@ -21,6 +21,7 @@ Pinned at verification: **better-auth 1.6.31**, **@better-auth/expo 1.6.31**, **
 | 4   | `admin({ ac, roles, defaultRole, adminRoles })`                                            | Accepted                                                                                                                                                                                                                                       |
 | 5   | `rateLimit.customRules` keys `/sign-in/email` and `/email-otp/send-verification-otp`       | 6th sign-in → **429** + **`X-Retry-After`** (1.6.31 does not set standard `Retry-After`); 2nd OTP send → **429** (1 / 15 min); `resendStrategy: "reuse"` keeps the same digits when a second send is permitted (`library-assumptions.test.ts`) |
 | 6   | JWT `iss`/`aud` = `APP_ORIGIN`                                                             | Plugin defaults to `baseURL` origin; `jwtVerify` in `principal.ts` keeps both; decode + bearer probe green                                                                                                                                     |
+| 7   | `advanced.cookiePrefix: "bbc"` → `Set-Cookie: bbc.session_token`                           | Expo `expoClient({ cookiePrefix: "bbc" })` must match. Default `"better-auth"` ignores our cookies → empty `getCookie()` → `POST /v1/account/password` 401                                                                                     |
 
 ## Checklist A findings (schema / rate-limit — Better Auth 1.6.31)
 

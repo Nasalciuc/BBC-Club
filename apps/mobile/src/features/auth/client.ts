@@ -7,7 +7,16 @@ import { env } from "@/lib/env";
 
 export const authClient = createAuthClient({
   baseURL: env.EXPO_PUBLIC_API_URL,
-  plugins: [expoClient({ scheme: "bbcclub", storagePrefix: "bbcclub", storage: SecureStore }), emailOTPClient()],
+  plugins: [
+    expoClient({
+      scheme: "bbcclub",
+      storagePrefix: "bbcclub",
+      // Must match identity advanced.cookiePrefix — default "better-auth" drops bbc.session_token.
+      cookiePrefix: "bbc",
+      storage: SecureStore,
+    }),
+    emailOTPClient(),
+  ],
 });
 export const { useSession } = authClient;
 
@@ -17,12 +26,12 @@ export function authHeaders(): Record<string, string> {
   return cookie ? { Cookie: cookie } : {};
 }
 
-const COOKIE_WAIT_MS = 1000;
+const COOKIE_WAIT_MS = 3_000;
 const COOKIE_POLL_MS = 50;
 
 /**
  * Expo plugin writes the session cookie to SecureStore asynchronously after sign-in.
- * Poll briefly so /v1/* calls do not race an empty getCookie() → 401 → bounce to sign-in.
+ * Poll so /v1/* (e.g. set password) do not race an empty getCookie() → 401 "Please sign in."
  */
 export async function waitForSessionCookie(): Promise<boolean> {
   const deadline = Date.now() + COOKIE_WAIT_MS;
