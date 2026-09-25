@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fixture } from "@bbc/shared/fixture";
+import { assertIanaZone } from "../../src/application/flight-local";
 import { fareFactsLine, mapFa01 } from "./fa01-map";
 
 const csvPath = join(import.meta.dir, "../../../../../db/seeds/airports.csv");
@@ -52,12 +53,13 @@ describe("flight local times", () => {
   });
 
   it("every airports.csv tz is a real IANA zone", () => {
-    const supported = new Set(Intl.supportedValuesOf("timeZone"));
     const [header, ...rows] = readFileSync(csvPath, "utf8").trim().split(/\r?\n/);
     expect(header?.split(",").at(-1)).toBe("tz");
     for (const line of rows) {
       const tz = line.split(",").at(-1)!;
-      expect(supported.has(tz), tz).toBe(true);
+      // Same check as importCatalog — DateTimeFormat, not supportedValuesOf
+      // (Bun 1.3.4 ICU omits Asia/Kolkata from the list while still accepting it).
+      expect(() => assertIanaZone(tz), tz).not.toThrow();
     }
   });
 });
