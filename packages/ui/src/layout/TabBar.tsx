@@ -31,7 +31,7 @@ export function TabBar({ active, unread, onPress, testID, testIDs }: Props) {
     <View style={styles.bar} testID={testID}>
       {TABS.map((tab) => {
         const on = tab.key === active;
-        const color = on ? tokens.colors.textPrimary : tokens.colors.textTertiary;
+        const color = on ? tokens.colors.textPrimary : tokens.colors.textSecondary;
         const id = testIDs?.[tab.key] ?? DEFAULT_TEST_IDS[tab.key];
         return (
           <Pressable
@@ -47,7 +47,9 @@ export function TabBar({ active, unread, onPress, testID, testIDs }: Props) {
               <Icon name={tab.icon} size={24} color={color} />
               {tab.key === "requests" && unread > 0 ? <View style={styles.dot} /> : null}
             </View>
-            <Text style={[styles.label, { color }]}>{tab.label}</Text>
+            <Text style={[styles.label, { color }]} maxFontSizeMultiplier={1.15}>
+              {tab.label}
+            </Text>
           </Pressable>
         );
       })}

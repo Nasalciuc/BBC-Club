@@ -105,9 +105,9 @@ export const tokens = {
   },
   "tabMono": {
     "fontFamily": "Geist Mono",
-    "fontSize": 9,
+    "fontSize": 11,
     "fontWeight": "500",
-    "lineHeight": 9,
+    "lineHeight": 13,
     "letterSpacing": 1
   }
 },

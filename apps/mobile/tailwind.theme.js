@@ -127,9 +127,9 @@ module.exports = {
     }
   ],
   "tab-mono": [
-    "9px",
+    "11px",
     {
-      "lineHeight": "9px",
+      "lineHeight": "13px",
       "letterSpacing": "1px",
       "fontWeight": "500"
     }

@@ -89,9 +89,9 @@ typography:
     letterSpacing: 1px
   tab-mono:
     fontFamily: "Geist Mono, Menlo, monospace"
-    fontSize: 9px
+    fontSize: 11px
     fontWeight: 500
-    lineHeight: 1.0
+    lineHeight: 1.2
     letterSpacing: 1px
 
 rounded:
