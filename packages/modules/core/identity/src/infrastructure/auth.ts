@@ -8,7 +8,7 @@ import { event } from "@bbc/shared/events";
 import type { EmailSender } from "../ports/email";
 import type { EventPublisher } from "../ports/events";
 import { ac, roles } from "./access";
-import { claimOtpSend } from "./otp-cooldown";
+import { claimOtpSend, releaseOtpClaim } from "./otp-cooldown";
 import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
 
 export type Logger = {
@@ -139,15 +139,24 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
         // Plugin default is 3/60s for every emailOTP path. customRules overwrites per path after;
         // set this to the send window so an accidental customRules removal still allows colleagues.
         rateLimit: { window: FIFTEEN_MINUTES, max: 10 },
-        // The tutorial's fatal bug made impossible: recipient = the user's email, the call is awaited,
-        // and a provider failure propagates → Better Auth returns an error → the app shows it.
+        // Recipient = the user's email; send is awaited inside our callback. Better Auth 1.6.31's
+        // runInBackgroundOrAwait may still return HTTP 200 if Postmark throws — we release the claim
+        // so a retry inside the 30s UI window can mail again.
         sendVerificationOTP: async ({ email: to, otp, type }) => {
           // Same answer either way (no enumeration). resendStrategy "reuse" keeps the earlier code valid.
-          if (!(await claimOtpSend(db, to, type))) {
+          // BA resolveOTP may have already stored a *replacement* OTP before this runs — claim by otp hash
+          // so a new code still mails inside the 30s UI window.
+          const claim = await claimOtpSend(db, to, type, otp);
+          if (!claim) {
             logger.info({ type }, "otp: resend inside cooldown, not sent"); // never log the address
             return;
           }
-          await email.sendOtp({ to, otp, purpose: type });
+          try {
+            await email.sendOtp({ to, otp, purpose: type });
+          } catch (e) {
+            await releaseOtpClaim(db, claim);
+            throw e;
+          }
           logger.info({ to: mask(to), purpose: type }, "otp sent");
         },
       }),

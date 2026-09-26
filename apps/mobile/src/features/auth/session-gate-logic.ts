@@ -7,7 +7,7 @@ export type ProfileLoad =
   | { kind: "unavailable"; status: number }; // 429, 5xx, 0 (timeout / offline): busy or unreachable — NOT a sign-out
 
 /** 250 ms covers the post-registration "pending" profile and the SecureStore cookie race (the old behaviour);
- *  the longer steps give a busy server room. Worst case ≈ 3.75 s, then the app opens anyway. */
+ *  the longer steps give a busy server room. Waits sit between attempts only — worst case ≈ 1.75 s. */
 export const BACKOFF_MS = [250, 500, 1_000, 2_000] as const;
 
 export async function loadProfileWith(
@@ -25,8 +25,11 @@ export async function loadProfileWith(
     } else {
       lastStatus = r.status;
     }
-    const wait = BACKOFF_MS[attempt];
-    if (wait !== undefined) await sleep(wait);
+    // No sleep after the last attempt — nothing follows it.
+    if (attempt < BACKOFF_MS.length - 1) {
+      const wait = BACKOFF_MS[attempt];
+      if (wait !== undefined) await sleep(wait);
+    }
   }
   if (pending) return { kind: "ok", profile: pending };
   if (lastStatus === 401) return { kind: "signed-out" };

@@ -40,4 +40,71 @@ describe("OTP colleagues + per-email cooldown", () => {
 
     await t.close();
   });
+
+  it("failed send releases the claim so a retry inside 30s can mail", async () => {
+    const t = await testApp({ suite: "otp-fail-retry" });
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
+
+    const email = "fail.retry.otp@test.dev";
+    const send = () =>
+      t.app.request("/api/auth/email-otp/send-verification-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.60, 173.245.48.1",
+          Origin: t.appOrigin,
+        },
+        body: JSON.stringify({ email, type: "sign-in" }),
+      });
+
+    t.email.failNext(1);
+    // Better Auth 1.6.31 runInBackgroundOrAwait swallows send errors → still HTTP 200.
+    expect((await send()).status).toBe(200);
+    expect(t.email.sent.filter((s) => s.to.toLowerCase() === email).length).toBe(0);
+
+    expect((await send()).status).toBe(200);
+    expect(t.email.lastOtp(email)).toBeTruthy();
+
+    await t.close();
+  });
+
+  it("after five bad verifies, resend inside 30s still delivers the replacement OTP", async () => {
+    const t = await testApp({ suite: "otp-replace" });
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
+
+    const email = t.memberA.email;
+    const send = () =>
+      t.app.request("/api/auth/email-otp/send-verification-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Forwarded-For": "203.0.113.70, 173.245.48.1",
+          Origin: t.appOrigin,
+        },
+        body: JSON.stringify({ email, type: "sign-in" }),
+      });
+
+    expect((await send()).status).toBe(200);
+    const first = t.email.lastOtp(email);
+    const before = t.email.sent.length;
+
+    for (let i = 0; i < 5; i++) {
+      const r = await t.app.request("/api/auth/sign-in/email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: t.appOrigin },
+        body: JSON.stringify({ email, otp: "000000" }),
+      });
+      expect(r.status).toBeGreaterThanOrEqual(400);
+    }
+
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    expect((await send()).status).toBe(200);
+    expect(t.email.sent.length).toBe(before + 1);
+    const replacement = t.email.lastOtp(email);
+    expect(replacement).not.toBe(first);
+
+    await t.close();
+  });
 });

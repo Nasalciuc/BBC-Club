@@ -71,4 +71,6 @@ export const rateLimit = auth.table("rate_limit", {
 export const otpCooldown = auth.table("otp_cooldown", {
   key: text("key").primaryKey(),
   lastSentAt: timestamp("last_sent_at", { withTimezone: true }).notNull(),
+  /** sha256 of the plaintext OTP last claimed — a BA replacement must still deliver inside the window. */
+  otpHash: text("otp_hash"),
 });

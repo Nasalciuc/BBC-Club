@@ -124,9 +124,11 @@ Everything above is runnable by anyone with SSH. Credentials are in the company 
 
 ## The origin is reachable only through Cloudflare
 
-Docker publishes Caddy on 80/443. Those ports are filtered in the **`DOCKER-USER`** chain (not by a blanket
-`ufw allow 443`) using `infra/cloudflare-ranges.txt`. Refresh ranges with `bun run cf:gen`, commit, deploy, then
-re-run the DOCKER-USER block from `infra/bootstrap.sh` (step 5b) on the host.
+Docker publishes Caddy on 80/443. Those ports are filtered via a dedicated **`BBC-CF-WEB`** / **`BBC-CF-WEB6`**
+chain jumped from `DOCKER-USER` (not by a blanket `ufw allow 443`), using `infra/cloudflare-ranges.txt`.
+Refresh ranges with `bun run cf:gen`, commit, deploy, then re-run step 5b from `infra/bootstrap.sh` on the host
+(first deploy of this firewall change: re-run bootstrap or 5b once so any leftover `ufw allow 80/443` is deleted
+and `netfilter-persistent` saves the new chains).
 
 **Check how 443 is bound (IPv4 vs IPv6):**
 

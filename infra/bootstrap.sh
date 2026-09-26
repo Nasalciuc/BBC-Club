@@ -81,27 +81,36 @@ echo "    INFRA_DIR=$INFRA_DIR"
 # iptables rules run before ufw's. DOCKER-USER is the chain Docker guarantees to evaluate first.
 # If Docker has no IPv6, docker-proxy may still listen on [::]:443 and that path goes through ufw —
 # so we also allow Cloudflare's IPv6 CIDRs on 80/443 via ufw (without a blanket allow).
-say "5b/9 origin firewall (DOCKER-USER + Cloudflare IPv6 via ufw)"
+say "5b/9 origin firewall (BBC-CF-WEB + Cloudflare IPv6 via ufw)"
 CF="$APP_DIR/infra/cloudflare-ranges.txt"
 [[ -f "$CF" ]] || { echo "❌ missing $CF — cannot lock 80/443 to Cloudflare"; exit 1; }
 EXT_IF="$(ip route show default | awk '{print $5; exit}')"
 [[ -n "$EXT_IF" ]] || { echo "❌ no default route interface"; exit 1; }
-apply_docker_user() { # $1 = iptables | ip6tables, $2 = 4|6
-  local ipt="$1"
+# Upgrades that skip step 3's ufw reset may still have a blanket allow — drop them before CF CIDRs.
+ufw delete allow 80/tcp >/dev/null 2>&1 || true
+ufw delete allow 443/tcp >/dev/null 2>&1 || true
+# Dedicated chains: never -F DOCKER-USER (opens the window / wipes operator rules). Jump once into ours.
+apply_cf_web() { # $1 = iptables | ip6tables, $2 = 4|6, $3 = chain name
+  local ipt="$1" fam="$2" chain="$3"
   $ipt -N DOCKER-USER 2>/dev/null || true
-  $ipt -F DOCKER-USER
-  $ipt -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+  $ipt -N "$chain" 2>/dev/null || true
+  $ipt -F "$chain"
+  $ipt -A "$chain" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
   while read -r cidr; do
     [[ -z "$cidr" || "$cidr" == \#* ]] && continue
-    [[ "$2" == 6 && "$cidr" != *:* ]] && continue
-    [[ "$2" == 4 && "$cidr" == *:* ]] && continue
-    $ipt -A DOCKER-USER -i "$EXT_IF" -p tcp -m multiport --dports 80,443 -s "$cidr" -j RETURN
+    [[ "$fam" == 6 && "$cidr" != *:* ]] && continue
+    [[ "$fam" == 4 && "$cidr" == *:* ]] && continue
+    $ipt -A "$chain" -i "$EXT_IF" -p tcp -m multiport --dports 80,443 -s "$cidr" -j RETURN
   done < "$CF"
-  $ipt -A DOCKER-USER -i "$EXT_IF" -p tcp -m multiport --dports 80,443 -j DROP
-  $ipt -A DOCKER-USER -j RETURN
+  $ipt -A "$chain" -i "$EXT_IF" -p tcp -m multiport --dports 80,443 -j DROP
+  $ipt -A "$chain" -j RETURN
+  while $ipt -C DOCKER-USER -j "$chain" 2>/dev/null; do
+    $ipt -D DOCKER-USER -j "$chain"
+  done
+  $ipt -I DOCKER-USER 1 -j "$chain"
 }
-apply_docker_user iptables 4
-apply_docker_user ip6tables 6
+apply_cf_web iptables 4 BBC-CF-WEB
+apply_cf_web ip6tables 6 BBC-CF-WEB6
 # ufw IPv6: cover the case where Docker IPv6 is off and [::]:443 is filtered by ufw, not DOCKER-USER.
 while read -r cidr; do
   [[ -z "$cidr" || "$cidr" == \#* ]] && continue
@@ -109,7 +118,10 @@ while read -r cidr; do
   ufw allow from "$cidr" to any port 80,443 proto tcp >/dev/null
 done < "$CF"
 ufw reload >/dev/null
-apt-get install -y iptables-persistent >/dev/null 2>&1 && netfilter-persistent save >/dev/null || true
+apt-get install -y iptables-persistent >/dev/null
+netfilter-persistent save >/dev/null
+iptables-save | grep -q 'BBC-CF-WEB' || { echo "❌ BBC-CF-WEB missing from saved iptables — refusing to continue"; exit 1; }
+ip6tables-save | grep -q 'BBC-CF-WEB6' || { echo "❌ BBC-CF-WEB6 missing from saved ip6tables — refusing to continue"; exit 1; }
 
 say "6/9 secrets"
 ENV_FILE="$INFRA_DIR/env/${MODE}.env"
