@@ -66,3 +66,9 @@ export const rateLimit = auth.table("rate_limit", {
   // Better Auth stores Date.now() ms — overflows Postgres `integer` (already does in 2026).
   lastRequest: bigint("last_request", { mode: "number" }),
 });
+
+/** App-owned (not Better Auth): last OTP send per sha256(type:email). Purged daily by the retention job. */
+export const otpCooldown = auth.table("otp_cooldown", {
+  key: text("key").primaryKey(),
+  lastSentAt: timestamp("last_sent_at", { withTimezone: true }).notNull(),
+});

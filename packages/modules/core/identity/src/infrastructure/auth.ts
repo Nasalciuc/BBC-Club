@@ -8,6 +8,7 @@ import { event } from "@bbc/shared/events";
 import type { EmailSender } from "../ports/email";
 import type { EventPublisher } from "../ports/events";
 import { ac, roles } from "./access";
+import { claimOtpSend } from "./otp-cooldown";
 import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
 
 export type Logger = {
@@ -66,7 +67,9 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       customRules: {
         "/sign-in/email": { window: TEN_MINUTES, max: 5 },
         "/sign-up/email": { window: TEN_MINUTES, max: 5 },
-        "/email-otp/send-verification-otp": { window: FIFTEEN_MINUTES, max: 1 },
+        // Final per-IP limit for OTP send (plugin rateLimit is applied first, then this overwrites —
+        // see better-auth rate-limiter resolveRateLimitConfig). Keep emailOTP({ rateLimit }) in sync.
+        "/email-otp/send-verification-otp": { window: FIFTEEN_MINUTES, max: 10 },
         "/email-otp/verify-email": { window: TEN_MINUTES, max: 10 },
         "/email-otp/reset-password": { window: 60 * 15, max: 5 },
         "/forget-password/email-otp": { window: 60 * 15, max: 3 },
@@ -133,9 +136,17 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
         // Same digits on a permitted second send (other IP / cleared rate_limit); 429 stops the mail.
         resendStrategy: "reuse",
         sendVerificationOnSignUp: true,
+        // Plugin default is 3/60s for every emailOTP path. customRules overwrites per path after;
+        // set this to the send window so an accidental customRules removal still allows colleagues.
+        rateLimit: { window: FIFTEEN_MINUTES, max: 10 },
         // The tutorial's fatal bug made impossible: recipient = the user's email, the call is awaited,
         // and a provider failure propagates → Better Auth returns an error → the app shows it.
         sendVerificationOTP: async ({ email: to, otp, type }) => {
+          // Same answer either way (no enumeration). resendStrategy "reuse" keeps the earlier code valid.
+          if (!(await claimOtpSend(db, to, type))) {
+            logger.info({ type }, "otp: resend inside cooldown, not sent"); // never log the address
+            return;
+          }
           await email.sendOtp({ to, otp, purpose: type });
           logger.info({ to: mask(to), purpose: type }, "otp sent");
         },
