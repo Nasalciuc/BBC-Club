@@ -13,7 +13,8 @@
     "start": "bun src/index.ts",
     "test": "bun test --preload ../../packages/db/src/testing/preload.ts",
     "test:db": "bun test --preload ../../packages/db/src/testing/preload.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cron:gen": "bun run scripts/cron-gen.ts"
   },
   "dependencies": {
     "hono": "^4.7.0",

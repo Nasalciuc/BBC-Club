@@ -5,6 +5,7 @@ import type { Jobs } from "./index";
 export function registerPlatformJobs(jobs: Jobs) {
   jobs.register("partitions", {
     description: "create journal partitions for the coming months",
+    cron: "0 2 * * *",
     singleton: true,
     timeoutMs: 60_000,
     handler: async ({ db }) => {
@@ -15,6 +16,7 @@ export function registerPlatformJobs(jobs: Jobs) {
 
   jobs.register("retention", {
     description: "drop journal partitions older than 24 months; delete done deliveries older than 30 days",
+    cron: "0 4 * * *",
     singleton: true,
     timeoutMs: 300_000,
     handler: async ({ db }) => {
@@ -33,6 +35,7 @@ export function registerPlatformJobs(jobs: Jobs) {
 
   jobs.register("queue-health", {
     description: "log queue depth and age; the alert rule reads these metrics",
+    cron: "*/10 * * * *",
     timeoutMs: 15_000,
     handler: async ({ db, logger }) => {
       const rows: any[] = await db.execute(sql`

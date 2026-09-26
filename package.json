@@ -21,6 +21,7 @@
     "design:lint": "npx -y @google/design.md lint DESIGN.md",
     "module:check": "bun run scripts/check-modules.ts",
     "maestro:ids": "bun run scripts/check-maestro-ids.ts",
+    "cron:gen": "bun run --filter @bbc/api cron:gen",
     "new-module": "bun run scripts/new-module.ts",
     "test:unit": "turbo run test:unit",
     "test:db": "docker compose -f infra/compose.test.yml up -d --wait && turbo run test:db",

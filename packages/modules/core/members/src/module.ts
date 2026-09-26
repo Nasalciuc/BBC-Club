@@ -191,6 +191,7 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
         {
           name: "reconcile-profiles",
           spec: {
+            cron: "*/15 * * * *",
             singleton: true,
             timeoutMs: 120_000,
             handler: async () => ({
