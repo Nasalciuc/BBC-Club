@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 
@@ -104,6 +105,48 @@ describe("OTP colleagues + per-email cooldown", () => {
     expect(t.email.sent.length).toBe(before + 1);
     const replacement = t.email.lastOtp(email);
     expect(replacement).not.toBe(first);
+
+    await t.close();
+  });
+
+  it("verification is encrypted and cooldown otp_hash is not unkeyed sha256(otp)", async () => {
+    const t = await testApp({ suite: "otp-storage" });
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
+    await t.db.execute(sql`DELETE FROM auth.verification`);
+
+    const email = "storage.otp@test.dev";
+    expect(
+      (
+        await t.app.request("/api/auth/email-otp/send-verification-otp", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Forwarded-For": "203.0.113.80, 173.245.48.1",
+            Origin: t.appOrigin,
+          },
+          body: JSON.stringify({ email, type: "sign-in" }),
+        })
+      ).status,
+    ).toBe(200);
+    const otp = t.email.lastOtp(email);
+
+    const verif = (await t.db.execute(sql`
+      SELECT value FROM auth.verification
+      WHERE identifier = ${`sign-in-otp-${email}`}
+      ORDER BY created_at DESC LIMIT 1`)) as { value: string }[];
+    expect(verif.length).toBe(1);
+    const value = verif[0]?.value ?? "";
+    expect(value).not.toMatch(/^\d{6}:/);
+
+    const cool = (await t.db.execute(sql`SELECT otp_hash FROM auth.otp_cooldown`)) as {
+      otp_hash: string | null;
+    }[];
+    expect(cool.length).toBe(1);
+    const stored = cool[0]?.otp_hash;
+    expect(stored).toBeTruthy();
+    const unkeyed = createHash("sha256").update(otp).digest("hex");
+    expect(stored).not.toBe(unkeyed);
 
     await t.close();
   });

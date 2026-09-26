@@ -135,6 +135,9 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
         allowedAttempts: 5,
         // Same digits on a permitted second send (other IP / cleared rate_limit); 429 stops the mail.
         resendStrategy: "reuse",
+        // Recoverable (reuse works) and not plaintext in auth.verification — "hashed" is unkeyed SHA-256
+        // of six digits (~20 bits) and forces rotate.
+        storeOTP: "encrypted",
         sendVerificationOnSignUp: true,
         // Plugin default is 3/60s for every emailOTP path. customRules overwrites per path after;
         // set this to the send window so an accidental customRules removal still allows colleagues.
@@ -144,9 +147,9 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
         // so a retry inside the 30s UI window can mail again.
         sendVerificationOTP: async ({ email: to, otp, type }) => {
           // Same answer either way (no enumeration). resendStrategy "reuse" keeps the earlier code valid.
-          // BA resolveOTP may have already stored a *replacement* OTP before this runs — claim by otp hash
+          // BA resolveOTP may have already stored a *replacement* OTP before this runs — claim by otp HMAC
           // so a new code still mails inside the 30s UI window.
-          const claim = await claimOtpSend(db, to, type, otp);
+          const claim = await claimOtpSend(db, to, type, otp, env.BETTER_AUTH_SECRET);
           if (!claim) {
             logger.info({ type }, "otp: resend inside cooldown, not sent"); // never log the address
             return;

@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 
@@ -10,8 +10,9 @@ function cooldownKey(email: string, type: string): string {
   return createHash("sha256").update(`${type}:${email.trim().toLowerCase()}`).digest("hex");
 }
 
-function otpHash(otp: string): string {
-  return createHash("sha256").update(otp).digest("hex");
+/** Keyed digest — unkeyed sha256 of a 6-digit OTP is only ~20 bits. */
+function otpHmac(otp: string, secret: string): string {
+  return createHmac("sha256", secret).update(otp).digest("hex");
 }
 
 /**
@@ -19,9 +20,15 @@ function otpHash(otp: string): string {
  * - Same otp inside the window → null (reuse: do not re-mail).
  * - New otp (BA replacement after exhausted attempts) or window expired → claim.
  */
-export async function claimOtpSend(db: Executor, email: string, type: string, otp: string): Promise<OtpClaim | null> {
+export async function claimOtpSend(
+  db: Executor,
+  email: string,
+  type: string,
+  otp: string,
+  secret: string,
+): Promise<OtpClaim | null> {
   const key = cooldownKey(email, type);
-  const hash = otpHash(otp);
+  const hash = otpHmac(otp, secret);
   const rows = (await db.execute(sql`
     INSERT INTO auth.otp_cooldown (key, last_sent_at, otp_hash) VALUES (${key}, now(), ${hash})
     ON CONFLICT (key) DO UPDATE SET last_sent_at = now(), otp_hash = ${hash}
