@@ -261,7 +261,7 @@ export async function testApp(
           Cookie: m.cookie,
           "Content-Type": "application/json",
           "Idempotency-Key": opts.idempotencyKey ?? crypto.randomUUID(),
-          ...(opts.ip ? { "cf-connecting-ip": opts.ip } : {}),
+          ...(opts.ip ? { "X-Forwarded-For": `${opts.ip}, 173.245.48.1` } : {}),
           "X-App-Platform": "ios",
           "X-App-Version": "1.0.0",
         },

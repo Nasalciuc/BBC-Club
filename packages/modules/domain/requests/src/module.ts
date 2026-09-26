@@ -61,7 +61,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           memberId: actorMemberId(principal),
           source: (platformHdr === "android" ? "android" : "ios") as "ios" | "android",
           appVersion: c.req.header("X-App-Version") ?? null,
-          ip: c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+          ip: c.get("clientIp"),
         };
 
         const body = await c.req.json().catch(() => ({}));

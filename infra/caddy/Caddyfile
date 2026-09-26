@@ -61,9 +61,11 @@
 }
 
 {$API_DOMAIN} {
+	import /etc/caddy/origin-pulls.caddy
 	import api_site api:8000
 }
 
 {$API_DOMAIN_STAGING} {
+	import /etc/caddy/origin-pulls.caddy
 	import api_site api-staging:8000
 }

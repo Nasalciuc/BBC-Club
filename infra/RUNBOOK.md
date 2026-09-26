@@ -122,6 +122,48 @@ Everything above is runnable by anyone with SSH. Credentials are in the company 
 
 ---
 
+## The origin is reachable only through Cloudflare
+
+Docker publishes Caddy on 80/443. Those ports are filtered in the **`DOCKER-USER`** chain (not by a blanket
+`ufw allow 443`) using `infra/cloudflare-ranges.txt`. Refresh ranges with `bun run cf:gen`, commit, deploy, then
+re-run the DOCKER-USER block from `infra/bootstrap.sh` (step 5b) on the host.
+
+**Check how 443 is bound (IPv4 vs IPv6):**
+
+```bash
+ss -ltnp | grep :443
+```
+
+If you see `*:443` / `0.0.0.0:443` only, Cloudflare must use the A record. If you also see `[::]:443` and the
+origin has an AAAA, traffic can hit ufw — bootstrap therefore `ufw allow`s Cloudflare’s **IPv6** CIDRs on 80/443.
+Prefer dropping the AAAA if you do not need IPv6 to the origin.
+
+**Direct-to-origin must fail** (from a machine that is not Cloudflare), on both families:
+
+```bash
+# IPv4 — replace <origin-v4> with the host A record
+curl -v --resolve api.buybusinessclass.club:443:<origin-v4> https://api.buybusinessclass.club/health
+# IPv6 — only if an AAAA exists; replace <origin-v6>
+curl -v --resolve api.buybusinessclass.club:443:<origin-v6> https://api.buybusinessclass.club/health
+```
+
+Expect timeout / connection refused / TLS failure — never a 200. Through the orange-cloud hostname it must be 200.
+
+### Authenticated Origin Pulls (second lock)
+
+Order matters — reverse it and every request fails:
+
+1. Cloudflare dashboard → SSL/TLS → Origin Server → **Authenticated Origin Pulls** = ON for the zone.
+2. Open a **small PR** that copies the `tls { client_auth … }` block from
+   `infra/caddy/origin-pulls.caddy.example` into `infra/caddy/origin-pulls.caddy`, merge, deploy.
+
+Do **not** edit `origin-pulls.caddy` on the server. The live file is mounted from git; the next deploy would
+overwrite a hand edit (protection disappears silently) or fail on conflict. Keep the CA at
+`infra/caddy/cloudflare-origin-pull-ca.pem` (already mounted). After the PR deploys, `curl` to the origin IP
+without Cloudflare’s client cert must fail the TLS handshake.
+
+---
+
 ## First-day checklist on a new machine
 
 0. Publish an API image first. `production.env.example` ships `API_IMAGE=…:REPLACE_WITH_SHA` and bootstrap
