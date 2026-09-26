@@ -10,7 +10,7 @@ describe("cron parity (ADR-IMPL-021)", () => {
   it("the committed crontab is exactly what the registered job specs generate", async () => {
     const t = await testApp({ suite: "cron-parity" });
     const schedule = t.platform.jobs.schedule();
-    expect(readFileSync(CRONTAB, "utf8")).toBe(renderCrontab(schedule));
+    expect(readFileSync(CRONTAB, "utf8").replace(/\r\n/g, "\n")).toBe(renderCrontab(schedule));
     await t.close();
   });
 
