@@ -130,9 +130,9 @@ Refresh ranges with `bun run cf:gen`, commit, deploy, then re-run step 5b from `
 (first deploy of this firewall change: re-run bootstrap or 5b once so any leftover `ufw allow 80/443` is deleted
 and `netfilter-persistent` saves the new chains).
 
-The DROP applies to **new** connections. `RELATED,ESTABLISHED` returns before the Cloudflare CIDR checks, so a
-TCP session already tracked when 5b is re-run on a live host can finish; first bootstrap applies 5b before Caddy
-starts, so there is nothing to expire. The curl checks below only open new connections.
+Step 5b matches Cloudflare CIDRs on 80/443 **before** `RELATED,ESTABLISHED`, then DROPs everything else on those
+ports — so a direct-to-origin TCP session already tracked when you re-run 5b is cut on the next packet.
+Cloudflare keep-alives still match a CIDR and continue.
 
 **Check how 443 is bound (IPv4 vs IPv6):**
 
@@ -144,8 +144,7 @@ If you see `*:443` / `0.0.0.0:443` only, Cloudflare must use the A record. If yo
 origin has an AAAA, traffic can hit ufw — bootstrap therefore `ufw allow`s Cloudflare’s **IPv6** CIDRs on 80/443.
 Prefer dropping the AAAA if you do not need IPv6 to the origin.
 
-**Direct-to-origin must fail** (from a machine that is not Cloudflare), on both families — these curls open **new**
-connections and do not prove that a pre-5b tracked flow has ended:
+**Direct-to-origin must fail** (from a machine that is not Cloudflare), on both families:
 
 ```bash
 # IPv4 — replace <origin-v4> with the host A record

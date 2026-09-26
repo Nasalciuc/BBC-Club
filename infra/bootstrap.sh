@@ -90,12 +90,13 @@ EXT_IF="$(ip route show default | awk '{print $5; exit}')"
 ufw delete allow 80/tcp >/dev/null 2>&1 || true
 ufw delete allow 443/tcp >/dev/null 2>&1 || true
 # Dedicated chains: never -F DOCKER-USER (opens the window / wipes operator rules). Jump once into ours.
+# CIDR + DROP on 80/443 run BEFORE RELATED,ESTABLISHED so a pre-5b direct-to-origin TCP session is dropped
+# on the next packet. Cloudflare keep-alives still match a CIDR. Other Docker ports use the ESTABLISHED RETURN.
 apply_cf_web() { # $1 = iptables | ip6tables, $2 = 4|6, $3 = chain name
   local ipt="$1" fam="$2" chain="$3"
   $ipt -N DOCKER-USER 2>/dev/null || true
   $ipt -N "$chain" 2>/dev/null || true
   $ipt -F "$chain"
-  $ipt -A "$chain" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
   while read -r cidr; do
     [[ -z "$cidr" || "$cidr" == \#* ]] && continue
     [[ "$fam" == 6 && "$cidr" != *:* ]] && continue
@@ -103,6 +104,7 @@ apply_cf_web() { # $1 = iptables | ip6tables, $2 = 4|6, $3 = chain name
     $ipt -A "$chain" -i "$EXT_IF" -p tcp -m multiport --dports 80,443 -s "$cidr" -j RETURN
   done < "$CF"
   $ipt -A "$chain" -i "$EXT_IF" -p tcp -m multiport --dports 80,443 -j DROP
+  $ipt -A "$chain" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
   $ipt -A "$chain" -j RETURN
   while $ipt -C DOCKER-USER -j "$chain" 2>/dev/null; do
     $ipt -D DOCKER-USER -j "$chain"
