@@ -40,7 +40,8 @@ function parseAirportsCsv(raw: string) {
         cur += ch;
       }
       cols.push(cur);
-      const [code, name, city, country, countryCode, region, lat, lng, popularity] = cols;
+      const [code, name, city, country, countryCode, region, lat, lng, popularity, tz] = cols;
+      if (!tz?.trim()) throw new Error(`airports.csv: missing tz for ${code}`);
       return {
         code: code!.trim(),
         name: name!.trim(),
@@ -51,6 +52,7 @@ function parseAirportsCsv(raw: string) {
         lat: lat!.trim(),
         lng: lng!.trim(),
         popularity: Number(popularity ?? 0),
+        tz: tz.trim(),
       };
     });
 }
@@ -106,7 +108,23 @@ try {
     }
 
     for (const a of parseAirportsCsv(readFileSync(airportsCsv, "utf8"))) {
-      await tx.insert(airports).values(a).onConflictDoNothing({ target: airports.code });
+      await tx
+        .insert(airports)
+        .values(a)
+        .onConflictDoUpdate({
+          target: airports.code,
+          set: {
+            name: a.name,
+            city: a.city,
+            country: a.country,
+            countryCode: a.countryCode,
+            region: a.region,
+            lat: a.lat,
+            lng: a.lng,
+            popularity: a.popularity,
+            tz: a.tz,
+          },
+        });
     }
 
     const fareSeeds = [

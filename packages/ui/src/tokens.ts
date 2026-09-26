@@ -4,7 +4,7 @@ export const tokens = {
   "primary": "#1E293B",
   "actionPrimary": "#1E293B",
   "actionInverted": "#F8FAFC",
-  "surfacePage": "#F8FAFC",
+  "surfacePage": "#F4F5F4",
   "surfaceCard": "#FFFFFF",
   "surfacePanel": "#1E293B",
   "surfaceMuted": "#334155",
@@ -15,98 +15,99 @@ export const tokens = {
   "textOnDarkMuted": "#94A3B8",
   "borderDefault": "#E2E8F0",
   "statusDanger": "#B42318",
+  "accentWarm": "#9A7B4F",
   "scrim": "rgba(15,23,42,0.78)"
 },
   type: {
   "display": {
-    "fontFamily": "Newsreader",
+    "fontFamily": "Fraunces",
     "fontSize": 34,
     "fontWeight": "400",
     "lineHeight": 37,
     "letterSpacing": -0.4
   },
   "headline": {
-    "fontFamily": "Newsreader",
+    "fontFamily": "Fraunces",
     "fontSize": 28,
     "fontWeight": "400",
     "lineHeight": 32,
     "letterSpacing": -0.3
   },
   "title": {
-    "fontFamily": "Newsreader",
+    "fontFamily": "Fraunces",
     "fontSize": 20,
     "fontWeight": "400",
     "lineHeight": 24,
     "letterSpacing": 0
   },
   "titleSm": {
-    "fontFamily": "Newsreader",
+    "fontFamily": "Fraunces",
     "fontSize": 16,
     "fontWeight": "400",
     "lineHeight": 20,
     "letterSpacing": 0
   },
   "body": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 17,
     "fontWeight": "400",
     "lineHeight": 25,
     "letterSpacing": 0
   },
   "bodySm": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 15,
     "fontWeight": "400",
     "lineHeight": 21,
     "letterSpacing": 0
   },
   "caption": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 13,
     "fontWeight": "400",
     "lineHeight": 18,
     "letterSpacing": 0
   },
   "price": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 24,
     "fontWeight": "500",
     "lineHeight": 26,
     "letterSpacing": -0.2
   },
   "priceStruck": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 14,
     "fontWeight": "400",
     "lineHeight": 17,
     "letterSpacing": 0
   },
   "button": {
-    "fontFamily": "Inter",
+    "fontFamily": "Geist",
     "fontSize": 17,
     "fontWeight": "500",
     "lineHeight": 17,
     "letterSpacing": 0
   },
   "labelMono": {
-    "fontFamily": "JetBrains Mono",
+    "fontFamily": "Geist Mono",
     "fontSize": 11,
     "fontWeight": "500",
     "lineHeight": 14,
     "letterSpacing": 1.5
   },
   "factsMono": {
-    "fontFamily": "JetBrains Mono",
+    "fontFamily": "Geist Mono",
     "fontSize": 12,
     "fontWeight": "400",
     "lineHeight": 17,
     "letterSpacing": 1
   },
   "tabMono": {
-    "fontFamily": "JetBrains Mono",
-    "fontSize": 9,
+    "fontFamily": "Geist Mono",
+    "fontSize": 11,
     "fontWeight": "500",
-    "lineHeight": 9,
+    "lineHeight": 13,
     "letterSpacing": 1
   }
 },

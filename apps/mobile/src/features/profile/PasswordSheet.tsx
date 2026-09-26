@@ -1,7 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Button, Icon, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text, View } from "react-native";
+import { Button, CloseButton, tokens, rn } from "@bbc/ui";
 
 import { postAccountPassword, type Profile } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
@@ -50,8 +50,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
     }
     setBusy(true);
     setError(null);
-    // API accepts only `{ newPassword }` — current password is UX confirmation only.
-    const result = await postAccountPassword(newPassword);
+    const result = await postAccountPassword(newPassword, currentPassword);
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
@@ -73,15 +72,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.password.sheet">
         <View style={styles.header}>
           <Text style={styles.title}>Password</Text>
-          <Pressable
-            testID="profile.password.close"
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={12}
-            onPress={() => modalRef.current?.dismiss()}
-          >
-            <Icon name="clear" size={20} />
-          </Pressable>
+          <CloseButton testID="profile.password.close" onPress={() => modalRef.current?.dismiss()} />
         </View>
 
         <Field

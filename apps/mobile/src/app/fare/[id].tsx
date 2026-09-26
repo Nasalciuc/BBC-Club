@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, ErrorState, Icon, ListRow, PricePair, SectionLabel, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, ErrorState, Icon, ListRow, PricePair, SectionLabel, tokens, rn } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
@@ -13,37 +13,38 @@ import { formatPrice, formatValidUntil } from "@/lib/format";
 
 const CTA_RESERVE = 56 + 24 + 18;
 
-function hhmm(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
 function TimeBlock({ fare }: { fare: FareVM }) {
-  if (!fare.departAt || !fare.arriveAt) {
+  if (!fare.departLocal || !fare.arriveLocal) {
     return <Text style={styles.factsMono}>{fare.nonstop ? "NONSTOP" : "1 STOP"} · TIMES ON REQUEST</Text>;
   }
   const dur =
     fare.durationMinutes != null
       ? `${Math.floor(fare.durationMinutes / 60)}H ${String(fare.durationMinutes % 60).padStart(2, "0")}`
       : null;
+  const arriveClock = fare.arriveDayOffset > 0 ? `${fare.arriveLocal} +${fare.arriveDayOffset}` : fare.arriveLocal;
   return (
     <View style={styles.timeBlock}>
       <View style={styles.timeCol}>
-        <Text style={styles.timeDisplay}>{hhmm(fare.departAt)}</Text>
+        <Text style={styles.timeDisplay}>{fare.departLocal}</Text>
         <Text style={styles.factsMono}>{fare.from.code}</Text>
-        <Text style={styles.caption}>
-          {new Date(fare.departAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        </Text>
+        {fare.departAt ? (
+          <Text style={styles.caption}>
+            {new Date(fare.departAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </Text>
+        ) : null}
       </View>
       <View style={styles.timeMid}>
         <View style={styles.hairline} />
         {dur ? <Text style={styles.dur}>{dur}</Text> : null}
       </View>
       <View style={[styles.timeCol, styles.timeRight]}>
-        <Text style={styles.timeDisplay}>{hhmm(fare.arriveAt)}</Text>
+        <Text style={styles.timeDisplay}>{arriveClock}</Text>
         <Text style={styles.factsMono}>{fare.to.code}</Text>
-        <Text style={styles.caption}>
-          {new Date(fare.arriveAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        </Text>
+        {fare.arriveAt ? (
+          <Text style={styles.caption}>
+            {new Date(fare.arriveAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -172,17 +173,7 @@ export default function FareDetailScreen() {
           paddingBottom: insets.bottom + CTA_RESERVE + tokens.space.xl,
         }}
       >
-        <Pressable
-          testID="fare.back"
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          hitSlop={12}
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Icon name="chevron" size={20} color={tokens.colors.textPrimary} />
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
+        <BackButton testID="fare.back" onPress={() => router.back()} style={styles.back} />
 
         {offer?.mediaUrl ? (
           <Image
@@ -254,11 +245,9 @@ export default function FareDetailScreen() {
       <Modal visible={whyOpen} transparent animationType="fade" onRequestClose={() => setWhyOpen(false)}>
         <Pressable testID="fare.whyScrim" style={styles.modalScrim} onPress={() => setWhyOpen(false)}>
           <View style={styles.modalCard} testID="fare.whySheet">
-            <Text style={styles.title}>Why it's lower</Text>
+            <Text style={styles.title}>{`Why it's ${formatPrice(savings ?? 0, fare.price.currency)} lower`}</Text>
             <Text style={styles.body}>
-              Published fares are what the airline lists. We find inventory and consolidator rates that specialists can
-              ticket for you — often 30–50% under that published number. The source on the struck price is the FTC
-              reference for what you would have paid.
+              {`${formatPrice(fare.price.published!, fare.price.currency)} published − ${formatPrice(fare.price.offer, fare.price.currency)} club fare = ${formatPrice(savings ?? 0, fare.price.currency)}.`}
             </Text>
             <Button testID="fare.whyClose" label="Got it" shape="card" onPress={() => setWhyOpen(false)} />
           </View>
@@ -273,8 +262,7 @@ export default function FareDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
-  back: { flexDirection: "row", alignItems: "center", gap: tokens.space.xxs, marginBottom: tokens.space.md },
-  backText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  back: { marginBottom: tokens.space.md },
   hero: {
     width: "100%",
     height: 180,

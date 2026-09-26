@@ -30,7 +30,7 @@ function runMigrate(): Promise<{ code: number; out: string }> {
 }
 
 describe("extras ledger", () => {
-  it("second migrate applies nothing; ensure_event_partitions exists; ledger has 0001, 0005–0009", async () => {
+  it("second migrate applies nothing; ensure_event_partitions exists; ledger has 0001, 0005–0010", async () => {
     const first = await runMigrate();
     expect(first.code).toBe(0);
 
@@ -42,6 +42,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/db:verify fitness fixes applied/);
     expect(second.out).not.toMatch(/requests phone_e164\/phone_valid applied/);
     expect(second.out).not.toMatch(/notifications request_id applied/);
+    expect(second.out).not.toMatch(/catalog airports.tz applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -53,6 +54,7 @@ describe("extras ledger", () => {
       "0007_db_verify_fitness.sql",
       "0008_requests_phone.sql",
       "0009_notifications_request_id.sql",
+      "0010_catalog_airport_tz.sql",
     ]);
   });
 });

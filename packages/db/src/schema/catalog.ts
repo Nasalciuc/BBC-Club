@@ -67,6 +67,7 @@ export const airports = catalog.table(
     lat: numeric("lat", { precision: 9, scale: 6 }).notNull(),
     lng: numeric("lng", { precision: 9, scale: 6 }).notNull(),
     popularity: integer("popularity").notNull().default(0),
+    tz: text("tz").notNull().default("UTC"),
     createdAt: createdAt(),
   },
   (t) => [index("airports_city").on(t.city), index("airports_region").on(t.region)],

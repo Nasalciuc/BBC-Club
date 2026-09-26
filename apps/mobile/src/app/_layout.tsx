@@ -1,5 +1,8 @@
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { MaterialSymbols_400Regular } from "@expo-google-fonts/material-symbols";
+import { Fraunces_400Regular, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
+import { Geist_400Regular, Geist_500Medium } from "@expo-google-fonts/geist";
+import { GeistMono_400Regular, GeistMono_500Medium } from "@expo-google-fonts/geist-mono";
 import { Inter_400Regular, Inter_500Medium } from "@expo-google-fonts/inter";
 import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
 import { SourceSerif4_400Regular } from "@expo-google-fonts/source-serif-4";
@@ -58,10 +61,19 @@ export default function RootLayout() {
     SourceSerif4_400Regular,
     JetBrainsMono_400Regular,
     JetBrainsMono_500Medium,
+    Fraunces_400Regular,
+    Fraunces_600SemiBold,
+    Geist_400Regular,
+    Geist_500Medium,
+    GeistMono_400Regular,
+    GeistMono_500Medium,
     MaterialSymbols_400Regular,
     Inter: Inter_400Regular,
     Newsreader: SourceSerif4_400Regular,
     "JetBrains Mono": JetBrainsMono_400Regular,
+    Fraunces: Fraunces_400Regular,
+    Geist: Geist_400Regular,
+    "Geist Mono": GeistMono_400Regular,
   });
 
   // Hide splash on first paint — never wait for get-session (Better Auth has no client timeout).

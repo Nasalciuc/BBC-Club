@@ -3,12 +3,13 @@ import NetInfo from "@react-native-community/netinfo";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
-import { Button, Chip, Icon, tokens, rn } from "@bbc/ui";
+import { Button, Chip, CloseButton, Icon, tokens, rn } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
 import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
 import { enqueueRequest } from "@/lib/queue";
+import { env } from "@/lib/env";
 import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
 
 export type RequestSheetHandle = {
@@ -21,7 +22,6 @@ type Props = {
   onSeeRequests?: () => void;
 };
 
-const SUPPORT = "+1 (800) 000-0000";
 const SNAP = ["90%"] as const;
 
 export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function RequestSheet(
@@ -165,21 +165,15 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
             >
               <Text style={styles.link}>See it in Requests</Text>
             </Pressable>
-            <Text style={styles.caption}>{`Don't want to wait? Call ${SUPPORT}`}</Text>
+            {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
+              <Text style={styles.caption}>{`Don't want to wait? Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}</Text>
+            ) : null}
           </>
         ) : (
           <>
             <View style={styles.header}>
               <Text style={styles.title}>Request this fare</Text>
-              <Pressable
-                testID="request.close"
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                hitSlop={12}
-                onPress={() => modalRef.current?.dismiss()}
-              >
-                <Icon name="clear" size={20} />
-              </Pressable>
+              <CloseButton testID="request.close" onPress={() => modalRef.current?.dismiss()} />
             </View>
             <Text style={styles.mono}>{monoLine}</Text>
 
@@ -279,7 +273,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
               shape="card"
               onPress={() => void onSubmit()}
             />
-            <Text style={styles.caption}>A specialist will call you shortly · 24/7</Text>
+            <Text style={styles.caption}>A specialist will call you shortly.</Text>
           </>
         )}
       </BottomSheetScrollView>

@@ -122,7 +122,7 @@ export function buildDraft(opts: {
     contact: {
       name: opts.profile?.displayName ?? "",
       phone: opts.profile?.phone ?? "",
-      email: "",
+      email: opts.profile?.email ?? "",
     },
     note: "",
     fareId: opts.fare?.id,

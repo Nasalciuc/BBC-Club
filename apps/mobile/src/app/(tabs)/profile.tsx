@@ -24,13 +24,8 @@ function monogram(name: string | null | undefined): string {
 }
 
 function travelersLabel(prefs: Profile["preferences"] | undefined): string {
-  const p = prefs?.passengers;
-  if (!p) return "1 adult";
-  const parts: string[] = [];
-  parts.push(`${p.adult} adult${p.adult === 1 ? "" : "s"}`);
-  if (p.child > 0) parts.push(`${p.child} child${p.child === 1 ? "" : "ren"}`);
-  if (p.infant > 0) parts.push(`${p.infant} infant${p.infant === 1 ? "" : "s"}`);
-  return parts.join(", ");
+  const n = prefs?.passengers?.adult ?? 1;
+  return n === 1 ? "1 adult" : `${n} adults`;
 }
 
 function clientSinceYear(iso: string | null | undefined): string | null {

@@ -4,7 +4,7 @@ module.exports = {
   "primary": "#1E293B",
   "action-primary": "#1E293B",
   "action-inverted": "#F8FAFC",
-  "surface-page": "#F8FAFC",
+  "surface-page": "#F4F5F4",
   "surface-card": "#FFFFFF",
   "surface-panel": "#1E293B",
   "surface-muted": "#334155",
@@ -15,17 +15,18 @@ module.exports = {
   "text-on-dark-muted": "#94A3B8",
   "border-default": "#E2E8F0",
   "status-danger": "#B42318",
+  "accent-warm": "#9A7B4F",
   "scrim": "rgba(15,23,42,0.78)"
 },
   fontFamily: {
-  "newsreader": [
-    "Newsreader"
+  "fraunces": [
+    "Fraunces"
   ],
-  "inter": [
-    "Inter"
+  "geist": [
+    "Geist"
   ],
-  "jetbrains-mono": [
-    "JetBrains Mono"
+  "geist-mono": [
+    "Geist Mono"
   ]
 },
   fontSize: {
@@ -126,9 +127,9 @@ module.exports = {
     }
   ],
   "tab-mono": [
-    "9px",
+    "11px",
     {
-      "lineHeight": "9px",
+      "lineHeight": "13px",
       "letterSpacing": "1px",
       "fontWeight": "500"
     }

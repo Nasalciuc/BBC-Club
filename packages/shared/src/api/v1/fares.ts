@@ -20,6 +20,16 @@ export const FareVM = z.object({
   /** null when the source has no times — the row renders "from $X" instead of inventing a departure. */
   departAt: z.string().datetime().nullable(),
   arriveAt: z.string().datetime().nullable(),
+  /** Wall clock at the origin / destination airport. Never the device TZ. */
+  departLocal: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullable(),
+  arriveLocal: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .nullable(),
+  arriveDayOffset: z.number().int().min(0).max(2),
   price: PricePair,
   validUntil: z.string().datetime(),
   /** A promotional offer exists on this route. */

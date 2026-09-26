@@ -75,6 +75,8 @@ export function useSearch(options: Options = {}) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
   const abortRef = useRef<AbortController | null>(null);
   const seeded = useRef(false);
+  const paramsRef = useRef({ from: state.from, to: state.to, cabin: state.cabin });
+  paramsRef.current = { from: state.from, to: state.to, cabin: state.cabin };
 
   useEffect(() => {
     if (seeded.current) return;
@@ -84,35 +86,35 @@ export function useSearch(options: Options = {}) {
     }
   }, [options.defaultFrom]);
 
-  useEffect(() => {
-    if (!state.from || !state.to) return;
-
+  function runSearch(from: AirportVM, to: AirportVM, cabin: SearchState["cabin"]) {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
     dispatch({ type: "searchStarted" });
-    const timer = setTimeout(() => {
-      void (async () => {
-        const result = await searchFares({
-          from: state.from!.code,
-          to: state.to!.code,
-          cabin: state.cabin,
-        });
-        if (controller.signal.aborted) return;
-        if (!result.ok) {
-          dispatch({ type: "searchFailed", message: result.message });
-          return;
-        }
-        dispatch({ type: "searchDone", results: result.data.items });
-      })();
-    }, 250);
+    void (async () => {
+      const result = await searchFares({ from: from.code, to: to.code, cabin });
+      if (controller.signal.aborted) return;
+      if (!result.ok) {
+        dispatch({ type: "searchFailed", message: result.message });
+        return;
+      }
+      dispatch({ type: "searchDone", results: result.data.items });
+    })();
+  }
 
+  useEffect(() => {
+    if (!state.from || !state.to) return;
+    const timer = setTimeout(() => runSearch(state.from!, state.to!, state.cabin), 250);
     return () => {
       clearTimeout(timer);
-      controller.abort();
+      abortRef.current?.abort();
     };
   }, [state.from, state.to, state.cabin, state.dates]);
 
-  return { state, dispatch };
+  function retry() {
+    const { from, to, cabin } = paramsRef.current;
+    if (from && to) runSearch(from, to, cabin);
+  }
+
+  return { state, dispatch, retry };
 }

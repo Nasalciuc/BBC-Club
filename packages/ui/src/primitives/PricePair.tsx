@@ -10,13 +10,15 @@ type Props = {
   price: Price;
   size?: "sm" | "lg";
   align?: "left" | "right";
+  /** Offer amount only. Caller passes a token — never a hex. */
+  color?: string;
 };
 
 const money = (n: number, currency: string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
 
 /** Struck price always carries its source when one exists — FTC requirement. */
-export function PricePair({ price, size = "sm", align = "right" }: Props) {
+export function PricePair({ price, size = "sm", align = "right", color }: Props) {
   const hasPublished = price.published != null;
   const label = hasPublished
     ? `${money(price.offer, price.currency)}, down from ${money(price.published!, price.currency)}`
@@ -30,7 +32,9 @@ export function PricePair({ price, size = "sm", align = "right" }: Props) {
           {price.publishedSource ? <Text style={styles.source}>{price.publishedSource.toUpperCase()}</Text> : null}
         </>
       ) : null}
-      <Text style={size === "lg" ? styles.big : styles.price}>{money(price.offer, price.currency)}</Text>
+      <Text style={[size === "lg" ? styles.big : styles.price, color ? { color } : null]}>
+        {money(price.offer, price.currency)}
+      </Text>
     </View>
   );
 }

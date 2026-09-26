@@ -2,7 +2,10 @@ export { tokens } from "./tokens";
 export { Icon, icons, type IconName, type IconSize } from "./icons";
 export { rn } from "./rn-type";
 
+export { BackButton } from "./primitives/BackButton";
 export { Button } from "./primitives/Button";
+export { CloseButton } from "./primitives/CloseButton";
+export { ProgressLine } from "./primitives/ProgressLine";
 export { Chip } from "./primitives/Chip";
 export { ListRow } from "./primitives/ListRow";
 export { PricePair } from "./primitives/PricePair";

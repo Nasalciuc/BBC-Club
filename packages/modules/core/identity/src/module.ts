@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { and, eq } from "drizzle-orm";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
@@ -11,6 +12,9 @@ import type { IdentityFacade } from "./api";
 import type { EmailFacade } from "@bbc/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
+import { account } from "./infrastructure/schema";
+
+const WRONG_PASSWORD = "That password isn't right.";
 
 type Ports = { email: EmailFacade };
 
@@ -56,11 +60,33 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
             400,
           );
         }
+        const existing = await conn
+          .select({ id: account.id })
+          .from(account)
+          .where(and(eq(account.userId, actor), eq(account.providerId, "credential")))
+          .limit(1);
+        const hasCredential = existing.length > 0;
+        const currentPassword = parsed.data.currentPassword;
+        if (hasCredential && !currentPassword) {
+          return c.json(apiError("VALIDATION", { message: "Current password is required." }), 400);
+        }
+
         try {
-          await auth.api.setPassword({
-            headers: c.req.raw.headers,
-            body: { newPassword: parsed.data.newPassword },
-          });
+          if (hasCredential && currentPassword) {
+            await auth.api.changePassword({
+              headers: c.req.raw.headers,
+              body: {
+                newPassword: parsed.data.newPassword,
+                currentPassword,
+                revokeOtherSessions: true,
+              },
+            });
+          } else {
+            await auth.api.setPassword({
+              headers: c.req.raw.headers,
+              body: { newPassword: parsed.data.newPassword },
+            });
+          }
         } catch (err: unknown) {
           const status =
             err && typeof err === "object"
@@ -71,8 +97,9 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
           if (status === 400)
             return c.json(
               apiError("VALIDATION", {
-                message:
-                  err && typeof err === "object"
+                message: hasCredential
+                  ? WRONG_PASSWORD
+                  : err && typeof err === "object"
                     ? ((err as { body?: { message?: string } }).body?.message ?? "Invalid password")
                     : "Invalid password",
               }),

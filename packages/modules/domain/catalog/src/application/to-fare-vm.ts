@@ -1,5 +1,6 @@
 import type { AirportVM, DestinationPinVM, FareVM } from "@bbc/shared/api/v1/fares";
 import type { airports, fares } from "@bbc/db/schema/catalog";
+import { calendarDayOffset, formatInZone } from "./flight-local";
 
 type FareRow = typeof fares.$inferSelect;
 type AirportRow = typeof airports.$inferSelect;
@@ -36,6 +37,12 @@ export function toFareVM(
     durationMinutes: row.durationMinutes,
     departAt: row.departAt ? row.departAt.toISOString() : null,
     arriveAt: row.arriveAt ? row.arriveAt.toISOString() : null,
+    ...localClocks(
+      row.departAt ? row.departAt.toISOString() : null,
+      row.arriveAt ? row.arriveAt.toISOString() : null,
+      airports.from.tz,
+      airports.to.tz,
+    ),
     price: {
       offer: parseFloat(row.price),
       ...(row.publishedPrice
@@ -75,5 +82,23 @@ export function toDestinationPin(
     fromPrice: row.fromPrice,
     hasOffer,
     region: row.region,
+  };
+}
+
+function localClocks(
+  departAt: string | null,
+  arriveAt: string | null,
+  originTz: string,
+  destTz: string,
+): { departLocal: string | null; arriveLocal: string | null; arriveDayOffset: number } {
+  if (!departAt || !arriveAt) {
+    return { departLocal: null, arriveLocal: null, arriveDayOffset: 0 };
+  }
+  const dep = formatInZone(departAt, originTz);
+  const arr = formatInZone(arriveAt, destTz);
+  return {
+    departLocal: dep.hhmm,
+    arriveLocal: arr.hhmm,
+    arriveDayOffset: calendarDayOffset(dep.ymd, arr.ymd),
   };
 }

@@ -1,7 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { AirportRow, Button, Icon, SearchField, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text, View } from "react-native";
+import { AirportRow, Button, CloseButton, SearchField, tokens, rn } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
 import { fetchAirports, patchProfile, type Profile } from "@/lib/api";
@@ -85,15 +85,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
       <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.homeAirport.sheet">
         <View style={styles.header}>
           <Text style={styles.title}>Home airport</Text>
-          <Pressable
-            testID="profile.homeAirport.close"
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={12}
-            onPress={() => modalRef.current?.dismiss()}
-          >
-            <Icon name="clear" size={20} />
-          </Pressable>
+          <CloseButton testID="profile.homeAirport.close" onPress={() => modalRef.current?.dismiss()} />
         </View>
 
         <SearchField

@@ -1,7 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Button, Icon, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text, View } from "react-native";
+import { Button, CloseButton, tokens, rn } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
 import { patchProfile, type Profile } from "@/lib/api";
@@ -66,15 +66,7 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
       <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.phone.sheet">
         <View style={styles.header}>
           <Text style={styles.title}>Phone</Text>
-          <Pressable
-            testID="profile.phone.close"
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={12}
-            onPress={() => modalRef.current?.dismiss()}
-          >
-            <Icon name="clear" size={20} />
-          </Pressable>
+          <CloseButton testID="profile.phone.close" onPress={() => modalRef.current?.dismiss()} />
         </View>
 
         <PhoneField

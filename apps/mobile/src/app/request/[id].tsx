@@ -1,9 +1,9 @@
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, ErrorState, Icon, StatusBadge, Timeline, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, ErrorState, StatusBadge, Timeline, tokens, rn } from "@bbc/ui";
 
 import { badgeStatus, requestMeta } from "@/features/requests/status";
 import { fetchRequest, submitRequest } from "@/lib/api";
@@ -164,17 +164,7 @@ export default function RequestDetailScreen() {
           paddingBottom: insets.bottom + tokens.space.xxl,
         }}
       >
-        <Pressable
-          testID="request.back"
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          hitSlop={12}
-          onPress={() => router.back()}
-          style={styles.back}
-        >
-          <Icon name="back" size={20} color={tokens.colors.textPrimary} />
-          <Text style={styles.backText}>Back</Text>
-        </Pressable>
+        <BackButton testID="request.back" onPress={() => router.back()} style={styles.back} />
 
         <View style={styles.header}>
           <Text style={styles.route}>{vm.route}</Text>
@@ -226,8 +216,7 @@ export default function RequestDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
-  back: { flexDirection: "row", alignItems: "center", gap: tokens.space.xxs, marginBottom: tokens.space.md },
-  backText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  back: { marginBottom: tokens.space.md },
   header: {
     flexDirection: "row",
     alignItems: "center",

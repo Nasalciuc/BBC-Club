@@ -51,6 +51,7 @@ export const airportsRepo = {
       lat: string;
       lng: string;
       popularity: number;
+      tz: string;
     }>,
   ) {
     let n = 0;
@@ -69,6 +70,7 @@ export const airportsRepo = {
             lat: row.lat,
             lng: row.lng,
             popularity: row.popularity,
+            tz: row.tz,
           },
         });
       n += 1;

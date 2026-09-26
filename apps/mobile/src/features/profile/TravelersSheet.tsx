@@ -1,7 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Button, Icon, Stepper, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text, View } from "react-native";
+import { Button, CloseButton, Stepper, tokens, rn } from "@bbc/ui";
 
 import { putTravelPreferences, type Profile } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
@@ -16,8 +16,6 @@ const SNAP = ["55%"] as const;
 export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function TravelersSheet({ profile, onSaved }, ref) {
   const modalRef = useRef<BottomSheetModal>(null);
   const [adult, setAdult] = useState(1);
-  const [child, setChild] = useState(0);
-  const [infant, setInfant] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,8 +23,6 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
     present() {
       const p = profile.preferences?.passengers;
       setAdult(p?.adult ?? 1);
-      setChild(p?.child ?? 0);
-      setInfant(p?.infant ?? 0);
       setBusy(false);
       setError(null);
       modalRef.current?.present();
@@ -40,7 +36,7 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
     setBusy(true);
     setError(null);
     const result = await putTravelPreferences({
-      passengers: { adult, child, infant },
+      passengers: { adult, child: 0, infant: 0 },
     });
     setBusy(false);
     if (!result.ok) {
@@ -62,27 +58,11 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
       <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.travelers.sheet">
         <View style={styles.header}>
           <Text style={styles.title}>Travelers</Text>
-          <Pressable
-            testID="profile.travelers.close"
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            hitSlop={12}
-            onPress={() => modalRef.current?.dismiss()}
-          >
-            <Icon name="clear" size={20} />
-          </Pressable>
+          <CloseButton testID="profile.travelers.close" onPress={() => modalRef.current?.dismiss()} />
         </View>
 
         <Stepper testID="profile.travelers.adult" label="Adults" value={adult} min={1} max={9} onChange={setAdult} />
-        <Stepper testID="profile.travelers.child" label="Children" value={child} min={0} max={8} onChange={setChild} />
-        <Stepper
-          testID="profile.travelers.infant"
-          label="Infants"
-          value={infant}
-          min={0}
-          max={4}
-          onChange={setInfant}
-        />
+        <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -108,5 +88,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.sm },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
+  caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });
