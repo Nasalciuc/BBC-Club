@@ -1,3 +1,4 @@
+import { CLOUDFLARE_RANGES } from "@bbc/shared/net/cloudflare-ranges";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, haveIBeenPwned, jwt, bearer, admin } from "better-auth/plugins";
@@ -118,6 +119,9 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       // Better Auth 1.6.31: "uuid" means "the database generates it", but auth.user.id is text with no default
       // (the CLI-generated schema, kept regen-safe). Generate in-app instead — a real UUID, no schema edit.
       database: { generateId: () => crypto.randomUUID() },
+      // Caddy forwards `client, cloudflare`. Without trustedProxies Better Auth resolves no IP from a two-value
+      // X-Forwarded-For and rate-limits every member in ONE bucket (core/utils/ip getIPFromHeader).
+      ipAddress: { ipAddressHeaders: ["x-forwarded-for"], trustedProxies: [...CLOUDFLARE_RANGES] },
     },
 
     plugins: [
