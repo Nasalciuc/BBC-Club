@@ -1,5 +1,5 @@
 import Constants from "expo-constants";
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -9,6 +9,7 @@ import { ListRow } from "@/components/list-row";
 import { deleteAccount, signOut } from "@/features/auth/flows";
 import { CabinSheet } from "@/features/profile/CabinSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
+import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
@@ -50,6 +51,7 @@ export default function ProfileScreen() {
   const travelersRef = useRef<ProfileSheetHandle>(null);
   const passwordRef = useRef<ProfileSheetHandle>(null);
   const phoneRef = useRef<ProfileSheetHandle>(null);
+  const notificationsRef = useRef<ProfileSheetHandle>(null);
 
   useEffect(() => {
     void (async () => {
@@ -176,7 +178,7 @@ export default function ProfileScreen() {
         testID="profile.notifications"
         label="Notifications"
         value="On"
-        onPress={() => router.push("/notifications" as Href)}
+        onPress={() => notificationsRef.current?.present()}
       />
 
       <SectionLabel label="Legal & support" />
@@ -276,6 +278,7 @@ export default function ProfileScreen() {
           <TravelersSheet ref={travelersRef} profile={profile} onSaved={onSheetSaved} />
           <PasswordSheet ref={passwordRef} profile={profile} onSaved={onSheetSaved} />
           <PhoneSheet ref={phoneRef} profile={profile} onSaved={onSheetSaved} />
+          <NotificationsSheet ref={notificationsRef} />
         </>
       ) : null}
     </ScrollView>

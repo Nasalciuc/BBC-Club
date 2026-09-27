@@ -1,5 +1,6 @@
 /** PATCH /v1/profile + PUT /v1/profile/preferences: member-scoped update. */
 import { describe, it, expect } from "bun:test";
+import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 
 describe("PATCH /v1/profile", () => {
@@ -69,6 +70,30 @@ describe("PUT /v1/profile/preferences", () => {
     expect(r.status).toBe(200);
     const body = (await r.json()) as any;
     expect(body.ok).toBe(true);
+    await t.close();
+  });
+
+  it("writes both offer categories from one update", async () => {
+    const t = await testApp({ suite: "prefs-both" });
+    const r = await t.app.request("/v1/profile/preferences", {
+      method: "PUT",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        preferences: [
+          { category: "offers_personal", enabled: false },
+          { category: "offers_broadcast", enabled: false },
+        ],
+      }),
+    });
+    expect(r.status).toBe(200);
+    const rows = (await t.db.execute(sql`
+      SELECT category, enabled FROM members.notification_preferences
+      WHERE member_id = ${t.memberA.id}
+      ORDER BY category`)) as { category: string; enabled: boolean }[];
+    expect(rows.map((row) => [row.category, row.enabled])).toEqual([
+      ["offers_personal", false],
+      ["offers_broadcast", false],
+    ]);
     await t.close();
   });
 
