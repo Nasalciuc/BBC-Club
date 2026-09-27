@@ -122,6 +122,32 @@ Everything above is runnable by anyone with SSH. Credentials are in the company 
 
 ---
 
+## Rate limiting
+
+The API counts with GCRA. Reads stay in process memory and fail open, so a home refresh never writes Postgres and a memory miss still serves the page. Submits, profile writes, device registration, and operator links use Postgres and fail closed: if that store errors, the route is 503, not unlimited.
+
+| Rule                 | Store    | Limit | Period | Burst | On store error |
+| -------------------- | -------- | ----- | ------ | ----- | -------------- |
+| `read`               | memory   | 120   | 1 min  | 60    | allow          |
+| `search`             | memory   | 60    | 1 min  | 20    | allow          |
+| `anon`               | memory   | 300   | 1 min  | 100   | allow          |
+| `requests.submit`    | postgres | 10    | 1 hour | 5     | 503            |
+| `requests.submit.ip` | postgres | 60    | 1 hour | 20    | 503            |
+| `profile.write`      | postgres | 30    | 1 hour | 10    | 503            |
+| `devices.register`   | postgres | 20    | 1 hour | 5     | 503            |
+| `ops.link`           | postgres | 30    | 1 min  | 10    | 503            |
+
+Override without a deploy: a flag row `ratelimit.<rule>` whose JSON is `{ "limit": 10, "periodMs": 3600000, "burst": 5 }`. The process reads it from the flag cache. Denials increment `rate_limited_total{rule}`.
+
+Nothing in the app depends on the edge rule below. It is a second lock in front of the origin, and it is not applied yet.
+
+- STATUS: pending — needs someone with access to the zone
+- Free-plan limits (1 rule, Path only, count by IP, 10 s period, 10 s mitigation)
+- Rule `bbc-api-flood`: path starts with `/v1/` or `/api/auth/`, 1000 req / 10 s / IP, action **Block 10 s** — never Challenge
+- PR body _Needs an owner_: which plan is the zone on; does the owner apply the rule or issue a WAF-edit token for this zone
+
+---
+
 ## The origin is reachable only through Cloudflare
 
 Docker publishes Caddy on 80/443. Those ports are filtered via a dedicated **`BBC-CF-WEB`** / **`BBC-CF-WEB6`**
