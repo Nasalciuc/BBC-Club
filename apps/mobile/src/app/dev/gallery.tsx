@@ -21,8 +21,10 @@ import {
   Stepper,
   TabBar,
   Timeline,
+  Calendar,
   tokens,
   rn,
+  type Selection,
 } from "@bbc/ui";
 
 /** Storybook substitute. A component without a state here does not exist. */
@@ -38,6 +40,15 @@ export default function GalleryScreen() {
   const [stepperInfant, setStepperInfant] = useState(0);
   const [editableQuery, setEditableQuery] = useState("");
   const noop = () => undefined;
+  const calendarToday = "2026-09-26";
+  const calendarDepart: Selection = { tripType: "round", depart: "2026-10-12", ret: null, editing: "return" };
+  const calendarRange: Selection = {
+    tripType: "round",
+    depart: "2026-10-12",
+    ret: "2026-10-19",
+    editing: "depart",
+  };
+  const calendarOneWay: Selection = { tripType: "oneway", depart: "2026-10-12", ret: null, editing: "depart" };
 
   const fareTimed = fixture.fares[0]!;
   const fareNoTimes = fixture.fares[2]!;
@@ -162,6 +173,29 @@ export default function GalleryScreen() {
         <StatusBadge status="not_sent" />
         <StatusBadge status="mystery_future_status" />
       </View>
+
+      <SectionLabel label="Calendar" />
+      <Calendar
+        testID="gallery.calendar.depart"
+        selection={calendarDepart}
+        today={calendarToday}
+        months={2}
+        onSelect={noop}
+      />
+      <Calendar
+        testID="gallery.calendar.range"
+        selection={calendarRange}
+        today={calendarToday}
+        months={2}
+        onSelect={noop}
+      />
+      <Calendar
+        testID="gallery.calendar.oneway"
+        selection={calendarOneWay}
+        today={calendarToday}
+        months={2}
+        onSelect={noop}
+      />
 
       <SectionLabel label="Timeline" />
       <Timeline
