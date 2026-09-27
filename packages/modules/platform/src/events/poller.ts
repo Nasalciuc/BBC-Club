@@ -1,3 +1,4 @@
+import { fenceExecutor } from "./fence";
 import { sql } from "drizzle-orm";
 import { eventDlq } from "../infrastructure/schema";
 import type { EventRegistry } from "./registry";
@@ -77,6 +78,7 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
         }
 
         const started = Date.now();
+        const fence = fenceExecutor(tx);
         const ac = new AbortController();
         const timer = setTimeout(() => ac.abort(), handlerTimeoutMs);
         try {
@@ -84,7 +86,7 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
           await Promise.race([
             handler(
               {
-                tx,
+                tx: fence.exec,
                 deliveryId: String(row.id),
                 event: {
                   id: String(row.event_id),
@@ -120,6 +122,7 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
           failure = { row, attempt, message: String(e?.message ?? e).slice(0, 1000) };
           throw e; // roll back handler writes
         } finally {
+          fence.close(); // success, error or timeout: this handler's executor is dead from here on
           clearTimeout(timer);
         }
       })
