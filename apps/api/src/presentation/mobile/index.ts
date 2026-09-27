@@ -61,7 +61,6 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
 
         const profile = await ports.members.getProfile(undefined, actor);
         const homeCode = (profile?.homeAirport ?? DEFAULT_HOME_AIRPORT).toUpperCase();
-        const homeRow = await ports.catalog.getAirport(undefined, homeCode);
 
         const [destRows, offerRows] = await Promise.all([
           ports.catalog.destinations(undefined, homeCode),
@@ -72,12 +71,16 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const destinations = destRows.map((d) => toDestinationPin(d, offerRouteTos.has(d.code.toUpperCase())));
 
         const regionByCode = new Map(destRows.map((d) => [d.code.toUpperCase(), d.region]));
-        for (const o of offerRows) {
-          const code = String(o.routeTo).toUpperCase();
-          if (regionByCode.has(code)) continue;
-          const apt = await ports.catalog.getAirport(undefined, code);
-          if (apt?.region) regionByCode.set(code, apt.region);
+        const missing = [...new Set(offerRows.map((o) => String(o.routeTo).toUpperCase()))].filter(
+          (c) => !regionByCode.has(c),
+        );
+        const airportRows = await ports.catalog.getAirports(undefined, [homeCode, ...missing]);
+        const byCode = new Map(airportRows.map((a) => [a.code.toUpperCase(), a]));
+        for (const code of missing) {
+          const r = byCode.get(code)?.region;
+          if (r) regionByCode.set(code, r);
         }
+        const homeRow = byCode.get(homeCode) ?? null;
 
         const offerIds = offerRows.map((r) => r.id);
         const states = offerIds.length > 0 ? await ports.engagement.responsesFor(undefined, actor, offerIds) : {};

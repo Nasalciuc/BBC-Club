@@ -30,5 +30,7 @@ export type CatalogFacade = {
   destinations(exec: Executor | undefined, home: string): Promise<DestinationPin[]>;
   searchAirports(exec: Executor | undefined, q: string): Promise<AirportRow[]>;
   getAirport(exec: Executor | undefined, code: string): Promise<AirportRow | null>;
+  /** Batch lookup; order is not guaranteed. Replaces getAirport in loops. */
+  getAirports(exec: Executor | undefined, codes: readonly string[]): Promise<AirportRow[]>;
   importCsv(input: unknown): Promise<{ imported: number }>;
 };

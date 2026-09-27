@@ -4,7 +4,7 @@
 **Publishes:** none.
 **Consumes:** none.
 **Ports:** none (`needs: []`). Repository surface is the port — a Sabre / company-API adapter can replace `fares.repo` later without route changes.
-**Facade:** `searchFares`, `getFare`, `destinations`, `searchAirports`, `getAirport`, `importCsv`.
+**Facade:** `searchFares` (at most 30), `getFare`, `destinations`, `searchAirports`, `getAirport`, `getAirports`, `importCsv`.
 **Routes:** `GET /v1/search`, `GET /v1/fares/:id` (410 if past `valid_until` or unpublished), `GET /v1/airports?q=` (max 8), `POST /v1/internal/catalog/import` (`catalog:import`).
 **Jobs:** `expire-fares` every 15 minutes — sets `published = false` where `valid_until < now()`, then clears the destinations cache.
 **Home map:** `destinations()` is `DISTINCT ON (route_to)` ordered by price, cached 60s per airport outside a caller transaction. A fare that expires mid-minute can stay on the map for ≤ 60s; its detail answers 410. Import and expire-fares clear the cache.

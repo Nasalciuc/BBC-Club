@@ -31,6 +31,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
           : destinationsCache.get(home, () => faresRepo.destinations(conn, home)),
       searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
+      getAirports: (exec, codes) => airportsRepo.getMany(exec ?? conn, [...codes]),
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
