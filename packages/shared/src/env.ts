@@ -21,6 +21,10 @@ export const ServerEnv = z.object({
   /** Dual-secret rotation window — accepted alongside INTERNAL_API_SECRET when set. */
   INTERNAL_API_SECRET_NEXT: z.string().min(32).optional(),
   CRM_ADAPTER: z.enum(["mock", "http"]).default("mock"),
+  /** Inbox for the email CRM adapter. Required when CRM_ADAPTER=email. */
+  OPERATORS_EMAIL: z.string().email().optional(),
+  /** HMAC for operator action links. Required when CRM_ADAPTER=email. */
+  OPS_LINK_SECRET: z.string().min(32).optional(),
   PORT: z.coerce.number().int().positive().default(8000),
 });
 export type ServerEnv = z.infer<typeof ServerEnv>;
