@@ -148,10 +148,12 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
               <View style={styles.checkWrap}>
                 <Icon name="check" size={24} color={tokens.colors.textPrimary} />
               </View>
-              <Text style={styles.display}>{state.phase === "saved" ? "Saved." : "Request received."}</Text>
+              <Text style={styles.display}>
+                {state.phase === "saved" ? "Saved. It goes out when you’re back online." : "Request received."}
+              </Text>
               <Text style={styles.body}>
                 {state.phase === "saved"
-                  ? "We'll send it when you're back online."
+                  ? "You’re offline right now. Nothing more to do — a specialist will call you shortly after it arrives."
                   : `A specialist will call you shortly on ${state.confirmedPhone}.`}
               </Text>
               <Text style={styles.mono}>
