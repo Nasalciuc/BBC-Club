@@ -3,9 +3,10 @@ import NetInfo from "@react-native-community/netinfo";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
-import { Button, Chip, CloseButton, Icon, tokens, rn } from "@bbc/ui";
+import { Button, Chip, CloseButton, Icon, short, tokens, rn, type Selection } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
+import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
 import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
 import { enqueueRequest } from "@/lib/queue";
@@ -29,6 +30,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
   ref,
 ) {
   const modalRef = useRef<BottomSheetModal>(null);
+  const datesRef = useRef<DatesSheetHandle>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -121,165 +123,210 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
 
   const confirmed = state.phase === "confirm" || state.phase === "saved";
 
+  function presentDates(editing: Selection["editing"]) {
+    datesRef.current?.present({
+      tripType: state.tripType,
+      depart: state.legs[0]?.date || null,
+      ret: state.tripType === "round" ? state.legs[1]?.date || null : null,
+      editing,
+    });
+  }
+
   return (
-    <BottomSheetModal
-      ref={modalRef}
-      snapPoints={[...SNAP]}
-      enablePanDownToClose={!busy}
-      keyboardBehavior="interactive"
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
-    >
-      <BottomSheetScrollView contentContainerStyle={styles.content} testID="request.sheet">
-        {confirmed ? (
-          <>
-            <View style={styles.checkWrap}>
-              <Icon name="check" size={24} color={tokens.colors.textPrimary} />
-            </View>
-            <Text style={styles.display}>{state.phase === "saved" ? "Saved." : "Request received."}</Text>
-            <Text style={styles.body}>
-              {state.phase === "saved"
-                ? "We'll send it when you're back online."
-                : `A specialist will call you shortly on ${state.confirmedPhone}.`}
-            </Text>
-            <Text style={styles.mono}>
-              {state.confirmedRoute} · {state.confirmedDates} · {state.cabin.toUpperCase()}
-            </Text>
-            <Button
-              testID="request.done"
-              label="Done"
-              shape="card"
-              onPress={() => {
-                modalRef.current?.dismiss();
-                onDone?.();
-              }}
-            />
-            <Pressable
-              testID="request.seeRequests"
-              accessibilityRole="link"
-              onPress={() => {
-                modalRef.current?.dismiss();
-                onSeeRequests?.();
-              }}
-              style={({ pressed }) => pressed && styles.pressed}
-            >
-              <Text style={styles.link}>See it in Requests</Text>
-            </Pressable>
-            {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
-              <Text style={styles.caption}>{`Don't want to wait? Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}</Text>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <View style={styles.header}>
-              <Text style={styles.title}>Request this fare</Text>
-              <CloseButton testID="request.close" onPress={() => modalRef.current?.dismiss()} />
-            </View>
-            <Text style={styles.mono}>{monoLine}</Text>
-
-            <View style={styles.chips}>
-              <Chip
-                testID="request.tripType.round"
-                label="Round trip"
-                selected={state.tripType === "round"}
-                onPress={() => dispatch({ type: "setTripType", tripType: "round" })}
+    <>
+      <BottomSheetModal
+        ref={modalRef}
+        snapPoints={[...SNAP]}
+        enablePanDownToClose={!busy}
+        keyboardBehavior="interactive"
+        backgroundStyle={styles.bg}
+        handleIndicatorStyle={styles.handle}
+      >
+        <BottomSheetScrollView contentContainerStyle={styles.content} testID="request.sheet">
+          {confirmed ? (
+            <>
+              <View style={styles.checkWrap}>
+                <Icon name="check" size={24} color={tokens.colors.textPrimary} />
+              </View>
+              <Text style={styles.display}>
+                {state.phase === "saved" ? "Saved. It goes out when you’re back online." : "Request received."}
+              </Text>
+              <Text style={styles.body}>
+                {state.phase === "saved"
+                  ? "You’re offline right now. Nothing more to do — a specialist will call you shortly after it arrives."
+                  : `A specialist will call you shortly on ${state.confirmedPhone}.`}
+              </Text>
+              <Text style={styles.mono}>
+                {state.confirmedRoute} · {state.confirmedDates} · {state.cabin.toUpperCase()}
+              </Text>
+              <Button
+                testID="request.done"
+                label="Done"
+                shape="card"
+                onPress={() => {
+                  modalRef.current?.dismiss();
+                  onDone?.();
+                }}
               />
-              <Chip
-                testID="request.tripType.oneway"
-                label="One way"
-                selected={state.tripType === "oneway"}
-                onPress={() => dispatch({ type: "setTripType", tripType: "oneway" })}
-              />
-            </View>
-
-            <Field
-              testID="request.depart"
-              label="DEPART"
-              value={state.legs[0]?.date ?? ""}
-              onChangeText={(v) => dispatch({ type: "setDepart", date: v })}
-            />
-            {state.tripType === "round" ? (
-              <Field
-                testID="request.return"
-                label="RETURN"
-                value={state.legs[1]?.date ?? ""}
-                onChangeText={(v) => dispatch({ type: "setReturn", date: v })}
-              />
-            ) : null}
-            <Field
-              testID="request.travelers"
-              label="TRAVELERS"
-              value={String(state.passengers.adult)}
-              onChangeText={(v) => {
-                const n = Math.max(1, Math.min(9, Number(v) || 1));
-                dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult: n } });
-              }}
-              keyboardType="number-pad"
-            />
-            <Field
-              testID="request.name"
-              label="NAME"
-              value={state.contact.name}
-              onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
-              empty={!state.contact.name}
-            />
-            <PhoneField
-              testID="request.phone"
-              countryTestID="phone.country"
-              value={state.contact.phone}
-              country={phoneCountry}
-              empty={!state.contact.phone}
-              onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
-              onCountryChange={(c) => {
-                setPhoneCountry(c);
-                dispatch({ type: "setPhoneError", error: null });
-              }}
-            />
-            {state.phoneError ? <Text style={styles.error}>{state.phoneError}</Text> : null}
-            <Field
-              testID="request.email"
-              label="EMAIL"
-              value={state.contact.email}
-              onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
-              empty={!state.contact.email}
-              keyboardType="email-address"
-            />
-
-            {noteOpen ? (
-              <Field
-                testID="request.note"
-                label="NOTE"
-                value={state.note}
-                onChangeText={(v) => dispatch({ type: "setNote", note: v })}
-                multiline
-              />
-            ) : (
               <Pressable
-                testID="request.note"
-                accessibilityRole="button"
-                onPress={() => setNoteOpen(true)}
+                testID="request.seeRequests"
+                accessibilityRole="link"
+                onPress={() => {
+                  modalRef.current?.dismiss();
+                  onSeeRequests?.();
+                }}
                 style={({ pressed }) => pressed && styles.pressed}
               >
-                <Text style={styles.link}>+ Add a note</Text>
+                <Text style={styles.link}>See it in Requests</Text>
               </Pressable>
-            )}
+              {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
+                <Text style={styles.caption}>{`Don't want to wait? Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}</Text>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <View style={styles.header}>
+                <Text style={styles.title}>Request this fare</Text>
+                <CloseButton testID="request.close" onPress={() => modalRef.current?.dismiss()} />
+              </View>
+              <Text style={styles.mono}>{monoLine}</Text>
 
-            {state.submitError ? <Text style={styles.error}>{state.submitError}</Text> : null}
+              <View style={styles.chips}>
+                <Chip
+                  testID="request.tripType.round"
+                  label="Round trip"
+                  selected={state.tripType === "round"}
+                  onPress={() => dispatch({ type: "setTripType", tripType: "round" })}
+                />
+                <Chip
+                  testID="request.tripType.oneway"
+                  label="One way"
+                  selected={state.tripType === "oneway"}
+                  onPress={() => dispatch({ type: "setTripType", tripType: "oneway" })}
+                />
+              </View>
 
-            <Button
-              testID="request.submit"
-              label={busy ? "Sending…" : "Request this fare"}
-              busy={busy}
-              shape="card"
-              onPress={() => void onSubmit()}
-            />
-            <Text style={styles.caption}>A specialist will call you shortly.</Text>
-          </>
-        )}
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+              <DateRow
+                testID="request.depart"
+                label="DEPART"
+                value={state.legs[0]?.date ? short(state.legs[0].date) : "Select date"}
+                onPress={() => presentDates("depart")}
+              />
+              {state.tripType === "round" ? (
+                <DateRow
+                  testID="request.return"
+                  label="RETURN"
+                  value={state.legs[1]?.date ? short(state.legs[1].date) : "Select date"}
+                  onPress={() => presentDates("return")}
+                />
+              ) : null}
+              <Field
+                testID="request.travelers"
+                label="TRAVELERS"
+                value={String(state.passengers.adult)}
+                onChangeText={(v) => {
+                  const n = Math.max(1, Math.min(9, Number(v) || 1));
+                  dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult: n } });
+                }}
+                keyboardType="number-pad"
+              />
+              <Field
+                testID="request.name"
+                label="NAME"
+                value={state.contact.name}
+                onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
+                empty={!state.contact.name}
+              />
+              <PhoneField
+                testID="request.phone"
+                countryTestID="phone.country"
+                value={state.contact.phone}
+                country={phoneCountry}
+                empty={!state.contact.phone}
+                onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
+                onCountryChange={(c) => {
+                  setPhoneCountry(c);
+                  dispatch({ type: "setPhoneError", error: null });
+                }}
+              />
+              {state.phoneError ? <Text style={styles.error}>{state.phoneError}</Text> : null}
+              <Field
+                testID="request.email"
+                label="EMAIL"
+                value={state.contact.email}
+                onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
+                empty={!state.contact.email}
+                keyboardType="email-address"
+              />
+
+              {noteOpen ? (
+                <Field
+                  testID="request.note"
+                  label="NOTE"
+                  value={state.note}
+                  onChangeText={(v) => dispatch({ type: "setNote", note: v })}
+                  multiline
+                />
+              ) : (
+                <Pressable
+                  testID="request.note"
+                  accessibilityRole="button"
+                  onPress={() => setNoteOpen(true)}
+                  style={({ pressed }) => pressed && styles.pressed}
+                >
+                  <Text style={styles.link}>+ Add a note</Text>
+                </Pressable>
+              )}
+
+              {state.submitError ? <Text style={styles.error}>{state.submitError}</Text> : null}
+
+              <Button
+                testID="request.submit"
+                label={busy ? "Sending…" : "Request this fare"}
+                busy={busy}
+                shape="card"
+                onPress={() => void onSubmit()}
+              />
+              <Text style={styles.caption}>A specialist will call you shortly.</Text>
+            </>
+          )}
+        </BottomSheetScrollView>
+      </BottomSheetModal>
+      <DatesSheet
+        ref={datesRef}
+        onUse={(s) => {
+          if (s.depart) dispatch({ type: "setDepart", date: s.depart });
+          if (s.tripType === "round") dispatch({ type: "setReturn", date: s.ret ?? "" });
+        }}
+      />
+    </>
   );
 });
+
+function DateRow({
+  testID,
+  label,
+  value,
+  onPress,
+}: {
+  testID: string;
+  label: string;
+  value: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.fieldWrap, pressed && styles.pressed]}
+    >
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.dateValue}>{value}</Text>
+    </Pressable>
+  );
+}
 
 function Field({
   testID,
@@ -328,6 +375,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: "row", gap: tokens.space.xs },
   fieldWrap: { gap: tokens.space.xxs },
   fieldLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
+  dateValue: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
   field: {
     minHeight: 56,
     borderRadius: tokens.radius.field,

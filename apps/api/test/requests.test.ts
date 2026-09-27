@@ -159,6 +159,32 @@ describe("GET /v1/requests", () => {
     expect(body.hasMore).toBe(true);
     await t.close();
   });
+
+  it("list and detail share the closed event time, not createdAt", async () => {
+    const t = await testApp({ suite: "requests-closed-at" });
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const { id } = (await created.json()) as { id: string };
+    await t.drainAll();
+    const closed = await t.app.request(`/v1/internal/requests/${id}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+      body: JSON.stringify({ status: "closed" }),
+    });
+    expect(closed.status).toBe(200);
+    const list = await t.app.request("/v1/requests", { headers: { Cookie: t.memberA.cookie } });
+    const detail = await t.app.request(`/v1/requests/${id}`, { headers: { Cookie: t.memberA.cookie } });
+    expect(list.status).toBe(200);
+    expect(detail.status).toBe(200);
+    type Row = { id: string; createdAt: string; timeline: { status: string; at: string }[] };
+    const listItem = ((await list.json()) as { items: Row[] }).items.find((item) => item.id === id);
+    const detailBody = (await detail.json()) as Row;
+    const listClosed = listItem?.timeline.find((e) => e.status === "closed")?.at;
+    const detailClosed = detailBody.timeline.find((e) => e.status === "closed")?.at;
+    expect(listClosed).toBeTruthy();
+    expect(listClosed).toBe(detailClosed);
+    expect(listClosed).not.toBe(listItem?.createdAt);
+    await t.close();
+  });
 });
 
 describe("POST /v1/internal/requests/:id/status", () => {

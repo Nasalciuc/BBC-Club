@@ -194,7 +194,7 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
                 "This password has appeared in a data breach. Please choose a different one.",
             }),
           ]),
-      jwt({ jwks: { keyPairConfig: { alg: "EdDSA", crv: "Ed25519" } } }), // operator/system callers only
+      jwt({ jwks: { keyPairConfig: { alg: "EdDSA", crv: "Ed25519" } }, disableSettingJwtHeader: true }), // operator/system callers only
       bearer(),
       admin({ ac, roles, defaultRole: "member", adminRoles: ["operator", "system"] }),
     ],

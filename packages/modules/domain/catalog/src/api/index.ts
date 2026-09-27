@@ -21,6 +21,7 @@ export type DestinationPin = {
 
 /** The only import surface of @bbc/catalog. module.ts implements it; consumers import it. */
 export type CatalogFacade = {
+  /** At most 30 fares, cheapest first — the same bound the future full-text path will use. */
   searchFares(
     exec: Executor | undefined,
     q: { from: string; to: string; cabin: "business" | "first"; when?: Date },
@@ -29,5 +30,7 @@ export type CatalogFacade = {
   destinations(exec: Executor | undefined, home: string): Promise<DestinationPin[]>;
   searchAirports(exec: Executor | undefined, q: string): Promise<AirportRow[]>;
   getAirport(exec: Executor | undefined, code: string): Promise<AirportRow | null>;
+  /** Batch lookup; order is not guaranteed. Replaces getAirport in loops. */
+  getAirports(exec: Executor | undefined, codes: readonly string[]): Promise<AirportRow[]>;
   importCsv(input: unknown): Promise<{ imported: number }>;
 };

@@ -64,7 +64,7 @@ export default tseslint.config(
   },
 
   {
-    files: ["**/*.{js,mjs,cjs}", "scripts/**/*.ts"],
+    files: ["**/*.{js,mjs,cjs}", "scripts/**/*.ts", "load/**/*.ts"],
     ...tseslint.configs.disableTypeChecked,
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,

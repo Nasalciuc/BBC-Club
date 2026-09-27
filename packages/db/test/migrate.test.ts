@@ -34,6 +34,22 @@ describe("extras ledger", () => {
     const first = await runMigrate();
     expect(first.code).toBe(0);
 
+    const indexes: any[] = await db.execute(sql`
+      SELECT indexname FROM pg_indexes
+      WHERE indexname IN (
+        'deliveries_pending_created',
+        'deliveries_dead',
+        'deliveries_paused',
+        'fares_home_destinations'
+      )
+      ORDER BY indexname`);
+    expect(indexes.map((r) => r.indexname)).toEqual([
+      "deliveries_dead",
+      "deliveries_paused",
+      "deliveries_pending_created",
+      "fares_home_destinations",
+    ]);
+
     const second = await runMigrate();
     expect(second.code).toBe(0);
     expect(second.out).not.toMatch(/extras applied: 0001/);
@@ -44,6 +60,8 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/notifications request_id applied/);
     expect(second.out).not.toMatch(/catalog airports.tz applied/);
     expect(second.out).not.toMatch(/auth.otp_cooldown applied/);
+    expect(second.out).not.toMatch(/platform delivery stats indexes applied/);
+    expect(second.out).not.toMatch(/catalog fares_home_destinations applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -57,6 +75,8 @@ describe("extras ledger", () => {
       "0009_notifications_request_id.sql",
       "0010_catalog_airport_tz.sql",
       "0011_auth_otp_cooldown.sql",
+      "0012_platform_delivery_stats.sql",
+      "0013_catalog_fares_home_destinations.sql",
     ]);
   });
 });

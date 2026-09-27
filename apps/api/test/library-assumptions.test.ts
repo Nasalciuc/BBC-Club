@@ -26,6 +26,15 @@ describe("JWT claims (Better Auth jwt plugin)", () => {
     expect(r.status).toBe(403);
   });
 
+  it("GET /api/auth/get-session does not set a JWT header for a member", async () => {
+    const r = await t.app.request("/api/auth/get-session", {
+      headers: { cookie: t.memberA.cookie },
+    });
+    expect(r.status).toBe(200);
+    const jwtHeader = [...r.headers.keys()].find((n) => n.toLowerCase() === "set-auth-jwt");
+    expect(jwtHeader).toBeUndefined();
+  });
+
   it("GET /api/auth/jwks returns a key set", async () => {
     const r = await t.app.request("/api/auth/jwks");
     expect(r.status).toBe(200);

@@ -9,8 +9,10 @@ export type SearchQuery = {
   when?: Date;
 };
 
+export const SEARCH_LIMIT = 30; // the same page the future FT.SEARCH … LIMIT 0 30 returns — one contract for both paths
+
 export const faresRepo = {
-  /** Visible published fares in the validity window. Filters in SQL. */
+  /** Visible published fares in the validity window. Filters in SQL. At most SEARCH_LIMIT rows, cheapest first. */
   async search(exec: Executor, q: SearchQuery) {
     const now = q.when ?? new Date();
     return exec
@@ -26,7 +28,8 @@ export const faresRepo = {
           gt(fares.validUntil, now),
         ),
       )
-      .orderBy(asc(fares.price));
+      .orderBy(asc(fares.price))
+      .limit(SEARCH_LIMIT);
   },
 
   /** Any row by id (ignore published/window) — caller maps expired → 410. */
@@ -35,12 +38,13 @@ export const faresRepo = {
     return row ?? null;
   },
 
-  /** Cheapest published fare per destination from `home`, with airport enrichment. hasOffer left to BFF. */
+  /** Cheapest published fare per destination from `home`, with airport enrichment. hasOffer left to BFF.
+   *  DISTINCT ON (route_to) keeps the first row of ORDER BY route_to, price — the cheapest. */
   async destinations(exec: Executor, home: string) {
     const homeCode = home.toUpperCase();
     const now = new Date();
     const rows = await exec
-      .select({
+      .selectDistinctOn([fares.routeTo], {
         code: fares.routeTo,
         name: airports.name,
         city: airports.city,
@@ -60,35 +64,13 @@ export const faresRepo = {
           gt(fares.validUntil, now),
         ),
       )
-      .orderBy(asc(fares.routeTo), asc(fares.price));
-
-    const best = new Map<
-      string,
-      {
-        code: string;
-        name: string;
-        city: string;
-        countryCode: string;
-        region: string;
-        lat: number;
-        lng: number;
-        fromPrice: number;
-      }
-    >();
-    for (const r of rows) {
-      if (best.has(r.code)) continue;
-      best.set(r.code, {
-        code: r.code,
-        name: r.name,
-        city: r.city,
-        countryCode: r.countryCode,
-        region: r.region,
-        lat: parseFloat(String(r.lat)),
-        lng: parseFloat(String(r.lng)),
-        fromPrice: parseFloat(String(r.fromPrice)),
-      });
-    }
-    return [...best.values()];
+      .orderBy(asc(fares.routeTo), asc(fares.price)); // DISTINCT ON keeps the first row per routeTo = the cheapest
+    return rows.map((r) => ({
+      ...r,
+      lat: parseFloat(String(r.lat)),
+      lng: parseFloat(String(r.lng)),
+      fromPrice: parseFloat(String(r.fromPrice)),
+    }));
   },
 
   async expirePast(exec: Executor, now = new Date()) {

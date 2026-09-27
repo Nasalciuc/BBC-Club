@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { testApp } from "./helpers/test-app";
 import { FareVM, AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
-import { toFareVM } from "@bbc/catalog";
+import { toFareVM, type CatalogFacade } from "@bbc/catalog";
 import { fixture } from "@bbc/shared/fixture";
 
 describe("catalog routes", () => {
@@ -126,6 +126,34 @@ describe("GET /v1/home", () => {
     expect(body.destinations.some((d) => d.code === "LHR")).toBe(true);
     expect(body.destinations.find((d) => d.code === "LHR")?.hasOffer).toBe(true);
     expect(body.sections.length).toBeGreaterThan(0);
+    await t.close();
+  });
+
+  it("loads home and offer airports in one getAirports call", async () => {
+    const t = await testApp({ suite: "catalog-home-batch" });
+    await t.seedCatalogBasics();
+    await t.seedBroadcastOffer({ routeTo: "CDG", title: "Paris" });
+    await t.seedBroadcastOffer({ routeTo: "HND", title: "Tokyo" });
+    await t.seedBroadcastOffer({ routeTo: "DXB", title: "Dubai" });
+    const catalog = t.registry.facade<CatalogFacade>("catalog");
+    let many = 0;
+    let one = 0;
+    const getAirports = catalog.getAirports.bind(catalog);
+    const getAirport = catalog.getAirport.bind(catalog);
+    catalog.getAirports = async (...args) => {
+      many++;
+      return getAirports(...args);
+    };
+    catalog.getAirport = async (...args) => {
+      one++;
+      return getAirport(...args);
+    };
+    const r = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(200);
+    expect(many).toBe(1);
+    expect(one).toBe(0);
+    const body = HomeVM.parse(await r.json());
+    expect(body.home?.code).toBe("JFK");
     await t.close();
   });
 });

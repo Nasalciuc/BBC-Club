@@ -199,13 +199,6 @@ export default function RootLayout() {
                   }}
                 />
                 <Stack.Screen
-                  name="notifications"
-                  options={{
-                    animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
-                  }}
-                />
-                <Stack.Screen
                   name="dev/gallery"
                   options={{
                     animation: "slide_from_right",

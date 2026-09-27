@@ -6,6 +6,7 @@ import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
+import { createDestinationsCache } from "./application/destinations-cache";
 import { expireFares } from "./application/expire-fares";
 import { importCatalog, ImportBody } from "./application/import";
 import { toAirportVM, toFareVM } from "./application/to-fare-vm";
@@ -20,12 +21,17 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
   layer: "domain",
   init: ({ db, platform }) => {
     const conn = db as unknown as Executor;
+    const destinationsCache = createDestinationsCache();
     const expose: CatalogFacade = {
       searchFares: (exec, q) => faresRepo.search(exec ?? conn, q),
       getFare: (exec, id) => faresRepo.getAny(exec ?? conn, id),
-      destinations: (exec, home) => faresRepo.destinations(exec ?? conn, home),
+      destinations: (exec, home) =>
+        exec
+          ? faresRepo.destinations(exec, home)
+          : destinationsCache.get(home, () => faresRepo.destinations(conn, home)),
       searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
+      getAirports: (exec, codes) => airportsRepo.getMany(exec ?? conn, [...codes]),
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
@@ -141,6 +147,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         }
         try {
           const r = await expose.importCsv(parsed.data);
+          destinationsCache.clear();
           return c.json(r);
         } catch (e: unknown) {
           return c.json(apiError("VALIDATION", { message: e instanceof Error ? e.message : "import failed" }), 400);
@@ -159,7 +166,11 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
             cron: "*/15 * * * *",
             singleton: true,
             timeoutMs: 30_000,
-            handler: async () => expireFares({ db: conn }),
+            handler: async () => {
+              const out = await expireFares({ db: conn });
+              destinationsCache.clear();
+              return out;
+            },
           },
         },
       ],

@@ -180,6 +180,22 @@ try {
           target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom],
         });
     }
+
+    if (process.argv.includes("--bench")) {
+      await tx.execute(sql`
+        INSERT INTO catalog.fares (
+          route_from, route_to, cabin, carrier, nonstop, price, currency, source,
+          valid_from, valid_until, published
+        )
+        SELECT 'JFK', 'LHR', 'business', 'BA', true,
+               (1000 + g)::numeric(10, 2), 'USD', 'manual',
+               timestamptz '2026-01-01 00:00:00+00' + (g || ' seconds')::interval,
+               timestamptz '2028-01-01 00:00:00+00', true
+        FROM generate_series(1, 10000) g
+        ON CONFLICT (route_from, route_to, cabin, carrier, valid_from) DO NOTHING
+      `);
+      console.log("bench fares seeded (10000 JFK→LHR)");
+    }
   });
   console.log("fixture seeded");
   process.exit(0);

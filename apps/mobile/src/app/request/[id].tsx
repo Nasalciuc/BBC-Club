@@ -5,7 +5,8 @@ import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from "
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BackButton, Button, ErrorState, StatusBadge, Timeline, tokens, rn } from "@bbc/ui";
 
-import { badgeStatus, requestMeta } from "@/features/requests/status";
+import { closedAt, requestView } from "@/features/requests/request-view-logic";
+import { requestMeta } from "@/features/requests/status";
 import { fetchRequest, submitRequest } from "@/lib/api";
 import { env } from "@/lib/env";
 import { getQueued, sendOne, type QueuedRequest } from "@/lib/queue";
@@ -154,6 +155,7 @@ export default function RequestDetailScreen() {
   const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
   const showCall = vm.status === "quoted" && Boolean(supportPhone);
   const showSend = queued;
+  const view = requestView(queued ? "queued" : vm.status, closedAt(vm));
 
   return (
     <View testID="request.root" style={styles.root}>
@@ -168,9 +170,19 @@ export default function RequestDetailScreen() {
 
         <View style={styles.header}>
           <Text style={styles.route}>{vm.route}</Text>
-          <StatusBadge status={badgeStatus(vm.status)} />
+          {view.badge ? <StatusBadge status={view.badge} /> : null}
         </View>
         <Text style={styles.meta}>{requestMeta(vm)}</Text>
+        {view.closedLine ? (
+          <Text testID="request.closed" style={styles.closed}>
+            {view.closedLine}
+          </Text>
+        ) : null}
+        {view.sentence ? (
+          <Text testID="request.sentence" style={styles.sentence}>
+            {view.sentence}
+          </Text>
+        ) : null}
 
         {vm.reference.trim().length > 0 ? (
           <Text testID="request.reference" style={styles.reference}>
@@ -178,8 +190,17 @@ export default function RequestDetailScreen() {
           </Text>
         ) : null}
 
-        <Text style={styles.section}>Status</Text>
-        <Timeline testID="request.timeline" status={queued ? "queued" : vm.status} events={vm.timeline} />
+        {view.showTimeline ? (
+          <>
+            <Text style={styles.section}>Status</Text>
+            <Timeline
+              testID="request.timeline"
+              status={view.timelineStatus}
+              events={vm.timeline}
+              currentCaption={view.caption}
+            />
+          </>
+        ) : null}
 
         {showCall ? (
           <Button
@@ -226,6 +247,8 @@ const styles = StyleSheet.create({
   },
   route: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, flex: 1 },
   meta: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.md },
+  closed: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
+  sentence: { ...rn(tokens.type.body), color: tokens.colors.textPrimary, marginBottom: tokens.space.md },
   reference: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary, marginBottom: tokens.space.md },
   section: {
     ...rn(tokens.type.titleSm),

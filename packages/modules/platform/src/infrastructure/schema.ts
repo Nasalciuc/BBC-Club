@@ -69,6 +69,15 @@ export const eventDeliveries = platform.table(
     index("deliveries_cleanup")
       .on(t.processedAt)
       .where(sql`${t.status} = 'done'`),
+    index("deliveries_pending_created")
+      .on(t.createdAt)
+      .where(sql`${t.status} = 'pending'`),
+    index("deliveries_dead")
+      .on(t.id)
+      .where(sql`${t.status} = 'dead'`),
+    index("deliveries_paused")
+      .on(t.id)
+      .where(sql`${t.status} = 'paused'`),
     check("deliveries_attempts_nonneg", sql`${t.attempts} >= 0`),
   ],
 );
