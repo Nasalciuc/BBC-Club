@@ -16,6 +16,7 @@ describe("singleton jobs on a connection pool", () => {
     const p = createPlatform(db, { level: "silent" });
     let runs = 0;
     p.jobs.register("single-seq", {
+      cron: "manual",
       singleton: true,
       handler: async () => {
         runs++;
@@ -28,6 +29,7 @@ describe("singleton jobs on a connection pool", () => {
   it("still refuses a truly concurrent second run", async () => {
     const p = createPlatform(db, { level: "silent" });
     p.jobs.register("single-par", {
+      cron: "manual",
       singleton: true,
       handler: async () => {
         await new Promise((r) => setTimeout(r, 300));
@@ -40,6 +42,7 @@ describe("singleton jobs on a connection pool", () => {
   it("persists metrics only when every value is a finite number", async () => {
     const p = createPlatform(db, { level: "silent" });
     p.jobs.register("metrics-array", {
+      cron: "manual",
       handler: async () => ["x"],
     });
     await p.jobs.run("metrics-array");
@@ -49,6 +52,7 @@ describe("singleton jobs on a connection pool", () => {
     expect(bad.metrics).toBeNull();
 
     p.jobs.register("metrics-ok", {
+      cron: "manual",
       handler: async () => ({ n: 3 }),
     });
     const r = await p.jobs.run("metrics-ok");

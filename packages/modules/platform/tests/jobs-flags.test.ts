@@ -14,7 +14,7 @@ afterAll(() => iso.drop());
 describe("jobs", () => {
   it("records every run and returns metrics", async () => {
     const p = createPlatform(db, { level: "silent" });
-    p.jobs.register("test-job", { handler: async () => ({ processed: 3 }) });
+    p.jobs.register("test-job", { cron: "manual", handler: async () => ({ processed: 3 }) });
     const r = await p.jobs.run("test-job");
     expect(r.status).toBe("succeeded");
     expect(r.metrics).toEqual({ processed: 3 });
@@ -25,6 +25,7 @@ describe("jobs", () => {
   it("records failures instead of throwing", async () => {
     const p = createPlatform(db, { level: "silent" });
     p.jobs.register("bad-job", {
+      cron: "manual",
       handler: async () => {
         throw new Error("nope");
       },
@@ -39,6 +40,7 @@ describe("jobs", () => {
     let running = 0,
       maxConcurrent = 0;
     p.jobs.register("single", {
+      cron: "manual",
       singleton: true,
       handler: async () => {
         running++;

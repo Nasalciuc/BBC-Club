@@ -41,7 +41,9 @@ systemctl enable --now docker; systemctl restart docker
 
 say "3/9 firewall + ssh hardening"
 ufw --force reset >/dev/null; ufw default deny incoming >/dev/null; ufw default allow outgoing >/dev/null
-ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw --force enable >/dev/null
+# SSH only here. 80/443 are not opened generically — Docker-published ports bypass ufw (DOCKER-USER
+# after the repo is on disk). IPv6 Cloudflare CIDRs are allowed via ufw once ranges exist (see step 5).
+ufw allow 22/tcp >/dev/null; ufw --force enable >/dev/null
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/; s/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
 (systemctl reload ssh 2>/dev/null || systemctl reload sshd) || true
 systemctl enable --now fail2ban
@@ -74,6 +76,54 @@ cd "$APP_DIR"
 echo "    REPO_DIR=$REPO_DIR"
 echo "    APP_DIR=$APP_DIR"
 echo "    INFRA_DIR=$INFRA_DIR"
+
+# Web ports reach Caddy only from Cloudflare. ufw cannot do this for Docker-published ports: Docker's
+# iptables rules run before ufw's. DOCKER-USER is the chain Docker guarantees to evaluate first.
+# If Docker has no IPv6, docker-proxy may still listen on [::]:443 and that path goes through ufw —
+# so we also allow Cloudflare's IPv6 CIDRs on 80/443 via ufw (without a blanket allow).
+say "5b/9 origin firewall (BBC-CF-WEB + Cloudflare IPv6 via ufw)"
+CF="$APP_DIR/infra/cloudflare-ranges.txt"
+[[ -f "$CF" ]] || { echo "❌ missing $CF — cannot lock 80/443 to Cloudflare"; exit 1; }
+EXT_IF="$(ip route show default | awk '{print $5; exit}')"
+[[ -n "$EXT_IF" ]] || { echo "❌ no default route interface"; exit 1; }
+# Upgrades that skip step 3's ufw reset may still have a blanket allow — drop them before CF CIDRs.
+ufw delete allow 80/tcp >/dev/null 2>&1 || true
+ufw delete allow 443/tcp >/dev/null 2>&1 || true
+# Dedicated chains: never -F DOCKER-USER (opens the window / wipes operator rules). Jump once into ours.
+# CIDR + DROP on 80/443 run BEFORE RELATED,ESTABLISHED so a pre-5b direct-to-origin TCP session is dropped
+# on the next packet. Cloudflare keep-alives still match a CIDR. Other Docker ports use the ESTABLISHED RETURN.
+apply_cf_web() { # $1 = iptables | ip6tables, $2 = 4|6, $3 = chain name
+  local ipt="$1" fam="$2" chain="$3"
+  $ipt -N DOCKER-USER 2>/dev/null || true
+  $ipt -N "$chain" 2>/dev/null || true
+  $ipt -F "$chain"
+  while read -r cidr; do
+    [[ -z "$cidr" || "$cidr" == \#* ]] && continue
+    [[ "$fam" == 6 && "$cidr" != *:* ]] && continue
+    [[ "$fam" == 4 && "$cidr" == *:* ]] && continue
+    $ipt -A "$chain" -i "$EXT_IF" -p tcp -m multiport --dports 80,443 -s "$cidr" -j RETURN
+  done < "$CF"
+  $ipt -A "$chain" -i "$EXT_IF" -p tcp -m multiport --dports 80,443 -j DROP
+  $ipt -A "$chain" -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+  $ipt -A "$chain" -j RETURN
+  while $ipt -C DOCKER-USER -j "$chain" 2>/dev/null; do
+    $ipt -D DOCKER-USER -j "$chain"
+  done
+  $ipt -I DOCKER-USER 1 -j "$chain"
+}
+apply_cf_web iptables 4 BBC-CF-WEB
+apply_cf_web ip6tables 6 BBC-CF-WEB6
+# ufw IPv6: cover the case where Docker IPv6 is off and [::]:443 is filtered by ufw, not DOCKER-USER.
+while read -r cidr; do
+  [[ -z "$cidr" || "$cidr" == \#* ]] && continue
+  [[ "$cidr" != *:* ]] && continue
+  ufw allow from "$cidr" to any port 80,443 proto tcp >/dev/null
+done < "$CF"
+ufw reload >/dev/null
+apt-get install -y iptables-persistent >/dev/null
+netfilter-persistent save >/dev/null
+iptables-save | grep -q 'BBC-CF-WEB' || { echo "❌ BBC-CF-WEB missing from saved iptables — refusing to continue"; exit 1; }
+ip6tables-save | grep -q 'BBC-CF-WEB6' || { echo "❌ BBC-CF-WEB6 missing from saved ip6tables — refusing to continue"; exit 1; }
 
 say "6/9 secrets"
 ENV_FILE="$INFRA_DIR/env/${MODE}.env"

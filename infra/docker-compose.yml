@@ -20,6 +20,9 @@ services:
     networks: [edge, data]
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/cloudflare_ranges.caddy:/etc/caddy/cloudflare_ranges.caddy:ro
+      - ./caddy/origin-pulls.caddy:/etc/caddy/origin-pulls.caddy:ro
+      - ./caddy/cloudflare-origin-pull-ca.pem:/etc/caddy/cloudflare-origin-pull-ca.pem:ro
       - ./caddy/well-known:/srv/well-known:ro
       - caddy_data:/data
       - caddy_config:/config

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { JobSpec } from "@bbc/shared/platform-specs";
+import { CRON_FIELDS_RE, type JobSpec } from "@bbc/shared/platform-specs";
 import { jobRuns } from "../infrastructure/schema";
 
 export type JobContext = {
@@ -102,10 +102,20 @@ export function createJobs(
   return {
     register(name: string, spec: JobSpec) {
       if (registry.has(name)) throw new Error(`job already registered: ${name}`);
+      if (!/^[a-z][a-z0-9-]*$/.test(name))
+        throw new Error(`job ${name}: kebab-case only (crontab column + URL segment)`);
+      if (spec.cron !== "manual" && !CRON_FIELDS_RE.test(spec.cron.trim()))
+        throw new Error(`job ${name}: invalid cron "${spec.cron}" — five fields or "manual"`);
       registry.set(name, spec);
     },
     has: (name: string) => registry.has(name),
     names: () => [...registry.keys()],
+    /** Every scheduled job, sorted — the only input of cron:gen and of the parity test. */
+    schedule: (): Array<{ name: string; cron: string }> =>
+      [...registry.entries()]
+        .filter(([, s]) => s.cron !== "manual")
+        .map(([name, s]) => ({ name, cron: s.cron.trim().replace(/\s+/g, " ") }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     run,
     /** Last run per job — for /ready, dashboards and the "is anything stale?" alert. */
     async lastRuns(): Promise<Record<string, { status: string; at: Date | null; durationMs: number | null }>> {

@@ -9,6 +9,7 @@ import type { IdentityFacade } from "@bbc/identity";
 import { installBaseMiddleware } from "./middleware/base";
 import { errorContract } from "./middleware/error-contract";
 import { resolvePrincipal, type PrincipalVars } from "./middleware/principal";
+import { clientIp } from "./middleware/client-ip";
 import { authorize, registerRoute } from "./middleware/authorize";
 import { ModuleRegistry } from "./registry";
 import { appConfig } from "./presentation/mobile/app-config";
@@ -46,7 +47,8 @@ export async function buildApp(opts: BuildOptions = {}) {
   await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
   const identity = registry.facade<IdentityFacade>("identity");
 
-  // 3. principal resolution — after modules exist (needs identity), before any route
+  // 3. client IP (behind Cloudflare → Caddy) then principal — IP before any authz log
+  app.use("*", clientIp());
   app.use(
     "*",
     resolvePrincipal({

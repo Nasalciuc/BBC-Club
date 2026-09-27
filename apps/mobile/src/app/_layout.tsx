@@ -53,6 +53,9 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const { data: session, isPending: sessionPending } = useSession();
+  // useSession() may yield data:null on a 429/5xx get-session — that is NOT signed-out.
+  // gate() returns early on !session and never calls resolvePostAuthRoute; only onSessionRevoked
+  // (apiFetch 401) and explicit signOut navigate to /sign-in.
 
   // Fonts swap in when ready (RN 0.72+); do not block Stack on useFonts (Expo Router migrate).
   useFonts({

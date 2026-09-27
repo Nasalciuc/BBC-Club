@@ -2,6 +2,10 @@
 packages/ui/src/tokens.ts
 apps/mobile/tailwind.theme.js
 
+# Generated from infra/cloudflare-ranges.txt by `bun run cf:gen` — byte-identical to generator.
+packages/shared/src/net/cloudflare-ranges.ts
+infra/caddy/cloudflare_ranges.caddy
+
 # Agent scratch / local worktrees — not part of the product tree.
 .claude/**
 

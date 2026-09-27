@@ -1,3 +1,4 @@
+import { CLOUDFLARE_RANGES } from "@bbc/shared/net/cloudflare-ranges";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP, haveIBeenPwned, jwt, bearer, admin } from "better-auth/plugins";
@@ -7,6 +8,7 @@ import { event } from "@bbc/shared/events";
 import type { EmailSender } from "../ports/email";
 import type { EventPublisher } from "../ports/events";
 import { ac, roles } from "./access";
+import { claimOtpSend, releaseOtpClaim } from "./otp-cooldown";
 import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
 
 export type Logger = {
@@ -65,7 +67,9 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       customRules: {
         "/sign-in/email": { window: TEN_MINUTES, max: 5 },
         "/sign-up/email": { window: TEN_MINUTES, max: 5 },
-        "/email-otp/send-verification-otp": { window: FIFTEEN_MINUTES, max: 1 },
+        // Final per-IP limit for OTP send (plugin rateLimit is applied first, then this overwrites —
+        // see better-auth rate-limiter resolveRateLimitConfig). Keep emailOTP({ rateLimit }) in sync.
+        "/email-otp/send-verification-otp": { window: FIFTEEN_MINUTES, max: 10 },
         "/email-otp/verify-email": { window: TEN_MINUTES, max: 10 },
         "/email-otp/reset-password": { window: 60 * 15, max: 5 },
         "/forget-password/email-otp": { window: 60 * 15, max: 3 },
@@ -118,6 +122,9 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       // Better Auth 1.6.31: "uuid" means "the database generates it", but auth.user.id is text with no default
       // (the CLI-generated schema, kept regen-safe). Generate in-app instead — a real UUID, no schema edit.
       database: { generateId: () => crypto.randomUUID() },
+      // Caddy forwards `client, cloudflare`. Without trustedProxies Better Auth resolves no IP from a two-value
+      // X-Forwarded-For and rate-limits every member in ONE bucket (core/utils/ip getIPFromHeader).
+      ipAddress: { ipAddressHeaders: ["x-forwarded-for"], trustedProxies: [...CLOUDFLARE_RANGES] },
     },
 
     plugins: [
@@ -128,11 +135,31 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
         allowedAttempts: 5,
         // Same digits on a permitted second send (other IP / cleared rate_limit); 429 stops the mail.
         resendStrategy: "reuse",
+        // Recoverable (reuse works) and not plaintext in auth.verification — "hashed" is unkeyed SHA-256
+        // of six digits (~20 bits) and forces rotate.
+        storeOTP: "encrypted",
         sendVerificationOnSignUp: true,
-        // The tutorial's fatal bug made impossible: recipient = the user's email, the call is awaited,
-        // and a provider failure propagates → Better Auth returns an error → the app shows it.
+        // Plugin default is 3/60s for every emailOTP path. customRules overwrites per path after;
+        // set this to the send window so an accidental customRules removal still allows colleagues.
+        rateLimit: { window: FIFTEEN_MINUTES, max: 10 },
+        // Recipient = the user's email; send is awaited inside our callback. Better Auth 1.6.31's
+        // runInBackgroundOrAwait may still return HTTP 200 if Postmark throws — we release the claim
+        // so a retry inside the 30s UI window can mail again.
         sendVerificationOTP: async ({ email: to, otp, type }) => {
-          await email.sendOtp({ to, otp, purpose: type });
+          // Same answer either way (no enumeration). resendStrategy "reuse" keeps the earlier code valid.
+          // BA resolveOTP may have already stored a *replacement* OTP before this runs — claim by otp HMAC
+          // so a new code still mails inside the 30s UI window.
+          const claim = await claimOtpSend(db, to, type, otp, env.BETTER_AUTH_SECRET);
+          if (!claim) {
+            logger.info({ type }, "otp: resend inside cooldown, not sent"); // never log the address
+            return;
+          }
+          try {
+            await email.sendOtp({ to, otp, purpose: type });
+          } catch (e) {
+            await releaseOtpClaim(db, claim);
+            throw e;
+          }
           logger.info({ to: mask(to), purpose: type }, "otp sent");
         },
       }),

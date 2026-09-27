@@ -4,6 +4,7 @@
  *  Run: bun run scripts/seed-fixture-auth.ts (DATABASE_URL + APP_ORIGIN + secrets set). */
 import { sql } from "drizzle-orm";
 import { loadEnv } from "@bbc/shared/env";
+import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { fixture } from "@bbc/shared/fixture";
 import { createDb } from "@bbc/db";
 import { createPlatform } from "@bbc/platform";
@@ -17,6 +18,7 @@ const fixtureId = fixture.member.id;
 
 const db = createDb(env.DATABASE_URL, { max: 1, applicationName: "bbc-seed-fixture-auth" });
 const platform = createPlatform(db, { level: "warn" });
+for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
 const auth = createAuth({
   env,
   db,

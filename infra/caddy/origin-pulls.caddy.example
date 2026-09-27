@@ -1,0 +1,12 @@
+# After Cloudflare → SSL/TLS → Origin Server → Authenticated Origin Pulls is ON for the zone,
+# open a small PR that replaces infra/caddy/origin-pulls.caddy with the block below (keep this
+# example as the template). Deploy that PR — never copy the file onto the server by hand.
+#
+# VERIFY with: docker compose run --rm caddy caddy validate --config /etc/caddy/Caddyfile
+#
+# tls {
+# 	client_auth {
+# 		mode require_and_verify
+# 		trust_pool file /etc/caddy/cloudflare-origin-pull-ca.pem
+# 	}
+# }

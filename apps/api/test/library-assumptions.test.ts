@@ -64,23 +64,25 @@ describe("Better Auth rate-limit customRules", () => {
     expect(retryAfter).toBeTruthy();
   });
 
-  it("2nd POST /api/auth/email-otp/send-verification-otp is 429", async () => {
+  it("11th POST /api/auth/email-otp/send-verification-otp is 429", async () => {
     await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
     const statuses: number[] = [];
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 11; i++) {
       const r = await t.app.request("/api/auth/email-otp/send-verification-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "otp-rate@test.dev", type: "sign-in" }),
+        body: JSON.stringify({ email: `otp-rate-${i}@test.dev`, type: "sign-in" }),
       });
       statuses.push(r.status);
     }
-    expect(statuses[0]).toBe(200);
-    expect(statuses[1]).toBe(429);
+    expect(statuses.slice(0, 10).every((s) => s === 200)).toBe(true);
+    expect(statuses[10]).toBe(429);
   });
 
   it("resendStrategy reuse: second send after clearing rate_limit returns the same OTP", async () => {
     await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
     const email = `otp.reuse.${crypto.randomUUID().slice(0, 8)}@test.dev`;
     const send = async () =>
       t.app.request("/api/auth/email-otp/send-verification-otp", {
@@ -91,6 +93,7 @@ describe("Better Auth rate-limit customRules", () => {
     expect((await send()).status).toBe(200);
     const first = t.email.lastOtp(email);
     await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
     expect((await send()).status).toBe(200);
     expect(t.email.lastOtp(email)).toBe(first);
     const verify = await t.app.request("/api/auth/sign-in/email-otp", {

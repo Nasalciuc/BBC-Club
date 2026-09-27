@@ -61,6 +61,7 @@ try {
     "platform.rate_limits",
     "members.notification_preferences",
     "personalization.member_features",
+    "auth.otp_cooldown",
   ]);
   const noCreated = await q(sql`
     SELECT t.table_schema, t.table_name FROM information_schema.tables t

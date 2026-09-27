@@ -13,9 +13,11 @@
     "start": "bun src/index.ts",
     "test": "bun test --preload ../../packages/db/src/testing/preload.ts",
     "test:db": "bun test --preload ../../packages/db/src/testing/preload.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cron:gen": "bun run scripts/cron-gen.ts"
   },
   "dependencies": {
+    "@better-auth/core": "1.6.31",
     "hono": "^4.7.0",
     "jose": "^6.0.0",
     "zod": "^3.24.0",

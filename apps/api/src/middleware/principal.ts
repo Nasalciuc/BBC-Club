@@ -48,7 +48,7 @@ export function resolvePrincipal(opts: Opts): MiddlewareHandler<PrincipalVars> {
     if (secret) {
       const ok = secretHashes.some((h) => timingSafeEqual(h, sha256(secret)));
       if (!ok) {
-        opts.logger.warn({ ip: c.req.header("cf-connecting-ip") }, "authz.denied internal-secret");
+        opts.logger.warn({ ip: c.get("clientIp") }, "authz.denied internal-secret");
         return c.json(err("UNAUTHORIZED"), 401);
       }
       c.set("principal", { kind: "system", role: "system", source: "internal-secret" });
