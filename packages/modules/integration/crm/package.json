@@ -9,13 +9,14 @@
     "./schema": "./src/infrastructure/schema.ts"
   },
   "scripts": {
+    "test": "bun test tests/unit tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
     "test:db": "bun test tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "drizzle-orm": "1.0.0-rc.4",
     "zod": "^3.24.0",
-    "@bbc/shared": "workspace:*",
+    "@bbc/email": "workspace:*",
     "@bbc/db": "workspace:*",
     "@bbc/platform": "workspace:*"
   }

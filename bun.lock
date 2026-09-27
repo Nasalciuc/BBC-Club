@@ -218,8 +218,8 @@
       "version": "0.1.0",
       "dependencies": {
         "@bbc/db": "workspace:*",
+        "@bbc/email": "workspace:*",
         "@bbc/platform": "workspace:*",
-        "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "zod": "^3.24.0",
       },

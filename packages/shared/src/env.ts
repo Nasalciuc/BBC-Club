@@ -20,7 +20,7 @@ export const ServerEnv = z.object({
   INTERNAL_API_SECRET: z.string().min(32),
   /** Dual-secret rotation window — accepted alongside INTERNAL_API_SECRET when set. */
   INTERNAL_API_SECRET_NEXT: z.string().min(32).optional(),
-  CRM_ADAPTER: z.enum(["mock", "http"]).default("mock"),
+  CRM_ADAPTER: z.enum(["mock", "http", "email"]).default("mock"),
   /** Inbox for the email CRM adapter. Required when CRM_ADAPTER=email. */
   OPERATORS_EMAIL: z.string().email().optional(),
   /** HMAC for operator action links. Required when CRM_ADAPTER=email. */
@@ -65,6 +65,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n  ");
     throw new Error(`Invalid environment:\n  ${missing}`);
+  }
+  if (parsed.data.CRM_ADAPTER === "email") {
+    if (!parsed.data.OPERATORS_EMAIL) {
+      throw new Error("OPERATORS_EMAIL is required when CRM_ADAPTER=email");
+    }
+    if (!parsed.data.OPS_LINK_SECRET) {
+      throw new Error("OPS_LINK_SECRET is required when CRM_ADAPTER=email");
+    }
   }
   if (parsed.data.NODE_ENV === "production" && !parsed.data.POSTMARK_SERVER_TOKEN) {
     throw new Error("POSTMARK_SERVER_TOKEN is required in production (OTP delivery = login availability).");
