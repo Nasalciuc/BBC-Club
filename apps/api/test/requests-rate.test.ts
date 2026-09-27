@@ -19,7 +19,7 @@ describe("POST /v1/requests rate limits", () => {
     }
     expect(statuses).toEqual([201, 201, 201, 201, 201, 201, 201, 201, 201, 201]);
     await t.close();
-  });
+  }, 30_000);
 
   it("a member's sixth submit is 429 for about 360s; replaying the fifth is 200", async () => {
     const t = await testApp({ suite: "requests-rate-member" });

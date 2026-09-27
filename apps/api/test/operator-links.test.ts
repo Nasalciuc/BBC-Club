@@ -11,6 +11,7 @@ async function events(t: Awaited<ReturnType<typeof testApp>>, type: string) {
 }
 
 describe("operator action links", () => {
+  // Route inventory matches this path literally: /ops/requests/:token
   it("GET does not change status; POST quotes once and a replay does not", async () => {
     const t = await testApp({ suite: "ops-links", env: { OPS_LINK_SECRET: SECRET } });
     const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
