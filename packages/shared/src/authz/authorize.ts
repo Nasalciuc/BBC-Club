@@ -8,8 +8,12 @@ export type PrincipalVars = AppEnv;
 
 /** Every protected route registers here at mount time; the inventory test asserts every /v1 route is present. */
 export const routeRegistry = new Map<string, Permission | "public">();
-export function registerRoute(method: string, path: string, permission: Permission | "public") {
-  routeRegistry.set(`${method.toUpperCase()} ${path}`, permission);
+/** Rule name passed to rateLimit() for that same route. Absent means the route is not limited. */
+export const rateRuleRegistry = new Map<string, string>();
+export function registerRoute(method: string, path: string, permission: Permission | "public", rate?: string) {
+  const key = `${method.toUpperCase()} ${path}`;
+  routeRegistry.set(key, permission);
+  if (rate) rateRuleRegistry.set(key, rate);
 }
 
 type Flags = { isKilled(module: string): Promise<boolean> };

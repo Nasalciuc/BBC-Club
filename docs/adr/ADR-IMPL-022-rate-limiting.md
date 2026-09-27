@@ -8,6 +8,6 @@ Status: accepted · Date: 2026-09-27 · Amends nothing. `packages/shared` is ADR
 
 1. GCRA. Security and write rules live in Postgres (`platform.rate_limit_state`) and fail closed. Read rules live in process memory and fail open. A denied request is `429` with `Retry-After`.
 2. Defaults live in code. A `platform.flags` row `ratelimit.<rule>` may override `limit`, `periodMs`, and `burst` from the cache — not a query per request, and not a deploy.
-3. `ModulePlatform` exposes `rateLimit.check(rule, subject)`. Better Auth keeps its own limiter.
+3. `ModulePlatform` exposes `rateLimit.check(rule, subject)`. `registerRoute` records the rule name so the inventory can see it. Better Auth keeps its own limiter. The host does not limit `/health`, `/ready`, `/metrics`, `/api/auth/*`, or `/v1/internal/*`.
 
 **Consequence.** Colleagues on one network can each request a fare. A store outage on a closed rule is `503`, never "allowed".

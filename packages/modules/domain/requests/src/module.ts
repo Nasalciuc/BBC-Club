@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
+import { rateLimit } from "@bbc/platform/ratelimit";
 import { apiError, zodFieldErrors } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
@@ -85,9 +86,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       },
     );
 
-    registerRoute("GET", "/v1/requests", "requests:read-self");
+    registerRoute("GET", "/v1/requests", "requests:read-self", "read");
     routes.get(
       "/requests",
+      rateLimit(platform.rateLimit, "read"),
       authorize("requests:read-self", {
         module: "requests",
         flags: platform.flags,
@@ -109,9 +111,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       },
     );
 
-    registerRoute("GET", "/v1/requests/:id", "requests:read-self");
+    registerRoute("GET", "/v1/requests/:id", "requests:read-self", "read");
     routes.get(
       "/requests/:id",
+      rateLimit(platform.rateLimit, "read"),
       authorize("requests:read-self", {
         module: "requests",
         flags: platform.flags,
