@@ -43,6 +43,9 @@ export const fares = catalog.table(
     index("fares_destinations")
       .on(t.routeTo)
       .where(sql`${t.published} = true`),
+    index("fares_home_destinations")
+      .on(t.routeFrom, t.routeTo, t.price)
+      .where(sql`${t.published} = true`),
     check("fares_price_pos", sql`${t.price} > 0`),
     check("fares_published_gte_price", sql`${t.publishedPrice} IS NULL OR ${t.publishedPrice} >= ${t.price}`),
     check("fares_valid_range", sql`${t.validUntil} > ${t.validFrom}`),

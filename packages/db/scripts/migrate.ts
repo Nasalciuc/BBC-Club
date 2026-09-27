@@ -185,6 +185,22 @@ try {
     }
   }
 
+  const homeDestinations = join(migrationsDir, "0013_catalog_fares_home_destinations.sql");
+  if (existsSync(homeDestinations)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0013_catalog_fares_home_destinations.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(homeDestinations, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0013_catalog_fares_home_destinations.sql')`,
+        );
+      });
+      console.log("catalog fares_home_destinations applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {
