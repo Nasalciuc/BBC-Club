@@ -171,35 +171,42 @@ try {
     }
   }
 
-  const deliveryStats = join(migrationsDir, "0012_platform_delivery_stats.sql");
-  if (existsSync(deliveryStats)) {
-    const done = (await db.execute(
-      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0012_platform_delivery_stats.sql'`,
-    )) as any[];
-    if (!done.length) {
-      await db.transaction(async (tx: any) => {
-        await tx.execute(sql.raw(readFileSync(deliveryStats, "utf8")));
-        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0012_platform_delivery_stats.sql')`);
-      });
-      console.log("platform delivery stats indexes applied");
+  /** CREATE INDEX CONCURRENTLY cannot run inside a transaction or as a multi-statement string. */
+  const applyConcurrentIndexes = async (name: string, file: string, label: string) => {
+    if (!existsSync(file)) return;
+    const done = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${name}`)) as any[];
+    if (done.length) return;
+    const statements = readFileSync(file, "utf8")
+      .split(";")
+      .map((part) =>
+        part
+          .split("\n")
+          .filter((line) => !line.trimStart().startsWith("--"))
+          .join("\n")
+          .trim(),
+      )
+      .filter((stmt) => stmt.length > 0);
+    const raw = db.raw;
+    await raw.unsafe("SET statement_timeout = 0");
+    try {
+      for (const stmt of statements) await raw.unsafe(stmt);
+      await db.execute(sql`INSERT INTO platform.extras_applied (name) VALUES (${name})`);
+      console.log(label);
+    } finally {
+      await raw.unsafe("SET statement_timeout = '15s'");
     }
-  }
+  };
 
-  const homeDestinations = join(migrationsDir, "0013_catalog_fares_home_destinations.sql");
-  if (existsSync(homeDestinations)) {
-    const done = (await db.execute(
-      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0013_catalog_fares_home_destinations.sql'`,
-    )) as any[];
-    if (!done.length) {
-      await db.transaction(async (tx: any) => {
-        await tx.execute(sql.raw(readFileSync(homeDestinations, "utf8")));
-        await tx.execute(
-          sql`INSERT INTO platform.extras_applied (name) VALUES ('0013_catalog_fares_home_destinations.sql')`,
-        );
-      });
-      console.log("catalog fares_home_destinations applied");
-    }
-  }
+  await applyConcurrentIndexes(
+    "0012_platform_delivery_stats.sql",
+    join(migrationsDir, "0012_platform_delivery_stats.sql"),
+    "platform delivery stats indexes applied",
+  );
+  await applyConcurrentIndexes(
+    "0013_catalog_fares_home_destinations.sql",
+    join(migrationsDir, "0013_catalog_fares_home_destinations.sql"),
+    "catalog fares_home_destinations applied",
+  );
 
   console.log("migrations up to date");
   process.exit(0);

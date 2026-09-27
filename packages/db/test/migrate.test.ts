@@ -34,6 +34,22 @@ describe("extras ledger", () => {
     const first = await runMigrate();
     expect(first.code).toBe(0);
 
+    const indexes: any[] = await db.execute(sql`
+      SELECT indexname FROM pg_indexes
+      WHERE indexname IN (
+        'deliveries_pending_created',
+        'deliveries_dead',
+        'deliveries_paused',
+        'fares_home_destinations'
+      )
+      ORDER BY indexname`);
+    expect(indexes.map((r) => r.indexname)).toEqual([
+      "deliveries_dead",
+      "deliveries_paused",
+      "deliveries_pending_created",
+      "fares_home_destinations",
+    ]);
+
     const second = await runMigrate();
     expect(second.code).toBe(0);
     expect(second.out).not.toMatch(/extras applied: 0001/);
