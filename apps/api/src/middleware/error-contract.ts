@@ -1,6 +1,7 @@
 import type { ErrorHandler } from "hono";
 import { ZodError } from "zod";
 import { DomainError, apiError, HTTP_STATUS, type ErrorCode } from "@bbc/shared/errors";
+import { RateLimitUnavailable } from "@bbc/platform/ratelimit";
 
 type Logger = { error: (o: object, m?: string) => void; warn: (o: object, m?: string) => void };
 type Metrics = { inc(n: string, l?: Record<string, string>): void };
@@ -15,6 +16,10 @@ export function errorContract(logger: Logger, metrics?: Metrics): ErrorHandler<a
       const status = HTTP_STATUS[err.code];
       if (err.code === "RATE_LIMITED") c.header("Retry-After", "30");
       return c.json(apiError(err.code, { message: err.message, requestId, details: err.details }), status as any);
+    }
+    if (err instanceof RateLimitUnavailable) {
+      metrics?.inc("http_errors", { code: "SERVICE_DISABLED" });
+      return c.json(apiError("SERVICE_DISABLED", { requestId }), 503);
     }
     if (err instanceof ZodError) {
       metrics?.inc("http_errors", { code: "VALIDATION" });

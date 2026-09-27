@@ -67,14 +67,17 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         const body = await c.req.json().catch(() => ({}));
         let result;
         try {
-          result = await submit(conn, body, actor, key, { publish });
+          result = await submit(conn, body, actor, key, { publish, rateLimit: platform.rateLimit });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
           if (details) return c.json(apiError("VALIDATION", { details }), 400);
           throw err;
         }
         if (!result.ok) {
-          if (result.code === "RATE_LIMITED") return c.json(apiError("RATE_LIMITED"), 429);
+          if (result.code === "RATE_LIMITED") {
+            c.header("Retry-After", String(Math.max(1, Math.ceil((result.retryAfterMs ?? 1000) / 1000))));
+            return c.json(apiError("RATE_LIMITED"), 429);
+          }
           if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
           return c.json(apiError("VALIDATION"), 400);
         }
