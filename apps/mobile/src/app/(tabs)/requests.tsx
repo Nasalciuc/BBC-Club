@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 import { EmptyState, RequestRow, SectionLabel, tokens, rn } from "@bbc/ui";
 
+import { requestView } from "@/features/requests/request-view-logic";
 import { badgeStatus, isOpen, requestMeta } from "@/features/requests/status";
 import { fetchRequests, submitRequest } from "@/lib/api";
 import { env } from "@/lib/env";
@@ -219,17 +220,20 @@ export default function RequestsScreen() {
             return (
               <View>
                 <SectionLabel label="Closed" />
-                {closed.map((r) => (
-                  <RequestRow
-                    key={r.id}
-                    testID={`requests.row.${r.id}`}
-                    route={r.route}
-                    meta={requestMeta(r)}
-                    badgeStatus={badgeStatus(r.status)}
-                    muted
-                    onPress={() => router.push({ pathname: "/request/[id]", params: { id: r.id } } as Href)}
-                  />
-                ))}
+                {closed.map((r) => {
+                  const view = requestView(r.status, r.createdAt);
+                  return (
+                    <RequestRow
+                      key={r.id}
+                      testID={`requests.row.${r.id}`}
+                      route={r.route}
+                      meta={view.closedLine ?? requestMeta(r)}
+                      badgeStatus={view.badge}
+                      muted
+                      onPress={() => router.push({ pathname: "/request/[id]", params: { id: r.id } } as Href)}
+                    />
+                  );
+                })}
               </View>
             );
           }}

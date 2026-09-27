@@ -7,8 +7,8 @@ import { tokens } from "../tokens";
 type Props = {
   route: string;
   meta: string;
-  /** StatusBadge key — already mapped (quote_ready, not_sent, …). */
-  badgeStatus: string;
+  /** StatusBadge key — already mapped (quote_ready, not_sent, …). Null hides the badge (closed). */
+  badgeStatus: string | null;
   muted?: boolean;
   onPress: () => void;
   onCall?: () => void;
@@ -46,7 +46,7 @@ export function RequestRow({
         <Text style={[styles.route, muted && styles.muted]} numberOfLines={1}>
           {route}
         </Text>
-        <StatusBadge status={badgeStatus} />
+        {badgeStatus ? <StatusBadge status={badgeStatus} /> : null}
       </View>
       <Text style={[styles.meta, muted && styles.muted]} numberOfLines={2}>
         {meta}

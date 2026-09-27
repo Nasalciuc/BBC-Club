@@ -1,11 +1,10 @@
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 
-/** Contract statuses → StatusBadge copy keys. Do not change shared or StatusBadge. */
-export function badgeStatus(status: RequestVM["status"]): string {
-  if (status === "quoted") return "quote_ready";
-  if (status === "assigned") return "received";
-  if (status === "closed") return "booked";
-  return status;
+import { requestView } from "./request-view-logic";
+
+/** Contract statuses → StatusBadge copy keys. Closed has no badge. */
+export function badgeStatus(status: RequestVM["status"]): string | null {
+  return requestView(status).badge;
 }
 
 export function isOpen(status: RequestVM["status"]): boolean {

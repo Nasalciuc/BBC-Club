@@ -199,13 +199,41 @@ export default function GalleryScreen() {
 
       <SectionLabel label="Timeline" />
       <Timeline
+        testID="gallery.timeline.received"
+        status="received"
+        events={[{ status: "received", at: "2026-09-18T12:00:00.000Z" }]}
+      />
+      <View style={styles.gap} />
+      <Timeline
         testID="gallery.timeline.partial"
         status="assigned"
+        currentCaption="A specialist will call you shortly."
         events={[
           { status: "received", at: "2026-09-18T12:00:00.000Z" },
-          { status: "assigned", at: "2026-09-18T14:30:00.000Z" },
+          { status: "assigned", at: "2026-09-18T14:30:00.000Z", note: "A specialist will call you shortly." },
         ]}
       />
+      <View style={styles.gap} />
+      <Timeline
+        testID="gallery.timeline.quoted"
+        status="quoted"
+        currentCaption="Review the quote with your specialist."
+        events={[
+          { status: "received", at: "2026-09-18T12:00:00.000Z" },
+          { status: "quoted", at: "2026-09-19T12:00:00.000Z" },
+        ]}
+      />
+      <View style={styles.gap} />
+      <Timeline
+        testID="gallery.timeline.booked"
+        status="booked"
+        events={[{ status: "booked", at: "2026-09-20T12:00:00.000Z" }]}
+      />
+      <View style={styles.gap} />
+      <Text testID="gallery.request.closedLine" style={styles.closedLine}>
+        Closed · Oct 3
+      </Text>
+      <Text style={styles.closedSentence}>This request is closed.</Text>
       <View style={styles.gap} />
       <Timeline testID="gallery.timeline.empty" status="queued" events={[]} />
 
@@ -271,6 +299,14 @@ export default function GalleryScreen() {
         onPress={noop}
         onCall={noop}
         callTestID="gallery.request.call"
+      />
+      <RequestRow
+        testID="gallery.request.closed"
+        route="JFK → LHR"
+        meta="Closed · Oct 3"
+        badgeStatus={null}
+        muted
+        onPress={noop}
       />
       <RequestRow
         testID="gallery.request.booked"
@@ -348,4 +384,6 @@ const styles = StyleSheet.create({
   note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
   row: { flexDirection: "row", flexWrap: "wrap", gap: tokens.space.xs, alignItems: "center" },
   gap: { height: tokens.space.sm },
+  closedLine: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  closedSentence: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
 });
