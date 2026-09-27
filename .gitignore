@@ -75,3 +75,6 @@ pnpm-lock.yaml
 
 # monorepo
 .turbo/
+
+# Nightly bench writes this; baseline.json is the committed comparison.
+load/bench/report.json

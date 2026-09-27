@@ -1,0 +1,32 @@
+{
+  "home": {
+    "cpuMsPerReq": 2.376,
+    "p50": 4.392,
+    "p99": 11.636
+  },
+  "proposals": {
+    "cpuMsPerReq": 3.344,
+    "p50": 5.074,
+    "p99": 9.687
+  },
+  "search": {
+    "cpuMsPerReq": 3.656,
+    "p50": 6.075,
+    "p99": 11.0
+  },
+  "fare": {
+    "cpuMsPerReq": 4.5,
+    "p50": 5.679,
+    "p99": 10.597
+  },
+  "profile": {
+    "cpuMsPerReq": 1.72,
+    "p50": 3.221,
+    "p99": 6.712
+  },
+  "requests": {
+    "cpuMsPerReq": 2.216,
+    "p50": 2.936,
+    "p99": 6.073
+  }
+}

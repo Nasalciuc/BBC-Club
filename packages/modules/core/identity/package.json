@@ -11,6 +11,7 @@
   },
   "scripts": {
     "test:db": "bun test tests --preload ../../../db/src/testing/preload.ts",
+    "test:unit": "bun test tests/password-off-thread.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
