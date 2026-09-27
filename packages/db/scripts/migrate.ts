@@ -222,6 +222,42 @@ try {
     }
   }
 
+  const sendingEnum = join(migrationsDir, "0015_notifications_sending_enum.sql");
+  if (existsSync(sendingEnum)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0015_notifications_sending_enum.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(sendingEnum, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0015_notifications_sending_enum.sql')`,
+        );
+      });
+      console.log("notifications sending status applied");
+    }
+  }
+
+  const claimedAt = join(migrationsDir, "0016_notifications_claimed_at.sql");
+  if (existsSync(claimedAt)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0016_notifications_claimed_at.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(claimedAt, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0016_notifications_claimed_at.sql')`);
+      });
+      console.log("notifications claimed_at applied");
+    }
+  }
+
+  await applyConcurrentIndexes(
+    "0017_notifications_sending_index.sql",
+    join(migrationsDir, "0017_notifications_sending_index.sql"),
+    "notifications sending index applied",
+  );
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {

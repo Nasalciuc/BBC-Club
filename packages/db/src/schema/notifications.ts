@@ -6,6 +6,7 @@ export const notifications = pgSchema("notifications");
 
 export const notificationStatus = notifications.enum("notification_status", [
   "pending",
+  "sending",
   "sent",
   "delivered",
   "failed",
@@ -32,6 +33,7 @@ export const notificationsTable = notifications.table(
     requestId: uuid("request_id"),
     sourceEventId: text("source_event_id"), // journal id that created it (dedupe/debug)
     status: notificationStatus("status").notNull().default("pending"),
+    claimedAt: tz("claimed_at"),
     scheduledFor: tz("scheduled_for").notNull().defaultNow(), // quiet hours push it forward
     attempts: integer("attempts").notNull().default(0),
     ticketId: text("ticket_id"), // provider message id
@@ -46,6 +48,9 @@ export const notificationsTable = notifications.table(
     index("notif_dispatch")
       .on(t.scheduledFor, t.category)
       .where(sql`${t.status} = 'pending'`),
+    index("notif_sending_claimed")
+      .on(t.claimedAt)
+      .where(sql`${t.status} = 'sending'`),
     // inbox: newest first per member; badge = unread count
     index("notif_inbox").on(t.memberId, t.createdAt),
     index("notif_unread")
