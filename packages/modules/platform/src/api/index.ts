@@ -2,6 +2,7 @@ import { EventRegistry, createPublisher, createPoller, tombstoneMember, type Pol
 import { createFlags } from "../flags";
 import { createJobs } from "../jobs";
 import { createLogger, createMetrics } from "../telemetry";
+import { createRateLimiter } from "../ratelimit";
 
 export type Platform = ReturnType<typeof createPlatform>;
 
@@ -16,6 +17,7 @@ export function createPlatform(
   const registry = new EventRegistry();
   const flags = createFlags(db, { logger });
   const jobs = createJobs(db, { logger, metrics });
+  const rateLimit = createRateLimiter({ db, flags, metrics, logger });
   const { publish } = createPublisher(registry, metrics);
   const poller = createPoller(
     db,
@@ -54,6 +56,7 @@ export function createPlatform(
     metrics,
     flags,
     jobs,
+    rateLimit,
     poller,
     events: {
       defineEvent: registry.defineEvent.bind(registry),

@@ -67,6 +67,12 @@ export type ModulePlatform = {
     registerConsumer: (type: string, name: string, handler: ConsumerSpec["handler"]) => void;
   };
   jobs: { register: (name: string, spec: JobSpec) => void };
+  rateLimit: {
+    check(
+      rule: string,
+      subject: string,
+    ): Promise<{ allowed: boolean; remaining: number; resetMs: number; retryAfterMs?: number; limit: number }>;
+  };
 };
 
 export type ModuleOutput<Exposes> = {
