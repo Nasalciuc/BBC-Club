@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 import { EmptyState, RequestRow, SectionLabel, tokens, rn } from "@bbc/ui";
 
-import { requestView } from "@/features/requests/request-view-logic";
+import { closedAt, requestView } from "@/features/requests/request-view-logic";
 import { badgeStatus, isOpen, requestMeta } from "@/features/requests/status";
 import { fetchRequests, submitRequest } from "@/lib/api";
 import { env } from "@/lib/env";
@@ -221,7 +221,7 @@ export default function RequestsScreen() {
               <View>
                 <SectionLabel label="Closed" />
                 {closed.map((r) => {
-                  const view = requestView(r.status, r.createdAt);
+                  const view = requestView(r.status, closedAt(r));
                   return (
                     <RequestRow
                       key={r.id}

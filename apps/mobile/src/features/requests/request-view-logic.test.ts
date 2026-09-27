@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { requestView } from "./request-view-logic";
+import { closedAt, requestView } from "./request-view-logic";
 
 test("received stays Received with no invented caption", () => {
   const v = requestView("received");
@@ -28,6 +28,18 @@ test("booked is Booked by phone, with no invented caption", () => {
   expect(v.badge).toBe("booked");
   expect(v.showTimeline).toBe(true);
   expect(v.caption).toBeNull();
+});
+
+test("closedAt prefers the closed timeline event over createdAt", () => {
+  const at = closedAt({
+    createdAt: "2026-09-01T00:00:00.000Z",
+    timeline: [
+      { status: "received", at: "2026-09-01T00:00:00.000Z" },
+      { status: "closed", at: "2026-10-03T15:00:00.000Z" },
+    ],
+  });
+  expect(at).toBe("2026-10-03T15:00:00.000Z");
+  expect(requestView("closed", at).closedLine).toBe("Closed · Oct 3");
 });
 
 test("closed is not Booked: no badge, no timeline, muted date", () => {

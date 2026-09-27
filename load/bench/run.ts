@@ -45,7 +45,7 @@ async function signInBenchMember(app: Awaited<ReturnType<typeof buildApp>>) {
     .join("; ");
 }
 
-/** 20 000 no-op deliveries. The drain itself must finish in under 10s. */
+/** 20 000 no-op deliveries. A short count fails the run; 10s is a warning only. */
 async function drainBacklog(db: Awaited<ReturnType<typeof buildApp>>["db"]) {
   const p = createPlatform(db, { level: "silent" });
   const Payload = z.object({ type: z.literal("bench.noop"), version: z.literal(1) });
@@ -76,7 +76,8 @@ async function drainBacklog(db: Awaited<ReturnType<typeof buildApp>>["db"]) {
   const sec = (performance.now() - t0) / 1000;
   const rate = sec === 0 ? n : n / sec;
   console.log(`poller drain: ${n} deliveries in ${sec.toFixed(2)}s (${rate.toFixed(0)}/s)`);
-  if (sec >= 10) console.error(`poller drain exceeded 10s (${sec.toFixed(2)}s for ${n})`);
+  if (n !== total) throw new Error(`poller drain delivered ${n}, expected ${total}`);
+  if (sec >= 10) console.error(`poller drain took ${sec.toFixed(2)}s (warning only; 10s is not a gate)`);
 }
 
 const built = await buildApp({ startPoller: false });

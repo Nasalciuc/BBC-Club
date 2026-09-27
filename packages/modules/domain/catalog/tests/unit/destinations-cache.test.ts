@@ -27,6 +27,26 @@ test("two concurrent misses call load once", async () => {
   expect(calls).toBe(1);
 });
 
+test("clear drops an in-flight load so it cannot write stale data back", async () => {
+  const cache = createDestinationsCache();
+  let resolveLoad: (pins: DestinationPin[]) => void = () => undefined;
+  const load = () =>
+    new Promise<DestinationPin[]>((resolve) => {
+      resolveLoad = resolve;
+    });
+  const pending = cache.get("JFK", load);
+  cache.clear();
+  resolveLoad([pin("LHR", 4200)]);
+  expect((await pending)[0]?.fromPrice).toBe(4200);
+  let calls = 0;
+  const next = async () => {
+    calls++;
+    return [pin("LHR", 1000)];
+  };
+  expect((await cache.get("JFK", next))[0]?.fromPrice).toBe(1000);
+  expect(calls).toBe(1);
+});
+
 test("clear drops the cached value", async () => {
   const cache = createDestinationsCache();
   let price = 4200;

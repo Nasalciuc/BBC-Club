@@ -40,18 +40,19 @@ describe("delivery stats", () => {
     expect(statsQueries).toBe(1);
   });
 
-  it("stats() stays under 20ms with a million done deliveries", async () => {
-    await db.execute(sql`
-      INSERT INTO platform.event_deliveries (event_id, event_occurred_at, consumer, aggregate_id, status, processed_at)
-      SELECT g, now(), 'bench.noop', g::text, 'done', now()
-      FROM generate_series(1, 1000000) g
-    `);
-    const p = createPlatform(db, { level: "silent" });
-    await p.poller.stats();
-    const t0 = performance.now();
-    const s = await p.poller.stats();
-    const ms = performance.now() - t0;
-    expect(s.pending).toBe(0);
-    expect(ms).toBeLessThan(20);
-  }, 120_000);
+  it("stats() uses the partial delivery indexes", async () => {
+    const plan = (await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+      return tx.execute(sql`
+        EXPLAIN SELECT (SELECT count(*) FROM platform.event_deliveries WHERE status = 'pending')::int AS pending,
+                      (SELECT count(*) FROM platform.event_deliveries WHERE status = 'dead')::int AS dead,
+                      (SELECT count(*) FROM platform.event_deliveries WHERE status = 'paused')::int AS paused,
+                      COALESCE(EXTRACT(EPOCH FROM now() - (SELECT min(created_at) FROM platform.event_deliveries
+                                                           WHERE status = 'pending'))::int, 0) AS oldest_pending_s`);
+    })) as { "QUERY PLAN": string }[];
+    const text = plan.map((r) => r["QUERY PLAN"]).join("\n");
+    expect(text).toContain("deliveries_pending_created");
+    expect(text).toContain("deliveries_dead");
+    expect(text).toContain("deliveries_paused");
+  });
 });

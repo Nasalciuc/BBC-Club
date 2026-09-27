@@ -5,6 +5,7 @@ import type { DestinationPin } from "../api";
 export function createDestinationsCache(ttlMs = 60_000) {
   const done = new Map<string, { at: number; value: DestinationPin[] }>();
   const inflight = new Map<string, Promise<DestinationPin[]>>();
+  let generation = 0;
   return {
     async get(home: string, load: () => Promise<DestinationPin[]>): Promise<DestinationPin[]> {
       const k = home.toUpperCase();
@@ -12,18 +13,23 @@ export function createDestinationsCache(ttlMs = 60_000) {
       if (hit && Date.now() - hit.at < ttlMs) return hit.value;
       const running = inflight.get(k);
       if (running) return running;
+      const gen = generation;
       const p = load()
         .then((value) => {
-          done.set(k, { at: Date.now(), value });
+          if (gen === generation) done.set(k, { at: Date.now(), value });
           return value;
         })
-        .finally(() => inflight.delete(k));
+        .finally(() => {
+          if (inflight.get(k) === p) inflight.delete(k);
+        });
       inflight.set(k, p);
       return p;
     },
     /** Called by the catalogue import and by expire-fares. Every cache here has an invalidation path. */
     clear(): void {
+      generation += 1;
       done.clear();
+      inflight.clear();
     },
   };
 }

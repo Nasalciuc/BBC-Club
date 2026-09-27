@@ -1,4 +1,4 @@
-import { EventRegistry, createPublisher, createPoller, tombstoneMember } from "../events";
+import { EventRegistry, createPublisher, createPoller, tombstoneMember, type PollerOptions } from "../events";
 import { createFlags } from "../flags";
 import { createJobs } from "../jobs";
 import { createLogger, createMetrics } from "../telemetry";
@@ -7,7 +7,10 @@ export type Platform = ReturnType<typeof createPlatform>;
 
 /** The only surface other modules and the host may import from platform.
  *  Modules get `events.publish`, `flags`, `jobs.register`; the host also gets the poller and metrics. */
-export function createPlatform(db: any, opts: { level?: string; pretty?: boolean; handlerTimeoutMs?: number } = {}) {
+export function createPlatform(
+  db: any,
+  opts: { level?: string; pretty?: boolean; handlerTimeoutMs?: number; onDead?: PollerOptions["onDead"] } = {},
+) {
   const logger = createLogger(opts);
   const metrics = createMetrics();
   const registry = new EventRegistry();
@@ -24,7 +27,8 @@ export function createPlatform(db: any, opts: { level?: string; pretty?: boolean
     },
     {
       handlerTimeoutMs: opts.handlerTimeoutMs,
-      onDead: ({ consumer, eventId }) => logger.error({ consumer, eventId }, "DLQ: manual replay required"),
+      onDead:
+        opts.onDead ?? (({ consumer, eventId }) => logger.error({ consumer, eventId }, "DLQ: manual replay required")),
     },
   );
 

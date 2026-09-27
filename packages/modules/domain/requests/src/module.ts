@@ -94,8 +94,15 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         const memberId = actorMemberId(c.get("principal"));
         if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
         const rows = await repo.listForMember(undefined, memberId);
-        const hasMore = rows.length > 50;
-        return c.json({ items: rows.slice(0, 50).map((r) => toRequestVM(r)), hasMore });
+        const page = rows.slice(0, 50);
+        const timelines = await repo.timelinesFor(
+          undefined,
+          page.map((r) => r.id),
+        );
+        return c.json({
+          items: page.map((r) => toRequestVM(r, timelines.get(r.id) ?? [])),
+          hasMore: rows.length > 50,
+        });
       },
     );
 

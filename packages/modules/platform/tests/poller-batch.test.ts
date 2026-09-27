@@ -77,4 +77,35 @@ describe("poller batch (savepoint per delivery)", () => {
     expect(await probes()).not.toContain("zombie");
     expect(await probes()).not.toContain("a");
   });
+
+  it("a throwing onDead leaves the delivery dead and does not replay it", async () => {
+    let calls = 0;
+    const p = createPlatform(db, {
+      level: "silent",
+      onDead: () => {
+        calls++;
+        throw new Error("alert down");
+      },
+    });
+    p.events.defineEvent("test.happened", { version: 1, schema: Payload });
+    p.events.registerConsumer("test.happened", "testing.onHappened", async (ctx: any, pl: any) => {
+      await ctx.tx.execute(sql`INSERT INTO public.batch_probe (v) VALUES (${pl.value})`);
+      if (pl.value === "c") throw new Error("poison");
+    });
+    for (const v of ["a", "b", "c"]) await emit(p, v);
+    await db.execute(sql`
+      UPDATE platform.event_deliveries d
+      SET attempts = 6, run_after = now()
+      FROM platform.domain_events e
+      WHERE e.id = d.event_id AND e.payload->>'value' = 'c'`);
+    await p.poller.drainOnce(5);
+    const s = await status();
+    expect(s.find((r) => r.v === "a")).toMatchObject({ status: "done" });
+    expect(s.find((r) => r.v === "b")).toMatchObject({ status: "done" });
+    expect(s.find((r) => r.v === "c")).toMatchObject({ status: "dead", attempts: 7 });
+    expect(await probes()).toEqual(["a", "b"]);
+    expect(calls).toBe(1);
+    expect(await p.poller.drainOnce(5)).toBe(0);
+    expect((await status()).find((r) => r.v === "c")).toMatchObject({ status: "dead", attempts: 7 });
+  });
 });

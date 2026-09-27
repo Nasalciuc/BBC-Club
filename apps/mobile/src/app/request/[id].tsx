@@ -5,7 +5,7 @@ import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from "
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BackButton, Button, ErrorState, StatusBadge, Timeline, tokens, rn } from "@bbc/ui";
 
-import { requestView } from "@/features/requests/request-view-logic";
+import { closedAt, requestView } from "@/features/requests/request-view-logic";
 import { requestMeta } from "@/features/requests/status";
 import { fetchRequest, submitRequest } from "@/lib/api";
 import { env } from "@/lib/env";
@@ -155,8 +155,7 @@ export default function RequestDetailScreen() {
   const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
   const showCall = vm.status === "quoted" && Boolean(supportPhone);
   const showSend = queued;
-  const closedAt = vm.timeline.find((e) => e.status === "closed")?.at ?? vm.createdAt;
-  const view = requestView(queued ? "queued" : vm.status, closedAt);
+  const view = requestView(queued ? "queued" : vm.status, closedAt(vm));
 
   return (
     <View testID="request.root" style={styles.root}>

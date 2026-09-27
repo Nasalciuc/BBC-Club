@@ -118,34 +118,54 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
     }
   }
 
-  /** attempts++ with backoff, or dead + DLQ + onDead after MAX_ATTEMPTS. Runs on the executor it is given. */
-  async function recordFailure(exec: any, row: any, attempt: number, message: string): Promise<void> {
+  type DeadNotice = { consumer: string; eventId: string; error: string };
+
+  /** attempts++ with backoff, or dead + DLQ. Never calls onDead — the caller does that after COMMIT. */
+  async function recordFailure(exec: any, row: any, attempt: number, message: string): Promise<DeadNotice | null> {
     if (attempt >= MAX_ATTEMPTS) {
-      await (async (tx: any) => {
-        await tx.execute(
-          sql`UPDATE platform.event_deliveries SET status='dead', attempts=${attempt}, last_error=${message}, processed_at=now() WHERE id = ${row.id}`,
-        );
-        await tx.insert(eventDlq).values({
-          deliveryId: row.id,
-          eventId: row.event_id,
-          consumer: row.consumer,
-          attempts: attempt,
-          lastError: message,
-        });
-      })(exec);
+      await exec.execute(
+        sql`UPDATE platform.event_deliveries SET status='dead', attempts=${attempt}, last_error=${message}, processed_at=now() WHERE id = ${row.id}`,
+      );
+      await exec.insert(eventDlq).values({
+        deliveryId: row.id,
+        eventId: row.event_id,
+        consumer: row.consumer,
+        attempts: attempt,
+        lastError: message,
+      });
       deps.logger.error(
         { consumer: row.consumer, eventId: String(row.event_id), attempts: attempt, err: message },
         "delivery dead",
       );
       deps.metrics?.inc("deliveries_dead", { consumer: row.consumer });
-      opts.onDead?.({ consumer: row.consumer, eventId: String(row.event_id), error: message });
-    } else {
-      const delay = BACKOFF_MS[attempt - 1] ?? 1_000;
-      await exec.execute(
-        sql`UPDATE platform.event_deliveries SET attempts=${attempt}, last_error=${message}, run_after = now() + ${delay} * interval '1 millisecond' WHERE id = ${row.id}`,
-      );
-      deps.logger.warn({ consumer: row.consumer, attempt, retryInMs: delay, err: message }, "delivery retry");
-      deps.metrics?.inc("deliveries_retried", { consumer: row.consumer });
+      return { consumer: row.consumer, eventId: String(row.event_id), error: message };
+    }
+    const delay = BACKOFF_MS[attempt - 1] ?? 1_000;
+    await exec.execute(
+      sql`UPDATE platform.event_deliveries SET attempts=${attempt}, last_error=${message}, run_after = now() + ${delay} * interval '1 millisecond' WHERE id = ${row.id}`,
+    );
+    deps.logger.warn({ consumer: row.consumer, attempt, retryInMs: delay, err: message }, "delivery retry");
+    deps.metrics?.inc("deliveries_retried", { consumer: row.consumer });
+    return null;
+  }
+
+  /** Last resort when recording the real failure itself fails. Keeps the row off the immediate retry loop. */
+  async function bumpRunAfter(exec: any, id: string, message: string): Promise<void> {
+    await exec.execute(sql`
+      UPDATE platform.event_deliveries
+      SET attempts = attempts + 1,
+          run_after = now() + interval '5 minutes',
+          last_error = left(${message}, 1000)
+      WHERE id = ${id}`);
+  }
+
+  async function notifyDead(notices: readonly DeadNotice[]): Promise<void> {
+    for (const n of notices) {
+      try {
+        await opts.onDead?.(n);
+      } catch (err) {
+        deps.logger.error({ err, consumer: n.consumer, eventId: n.eventId }, "events.dead.notify_failed");
+      }
     }
   }
 
@@ -180,7 +200,14 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
       });
     if (outcome !== "failed") return outcome;
     const f = failed as unknown as { row: any; attempt: number; message: string };
-    await db.transaction(async (tx: any) => recordFailure(tx, f.row, f.attempt, f.message));
+    let notice: DeadNotice | null = null;
+    try {
+      notice = await db.transaction(async (tx: any) => recordFailure(tx, f.row, f.attempt, f.message));
+    } catch (writeErr) {
+      deps.logger.error({ err: writeErr, deliveryId: String(f.row.id) }, "events.record_failure");
+      await db.transaction(async (tx: any) => bumpRunAfter(tx, f.row.id, f.message));
+    }
+    if (notice) await notifyDead([notice]);
     return "done";
   }
 
@@ -191,8 +218,9 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
   async function processBatch(): Promise<number> {
     let timedOut: { row: any; attempt: number; message: string } | null = null;
     let processed = 0;
-    await db
-      .transaction(async (tx: any) => {
+    const dead: DeadNotice[] = [];
+    try {
+      await db.transaction(async (tx: any) => {
         const rows: any[] = await tx.execute(CLAIM_SQL(CLAIM_BATCH));
         const deadline = Date.now() + BATCH_BUDGET_MS;
         for (const row of rows) {
@@ -205,20 +233,35 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
               timedOut = { row, attempt: row.attempts + 1, message };
               throw e;
             }
-            await recordFailure(tx, row, row.attempts + 1, message);
+            try {
+              const notice = await tx.transaction(async (sp: any) => recordFailure(sp, row, row.attempts + 1, message));
+              if (notice) dead.push(notice);
+            } catch (writeErr) {
+              deps.logger.error({ err: writeErr, deliveryId: String(row.id) }, "events.record_failure");
+              await tx.transaction(async (sp: any) => bumpRunAfter(sp, row.id, message));
+            }
           }
           processed++;
         }
-      })
-      .catch((e: any) => {
-        if (!timedOut) throw e;
-        processed = 0;
       });
+    } catch (e: any) {
+      dead.length = 0;
+      if (!timedOut) throw e;
+      processed = 0;
+    }
     if (timedOut) {
       const t = timedOut as unknown as { row: any; attempt: number; message: string };
-      await db.transaction(async (tx: any) => recordFailure(tx, t.row, t.attempt, t.message));
+      let notice: DeadNotice | null = null;
+      try {
+        notice = await db.transaction(async (tx: any) => recordFailure(tx, t.row, t.attempt, t.message));
+      } catch (writeErr) {
+        deps.logger.error({ err: writeErr, deliveryId: String(t.row.id) }, "events.record_failure");
+        await db.transaction(async (tx: any) => bumpRunAfter(tx, t.row.id, t.message));
+      }
+      if (notice) await notifyDead([notice]);
       return 1;
     }
+    await notifyDead(dead);
     return processed;
   }
 

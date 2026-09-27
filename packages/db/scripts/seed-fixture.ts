@@ -189,8 +189,8 @@ try {
         )
         SELECT 'JFK', 'LHR', 'business', 'BA', true,
                (1000 + g)::numeric(10, 2), 'USD', 'manual',
-               timestamptz '2027-01-01 00:00:00+00' + (g || ' seconds')::interval,
-               timestamptz '2027-06-01 00:00:00+00', true
+               timestamptz '2026-01-01 00:00:00+00' + (g || ' seconds')::interval,
+               timestamptz '2028-01-01 00:00:00+00', true
         FROM generate_series(1, 10000) g
         ON CONFLICT (route_from, route_to, cabin, carrier, valid_from) DO NOTHING
       `);

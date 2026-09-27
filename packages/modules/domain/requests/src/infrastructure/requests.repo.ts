@@ -1,6 +1,8 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
+
+type EventRow = typeof requestEvents.$inferSelect;
 
 type Status = "received" | "assigned" | "quoted" | "booked" | "closed";
 
@@ -36,6 +38,23 @@ export function createRequestsRepo(db: Executor) {
         .from(requestEvents)
         .where(eq(requestEvents.requestId, requestId))
         .orderBy(requestEvents.createdAt);
+    },
+
+    /** One indexed read for a page of requests. Empty ids skip the query. */
+    async timelinesFor(exec: Executor | undefined, ids: readonly string[]): Promise<Map<string, EventRow[]>> {
+      if (ids.length === 0) return new Map();
+      const rows = await (exec ?? db)
+        .select()
+        .from(requestEvents)
+        .where(inArray(requestEvents.requestId, [...ids]))
+        .orderBy(requestEvents.createdAt);
+      const byId = new Map<string, EventRow[]>();
+      for (const row of rows) {
+        const list = byId.get(row.requestId);
+        if (list) list.push(row);
+        else byId.set(row.requestId, [row]);
+      }
+      return byId;
     },
 
     /** Claims unsent requests. FOR UPDATE SKIP LOCKED so two workers never take the same row. */

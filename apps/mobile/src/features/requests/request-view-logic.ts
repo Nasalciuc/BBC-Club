@@ -15,6 +15,11 @@ export type RequestView = {
 
 const NOT_SENT = "Saved on your phone. It goes out when you're back online.";
 
+/** Closed event time when the list or detail payload has one; otherwise the request's createdAt. */
+export function closedAt(r: { createdAt: string; timeline: readonly { status: string; at: string }[] }): string {
+  return r.timeline.find((e) => e.status === "closed")?.at ?? r.createdAt;
+}
+
 export function requestView(status: string, at?: string | null): RequestView {
   switch (status) {
     case "received":

@@ -11,6 +11,7 @@ test("five concurrent password hashes never block the event loop for more than 5
     last = n;
   }, 5);
   await Promise.all([1, 2, 3, 4, 5].map((i) => hashPassword(`pw-${i}-Secret!`)));
+  await new Promise((resolve) => setTimeout(resolve, 10));
   clearInterval(iv);
   expect(worst).toBeLessThan(50); // measured 12 ms on Bun 1.3.4; a JS scrypt would block ≥ 350 ms
 });

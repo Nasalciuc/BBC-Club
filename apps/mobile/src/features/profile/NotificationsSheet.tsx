@@ -1,7 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Notifications from "expo-notifications";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { Linking, StyleSheet, Switch, Text, View } from "react-native";
+import { Linking, Platform, StyleSheet, Switch, Text, View } from "react-native";
 import { Button, CloseButton, tokens, rn } from "@bbc/ui";
 
 import { putNotificationPreferences } from "@/lib/api";
@@ -16,7 +16,6 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle>(function Notifi
 
   useImperativeHandle(ref, () => ({
     present() {
-      setOffersOn(true);
       setDenied(false);
       setBusy(false);
       setError(null);
@@ -34,6 +33,7 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle>(function Notifi
   }
 
   async function onOffers(enabled: boolean) {
+    const previous = offersOn;
     setOffersOn(enabled);
     setBusy(true);
     setError(null);
@@ -44,7 +44,10 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle>(function Notifi
       ],
     });
     setBusy(false);
-    if (!result.ok) setError(result.message);
+    if (!result.ok) {
+      setOffersOn(previous);
+      setError(result.message);
+    }
   }
 
   return (
@@ -64,7 +67,9 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle>(function Notifi
         {denied ? (
           <View style={styles.denied}>
             <Text testID="notifications.denied" style={styles.caption}>
-              Notifications are off for BuyBusinessClass in iOS Settings.
+              {Platform.OS === "ios"
+                ? "Notifications are off for BuyBusinessClass in iOS Settings."
+                : "Notifications are off for BuyBusinessClass in device settings."}
             </Text>
             <Button
               testID="notifications.openSettings"
