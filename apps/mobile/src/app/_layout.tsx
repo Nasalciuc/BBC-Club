@@ -136,7 +136,7 @@ export default function RootLayout() {
   // Push device registration once an active session is present.
   useEffect(() => {
     if (!session || sessionPending) return;
-    void registerPushDevice().catch(() => {
+    void registerPushDevice({ prompt: false }).catch(() => {
       // push is best-effort; the rest of the app works without a token
     });
   }, [session, sessionPending]);

@@ -17,16 +17,19 @@ async function stableDeviceId(): Promise<string> {
 }
 
 /**
- * Request notification permission and POST /v1/devices when permitted.
+ * POST /v1/devices when notification permission is granted.
+ * `prompt: false` never shows the system dialog — launch uses that.
+ * `prompt: true` asks only from the sheet after the first request.
  * No-op on web / simulators without push; failures are swallowed (non-blocking).
  */
-export async function registerPushDevice(): Promise<void> {
+export async function registerPushDevice({ prompt }: { prompt: boolean }): Promise<void> {
   if (Platform.OS !== "ios" && Platform.OS !== "android") return;
   if (!Device.isDevice) return;
 
   const current = await Notifications.getPermissionsAsync();
   let status = current.status;
   if (status !== "granted") {
+    if (!prompt) return;
     const asked = await Notifications.requestPermissionsAsync();
     status = asked.status;
   }

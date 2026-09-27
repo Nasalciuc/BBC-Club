@@ -28,6 +28,9 @@ appId: com.buybusinessclass.club
 - inputText: "2125550148"
 - tapOn: { id: "request.submit" }
 - assertVisible: { text: "Request received." }
+- tapOn:
+    id: push-ask.not-now
+    optional: true
 - tapOn: { text: "See it in Requests" }
 - assertVisible: { id: "requests.root" }
 - tapOn:
