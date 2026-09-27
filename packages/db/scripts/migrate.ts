@@ -208,6 +208,20 @@ try {
     "catalog fares_home_destinations applied",
   );
 
+  const rateLimitState = join(migrationsDir, "0014_platform_rate_limit_state.sql");
+  if (existsSync(rateLimitState)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0014_platform_rate_limit_state.sql'`,
+    )) as any[];
+    if (!done.length) {
+      await db.transaction(async (tx: any) => {
+        await tx.execute(sql.raw(readFileSync(rateLimitState, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0014_platform_rate_limit_state.sql')`);
+      });
+      console.log("platform rate_limit_state applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {

@@ -129,6 +129,16 @@ export const jobRuns = platform.table(
   (t) => [index("job_runs_job_started").on(t.job, t.startedAt)],
 );
 
+/** GCRA state. One theoretical arrival time per key. The old rate_limits table stays unused after A3. */
+export const rateLimitState = platform.table(
+  "rate_limit_state",
+  {
+    key: text("key").primaryKey(),
+    tat: timestamp("tat", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("rate_limit_state_tat").on(t.tat)],
+);
+
 export const rateLimits = platform.table(
   "rate_limits",
   {
