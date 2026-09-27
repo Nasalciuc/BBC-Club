@@ -13,7 +13,7 @@ describe("rate limit inventory", () => {
         continue;
       }
       if (method === "GET" && permission !== "public" && path?.startsWith("/v1/")) {
-        expect(["read", "search"]).toContain(rule);
+        expect(rule === "read" || rule === "search").toBe(true);
       }
     }
     expect(rateRuleRegistry.get("GET /v1/app-config")).toBe("anon");
