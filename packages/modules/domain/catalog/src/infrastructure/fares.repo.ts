@@ -9,8 +9,10 @@ export type SearchQuery = {
   when?: Date;
 };
 
+export const SEARCH_LIMIT = 30; // the same page the future FT.SEARCH … LIMIT 0 30 returns — one contract for both paths
+
 export const faresRepo = {
-  /** Visible published fares in the validity window. Filters in SQL. */
+  /** Visible published fares in the validity window. Filters in SQL. At most SEARCH_LIMIT rows, cheapest first. */
   async search(exec: Executor, q: SearchQuery) {
     const now = q.when ?? new Date();
     return exec
@@ -26,7 +28,8 @@ export const faresRepo = {
           gt(fares.validUntil, now),
         ),
       )
-      .orderBy(asc(fares.price));
+      .orderBy(asc(fares.price))
+      .limit(SEARCH_LIMIT);
   },
 
   /** Any row by id (ignore published/window) — caller maps expired → 410. */

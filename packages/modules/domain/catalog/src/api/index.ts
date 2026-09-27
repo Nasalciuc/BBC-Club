@@ -21,6 +21,7 @@ export type DestinationPin = {
 
 /** The only import surface of @bbc/catalog. module.ts implements it; consumers import it. */
 export type CatalogFacade = {
+  /** At most 30 fares, cheapest first — the same bound the future full-text path will use. */
   searchFares(
     exec: Executor | undefined,
     q: { from: string; to: string; cabin: "business" | "first"; when?: Date },

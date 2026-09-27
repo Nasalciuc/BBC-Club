@@ -30,4 +30,25 @@ describe("@bbc/catalog facade", () => {
     expect(airports[0]?.code).toBe("JFK");
     await iso.drop();
   });
+
+  it("search returns at most 30 fares, cheapest first", async () => {
+    const iso = await isolatedDb("catalog-search-limit");
+    await iso.db.execute(sql`
+      INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng, popularity) VALUES
+        ('JFK', 'John F Kennedy International', 'New York', 'United States', 'US', 'americas', 40.6413, -73.7781, 100),
+        ('LHR', 'Heathrow', 'London', 'United Kingdom', 'GB', 'europe', 51.47, -0.4543, 98)
+      ON CONFLICT DO NOTHING`);
+    await iso.db.execute(sql`
+      INSERT INTO catalog.fares (
+        route_from, route_to, cabin, carrier, nonstop, price, currency, source, valid_from, valid_until, published
+      )
+      SELECT 'JFK', 'LHR', 'business', 'BA', true, g::numeric(10,2), 'USD', 'manual',
+             now() - interval '1 day' + (g || ' seconds')::interval,
+             now() + interval '30 days', true
+      FROM generate_series(1, 128) g`);
+    const rows = await faresRepo.search(iso.db, { from: "JFK", to: "LHR", cabin: "business" });
+    expect(rows).toHaveLength(30);
+    expect(rows.map((r) => Number(r.price))).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
+    await iso.drop();
+  });
 });
