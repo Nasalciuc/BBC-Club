@@ -2,7 +2,14 @@ import type { MiddlewareHandler } from "hono";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { apiError } from "@bbc/shared/errors";
 import type { Principal } from "@bbc/shared/authz/principal";
-import type { RateLimiter, RuleName } from "./index";
+import type { RuleName } from "./rules";
+
+type Limiter = {
+  check(
+    rule: RuleName,
+    subject: string,
+  ): Promise<{ allowed: boolean; remaining: number; resetMs: number; retryAfterMs?: number; limit: number }>;
+};
 
 /** The subject a limit counts: the member when signed in, otherwise the client IP (resolved once, PR 1). */
 export function subjectOf(c: { get(k: "principal"): Principal; get(k: "clientIp"): string | null }): string {
@@ -13,7 +20,7 @@ export function subjectOf(c: { get(k: "principal"): Principal; get(k: "clientIp"
 
 export const rateLimit =
   (
-    limiter: RateLimiter,
+    limiter: Limiter,
     rule: RuleName,
     subject: (c: { get(k: "principal"): Principal; get(k: "clientIp"): string | null }) => string = subjectOf,
   ): MiddlewareHandler<AppEnv> =>
