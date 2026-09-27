@@ -6,7 +6,16 @@ describe("GET /v1/test/last-otp", () => {
   it("is not registered in production", async () => {
     const t = await testApp({
       suite: "last-otp-prod",
-      env: { NODE_ENV: "production", POSTMARK_SERVER_TOKEN: "x".repeat(10) },
+      env: {
+        NODE_ENV: "production",
+        POSTMARK_SERVER_TOKEN: "x".repeat(10),
+        PUSH_ADAPTER: "live",
+        APNS_KEY_ID: "KEY",
+        APNS_TEAM_ID: "TEAM",
+        APNS_BUNDLE_ID: "com.buybusinessclass.club",
+        APNS_P8_BASE64: "eA==",
+        FCM_SERVICE_ACCOUNT_BASE64: "e30=",
+      },
     });
     const r = await t.app.request("/v1/test/last-otp?email=alex@test.dev");
     expect(r.status).toBe(404);

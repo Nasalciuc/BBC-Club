@@ -25,6 +25,13 @@ export const ServerEnv = z.object({
   OPERATORS_EMAIL: z.string().email().optional(),
   /** HMAC for operator action links. Required when CRM_ADAPTER=email. */
   OPS_LINK_SECRET: z.string().min(32).optional(),
+  PUSH_ADAPTER: z.enum(["recording", "live"]).default("recording"),
+  APNS_P8_BASE64: z.string().optional(),
+  APNS_KEY_ID: z.string().optional(),
+  APNS_TEAM_ID: z.string().optional(),
+  APNS_BUNDLE_ID: z.string().optional(),
+  APNS_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
+  FCM_SERVICE_ACCOUNT_BASE64: z.string().optional(),
   PORT: z.coerce.number().int().positive().default(8000),
 });
 export type ServerEnv = z.infer<typeof ServerEnv>;
@@ -83,6 +90,22 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
         throw new Error(`CORS_ORIGINS must not include an insecure origin in production: ${origin}`);
       }
     }
+  }
+  if (parsed.data.NODE_ENV === "production" && parsed.data.PUSH_ADAPTER !== "live") {
+    throw new Error("PUSH_ADAPTER must be live when NODE_ENV=production");
+  }
+  if (parsed.data.PUSH_ADAPTER === "live") {
+    const required = {
+      APNS_P8_BASE64: parsed.data.APNS_P8_BASE64,
+      APNS_KEY_ID: parsed.data.APNS_KEY_ID,
+      APNS_TEAM_ID: parsed.data.APNS_TEAM_ID,
+      APNS_BUNDLE_ID: parsed.data.APNS_BUNDLE_ID,
+      FCM_SERVICE_ACCOUNT_BASE64: parsed.data.FCM_SERVICE_ACCOUNT_BASE64,
+    };
+    const missing = Object.entries(required)
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+    if (missing.length > 0) throw new Error(`PUSH_ADAPTER=live requires ${missing.join(", ")}`);
   }
   return parsed.data;
 }
