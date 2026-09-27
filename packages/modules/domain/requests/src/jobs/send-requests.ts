@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { withTx, type Executor } from "@bbc/db";
 import type { RequestsRepo } from "../infrastructure/requests.repo";
+import { signAction, type OperatorAction } from "../application/operator-links";
 
 type Logger = { warn: (obj: object, msg: string) => void };
 
@@ -40,6 +41,8 @@ export function createSendRequestsJob(deps: {
   repo: RequestsRepo;
   crm: { submitRequest(payload: unknown): Promise<{ crmRequestId: string }> };
   logger: Logger;
+  appOrigin: string;
+  opsLinkSecret: string;
 }) {
   return async function run() {
     let sent = 0;
@@ -47,6 +50,8 @@ export function createSendRequestsJob(deps: {
 
     for (const row of rows) {
       try {
+        const actionUrl = (action: OperatorAction) =>
+          `${deps.appOrigin}/ops/requests/${signAction(deps.opsLinkSecret, row.id, action)}`;
         const { crmRequestId } = await deps.crm.submitRequest({
           reference: row.reference,
           client: {
@@ -61,6 +66,12 @@ export function createSendRequestsJob(deps: {
           phone_valid: row.phone_valid,
           _source: row.source,
           _app_version: row.app_version,
+          _request_id: row.id,
+          _actions: {
+            quoted: actionUrl("quoted"),
+            booked: actionUrl("booked"),
+            closed: actionUrl("closed"),
+          },
         });
         await withTx(deps.db, (tx) => deps.repo.markSent(tx, row.id, crmRequestId));
         sent++;

@@ -194,6 +194,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
               repo,
               crm: ports.crm,
               logger: platform.logger,
+              appOrigin: env.APP_ORIGIN,
+              opsLinkSecret: env.OPS_LINK_SECRET ?? "",
             }),
           },
         },

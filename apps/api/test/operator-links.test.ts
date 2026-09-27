@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
-import { signAction } from "../../../packages/modules/domain/requests/src/application/operator-links";
+import { signAction, verifyAction } from "../../../packages/modules/domain/requests/src/application/operator-links";
 import { testApp } from "./helpers/test-app";
 
 const SECRET = "ops-link-secret-at-least-32-characters";
@@ -60,6 +60,25 @@ describe("operator action links", () => {
       status: string;
     }[];
     expect(rows[0]?.status).toBe("received");
+    await t.close();
+  });
+
+  it("the send job carries three links that verify", async () => {
+    const t = await testApp({ suite: "ops-send", env: { OPS_LINK_SECRET: SECRET } });
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const { id } = (await created.json()) as { id: string };
+    await t.platform.jobs.run("send-requests");
+    const payload = t.crm.submitted[0] as {
+      _request_id: string;
+      _actions: { quoted: string; booked: string; closed: string };
+    };
+    expect(payload._request_id).toBe(id);
+    for (const action of ["quoted", "booked", "closed"] as const) {
+      const token = new URL(payload._actions[action]).pathname.replace("/ops/requests/", "");
+      const verified = verifyAction(SECRET, decodeURIComponent(token));
+      expect(verified.ok).toBe(true);
+      if (verified.ok) expect(verified.action).toBe(action);
+    }
     await t.close();
   });
 });
