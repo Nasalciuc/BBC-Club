@@ -20,6 +20,7 @@ function item(over: Partial<QueuedRequest> = {}): QueuedRequest {
     idempotencyKey: over.idempotencyKey ?? "key-1",
     enqueuedAt: over.enqueuedAt ?? "2026-09-18T12:00:00.000Z",
     attempts: over.attempts ?? 0,
+    ...(over.notBefore ? { notBefore: over.notBefore } : {}),
   };
 }
 
@@ -58,6 +59,14 @@ describe("afterAttempt", () => {
     expect(r.outcome).toBe("dropped");
     expect(r.keep).toBeNull();
   });
+
+  it("a 429 waits and is never dropped, even on the sixth attempt", () => {
+    const now = Date.parse("2026-09-27T12:00:00.000Z");
+    const r = afterAttempt(item({ attempts: 5 }), { ok: false, status: 429, retryAfterS: 360 }, now);
+    expect(r.outcome).toBe("failed");
+    expect(r.keep?.attempts).toBe(5);
+    expect(r.keep?.notBefore).toBe("2026-09-27T12:06:00.000Z");
+  });
 });
 
 describe("flushItems", () => {
@@ -76,6 +85,26 @@ describe("flushItems", () => {
     expect(r.failed).toBe(1);
     expect(r.remaining).toHaveLength(1);
     expect(r.remaining[0]?.idempotencyKey).toBe("b");
+  });
+
+  it("does not submit an item before notBefore", async () => {
+    const now = Date.parse("2026-09-27T12:00:00.000Z");
+    const waiting = item({ notBefore: "2026-09-27T12:06:00.000Z" });
+    let calls = 0;
+    const early = await flushItems(
+      [waiting],
+      async () => {
+        calls += 1;
+        return { ok: true };
+      },
+      now,
+    );
+    expect(calls).toBe(0);
+    expect(early.remaining).toHaveLength(1);
+    expect(early.failed).toBe(0);
+    const later = await flushItems([waiting], async () => ({ ok: true }), Date.parse("2026-09-27T12:06:00.000Z"));
+    expect(later.sent).toBe(1);
+    expect(later.remaining).toHaveLength(0);
   });
 });
 
