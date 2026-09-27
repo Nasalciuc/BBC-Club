@@ -10,6 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "bun test src",
     "test:unit": "bun test src"
   },
   "dependencies": {
