@@ -62,7 +62,7 @@ describe("destinations", () => {
         ('JFK', 'LHR', 'business', 'BA', true, '4200.00', 'USD', 'manual', ${from}::timestamptz, ${until}::timestamptz, true)`);
 
     const platform = createPlatform(iso.db, { level: "silent" });
-    const out = catalogModule().init({
+    const out = await catalogModule().init({
       db: iso.db,
       platform,
       env: {} as never,
