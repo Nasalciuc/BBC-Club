@@ -94,6 +94,45 @@ Symptoms: `deliveries_dead` climbing, `notification.failed` with `InvalidProvide
 3. `docker compose ... up -d api`, then replay the dead deliveries.
    Inbox rows already exist, so nothing is lost — pushes are late, not missing.
 
+Day-to-day states, sandbox versus production, and how to replay one failed row are under **Push**.
+
+## Push
+
+Keys live in env, base64-encoded. Nothing in the repo is a `.p8` or a Firebase service-account JSON.
+
+| Name                         | What it is                                                                                                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUSH_ADAPTER`               | `recording` in dev and test. `live` talks to Apple and Google. `NODE_ENV=production` refuses to boot unless this is `live`.                                                                             |
+| `APNS_P8_BASE64`             | Base64 of the `.p8` from Apple Developer → Keys.                                                                                                                                                        |
+| `APNS_KEY_ID`                | The key id of that `.p8`.                                                                                                                                                                               |
+| `APNS_TEAM_ID`               | Apple team id.                                                                                                                                                                                          |
+| `APNS_BUNDLE_ID`             | `com.buybusinessclass.club`.                                                                                                                                                                            |
+| `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too. |
+| `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                            |
+
+Rotate the APNs key the same way as the incident above: new `.p8`, new `APNS_P8_BASE64` and `APNS_KEY_ID`, restart the API. The old key stops working as soon as Apple revokes it, so put the new values in env before you revoke.
+
+`notifications.notifications.status`:
+
+| Status       | Meaning                                                                                                                                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending`    | Due, not claimed.                                                                                                                                                                                                                                 |
+| `sending`    | Claimed. The provider call is in flight, or the process died after the claim. A row left in `sending` for more than 5 minutes goes back to `pending` on the next dispatch. The collapse id is the notification id, so the phone shows one banner. |
+| `sent`       | No active device. The inbox row stays; there was nothing to push.                                                                                                                                                                                 |
+| `delivered`  | At least one token was accepted.                                                                                                                                                                                                                  |
+| `failed`     | Every token failed, or a `RateLimited` / `Transient` error has already been tried 6 times.                                                                                                                                                        |
+| `suppressed` | The member is not active, or an offer preference is off. A transactional quote-ready row is never suppressed by offer preferences.                                                                                                                |
+
+Replay one `failed` row (the next dispatch sends it):
+
+```sql
+UPDATE notifications.notifications
+SET status = 'pending', claimed_at = NULL, scheduled_for = now(), last_error = NULL
+WHERE id = '<uuid>' AND status = 'failed';
+```
+
+Staging proof is after merge, not a merge gate. Set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. The phone should get the notification. Until those keys are in env, a production-mode process will not boot.
+
 ## Postmark down / OTP not arriving
 
 1. Check bounce rate in Postmark; check `#bbc-ops` for the OTP sent/verified ratio.
