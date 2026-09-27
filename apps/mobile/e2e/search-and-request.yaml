@@ -8,6 +8,22 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "explore.fare.00000000-0000-4000-8000-00000000fa01" }
 - assertVisible: { id: "fare.root" }
 - tapOn: { id: "fare.request" }
+- tapOn: { id: "request.depart" }
+- assertVisible: { id: "dates.root" }
+- evalScript: |
+    const now = new Date();
+    function iso(offset) {
+      const t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+      const p = function (n) { return String(n).padStart(2, '0'); };
+      return t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate());
+    }
+    output.departDay = 'calendar.day.' + iso(14);
+    output.returnDay = 'calendar.day.' + iso(21);
+- tapOn:
+    id: ${output.departDay}
+- tapOn:
+    id: ${output.returnDay}
+- tapOn: { id: "dates.use" }
 - tapOn: { id: "request.phone" }
 - inputText: "2125550148"
 - tapOn: { id: "request.submit" }
