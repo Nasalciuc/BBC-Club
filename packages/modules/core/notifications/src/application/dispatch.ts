@@ -1,4 +1,4 @@
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { withTx, type Executor } from "@bbc/db";
 import { event } from "@bbc/shared/events";
@@ -75,7 +75,11 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
   const reclaimed = rowList(
     await deps.db.execute(sql`
       UPDATE notifications.notifications
-      SET status = 'pending', claimed_at = NULL
+      SET
+        attempts = attempts + 1,
+        status = CASE WHEN attempts + 1 >= 6 THEN 'failed' ELSE 'pending' END::notifications.notification_status,
+        claimed_at = NULL,
+        last_error = CASE WHEN attempts + 1 >= 6 THEN 'reaped' ELSE last_error END
       WHERE status = 'sending' AND claimed_at < now() - ${stuck}
       RETURNING id`),
   );
@@ -145,26 +149,41 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
     return out;
   });
 
-  if (deps.signal?.aborted) return metrics;
+  if (deps.signal?.aborted) {
+    const ids = work.map((item) => item.row.id);
+    if (ids.length > 0) {
+      await deps.db
+        .update(notificationsTable)
+        .set({ status: "pending", claimedAt: null })
+        .where(inArray(notificationsTable.id, ids));
+    }
+    return metrics;
+  }
 
   const results = await mapLimit(work, CONCURRENCY, async ({ row, tokens }) => ({
     row,
     outcomes: await Promise.all(
-      tokens.map(async (tok) => ({
-        tok,
-        result: await deps.push.send({
-          platform: tok.platform,
-          token: tok.nativeToken,
-          title: row.title,
-          body: row.body ?? undefined,
-          data: {
-            ...(row.deep_link ? { deepLink: row.deep_link } : {}),
-            ...(row.offer_id ? { offerId: row.offer_id } : {}),
-            notificationId: row.id,
-          },
-          collapseId: row.id,
-        }),
-      })),
+      tokens.map(async (tok) => {
+        try {
+          return {
+            tok,
+            result: await deps.push.send({
+              platform: tok.platform,
+              token: tok.nativeToken,
+              title: row.title,
+              body: row.body ?? undefined,
+              data: {
+                ...(row.deep_link ? { deepLink: row.deep_link } : {}),
+                ...(row.offer_id ? { offerId: row.offer_id } : {}),
+                notificationId: row.id,
+              },
+              collapseId: row.id,
+            }),
+          };
+        } catch {
+          return { tok, result: { ok: false as const, reason: "Transient" as const } };
+        }
+      }),
     ),
   }));
 

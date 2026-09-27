@@ -29,7 +29,7 @@ export function emailCrm(deps: { email: EmailFacade; operatorsEmail: string }): 
         `New fare request ${p.reference}`,
         "",
         route,
-        `${p.cabin_class} · ${p.trip_type} · ${p.passengers.adult} adult(s)`,
+        `${p.cabin_class} · ${p.trip_type} · ${p.passengers.adult} adult(s), ${p.passengers.child} child(ren), ${p.passengers.infant} infant(s)`,
         "",
         `Member: ${p.client.name}`,
         `Phone: ${p.client.phone}${p.phone_valid === false ? "  (not validated)" : ""}`,

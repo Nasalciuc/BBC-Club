@@ -23,7 +23,7 @@ describe("emailCrm", () => {
         { from: "JFK", to: "LHR", date: "2026-10-12" },
         { from: "LHR", to: "JFK", date: "2026-10-19" },
       ],
-      passengers: { adult: 1, child: 0, infant: 0 },
+      passengers: { adult: 2, child: 1, infant: 1 },
       _actions: {
         quoted,
         booked: "https://api.example/ops/requests/booked",
@@ -35,6 +35,7 @@ describe("emailCrm", () => {
     expect(sent?.replyTo).toBe("alex@test.dev");
     expect(sent?.text).toContain("R-ABC");
     expect(sent?.text).toContain("JFK → LHR");
+    expect(sent?.text).toContain("2 adult(s), 1 child(ren), 1 infant(s)");
     expect(sent?.text).toContain("quoted-");
     expect(sent?.text).toContain("booked");
     expect(sent?.text).toContain("closed");

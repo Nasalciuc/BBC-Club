@@ -50,8 +50,9 @@ export function createSendRequestsJob(deps: {
 
     for (const row of rows) {
       try {
+        const origin = deps.appOrigin.replace(/\/+$/, "");
         const actionUrl = (action: OperatorAction) =>
-          `${deps.appOrigin}/ops/requests/${signAction(deps.opsLinkSecret, row.id, action)}`;
+          `${origin}/ops/requests/${signAction(deps.opsLinkSecret, row.id, action)}`;
         const { crmRequestId } = await deps.crm.submitRequest({
           reference: row.reference,
           client: {

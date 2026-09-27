@@ -100,28 +100,28 @@ Day-to-day states, sandbox versus production, and how to replay one failed row a
 
 Keys live in env, base64-encoded. Nothing in the repo is a `.p8` or a Firebase service-account JSON.
 
-| Name                         | What it is                                                                                                                                                                                              |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PUSH_ADAPTER`               | `recording` in dev and test. `live` talks to Apple and Google. `NODE_ENV=production` refuses to boot unless this is `live`.                                                                             |
-| `APNS_P8_BASE64`             | Base64 of the `.p8` from Apple Developer → Keys.                                                                                                                                                        |
-| `APNS_KEY_ID`                | The key id of that `.p8`.                                                                                                                                                                               |
-| `APNS_TEAM_ID`               | Apple team id.                                                                                                                                                                                          |
-| `APNS_BUNDLE_ID`             | `com.buybusinessclass.club`.                                                                                                                                                                            |
-| `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too. |
-| `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                            |
+| Name                         | What it is                                                                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PUSH_ADAPTER`               | `recording` (default) stores nothing with Apple or Google. `live` requires every APNs field and the FCM JSON. Production may boot on `recording`; it logs one warning and `push_live` is 0 until you switch. |
+| `APNS_P8_BASE64`             | Base64 of the `.p8` from Apple Developer → Keys.                                                                                                                                                             |
+| `APNS_KEY_ID`                | The key id of that `.p8`.                                                                                                                                                                                    |
+| `APNS_TEAM_ID`               | Apple team id.                                                                                                                                                                                               |
+| `APNS_BUNDLE_ID`             | `com.buybusinessclass.club`.                                                                                                                                                                                 |
+| `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too.      |
+| `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                                 |
 
 Rotate the APNs key the same way as the incident above: new `.p8`, new `APNS_P8_BASE64` and `APNS_KEY_ID`, restart the API. The old key stops working as soon as Apple revokes it, so put the new values in env before you revoke.
 
 `notifications.notifications.status`:
 
-| Status       | Meaning                                                                                                                                                                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pending`    | Due, not claimed.                                                                                                                                                                                                                                 |
-| `sending`    | Claimed. The provider call is in flight, or the process died after the claim. A row left in `sending` for more than 5 minutes goes back to `pending` on the next dispatch. The collapse id is the notification id, so the phone shows one banner. |
-| `sent`       | No active device. The inbox row stays; there was nothing to push.                                                                                                                                                                                 |
-| `delivered`  | At least one token was accepted.                                                                                                                                                                                                                  |
-| `failed`     | Every token failed, or a `RateLimited` / `Transient` error has already been tried 6 times.                                                                                                                                                        |
-| `suppressed` | The member is not active, or an offer preference is off. A transactional quote-ready row is never suppressed by offer preferences.                                                                                                                |
+| Status       | Meaning                                                                                                                                                                                                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending`    | Due, not claimed.                                                                                                                                                                                                                                                                             |
+| `sending`    | Claimed. The provider call is in flight, or the process died after the claim. After 5 minutes the next dispatch adds 1 to `attempts` and returns the row to `pending`, or marks it `failed` once `attempts` reaches 6. The collapse id is the notification id, so the phone shows one banner. |
+| `sent`       | No active device. The inbox row stays; there was nothing to push.                                                                                                                                                                                                                             |
+| `delivered`  | At least one token was accepted.                                                                                                                                                                                                                                                              |
+| `failed`     | Every token failed, or a `RateLimited` / `Transient` error has already been tried 6 times.                                                                                                                                                                                                    |
+| `suppressed` | The member is not active, or an offer preference is off. A transactional quote-ready row is never suppressed by offer preferences.                                                                                                                                                            |
 
 Replay one `failed` row (the next dispatch sends it):
 
@@ -131,7 +131,7 @@ SET status = 'pending', claimed_at = NULL, scheduled_for = now(), last_error = N
 WHERE id = '<uuid>' AND status = 'failed';
 ```
 
-Staging proof is after merge, not a merge gate. Set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. The phone should get the notification. Until those keys are in env, a production-mode process will not boot.
+Staging boots with `PUSH_ADAPTER=recording`. Turn on email CRM first. The phone proof is later: set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. `live` without those keys refuses to boot.
 
 ## Postmark down / OTP not arriving
 

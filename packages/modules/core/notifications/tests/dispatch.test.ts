@@ -51,11 +51,33 @@ function rowList(raw: unknown): unknown[] {
   return [];
 }
 
-async function statusOf(id: string) {
+async function rowOf(id: string) {
   const rows = z
-    .array(z.object({ status: z.string() }))
-    .parse(rowList(await iso.db.execute(sql`SELECT status FROM notifications.notifications WHERE id = ${id}::uuid`)));
-  return rows[0]?.status;
+    .array(z.object({ status: z.string(), attempts: z.coerce.number(), last_error: z.string().nullable() }))
+    .parse(
+      rowList(
+        await iso.db.execute(
+          sql`SELECT status, attempts, last_error FROM notifications.notifications WHERE id = ${id}::uuid`,
+        ),
+      ),
+    );
+  return rows[0];
+}
+
+async function statusOf(id: string) {
+  return (await rowOf(id))?.status;
+}
+
+async function insertSending(memberId: string, attempts: number) {
+  const id = crypto.randomUUID();
+  await iso.db.execute(sql`
+    INSERT INTO notifications.notifications
+      (id, member_id, category, title, body, status, attempts, claimed_at, scheduled_for)
+    VALUES (
+      ${id}::uuid, ${memberId}, 'transactional', 'Your quote is ready', 'stuck',
+      'sending', ${attempts}, now() - interval '1 hour', now() + interval '1 day'
+    )`);
+  return id;
 }
 
 async function tokenActive(token: string) {
@@ -93,34 +115,71 @@ test("the claim transaction commits before the first send", async () => {
   expect(await statusOf(id)).toBe("delivered");
 });
 
-test("a crash after the claim is reaped on the next run", async () => {
-  const memberId = `m-${crypto.randomUUID()}`;
-  const id = await insertNotification("transactional", memberId);
-  await insertToken(memberId, `tok-crash-${id}`);
-  const stuckAfter = sql`interval '1 millisecond'`;
-  await expect(
-    dispatch(
-      deps(
-        {
-          send: async () => {
-            throw new Error("provider down");
-          },
-        },
-        { stuckAfter },
-      ),
-    ),
-  ).rejects.toThrow("provider down");
-  expect(await statusOf(id)).toBe("sending");
-  await Bun.sleep(20);
+test("one thrown send does not drop the rest of the batch", async () => {
+  const memberA = `m-${crypto.randomUUID()}`;
+  const memberB = `m-${crypto.randomUUID()}`;
+  const thrown = await insertNotification("transactional", memberA);
+  const kept = await insertNotification("transactional", memberB);
+  await insertToken(memberA, `tok-throw-${thrown}`);
+  await insertToken(memberB, `tok-keep-${kept}`);
+  await dispatch(
+    deps({
+      send: async (input) => {
+        if (input.collapseId === thrown) throw new Error("provider down");
+        return { ok: true, ticketId: "kept" };
+      },
+    }),
+  );
+  expect(await statusOf(kept)).toBe("delivered");
+  const failedSend = await rowOf(thrown);
+  expect(failedSend?.status).toBe("pending");
+  expect(failedSend?.attempts).toBe(1);
+});
+
+test("the reaper counts a killed send and stops at six", async () => {
+  const young = await insertSending(`m-${crypto.randomUUID()}`, 0);
+  const old = await insertSending(`m-${crypto.randomUUID()}`, 5);
+  let sends = 0;
   await dispatch(
     deps(
       {
-        send: async () => ({ ok: true, ticketId: "after-reap" }),
+        send: async () => {
+          sends += 1;
+          return { ok: true, ticketId: "nope" };
+        },
       },
-      { stuckAfter },
+      { stuckAfter: sql`interval '1 millisecond'` },
     ),
   );
-  expect(await statusOf(id)).toBe("delivered");
+  const again = await rowOf(young);
+  expect(again?.status).toBe("pending");
+  expect(again?.attempts).toBe(1);
+  const dead = await rowOf(old);
+  expect(dead?.status).toBe("failed");
+  expect(dead?.attempts).toBe(6);
+  expect(dead?.last_error).toBe("reaped");
+  expect(sends).toBe(0);
+});
+
+test("an abort after the claim returns those rows to pending", async () => {
+  const memberId = `m-${crypto.randomUUID()}`;
+  const id = await insertNotification("transactional", memberId);
+  await insertToken(memberId, `tok-abort-${id}`);
+  const signal = AbortSignal.abort();
+  let sends = 0;
+  await dispatch(
+    deps(
+      {
+        send: async () => {
+          sends += 1;
+          return { ok: true, ticketId: "late" };
+        },
+      },
+      { signal },
+    ),
+  );
+  expect(sends).toBe(0);
+  expect(await statusOf(id)).toBe("pending");
 });
 
 test("Unregistered deactivates the token", async () => {

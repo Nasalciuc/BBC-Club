@@ -26,6 +26,13 @@ export async function registerPushDevice({ prompt }: { prompt: boolean }): Promi
   if (Platform.OS !== "ios" && Platform.OS !== "android") return;
   if (!Device.isDevice) return;
 
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "Quotes",
+      importance: Notifications.AndroidImportance.DEFAULT,
+    });
+  }
+
   const current = await Notifications.getPermissionsAsync();
   let status = current.status;
   if (status !== "granted") {

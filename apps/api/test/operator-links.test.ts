@@ -49,7 +49,10 @@ describe("operator action links", () => {
     const idA = ((await a.json()) as { id: string }).id;
     const idB = ((await b.json()) as { id: string }).id;
     const token = signAction(SECRET, idA, "quoted");
-    const tampered = `${token.slice(0, -1)}${token.endsWith("a") ? "b" : "a"}`;
+    const dot = token.indexOf(".");
+    const sig = token.slice(dot + 1);
+    const flipped = `${sig.startsWith("A") ? "B" : "A"}${sig.slice(1)}`;
+    const tampered = `${token.slice(0, dot + 1)}${flipped}`;
     expect((await t.app.request(`/ops/requests/${tampered}`)).status).toBe(403);
 
     const expired = signAction(SECRET, idA, "quoted", Date.now() - 8 * 24 * 3600 * 1000);

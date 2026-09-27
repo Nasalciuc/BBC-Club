@@ -18,9 +18,8 @@ describe("PUSH_ADAPTER", () => {
     expect(loadEnv(base).PUSH_ADAPTER).toBe("recording");
   });
 
-  it("refuses recording in production", () => {
-    expect(() => loadEnv({ ...base, NODE_ENV: "production", PUSH_ADAPTER: "recording" })).toThrow(
-      /PUSH_ADAPTER must be live/,
-    );
+  it("boots production on the recording default", () => {
+    const env = loadEnv({ ...base, NODE_ENV: "production" });
+    expect(env.PUSH_ADAPTER).toBe("recording");
   });
 });

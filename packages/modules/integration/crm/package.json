@@ -17,6 +17,7 @@
     "drizzle-orm": "1.0.0-rc.4",
     "zod": "^3.24.0",
     "@bbc/email": "workspace:*",
+    "@bbc/shared": "workspace:*",
     "@bbc/db": "workspace:*",
     "@bbc/platform": "workspace:*"
   }

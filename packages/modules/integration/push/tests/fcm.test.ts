@@ -66,4 +66,24 @@ describe("fcmSender", () => {
       retryAfterMs: 30_000,
     });
   });
+
+  it("a fetch that aborts is Transient, and both calls carry a timeout signal", async () => {
+    const signals: AbortSignal[] = [];
+    const hanging: typeof fetch = async (_url, init) => {
+      const signal = init?.signal;
+      if (!signal) throw new Error("missing signal");
+      signals.push(signal);
+      throw new DOMException("The operation was aborted", "AbortError");
+    };
+    const sender = fcmSender(
+      { project_id: "bbc", client_email: "push@bbc.iam.gserviceaccount.com", private_key: privateKey() },
+      hanging,
+    );
+    expect(await sender.send({ platform: "android", token: "dev", title: "Quote" })).toEqual({
+      ok: false,
+      reason: "Transient",
+    });
+    expect(signals.length).toBeGreaterThan(0);
+    expect(signals[0]?.aborted).toBe(false);
+  });
 });

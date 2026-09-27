@@ -21,6 +21,7 @@ export function fcmSender(sa: FcmServiceAccount, fetchImpl: typeof fetch = fetch
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) throw new Error(`fcm oauth ${res.status}`);
     const j = (await res.json()) as { access_token: string; expires_in: number };
@@ -35,6 +36,7 @@ export function fcmSender(sa: FcmServiceAccount, fetchImpl: typeof fetch = fetch
         res = await fetchImpl(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
           method: "POST",
           headers: { authorization: `Bearer ${await accessToken()}`, "content-type": "application/json" },
+          signal: AbortSignal.timeout(10_000),
           body: JSON.stringify({
             message: {
               token,

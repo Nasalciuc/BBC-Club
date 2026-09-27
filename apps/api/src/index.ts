@@ -32,6 +32,13 @@ export async function buildApp(opts: BuildOptions = {}) {
     level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug",
     pretty: env.NODE_ENV === "development",
   });
+  platform.metrics.gauge("push_live", () => (env.PUSH_ADAPTER === "live" ? 1 : 0));
+  if (env.NODE_ENV === "production" && env.PUSH_ADAPTER !== "live") {
+    platform.logger.warn(
+      { pushAdapter: env.PUSH_ADAPTER },
+      "production is running with recording push; nothing is delivered until PUSH_ADAPTER=live",
+    );
+  }
 
   // 1. events: the catalogue is the only source of types
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);

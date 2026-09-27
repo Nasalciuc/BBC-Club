@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { generateKeyPairSync } from "node:crypto";
-import { apnsSender, type ApnsTransport } from "../src/apns";
+import http2 from "node:http2";
+import { apnsSender, http2Transport, type ApnsTransport } from "../src/apns";
 
 function p8(): string {
   const { privateKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
@@ -63,5 +64,31 @@ describe("apnsSender", () => {
       ok: false,
       reason: "Transient",
     });
+  });
+
+  it("a timed-out stream rejects instead of hanging, and the sender maps that to Transient", async () => {
+    const server = http2.createServer();
+    server.on("stream", () => {
+      // Never respond. The client timeout must settle the promise.
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    try {
+      const transport = http2Transport(`http://127.0.0.1:${port}`, 50);
+      await expect(transport({ path: "/3/device/tok", headers: {}, body: "{}" })).rejects.toThrow(/closed/);
+      const sender = apnsSender(
+        { keyP8: p8(), keyId: "KEYID", teamId: "TEAM", bundleId: "com.buybusinessclass.club", env: "sandbox" },
+        async () => {
+          throw new Error("apns stream closed");
+        },
+      );
+      expect(await sender.send({ platform: "ios", token: "dev", title: "Quote" })).toEqual({
+        ok: false,
+        reason: "Transient",
+      });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

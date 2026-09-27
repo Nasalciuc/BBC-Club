@@ -19,7 +19,7 @@ export type ApnsTransport = (req: {
 const HOST = { sandbox: "https://api.sandbox.push.apple.com", production: "https://api.push.apple.com" } as const;
 const TOKEN_TTL_MS = 45 * 60_000;
 
-export function http2Transport(authority: string): ApnsTransport {
+export function http2Transport(authority: string, timeoutMs = 10_000): ApnsTransport {
   let session: http2.ClientHttp2Session | null = null;
   const get = () => {
     if (session && !session.closed && !session.destroyed) return session;
@@ -33,21 +33,37 @@ export function http2Transport(authority: string): ApnsTransport {
   };
   return ({ path, headers, body }) =>
     new Promise((resolve, reject) => {
+      let settled = false;
+      let finished = false;
+      let gotResponse = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        fn();
+      };
       const req = get().request({ ":method": "POST", ":path": path, ...headers });
       let status = 0;
       let resHeaders: Record<string, string> = {};
       let data = "";
       req.setEncoding("utf8");
       req.on("response", (h) => {
+        gotResponse = true;
         status = Number(h[":status"]);
         resHeaders = h as Record<string, string>;
       });
       req.on("data", (c) => {
         data += c;
       });
-      req.on("end", () => resolve({ status, headers: resHeaders, body: data }));
-      req.on("error", reject);
-      req.setTimeout(10_000, () => req.close(http2.constants.NGHTTP2_CANCEL));
+      req.on("end", () => {
+        if (!gotResponse) return;
+        finished = true;
+        finish(() => resolve({ status, headers: resHeaders, body: data }));
+      });
+      req.on("error", (err) => finish(() => reject(err)));
+      req.on("close", () => {
+        if (!finished) finish(() => reject(new Error("apns stream closed")));
+      });
+      req.setTimeout(timeoutMs, () => req.close(http2.constants.NGHTTP2_CANCEL));
       req.end(body);
     });
 }

@@ -6,12 +6,6 @@ const SECRETS = {
   BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-0000",
   INTERNAL_API_SECRET: "internal-secret-internal-secret-0000",
   POSTMARK_SERVER_TOKEN: "pm-test-token-xxxxxxxx",
-  PUSH_ADAPTER: "live",
-  APNS_KEY_ID: "KEY",
-  APNS_TEAM_ID: "TEAM",
-  APNS_BUNDLE_ID: "com.buybusinessclass.club",
-  APNS_P8_BASE64: "eA==",
-  FCM_SERVICE_ACCOUNT_BASE64: "e30=",
 } as const;
 
 describe("CORS_ORIGINS via loadEnv", () => {

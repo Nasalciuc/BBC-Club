@@ -53,14 +53,14 @@ export async function submit(
     return { ok: true as const, request: replay, created: false as const };
   }
 
+  if (actor.ip) {
+    const ip = await deps.rateLimit.check("requests.submit.ip", `ip:${actor.ip}`);
+    if (!ip.allowed) return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: ip.retryAfterMs };
+  }
   if (actor.memberId) {
     const member = await deps.rateLimit.check("requests.submit", `m:${actor.memberId}`);
     if (!member.allowed)
       return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: member.retryAfterMs };
-  }
-  if (actor.ip) {
-    const ip = await deps.rateLimit.check("requests.submit.ip", `ip:${actor.ip}`);
-    if (!ip.allowed) return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: ip.retryAfterMs };
   }
 
   return withTx(exec, async (tx) => {

@@ -91,9 +91,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
       }
     }
   }
-  if (parsed.data.NODE_ENV === "production" && parsed.data.PUSH_ADAPTER !== "live") {
-    throw new Error("PUSH_ADAPTER must be live when NODE_ENV=production");
-  }
   if (parsed.data.PUSH_ADAPTER === "live") {
     const required = {
       APNS_P8_BASE64: parsed.data.APNS_P8_BASE64,

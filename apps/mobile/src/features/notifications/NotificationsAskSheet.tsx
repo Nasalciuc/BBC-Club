@@ -56,9 +56,15 @@ export const NotificationsAskSheet = forwardRef<NotificationsAskSheetHandle>(
             label="Turn on notifications"
             shape="card"
             onPress={() => {
-              markAsked();
-              void registerPushDevice({ prompt: true });
-              modalRef.current?.dismiss();
+              void (async () => {
+                try {
+                  await registerPushDevice({ prompt: true });
+                  markAsked();
+                  modalRef.current?.dismiss();
+                } catch {
+                  // The system dialog never appeared. Leave the sheet unmarked so the next request can ask.
+                }
+              })();
             }}
           />
         </BottomSheetScrollView>
