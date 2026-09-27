@@ -274,13 +274,12 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
       ),
     /** Queue health for /metrics and alerts: age of the oldest pending delivery is the number that matters. */
     stats: async () => {
-      const rows: any[] = await db.execute(sql`
-        SELECT count(*) FILTER (WHERE status='pending')::int AS pending,
-               count(*) FILTER (WHERE status='dead')::int AS dead,
-               count(*) FILTER (WHERE status='paused')::int AS paused,
-               COALESCE(EXTRACT(EPOCH FROM (now() - min(created_at) FILTER (WHERE status='pending')))::int, 0) AS oldest_pending_s
-        FROM platform.event_deliveries`);
-      const r = rows[0];
+      const [r]: any[] = await db.execute(sql`
+    SELECT (SELECT count(*) FROM platform.event_deliveries WHERE status = 'pending')::int AS pending,
+           (SELECT count(*) FROM platform.event_deliveries WHERE status = 'dead')::int    AS dead,
+           (SELECT count(*) FROM platform.event_deliveries WHERE status = 'paused')::int  AS paused,
+           COALESCE(EXTRACT(EPOCH FROM now() - (SELECT min(created_at) FROM platform.event_deliveries
+                                                WHERE status = 'pending'))::int, 0)      AS oldest_pending_s`);
       return { pending: r.pending, dead: r.dead, paused: r.paused, oldestPendingSeconds: r.oldest_pending_s };
     },
   };

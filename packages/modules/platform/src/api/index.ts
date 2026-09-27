@@ -28,9 +28,22 @@ export function createPlatform(db: any, opts: { level?: string; pretty?: boolean
     },
   );
 
-  metrics.gauge("queue_pending", async () => (await poller.stats()).pending);
-  metrics.gauge("queue_dead", async () => (await poller.stats()).dead);
-  metrics.gauge("queue_oldest_pending_seconds", async () => (await poller.stats()).oldestPendingSeconds);
+  let statsAt = 0;
+  let statsP: ReturnType<typeof poller.stats> | null = null;
+  /** The three gauges share one stats() per 2 s — a scrape must not run the same query three times. */
+  const stats = () => {
+    if (!statsP || Date.now() - statsAt > 2_000) {
+      statsAt = Date.now();
+      statsP = poller.stats().catch((e) => {
+        statsP = null;
+        throw e;
+      });
+    }
+    return statsP;
+  };
+  metrics.gauge("queue_pending", async () => (await stats()).pending);
+  metrics.gauge("queue_dead", async () => (await stats()).dead);
+  metrics.gauge("queue_oldest_pending_seconds", async () => (await stats()).oldestPendingSeconds);
 
   return {
     logger,
