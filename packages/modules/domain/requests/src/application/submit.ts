@@ -5,8 +5,6 @@ import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
 import { parseMemberPhone } from "@bbc/shared/phone";
-import { bumpCounter } from "@bbc/db/helpers";
-import { rateLimits } from "@bbc/platform/schema";
 
 type Publish = (
   tx: Executor,
@@ -33,7 +31,15 @@ export async function submit(
   raw: unknown,
   actor: SubmitActor,
   idempotencyKey: string,
-  deps: { publish: Publish },
+  deps: {
+    publish: Publish;
+    rateLimit: {
+      check: (
+        rule: "requests.submit" | "requests.submit.ip",
+        subject: string,
+      ) => Promise<{ allowed: boolean; retryAfterMs?: number }>;
+    };
+  },
 ) {
   const body = RequestBody.parse(raw);
   const phone = parseMemberPhone(body.contact.phone);
@@ -47,34 +53,14 @@ export async function submit(
     return { ok: true as const, request: replay, created: false as const };
   }
 
-  // Clock-hour window, not rolling: five at 10:58 and five at 11:01 is ten in three minutes.
-  // Acceptable at this volume; a rolling window would be the other trade-off, not silence.
-  const windowStart = new Date();
-  windowStart.setMinutes(0, 0, 0);
-  const RATE_LIMIT_WINDOW_MS = 3_600_000;
-  const expiresAt = new Date(windowStart.getTime() + RATE_LIMIT_WINDOW_MS);
-
-  if (actor.memberId) {
-    const n = await bumpCounter(
-      exec,
-      rateLimits,
-      { key: `requests:member:${actor.memberId}`, windowStart, expiresAt },
-      rateLimits.count,
-      [rateLimits.key],
-      5,
-    );
-    if (n == null) return { ok: false as const, code: "RATE_LIMITED" as const };
-  }
   if (actor.ip) {
-    const n = await bumpCounter(
-      exec,
-      rateLimits,
-      { key: `requests:ip:${actor.ip}`, windowStart, expiresAt },
-      rateLimits.count,
-      [rateLimits.key],
-      3,
-    );
-    if (n == null) return { ok: false as const, code: "RATE_LIMITED" as const };
+    const ip = await deps.rateLimit.check("requests.submit.ip", `ip:${actor.ip}`);
+    if (!ip.allowed) return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: ip.retryAfterMs };
+  }
+  if (actor.memberId) {
+    const member = await deps.rateLimit.check("requests.submit", `m:${actor.memberId}`);
+    if (!member.allowed)
+      return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: member.retryAfterMs };
   }
 
   return withTx(exec, async (tx) => {

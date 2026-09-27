@@ -5,3 +5,6 @@ export const appStorage = createMMKV({ id: "bbc-app" });
 
 /** Set once per device after onboarding (or skip). Cleared on sign-out / delete. */
 export const ONBOARDED_KEY = "bbcclub.onboarded";
+
+/** Set when the member turns notifications on or chooses Not now. Ask only while this is absent. */
+export const PUSH_ASKED_AT_KEY = "bbcclub.pushAskedAt";

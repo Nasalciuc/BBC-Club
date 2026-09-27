@@ -58,7 +58,8 @@ export const api = hc<AppType>(env.EXPO_PUBLIC_API_URL, {
 export type { Profile };
 
 export type ApiResult<T> =
-  { ok: true; data: T } | { ok: false; message: string; code?: string; status: number; gone?: FareGoneContext };
+  | { ok: true; data: T }
+  | { ok: false; message: string; code?: string; status: number; gone?: FareGoneContext; retryAfterS?: number };
 
 /** Closed-fare facts from a 410 body — only when the server sent `error.context`. */
 export type FareGoneContext = {
@@ -95,6 +96,17 @@ async function parseJson(res: Response): Promise<unknown> {
 }
 
 function failFromBody(res: Response, body: { error?: { code?: string; message?: string } } | null): ApiResult<never> {
+  if (res.status === 429) {
+    const header = Number(res.headers.get("Retry-After"));
+    const retryAfterS = Number.isFinite(header) && header >= 0 ? Math.ceil(header) : undefined;
+    return {
+      ok: false,
+      message: authMessage("TOO_MANY_ATTEMPTS"),
+      code: "RATE_LIMITED",
+      status: 429,
+      ...(retryAfterS !== undefined ? { retryAfterS } : {}),
+    };
+  }
   return {
     ok: false,
     message: body?.error?.message ?? authMessage(body?.error?.code),

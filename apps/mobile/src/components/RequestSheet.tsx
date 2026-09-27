@@ -1,12 +1,19 @@
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import NetInfo from "@react-native-community/netinfo";
+import * as Notifications from "expo-notifications";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 import { Button, Chip, CloseButton, Icon, short, tokens, rn, type Selection } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
+import {
+  NotificationsAskSheet,
+  type NotificationsAskSheetHandle,
+} from "@/features/notifications/NotificationsAskSheet";
 import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
+import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
+import { appStorage, PUSH_ASKED_AT_KEY } from "@/lib/storage-keys";
 import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
 import { enqueueRequest } from "@/lib/queue";
@@ -31,6 +38,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
 ) {
   const modalRef = useRef<BottomSheetModal>(null);
   const datesRef = useRef<DatesSheetHandle>(null);
+  const askRef = useRef<NotificationsAskSheetHandle>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -122,6 +130,28 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
   }`;
 
   const confirmed = state.phase === "confirm" || state.phase === "saved";
+
+  useEffect(() => {
+    if (state.phase !== "confirm") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const current = await Notifications.getPermissionsAsync();
+        if (cancelled) return;
+        const raw = appStorage.getString(PUSH_ASKED_AT_KEY);
+        const parsed = raw == null || raw === "" ? null : Number(raw);
+        const askedAt = parsed != null && Number.isFinite(parsed) ? parsed : null;
+        const status: PermissionStatus =
+          current.status === "granted" || current.status === "denied" ? current.status : "undetermined";
+        if (shouldAskForPush(status, askedAt)) askRef.current?.present();
+      } catch {
+        // Permission state is best-effort; the request itself already succeeded.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.phase]);
 
   function presentDates(editing: Selection["editing"]) {
     datesRef.current?.present({
@@ -292,6 +322,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
           )}
         </BottomSheetScrollView>
       </BottomSheetModal>
+      <NotificationsAskSheet ref={askRef} />
       <DatesSheet
         ref={datesRef}
         onUse={(s) => {

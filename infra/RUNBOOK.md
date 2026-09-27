@@ -94,6 +94,45 @@ Symptoms: `deliveries_dead` climbing, `notification.failed` with `InvalidProvide
 3. `docker compose ... up -d api`, then replay the dead deliveries.
    Inbox rows already exist, so nothing is lost — pushes are late, not missing.
 
+Day-to-day states, sandbox versus production, and how to replay one failed row are under **Push**.
+
+## Push
+
+Keys live in env, base64-encoded. Nothing in the repo is a `.p8` or a Firebase service-account JSON.
+
+| Name                         | What it is                                                                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PUSH_ADAPTER`               | `recording` (default) stores nothing with Apple or Google. `live` requires every APNs field and the FCM JSON. Production may boot on `recording`; it logs one warning and `push_live` is 0 until you switch. |
+| `APNS_P8_BASE64`             | Base64 of the `.p8` from Apple Developer → Keys.                                                                                                                                                             |
+| `APNS_KEY_ID`                | The key id of that `.p8`.                                                                                                                                                                                    |
+| `APNS_TEAM_ID`               | Apple team id.                                                                                                                                                                                               |
+| `APNS_BUNDLE_ID`             | `com.buybusinessclass.club`.                                                                                                                                                                                 |
+| `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too.      |
+| `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                                 |
+
+Rotate the APNs key the same way as the incident above: new `.p8`, new `APNS_P8_BASE64` and `APNS_KEY_ID`, restart the API. The old key stops working as soon as Apple revokes it, so put the new values in env before you revoke.
+
+`notifications.notifications.status`:
+
+| Status       | Meaning                                                                                                                                                                                                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending`    | Due, not claimed.                                                                                                                                                                                                                                                                             |
+| `sending`    | Claimed. The provider call is in flight, or the process died after the claim. After 5 minutes the next dispatch adds 1 to `attempts` and returns the row to `pending`, or marks it `failed` once `attempts` reaches 6. The collapse id is the notification id, so the phone shows one banner. |
+| `sent`       | No active device. The inbox row stays; there was nothing to push.                                                                                                                                                                                                                             |
+| `delivered`  | At least one token was accepted.                                                                                                                                                                                                                                                              |
+| `failed`     | Every token failed, or a `RateLimited` / `Transient` error has already been tried 6 times.                                                                                                                                                                                                    |
+| `suppressed` | The member is not active, or an offer preference is off. A transactional quote-ready row is never suppressed by offer preferences.                                                                                                                                                            |
+
+Replay one `failed` row (the next dispatch sends it):
+
+```sql
+UPDATE notifications.notifications
+SET status = 'pending', claimed_at = NULL, scheduled_for = now(), last_error = NULL
+WHERE id = '<uuid>' AND status = 'failed';
+```
+
+Staging boots with `PUSH_ADAPTER=recording`. Turn on email CRM first. The phone proof is later: set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. `live` without those keys refuses to boot.
+
 ## Postmark down / OTP not arriving
 
 1. Check bounce rate in Postmark; check `#bbc-ops` for the OTP sent/verified ratio.
@@ -119,6 +158,32 @@ Caddy renews automatically. If a domain shows an expired certificate: `docker co
 
 Everything above is runnable by anyone with SSH. Credentials are in the company password manager (Dan has access): SSH key, env files, backup encryption key, GHCR token, Apple/Google accounts.
 **If the API is down and nothing above helps:** `docker compose ... restart api`; if that fails, deploy the last known good SHA from `#bbc-ops` history. Data is safe — backups are off-machine and encrypted.
+
+---
+
+## Rate limiting
+
+The API counts with GCRA. Reads stay in process memory and fail open, so a home refresh never writes Postgres and a memory miss still serves the page. Submits, profile writes, device registration, and operator links use Postgres and fail closed: if that store errors, the route is 503, not unlimited.
+
+| Rule                 | Store    | Limit | Period | Burst | On store error |
+| -------------------- | -------- | ----- | ------ | ----- | -------------- |
+| `read`               | memory   | 120   | 1 min  | 60    | allow          |
+| `search`             | memory   | 60    | 1 min  | 20    | allow          |
+| `anon`               | memory   | 300   | 1 min  | 100   | allow          |
+| `requests.submit`    | postgres | 10    | 1 hour | 5     | 503            |
+| `requests.submit.ip` | postgres | 60    | 1 hour | 20    | 503            |
+| `profile.write`      | postgres | 30    | 1 hour | 10    | 503            |
+| `devices.register`   | postgres | 20    | 1 hour | 5     | 503            |
+| `ops.link`           | postgres | 30    | 1 min  | 10    | 503            |
+
+Override without a deploy: a flag row `ratelimit.<rule>` whose JSON is `{ "limit": 10, "periodMs": 3600000, "burst": 5 }`. The process reads it from the flag cache. Denials increment `rate_limited_total{rule}`.
+
+Nothing in the app depends on the edge rule below. It is a second lock in front of the origin, and it is not applied yet.
+
+- STATUS: pending — needs someone with access to the zone
+- Free-plan limits (1 rule, Path only, count by IP, 10 s period, 10 s mitigation)
+- Rule `bbc-api-flood`: path starts with `/v1/` or `/api/auth/`, 1000 req / 10 s / IP, action **Block 10 s** — never Challenge
+- PR body _Needs an owner_: which plan is the zone on; does the owner apply the rule or issue a WAF-edit token for this zone
 
 ---
 

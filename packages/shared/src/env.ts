@@ -20,7 +20,18 @@ export const ServerEnv = z.object({
   INTERNAL_API_SECRET: z.string().min(32),
   /** Dual-secret rotation window — accepted alongside INTERNAL_API_SECRET when set. */
   INTERNAL_API_SECRET_NEXT: z.string().min(32).optional(),
-  CRM_ADAPTER: z.enum(["mock", "http"]).default("mock"),
+  CRM_ADAPTER: z.enum(["mock", "http", "email"]).default("mock"),
+  /** Inbox for the email CRM adapter. Required when CRM_ADAPTER=email. */
+  OPERATORS_EMAIL: z.string().email().optional(),
+  /** HMAC for operator action links. Required when CRM_ADAPTER=email. */
+  OPS_LINK_SECRET: z.string().min(32).optional(),
+  PUSH_ADAPTER: z.enum(["recording", "live"]).default("recording"),
+  APNS_P8_BASE64: z.string().optional(),
+  APNS_KEY_ID: z.string().optional(),
+  APNS_TEAM_ID: z.string().optional(),
+  APNS_BUNDLE_ID: z.string().optional(),
+  APNS_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
+  FCM_SERVICE_ACCOUNT_BASE64: z.string().optional(),
   PORT: z.coerce.number().int().positive().default(8000),
 });
 export type ServerEnv = z.infer<typeof ServerEnv>;
@@ -62,6 +73,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
     const missing = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n  ");
     throw new Error(`Invalid environment:\n  ${missing}`);
   }
+  if (parsed.data.CRM_ADAPTER === "email") {
+    if (!parsed.data.OPERATORS_EMAIL) {
+      throw new Error("OPERATORS_EMAIL is required when CRM_ADAPTER=email");
+    }
+    if (!parsed.data.OPS_LINK_SECRET) {
+      throw new Error("OPS_LINK_SECRET is required when CRM_ADAPTER=email");
+    }
+  }
   if (parsed.data.NODE_ENV === "production" && !parsed.data.POSTMARK_SERVER_TOKEN) {
     throw new Error("POSTMARK_SERVER_TOKEN is required in production (OTP delivery = login availability).");
   }
@@ -71,6 +90,19 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
         throw new Error(`CORS_ORIGINS must not include an insecure origin in production: ${origin}`);
       }
     }
+  }
+  if (parsed.data.PUSH_ADAPTER === "live") {
+    const required = {
+      APNS_P8_BASE64: parsed.data.APNS_P8_BASE64,
+      APNS_KEY_ID: parsed.data.APNS_KEY_ID,
+      APNS_TEAM_ID: parsed.data.APNS_TEAM_ID,
+      APNS_BUNDLE_ID: parsed.data.APNS_BUNDLE_ID,
+      FCM_SERVICE_ACCOUNT_BASE64: parsed.data.FCM_SERVICE_ACCOUNT_BASE64,
+    };
+    const missing = Object.entries(required)
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+    if (missing.length > 0) throw new Error(`PUSH_ADAPTER=live requires ${missing.join(", ")}`);
   }
   return parsed.data;
 }

@@ -44,6 +44,28 @@ export function postmarkSender(opts: { token: string; from: string; fetchImpl?: 
         throw new Error(`Postmark ${res.status}: ${body.slice(0, 200)}`); // ← propagate; never swallow
       }
     },
+    async sendOperatorRequest({ to, subject, text, replyTo }) {
+      const res = await f("https://api.postmarkapp.com/email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-Postmark-Server-Token": opts.token,
+        },
+        body: JSON.stringify({
+          From: opts.from,
+          To: to,
+          Subject: subject,
+          TextBody: text,
+          MessageStream: "outbound",
+          ...(replyTo ? { ReplyTo: replyTo } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`Postmark ${res.status}: ${body.slice(0, 200)}`);
+      }
+    },
   };
 }
 
@@ -53,6 +75,9 @@ export function consoleSender(log: (m: string) => void = console.log): EmailFaca
     async sendOtp({ to, otp, purpose }) {
       rememberDevOtp(to, otp);
       log(`[dev-email] ${purpose} → ${to}`);
+    },
+    async sendOperatorRequest({ subject }) {
+      log(`[dev-email] ${subject}`);
     },
   };
 }

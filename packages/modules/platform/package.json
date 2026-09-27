@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/api/index.ts",
     "./authz/principal": "./src/authz/principal.ts",
-    "./schema": "./src/infrastructure/schema.ts"
+    "./schema": "./src/infrastructure/schema.ts",
+    "./ratelimit": "./src/ratelimit/index.ts"
   },
   "scripts": {
     "test": "bun test --preload ../../db/src/testing/preload.ts",
@@ -15,6 +16,7 @@
   "dependencies": {
     "@bbc/shared": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4",
+    "hono": "^4.7.0",
     "pino": "^9.0.0",
     "zod": "^3.24.0"
   },

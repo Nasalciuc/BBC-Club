@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
+import { rateLimit } from "@bbc/platform/ratelimit";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
@@ -48,9 +49,10 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
 
     const routes = new Hono<AppEnv>();
 
-    registerRoute("PATCH", "/v1/profile", "profile:update-self");
+    registerRoute("PATCH", "/v1/profile", "profile:update-self", "profile.write");
     routes.patch(
       "/profile",
+      rateLimit(platform.rateLimit, "profile.write"),
       authorize("profile:update-self", {
         module: "members",
         flags: platform.flags,
@@ -91,9 +93,10 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
       },
     );
 
-    registerRoute("PUT", "/v1/profile/travel", "profile:update-self");
+    registerRoute("PUT", "/v1/profile/travel", "profile:update-self", "profile.write");
     routes.put(
       "/profile/travel",
+      rateLimit(platform.rateLimit, "profile.write"),
       authorize("profile:update-self", {
         module: "members",
         flags: platform.flags,
@@ -134,9 +137,10 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
       },
     );
 
-    registerRoute("PUT", "/v1/profile/preferences", "inbox:manage-preferences");
+    registerRoute("PUT", "/v1/profile/preferences", "inbox:manage-preferences", "profile.write");
     routes.put(
       "/profile/preferences",
+      rateLimit(platform.rateLimit, "profile.write"),
       authorize("inbox:manage-preferences", {
         module: "members",
         flags: platform.flags,

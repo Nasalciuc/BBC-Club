@@ -19,6 +19,7 @@ export function capturingEmail(): EmailFacade & {
       sent.push(input);
       rememberDevOtp(input.to, input.otp);
     },
+    async sendOperatorRequest() {},
     lastOtp(to) {
       const m = [...sent].reverse().find((s) => s.to.toLowerCase() === to.toLowerCase() || s.to === to);
       if (!m) throw new Error(`no OTP captured for ${to}`);

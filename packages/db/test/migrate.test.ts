@@ -40,7 +40,8 @@ describe("extras ledger", () => {
         'deliveries_pending_created',
         'deliveries_dead',
         'deliveries_paused',
-        'fares_home_destinations'
+        'fares_home_destinations',
+        'notif_sending_claimed'
       )
       ORDER BY indexname`);
     expect(indexes.map((r) => r.indexname)).toEqual([
@@ -48,6 +49,7 @@ describe("extras ledger", () => {
       "deliveries_paused",
       "deliveries_pending_created",
       "fares_home_destinations",
+      "notif_sending_claimed",
     ]);
 
     const second = await runMigrate();
@@ -62,6 +64,10 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/auth.otp_cooldown applied/);
     expect(second.out).not.toMatch(/platform delivery stats indexes applied/);
     expect(second.out).not.toMatch(/catalog fares_home_destinations applied/);
+    expect(second.out).not.toMatch(/platform rate_limit_state applied/);
+    expect(second.out).not.toMatch(/notifications sending status applied/);
+    expect(second.out).not.toMatch(/notifications claimed_at applied/);
+    expect(second.out).not.toMatch(/notifications sending index applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -77,6 +83,10 @@ describe("extras ledger", () => {
       "0011_auth_otp_cooldown.sql",
       "0012_platform_delivery_stats.sql",
       "0013_catalog_fares_home_destinations.sql",
+      "0014_platform_rate_limit_state.sql",
+      "0015_notifications_sending_enum.sql",
+      "0016_notifications_claimed_at.sql",
+      "0017_notifications_sending_index.sql",
     ]);
   });
 });

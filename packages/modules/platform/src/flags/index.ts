@@ -89,6 +89,8 @@ export function createFlags(
       cache.delete(key);
     },
     invalidate: (key?: string) => (key ? cache.delete(key) : cache.clear()),
+    /** Cached flag row. The limiter reads `ratelimit.<rule>` here — never a query the facade exposes. */
+    read,
     async killSwitches(modules: string[]): Promise<Record<string, boolean>> {
       const out: Record<string, boolean> = {};
       for (const m of modules) out[m] = await this.isKilled(m);

@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Db, Executor } from "@bbc/db";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
+import { rateLimit } from "@bbc/platform/ratelimit";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { airportsRepo } from "./infrastructure/airports.repo";
@@ -37,9 +38,10 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
 
     const routes = new Hono<AppEnv>();
 
-    registerRoute("GET", "/v1/search", "fares:read");
+    registerRoute("GET", "/v1/search", "fares:read", "search");
     routes.get(
       "/search",
+      rateLimit(platform.rateLimit, "search"),
       authorize("fares:read", {
         module: "catalog",
         flags: platform.flags,
@@ -75,9 +77,10 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
       },
     );
 
-    registerRoute("GET", "/v1/fares/:id", "fares:read");
+    registerRoute("GET", "/v1/fares/:id", "fares:read", "read");
     routes.get(
       "/fares/:id",
+      rateLimit(platform.rateLimit, "read"),
       authorize("fares:read", {
         module: "catalog",
         flags: platform.flags,
@@ -112,9 +115,10 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
       },
     );
 
-    registerRoute("GET", "/v1/airports", "fares:read");
+    registerRoute("GET", "/v1/airports", "fares:read", "read");
     routes.get(
       "/airports",
+      rateLimit(platform.rateLimit, "read"),
       authorize("fares:read", {
         module: "catalog",
         flags: platform.flags,

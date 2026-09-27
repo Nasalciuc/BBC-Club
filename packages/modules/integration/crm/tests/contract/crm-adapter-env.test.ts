@@ -1,6 +1,12 @@
 import { describe, it, expect } from "bun:test";
 import { loadEnv, ServerEnv } from "@bbc/shared/env";
 import { crmModule } from "../../src/module";
+import type { EmailFacade } from "@bbc/email";
+
+const email: EmailFacade = {
+  async sendOtp() {},
+  async sendOperatorRequest() {},
+};
 
 describe("CRM_ADAPTER via loadEnv", () => {
   it("defaults to mock and is part of ServerEnv", () => {
@@ -20,7 +26,7 @@ describe("CRM_ADAPTER via loadEnv", () => {
         db: {},
         platform: {},
         env: { CRM_ADAPTER: "http" },
-        ports: {},
+        ports: { email },
       }),
     ).toThrow(/stage 5/);
   });
@@ -30,9 +36,10 @@ describe("CRM_ADAPTER via loadEnv", () => {
       db: {},
       platform: {},
       env: { CRM_ADAPTER: "mock" },
-      ports: {},
+      ports: { email },
     });
     expect(out.exposes).toBeDefined();
-    expect(await out.exposes!.findByEmail("nobody@x.com")).toBeNull();
+    if (!out.exposes) throw new Error("crm facade missing");
+    expect(await out.exposes.findByEmail("nobody@x.com")).toBeNull();
   });
 });

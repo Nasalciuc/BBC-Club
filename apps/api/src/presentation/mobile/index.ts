@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { createHash } from "node:crypto";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute, type PrincipalVars } from "@bbc/shared/authz/authorize";
+import { rateLimit } from "@bbc/platform/ratelimit";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import { DEFAULT_HOME_AIRPORT } from "@bbc/shared/defaults";
@@ -36,20 +37,26 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
 
     // ── Profile ──────────────────────────────────────────────────────────────
 
-    registerRoute("GET", "/v1/profile", "profile:read-self");
-    routes.get("/profile", authorize("profile:read-self", { module: "members", flags: platform.flags }), async (c) => {
-      const actor = actorMemberId(c.get("principal"));
-      if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-      const p = await ports.members.getProfile(undefined, actor);
-      const principal = c.get("principal");
-      return c.json(toProfileVM(p, principal.kind === "member" ? principal.email : null, actor));
-    });
+    registerRoute("GET", "/v1/profile", "profile:read-self", "read");
+    routes.get(
+      "/profile",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("profile:read-self", { module: "members", flags: platform.flags }),
+      async (c) => {
+        const actor = actorMemberId(c.get("principal"));
+        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+        const p = await ports.members.getProfile(undefined, actor);
+        const principal = c.get("principal");
+        return c.json(toProfileVM(p, principal.kind === "member" ? principal.email : null, actor));
+      },
+    );
 
     // ── Home ─────────────────────────────────────────────────────────────────
 
-    registerRoute("GET", "/v1/home", "fares:read");
+    registerRoute("GET", "/v1/home", "fares:read", "read");
     routes.get(
       "/home",
+      rateLimit(platform.rateLimit, "read"),
       authorize("fares:read", {
         module: "catalog",
         flags: platform.flags,
@@ -116,9 +123,10 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
 
     // ── Proposals feed ───────────────────────────────────────────────────────
 
-    registerRoute("GET", "/v1/proposals", "proposals:read");
+    registerRoute("GET", "/v1/proposals", "proposals:read", "read");
     routes.get(
       "/proposals",
+      rateLimit(platform.rateLimit, "read"),
       authorize("proposals:read", {
         module: "proposals",
         flags: platform.flags,
@@ -152,9 +160,10 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
 
     // ── Proposal detail ──────────────────────────────────────────────────────
 
-    registerRoute("GET", "/v1/proposals/:id", "proposals:read");
+    registerRoute("GET", "/v1/proposals/:id", "proposals:read", "read");
     routes.get(
       "/proposals/:id",
+      rateLimit(platform.rateLimit, "read"),
       authorize("proposals:read", {
         module: "proposals",
         flags: platform.flags,

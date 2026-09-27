@@ -1,5 +1,7 @@
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
+import type { EmailFacade } from "@bbc/email";
 import type { CrmFacade, CrmCallOpts } from "./api";
+import { emailCrm } from "./infrastructure/email-crm";
 
 export type { CrmFacade, CrmCallOpts };
 /** @deprecated Prefer CrmFacade — same shape. */
@@ -69,12 +71,22 @@ export function mockCrm(
   };
 }
 
-export const crmModule = (override?: CrmFacade): ModuleDescriptor<Record<string, never>, CrmFacade> => ({
+export const crmModule = (override?: CrmFacade): ModuleDescriptor<{ email: EmailFacade }, CrmFacade> => ({
   name: "crm",
   layer: "integration",
-  init: ({ env }) => {
-    const adapter = env.CRM_ADAPTER as "mock" | "http";
-    if (!override && adapter === "http") throw new Error("CRM http adapter is stage 5; set CRM_ADAPTER=mock");
-    return { exposes: withCrmTimeout(override ?? mockCrm()), routes: [], consumers: [], jobs: [] };
+  needs: ["email"],
+  init: ({ env, ports }) => {
+    if (override) return { exposes: withCrmTimeout(override), routes: [], consumers: [], jobs: [] };
+    if (env.CRM_ADAPTER === "http") throw new Error("CRM http adapter is stage 5; set CRM_ADAPTER=mock");
+    if (env.CRM_ADAPTER === "email") {
+      if (!env.OPERATORS_EMAIL) throw new Error("OPERATORS_EMAIL is required when CRM_ADAPTER=email");
+      return {
+        exposes: withCrmTimeout(emailCrm({ email: ports.email, operatorsEmail: env.OPERATORS_EMAIL })),
+        routes: [],
+        consumers: [],
+        jobs: [],
+      };
+    }
+    return { exposes: withCrmTimeout(mockCrm()), routes: [], consumers: [], jobs: [] };
   },
 });

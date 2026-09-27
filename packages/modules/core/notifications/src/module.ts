@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { eq, sql } from "drizzle-orm";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
+import { rateLimit } from "@bbc/platform/ratelimit";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
@@ -47,9 +48,10 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
       },
     ) => platform.events.publish(tx, { ...e, publishedBy: "notifications" });
 
-    registerRoute("GET", "/v1/inbox", "inbox:read");
+    registerRoute("GET", "/v1/inbox", "inbox:read", "read");
     routes.get(
       "/inbox",
+      rateLimit(platform.rateLimit, "read"),
       authorize("inbox:read", {
         module: "notifications",
         flags: platform.flags,
@@ -102,9 +104,10 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
       },
     );
 
-    registerRoute("POST", "/v1/devices", "devices:register");
+    registerRoute("POST", "/v1/devices", "devices:register", "devices.register");
     routes.post(
       "/devices",
+      rateLimit(platform.rateLimit, "devices.register"),
       authorize("devices:register", {
         module: "notifications",
         flags: platform.flags,

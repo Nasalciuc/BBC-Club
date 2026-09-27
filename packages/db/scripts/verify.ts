@@ -59,6 +59,7 @@ try {
     "platform.event_cursors",
     "platform.flags",
     "platform.rate_limits",
+    "platform.rate_limit_state",
     "members.notification_preferences",
     "personalization.member_features",
     "auth.otp_cooldown",

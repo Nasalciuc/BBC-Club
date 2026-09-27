@@ -218,6 +218,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@bbc/db": "workspace:*",
+        "@bbc/email": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
@@ -236,6 +237,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@bbc/shared": "workspace:*",
+        "jose": "^6.0.0",
       },
     },
     "packages/modules/intelligence/personalization": {
@@ -255,6 +257,7 @@
       "dependencies": {
         "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
+        "hono": "^4.7.0",
         "pino": "^9.0.0",
         "zod": "^3.24.0",
       },

@@ -11,6 +11,7 @@ import { errorContract } from "./middleware/error-contract";
 import { resolvePrincipal, type PrincipalVars } from "./middleware/principal";
 import { clientIp } from "./middleware/client-ip";
 import { authorize, registerRoute } from "./middleware/authorize";
+import { rateLimit } from "./middleware/rate-limit";
 import { ModuleRegistry } from "./registry";
 import { appConfig } from "./presentation/mobile/app-config";
 import { modules } from "./modules"; // the ordered list of ModuleDescriptors (identity, members, proposals, …)
@@ -31,6 +32,13 @@ export async function buildApp(opts: BuildOptions = {}) {
     level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug",
     pretty: env.NODE_ENV === "development",
   });
+  platform.metrics.gauge("push_live", () => (env.PUSH_ADAPTER === "live" ? 1 : 0));
+  if (env.NODE_ENV === "production" && env.PUSH_ADAPTER !== "live") {
+    platform.logger.warn(
+      { pushAdapter: env.PUSH_ADAPTER },
+      "production is running with recording push; nothing is delivered until PUSH_ADAPTER=live",
+    );
+  }
 
   // 1. events: the catalogue is the only source of types
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
@@ -88,8 +96,8 @@ export async function buildApp(opts: BuildOptions = {}) {
     c.text(await platform.metrics.render(), 200, { "Content-Type": "text/plain; version=0.0.4" }),
   );
   // Inventory tests read routeRegistry — do not maintain a parallel allow-list in authz/guard.
-  registerRoute("GET", "/v1/app-config", "public");
-  app.get("/v1/app-config", async (c) => c.json(await appConfig(platform)));
+  registerRoute("GET", "/v1/app-config", "public", "anon");
+  app.get("/v1/app-config", rateLimit(platform.rateLimit, "anon"), async (c) => c.json(await appConfig(platform)));
 
   // Test/dev only: Maestro reads the last OTP without logging it. Never mounted in production.
   if (env.NODE_ENV !== "production") {

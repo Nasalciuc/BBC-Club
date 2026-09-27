@@ -14,5 +14,7 @@ export type PushFacade = {
     title: string;
     body?: string;
     data?: Record<string, string>;
+    /** Same id → the device shows one notification even if the server sent it twice. */
+    collapseId?: string;
   }): Promise<PushResult>;
 };

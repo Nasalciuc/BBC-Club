@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
+import { rateLimit } from "@bbc/platform/ratelimit";
 import { apiError, zodFieldErrors } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
@@ -9,6 +10,7 @@ import type { Executor } from "@bbc/db";
 import { createRequestsRepo } from "./infrastructure/requests.repo";
 import { submit } from "./application/submit";
 import { setStatus } from "./application/set-status";
+import { actionLabel, escapeHtml, routeLabel, verifyAction } from "./application/operator-links";
 import { toRequestVM } from "./application/to-request-vm";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
@@ -23,7 +25,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
   name: "requests",
   layer: "domain",
   needs: ["crm"],
-  init: ({ db, platform, ports }) => {
+  init: ({ db, platform, ports, env }) => {
     const conn = db as unknown as Executor;
     const repo = createRequestsRepo(conn);
     const publish = async (
@@ -67,14 +69,17 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         const body = await c.req.json().catch(() => ({}));
         let result;
         try {
-          result = await submit(conn, body, actor, key, { publish });
+          result = await submit(conn, body, actor, key, { publish, rateLimit: platform.rateLimit });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
           if (details) return c.json(apiError("VALIDATION", { details }), 400);
           throw err;
         }
         if (!result.ok) {
-          if (result.code === "RATE_LIMITED") return c.json(apiError("RATE_LIMITED"), 429);
+          if (result.code === "RATE_LIMITED") {
+            c.header("Retry-After", String(Math.max(1, Math.ceil((result.retryAfterMs ?? 1000) / 1000))));
+            return c.json(apiError("RATE_LIMITED"), 429);
+          }
           if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
           return c.json(apiError("VALIDATION"), 400);
         }
@@ -82,9 +87,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       },
     );
 
-    registerRoute("GET", "/v1/requests", "requests:read-self");
+    registerRoute("GET", "/v1/requests", "requests:read-self", "read");
     routes.get(
       "/requests",
+      rateLimit(platform.rateLimit, "read"),
       authorize("requests:read-self", {
         module: "requests",
         flags: platform.flags,
@@ -106,9 +112,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       },
     );
 
-    registerRoute("GET", "/v1/requests/:id", "requests:read-self");
+    registerRoute("GET", "/v1/requests/:id", "requests:read-self", "read");
     routes.get(
       "/requests/:id",
+      rateLimit(platform.rateLimit, "read"),
       authorize("requests:read-self", {
         module: "requests",
         flags: platform.flags,
@@ -149,7 +156,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
 
     return {
       exposes: expose,
-      routes: [{ basePath: "/v1", app: routes }],
+      routes: [
+        { basePath: "/v1", app: routes },
+        { basePath: "/ops", app: opsRoutes(conn, repo, publish, platform, env.OPS_LINK_SECRET ?? "") },
+      ],
       consumers: [
         {
           type: "request.submitted",
@@ -184,6 +194,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
               repo,
               crm: ports.crm,
               logger: platform.logger,
+              appOrigin: env.APP_ORIGIN,
+              opsLinkSecret: env.OPS_LINK_SECRET ?? "",
             }),
           },
         },
@@ -191,6 +203,76 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
     };
   },
 });
+
+type OpsPublish = (
+  tx: Executor,
+  e: {
+    type: string;
+    version: number;
+    aggregateType: string;
+    aggregateId: string;
+    memberId: string | null;
+    payload: unknown;
+  },
+) => Promise<void>;
+
+function opsRoutes(
+  conn: Executor,
+  repo: ReturnType<typeof createRequestsRepo>,
+  publish: OpsPublish,
+  platform: { rateLimit: Parameters<typeof rateLimit>[0] },
+  secret: string,
+) {
+  const ops = new Hono<AppEnv>();
+  const limit = rateLimit(platform.rateLimit, "ops.link", (c) => `ip:${c.get("clientIp") ?? "unknown"}`);
+
+  registerRoute("GET", "/ops/requests/:token", "public", "ops.link");
+  ops.get("/requests/:token", limit, async (c) => {
+    const v = verifyAction(secret, c.req.param("token"));
+    if (!v.ok) {
+      return c.html(
+        page(v.reason === "expired" ? "This link has expired." : "This link is not valid."),
+        v.reason === "expired" ? 410 : 403,
+      );
+    }
+    const req = await repo.getById(conn, v.requestId);
+    if (!req) return c.html(page("Request not found."), 404);
+    return c.html(
+      confirmPage({
+        token: c.req.param("token"),
+        action: v.action,
+        reference: req.reference,
+        route: routeLabel(req.legs),
+        name: req.contactName,
+      }),
+    );
+  });
+
+  registerRoute("POST", "/ops/requests/:token", "public", "ops.link");
+  ops.post("/requests/:token", limit, async (c) => {
+    const v = verifyAction(secret, c.req.param("token"));
+    if (!v.ok) return c.html(page("This link is not valid or has expired."), 403);
+    const r = await setStatus(conn, { requestId: v.requestId, status: v.action, agentId: "ops" }, { repo, publish });
+    if (!r.ok) return c.html(page("Request not found."), 404);
+    return c.html(page(r.unchanged ? "Already marked — nothing changed." : `Marked as ${actionLabel(v.action)}.`));
+  });
+
+  return ops;
+}
+
+function page(message: string): string {
+  return `<!doctype html><html><body><p>${escapeHtml(message)}</p></body></html>`;
+}
+
+function confirmPage(input: {
+  token: string;
+  action: "quoted" | "booked" | "closed";
+  reference: string;
+  route: string;
+  name: string;
+}): string {
+  return `<!doctype html><html><body><p>${escapeHtml(input.reference)}</p><p>${escapeHtml(input.route)}</p><p>${escapeHtml(input.name)}</p><form method="post" action="/ops/requests/${escapeHtml(input.token)}"><button type="submit">Mark as ${escapeHtml(actionLabel(input.action))}</button></form></body></html>`;
+}
 
 function facade(db: Executor, repo: ReturnType<typeof createRequestsRepo>): RequestsFacade {
   return {
