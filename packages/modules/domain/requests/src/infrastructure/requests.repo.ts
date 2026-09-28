@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { query, type Executor } from "@bbc/db";
+import { col } from "@bbc/db/helpers";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 
 type EventRow = typeof requestEvents.$inferSelect;
@@ -83,29 +84,19 @@ export function createRequestsRepo(db: Executor) {
 
     /** Claims unsent requests. FOR UPDATE SKIP LOCKED so two workers never take the same row. */
     async claimUnsent(tx: Executor, limit = 20): Promise<ClaimedRow[]> {
+      const r = requests; // columns from the schema (col()): a rename cannot leave this statement behind
       return query(
         tx,
         sql`
         SELECT
-          id,
-          reference,
-          contact_name,
-          contact_phone,
-          contact_email,
-          legs,
-          trip_type,
-          cabin,
-          passengers,
-          source,
-          app_version,
-          send_attempts,
-          phone_valid,
-          phone_e164
-        FROM requests.requests
-        WHERE sent_to_crm = false
-          AND send_attempts < 6
-          AND (sent_at IS NULL OR sent_at < now() - interval '5 minutes')
-        ORDER BY created_at
+          ${col(r.id)}, ${col(r.reference)}, ${col(r.contactName)}, ${col(r.contactPhone)}, ${col(r.contactEmail)},
+          ${col(r.legs)}, ${col(r.tripType)}, ${col(r.cabin)}, ${col(r.passengers)}, ${col(r.source)},
+          ${col(r.appVersion)}, ${col(r.sendAttempts)}, ${col(r.phoneValid)}, ${col(r.phoneE164)}
+        FROM ${r}
+        WHERE ${col(r.sentToCrm)} = false
+          AND ${col(r.sendAttempts)} < 6
+          AND (${col(r.sentAt)} IS NULL OR ${col(r.sentAt)} < now() - interval '5 minutes')
+        ORDER BY ${col(r.createdAt)}
         FOR UPDATE SKIP LOCKED
         LIMIT ${limit}`,
         ClaimedRow,

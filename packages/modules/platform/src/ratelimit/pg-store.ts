@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import { query, type Executor } from "@bbc/db";
+import { col } from "@bbc/db/helpers";
+import { rateLimitState as S } from "../infrastructure/schema";
 import { z } from "zod";
 
 export type GcraResult = {
@@ -27,11 +29,11 @@ export async function gcraCheck(
   const inserted = await query(
     exec,
     sql`
-    INSERT INTO platform.rate_limit_state AS s (key, tat) VALUES (${key}, to_timestamp(${(nowMs + T) / 1000}))
-    ON CONFLICT (key) DO UPDATE
-      SET tat = GREATEST(s.tat, to_timestamp(${nowMs / 1000})) + make_interval(secs => ${T / 1000})
-      WHERE GREATEST(s.tat, to_timestamp(${nowMs / 1000})) - to_timestamp(${nowMs / 1000}) <= make_interval(secs => ${tau / 1000})
-    RETURNING extract(epoch from tat) * 1000 AS tat_ms`,
+    INSERT INTO ${S} AS s (${col(S.key)}, ${col(S.tat)}) VALUES (${key}, to_timestamp(${(nowMs + T) / 1000}))
+    ON CONFLICT (${col(S.key)}) DO UPDATE
+      SET ${col(S.tat)} = GREATEST(s.${col(S.tat)}, to_timestamp(${nowMs / 1000})) + make_interval(secs => ${T / 1000})
+      WHERE GREATEST(s.${col(S.tat)}, to_timestamp(${nowMs / 1000})) - to_timestamp(${nowMs / 1000}) <= make_interval(secs => ${tau / 1000})
+    RETURNING extract(epoch from ${col(S.tat)}) * 1000 AS tat_ms`,
     TatRow,
   );
   const written = inserted[0];
@@ -45,7 +47,7 @@ export async function gcraCheck(
   }
   const selected = await query(
     exec,
-    sql`SELECT extract(epoch from tat) * 1000 AS tat_ms FROM platform.rate_limit_state WHERE key = ${key}`,
+    sql`SELECT extract(epoch from ${col(S.tat)}) * 1000 AS tat_ms FROM ${S} WHERE ${col(S.key)} = ${key}`,
     TatRow,
   );
   const current = selected[0];

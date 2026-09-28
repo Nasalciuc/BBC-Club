@@ -31,6 +31,11 @@ export async function tryAdvisoryXactLock(exec: Executor, key: string): Promise<
   return Boolean(rows[0]?.ok);
 }
 
+/** A schema column's name as a bare identifier (`"status"`), for hand-written SQL where the qualified
+ *  `${table.column}` form (`"table"."column"`) is invalid: an aliased FROM item (`d.${col(t.status)}`), a SET target.
+ *  Rename-safe like `${table.column}`: the SQL follows the Drizzle schema (scripts/check-raw-sql-columns.ts). */
+export const col = (c: PgColumn): SQL => sql`${sql.identifier(c.name)}`;
+
 /** SKIP LOCKED fetch for queue tables: caller passes the table, the predicate and the order. */
 export function forUpdateSkipLocked(limit: number): SQL {
   return sql`FOR UPDATE SKIP LOCKED LIMIT ${limit}`;

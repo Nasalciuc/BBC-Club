@@ -1,6 +1,7 @@
 import { fenceExecutor } from "./fence";
-import { sql } from "drizzle-orm";
-import { eventDlq } from "../infrastructure/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { col } from "@bbc/db/helpers";
+import { domainEvents, eventDeliveries, eventDlq } from "../infrastructure/schema";
 import type { EventRegistry } from "./registry";
 import { query, type Db, type Executor } from "@bbc/db";
 import { z } from "zod";
@@ -66,7 +67,10 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
    *  Throws the handler's error (the caller decides how to roll back). A timeout throws HandlerTimeout. */
   async function deliver(exec: Executor, row: Delivery): Promise<void> {
     if (deps.isPaused && (await deps.isPaused(row.consumer))) {
-      await exec.execute(sql`UPDATE platform.event_deliveries SET status='paused' WHERE id = ${row.id}`);
+      await exec
+        .update(eventDeliveries)
+        .set({ status: "paused" })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
       return;
     }
 
@@ -74,9 +78,10 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
     const handler = registry.handlerFor(row.type, row.consumer);
     if (!handler) {
       // module removed or consumer renamed → park, don't spin
-      await exec.execute(
-        sql`UPDATE platform.event_deliveries SET status='dead', attempts=${attempt}, last_error='handler not registered', processed_at=now() WHERE id = ${row.id}`,
-      );
+      await exec
+        .update(eventDeliveries)
+        .set({ status: "dead", attempts: attempt, lastError: "handler not registered", processedAt: sql`now()` })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
       await exec.insert(eventDlq).values({
         deliveryId: BigInt(row.id),
         eventId: BigInt(row.event_id),
@@ -123,9 +128,10 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
         abortedPromise(ac.signal, `${row.consumer} timed out after ${handlerTimeoutMs}ms`),
       ]);
 
-      await exec.execute(
-        sql`UPDATE platform.event_deliveries SET status='done', attempts=${attempt}, processed_at=now(), last_error=NULL WHERE id = ${row.id}`,
-      );
+      await exec
+        .update(eventDeliveries)
+        .set({ status: "done", attempts: attempt, processedAt: sql`now()`, lastError: null })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
       deps.metrics?.observe("delivery_duration_ms", Date.now() - started, { consumer: row.consumer });
       deps.metrics?.inc("deliveries_done", { consumer: row.consumer });
       return;
@@ -148,9 +154,10 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
     message: string,
   ): Promise<DeadNotice | null> {
     if (attempt >= MAX_ATTEMPTS) {
-      await exec.execute(
-        sql`UPDATE platform.event_deliveries SET status='dead', attempts=${attempt}, last_error=${message}, processed_at=now() WHERE id = ${row.id}`,
-      );
+      await exec
+        .update(eventDeliveries)
+        .set({ status: "dead", attempts: attempt, lastError: message, processedAt: sql`now()` })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
       await exec.insert(eventDlq).values({
         deliveryId: BigInt(row.id),
         eventId: BigInt(row.event_id),
@@ -166,9 +173,10 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
       return { consumer: row.consumer, eventId: String(row.event_id), error: message };
     }
     const delay = BACKOFF_MS[attempt - 1] ?? 1_000;
-    await exec.execute(
-      sql`UPDATE platform.event_deliveries SET attempts=${attempt}, last_error=${message}, run_after = now() + ${delay} * interval '1 millisecond' WHERE id = ${row.id}`,
-    );
+    await exec
+      .update(eventDeliveries)
+      .set({ attempts: attempt, lastError: message, runAfter: sql`now() + ${delay} * interval '1 millisecond'` })
+      .where(eq(eventDeliveries.id, BigInt(row.id)));
     deps.logger.warn({ consumer: row.consumer, attempt, retryInMs: delay, err: message }, "delivery retry");
     deps.metrics?.inc("deliveries_retried", { consumer: row.consumer });
     return null;
@@ -176,12 +184,14 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
 
   /** Last resort when recording the real failure itself fails. Keeps the row off the immediate retry loop. */
   async function bumpRunAfter(exec: Executor, id: string, message: string): Promise<void> {
-    await exec.execute(sql`
-      UPDATE platform.event_deliveries
-      SET attempts = attempts + 1,
-          run_after = now() + interval '5 minutes',
-          last_error = left(${message}, 1000)
-      WHERE id = ${id}`);
+    await exec
+      .update(eventDeliveries)
+      .set({
+        attempts: sql`${eventDeliveries.attempts} + 1`,
+        runAfter: sql`now() + interval '5 minutes'`,
+        lastError: message.slice(0, 1000),
+      })
+      .where(eq(eventDeliveries.id, BigInt(id)));
   }
 
   async function notifyDead(notices: readonly DeadNotice[]): Promise<void> {
@@ -194,13 +204,17 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
     }
   }
 
+  // Columns come from the schema (col()), so a rename cannot leave this statement behind (check-raw-sql-columns).
+  const D = eventDeliveries;
+  const E = domainEvents;
   const CLAIM_SQL = (limit: number) => sql`
-        SELECT d.id, d.event_id, d.event_occurred_at, d.consumer, d.attempts,
-               e.type, e.version, e.aggregate_type, e.aggregate_id, e.member_id, e.payload, e.occurred_at
-        FROM platform.event_deliveries d
-        JOIN platform.domain_events e ON e.id = d.event_id AND e.occurred_at = d.event_occurred_at
-        WHERE d.status = 'pending' AND d.run_after <= now()
-        ORDER BY d.run_after, d.id
+        SELECT d.${col(D.id)}, d.${col(D.eventId)}, d.${col(D.eventOccurredAt)}, d.${col(D.consumer)}, d.${col(D.attempts)},
+               e.${col(E.type)}, e.${col(E.version)}, e.${col(E.aggregateType)}, e.${col(E.aggregateId)},
+               e.${col(E.memberId)}, e.${col(E.payload)}, e.${col(E.occurredAt)}
+        FROM ${D} d
+        JOIN ${E} e ON e.${col(E.id)} = d.${col(D.eventId)} AND e.${col(E.occurredAt)} = d.${col(D.eventOccurredAt)}
+        WHERE d.${col(D.status)} = 'pending' AND d.${col(D.runAfter)} <= now()
+        ORDER BY d.${col(D.runAfter)}, d.${col(D.id)}
         FOR UPDATE OF d SKIP LOCKED
         LIMIT ${limit}`;
 
@@ -330,26 +344,28 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
     /** Operator action: requeue a dead delivery after fixing the cause. */
     replay: async (deliveryId: string) =>
       db.transaction(async (tx) => {
-        await tx.execute(
-          sql`UPDATE platform.event_deliveries SET status='pending', attempts=0, run_after=now(), last_error=NULL WHERE id = ${deliveryId}`,
-        );
-        await tx.execute(sql`DELETE FROM platform.event_dlq WHERE delivery_id = ${deliveryId}`);
+        await tx
+          .update(eventDeliveries)
+          .set({ status: "pending", attempts: 0, runAfter: sql`now()`, lastError: null })
+          .where(eq(eventDeliveries.id, BigInt(deliveryId)));
+        await tx.delete(eventDlq).where(eq(eventDlq.deliveryId, BigInt(deliveryId)));
       }),
     /** Resume everything a pause left behind. */
     resume: async (consumer: string) =>
-      db.execute(
-        sql`UPDATE platform.event_deliveries SET status='pending', run_after=now() WHERE consumer=${consumer} AND status='paused'`,
-      ),
+      db
+        .update(eventDeliveries)
+        .set({ status: "pending", runAfter: sql`now()` })
+        .where(and(eq(eventDeliveries.consumer, consumer), eq(eventDeliveries.status, "paused"))),
     /** Queue health for /metrics and alerts: age of the oldest pending delivery is the number that matters. */
     stats: async () => {
       const [r] = await query(
         db,
         sql`
-    SELECT (SELECT count(*) FROM platform.event_deliveries WHERE status = 'pending')::int AS pending,
-           (SELECT count(*) FROM platform.event_deliveries WHERE status = 'dead')::int    AS dead,
-           (SELECT count(*) FROM platform.event_deliveries WHERE status = 'paused')::int  AS paused,
-           COALESCE(EXTRACT(EPOCH FROM now() - (SELECT min(created_at) FROM platform.event_deliveries
-                                                WHERE status = 'pending'))::int, 0)      AS oldest_pending_s`,
+    SELECT (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'pending')::int AS pending,
+           (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'dead')::int    AS dead,
+           (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'paused')::int  AS paused,
+           COALESCE(EXTRACT(EPOCH FROM now() - (SELECT min(${col(D.createdAt)}) FROM ${D}
+                                                WHERE ${col(D.status)} = 'pending'))::int, 0) AS oldest_pending_s`,
         QueueStats,
       );
       if (!r) throw new Error("poller.stats returned no row");

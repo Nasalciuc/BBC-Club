@@ -43,6 +43,8 @@ jobs:
       - run: bun run typecheck
       - run: bun run tokens:check
       - run: bun run design:lint
+      # Ratchet: column names written as text in raw SQL may only go down (scripts/raw-sql-columns.baseline.json).
+      - run: bun run sql:columns
 
       - run: bun run --filter @bbc/db db:migrate
       - run: bun run test:unit
