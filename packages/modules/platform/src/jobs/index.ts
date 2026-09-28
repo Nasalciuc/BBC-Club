@@ -55,13 +55,18 @@ export function createJobs(
       }
     }
 
-    const [runRow] = await db.insert(jobRuns).values({ job: name, status: "running" }).returning({ id: jobRuns.id });
-    if (!runRow) throw new Error(`job ${name}: the job_runs insert returned no row`);
+    // From here on the lock is held: everything, the job_runs insert included, runs inside try so that finally
+    // always unlocks and releases the reserved connection. A throw outside it would keep the lock on a leaked
+    // connection, and every later run would be "skipped" until the process restarts.
+    let runId: bigint | null = null;
     const ac = new AbortController();
     const DEFAULT_JOB_TIMEOUT_MS = 10 * 60_000;
     const timeout = setTimeout(() => ac.abort(), spec.timeoutMs ?? DEFAULT_JOB_TIMEOUT_MS);
 
     try {
+      const [runRow] = await db.insert(jobRuns).values({ job: name, status: "running" }).returning({ id: jobRuns.id });
+      if (!runRow) throw new Error(`job ${name}: the job_runs insert returned no row`);
+      runId = runRow.id;
       const raw = await spec.handler({ db, logger: deps.logger, signal: ac.signal });
       const metrics =
         raw !== null &&
@@ -74,7 +79,7 @@ export function createJobs(
       await db
         .update(jobRuns)
         .set({ status: "succeeded", finishedAt: sql`now()`, durationMs, metrics })
-        .where(sql`${jobRuns.id} = ${runRow.id}`);
+        .where(sql`${jobRuns.id} = ${runId}`);
       deps.metrics?.observe("job_duration_ms", durationMs, { job: name });
       deps.metrics?.inc("job_succeeded", { job: name });
       deps.logger.info({ job: name, durationMs, ...(metrics ?? {}) }, "job succeeded");
@@ -82,10 +87,12 @@ export function createJobs(
     } catch (e: any) {
       const durationMs = Date.now() - started;
       const error = String(e?.message ?? e).slice(0, 2000);
-      await db
-        .update(jobRuns)
-        .set({ status: "failed", finishedAt: sql`now()`, durationMs, error })
-        .where(sql`${jobRuns.id} = ${runRow.id}`);
+      // No row when the insert itself failed; the result and the log still say so.
+      if (runId !== null)
+        await db
+          .update(jobRuns)
+          .set({ status: "failed", finishedAt: sql`now()`, durationMs, error })
+          .where(sql`${jobRuns.id} = ${runId}`);
       deps.metrics?.inc("job_failed", { job: name });
       deps.logger.error({ job: name, durationMs, err: error }, "job failed");
       return { status: "failed", durationMs, error };
