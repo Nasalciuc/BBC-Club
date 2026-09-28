@@ -24,9 +24,10 @@ function textColumns(src: string): number {
 }
 const byFile: Record<string, number> = {};
 for (const root of ROOTS)
-  for await (const f of new Glob(root).scan(".")) {
+  for await (const raw of new Glob(root).scan(".")) {
+    const f = raw.replaceAll("\\", "/");
     if (/\.test\.ts$|\/tests?\//.test(f)) continue;
-    const n = textColumns(await Bun.file(f).text());
+    const n = textColumns(await Bun.file(raw).text());
     if (n) byFile[f] = n;
   }
 const total = Object.values(byFile).reduce((a, b) => a + b, 0);
