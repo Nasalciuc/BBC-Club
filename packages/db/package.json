@@ -8,13 +8,15 @@
     "./schema": "./src/schema/index.ts",
     "./schema/*": "./src/schema/*.ts",
     "./helpers": "./src/helpers.ts",
-    "./testing/isolated-db": "./src/testing/isolated-db.ts"
+    "./testing/isolated-db": "./src/testing/isolated-db.ts",
+    "./testing/plan": "./src/testing/plan.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:verify": "bun run scripts/verify.ts",
     "db:seed": "bun run scripts/seed-fixture.ts",
+    "db:seed:volume": "bun run scripts/seed-volume.ts",
     "db:reset:test": "bun run scripts/reset-test.ts",
     "db:test:clean": "bun run scripts/test-clean.ts",
     "db:studio": "drizzle-kit studio",
@@ -23,7 +25,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bbc/platform": "workspace:*",
+    "better-auth": "~1.6.0",
     "drizzle-orm": "1.0.0-rc.4",
     "postgres": "^3.4.0",
     "zod": "^3.24.0"

@@ -1,9 +1,10 @@
 import { Hono } from "hono";
+import { sql } from "drizzle-orm";
 import { authOrigins, loadEnv } from "@bbc/shared/env";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { apiError } from "@bbc/shared/errors";
 import { createDb } from "@bbc/db";
-import { createPlatform, registerPlatformJobs } from "@bbc/platform";
+import { createPlatform, registerPlatformJobs, collectDbReport } from "@bbc/platform";
 import { lastDevOtp } from "@bbc/email";
 import type { IdentityFacade } from "@bbc/identity";
 import { installBaseMiddleware } from "./middleware/base";
@@ -22,12 +23,21 @@ export type BuildOptions = {
   /** Tests inject a capturing email sender and extra flags here. */
   overrides?: Record<string, unknown>;
   startPoller?: boolean;
+  role?: "all" | "api" | "worker";
 };
 
 /** Builds the whole process. Tests call this with startPoller:false and drive the poller by hand. */
 export async function buildApp(opts: BuildOptions = {}) {
   const env = opts.env ?? loadEnv();
-  const db = opts.db ?? createDb(env.DATABASE_URL, { applicationName: "bbc-api" });
+  const role = opts.role ?? env.APP_ROLE;
+  const serveMembers = role !== "worker";
+  const runsBackground = role !== "api";
+  const db =
+    opts.db ??
+    createDb(env.DATABASE_URL, {
+      applicationName: role === "worker" ? "bbc-worker" : "bbc-api",
+      pooler: env.DB_POOLER,
+    });
   const platform = createPlatform(db, {
     level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug",
     pretty: env.NODE_ENV === "development",
@@ -42,7 +52,7 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   // 1. events: the catalogue is the only source of types
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
-  registerPlatformJobs(platform.jobs);
+  registerPlatformJobs(platform.jobs, platform.metrics);
 
   const app = new Hono<PrincipalVars>();
   installBaseMiddleware(app, { origins: authOrigins(env), metrics: platform.metrics });
@@ -55,8 +65,20 @@ export async function buildApp(opts: BuildOptions = {}) {
   await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
   const identity = registry.facade<IdentityFacade>("identity");
 
+  let draining = false;
+  const setDraining = (v: boolean) => {
+    draining = v;
+  };
+
+  const loadtestTrusted =
+    env.LOADTEST === "1"
+      ? env.LOADTEST_TRUSTED_PROXIES.split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
   // 3. client IP (behind Cloudflare → Caddy) then principal — IP before any authz log
-  app.use("*", clientIp());
+  app.use("*", clientIp(loadtestTrusted));
   app.use(
     "*",
     resolvePrincipal({
@@ -69,18 +91,30 @@ export async function buildApp(opts: BuildOptions = {}) {
     }),
   );
 
-  // 4. public
+  async function readyProbe(): Promise<boolean> {
+    try {
+      await Promise.race([
+        db.execute(sql`SELECT ${1}::int AS n`),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("ready probe timeout")), 2_000)),
+      ]);
+      await Promise.race([
+        db.execute(sql`SELECT ${1}::int AS n`),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("ready probe timeout")), 2_000)),
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // 4. public — every role answers these (Caddy drain, cron, metrics)
   registerRoute("GET", "/health", "public");
   app.get("/health", (c) => c.json({ ok: true }));
   registerRoute("GET", "/ready", "public");
   app.get("/ready", async (c) => {
+    if (draining) return c.json({ ok: false, draining: true }, 503);
     const checks: Record<string, unknown> = {};
-    try {
-      await db.execute("SELECT 1");
-      checks.db = true;
-    } catch {
-      checks.db = false;
-    }
+    checks.db = await readyProbe();
     const h = await platform.health().catch(() => ({ ok: false, queue: null }));
     checks.queue = h.queue;
     const runs = await platform.jobs.lastRuns().catch(() => ({}));
@@ -95,12 +129,18 @@ export async function buildApp(opts: BuildOptions = {}) {
   app.get("/metrics", async (c) =>
     c.text(await platform.metrics.render(), 200, { "Content-Type": "text/plain; version=0.0.4" }),
   );
-  // Inventory tests read routeRegistry — do not maintain a parallel allow-list in authz/guard.
-  registerRoute("GET", "/v1/app-config", "public", "anon");
-  app.get("/v1/app-config", rateLimit(platform.rateLimit, "anon"), async (c) => c.json(await appConfig(platform)));
+
+  registerRoute("GET", "/v1/internal/db-report", "ops:read");
+  app.get("/v1/internal/db-report", authorize("ops:read"), async (c) => c.json(await collectDbReport(db)));
+
+  if (serveMembers) {
+    // Inventory tests read routeRegistry — do not maintain a parallel allow-list in authz/guard.
+    registerRoute("GET", "/v1/app-config", "public", "anon");
+    app.get("/v1/app-config", rateLimit(platform.rateLimit, "anon"), async (c) => c.json(await appConfig(platform)));
+  }
 
   // Test/dev only: Maestro reads the last OTP without logging it. Never mounted in production.
-  if (env.NODE_ENV !== "production") {
+  if (serveMembers && env.NODE_ENV !== "production") {
     registerRoute("GET", "/v1/test/last-otp", "public");
     app.get("/v1/test/last-otp", (c) => {
       const email = c.req.query("email")?.trim();
@@ -111,21 +151,22 @@ export async function buildApp(opts: BuildOptions = {}) {
     });
   }
 
-  // 5. Better Auth owns /api/auth/*
-  app.on(["POST", "GET"], "/api/auth/*", (c) => identity.handler(c.req.raw));
+  if (serveMembers) {
+    app.on(["POST", "GET"], "/api/auth/*", (c) => identity.handler(c.req.raw));
+    for (const m of mounted) app.route(m.basePath, m.app);
+  }
 
-  // 6. module routes (each already carries authorize())
-  for (const m of mounted) app.route(m.basePath, m.app);
+  if (runsBackground) {
+    registerRoute("POST", "/v1/internal/run/:job", "jobs:run");
+    app.post("/v1/internal/run/:job", authorize("jobs:run"), async (c) => {
+      const name = c.req.param("job");
+      if (!platform.jobs.has(name))
+        return c.json({ error: { code: "NOT_FOUND", message: `unknown job ${name}` } }, 404);
+      return c.json(await platform.jobs.run(name));
+    });
+  }
 
-  // 7. jobs over HTTP for the cron container
-  registerRoute("POST", "/v1/internal/run/:job", "jobs:run");
-  app.post("/v1/internal/run/:job", authorize("jobs:run"), async (c) => {
-    const name = c.req.param("job");
-    if (!platform.jobs.has(name)) return c.json({ error: { code: "NOT_FOUND", message: `unknown job ${name}` } }, 404);
-    return c.json(await platform.jobs.run(name));
-  });
-
-  if (opts.startPoller ?? true) platform.poller.start();
+  if (runsBackground && (opts.startPoller ?? true)) platform.poller.start();
 
   const shutdown = async () => {
     platform.logger.info({}, "shutting down");
@@ -133,17 +174,19 @@ export async function buildApp(opts: BuildOptions = {}) {
     await db.close();
   };
 
-  return { app, db, platform, registry, shutdown, env };
+  return { app, db, platform, registry, shutdown, env, role, setDraining };
 }
 
-/** Process entry: builds, serves, dies cleanly on SIGTERM (compose gives 10 s). */
+/** Process entry: builds, serves, dies cleanly on SIGTERM (compose drain then stop). */
 if (import.meta.main) {
-  const { app, shutdown, env, platform } = await buildApp();
+  const { app, shutdown, env, platform, setDraining } = await buildApp();
   const server = Bun.serve({ port: env.PORT, fetch: app.fetch, idleTimeout: 30 });
-  platform.logger.info({ port: server.port, env: env.NODE_ENV }, "api up");
+  platform.logger.info({ port: server.port, env: env.NODE_ENV, role: env.APP_ROLE }, "api up");
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, async () => {
-      server.stop(true);
+      setDraining(true);
+      await Bun.sleep(5_000);
+      server.stop(false);
       await shutdown();
       process.exit(0);
     });

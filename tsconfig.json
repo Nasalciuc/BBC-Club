@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
-  "include": ["scripts/**/*.ts", "load/**/*.ts"],
+  "include": ["scripts/**/*.ts", "load/**/*.ts", "loadtest/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/graphify-out"]
 }

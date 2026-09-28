@@ -78,3 +78,4 @@ pnpm-lock.yaml
 
 # Nightly bench writes this; baseline.json is the committed comparison.
 load/bench/report.json
+loadtest/sessions.json

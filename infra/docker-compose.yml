@@ -42,8 +42,12 @@ services:
         required: false
     environment:
       PORT: "8000"
-      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
-    depends_on: { postgres: { condition: service_healthy } }
+      APP_ROLE: api
+      DB_POOLER: transaction
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@pgbouncer:5432/bbc
+    depends_on:
+      postgres: { condition: service_healthy }
+      pgbouncer: { condition: service_healthy }
     healthcheck:
       test:
         [
@@ -56,8 +60,63 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s
-    stop_grace_period: 15s
-    deploy: { resources: { limits: { cpus: "2.0", memory: 1g } } }
+    stop_grace_period: 20s
+    deploy:
+      replicas: ${API_REPLICAS:-4}
+      resources: { limits: { cpus: "1.0", memory: 512m } }
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p0
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
+      DB_USER: bbc
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_NAME: bbc
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      ADMIN_USERS: bbc
+      MAX_CLIENT_CONN: "2000"
+      DEFAULT_POOL_SIZE: "20"
+      RESERVE_POOL_SIZE: "5"
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits
+    depends_on: { postgres: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "pg_isready", "-h", "127.0.0.1"], interval: 5s, timeout: 3s, retries: 10 }
+    deploy: { resources: { limits: { memory: 64m } } }
+
+  worker:
+    image: ${API_IMAGE:?API_IMAGE must be a SHA-tagged image}
+    <<: [*restart, *logging]
+    command: ["bun", "apps/api/src/worker.ts"]
+    networks: [edge, data]
+    env_file:
+      - path: "${ENV_FILE:-./env/production.env}"
+        required: false
+    environment:
+      APP_ROLE: worker
+      WORKER_PORT: "8001"
+      DB_POOLER: none
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
+      PGBOUNCER_ADMIN_URL: postgres://bbc:${POSTGRES_PASSWORD}@pgbouncer:5432/pgbouncer
+    depends_on:
+      postgres: { condition: service_healthy }
+      pgbouncer: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://localhost:8001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    stop_grace_period: 60s
+    deploy: { resources: { limits: { cpus: "1.0", memory: 512m } } }
 
   postgres:
     build: { context: ./postgres } # postgres:16 + pgbackrest in the SAME container (archive_command needs it)
@@ -80,6 +139,9 @@ services:
       - -c=work_mem=8MB
       - -c=maintenance_work_mem=128MB
       - -c=max_connections=100
+      - -c=shared_preload_libraries=pg_stat_statements
+      - -c=pg_stat_statements.max=10000
+      - -c=pg_stat_statements.track=all
       - -c=wal_level=replica
       - -c=archive_mode=on
       - -c=archive_command=pgbackrest --stanza=bbc archive-push %p
@@ -99,9 +161,9 @@ services:
     entrypoint: ["/bin/sh", "/etc/cron/run.sh"]
     volumes: ["./cron:/etc/cron:ro"]
     environment:
-      API_URL: "http://api:8000"
+      API_URL: "http://worker:8001"
       INTERNAL_API_SECRET: "${INTERNAL_API_SECRET}"
-    depends_on: { api: { condition: service_healthy } }
+    depends_on: { worker: { condition: service_healthy } }
     deploy: { resources: { limits: { memory: 64m } } }
 
   minio:
@@ -124,18 +186,30 @@ services:
     command: ["redis-server", "--maxmemory", "192mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
     deploy: { resources: { limits: { memory: 256m } } }
 
+  glitchtip-postgres:
+    image: postgres:16-alpine
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD}
+      POSTGRES_DB: glitchtip
+    volumes: [glitchtip_pg:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"], interval: 5s, timeout: 3s, retries: 10 }
+    deploy: { resources: { limits: { memory: 512m } } }
+
   glitchtip:
     image: glitchtip/glitchtip:latest
     <<: [*restart, *logging]
     networks: [data]
     environment:
-      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-postgres:5432/glitchtip
       SECRET_KEY: ${GLITCHTIP_SECRET}
       REDIS_URL: redis://redis:6379/0
       GLITCHTIP_DOMAIN: https://${ERRORS_DOMAIN}
       GLITCHTIP_MAX_EVENT_LIFE_DAYS: "30"
       ENABLE_USER_REGISTRATION: "false"
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { glitchtip-postgres: { condition: service_healthy } }
     deploy: { resources: { limits: { memory: 512m } } }
 
   glitchtip-worker:
@@ -144,7 +218,7 @@ services:
     networks: [data]
     command: ["./bin/run-celery-with-beat.sh"]
     environment:
-      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-postgres:5432/glitchtip
       SECRET_KEY: ${GLITCHTIP_SECRET}
       REDIS_URL: redis://redis:6379/0
     depends_on: [glitchtip]
@@ -160,6 +234,7 @@ services:
 volumes:
   postgres_data: {}
   pgbackrest_spool: {}
+  glitchtip_pg: {}
   minio_data: {}
   kuma_data: {}
   caddy_data: {}

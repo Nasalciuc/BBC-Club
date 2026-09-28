@@ -204,19 +204,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
     }
   }
 
-  // Columns come from the schema (col()), so a rename cannot leave this statement behind (check-raw-sql-columns).
-  const D = eventDeliveries;
-  const E = domainEvents;
-  const CLAIM_SQL = (limit: number) => sql`
-        SELECT d.${col(D.id)}, d.${col(D.eventId)}, d.${col(D.eventOccurredAt)}, d.${col(D.consumer)}, d.${col(D.attempts)},
-               e.${col(E.type)}, e.${col(E.version)}, e.${col(E.aggregateType)}, e.${col(E.aggregateId)},
-               e.${col(E.memberId)}, e.${col(E.payload)}, e.${col(E.occurredAt)}
-        FROM ${D} d
-        JOIN ${E} e ON e.${col(E.id)} = d.${col(D.eventId)} AND e.${col(E.occurredAt)} = d.${col(D.eventOccurredAt)}
-        WHERE d.${col(D.status)} = 'pending' AND d.${col(D.runAfter)} <= now()
-        ORDER BY d.${col(D.runAfter)}, d.${col(D.id)}
-        FOR UPDATE OF d SKIP LOCKED
-        LIMIT ${limit}`;
+  const CLAIM_SQL = pollerClaimSql;
 
   /** One delivery per transaction (kept for callers and tests that drive the poller one step at a time). */
   async function processOne(): Promise<"done" | "empty"> {
@@ -335,6 +323,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
       stopped = false;
       void loop();
     },
+    isRunning: () => running,
     stop: async () => {
       stopped = true;
       for (let i = 0; i < 100 && running; i++) await sleep(50);
@@ -358,20 +347,38 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
         .where(and(eq(eventDeliveries.consumer, consumer), eq(eventDeliveries.status, "paused"))),
     /** Queue health for /metrics and alerts: age of the oldest pending delivery is the number that matters. */
     stats: async () => {
-      const [r] = await query(
-        db,
-        sql`
-    SELECT (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'pending')::int AS pending,
-           (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'dead')::int    AS dead,
-           (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'paused')::int  AS paused,
-           COALESCE(EXTRACT(EPOCH FROM now() - (SELECT min(${col(D.createdAt)}) FROM ${D}
-                                                WHERE ${col(D.status)} = 'pending'))::int, 0) AS oldest_pending_s`,
-        QueueStats,
-      );
+      const [r] = await query(db, pollerStatsSql(), QueueStats);
       if (!r) throw new Error("poller.stats returned no row");
       return { pending: r.pending, dead: r.dead, paused: r.paused, oldestPendingSeconds: r.oldest_pending_s };
     },
   };
+}
+
+const D = eventDeliveries;
+const E = domainEvents;
+
+/** Same claim the poller runs — hot-query tests EXPLAIN this, not a copy. */
+export function pollerClaimSql(limit: number) {
+  return sql`
+        SELECT d.${col(D.id)}, d.${col(D.eventId)}, d.${col(D.eventOccurredAt)}, d.${col(D.consumer)}, d.${col(D.attempts)},
+               e.${col(E.type)}, e.${col(E.version)}, e.${col(E.aggregateType)}, e.${col(E.aggregateId)},
+               e.${col(E.memberId)}, e.${col(E.payload)}, e.${col(E.occurredAt)}
+        FROM ${D} d
+        JOIN ${E} e ON e.${col(E.id)} = d.${col(D.eventId)} AND e.${col(E.occurredAt)} = d.${col(D.eventOccurredAt)}
+        WHERE d.${col(D.status)} = 'pending' AND d.${col(D.runAfter)} <= now()
+        ORDER BY d.${col(D.runAfter)}, d.${col(D.id)}
+        FOR UPDATE OF d SKIP LOCKED
+        LIMIT ${limit}`;
+}
+
+/** Same stats() query the poller exposes on /metrics. */
+export function pollerStatsSql() {
+  return sql`
+    SELECT (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'pending')::int AS pending,
+           (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'dead')::int    AS dead,
+           (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'paused')::int  AS paused,
+           COALESCE(EXTRACT(EPOCH FROM now() - (SELECT min(${col(D.createdAt)}) FROM ${D}
+                                                WHERE ${col(D.status)} = 'pending'))::int, 0) AS oldest_pending_s`;
 }
 
 const QueueStats = z.object({

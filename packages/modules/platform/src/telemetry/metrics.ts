@@ -14,6 +14,7 @@ export function createMetrics() {
   const histos = new Map<string, { count: number; sum: number; buckets: Map<number, number> }>();
   const BUCKETS = [5, 25, 100, 300, 1000, 5000, 30000];
   const gauges = new Map<string, () => Promise<number> | number>();
+  const gaugeValues = new Map<string, number>();
 
   return {
     inc(name: string, labels?: Labels, by = 1) {
@@ -32,6 +33,16 @@ export function createMetrics() {
     gauge(name: string, fn: () => Promise<number> | number) {
       gauges.set(name, fn);
     },
+    /** Point-in-time series (DB snapshots). Labelled keys use the same encoding as counters. */
+    setGauge(name: string, value: number, labels?: Labels) {
+      gaugeValues.set(key(name, labels), value);
+    },
+    /** Drop labelled series whose prefix matches (e.g. `db_connections`) before a refresh. */
+    clearPrefix(prefix: string) {
+      for (const k of [...gaugeValues.keys()]) {
+        if (k === prefix || k.startsWith(`${prefix}{`)) gaugeValues.delete(k);
+      }
+    },
     async render(): Promise<string> {
       const lines: string[] = [];
       for (const [k, v] of counters) lines.push(`bbc_${k} ${v}`);
@@ -41,6 +52,7 @@ export function createMetrics() {
         for (const [b, c] of h.buckets) lines.push(`bbc_${base}_bucket{${labels}${labels ? "," : ""}le="${b}"} ${c}`);
         lines.push(`bbc_${base}_count{${labels}} ${h.count}`, `bbc_${base}_sum{${labels}} ${h.sum}`);
       }
+      for (const [k, v] of gaugeValues) lines.push(`bbc_${k} ${v}`);
       for (const [name, fn] of gauges) {
         try {
           lines.push(`bbc_${name} ${await fn()}`);
@@ -53,6 +65,7 @@ export function createMetrics() {
     reset() {
       counters.clear();
       histos.clear();
+      gaugeValues.clear();
     },
   };
 }

@@ -20,10 +20,14 @@ export async function testApp(
     suite?: string;
     poolMax?: number;
     env?: Record<string, string>;
+    queryLog?: string[];
   } = {},
 ) {
   const poolMax = opts.poolMax ?? 6;
-  const iso = await isolatedDb(opts.suite ?? "api", { max: poolMax });
+  const iso = await isolatedDb(opts.suite ?? "api", {
+    max: poolMax,
+    logger: opts.queryLog ? { logQuery: (q) => opts.queryLog!.push(q) } : undefined,
+  });
   const env = loadEnv({
     ...process.env,
     DATABASE_URL: iso.url,

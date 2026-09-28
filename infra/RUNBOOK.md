@@ -17,9 +17,13 @@ ssh -L 5432:localhost:5432 -L 3001:localhost:3001 root@<host>   # then connect t
 ```bash
 cd /opt/bbc
 docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env ps
-curl -s localhost:8000/ready | jq        # db, queue, staleJobs
-curl -s localhost:8000/metrics | grep -E 'queue_pending|queue_dead|queue_oldest'
+curl -s localhost:8000/ready | jq        # db, queue, staleJobs — one replica (Caddy @ops)
+curl -s localhost:8000/metrics | grep -E 'queue_pending|queue_dead|queue_oldest|db_|pgbouncer_'
 ```
+
+Request counters on `/metrics` are **per Bun process**. Caddy's `@ops` route (`/metrics` `/ready`) reaches one replica. DB-backed gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are exact. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
+
+GlitchTip uses **its own Postgres** (`glitchtip-postgres`). It is not in the pgBackRest stanza.
 
 ## Deploy
 
@@ -27,7 +31,13 @@ curl -s localhost:8000/metrics | grep -E 'queue_pending|queue_dead|queue_oldest'
 bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: deploy.sh staging <image>
 ```
 
-Seven steps with automatic rollback if `/ready` stays red for 60 s. **Never deploy `:latest` to production** — the compose file refuses it. `deploy.sh` rejects any image that is not tagged with a commit SHA.
+`LOADTEST=1` in production.env is refused. Image tags must be a commit SHA (`:latest` is rejected).
+
+Sequence: (1) `pg_dump` (2) pull API+worker images (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) scale API to 2N, wait `/ready` on **new** containers only, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (5) recreate the **single** worker (never two pollers) and wait `/ready` on 8001 (6) prune. `rollback_and_exit` restores the previous image tag and brings API+worker back.
+
+Compose healthcheck is `/health`; the deploy gate is `/ready`. Caddy `api_site` resolves replicas with `dynamic a` (refresh 5 s), `least_conn`, passive health on 5xx.
+
+After `shared_preload_libraries=pg_stat_statements` changes, Postgres must restart once for the library to load; `CREATE EXTENSION` is migration `0020`.
 
 ## Roll back right now
 
@@ -36,6 +46,31 @@ bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<previous-sha>
 ```
 
 Schema is expand-only, so the previous image always runs against the current database.
+
+## Database health
+
+Gauges (worker job `db-observe`, every minute, also on `/metrics`):
+
+| Gauge                           | Meaning                                                                         | Action                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `bbc_db_connections{app,state}` | `pg_stat_activity` by `application_name` and `state`                            | A pile of `idle in transaction` → find the PID, terminate if stuck                                       |
+| `bbc_db_oldest_tx_seconds{app}` | Oldest open transaction per app                                                 | **> 30 s** posts to `OPS_WEBHOOK` (Slack-compatible). Kill the session or the job that opened it         |
+| `bbc_db_lock_waits`             | `pg_locks` where `NOT granted`                                                  | Rising with oldest_tx → blocking writer                                                                  |
+| `bbc_db_deadlocks_total`        | `pg_stat_database.deadlocks`                                                    | Investigate the pair of statements                                                                       |
+| `bbc_pgbouncer_waiting_clients` | PgBouncer `SHOW POOLS` `cl_waiting` (needs `PGBOUNCER_ADMIN_URL` on the worker) | **> 0 for 2 minutes** posts to `OPS_WEBHOOK`. Raise `default_pool_size` only after checking slow queries |
+
+There is no Prometheus or Alertmanager in this stack. Thresholds are evaluated by the worker and posted to `OPS_WEBHOOK`.
+
+**Weekly report** (job `db-report`, Mondays 09:00 UTC) and live `GET /v1/internal/db-report` (`ops:read`, operator JWT):
+
+```bash
+# through an SSH tunnel to the box, against a replica (Caddy) or the worker
+curl -sS -H "Authorization: Bearer <operator-jwt>" https://127.0.0.1/v1/internal/db-report | jq
+```
+
+The JSON has `statsReset`, `statsAgeDays`, the 20 slowest statements by mean and by total time (`pg_stat_statements`), unused non-unique indexes, and dead-tuple ratios. **A laptop or CI database is not production.** Do not commit those dumps. The report is meaningful after **≥ 7 days** of traffic (`meaningfulAfterDays`). On a fresh cluster every index shows `idx_scan = 0`.
+
+Trigger now: `POST /v1/internal/run/db-report` with `X-Internal-Secret` against the **worker** (`http://worker:8001`).
 
 ## Stop a runaway feature without deploying
 

@@ -69,6 +69,8 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/notifications claimed_at applied/);
     expect(second.out).not.toMatch(/notifications sending index applied/);
     expect(second.out).not.toMatch(/notifications campaigns applied/);
+    expect(second.out).not.toMatch(/role statement_timeout applied/);
+    expect(second.out).not.toMatch(/pg_stat_statements applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -89,6 +91,8 @@ describe("extras ledger", () => {
       "0016_notifications_claimed_at.sql",
       "0017_notifications_sending_index.sql",
       "0018_notifications_campaigns.sql",
+      "0019_platform_statement_timeout.sql",
+      "0020_platform_pg_stat_statements.sql",
     ]);
   });
 });

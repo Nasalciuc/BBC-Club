@@ -33,6 +33,7 @@
     "validate:prepush": "bun run validate:quick && bunx turbo run test:db",
     "validate": "bun run validate:quick && bun run test:unit && bun run test:db && bun run db:verify",
     "e2e": "maestro test apps/mobile/e2e",
+    "loadtest:smoke": "k6 run -e SMOKE=1 -e BASE_URL=http://127.0.0.1:8000 loadtest/k6/mixed.js",
     "prepare": "husky"
   },
   "devDependencies": {

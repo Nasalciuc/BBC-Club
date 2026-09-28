@@ -1,8 +1,10 @@
 import { sql } from "drizzle-orm";
 import type { Jobs } from "./index";
+import type { Metrics } from "../telemetry/metrics";
+import { applyDbGauges, collectDbReport, collectDbSnapshot, maybeAlertOps } from "../observe/db-health";
 
 /** Jobs platform owns. Modules register their own (expire-offers, sync-mirror, receipts…). */
-export function registerPlatformJobs(jobs: Jobs) {
+export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
   jobs.register("partitions", {
     description: "create journal partitions for the coming months",
     cron: "0 2 * * *",
@@ -54,6 +56,49 @@ export function registerPlatformJobs(jobs: Jobs) {
         if (r.oldest_s > 300)
           logger.warn({ consumer: r.consumer, pending: r.pending, oldestSeconds: r.oldest_s }, "queue lagging");
       return { consumersWithBacklog: rows.length };
+    },
+  });
+
+  jobs.register("db-observe", {
+    description: "set DB gauges on /metrics; POST OPS_WEBHOOK when pool_waiting>0 for 2 min or oldest_tx>30s",
+    cron: "* * * * *",
+    timeoutMs: 15_000,
+    handler: async ({ db, logger }) => {
+      const snap = await collectDbSnapshot(db);
+      applyDbGauges(metrics, snap);
+      const alerts = await maybeAlertOps(snap, logger);
+      return {
+        connections: snap.connections.reduce((s, r) => s + r.n, 0),
+        lockWaits: snap.lockWaits,
+        poolWaiting: snap.poolWaiting,
+        oldestTxSeconds: snap.oldestTxSeconds,
+        alerts,
+      };
+    },
+  });
+
+  jobs.register("db-report", {
+    description:
+      "weekly pg_stat_statements + unused-index report; GET /v1/internal/db-report reads the same live query",
+    cron: "0 9 * * 1",
+    singleton: true,
+    timeoutMs: 60_000,
+    handler: async ({ db, logger }) => {
+      const report = await collectDbReport(db);
+      logger.info(
+        {
+          statsReset: report.statsReset,
+          statsAgeDays: report.statsAgeDays,
+          slowestByMean: report.slowestByMean.length,
+          unusedIndexes: report.unusedIndexes.length,
+        },
+        "db-report",
+      );
+      return {
+        slowestByMean: report.slowestByMean.length,
+        unusedIndexes: report.unusedIndexes.length,
+        statsAgeDays: report.statsAgeDays ?? -1,
+      };
     },
   });
 }

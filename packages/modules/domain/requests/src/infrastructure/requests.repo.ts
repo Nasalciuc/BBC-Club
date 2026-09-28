@@ -34,13 +34,17 @@ type Status = "received" | "assigned" | "quoted" | "booked" | "closed";
 /** Ownership is in the WHERE. Someone else's request returns undefined → route 404. */
 export function createRequestsRepo(db: Executor) {
   return {
-    async listForMember(exec: Executor | undefined, memberId: string) {
+    listForMemberSelect(exec: Executor | undefined, memberId: string) {
       return (exec ?? db)
         .select()
         .from(requests)
         .where(eq(requests.memberId, memberId))
         .orderBy(desc(requests.createdAt))
         .limit(51);
+    },
+
+    async listForMember(exec: Executor | undefined, memberId: string) {
+      return this.listForMemberSelect(exec, memberId);
     },
 
     async getForMember(exec: Executor | undefined, memberId: string, id: string) {
