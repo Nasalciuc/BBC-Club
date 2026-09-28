@@ -134,11 +134,16 @@ export async function ingest(
   });
 }
 
-/** Same key: the same offer if the payload matches, 409 if it does not. */
+/** Same key: the same offer if the payload matches, 409 if it does not. Every field the insert stores from the input
+ *  is compared, normalised the way Postgres gives it back: numerics by value, timestamps by instant, jsonb without
+ *  key order, absent optionals as null, the currency default. publish_at defaults to the first call's now(), so it is
+ *  compared only when the caller sent one. */
 function replay(
   row: typeof offers.$inferSelect,
   input: z.infer<typeof IngestInput>,
 ): { ok: true; offerId: string } | { ok: false; code: "CONFLICT" } {
+  const num = (v: string | null | undefined) => (v == null ? null : Number(v));
+  const instant = (v: Date | string | null | undefined) => (v == null ? null : new Date(v).getTime());
   const same =
     row.source === input.source &&
     row.targeting === input.targeting &&
@@ -146,7 +151,29 @@ function replay(
     row.routeFrom === input.routeFrom.toUpperCase() &&
     row.routeTo === input.routeTo.toUpperCase() &&
     row.cabin === input.cabin &&
-    row.price === input.price &&
-    row.title === input.title;
+    num(row.price) === num(input.price) &&
+    num(row.publishedPrice) === num(input.publishedPrice) &&
+    row.currency === (input.currency ?? "USD") &&
+    row.title === input.title &&
+    (row.body ?? null) === (input.body ?? null) &&
+    instant(row.validUntil) === instant(input.validUntil) &&
+    (input.publishAt === undefined || instant(row.publishAt) === instant(input.publishAt)) &&
+    canonical(row.flightFacts ?? null) === canonical(input.flightFacts ?? null) &&
+    (row.mediaUrl ?? null) === (input.mediaUrl ?? null) &&
+    (row.createdBy ?? null) === (input.createdBy ?? null);
   return same ? { ok: true, offerId: row.id } : { ok: false, code: "CONFLICT" };
+}
+
+/** jsonb does not keep key order: compare objects by sorted keys. */
+function canonical(value: unknown): string {
+  const sort = (v: unknown): unknown =>
+    v !== null && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v)
+            .filter(([, x]) => x !== undefined)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([k, x]) => [k, sort(x)]),
+        )
+      : v;
+  return JSON.stringify(sort(value));
 }
