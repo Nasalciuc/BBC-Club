@@ -133,6 +133,37 @@ WHERE id = '<uuid>' AND status = 'failed';
 
 Staging boots with `PUSH_ADAPTER=recording`. Turn on email CRM first. The phone proof is later: set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. `live` without those keys refuses to boot.
 
+## Campaigns
+
+A broadcast offer does not create notifications inside its `offer.published` delivery. The delivery writes one row to `notifications.campaigns` and nothing else; the `campaign-fanout` job (every minute, singleton, 55 s) pages through the audience, 1 000 members per transaction, and writes the rows the **Push** section describes.
+
+```sql
+SELECT id, offer_id, status, last_member_id, created_at, finished_at
+FROM notifications.campaigns ORDER BY created_at DESC LIMIT 10;
+```
+
+| Status    | Meaning                                                                                                                                                                              |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pending` | Recorded by the delivery; no page written yet.                                                                                                                                       |
+| `running` | At least one page claimed. `last_member_id` is the last member of the last **committed** page — the next run starts after it. A run that crashed or hit its 55 s timeout stays here. |
+| `done`    | The audience was exhausted; `finished_at` is set (a CHECK keeps the two in step).                                                                                                    |
+
+**Resume a stuck campaign.** Nothing to reset: a `running` campaign is picked up again by the next run, after `last_member_id`. To push it now instead of waiting a minute:
+
+```bash
+docker compose ... exec -T cron /bin/sh /etc/cron/job.sh campaign-fanout
+```
+
+The job returns `{ campaigns, pages, inserted, capped }` in `platform.job_runs.metrics`. If one campaign fails on every run, it blocks the ones behind it (oldest first); read the error in `platform.job_runs`, fix the cause, and it continues where it stopped.
+
+**Why it is idempotent.**
+
+- `source_event_id` is UNIQUE: a re-delivered `offer.published` cannot start a second campaign.
+- A page, its notifications and the new `last_member_id` commit together, so a crash never leaves a page half-counted.
+- The notifications themselves are UNIQUE on (member, offer, category), and the insert is `ON CONFLICT DO NOTHING` — running the same page twice writes nothing twice.
+
+**The daily cap** is one offer push per member per **server** day (`date_trunc('day', now())`, UTC on the host), not the member's local day. It is one query per page, not one per member.
+
 ## Postmark down / OTP not arriving
 
 1. Check bounce rate in Postmark; check `#bbc-ops` for the OTP sent/verified ratio.
