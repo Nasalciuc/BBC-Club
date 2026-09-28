@@ -21,7 +21,7 @@ const vm = toFareVM(
     currency: "USD",
     source: "manual",
     validFrom: new Date("2026-09-01T00:00:00.000Z"),
-    validUntil: new Date("2026-10-04T23:59:59.000Z"),
+    validUntil: new Date("2027-12-31T23:59:59.000Z"),
     published: true,
     createdAt: new Date("2026-09-01T00:00:00.000Z"),
     updatedAt: new Date("2026-09-01T00:00:00.000Z"),
