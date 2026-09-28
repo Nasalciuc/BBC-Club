@@ -1,7 +1,11 @@
 import { fenceExecutor } from "./fence";
-import { sql } from "drizzle-orm";
-import { eventDlq } from "../infrastructure/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { col } from "@bbc/db/helpers";
+import { domainEvents, eventDeliveries, eventDlq } from "../infrastructure/schema";
 import type { EventRegistry } from "./registry";
+import { query, type Db, type Executor } from "@bbc/db";
+import { z } from "zod";
+import type { HandlerTx } from "@bbc/shared/module-contract";
 
 const BACKOFF_MS = [1_000, 5_000, 30_000, 120_000, 600_000, 1_800_000]; // 6 retries, then dead
 const MAX_ATTEMPTS = BACKOFF_MS.length + 1;
@@ -31,7 +35,24 @@ export type PollerOptions = {
   batchBudgetMs?: number;
 };
 
-export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps, opts: PollerOptions = {}) {
+/** A claimed delivery joined to its event. Raw execute() through Drizzle returns int8 and timestamptz as text. */
+const ClaimedDelivery = z.object({
+  id: z.string(),
+  event_id: z.string(),
+  event_occurred_at: z.string(),
+  consumer: z.string(),
+  attempts: z.number().int(),
+  type: z.string(),
+  version: z.number().int(),
+  aggregate_type: z.string(),
+  aggregate_id: z.string(),
+  member_id: z.string().nullable(),
+  payload: z.unknown(),
+  occurred_at: z.coerce.date(), // HandlerContext promises a Date; it used to receive the text
+});
+type Delivery = z.infer<typeof ClaimedDelivery>;
+
+export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, opts: PollerOptions = {}) {
   const idleMs = opts.idleMs ?? 250;
   const busyMs = opts.busyMs ?? 0;
   const handlerTimeoutMs = opts.handlerTimeoutMs ?? 30_000;
@@ -44,9 +65,12 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
 
   /** Everything a delivery does after it is claimed: paused → park; no handler → dead; handler → done.
    *  Throws the handler's error (the caller decides how to roll back). A timeout throws HandlerTimeout. */
-  async function deliver(exec: any, row: any): Promise<void> {
+  async function deliver(exec: Executor, row: Delivery): Promise<void> {
     if (deps.isPaused && (await deps.isPaused(row.consumer))) {
-      await exec.execute(sql`UPDATE platform.event_deliveries SET status='paused' WHERE id = ${row.id}`);
+      await exec
+        .update(eventDeliveries)
+        .set({ status: "paused" })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
       return;
     }
 
@@ -54,12 +78,13 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
     const handler = registry.handlerFor(row.type, row.consumer);
     if (!handler) {
       // module removed or consumer renamed → park, don't spin
-      await exec.execute(
-        sql`UPDATE platform.event_deliveries SET status='dead', attempts=${attempt}, last_error='handler not registered', processed_at=now() WHERE id = ${row.id}`,
-      );
+      await exec
+        .update(eventDeliveries)
+        .set({ status: "dead", attempts: attempt, lastError: "handler not registered", processedAt: sql`now()` })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
       await exec.insert(eventDlq).values({
-        deliveryId: row.id,
-        eventId: row.event_id,
+        deliveryId: BigInt(row.id),
+        eventId: BigInt(row.event_id),
         consumer: row.consumer,
         attempts: attempt,
         lastError: "handler not registered",
@@ -77,7 +102,7 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
       await Promise.race([
         handler(
           {
-            tx: fence.exec,
+            tx: fence.exec as unknown as HandlerTx, // the contract a handler sees; the fence is the real executor
             deliveryId: String(row.id),
             event: {
               id: String(row.event_id),
@@ -103,9 +128,10 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
         abortedPromise(ac.signal, `${row.consumer} timed out after ${handlerTimeoutMs}ms`),
       ]);
 
-      await exec.execute(
-        sql`UPDATE platform.event_deliveries SET status='done', attempts=${attempt}, processed_at=now(), last_error=NULL WHERE id = ${row.id}`,
-      );
+      await exec
+        .update(eventDeliveries)
+        .set({ status: "done", attempts: attempt, processedAt: sql`now()`, lastError: null })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
       deps.metrics?.observe("delivery_duration_ms", Date.now() - started, { consumer: row.consumer });
       deps.metrics?.inc("deliveries_done", { consumer: row.consumer });
       return;
@@ -121,14 +147,20 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
   type DeadNotice = { consumer: string; eventId: string; error: string };
 
   /** attempts++ with backoff, or dead + DLQ. Never calls onDead — the caller does that after COMMIT. */
-  async function recordFailure(exec: any, row: any, attempt: number, message: string): Promise<DeadNotice | null> {
+  async function recordFailure(
+    exec: Executor,
+    row: Delivery,
+    attempt: number,
+    message: string,
+  ): Promise<DeadNotice | null> {
     if (attempt >= MAX_ATTEMPTS) {
-      await exec.execute(
-        sql`UPDATE platform.event_deliveries SET status='dead', attempts=${attempt}, last_error=${message}, processed_at=now() WHERE id = ${row.id}`,
-      );
+      await exec
+        .update(eventDeliveries)
+        .set({ status: "dead", attempts: attempt, lastError: message, processedAt: sql`now()` })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
       await exec.insert(eventDlq).values({
-        deliveryId: row.id,
-        eventId: row.event_id,
+        deliveryId: BigInt(row.id),
+        eventId: BigInt(row.event_id),
         consumer: row.consumer,
         attempts: attempt,
         lastError: message,
@@ -141,22 +173,25 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
       return { consumer: row.consumer, eventId: String(row.event_id), error: message };
     }
     const delay = BACKOFF_MS[attempt - 1] ?? 1_000;
-    await exec.execute(
-      sql`UPDATE platform.event_deliveries SET attempts=${attempt}, last_error=${message}, run_after = now() + ${delay} * interval '1 millisecond' WHERE id = ${row.id}`,
-    );
+    await exec
+      .update(eventDeliveries)
+      .set({ attempts: attempt, lastError: message, runAfter: sql`now() + ${delay} * interval '1 millisecond'` })
+      .where(eq(eventDeliveries.id, BigInt(row.id)));
     deps.logger.warn({ consumer: row.consumer, attempt, retryInMs: delay, err: message }, "delivery retry");
     deps.metrics?.inc("deliveries_retried", { consumer: row.consumer });
     return null;
   }
 
   /** Last resort when recording the real failure itself fails. Keeps the row off the immediate retry loop. */
-  async function bumpRunAfter(exec: any, id: string, message: string): Promise<void> {
-    await exec.execute(sql`
-      UPDATE platform.event_deliveries
-      SET attempts = attempts + 1,
-          run_after = now() + interval '5 minutes',
-          last_error = left(${message}, 1000)
-      WHERE id = ${id}`);
+  async function bumpRunAfter(exec: Executor, id: string, message: string): Promise<void> {
+    await exec
+      .update(eventDeliveries)
+      .set({
+        attempts: sql`${eventDeliveries.attempts} + 1`,
+        runAfter: sql`now() + interval '5 minutes'`,
+        lastError: message.slice(0, 1000),
+      })
+      .where(eq(eventDeliveries.id, BigInt(id)));
   }
 
   async function notifyDead(notices: readonly DeadNotice[]): Promise<void> {
@@ -169,22 +204,26 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
     }
   }
 
+  // Columns come from the schema (col()), so a rename cannot leave this statement behind (check-raw-sql-columns).
+  const D = eventDeliveries;
+  const E = domainEvents;
   const CLAIM_SQL = (limit: number) => sql`
-        SELECT d.id, d.event_id, d.event_occurred_at, d.consumer, d.attempts,
-               e.type, e.version, e.aggregate_type, e.aggregate_id, e.member_id, e.payload, e.occurred_at
-        FROM platform.event_deliveries d
-        JOIN platform.domain_events e ON e.id = d.event_id AND e.occurred_at = d.event_occurred_at
-        WHERE d.status = 'pending' AND d.run_after <= now()
-        ORDER BY d.run_after, d.id
+        SELECT d.${col(D.id)}, d.${col(D.eventId)}, d.${col(D.eventOccurredAt)}, d.${col(D.consumer)}, d.${col(D.attempts)},
+               e.${col(E.type)}, e.${col(E.version)}, e.${col(E.aggregateType)}, e.${col(E.aggregateId)},
+               e.${col(E.memberId)}, e.${col(E.payload)}, e.${col(E.occurredAt)}
+        FROM ${D} d
+        JOIN ${E} e ON e.${col(E.id)} = d.${col(D.eventId)} AND e.${col(E.occurredAt)} = d.${col(D.eventOccurredAt)}
+        WHERE d.${col(D.status)} = 'pending' AND d.${col(D.runAfter)} <= now()
+        ORDER BY d.${col(D.runAfter)}, d.${col(D.id)}
         FOR UPDATE OF d SKIP LOCKED
         LIMIT ${limit}`;
 
   /** One delivery per transaction (kept for callers and tests that drive the poller one step at a time). */
   async function processOne(): Promise<"done" | "empty"> {
-    let failed: { row: any; attempt: number; message: string } | null = null;
+    let failed: { row: Delivery; attempt: number; message: string } | null = null;
     const outcome = await db
-      .transaction(async (tx: any) => {
-        const [row]: any[] = await tx.execute(CLAIM_SQL(1));
+      .transaction(async (tx) => {
+        const [row] = await query(tx, CLAIM_SQL(1), ClaimedDelivery);
         if (!row) return "empty" as const;
         try {
           await deliver(tx, row);
@@ -199,13 +238,13 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
         return "failed" as const;
       });
     if (outcome !== "failed") return outcome;
-    const f = failed as unknown as { row: any; attempt: number; message: string };
+    const f = failed as unknown as { row: Delivery; attempt: number; message: string };
     let notice: DeadNotice | null = null;
     try {
-      notice = await db.transaction(async (tx: any) => recordFailure(tx, f.row, f.attempt, f.message));
+      notice = await db.transaction(async (tx) => recordFailure(tx, f.row, f.attempt, f.message));
     } catch (writeErr) {
       deps.logger.error({ err: writeErr, deliveryId: String(f.row.id) }, "events.record_failure");
-      await db.transaction(async (tx: any) => bumpRunAfter(tx, f.row.id, f.message));
+      await db.transaction(async (tx) => bumpRunAfter(tx, f.row.id, f.message));
     }
     if (notice) await notifyDead([notice]);
     return "done";
@@ -216,17 +255,17 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
    *  transaction and a second connection would wait on it). A TIMEOUT aborts the whole batch: the abandoned handler
    *  may still be running and must not write into a live transaction; the batch is retried, the timeout recorded after. */
   async function processBatch(): Promise<number> {
-    let timedOut: { row: any; attempt: number; message: string } | null = null;
+    let timedOut: { row: Delivery; attempt: number; message: string } | null = null;
     let processed = 0;
     const dead: DeadNotice[] = [];
     try {
-      await db.transaction(async (tx: any) => {
-        const rows: any[] = await tx.execute(CLAIM_SQL(CLAIM_BATCH));
+      await db.transaction(async (tx) => {
+        const rows = await query(tx, CLAIM_SQL(CLAIM_BATCH), ClaimedDelivery);
         const deadline = Date.now() + BATCH_BUDGET_MS;
         for (const row of rows) {
           if (stopped || Date.now() > deadline) break; // untouched rows stay pending, released at COMMIT
           try {
-            await tx.transaction(async (sp: any) => deliver(sp, row)); // SAVEPOINT
+            await tx.transaction(async (sp) => deliver(sp, row)); // SAVEPOINT
           } catch (e: any) {
             const message = String(e?.message ?? e).slice(0, 1000);
             if (e instanceof HandlerTimeout) {
@@ -234,11 +273,11 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
               throw e;
             }
             try {
-              const notice = await tx.transaction(async (sp: any) => recordFailure(sp, row, row.attempts + 1, message));
+              const notice = await tx.transaction(async (sp) => recordFailure(sp, row, row.attempts + 1, message));
               if (notice) dead.push(notice);
             } catch (writeErr) {
               deps.logger.error({ err: writeErr, deliveryId: String(row.id) }, "events.record_failure");
-              await tx.transaction(async (sp: any) => bumpRunAfter(sp, row.id, message));
+              await tx.transaction(async (sp) => bumpRunAfter(sp, row.id, message));
             }
           }
           processed++;
@@ -250,13 +289,13 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
       processed = 0;
     }
     if (timedOut) {
-      const t = timedOut as unknown as { row: any; attempt: number; message: string };
+      const t = timedOut as unknown as { row: Delivery; attempt: number; message: string };
       let notice: DeadNotice | null = null;
       try {
-        notice = await db.transaction(async (tx: any) => recordFailure(tx, t.row, t.attempt, t.message));
+        notice = await db.transaction(async (tx) => recordFailure(tx, t.row, t.attempt, t.message));
       } catch (writeErr) {
         deps.logger.error({ err: writeErr, deliveryId: String(t.row.id) }, "events.record_failure");
-        await db.transaction(async (tx: any) => bumpRunAfter(tx, t.row.id, t.message));
+        await db.transaction(async (tx) => bumpRunAfter(tx, t.row.id, t.message));
       }
       if (notice) await notifyDead([notice]);
       return 1;
@@ -304,29 +343,43 @@ export function createPoller(db: any, registry: EventRegistry, deps: PollerDeps,
     processOne,
     /** Operator action: requeue a dead delivery after fixing the cause. */
     replay: async (deliveryId: string) =>
-      db.transaction(async (tx: any) => {
-        await tx.execute(
-          sql`UPDATE platform.event_deliveries SET status='pending', attempts=0, run_after=now(), last_error=NULL WHERE id = ${deliveryId}`,
-        );
-        await tx.execute(sql`DELETE FROM platform.event_dlq WHERE delivery_id = ${deliveryId}`);
+      db.transaction(async (tx) => {
+        await tx
+          .update(eventDeliveries)
+          .set({ status: "pending", attempts: 0, runAfter: sql`now()`, lastError: null })
+          .where(eq(eventDeliveries.id, BigInt(deliveryId)));
+        await tx.delete(eventDlq).where(eq(eventDlq.deliveryId, BigInt(deliveryId)));
       }),
     /** Resume everything a pause left behind. */
     resume: async (consumer: string) =>
-      db.execute(
-        sql`UPDATE platform.event_deliveries SET status='pending', run_after=now() WHERE consumer=${consumer} AND status='paused'`,
-      ),
+      db
+        .update(eventDeliveries)
+        .set({ status: "pending", runAfter: sql`now()` })
+        .where(and(eq(eventDeliveries.consumer, consumer), eq(eventDeliveries.status, "paused"))),
     /** Queue health for /metrics and alerts: age of the oldest pending delivery is the number that matters. */
     stats: async () => {
-      const [r]: any[] = await db.execute(sql`
-    SELECT (SELECT count(*) FROM platform.event_deliveries WHERE status = 'pending')::int AS pending,
-           (SELECT count(*) FROM platform.event_deliveries WHERE status = 'dead')::int    AS dead,
-           (SELECT count(*) FROM platform.event_deliveries WHERE status = 'paused')::int  AS paused,
-           COALESCE(EXTRACT(EPOCH FROM now() - (SELECT min(created_at) FROM platform.event_deliveries
-                                                WHERE status = 'pending'))::int, 0)      AS oldest_pending_s`);
+      const [r] = await query(
+        db,
+        sql`
+    SELECT (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'pending')::int AS pending,
+           (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'dead')::int    AS dead,
+           (SELECT count(*) FROM ${D} WHERE ${col(D.status)} = 'paused')::int  AS paused,
+           COALESCE(EXTRACT(EPOCH FROM now() - (SELECT min(${col(D.createdAt)}) FROM ${D}
+                                                WHERE ${col(D.status)} = 'pending'))::int, 0) AS oldest_pending_s`,
+        QueueStats,
+      );
+      if (!r) throw new Error("poller.stats returned no row");
       return { pending: r.pending, dead: r.dead, paused: r.paused, oldestPendingSeconds: r.oldest_pending_s };
     },
   };
 }
+
+const QueueStats = z.object({
+  pending: z.number().int(),
+  dead: z.number().int(),
+  paused: z.number().int(),
+  oldest_pending_s: z.number().int(),
+});
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function abortedPromise(signal: AbortSignal, msg: string): Promise<never> {

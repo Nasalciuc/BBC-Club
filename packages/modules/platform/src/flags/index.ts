@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { flags as flagsTable } from "../infrastructure/schema";
+import type { Executor } from "@bbc/db";
 
 export type FlagValue = { enabled?: boolean; variant?: string; segment?: string[]; [k: string]: unknown };
 
@@ -20,7 +21,7 @@ function parseValue(raw: unknown): FlagValue | null {
 /** Feature flags cache 30s. Kill/pause skip the cache. A read error on kill/pause is fail-closed (treat as killed).
  *  A missing row is not killed. isEnabled/variant still fall back to the caller default. */
 export function createFlags(
-  db: any,
+  db: Executor,
   opts: { ttlMs?: number; logger?: { warn: (o: object, m?: string) => void } } = {},
 ) {
   const ttl = opts.ttlMs ?? 30_000;

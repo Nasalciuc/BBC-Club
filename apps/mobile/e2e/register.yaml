@@ -1,11 +1,14 @@
 appId: com.buybusinessclass.club
 ---
+# Android: AuthShell's footer stays under the open keyboard (edge-to-edge, no resize; follow-up in PR 43),
+# so the keyboard is closed before a footer button. Remove once the footer docks above it (DESIGN.md).
 - launchApp: { clearState: true }
 - tapOn: { id: "welcome.signIn" }
 - tapOn: { id: "signIn.createAccount" }
 - assertVisible: { id: "join.email" }
 - tapOn: { id: "join.email" }
 - inputText: "new.member@test.dev"
+- hideKeyboard
 - tapOn: { id: "join.continue" }
 - assertVisible: { id: "verify.code" }
 # Fetch OTP from test-only helper — never log the code, never put it in the URL.
@@ -17,10 +20,12 @@ appId: com.buybusinessclass.club
     output.otp = body.otp;
 - tapOn: { id: "verify.code" }
 - inputText: ${output.otp}
+- hideKeyboard
 - tapOn: { id: "verify.submit" }
 - assertVisible: { id: "setPassword.password" }
 - tapOn: { id: "setPassword.password" }
 - inputText: "atlantic2026!"
+- hideKeyboard
 - tapOn: { id: "setPassword.continue" }
 # New member has no homeAirport → onboarding once per device; skip leaves JFK via DEFAULT_HOME_AIRPORT.
 - assertVisible: { id: "onboarding.root" }

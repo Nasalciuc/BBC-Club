@@ -65,6 +65,8 @@ export const rateLimit = auth.table("rate_limit", {
   count: integer("count"),
   // Better Auth stores Date.now() ms — overflows Postgres `integer` (already does in 2026).
   lastRequest: bigint("last_request", { mode: "number" }),
+  // Added by 0001_extras.sql for db:verify §5 (NOT NULL DEFAULT now()); Better Auth never writes it.
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /** App-owned (not Better Auth): last OTP send per sha256(type:email). Purged daily by the retention job. */

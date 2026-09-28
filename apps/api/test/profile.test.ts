@@ -73,3 +73,50 @@ describe("PUT /v1/profile/travel", () => {
     await t.close();
   });
 });
+
+describe("GET /v1/profile — notifications (ADR-IMPL-025)", () => {
+  const put = (
+    t: Awaited<ReturnType<typeof testApp>>,
+    cookie: string,
+    prefs: { category: string; enabled: boolean }[],
+  ) =>
+    t.app.request("/v1/profile/preferences", {
+      method: "PUT",
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ preferences: prefs }),
+    });
+  const get = async (t: Awaited<ReturnType<typeof testApp>>, cookie: string) =>
+    ProfileVM.parse(await (await t.app.request("/v1/profile", { headers: { Cookie: cookie } })).json()).notifications;
+
+  it("reads back what the member saved, and only theirs", async () => {
+    const t = await testApp({ suite: "profile-notifications" });
+    // Nothing saved: a missing preference row means on.
+    expect(await get(t, t.memberA.cookie)).toEqual({ requestUpdates: true, offers: true });
+
+    // Offers off (what the sheet sends: both categories) → GET shows off, after a "restart" (a fresh GET).
+    expect(
+      (
+        await put(t, t.memberA.cookie, [
+          { category: "offers_personal", enabled: false },
+          { category: "offers_broadcast", enabled: false },
+        ])
+      ).status,
+    ).toBe(200);
+    expect(await get(t, t.memberA.cookie)).toEqual({ requestUpdates: true, offers: false });
+    expect(await get(t, t.memberB.cookie)).toEqual({ requestUpdates: true, offers: true });
+
+    // One category back on → offers is on.
+    await put(t, t.memberA.cookie, [{ category: "offers_broadcast", enabled: true }]);
+    expect((await get(t, t.memberA.cookie)).offers).toBe(true);
+
+    // The travel save returns a ProfileVM too, with the same saved value.
+    await put(t, t.memberA.cookie, [{ category: "offers_broadcast", enabled: false }]);
+    const travel = await t.app.request("/v1/profile/travel", {
+      method: "PUT",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ cabin: "first" }),
+    });
+    expect(ProfileVM.parse(await travel.json()).notifications).toEqual({ requestUpdates: true, offers: false });
+    await t.close();
+  });
+});

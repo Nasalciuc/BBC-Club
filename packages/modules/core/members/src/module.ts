@@ -133,7 +133,8 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           return p;
         });
         if (!updated) return c.json(apiError("NOT_FOUND"), 404);
-        return c.json(toProfileVM(updated, memberEmail(principal), actor));
+        const prefs = await facade.preferencesOf(undefined, actor);
+        return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
       },
     );
 
@@ -173,7 +174,7 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           handler: (ctx: HandlerContext, payload: unknown) =>
             onMemberRegistered(
               {
-                tx: ctx.tx,
+                tx: ctx.tx as unknown as Executor,
                 crm: ports.crm,
                 // ADR-PROD-001: seeded false by scripts/seed-flags.ts — an unknown CRM email is waitlist.
                 flags: { get: (k: string) => platform.flags.isEnabled(k, false) },
@@ -187,7 +188,8 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
         {
           type: "member.deleted",
           name: "members.onMemberDeleted",
-          handler: (ctx: HandlerContext, payload: unknown) => onMemberDeleted({ tx: ctx.tx }, payload),
+          handler: (ctx: HandlerContext, payload: unknown) =>
+            onMemberDeleted({ tx: ctx.tx as unknown as Executor }, payload),
         },
         // stage 1: crm.mirror.synced → link waitlist members
       ],

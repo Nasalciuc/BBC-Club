@@ -2,12 +2,13 @@ import { MemberRegisteredV1 } from "@bbc/shared/events/member";
 import { event } from "@bbc/shared/events";
 import { profile } from "@bbc/db/schema/members";
 import { inArray } from "drizzle-orm";
+import type { Executor } from "@bbc/db";
 
 /** Creates the profile and links it to the CRM mirror. Idempotent: platform.event_inbox gates re-delivery,
  *  and the insert is ON CONFLICT DO NOTHING on the primary key. */
 export async function onMemberRegistered(
   deps: {
-    tx: any; // Drizzle transaction from the poller
+    tx: Executor; // the poller's delivery transaction
     crm: {
       findByEmail(
         emailNormalized: string,
@@ -66,7 +67,7 @@ export type IdentityUsersPort = {
 /** Nightly: the identity hook publishes after Better Auth's insert, outside its transaction. If the event was
  *  lost, the member has an auth user and no profile. Diff in memory — no cross-schema SQL. */
 export async function reconcileMissingProfiles(deps: {
-  db: any;
+  db: Executor;
   identity: IdentityUsersPort;
   publish: (e: any) => Promise<void>;
 }) {

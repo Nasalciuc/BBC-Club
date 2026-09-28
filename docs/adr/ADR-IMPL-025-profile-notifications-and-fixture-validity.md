@@ -1,0 +1,12 @@
+# ADR-IMPL-025 — The profile carries notification preferences; the fixture stays valid
+
+Status: accepted · Date: 2026-09-28 · Amends ADR-IMPL-015 (ProfileVM). `packages/shared` is ADR-gated (`ProfileVM`, `fixture.ts`).
+
+**Context.** The notifications sheet could not show what a member saved: `PUT /v1/profile/preferences` writes `members.notification_preferences`, but nothing returned it to the app, so the _Offers to inspire_ switch started from a hard-coded `true` (CodeRabbit on #41). Separately, the nightly Maestro run (`e2e-android.yml`) taps fixture fare `…fa01` in `search-and-request.yaml`, and `apps/api/test/parity.test.ts` seeds the fixture's London offer with its own `validUntil`. Both were valid until **2026-10-04**. After that date the catalog hides the fare (`valid_until > now()`) and the feed hides the offer, so the nightly run and the parity test would turn red for a reason unrelated to the code — before this PR could merge.
+
+**Decision.**
+
+1. `ProfileVM` gains `notifications: { requestUpdates: true, offers: boolean }` (expand-only; old clients ignore it). `requestUpdates` is a literal: quote-ready notifications are transactional and cannot be turned off. `offers` is on when either `offers_personal` or `offers_broadcast` is on; a missing preference row means on (the table stores opt-outs). `toProfileVM` requires the preferences — no caller can fall back to a default — so GET `/v1/profile` and PUT `/v1/profile/travel` both read `preferencesOf`. The pending stub reports the same saved value (on, when nothing is stored).
+2. `fa01` and the London offer are valid until **2027-12-31**, everywhere the date is encoded (`packages/shared/src/fixture.ts` and the catalog clock test's copy of fa01). The other fixture validities (fa02 and the seeded fa07 on 2026-10-04; the rest between 2026-10-31 and 2026-12-15) are left as they are: no flow and no test depends on them. The follow-up is to express fixture validity relative to the seed date instead of as calendar dates.
+
+**Consequence.** The app shows the saved preference after a restart, from the request it already makes. `PATCH /v1/profile` still returns the raw row (no `notifications`); the app keeps the last known value across that save — making PATCH return a `ProfileVM` is a follow-up. Gate B and every nightly run until the end of 2027 use a fare that exists. The JFK → LHR list shows one fare instead of three after 2026-10-04 in a freshly seeded environment; no assertion counts them.

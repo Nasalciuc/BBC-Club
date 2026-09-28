@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { withTx, type Executor } from "@bbc/db";
+import { query, withTx, type Executor } from "@bbc/db";
+import { col } from "@bbc/db/helpers";
 import { event } from "@bbc/shared/events";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
@@ -20,6 +21,9 @@ const PendingRow = z.object({
   attempts: z.coerce.number().int(),
 });
 type PendingRow = z.infer<typeof PendingRow>;
+const ReclaimedRow = z.object({ id: z.string().uuid() });
+/** Columns in hand-written SQL come from the schema (col()), so a rename cannot leave a statement behind. */
+const N = notificationsTable;
 
 type TokenRow = typeof deviceTokens.$inferSelect;
 type SendResult = Awaited<ReturnType<PushSender["send"]>>;
@@ -72,30 +76,33 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
   };
   const stuck = deps.stuckAfter ?? sql`interval '5 minutes'`;
 
-  const reclaimed = rowList(
-    await deps.db.execute(sql`
-      UPDATE notifications.notifications
+  const reclaimed = await query(
+    deps.db,
+    sql`
+      UPDATE ${N}
       SET
-        attempts = attempts + 1,
-        status = CASE WHEN attempts + 1 >= 6 THEN 'failed' ELSE 'pending' END::notifications.notification_status,
-        claimed_at = NULL,
-        last_error = CASE WHEN attempts + 1 >= 6 THEN 'reaped' ELSE last_error END
-      WHERE status = 'sending' AND claimed_at < now() - ${stuck}
-      RETURNING id`),
+        ${col(N.attempts)} = ${col(N.attempts)} + 1,
+        ${col(N.status)} = CASE WHEN ${col(N.attempts)} + 1 >= 6 THEN 'failed' ELSE 'pending' END::notifications.notification_status,
+        ${col(N.claimedAt)} = NULL,
+        ${col(N.lastError)} = CASE WHEN ${col(N.attempts)} + 1 >= 6 THEN 'reaped' ELSE ${col(N.lastError)} END
+      WHERE ${col(N.status)} = 'sending' AND ${col(N.claimedAt)} < now() - ${stuck}
+      RETURNING ${col(N.id)}`,
+    ReclaimedRow,
   );
   metrics.reclaimed = reclaimed.length;
 
   const work = await withTx(deps.db, async (tx) => {
-    const rows = PendingRow.array().parse(
-      rowList(
-        await tx.execute(sql`
-          SELECT id, member_id, category, title, body, deep_link, offer_id, attempts
-          FROM notifications.notifications
-          WHERE status = 'pending' AND scheduled_for <= now()
-          ORDER BY scheduled_for
+    const rows = await query(
+      tx,
+      sql`
+          SELECT ${col(N.id)}, ${col(N.memberId)}, ${col(N.category)}, ${col(N.title)}, ${col(N.body)},
+                 ${col(N.deepLink)}, ${col(N.offerId)}, ${col(N.attempts)}
+          FROM ${N}
+          WHERE ${col(N.status)} = 'pending' AND ${col(N.scheduledFor)} <= now()
+          ORDER BY ${col(N.scheduledFor)}
           FOR UPDATE SKIP LOCKED
-          LIMIT ${CLAIM}`),
-      ),
+          LIMIT ${CLAIM}`,
+      PendingRow,
     );
     const out: { row: PendingRow; tokens: TokenRow[] }[] = [];
     for (const row of rows) {
@@ -308,13 +315,4 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
     }),
   );
   return out;
-}
-
-function rowList(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw;
-  if (raw && typeof raw === "object" && "rows" in raw) {
-    const rows = (raw as { rows: unknown }).rows;
-    if (Array.isArray(rows)) return rows;
-  }
-  return [];
 }

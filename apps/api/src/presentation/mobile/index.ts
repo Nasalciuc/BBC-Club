@@ -45,9 +45,12 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
       async (c) => {
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const p = await ports.members.getProfile(undefined, actor);
+        const [p, prefs] = await Promise.all([
+          ports.members.getProfile(undefined, actor),
+          ports.members.preferencesOf(undefined, actor),
+        ]);
         const principal = c.get("principal");
-        return c.json(toProfileVM(p, principal.kind === "member" ? principal.email : null, actor));
+        return c.json(toProfileVM(p, principal.kind === "member" ? principal.email : null, actor, prefs));
       },
     );
 

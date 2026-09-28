@@ -1,10 +1,24 @@
-/** Gate 3: offer.published → inbox row → dispatch via PushSender. */
+/** Gate 3: offer.published → campaign → campaign-fanout job → inbox row → dispatch via PushSender. */
 import { describe, it, expect } from "bun:test";
 import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 
+type T = Awaited<ReturnType<typeof testApp>>;
+
+/** The cron container's call: POST /v1/internal/run/:job with the internal secret. */
+async function runJob(t: T, name: string) {
+  const r = await t.app.request(`/v1/internal/run/${name}`, {
+    method: "POST",
+    headers: { "X-Internal-Secret": t.internalSecret },
+  });
+  expect(r.status).toBe(200);
+  const body = (await r.json()) as { status: string; metrics?: Record<string, number> };
+  expect(body.status).toBe("succeeded");
+  return body;
+}
+
 describe("notifications fan-out + dispatch", () => {
-  it("broadcast publish creates an inbox row for active members, then dispatch delivers push", async () => {
+  it("broadcast publish records a campaign, the job creates an inbox row for active members, dispatch delivers push", async () => {
     const t = await testApp({ suite: "notif-fanout" });
 
     // Register a device so dispatch has a token to send to.
@@ -18,7 +32,16 @@ describe("notifications fan-out + dispatch", () => {
     expect(reg.status).toBe(201);
 
     const offerId = await t.seedBroadcastOffer({ title: "Autumn in Paris" });
-    await t.drainAll(); // offer.published → onOfferPublished
+    await t.drainAll(); // offer.published → onOfferPublished records the campaign, nothing else
+
+    const [{ campaigns }]: any = await t.db.execute(sql`
+      SELECT count(*)::int campaigns FROM notifications.campaigns WHERE offer_id = ${offerId}::uuid`);
+    expect(campaigns).toBe(1);
+    const [{ early }]: any = await t.db.execute(sql`
+      SELECT count(*)::int early FROM notifications.notifications WHERE offer_id = ${offerId}::uuid`);
+    expect(early).toBe(0); // the fan-out left the delivery transaction
+
+    await runJob(t, "campaign-fanout");
 
     const rows: any[] = await t.db.execute(sql`
       SELECT id, category, status, title, offer_id
@@ -48,13 +71,7 @@ describe("notifications fan-out + dispatch", () => {
       WHERE offer_id = ${offerId} AND member_id = ${t.memberA.id}`);
 
     const before = t.push.sent.length;
-    const job = await t.app.request("/v1/internal/run/dispatch", {
-      method: "POST",
-      headers: { "X-Internal-Secret": t.internalSecret },
-    });
-    expect(job.status).toBe(200);
-    const jobBody = (await job.json()) as { status: string; metrics?: Record<string, number> };
-    expect(jobBody.status).toBe("succeeded");
+    await runJob(t, "dispatch");
 
     expect(t.push.sent.length).toBeGreaterThan(before);
     const last = t.push.sent[t.push.sent.length - 1] as { token: string; title: string; data?: Record<string, string> };
@@ -79,6 +96,8 @@ describe("notifications fan-out + dispatch", () => {
     const offerId = await t.seedBroadcastOffer({ title: "Idempotent Paris" });
     await t.drainAll();
     await t.drainAll(); // second drain should be a no-op for already-processed deliveries
+    await runJob(t, "campaign-fanout");
+    await runJob(t, "campaign-fanout"); // the campaign is done; a second run writes nothing
 
     const [{ n }]: any = await t.db.execute(sql`
       SELECT count(*)::int n FROM notifications.notifications
@@ -97,6 +116,7 @@ describe("notifications fan-out + dispatch", () => {
 
     const offerId = await t.seedBroadcastOffer({ title: "Muted" });
     await t.drainAll();
+    await runJob(t, "campaign-fanout");
 
     const [{ n }]: any = await t.db.execute(sql`
       SELECT count(*)::int n FROM notifications.notifications

@@ -294,6 +294,9 @@ function assertSchemaEnumsHaveZod() {
     "candidate_status",
     "notification_status",
     "fare_source",
+    "campaign_status", // internal to the campaign-fanout job; no API carries it
+    "external_source", // platform.external_inbox — webhook bookkeeping, no API carries it
+    "job_run_status", // platform.job_runs — operator-facing only
   ]);
   const drizzle = new Map<string, string[]>();
   const enumRe = /\.enum\(\s*"([^"]+)"\s*,\s*\[([^\]]+)\]/gs;

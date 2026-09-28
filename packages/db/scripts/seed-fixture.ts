@@ -99,7 +99,7 @@ try {
           publishedPrice: String(o.published),
           currency: "USD",
           title: o.title,
-          contextLine: o.contextLine ?? null,
+          contextLine: "contextLine" in o ? o.contextLine : null, // only some fixture offers carry one
           flightFacts: o.facts,
           validUntil: new Date(o.validUntil),
           status: "active",
@@ -141,8 +141,9 @@ try {
         departAt: f.departAt ? new Date(f.departAt) : null,
         arriveAt: f.arriveAt ? new Date(f.arriveAt) : null,
         price: String(f.price.offer),
-        publishedPrice: f.price.published != null ? String(f.price.published) : null,
-        publishedSource: f.price.publishedSource ?? null,
+        // Some fixture fares have no published price (the union's members differ): narrow, don't assert.
+        publishedPrice: "published" in f.price ? String(f.price.published) : null,
+        publishedSource: "publishedSource" in f.price ? f.price.publishedSource : null,
         currency: f.price.currency,
         source: "manual" as const,
         validFrom: new Date("2026-09-01T00:00:00.000Z"),

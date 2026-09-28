@@ -3,13 +3,14 @@ import { createFlags } from "../flags";
 import { createJobs } from "../jobs";
 import { createLogger, createMetrics } from "../telemetry";
 import { createRateLimiter } from "../ratelimit";
+import type { Db } from "@bbc/db";
 
 export type Platform = ReturnType<typeof createPlatform>;
 
 /** The only surface other modules and the host may import from platform.
  *  Modules get `events.publish`, `flags`, `jobs.register`; the host also gets the poller and metrics. */
 export function createPlatform(
-  db: any,
+  db: Db,
   opts: { level?: string; pretty?: boolean; handlerTimeoutMs?: number; onDead?: PollerOptions["onDead"] } = {},
 ) {
   const logger = createLogger(opts);

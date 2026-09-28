@@ -1,5 +1,6 @@
 appId: com.buybusinessclass.club
 ---
+# Android: the keyboard is closed before the sheet's submit button (it can sit under it; see register.yaml).
 - launchApp: { clearState: false }
 - tapOn: { id: "tab.explore" }
 - assertVisible: { id: "explore.root" }
@@ -19,13 +20,23 @@ appId: com.buybusinessclass.club
     }
     output.departDay = 'calendar.day.' + iso(14);
     output.returnDay = 'calendar.day.' + iso(21);
+# Twelve months in one scrolling sheet: the days two and three weeks out can be below the fold.
+- scrollUntilVisible:
+    element:
+      id: ${output.departDay}
+    direction: DOWN
 - tapOn:
     id: ${output.departDay}
+- scrollUntilVisible:
+    element:
+      id: ${output.returnDay}
+    direction: DOWN
 - tapOn:
     id: ${output.returnDay}
 - tapOn: { id: "dates.use" }
 - tapOn: { id: "request.phone" }
 - inputText: "2125550148"
+- hideKeyboard
 - tapOn: { id: "request.submit" }
 - assertVisible: { text: "Request received." }
 - tapOn:

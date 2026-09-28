@@ -8,7 +8,6 @@
     "./schema": "./src/schema/index.ts",
     "./schema/*": "./src/schema/*.ts",
     "./helpers": "./src/helpers.ts",
-    "./relations": "./src/relations/index.ts",
     "./testing/isolated-db": "./src/testing/isolated-db.ts"
   },
   "scripts": {
@@ -20,7 +19,8 @@
     "db:test:clean": "bun run scripts/test-clean.ts",
     "db:studio": "drizzle-kit studio",
     "test": "bun test",
-    "test:db": "bun test --preload ./src/testing/preload.ts"
+    "test:db": "bun test --preload ./src/testing/preload.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@bbc/platform": "workspace:*",

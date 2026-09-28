@@ -68,6 +68,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/notifications sending status applied/);
     expect(second.out).not.toMatch(/notifications claimed_at applied/);
     expect(second.out).not.toMatch(/notifications sending index applied/);
+    expect(second.out).not.toMatch(/notifications campaigns applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -87,6 +88,7 @@ describe("extras ledger", () => {
       "0015_notifications_sending_enum.sql",
       "0016_notifications_claimed_at.sql",
       "0017_notifications_sending_index.sql",
+      "0018_notifications_campaigns.sql",
     ]);
   });
 });

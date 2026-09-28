@@ -1,0 +1,17 @@
+{
+  "total": 98,
+  "byFile": {
+    "packages/modules/core/notifications/src/module.ts": 13,
+    "packages/modules/core/notifications/src/application/cleanup-devices.ts": 3,
+    "packages/modules/core/notifications/src/application/receipts.ts": 7,
+    "packages/modules/core/notifications/src/handlers/on-offer-published.ts": 16,
+    "packages/modules/core/identity/src/infrastructure/otp-cooldown.ts": 13,
+    "packages/modules/domain/proposals/src/infrastructure/offers.repo.ts": 2,
+    "packages/modules/domain/engagement/src/infrastructure/responses.repo.ts": 1,
+    "packages/modules/platform/src/events/publish.ts": 9,
+    "packages/modules/platform/src/events/poller.ts": 3,
+    "packages/modules/platform/src/events/tombstone.ts": 4,
+    "packages/modules/platform/src/jobs/index.ts": 8,
+    "packages/modules/platform/src/jobs/builtin.ts": 19
+  }
+}

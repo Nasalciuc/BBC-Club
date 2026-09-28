@@ -1,9 +1,7 @@
-// @ts-nocheck — drizzle-orm@1.0.0-rc.4 Relational Queries typings disagree with postgres-js + multi-schema
-// exports (see README debt). Runtime shape is correct; re-enable when on stable 1.x.
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import * as schema from "./schema";
-import { relations } from "./relations";
+
+export { query, RowShapeError } from "./query";
 
 export type Db = ReturnType<typeof createDb>;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -30,10 +28,10 @@ export function createDb(url: string, opts: DbOptions = {}) {
     transform: { undefined: null },
     onnotice: () => {},
   });
+  // No `schema` / `relations`: nothing uses Relational Queries (`db.query.*`), and passing them is what made this
+  // file type-check only with checking switched off. Every query goes through the builder or `sql`.
   const db = drizzle({
     client,
-    schema,
-    relations,
     logger: opts.logger ?? false,
   });
   return Object.assign(db, {
