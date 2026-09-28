@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rolling deploy: dump → pull → migrate (direct Postgres) → roll API (2N then N) → recreate worker → prune.
+# Rolling deploy: dump → pull → migrate (direct Postgres) → one canary → roll API → recreate worker → prune.
 #   bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:8f3c21a
 #   bash infra/deploy.sh staging    ghcr.io/nasalciuc/bbc-api:8f3c21a
 set -Eeuo pipefail
@@ -29,9 +29,11 @@ fi
 if [[ "$MODE" == "production" ]]; then
   SVC=api; WORKER=worker; PG=postgres; VAR=API_IMAGE; ENVF="$PROD_ENV"
   N="${API_REPLICAS:-4}"
+  CANARY_SECONDS="${CANARY_SECONDS:-600}"
 else
   SVC=api-staging; WORKER=worker-staging; PG=postgres-staging; VAR=API_IMAGE_STAGING; ENVF="$STG_ENV"
   N="${API_REPLICAS_STAGING:-2}"
+  CANARY_SECONDS="${CANARY_SECONDS:-120}"
 fi
 source <(grep -E '^(OPS_WEBHOOK|SEC_WEBHOOK|POSTGRES_PASSWORD|POSTGRES_PASSWORD_STAGING|LOADTEST)=' "$PROD_ENV" "$ENVF" 2>/dev/null || true)
 notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
@@ -87,14 +89,41 @@ if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$S
   notify "🚨 deploy $MODE aborted at migration. Old API still serving." "${SEC_WEBHOOK:-}"; exit 1
 fi
 
-echo "▶ 4/7 roll $SVC (scale $N → $((N * 2)) → $N)"
+echo "▶ 4/7 canary one new $SVC replica for ${CANARY_SECONDS}s"
 OLD="$($DC ps -q "$SVC" || true)"
-$DC up -d --no-deps --no-recreate --scale "$SVC=$((N * 2))" "$SVC" || rollback_and_exit "api scale-up failed"
+$DC up -d --no-deps --no-recreate --scale "$SVC=$((N + 1))" "$SVC" || rollback_and_exit "canary scale-up failed"
+CANARY="$(comm -13 <(printf '%s\n' $OLD | sort) <($DC ps -q "$SVC" | sort) | head -n1 || true)"
+[[ -n "$CANARY" ]] || rollback_and_exit "no canary container after scale-up"
+drop_canary() { docker stop "$CANARY" >/dev/null 2>&1 || true; docker rm "$CANARY" >/dev/null 2>&1 || true; }
+wait_ready "$CANARY" 8000 || { drop_canary; rollback_and_exit "/ready red on canary $CANARY"; }
+sleep "$CANARY_SECONDS"
+OLD_ONE="$(printf '%s\n' $OLD | head -n1 || true)"
+if [[ -z "$OLD_ONE" ]]; then
+  echo "no old replica; canary judged on /ready only"
+else
+  METRICS_DIR="$(mktemp -d)"
+  metrics_of() {
+    docker exec "$1" bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
+  }
+  metrics_of "$CANARY" > "$METRICS_DIR/canary.txt" || { drop_canary; rollback_and_exit "canary /metrics unreadable"; }
+  metrics_of "$OLD_ONE" > "$METRICS_DIR/old.txt" || { drop_canary; rollback_and_exit "old replica /metrics unreadable"; }
+  if ! REASON="$(bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt")"; then
+    echo "$REASON"
+    drop_canary
+    rollback_and_exit "canary: ${REASON:-compare failed}"
+  fi
+  echo "$REASON"
+  rm -rf "$METRICS_DIR"
+fi
+
+echo "▶ 5/7 roll $SVC (scale $((N + 1)) → $((N * 2)) → $N)"
+$DC up -d --no-deps --no-recreate --scale "$SVC=$((N * 2))" "$SVC" || { drop_canary; rollback_and_exit "api scale-up failed"; }
 NEW="$(comm -13 <(printf '%s\n' $OLD | sort) <($DC ps -q "$SVC" | sort) || true)"
 if [[ -z "${NEW// }" ]]; then
   rollback_and_exit "no new $SVC containers after scale-up"
 fi
 for c in $NEW; do
+  [[ "$c" == "$CANARY" ]] && continue
   wait_ready "$c" 8000 || { docker stop $NEW >/dev/null 2>&1 || true; docker rm $NEW >/dev/null 2>&1 || true; rollback_and_exit "/ready red on new replica $c"; }
 done
 if [[ -n "${OLD// }" ]]; then
@@ -103,11 +132,11 @@ if [[ -n "${OLD// }" ]]; then
 fi
 $DC up -d --no-deps --no-recreate --scale "$SVC=$N" "$SVC"
 
-echo "▶ 5/7 recreate $WORKER (one process — never two pollers)"
+echo "▶ 6/7 recreate $WORKER (one process — never two pollers)"
 $DC up -d --no-deps --force-recreate "$WORKER" || rollback_and_exit "worker recreate failed"
 W="$($DC ps -q "$WORKER" | head -n1)"
 [[ -n "$W" ]] || rollback_and_exit "worker container missing"
 wait_ready "$W" 8001 || rollback_and_exit "worker /ready red"
 
-echo "▶ 6/7 cleanup"; docker image prune -f >/dev/null
+echo "▶ 7/7 cleanup"; docker image prune -f >/dev/null
 notify "✅ deploy $MODE ok — $IMAGE in $(( $(date +%s) - started ))s"
