@@ -64,7 +64,7 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
     cron: "* * * * *",
     timeoutMs: 15_000,
     handler: async ({ db, logger, signal }) => {
-      const snap = await collectDbSnapshot(db);
+      const snap = await collectDbSnapshot(db, logger);
       applyDbGauges(metrics, snap);
       const alerts = await maybeAlertOps(snap, logger, Date.now(), signal);
       return {

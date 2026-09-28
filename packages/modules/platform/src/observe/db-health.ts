@@ -19,7 +19,7 @@ export type DbSnapshot = {
   oldestTx: { app: string; s: number }[];
   lockWaits: number;
   deadlocks: number;
-  /** null when SHOW POOLS failed. 0 means not configured or no clients waiting. */
+  /** null when the admin URL is unset or SHOW POOLS failed. A number is cl_waiting. */
   poolWaiting: number | null;
   oldestTxSeconds: number;
 };
@@ -38,13 +38,17 @@ export type DbReport = {
 let waitingSince: number | null = null;
 let oldestAlerted = false;
 
+type WarnLog = { warn: (o: object, m?: string) => void };
+
+export type PoolSample = { waiting: number; pools: number };
+
 /** Tests only — module-level alert windows must not leak across cases. */
 export function resetDbAlertState() {
   waitingSince = null;
   oldestAlerted = false;
 }
 
-export async function collectDbSnapshot(db: Db): Promise<DbSnapshot> {
+export async function collectDbSnapshot(db: Db, logger: WarnLog): Promise<DbSnapshot> {
   const connections = ConnRow.parse(
     await db.execute(
       sql.raw(`
@@ -69,7 +73,7 @@ export async function collectDbSnapshot(db: Db): Promise<DbSnapshot> {
   const deadlockRows = (await db.execute(
     sql.raw(`SELECT deadlocks::int AS n FROM pg_stat_database WHERE datname = current_database()`),
   )) as { n: number }[];
-  const poolWaiting = await pgbouncerWaiting();
+  const poolWaiting = await pgbouncerWaiting(logger);
   const oldestTxSeconds = oldestTx.reduce((m, r) => Math.max(m, r.s), 0);
   return {
     connections,
@@ -81,21 +85,31 @@ export async function collectDbSnapshot(db: Db): Promise<DbSnapshot> {
   };
 }
 
-async function pgbouncerWaiting(): Promise<number | null> {
-  const env = loadEnv();
-  const url = env.PGBOUNCER_ADMIN_URL;
-  if (!url) return 0;
+async function pgbouncerWaiting(logger: WarnLog): Promise<number | null> {
+  const url = loadEnv().PGBOUNCER_ADMIN_URL;
+  if (!url) return null;
+  const sample = await pgbouncerWaitingClients(url, logger);
+  return sample?.waiting ?? null;
+}
+
+/** SHOW POOLS on the PgBouncer admin console. fetch_types stays off: the console rejects the extended protocol. */
+export async function pgbouncerWaitingClients(url: string, logger: WarnLog): Promise<PoolSample | null> {
   const c = postgres(url, {
     max: 1,
     prepare: false,
+    fetch_types: false,
     connect_timeout: 3,
     connection: { application_name: "bbc-pgbouncer-stats" },
     onnotice: () => {},
   });
   try {
     const rows = (await c.unsafe("SHOW POOLS")) as { cl_waiting?: number | string }[];
-    return rows.reduce((sum, r) => sum + Number(r.cl_waiting ?? 0), 0);
-  } catch {
+    return {
+      waiting: rows.reduce((sum, r) => sum + Number(r.cl_waiting ?? 0), 0),
+      pools: rows.length,
+    };
+  } catch (err) {
+    logger.warn({ err }, "pgbouncer SHOW POOLS failed");
     return null;
   } finally {
     await c.end({ timeout: 1 }).catch(() => {});
@@ -115,7 +129,7 @@ export function applyDbGauges(metrics: Metrics, snap: DbSnapshot) {
 
 export async function maybeAlertOps(
   snap: DbSnapshot,
-  logger: { warn: (o: object, m?: string) => void },
+  logger: WarnLog,
   now = Date.now(),
   signal?: AbortSignal,
 ): Promise<number> {
@@ -124,12 +138,9 @@ export async function maybeAlertOps(
   const delivery = signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
   const waiting = snap.poolWaiting;
   let posted = 0;
-  if (waiting == null) {
-    logger.warn({}, "pgbouncer SHOW POOLS failed; waiting window unchanged");
-  } else if (waiting > 0) {
-    waitingSince ??= now;
-  } else {
-    waitingSince = null;
+  if (waiting != null) {
+    if (waiting > 0) waitingSince ??= now;
+    else waitingSince = null;
   }
   const waitingMs = waitingSince ? now - waitingSince : 0;
   if (hook && waiting != null && waiting > 0 && waitingMs >= 120_000) {

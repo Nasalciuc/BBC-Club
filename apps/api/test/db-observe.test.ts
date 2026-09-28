@@ -1,9 +1,25 @@
 /** Worker jobs db-observe / db-report and GET /v1/internal/db-report (ops:read). */
+import { connect } from "node:net";
 import { describe, expect, it } from "bun:test";
-import { maybeAlertOps, resetDbAlertState } from "@bbc/platform";
+import { maybeAlertOps, pgbouncerWaitingClients, resetDbAlertState } from "@bbc/platform";
 import { testApp } from "./helpers/test-app";
 
 const silent = { warn: () => {} };
+
+function portOpen(url: string): Promise<boolean> {
+  const parsed = new URL(url);
+  return new Promise((resolve) => {
+    const socket = connect({ host: parsed.hostname, port: Number(parsed.port || 5432) });
+    const done = (ok: boolean) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(1_000);
+    socket.once("connect", () => done(true));
+    socket.once("timeout", () => done(false));
+    socket.once("error", () => done(false));
+  });
+}
 const emptySnap = {
   connections: [] as { app: string; state: string; n: number }[],
   oldestTx: [] as { app: string; s: number }[],
@@ -88,15 +104,12 @@ describe("database observability", () => {
     });
     const prev = process.env.OPS_WEBHOOK;
     process.env.OPS_WEBHOOK = `http://127.0.0.1:${server.port}/`;
-    const warns: string[] = [];
-    const logger = { warn: (_o: object, m?: string) => warns.push(m ?? "") };
     try {
       const t0 = 20_000;
-      expect(await maybeAlertOps({ ...emptySnap, poolWaiting: 3 }, logger, t0)).toBe(0);
-      expect(await maybeAlertOps({ ...emptySnap, poolWaiting: null }, logger, t0 + 60_000)).toBe(0);
+      expect(await maybeAlertOps({ ...emptySnap, poolWaiting: 3 }, silent, t0)).toBe(0);
+      expect(await maybeAlertOps({ ...emptySnap, poolWaiting: null }, silent, t0 + 60_000)).toBe(0);
       expect(received).toEqual([]);
-      expect(warns.some((m) => m.includes("SHOW POOLS failed"))).toBe(true);
-      const later = await maybeAlertOps({ ...emptySnap, poolWaiting: 3 }, logger, t0 + 120_000);
+      const later = await maybeAlertOps({ ...emptySnap, poolWaiting: 3 }, silent, t0 + 120_000);
       expect(later).toBe(1);
       expect(received.some((b) => b.includes("pool_waiting=3"))).toBe(true);
     } finally {
@@ -105,6 +118,29 @@ describe("database observability", () => {
       server.stop();
       resetDbAlertState();
     }
+  });
+
+  it("SHOW POOLS against compose PgBouncer returns rows", async () => {
+    const base = process.env.PGBOUNCER_URL;
+    if (!base || !(await portOpen(base))) return;
+    const admin = base.replace(/\/[^/?]*(\?|$)/, "/pgbouncer$1");
+    const sample = await pgbouncerWaitingClients(admin, silent);
+    expect(sample).not.toBeNull();
+    expect(typeof sample?.waiting).toBe("number");
+    expect(sample?.pools).toBeGreaterThanOrEqual(1);
+  });
+
+  it("a refused admin connection warns once and returns null", async () => {
+    const warns: { err?: unknown; message?: string }[] = [];
+    const logger = {
+      warn: (o: object, m?: string) =>
+        warns.push({ err: "err" in o ? (o as { err: unknown }).err : undefined, message: m }),
+    };
+    const sample = await pgbouncerWaitingClients("postgres://bbc:bbc@127.0.0.1:1/pgbouncer", logger);
+    expect(sample).toBeNull();
+    expect(warns).toHaveLength(1);
+    expect(warns[0]?.message).toContain("SHOW POOLS failed");
+    expect(warns[0]?.err).toBeInstanceOf(Error);
   });
 
   it("an aborted job signal stops the webhook", async () => {
