@@ -111,3 +111,5 @@ jobs:
             e2e-results/
             api.log
           if-no-files-found: warn
+          # Maestro writes its screenshots under a .maestro/ folder inside --debug-output.
+          include-hidden-files: true
