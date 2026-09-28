@@ -122,17 +122,18 @@ export async function maybeAlertOps(
   const env = loadEnv();
   const hook = env.OPS_WEBHOOK;
   const delivery = signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
+  const waiting = snap.poolWaiting;
   let posted = 0;
-  if (snap.poolWaiting == null) {
+  if (waiting == null) {
     logger.warn({}, "pgbouncer SHOW POOLS failed; waiting window unchanged");
-  } else if (snap.poolWaiting > 0) {
+  } else if (waiting > 0) {
     waitingSince ??= now;
   } else {
     waitingSince = null;
   }
   const waitingMs = waitingSince ? now - waitingSince : 0;
-  if (hook && snap.poolWaiting != null && waitingMs >= 120_000) {
-    await postOps(hook, `pool_waiting=${snap.poolWaiting} for ${Math.round(waitingMs / 1000)}s`, delivery);
+  if (hook && waiting != null && waiting > 0 && waitingMs >= 120_000) {
+    await postOps(hook, `pool_waiting=${waiting} for ${Math.round(waitingMs / 1000)}s`, delivery);
     posted++;
     waitingSince = now;
   }
@@ -145,9 +146,9 @@ export async function maybeAlertOps(
   } else {
     oldestAlerted = false;
   }
-  if (posted === 0 && (snap.poolWaiting > 0 || snap.oldestTxSeconds > 30)) {
+  if (posted === 0 && ((waiting != null && waiting > 0) || snap.oldestTxSeconds > 30)) {
     logger.warn(
-      { poolWaiting: snap.poolWaiting, oldestTxSeconds: snap.oldestTxSeconds },
+      { poolWaiting: waiting, oldestTxSeconds: snap.oldestTxSeconds },
       "db threshold crossed (OPS_WEBHOOK unset — not posted)",
     );
   }
