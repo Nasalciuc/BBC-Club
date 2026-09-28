@@ -1,8 +1,9 @@
 import { eq, sql } from "drizzle-orm";
 import { requestEvents, requests } from "@bbc/db/schema/requests";
+import type { Executor } from "@bbc/db";
 
 /** Redact contact PII and drop ownership. The row stays for an open CRM lead (CHECK-safe placeholders). */
-export async function onMemberDeleted(deps: { tx: any; memberId: string }) {
+export async function onMemberDeleted(deps: { tx: Executor; memberId: string }) {
   const selected = await deps.tx.select({ id: requests.id }).from(requests).where(eq(requests.memberId, deps.memberId));
   const rows: { id: string }[] = Array.isArray(selected) ? selected : [];
   await deps.tx

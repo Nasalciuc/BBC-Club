@@ -100,7 +100,7 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Propo
           handler: (ctx: HandlerContext) => {
             const memberId = ctx.event.memberId;
             if (!memberId) return Promise.resolve();
-            return onMemberDeleted({ tx: ctx.tx, memberId });
+            return onMemberDeleted({ tx: ctx.tx as unknown as Executor, memberId });
           },
         },
       ],

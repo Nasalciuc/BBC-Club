@@ -28,7 +28,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
     const conn = db as unknown as Executor;
     const auth = createAuth({
       env,
-      db,
+      db: conn,
       email: ports.email,
       logger: platform.logger,
       events: {

@@ -178,7 +178,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           handler: (ctx: HandlerContext) => {
             const memberId = ctx.event.memberId;
             if (!memberId) return Promise.resolve();
-            return onMemberDeleted({ tx: ctx.tx, memberId });
+            return onMemberDeleted({ tx: ctx.tx as unknown as Executor, memberId });
           },
         },
       ],

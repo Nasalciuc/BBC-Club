@@ -160,17 +160,20 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
           type: "offer.published",
           name: "notifications.onOfferPublished",
           handler: (ctx: HandlerContext, raw: unknown) =>
-            onOfferPublished({ tx: ctx.tx, members: ports.members, sourceEventId: String(ctx.event.id) }, raw),
+            onOfferPublished(
+              { tx: ctx.tx as unknown as Executor, members: ports.members, sourceEventId: String(ctx.event.id) },
+              raw,
+            ),
         },
         {
           type: "offer.withdrawn",
           name: "notifications.onOfferWithdrawn",
-          handler: (ctx: HandlerContext, raw: unknown) => onOfferWithdrawn({ tx: ctx.tx }, raw),
+          handler: (ctx: HandlerContext, raw: unknown) => onOfferWithdrawn({ tx: ctx.tx as unknown as Executor }, raw),
         },
         {
           type: "offer.expired",
           name: "notifications.onOfferExpired",
-          handler: (ctx: HandlerContext, raw: unknown) => onOfferExpired({ tx: ctx.tx }, raw),
+          handler: (ctx: HandlerContext, raw: unknown) => onOfferExpired({ tx: ctx.tx as unknown as Executor }, raw),
         },
         {
           type: "request.status_changed",

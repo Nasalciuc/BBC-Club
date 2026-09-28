@@ -1,19 +1,20 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { OfferExpiredV1, OfferWithdrawnV1 } from "@bbc/shared/events/offer";
 import { notificationsTable } from "@bbc/db/schema/notifications";
+import type { Executor } from "@bbc/db";
 
 /** Pending push rows for a withdrawn/expired offer are suppressed — never sent. */
-export async function onOfferWithdrawn(deps: { tx: any }, raw: unknown): Promise<void> {
+export async function onOfferWithdrawn(deps: { tx: Executor }, raw: unknown): Promise<void> {
   const evt = OfferWithdrawnV1.parse(raw);
   await suppressPendingForOffer(deps.tx, evt.offerId, "offer_withdrawn");
 }
 
-export async function onOfferExpired(deps: { tx: any }, raw: unknown): Promise<void> {
+export async function onOfferExpired(deps: { tx: Executor }, raw: unknown): Promise<void> {
   const evt = OfferExpiredV1.parse(raw);
   await suppressPendingForOffer(deps.tx, evt.offerId, "offer_expired");
 }
 
-async function suppressPendingForOffer(tx: any, offerId: string, reason: string): Promise<void> {
+async function suppressPendingForOffer(tx: Executor, offerId: string, reason: string): Promise<void> {
   await tx
     .update(notificationsTable)
     .set({ status: "suppressed", lastError: reason })

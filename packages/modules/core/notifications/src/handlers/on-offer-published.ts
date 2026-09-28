@@ -3,13 +3,14 @@ import { OfferPublishedV1 } from "@bbc/shared/events/offer";
 import { campaigns } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
 import { scheduleAfterQuietHours } from "../application/quiet-hours";
+import type { Executor } from "@bbc/db";
 
 /** `offer.published` → a personal offer becomes one pending inbox/push row; a broadcast becomes one campaign row,
  *  fanned out later by the `campaign-fanout` job (never inside this delivery transaction).
  *  Idempotent: UNIQUE (member_id, offer_id, category) for the row, UNIQUE source_event_id for the campaign. */
 export async function onOfferPublished(
   deps: {
-    tx: any;
+    tx: Executor;
     members: MembersFacade;
     sourceEventId: string;
   },

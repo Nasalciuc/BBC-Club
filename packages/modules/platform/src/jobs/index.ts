@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
 import { CRON_FIELDS_RE, type JobSpec } from "@bbc/shared/platform-specs";
 import { jobRuns } from "../infrastructure/schema";
+import type { Db } from "@bbc/db";
 
 export type JobContext = {
-  db: any;
+  db: Db;
   logger: {
     info: (o: object, m?: string) => void;
     warn: (o: object, m?: string) => void;
@@ -18,7 +19,7 @@ export type { JobSpec };
  *  (`POST /v1/internal/run/:name`, authorized `jobs:run`). Every run is recorded in platform.job_runs —
  *  that table is the only honest answer to "did the backup run last night?". */
 export function createJobs(
-  db: any,
+  db: Db,
   deps: {
     logger: JobContext["logger"];
     metrics?: {
@@ -55,6 +56,7 @@ export function createJobs(
     }
 
     const [runRow] = await db.insert(jobRuns).values({ job: name, status: "running" }).returning({ id: jobRuns.id });
+    if (!runRow) throw new Error(`job ${name}: the job_runs insert returned no row`);
     const ac = new AbortController();
     const DEFAULT_JOB_TIMEOUT_MS = 10 * 60_000;
     const timeout = setTimeout(() => ac.abort(), spec.timeoutMs ?? DEFAULT_JOB_TIMEOUT_MS);

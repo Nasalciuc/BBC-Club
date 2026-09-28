@@ -7,6 +7,7 @@ import { authOrigins, type ServerEnv } from "@bbc/shared/env";
 import { event } from "@bbc/shared/events";
 import type { EmailSender } from "../ports/email";
 import type { EventPublisher } from "../ports/events";
+import type { Executor } from "@bbc/db";
 import { ac, roles } from "./access";
 import { claimOtpSend, releaseOtpClaim } from "./otp-cooldown";
 import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
@@ -18,7 +19,7 @@ export type Logger = {
 };
 export type IdentityDeps = {
   env: ServerEnv;
-  db: any;
+  db: Executor;
   email: EmailSender;
   events: EventPublisher;
   logger: Logger;

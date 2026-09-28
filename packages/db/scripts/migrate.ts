@@ -53,7 +53,7 @@ try {
   for (const f of extrasFiles) {
     const done = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${f}`)) as any[];
     if (done.length) continue;
-    await db.transaction(async (tx: any) => {
+    await db.transaction(async (tx) => {
       await tx.execute(sql.raw(readFileSync(join(migrationsDir, f), "utf8")));
       await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES (${f})`);
     });
@@ -79,7 +79,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0005_requests.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(requestsSchema, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0005_requests.sql')`);
       });
@@ -93,7 +93,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0006_catalog.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(catalogSchema, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0006_catalog.sql')`);
       });
@@ -107,7 +107,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0007_db_verify_fitness.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(verifyFitness, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0007_db_verify_fitness.sql')`);
       });
@@ -121,7 +121,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0008_requests_phone.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(requestsPhone, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0008_requests_phone.sql')`);
       });
@@ -135,7 +135,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0009_notifications_request_id.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(notifRequestId, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0009_notifications_request_id.sql')`);
       });
@@ -149,7 +149,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0010_catalog_airport_tz.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(airportTz, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0010_catalog_airport_tz.sql')`);
       });
@@ -163,7 +163,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0011_auth_otp_cooldown.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(otpCooldown, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0011_auth_otp_cooldown.sql')`);
       });
@@ -214,7 +214,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0014_platform_rate_limit_state.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(rateLimitState, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0014_platform_rate_limit_state.sql')`);
       });
@@ -228,7 +228,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0015_notifications_sending_enum.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(sendingEnum, "utf8")));
         await tx.execute(
           sql`INSERT INTO platform.extras_applied (name) VALUES ('0015_notifications_sending_enum.sql')`,
@@ -244,7 +244,7 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0016_notifications_claimed_at.sql'`,
     )) as any[];
     if (!done.length) {
-      await db.transaction(async (tx: any) => {
+      await db.transaction(async (tx) => {
         await tx.execute(sql.raw(readFileSync(claimedAt, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0016_notifications_claimed_at.sql')`);
       });

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { PublishInput } from "@bbc/shared/events";
 import { domainEvents } from "../infrastructure/schema";
 import type { EventRegistry } from "./registry";
+import type { Executor } from "@bbc/db";
 
 export type { PublishInput };
 export type Publisher = ReturnType<typeof createPublisher>;
@@ -12,7 +13,9 @@ export function createPublisher(
 ) {
   /** Writes the event AND one pending delivery per registered consumer, inside the caller's transaction.
    *  `tx` is the first parameter by design: publishing outside a transaction is not expressible. */
-  async function publish(tx: any, input: PublishInput): Promise<{ eventId: string; deliveries: number }> {
+  async function publish(exec: unknown, input: PublishInput): Promise<{ eventId: string; deliveries: number }> {
+    // The shared ModulePlatform contract types this `unknown` (modules hold a delivery tx or their own Executor).
+    const tx = exec as Executor;
     const def = registry.definition(input.type);
     if (!def) throw new Error(`publish: unknown event type ${input.type}`);
     def.schema.parse(input.payload); // fail at the source, not in the poller
@@ -29,6 +32,7 @@ export function createPublisher(
         publishedBy: input.publishedBy,
       })
       .returning({ id: domainEvents.id });
+    if (!evt) throw new Error(`publish: the journal insert for ${input.type} returned no row`);
 
     const consumers = registry.consumersOf(input.type);
     if (consumers.length) {
