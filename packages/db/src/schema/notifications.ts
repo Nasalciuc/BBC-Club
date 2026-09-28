@@ -18,6 +18,7 @@ export const notificationCategoryN = notifications.enum("notification_category",
   "offers_broadcast",
 ]);
 export const devicePlatform = notifications.enum("device_platform", ["ios", "android"]);
+export const campaignStatus = notifications.enum("campaign_status", ["pending", "running", "done"]);
 
 /** Inbox AND push queue in one table. Consumer of `offer.published` (idempotent via platform.event_inbox). */
 export const notificationsTable = notifications.table(
@@ -96,5 +97,33 @@ export const deviceTokens = notifications.table(
       .on(t.memberId)
       .where(sql`${t.active}`),
     index("device_last_seen").on(t.lastSeenAt), // cleanup: inactive > 180 d
+  ],
+);
+
+/** One row per broadcast offer (0018). The delivery only records it; the campaign-fanout job pages through the
+ *  audience and advances `last_member_id`, so a crash resumes after the last committed page. */
+export const campaigns = notifications.table(
+  "campaigns",
+  {
+    id: id(),
+    offerId: uuid("offer_id").notNull(), // opaque, no FK across schemas
+    // a re-delivered event cannot start a second campaign
+    sourceEventId: text("source_event_id").notNull().unique("campaigns_source_event_id_key"),
+    category: notificationCategoryN("category").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    deepLink: text("deep_link"),
+    lastMemberId: text("last_member_id"), // keyset cursor
+    status: campaignStatus("status").notNull().default("pending"),
+    createdAt: createdAt(),
+    finishedAt: tz("finished_at"),
+  },
+  (t) => [
+    index("campaigns_offer").on(t.offerId),
+    // claim order; the cursor rides along because db:verify §3 indexes every *_id column
+    index("campaigns_open")
+      .on(t.createdAt, t.lastMemberId)
+      .where(sql`${t.status} IN ('pending', 'running')`),
+    check("campaigns_finished_consistent", sql`(${t.status} = 'done') = (${t.finishedAt} IS NOT NULL)`),
   ],
 );

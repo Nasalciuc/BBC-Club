@@ -294,6 +294,7 @@ function assertSchemaEnumsHaveZod() {
     "candidate_status",
     "notification_status",
     "fare_source",
+    "campaign_status", // internal to the campaign-fanout job; no API carries it
   ]);
   const drizzle = new Map<string, string[]>();
   const enumRe = /\.enum\(\s*"([^"]+)"\s*,\s*\[([^\]]+)\]/gs;

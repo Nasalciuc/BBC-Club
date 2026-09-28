@@ -258,6 +258,20 @@ try {
     "notifications sending index applied",
   );
 
+  const campaigns = join(migrationsDir, "0018_notifications_campaigns.sql");
+  if (existsSync(campaigns)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0018_notifications_campaigns.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql.raw(readFileSync(campaigns, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0018_notifications_campaigns.sql')`);
+      });
+      console.log("notifications campaigns applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {

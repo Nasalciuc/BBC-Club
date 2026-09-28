@@ -15,6 +15,7 @@ import { notificationsRepo } from "./infrastructure/notifications.repo";
 import { devicesRepo } from "./infrastructure/devices.repo";
 import { markRead } from "./application/mark-read";
 import { dispatch } from "./application/dispatch";
+import { campaignFanout } from "./application/campaign-fanout";
 import { reconcileReceipts } from "./application/receipts";
 import { cleanupDevices } from "./application/cleanup-devices";
 import { onOfferPublished } from "./handlers/on-offer-published";
@@ -214,6 +215,17 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
                 publish,
                 signal: ctx.signal,
               }),
+          },
+        },
+        {
+          // A broadcast offer is recorded as a campaign; this pages through its audience (RUNBOOK: Campaigns).
+          name: "campaign-fanout",
+          spec: {
+            cron: "* * * * *",
+            singleton: true,
+            timeoutMs: 55_000,
+            handler: async (ctx: JobContext) =>
+              campaignFanout({ db: conn, members: ports.members, signal: ctx.signal }),
           },
         },
         {
