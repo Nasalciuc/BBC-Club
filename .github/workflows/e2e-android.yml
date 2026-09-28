@@ -97,10 +97,12 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
+          # A phone-sized screen (the default AVD is 320x640 at 160 dpi, smaller than any phone the app supports).
+          profile: pixel_6
           disable-animations: true
           script: bash apps/mobile/e2e/run-android-ci.sh
 
-      - name: Upload JUnit results and the API log
+      - name: Upload JUnit results, Maestro screenshots and the API log
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
