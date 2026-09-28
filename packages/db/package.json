@@ -8,7 +8,6 @@
     "./schema": "./src/schema/index.ts",
     "./schema/*": "./src/schema/*.ts",
     "./helpers": "./src/helpers.ts",
-    "./relations": "./src/relations/index.ts",
     "./testing/isolated-db": "./src/testing/isolated-db.ts"
   },
   "scripts": {
