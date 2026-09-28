@@ -1,8 +1,32 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import type { Executor } from "@bbc/db";
+import { z } from "zod";
+import { query, type Executor } from "@bbc/db";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 
 type EventRow = typeof requestEvents.$inferSelect;
+
+/** One request claimed for the CRM send (claimUnsent). Validated where it is read. */
+export const ClaimedRow = z.object({
+  id: z.string().uuid(),
+  reference: z.string(),
+  contact_name: z.string(),
+  contact_phone: z.string().min(7),
+  contact_email: z.string(),
+  legs: z.array(z.object({ from: z.string(), to: z.string(), date: z.string() })),
+  trip_type: z.string(),
+  cabin: z.string(),
+  passengers: z.object({
+    adult: z.coerce.number(),
+    child: z.coerce.number(),
+    infant: z.coerce.number(),
+  }),
+  source: z.string(),
+  app_version: z.string().nullable(),
+  send_attempts: z.coerce.number().int(),
+  phone_valid: z.coerce.boolean(),
+  phone_e164: z.string().nullable(),
+});
+export type ClaimedRow = z.infer<typeof ClaimedRow>;
 
 type Status = "received" | "assigned" | "quoted" | "booked" | "closed";
 
@@ -58,8 +82,10 @@ export function createRequestsRepo(db: Executor) {
     },
 
     /** Claims unsent requests. FOR UPDATE SKIP LOCKED so two workers never take the same row. */
-    async claimUnsent(tx: Executor, limit = 20) {
-      return tx.execute(sql`
+    async claimUnsent(tx: Executor, limit = 20): Promise<ClaimedRow[]> {
+      return query(
+        tx,
+        sql`
         SELECT
           id,
           reference,
@@ -81,7 +107,9 @@ export function createRequestsRepo(db: Executor) {
           AND (sent_at IS NULL OR sent_at < now() - interval '5 minutes')
         ORDER BY created_at
         FOR UPDATE SKIP LOCKED
-        LIMIT ${limit}`);
+        LIMIT ${limit}`,
+        ClaimedRow,
+      );
     },
 
     async markSent(tx: Executor, id: string, crmRequestId: string) {

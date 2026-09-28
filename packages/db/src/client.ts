@@ -1,6 +1,8 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
+export { query, RowShapeError } from "./query";
+
 export type Db = ReturnType<typeof createDb>;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 /** Anything that can run queries: the db or a transaction. Repositories accept this, never `Db` alone. */
