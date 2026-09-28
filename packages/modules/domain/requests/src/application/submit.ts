@@ -101,7 +101,16 @@ export async function submit(
         source: actor.source,
         appVersion: actor.appVersion,
       })
+      .onConflictDoNothing({ target: requests.idempotencyKey })
       .returning();
+    if (!row) {
+      // The same key arrived twice at once (a double tap, a retry racing the first) and the other call committed
+      // first: ON CONFLICT waited for it, and this statement sees its row. Replay it, as a later retry would.
+      const [first] = await tx.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
+      if (!first) throw new Error("request insert returned no row");
+      if (first.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
+      return { ok: true as const, request: first, created: false as const };
+    }
 
     await tx.insert(requestEvents).values({ requestId: id, status: "received", actor: "system" });
 
@@ -123,7 +132,6 @@ export async function submit(
       }),
     });
 
-    if (!row) throw new Error("request insert returned no row");
     return { ok: true as const, request: row, created: true as const };
   });
 }
