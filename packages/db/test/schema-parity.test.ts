@@ -89,7 +89,16 @@ test("the Drizzle schema and the migrated database are the same", async () => {
     for (const i of c.indexes) {
       const cfg = (i as any).config;
       const cols2 = cfg.columns.map((x: any) => x.name ?? "?").join(",");
-      if (idx.some((r) => r.indexname === cfg.name)) continue;
+      const byName = idx.find((r) => r.indexname === cfg.name);
+      if (byName) {
+        // Same name is not enough: the columns and whether it is partial must match too.
+        const partial = / WHERE /i.test(byName.indexdef);
+        if (idxCols(byName.indexdef) !== cols2 || partial !== Boolean(cfg.where))
+          drift.push(
+            `INDEX DEF ${name}.${cfg.name}: code (${cols2})${cfg.where ? " partial" : ""} · db ${byName.indexdef}`,
+          );
+        continue;
+      }
       const same = idx.find((r) => idxCols(r.indexdef) === cols2);
       drift.push(
         same

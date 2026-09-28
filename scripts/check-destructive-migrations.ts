@@ -6,8 +6,10 @@
 import { readFileSync } from "node:fs";
 
 const DESTRUCTIVE =
-  /\b(DROP\s+TABLE|DROP\s+COLUMN|TRUNCATE|ALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE|DROP\s+INDEX(?!\s+CONCURRENTLY))\b/i;
-const DELETE_WITHOUT_WHERE = /\bDELETE\s+FROM\s+[^;]*;/gi; // then keep only matches without \bWHERE\b
+  /\b(DROP\s+(?:TABLE|SCHEMA|COLUMN|INDEX(?!\s+CONCURRENTLY))|TRUNCATE|ALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE)\b/i;
+// A DELETE up to its semicolon, or to the end of the file when it is the last statement. Then keep only the matches
+// without \bWHERE\b.
+const DELETE_WITHOUT_WHERE = /\bDELETE\s+FROM\s+[^;]*(?:;|$)/gi;
 const REASON = /^\s*--\s*destructive:\s*\S/i;
 
 function git(args: string[]): { ok: boolean; out: string } {

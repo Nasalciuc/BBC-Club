@@ -15,25 +15,35 @@ afterAll(() => iso.drop());
 describe("lock_timeout in the migration runner", () => {
   test("a migration block that cannot get its lock fails in ~5 s with 55P03", async () => {
     const holder = postgres(iso.url, { max: 1, onnotice: () => {} });
+    const locked = Promise.withResolvers<void>();
     const held = holder.begin(async (tx) => {
-      await tx`LOCK TABLE public.locked IN ACCESS EXCLUSIVE MODE`;
+      try {
+        await tx`LOCK TABLE public.locked IN ACCESS EXCLUSIVE MODE`;
+      } catch (e) {
+        locked.reject(e);
+        throw e;
+      }
+      locked.resolve(); // the lock is held from here on — the test waits for this, not for a guessed delay
       await Bun.sleep(8_000);
     });
-    await Bun.sleep(200);
-    const t = performance.now();
-    const err = await iso.db
-      .transaction(async (tx: any) => {
-        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
-        await tx.execute(sql`ALTER TABLE public.locked ADD COLUMN x int`);
-      })
-      .then(
-        () => null,
-        (e: any) => e,
-      );
-    expect(err?.cause?.code ?? err?.code).toBe("55P03");
-    expect((performance.now() - t) / 1000).toBeLessThan(10);
-    await held;
-    await holder.end();
+    try {
+      await locked.promise;
+      const t = performance.now();
+      const err = await iso.db
+        .transaction(async (tx: any) => {
+          await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+          await tx.execute(sql`ALTER TABLE public.locked ADD COLUMN x int`);
+        })
+        .then(
+          () => null,
+          (e: any) => e,
+        );
+      expect(err?.cause?.code ?? err?.code).toBe("55P03");
+      expect((performance.now() - t) / 1000).toBeLessThan(10);
+    } finally {
+      await held.catch(() => {});
+      await holder.end();
+    }
   }, 20_000);
 
   test("the runner itself exits 1 and says why when a table stays locked", async () => {
@@ -55,20 +65,30 @@ describe("lock_timeout in the migration runner", () => {
       await fresh.db.execute(sql`DROP TABLE notifications.campaigns`);
       await fresh.db.execute(sql`DROP TYPE notifications.campaign_status`);
       const holder = postgres(fresh.url, { max: 1, onnotice: () => {} });
+      const locked = Promise.withResolvers<void>();
       const held = holder.begin(async (tx) => {
-        await tx`LOCK TABLE platform.extras_applied IN ACCESS EXCLUSIVE MODE`;
+        try {
+          await tx`LOCK TABLE platform.extras_applied IN ACCESS EXCLUSIVE MODE`;
+        } catch (e) {
+          locked.reject(e);
+          throw e;
+        }
+        locked.resolve();
         await Bun.sleep(9_000);
       });
-      await Bun.sleep(200);
-      const t = performance.now();
-      const second = run();
-      const code = await second.exited;
-      const stderr = await new Response(second.stderr).text();
-      expect(code).toBe(1);
-      expect(stderr).toContain("lock_timeout");
-      expect((performance.now() - t) / 1000).toBeLessThan(10);
-      await held;
-      await holder.end();
+      try {
+        await locked.promise;
+        const t = performance.now();
+        const second = run();
+        const code = await second.exited;
+        const stderr = await new Response(second.stderr).text();
+        expect(code).toBe(1);
+        expect(stderr).toContain("lock_timeout");
+        expect((performance.now() - t) / 1000).toBeLessThan(10);
+      } finally {
+        await held.catch(() => {});
+        await holder.end();
+      }
     } finally {
       await fresh.drop();
     }

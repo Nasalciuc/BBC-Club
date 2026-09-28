@@ -73,4 +73,75 @@ describe("ingest — the same key twice at once", () => {
     expect(results.filter((r) => !r.ok && r.code === "CONFLICT").length).toBe(1);
     expect(await count(sql`SELECT count(*)::int AS n FROM proposals.offers WHERE idempotency_key = ${key}`)).toBe(1);
   });
+
+  it("a retry is compared field by field: any stored difference is a 409, formatting is not", async () => {
+    const key = `retry:${crypto.randomUUID()}`;
+    const full = {
+      ...input,
+      publishedPrice: "7850.00",
+      body: "Five nights, the suite on the river.",
+      flightFacts: { nonstop: true, durationMinutes: 425, product: "Suite" },
+      mediaUrl: "https://cdn.example.com/london.webp",
+      createdBy: "campaign-autumn",
+    };
+    const deps: IngestDeps = {
+      db,
+      events: { publish: (tx, e) => platform.events.publish(tx, { ...e, publishedBy: "proposals" }) },
+    };
+    const first = await ingest(deps, full, key);
+    expect(first.ok).toBe(true);
+    // Same payload, differently formatted: same number, same instant, keys in another order, default currency.
+    const again = await ingest(
+      deps,
+      {
+        ...full,
+        price: "4200",
+        validUntil: "2027-12-31T23:59:59Z",
+        flightFacts: { product: "Suite", durationMinutes: 425, nonstop: true },
+        currency: "USD",
+      },
+      key,
+    );
+    expect(again).toEqual(first);
+    // Each stored field the first call did not send the same way is a conflict.
+    for (const change of [
+      { validUntil: "2027-11-30T23:59:59.000Z" },
+      { publishedPrice: "7900.00" },
+      { body: "Four nights." },
+      { flightFacts: { nonstop: false, durationMinutes: 425, product: "Suite" } },
+      { mediaUrl: "https://cdn.example.com/other.webp" },
+      { createdBy: "campaign-winter" },
+      { currency: "EUR" },
+    ]) {
+      expect({ change, result: await ingest(deps, { ...full, ...change }, key) }).toEqual({
+        change,
+        result: { ok: false, code: "CONFLICT" },
+      });
+    }
+    expect(await count(sql`SELECT count(*)::int AS n FROM proposals.offers WHERE idempotency_key = ${key}`)).toBe(1);
+  });
+
+  it("an omitted publishAt matches a default-now row, not a schedule the first call sent", async () => {
+    const deps: IngestDeps = {
+      db,
+      events: { publish: (tx, e) => platform.events.publish(tx, { ...e, publishedBy: "proposals" }) },
+    };
+    const scheduled = "2027-06-01T12:00:00.000Z";
+
+    const omittedKey = `pub:${crypto.randomUUID()}`;
+    const omitted = await ingest(deps, input, omittedKey);
+    expect(omitted.ok).toBe(true);
+    expect(await ingest(deps, input, omittedKey)).toEqual(omitted);
+
+    const scheduledKey = `pub:${crypto.randomUUID()}`;
+    const first = await ingest(deps, { ...input, publishAt: scheduled }, scheduledKey);
+    expect(first.ok).toBe(true);
+    expect(await ingest(deps, { ...input, publishAt: scheduled }, scheduledKey)).toEqual(first);
+    expect(await ingest(deps, input, scheduledKey)).toEqual({ ok: false, code: "CONFLICT" });
+
+    const nowKey = `pub:${crypto.randomUUID()}`;
+    const created = await ingest(deps, input, nowKey);
+    expect(created.ok).toBe(true);
+    expect(await ingest(deps, { ...input, publishAt: scheduled }, nowKey)).toEqual({ ok: false, code: "CONFLICT" });
+  });
 });
