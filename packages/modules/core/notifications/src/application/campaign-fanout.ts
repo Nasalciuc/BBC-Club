@@ -35,13 +35,22 @@ async function claimCampaign(tx: Tx): Promise<Campaign | null> {
 }
 
 /** One page: the daily cap as ONE query for the whole page, then one insert. The cursor advances in the same
- *  transaction, so a crash resumes after the last committed page and never writes a page twice. */
+ *  transaction, so a crash resumes after the last committed page and never writes a page twice.
+ *  Null when the campaign is no longer running — the offer was withdrawn or expired since the claim. */
 async function fanOutPage(
   tx: Tx,
   c: Campaign,
   page: { memberId: string; timezone: string }[],
   now: Date,
-): Promise<{ inserted: number; capped: number }> {
+): Promise<{ inserted: number; capped: number } | null> {
+  // Lock and re-read the campaign first: on-offer-lifecycle closes it under the same row lock, so a page either
+  // commits before the close (and the close suppresses its rows) or sees the close and writes nothing.
+  const [open] = await tx
+    .select({ status: campaigns.status })
+    .from(campaigns)
+    .where(eq(campaigns.id, c.id))
+    .for("update");
+  if (open?.status !== "running") return null;
   // Cap: at most one offer push per member per server day — date_trunc('day', now()) in the database
   // session's time zone (UTC on the host), not the member's local day. Same rule the personal path applies.
   const cappedRows = await tx
@@ -95,7 +104,7 @@ async function fanOutPage(
 
 /** The `campaign-fanout` job: pages through each open campaign's audience, one transaction per page, and marks it
  *  done. Never a query per member, never every member id in memory. An aborted run leaves the campaign `running`
- *  with its cursor; the next run resumes there. */
+ *  with its cursor; the next run resumes there. A campaign closed mid-run by its offer stops at the next page. */
 export async function campaignFanout(deps: CampaignFanoutDeps): Promise<Metrics> {
   const size = deps.pageSize ?? PAGE;
   const m: Metrics = { campaigns: 0, pages: 0, inserted: 0, capped: 0 };
@@ -104,6 +113,7 @@ export async function campaignFanout(deps: CampaignFanoutDeps): Promise<Metrics>
     if (!c) break;
     let after = c.lastMemberId ?? null;
     let finished = false;
+    let closed = false;
     while (!deps.signal?.aborted) {
       const page = await deps.members.audiencePage(undefined, {
         category: c.category === "offers_personal" ? "offers_personal" : "offers_broadcast",
@@ -117,16 +127,21 @@ export async function campaignFanout(deps: CampaignFanoutDeps): Promise<Metrics>
       }
       const now = deps.now?.() ?? new Date();
       const r = await withTx(deps.db, (tx) => fanOutPage(tx, c, page, now));
+      if (!r) {
+        closed = true; // by its offer's withdrawal or expiry: nothing more to write, nothing to mark
+        break;
+      }
       m.pages += 1;
       m.inserted += r.inserted;
       m.capped += r.capped;
       after = last.memberId;
     }
+    if (closed) continue;
     if (!finished) break;
     await deps.db
       .update(campaigns)
       .set({ status: "done", finishedAt: sql`now()` })
-      .where(eq(campaigns.id, c.id));
+      .where(and(eq(campaigns.id, c.id), eq(campaigns.status, "running")));
     m.campaigns += 1;
   }
   return m;

@@ -142,11 +142,12 @@ SELECT id, offer_id, status, last_member_id, created_at, finished_at
 FROM notifications.campaigns ORDER BY created_at DESC LIMIT 10;
 ```
 
-| Status    | Meaning                                                                                                                                                                              |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pending` | Recorded by the delivery; no page written yet.                                                                                                                                       |
-| `running` | At least one page claimed. `last_member_id` is the last member of the last **committed** page — the next run starts after it. A run that crashed or hit its 55 s timeout stays here. |
-| `done`    | The audience was exhausted; `finished_at` is set (a CHECK keeps the two in step).                                                                                                    |
+| Status       | Meaning                                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pending`    | Recorded by the delivery; no page written yet.                                                                                                                                                                                       |
+| `running`    | At least one page claimed. `last_member_id` is the last member of the last **committed** page — the next run starts after it. A run that crashed or hit its 55 s timeout stays here.                                                 |
+| `done`       | The audience was exhausted; `finished_at` is set (a CHECK keeps the two in step).                                                                                                                                                    |
+| `done` early | The offer was withdrawn or expired: `offer.withdrawn` / `offer.expired` close its open campaign, and a running fan-out stops at its next page (each page locks the campaign and re-reads it). Rows already written are `suppressed`. |
 
 **Resume a stuck campaign.** Nothing to reset: a `running` campaign is picked up again by the next run, after `last_member_id`. To push it now instead of waiting a minute:
 

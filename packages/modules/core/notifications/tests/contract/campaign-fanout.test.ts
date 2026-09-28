@@ -6,6 +6,7 @@ import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import type { AudienceMember, MembersFacade } from "@bbc/members";
 import { onOfferPublished } from "../../src/handlers/on-offer-published";
 import { campaignFanout, type CampaignFanoutDeps } from "../../src/application/campaign-fanout";
+import { onOfferExpired, onOfferWithdrawn } from "../../src/handlers/on-offer-lifecycle";
 
 let iso: IsolatedDb;
 let db: IsolatedDb["db"];
@@ -209,5 +210,87 @@ describe("campaign-fanout job", () => {
     const [c] = (await db.execute(sql`SELECT status, last_member_id FROM notifications.campaigns`)) as any[];
     expect(c).toEqual({ status: "running", last_member_id: mid(200) });
     expect(await run({ pageSize: 100 })).toEqual({ campaigns: 1, pages: 1, inserted: 100, capped: 0 });
+  });
+});
+
+describe("a withdrawn or expired offer", () => {
+  const withdraw = (offerId: string) =>
+    db.transaction((tx) =>
+      onOfferWithdrawn({ tx }, { type: "offer.withdrawn", version: 1, offerId, withdrawnAt: new Date().toISOString() }),
+    );
+  const expire = (offerId: string) =>
+    db.transaction((tx) =>
+      onOfferExpired({ tx }, { type: "offer.expired", version: 1, offerId, expiredAt: new Date().toISOString() }),
+    );
+  const campaignOf = async (offerId: string) =>
+    (
+      (await db.execute(sql`SELECT status, last_member_id, finished_at IS NOT NULL AS finished
+      FROM notifications.campaigns WHERE offer_id = ${offerId}::uuid`)) as any[]
+    )[0];
+
+  it("withdrawn before the job runs: the campaign closes and nothing is written", async () => {
+    await seedMembers(300);
+    const offerId = crypto.randomUUID();
+    await deliver(broadcast(offerId), "707");
+    await withdraw(offerId);
+    expect(await run({ pageSize: 100 })).toEqual({ campaigns: 0, pages: 0, inserted: 0, capped: 0 });
+    expect(await notificationCount()).toBe(0);
+    expect(await campaignOf(offerId)).toEqual({ status: "done", last_member_id: null, finished: true });
+  });
+
+  it("expired mid-run: the claimed campaign stops at the next page, and what it wrote is suppressed", async () => {
+    await seedMembers(500);
+    const offerId = crypto.randomUUID();
+    await deliver(broadcast(offerId), "808");
+    let calls = 0;
+    const expiring = {
+      audiencePage: (async (exec, q) => {
+        calls += 1;
+        if (calls === 3) await expire(offerId); // two pages are committed; the third must not be
+        return audiencePage(exec, q);
+      }) as Page,
+    } as unknown as MembersFacade;
+    expect(await campaignFanout({ db, members: expiring, pageSize: 100 })).toEqual({
+      campaigns: 0,
+      pages: 2,
+      inserted: 200,
+      capped: 0,
+    });
+    expect(await count(sql`SELECT count(*)::int AS n FROM notifications.notifications WHERE status = 'pending'`)).toBe(
+      0,
+    );
+    expect(
+      await count(sql`SELECT count(*)::int AS n FROM notifications.notifications
+                      WHERE status = 'suppressed' AND last_error = 'offer_expired'`),
+    ).toBe(200);
+    expect(await campaignOf(offerId)).toEqual({ status: "done", last_member_id: mid(200), finished: true });
+  });
+
+  it("a campaign closed right after its claim does not stop the next one", async () => {
+    await seedMembers(300);
+    const closedOffer = crypto.randomUUID();
+    const liveOffer = crypto.randomUUID();
+    await deliver(broadcast(closedOffer), "909");
+    await deliver(broadcast(liveOffer), "910");
+    let calls = 0;
+    const withdrawing = {
+      audiencePage: (async (exec, q) => {
+        calls += 1;
+        if (calls === 1) await withdraw(closedOffer); // claimed (oldest first), not one page written yet
+        return audiencePage(exec, q);
+      }) as Page,
+    } as unknown as MembersFacade;
+    expect(await campaignFanout({ db, members: withdrawing, pageSize: 100 })).toEqual({
+      campaigns: 1,
+      pages: 3,
+      inserted: 300,
+      capped: 0,
+    });
+    expect(
+      await count(
+        sql`SELECT count(*)::int AS n FROM notifications.notifications WHERE offer_id = ${closedOffer}::uuid`,
+      ),
+    ).toBe(0);
+    expect(await campaignOf(liveOffer)).toMatchObject({ status: "done", finished: true });
   });
 });
