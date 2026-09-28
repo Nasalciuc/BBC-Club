@@ -43,6 +43,7 @@ export function createMetrics() {
         if (k === prefix || k.startsWith(`${prefix}{`)) gaugeValues.delete(k);
       }
     },
+    /** Point-in-time gauges survive a scrape. clearPrefix (before each refresh) or reset() drops them. */
     async render(): Promise<string> {
       const lines: string[] = [];
       for (const [k, v] of counters) lines.push(`bbc_${k} ${v}`);
