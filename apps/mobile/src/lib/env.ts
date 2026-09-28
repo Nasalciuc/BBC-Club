@@ -3,7 +3,8 @@ import { z } from "zod";
 /** The only place EXPO_PUBLIC_* is read. Missing or malformed values fail at startup, not on the first request. */
 const Schema = z.object({
   EXPO_PUBLIC_API_URL: z.string().url(),
-  EXPO_PUBLIC_APP_ENV: z.enum(["development", "staging", "production"]).default("development"),
+  /** `e2e`: the emulator build of .github/workflows/e2e-android.yml (cleartext to 10.0.2.2 only). */
+  EXPO_PUBLIC_APP_ENV: z.enum(["development", "staging", "production", "e2e"]).default("development"),
   /** E.164 support line; empty → Call support / specialist dial is disabled. */
   EXPO_PUBLIC_SUPPORT_PHONE: z.string().min(1).optional(),
   EXPO_PUBLIC_PRIVACY_URL: z.string().url().optional(),

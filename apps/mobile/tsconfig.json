@@ -15,6 +15,6 @@
     "noUncheckedIndexedAccess": false,
     "verbatimModuleSyntax": false
   },
-  "include": ["src", "app.json", "expo-env.d.ts", ".expo/types/**/*.ts"],
+  "include": ["src", "app.json", "app.config.ts", "plugins", "expo-env.d.ts", ".expo/types/**/*.ts"],
   "exclude": ["node_modules", "src/**/*.test.ts"]
 }
