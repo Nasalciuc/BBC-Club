@@ -4,13 +4,14 @@ import { id, createdAt, tz } from "./_helpers";
 
 export const notifications = pgSchema("notifications");
 
+// Order is the database's: 0015 appended "sending" with ADD VALUE, so it sorts last (schema-parity.test.ts).
 export const notificationStatus = notifications.enum("notification_status", [
   "pending",
-  "sending",
   "sent",
   "delivered",
   "failed",
   "suppressed",
+  "sending",
 ]);
 export const notificationCategoryN = notifications.enum("notification_category", [
   "transactional",

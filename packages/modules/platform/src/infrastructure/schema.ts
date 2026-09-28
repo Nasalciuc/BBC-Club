@@ -16,6 +16,9 @@ import { sql } from "drizzle-orm";
 export const platform = pgSchema("platform");
 
 export const deliveryStatus = platform.enum("delivery_status", ["pending", "done", "dead", "paused"]);
+/** Labels read from the database (`enum_range(NULL::platform.…)`), created by 0001_extras.sql. */
+export const externalSource = platform.enum("external_source", ["crm", "postmark", "ses", "push", "expo", "unknown"]);
+export const jobRunStatus = platform.enum("job_run_status", ["running", "succeeded", "failed", "skipped"]);
 
 /** Append-only journal. Partitioned monthly on occurred_at (see migrations/0001_extras.sql).
  *  payload carries facts, never secrets; member_id is tombstoned on account deletion. */
@@ -34,9 +37,11 @@ export const domainEvents = platform.table(
   },
   (t) => [
     primaryKey({ columns: [t.id, t.occurredAt] }), // partition key must be in the PK
-    index("domain_events_type").on(t.type, t.id),
-    index("domain_events_aggregate").on(t.aggregateType, t.aggregateId, t.id),
-    index("domain_events_member")
+    // Named by Postgres when 0001_extras.sql partitioned the journal (CREATE TABLE … LIKE … INCLUDING ALL gives
+    // copied indexes default names). These are the names in every database — do not rename.
+    index("domain_events_type_id_idx").on(t.type, t.id),
+    index("domain_events_aggregate_type_aggregate_id_id_idx").on(t.aggregateType, t.aggregateId, t.id),
+    index("domain_events_member_id_idx")
       .on(t.memberId)
       .where(sql`${t.memberId} IS NOT NULL`),
     check("domain_events_version_pos", sql`${t.version} >= 1`),
@@ -100,7 +105,7 @@ export const eventDlq = platform.table(
 export const externalInbox = platform.table(
   "external_inbox",
   {
-    source: text("source").notNull(),
+    source: externalSource("source").notNull(),
     externalId: text("external_id").notNull(),
     processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -119,7 +124,7 @@ export const jobRuns = platform.table(
   {
     id: bigserial("id", { mode: "bigint" }).primaryKey(),
     job: text("job").notNull(),
-    status: text("status").notNull().default("running"), // running | succeeded | failed | skipped
+    status: jobRunStatus("status").notNull().default("running"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     durationMs: integer("duration_ms"),
