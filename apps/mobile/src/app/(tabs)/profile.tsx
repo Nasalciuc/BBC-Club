@@ -10,6 +10,12 @@ import { deleteAccount, signOut } from "@/features/auth/flows";
 import { CabinSheet } from "@/features/profile/CabinSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
 import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
+import {
+  mergeSavedProfile,
+  offersSwitchValue,
+  withOffers,
+  type SavedProfile,
+} from "@/features/profile/notifications-logic";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
@@ -110,8 +116,8 @@ export default function ProfileScreen() {
   const termsUrl = env.EXPO_PUBLIC_TERMS_URL;
   const cabinLabel = profile?.preferences?.cabin === "first" ? "First" : "Business";
 
-  function onSheetSaved(next: Profile) {
-    setProfile(next);
+  function onSheetSaved(next: SavedProfile) {
+    setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
     setError(null);
   }
 
@@ -278,7 +284,11 @@ export default function ProfileScreen() {
           <TravelersSheet ref={travelersRef} profile={profile} onSaved={onSheetSaved} />
           <PasswordSheet ref={passwordRef} profile={profile} onSaved={onSheetSaved} />
           <PhoneSheet ref={phoneRef} profile={profile} onSaved={onSheetSaved} />
-          <NotificationsSheet ref={notificationsRef} />
+          <NotificationsSheet
+            ref={notificationsRef}
+            savedOffers={offersSwitchValue(profile)}
+            onSaved={(offers) => setProfile((prev) => (prev ? withOffers(prev, offers) : prev))}
+          />
         </>
       ) : null}
     </ScrollView>

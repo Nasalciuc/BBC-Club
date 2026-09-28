@@ -1,15 +1,28 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Notifications from "expo-notifications";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Linking, Platform, StyleSheet, Switch, Text, View } from "react-native";
 import { Button, CloseButton, tokens, rn } from "@bbc/ui";
 
 import { putNotificationPreferences } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
 
-export const NotificationsSheet = forwardRef<ProfileSheetHandle>(function NotificationsSheet(_props, ref) {
+type Props = {
+  /** What the member saved (profile.notifications.offers), or null while unknown — never a default. */
+  savedOffers: boolean | null;
+  /** The server accepted a new value. */
+  onSaved: (offers: boolean) => void;
+};
+
+export const NotificationsSheet = forwardRef<ProfileSheetHandle, Props>(function NotificationsSheet(
+  { savedOffers, onSaved },
+  ref,
+) {
   const modalRef = useRef<BottomSheetModal>(null);
-  const [offersOn, setOffersOn] = useState(true);
+  const [offersOn, setOffersOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    setOffersOn(savedOffers);
+  }, [savedOffers]);
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +47,7 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle>(function Notifi
 
   async function onOffers(enabled: boolean) {
     const previous = offersOn;
+    if (previous === null) return;
     setOffersOn(enabled);
     setBusy(true);
     setError(null);
@@ -47,7 +61,9 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle>(function Notifi
     if (!result.ok) {
       setOffersOn(previous);
       setError(result.message);
+      return;
     }
+    onSaved(enabled);
   }
 
   return (
@@ -101,8 +117,8 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle>(function Notifi
           </View>
           <Switch
             testID="notifications.offers"
-            value={offersOn}
-            disabled={denied || busy}
+            value={offersOn ?? false}
+            disabled={offersOn === null || denied || busy}
             onValueChange={(v) => {
               void onOffers(v);
             }}
