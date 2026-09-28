@@ -1,9 +1,9 @@
 /** The only import surface of @bbc/members. Other modules and the host see nothing else. */
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gt, notExists, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { profile, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
-import type { MembersFacade, ProfileRow, NotificationPrefView } from "../api";
+import type { AudienceMember, MembersFacade, ProfileRow, NotificationPrefView } from "../api";
 
 export type { ProfileRow, NotificationPrefView, MembersFacade };
 export { toProfileVM } from "./to-profile-vm";
@@ -40,6 +40,36 @@ export function createMembersFacade(db: Executor): MembersFacade {
       .from(profile)
       .where(eq(profile.status, "active"));
     return rows.map((r: { memberId: string }) => r.memberId);
+  }
+
+  async function audiencePage(
+    exec: Executor | undefined,
+    q: { category: "offers_broadcast" | "offers_personal"; after: string | null; limit: number },
+  ): Promise<AudienceMember[]> {
+    const conn = exec ?? db;
+    // The preferences table stores opt-outs: a missing row means enabled.
+    const optedOut = conn
+      .select({ one: sql`1` })
+      .from(notificationPreferences)
+      .where(
+        and(
+          eq(notificationPreferences.memberId, profile.memberId),
+          eq(notificationPreferences.category, q.category),
+          eq(notificationPreferences.enabled, false),
+        ),
+      );
+    return conn
+      .select({ memberId: profile.memberId, timezone: profile.timezone })
+      .from(profile)
+      .where(
+        and(
+          eq(profile.status, "active"),
+          q.after === null ? undefined : gt(profile.memberId, q.after),
+          notExists(optedOut),
+        ),
+      )
+      .orderBy(profile.memberId)
+      .limit(q.limit);
   }
 
   async function preferencesOf(exec: Executor | undefined, memberId: string): Promise<NotificationPrefView> {
@@ -116,6 +146,7 @@ export function createMembersFacade(db: Executor): MembersFacade {
     getStatus,
     timezoneOf,
     activeMemberIds,
+    audiencePage,
     preferencesOf,
     updateProfile,
     setTravelPreferences,

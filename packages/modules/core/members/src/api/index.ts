@@ -30,6 +30,9 @@ export type NotificationPrefView = {
   offers_broadcast: boolean;
 };
 
+/** One page of a campaign audience: active members who accept `category`, in member-id order. */
+export type AudienceMember = { memberId: string; timezone: string };
+
 export { toProfileVM } from "../application/to-profile-vm";
 
 /** The only import surface of @bbc/members. module.ts implements it; consumers import it. */
@@ -38,6 +41,12 @@ export type MembersFacade = {
   getStatus(exec: Executor | undefined, memberId: string): Promise<MemberStatus>;
   timezoneOf(exec: Executor | undefined, memberId: string): Promise<string>;
   activeMemberIds(exec: Executor | undefined): Promise<string[]>;
+  /** Active members who accept `category`, with their time zone — one page, keyset on member id.
+   *  A missing preference row means enabled. Campaign fan-out pages through this instead of loading every id. */
+  audiencePage(
+    exec: Executor | undefined,
+    q: { category: "offers_broadcast" | "offers_personal"; after: string | null; limit: number },
+  ): Promise<AudienceMember[]>;
   preferencesOf(exec: Executor | undefined, memberId: string): Promise<NotificationPrefView>;
   updateProfile(
     exec: Executor | undefined,
