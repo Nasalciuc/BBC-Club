@@ -1,0 +1,9 @@
+# deploy.sh adds this file only when the previous image has no apps/api/src/worker.ts.
+services:
+  api:
+    environment:
+      DB_POOLER: none
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
+  cron:
+    environment:
+      API_URL: http://api:8000

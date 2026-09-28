@@ -50,8 +50,21 @@ rollback_and_exit() {
   if [[ -n "$PREVIOUS" ]]; then
     echo "▶ ROLLBACK → $PREVIOUS ($why)"
     sed -i "s|^${VAR}=.*|${VAR}=${PREVIOUS}|" "$ENVF"
-    $DC up -d --no-deps "$SVC" "$WORKER"
-    notify "🚨 deploy $MODE rolled back to $PREVIOUS ($why). Schema is expand-only → old code is safe." "${SEC_WEBHOOK:-}"
+    if docker run --rm --entrypoint test "$PREVIOUS" -f apps/api/src/worker.ts; then
+      $DC up -d --no-deps "$SVC" "$WORKER"
+      notify "🚨 deploy $MODE rolled back to $PREVIOUS ($why). Schema is expand-only → old code is safe." "${SEC_WEBHOOK:-}"
+    else
+      echo "▶ previous image has no worker; API direct to Postgres, cron on ${SVC}:8000"
+      local pre="$INFRA_DIR/compose.pre-worker.yml"
+      [[ "$MODE" == "staging" ]] && pre="$INFRA_DIR/compose.pre-worker.staging.yml"
+      $DC up -d --no-deps --scale "$WORKER=0" "$WORKER" || true
+      local wids
+      wids="$($DC ps -q "$WORKER" || true)"
+      if [[ -n "${wids// }" ]]; then docker stop $wids >/dev/null || true; docker rm $wids >/dev/null || true; fi
+      $DC -f "$pre" up -d --no-deps "$SVC"
+      $DC -f "$pre" up -d --no-deps --force-recreate "$CRON"
+      notify "🚨 deploy $MODE rolled back to $PREVIOUS ($why). Previous image has no worker; cutover compose set aside (API direct to Postgres, cron on ${SVC}:8000)." "${SEC_WEBHOOK:-}"
+    fi
   else
     notify "🚨 first deploy of $MODE failed ($why) and there is nothing to roll back to. Logs: $DC logs $SVC --tail 200" "${SEC_WEBHOOK:-}"
   fi

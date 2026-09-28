@@ -48,7 +48,7 @@ After `shared_preload_libraries=pg_stat_statements` changes, Postgres must resta
 bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<previous-sha>
 ```
 
-Schema is expand-only, so a later image always runs against the current database. The first cutover onto this compose is different: `rollback_and_exit` restores the previous image tag, but the host compose file stays the new one (API `DATABASE_URL` through PgBouncer, worker command `apps/api/src/worker.ts`). An image from before the worker entrypoint cannot be brought back by the tag alone. To undo that first cutover, restore the previous compose files as well.
+Schema is expand-only, so a later image always runs against the current database. If `apps/api/src/worker.ts` is missing from the previous image, `rollback_and_exit` does not start the worker. It brings the API up through `compose.pre-worker.yml` (direct Postgres, `DB_POOLER=none`) and points cron at `http://api:8000` (`compose.pre-worker.staging.yml` on staging). An image that contains the worker entrypoint rolls back with the current compose.
 
 ## Database health
 
