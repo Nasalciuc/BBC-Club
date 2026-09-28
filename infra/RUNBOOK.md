@@ -74,6 +74,66 @@ Backups run inside the postgres container (pgbackrest lives there); schedule is 
 Asks twice. RTO ≈ 45 min, RPO ≈ 5 min (continuous WAL). **Drill it monthly** — the cron job `restore-test` does it automatically; if `#bbc-ops` has not shown "restore drill ok" this month, run `bash infra/restore-test.sh` by hand.
 The script aborts before starting the API if Postgres does not come back or the restored database does not contain all 8 schemas.
 
+## Database recovery (a bad or stuck migration)
+
+Migrations are expand-only and there are no down migrations. "Back" is never a reverse script. It is one of three things: the previous image, which runs against the new schema; a **new forward migration**; or, when data is lost, a restore.
+
+**1. The deploy stopped at step 3/7: a lock timeout.** Every lock the runner takes waits at most 5 s (`lock_timeout`), so a migration can never queue live traffic behind it. The deploy log looks like this:
+
+```text
+▶ 3/7 migrations (expand-only, separate job)
+migration stopped: a lock was not granted within lock_timeout (5 s) — a long-running transaction holds the table. The failed block was rolled back; the previous release keeps serving. Retry when the table is quiet (RUNBOOK: Database recovery).
+migration failed: DrizzleQueryError: Failed query: ALTER TABLE …
+PostgresError: canceling statement due to lock timeout
+       code: "55P03"
+🚨 deploy production aborted at migration. Old API still serving.
+```
+
+Nothing is half-applied: the block was rolled back and its ledger row (`platform.extras_applied`) was not written. Find what held the table:
+
+```sql
+SELECT pid, pg_blocking_pids(pid) AS blocked_by, state, now() - xact_start AS in_tx, left(query, 80) AS query
+FROM pg_stat_activity WHERE datname = current_database() AND xact_start IS NOT NULL ORDER BY xact_start;
+```
+
+- **A long report or an export:** wait for it to finish.
+- **A session `idle in transaction` for minutes:** end it with `SELECT pg_terminate_backend(<pid>);`.
+- Then run the **same** `deploy.sh` command again. The block runs from the start.
+
+**2. A migration applied, but it is wrong (shape or data).** Leave the previous image serving (§ Roll back right now) and write a forward fix:
+
+1. Add `packages/db/migrations/NNNN_<module>_<desc>.sql` and its block in `scripts/migrate.ts`.
+2. `migrations-registered.test.ts` fails if either is missing.
+3. A destructive statement in it needs `-- destructive: <reason>` on the line above (`bun run migrations:destructive`), and it ships as its own announced PR.
+
+Never edit a migration that already ran.
+
+**3. Data was lost or corrupted.** Restore, from the smallest scope that works:
+
+- **One table, just after a deploy:** step 1/7 wrote `/var/backups/pre-deploy/<mode>-<timestamp>.dump`; files are kept 7 days. Restore that table into a scratch database, then copy the rows back:
+  - `pg_restore -d scratch --data-only -t <table> <dump>`
+  - then `INSERT … SELECT` across.
+- **Everything, to a point in time:** use pgBackRest (§ Restore the database):
+  - `bash infra/restore.sh --to-time "<just before the deploy>"`
+  - The restore is drilled monthly by `infra/restore-test.sh` (cron `restore-test`, "restore drill ok" in `#bbc-ops`).
+  - RPO ≈ 5 min: anything written after the chosen time is gone. Prefer the two options above when only one table is affected.
+
+**4. An INVALID index after a failed `CREATE INDEX CONCURRENTLY`.** The CONCURRENTLY files (0012, 0013, 0017) run outside a transaction, so a failed build is not rolled back. It leaves an index that exists but is INVALID: never used by queries, but still maintained on every write.
+
+The trap: those files say `IF NOT EXISTS`, so a plain re-run skips the invalid index and records the file as applied. Always drop the invalid index first:
+
+```sql
+SELECT n.nspname || '.' || c.relname AS index
+FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE NOT i.indisvalid;
+
+DROP INDEX CONCURRENTLY IF EXISTS <schema>.<index>;
+-- only if the file was already recorded as applied:
+DELETE FROM platform.extras_applied WHERE name = '<NNNN_file.sql>';
+```
+
+Then run `db:migrate` again (or the deploy): the build starts over.
+
 ## Rotate a secret
 
 ```bash
