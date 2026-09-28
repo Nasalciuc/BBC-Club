@@ -1,5 +1,7 @@
 appId: com.buybusinessclass.club
 ---
+# Android: AuthShell's footer stays under the open keyboard (edge-to-edge, no resize; follow-up in PR 43),
+# so the keyboard is closed before a footer button. Remove once the footer docks above it (DESIGN.md).
 - launchApp: { clearState: true }
 - assertVisible: { id: "welcome.signIn" }
 - tapOn: { id: "welcome.signIn" }
@@ -8,6 +10,7 @@ appId: com.buybusinessclass.club
 - inputText: "alex.morgan@company.com"
 - tapOn: { id: "signIn.password" }
 - inputText: "atlantic2026!"
+- hideKeyboard
 - tapOn: { id: "signIn.submit" }
 # Active member lands on Explore.
 - assertVisible: { id: "explore.root" }
