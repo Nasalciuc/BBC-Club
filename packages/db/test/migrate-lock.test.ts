@@ -15,11 +15,13 @@ afterAll(() => iso.drop());
 describe("lock_timeout in the migration runner", () => {
   test("a migration block that cannot get its lock fails in ~5 s with 55P03", async () => {
     const holder = postgres(iso.url, { max: 1, onnotice: () => {} });
+    const locked = Promise.withResolvers<void>();
     const held = holder.begin(async (tx) => {
       await tx`LOCK TABLE public.locked IN ACCESS EXCLUSIVE MODE`;
+      locked.resolve(); // the lock is held from here on — the test waits for this, not for a guessed delay
       await Bun.sleep(8_000);
     });
-    await Bun.sleep(200);
+    await locked.promise;
     const t = performance.now();
     const err = await iso.db
       .transaction(async (tx: any) => {
@@ -55,11 +57,13 @@ describe("lock_timeout in the migration runner", () => {
       await fresh.db.execute(sql`DROP TABLE notifications.campaigns`);
       await fresh.db.execute(sql`DROP TYPE notifications.campaign_status`);
       const holder = postgres(fresh.url, { max: 1, onnotice: () => {} });
+      const locked = Promise.withResolvers<void>();
       const held = holder.begin(async (tx) => {
         await tx`LOCK TABLE platform.extras_applied IN ACCESS EXCLUSIVE MODE`;
+        locked.resolve();
         await Bun.sleep(9_000);
       });
-      await Bun.sleep(200);
+      await locked.promise;
       const t = performance.now();
       const second = run();
       const code = await second.exited;
