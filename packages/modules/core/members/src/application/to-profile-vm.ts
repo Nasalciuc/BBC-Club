@@ -14,8 +14,21 @@ type ProfileSource = {
   crmLinked: boolean;
 };
 
-/** Always returns a parseable ProfileVM. Null row → complete pending stub with defaults. */
-export function toProfileVM(row: ProfileSource | null, email: string | null, memberId: string): ProfileVM {
+/** The member's saved notification preferences (`preferencesOf`: a missing row already reads as on). */
+type NotificationPrefsSource = { offers_personal: boolean; offers_broadcast: boolean };
+
+/** Always returns a parseable ProfileVM. Null row → complete pending stub with defaults.
+ *  `prefs` is required: the notifications field reflects what was saved, never a default. */
+export function toProfileVM(
+  row: ProfileSource | null,
+  email: string | null,
+  memberId: string,
+  prefs: NotificationPrefsSource,
+): ProfileVM {
+  const notifications = {
+    requestUpdates: true as const,
+    offers: prefs.offers_personal || prefs.offers_broadcast,
+  };
   if (!row) {
     return {
       memberId,
@@ -29,6 +42,7 @@ export function toProfileVM(row: ProfileSource | null, email: string | null, mem
       crmLinkedAt: null,
       crmLinked: false,
       preferences: {},
+      notifications,
     };
   }
   return {
@@ -43,5 +57,6 @@ export function toProfileVM(row: ProfileSource | null, email: string | null, mem
     crmLinkedAt: row.crmLinkedAt ? row.crmLinkedAt.toISOString() : null,
     crmLinked: row.crmLinked,
     preferences: row.preferences ?? {},
+    notifications,
   };
 }

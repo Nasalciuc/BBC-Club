@@ -27,5 +27,12 @@ export const ProfileVM = z.object({
   crmLinkedAt: z.string().datetime().nullable(),
   crmLinked: z.boolean(),
   preferences: TravelPreferencesVM,
+  /** What the member saved (ADR-IMPL-025) — the notifications sheet shows this, never a default. */
+  notifications: z.object({
+    /** Always on: the backend cannot turn quote-ready notifications off. */
+    requestUpdates: z.literal(true),
+    /** On when either offers_personal or offers_broadcast is on (a missing preference row means on). */
+    offers: z.boolean(),
+  }),
 });
 export type ProfileVM = z.infer<typeof ProfileVM>;

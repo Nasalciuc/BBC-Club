@@ -133,7 +133,8 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           return p;
         });
         if (!updated) return c.json(apiError("NOT_FOUND"), 404);
-        return c.json(toProfileVM(updated, memberEmail(principal), actor));
+        const prefs = await facade.preferencesOf(undefined, actor);
+        return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
       },
     );
 
