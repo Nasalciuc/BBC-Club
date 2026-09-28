@@ -27,15 +27,15 @@ else
 fi
 
 if [[ "$MODE" == "production" ]]; then
-  SVC=api; WORKER=worker; PG=postgres; VAR=API_IMAGE; ENVF="$PROD_ENV"
+  SVC=api; WORKER=worker; PG=postgres; POOLER=pgbouncer; CRON=cron; VAR=API_IMAGE; ENVF="$PROD_ENV"
   N="${API_REPLICAS:-4}"
   CANARY_SECONDS="${CANARY_SECONDS:-600}"
 else
-  SVC=api-staging; WORKER=worker-staging; PG=postgres-staging; VAR=API_IMAGE_STAGING; ENVF="$STG_ENV"
+  SVC=api-staging; WORKER=worker-staging; PG=postgres-staging; POOLER=pgbouncer-staging; CRON=cron-staging; VAR=API_IMAGE_STAGING; ENVF="$STG_ENV"
   N="${API_REPLICAS_STAGING:-2}"
   CANARY_SECONDS="${CANARY_SECONDS:-120}"
 fi
-source <(grep -E '^(OPS_WEBHOOK|SEC_WEBHOOK|POSTGRES_PASSWORD|POSTGRES_PASSWORD_STAGING|LOADTEST)=' "$PROD_ENV" "$ENVF" 2>/dev/null || true)
+source <(grep -hE '^(OPS_WEBHOOK|SEC_WEBHOOK|POSTGRES_PASSWORD|POSTGRES_PASSWORD_STAGING|LOADTEST)=' "$PROD_ENV" "$ENVF" 2>/dev/null || true)
 notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
 
 if [[ "$MODE" == "production" ]] && [[ "${LOADTEST:-}" == "1" ]]; then
@@ -90,6 +90,7 @@ if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$S
 fi
 
 echo "▶ 4/7 canary one new $SVC replica for ${CANARY_SECONDS}s"
+$DC up -d "$POOLER" || rollback_and_exit "pooler did not start"
 OLD="$($DC ps -q "$SVC" || true)"
 $DC up -d --no-deps --no-recreate --scale "$SVC=$((N + 1))" "$SVC" || rollback_and_exit "canary scale-up failed"
 CANARY="$(comm -13 <(printf '%s\n' $OLD | sort) <($DC ps -q "$SVC" | sort) | head -n1 || true)"
@@ -132,11 +133,12 @@ if [[ -n "${OLD// }" ]]; then
 fi
 $DC up -d --no-deps --no-recreate --scale "$SVC=$N" "$SVC"
 
-echo "▶ 6/7 recreate $WORKER (one process — never two pollers)"
+echo "▶ 6/7 recreate $WORKER (one process — never two pollers) and $CRON"
 $DC up -d --no-deps --force-recreate "$WORKER" || rollback_and_exit "worker recreate failed"
 W="$($DC ps -q "$WORKER" | head -n1)"
 [[ -n "$W" ]] || rollback_and_exit "worker container missing"
 wait_ready "$W" 8001 || rollback_and_exit "worker /ready red"
+$DC up -d --no-deps --force-recreate "$CRON" || rollback_and_exit "cron recreate failed"
 
 echo "▶ 7/7 cleanup"; docker image prune -f >/dev/null
 notify "✅ deploy $MODE ok — $IMAGE in $(( $(date +%s) - started ))s"

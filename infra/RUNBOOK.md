@@ -18,10 +18,12 @@ ssh -L 5432:localhost:5432 -L 3001:localhost:3001 root@<host>   # then connect t
 cd /opt/bbc
 docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env ps
 curl -s localhost:8000/ready | jq        # db, queue, staleJobs — one replica (Caddy @ops)
-curl -s localhost:8000/metrics | grep -E 'queue_pending|queue_dead|queue_oldest|db_|pgbouncer_'
+curl -s localhost:8000/metrics | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
+docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
+  bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
 ```
 
-Request counters on `/metrics` are **per Bun process**. Caddy's `@ops` route (`/metrics` `/ready`) reaches one replica. DB-backed gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are exact. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
+Request counters on `/metrics` are **per Bun process**. Caddy's `@ops` route (`/metrics` `/ready`) reaches one API replica on port 8000. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe` and are only on the worker's `:8001/metrics`. Alerts POST from that process to `OPS_WEBHOOK`; there is no scrape backend. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
 
 GlitchTip uses **its own Postgres** (`glitchtip-postgres`). It is not in the pgBackRest stanza.
 
@@ -33,7 +35,7 @@ bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: 
 
 `LOADTEST=1` in production.env is refused. Image tags must be a commit SHA (`:latest` is rejected).
 
-Sequence: (1) `pg_dump` (2) pull API+worker images (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to 2N, wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers) and wait `/ready` on 8001 (7) prune. `rollback_and_exit` restores the previous image tag and brings API+worker back.
+Sequence: (1) `pg_dump` (2) pull API+worker images (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d` the pooler (with its dependencies), then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to 2N, wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) prune. `rollback_and_exit` restores the previous image tag and brings API+worker back.
 
 Compose healthcheck is `/health`; the deploy gate is `/ready`. Caddy `api_site` resolves replicas with `dynamic a` (refresh 5 s), `least_conn`, passive health on 5xx.
 
@@ -45,11 +47,11 @@ After `shared_preload_libraries=pg_stat_statements` changes, Postgres must resta
 bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<previous-sha>
 ```
 
-Schema is expand-only, so the previous image always runs against the current database.
+Schema is expand-only, so a later image always runs against the current database. The first cutover onto this compose is different: `rollback_and_exit` restores the previous image tag, but the host compose file stays the new one (API `DATABASE_URL` through PgBouncer, worker command `apps/api/src/worker.ts`). An image from before the worker entrypoint cannot be brought back by the tag alone. To undo that first cutover, restore the previous compose files as well.
 
 ## Database health
 
-Gauges (worker job `db-observe`, every minute, also on `/metrics`):
+Gauges (worker job `db-observe`, every minute, on the worker's `:8001/metrics`):
 
 | Gauge                           | Meaning                                                                         | Action                                                                                                   |
 | ------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -64,8 +66,12 @@ There is no Prometheus or Alertmanager in this stack. Thresholds are evaluated b
 **Weekly report** (job `db-report`, Mondays 09:00 UTC) and live `GET /v1/internal/db-report` (`ops:read`, operator JWT):
 
 ```bash
-# through an SSH tunnel to the box, against a replica (Caddy) or the worker
-curl -sS -H "Authorization: Bearer <operator-jwt>" https://127.0.0.1/v1/internal/db-report | jq
+# worker directly (the route is on every role; the job that fills the report runs here)
+docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
+  bun -e "fetch('http://localhost:8001/v1/internal/db-report',{headers:{Authorization:'Bearer <operator-jwt>'}}).then(r=>r.text()).then(console.log)"
+
+# through Caddy, which only serves api_site for the real host
+curl -sS --resolve <API_DOMAIN>:443:127.0.0.1 -H "Authorization: Bearer <operator-jwt>" https://<API_DOMAIN>/v1/internal/db-report | jq
 ```
 
 The JSON has `statsReset`, `statsAgeDays`, the 20 slowest statements by mean and by total time (`pg_stat_statements`), unused non-unique indexes, and dead-tuple ratios. **A laptop or CI database is not production.** Do not commit those dumps. The report is meaningful after **≥ 7 days** of traffic (`meaningfulAfterDays`). On a fresh cluster every index shows `idx_scan = 0`.

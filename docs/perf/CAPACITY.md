@@ -4,11 +4,11 @@ A Bun process uses **one core**. Ceiling ≈ `1000 / API CPU-ms per request`. Pe
 
 ## Model (1-vCPU sandbox — not a measurement)
 
-|             | per average request          | at 1,000 RPS | provision                                                                        |
-| ----------- | ---------------------------- | ------------ | -------------------------------------------------------------------------------- |
-| API         | ≈ 4.7 ms CPU                 | ≈ 4.7 cores  | **7 Bun processes** at 70 %                                                      |
-| Postgres    | ≈ 1.8 ms CPU                 | ≈ 1.8 cores  | **3–4 cores** at 60 %                                                            |
-| Connections | 7 × 10 + worker + migrations | —            | exceeds `max_connections=100` with GlitchTip on the same cluster → **PgBouncer** |
+|             | per average request | at 1,000 RPS | provision                                                                                                             |
+| ----------- | ------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| API         | ≈ 4.7 ms CPU        | ≈ 4.7 cores  | **7 Bun processes** at 70 %                                                                                           |
+| Postgres    | ≈ 1.8 ms CPU        | ≈ 1.8 cores  | **3–4 cores** at 60 %                                                                                                 |
+| Connections | 7 × 10 client pools | —            | PgBouncer `default_pool_size` 20 keeps server connections under `max_connections=100`. GlitchTip has its own Postgres |
 
 Target: ~12–16 vCPU for API + Postgres on one host, or API and data on separate hosts. **Staging must not share production cores under load.**
 
