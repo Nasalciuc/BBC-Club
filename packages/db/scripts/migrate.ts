@@ -19,11 +19,18 @@ const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "../migratio
 
 const db = createDb(url, { max: 1, applicationName: "bbc-migrate" });
 try {
-  const [{ ok }] = (await db.execute(sql`SELECT pg_try_advisory_lock(hashtext('bbc.migrate')) AS ok`)) as any;
-  if (!ok) {
+  const [lock] = (await db.execute(sql`SELECT pg_try_advisory_lock(hashtext('bbc.migrate')) AS ok`)) as unknown as {
+    ok: boolean;
+  }[];
+  if (!lock?.ok) {
     console.error("another migration is running");
     process.exit(1);
   }
+
+  // A migration must never queue behind live traffic: every lock it takes waits at most 5 s, then fails (55P03) and
+  // the deploy stops with the previous release serving. Session-wide for the statements outside a transaction
+  // (Drizzle's migrator, the 0003/0004 re-runs, CONCURRENTLY builds); each transactional block also sets it LOCAL.
+  await db.execute(sql`SET lock_timeout = '5s'`);
 
   await migrate(db, { migrationsFolder: migrationsDir });
 
@@ -40,7 +47,7 @@ try {
   // DBs that already ran 0001 via the old view heuristic: record without re-running (partition rename is not idempotent).
   const alreadyExtras = (await db.execute(
     sql`SELECT 1 FROM pg_views WHERE schemaname='platform' AND viewname='cross_schema_fks'`,
-  )) as any[];
+  )) as unknown[];
   if (alreadyExtras.length) {
     await db.execute(
       sql`INSERT INTO platform.extras_applied (name) VALUES ('0001_extras.sql') ON CONFLICT (name) DO NOTHING`,
@@ -51,9 +58,10 @@ try {
     .filter((f) => /^\d{4}_.*extras\.sql$/.test(f))
     .sort();
   for (const f of extrasFiles) {
-    const done = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${f}`)) as any[];
+    const done = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${f}`)) as unknown[];
     if (done.length) continue;
     await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
       await tx.execute(sql.raw(readFileSync(join(migrationsDir, f), "utf8")));
       await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES (${f})`);
     });
@@ -77,9 +85,10 @@ try {
   if (existsSync(requestsSchema)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0005_requests.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(requestsSchema, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0005_requests.sql')`);
       });
@@ -91,9 +100,10 @@ try {
   if (existsSync(catalogSchema)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0006_catalog.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(catalogSchema, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0006_catalog.sql')`);
       });
@@ -105,9 +115,10 @@ try {
   if (existsSync(verifyFitness)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0007_db_verify_fitness.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(verifyFitness, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0007_db_verify_fitness.sql')`);
       });
@@ -119,9 +130,10 @@ try {
   if (existsSync(requestsPhone)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0008_requests_phone.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(requestsPhone, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0008_requests_phone.sql')`);
       });
@@ -133,9 +145,10 @@ try {
   if (existsSync(notifRequestId)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0009_notifications_request_id.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(notifRequestId, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0009_notifications_request_id.sql')`);
       });
@@ -147,9 +160,10 @@ try {
   if (existsSync(airportTz)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0010_catalog_airport_tz.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(airportTz, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0010_catalog_airport_tz.sql')`);
       });
@@ -161,9 +175,10 @@ try {
   if (existsSync(otpCooldown)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0011_auth_otp_cooldown.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(otpCooldown, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0011_auth_otp_cooldown.sql')`);
       });
@@ -174,7 +189,7 @@ try {
   /** CREATE INDEX CONCURRENTLY cannot run inside a transaction or as a multi-statement string. */
   const applyConcurrentIndexes = async (name: string, file: string, label: string) => {
     if (!existsSync(file)) return;
-    const done = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${name}`)) as any[];
+    const done = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${name}`)) as unknown[];
     if (done.length) return;
     const statements = readFileSync(file, "utf8")
       .split(";")
@@ -187,7 +202,9 @@ try {
       )
       .filter((stmt) => stmt.length > 0);
     const raw = db.raw;
+    // Outside a transaction: a long build is fine (no statement timeout), waiting on a lock is not.
     await raw.unsafe("SET statement_timeout = 0");
+    await raw.unsafe("SET lock_timeout = '5s'");
     try {
       for (const stmt of statements) await raw.unsafe(stmt);
       await db.execute(sql`INSERT INTO platform.extras_applied (name) VALUES (${name})`);
@@ -212,9 +229,10 @@ try {
   if (existsSync(rateLimitState)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0014_platform_rate_limit_state.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(rateLimitState, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0014_platform_rate_limit_state.sql')`);
       });
@@ -226,9 +244,10 @@ try {
   if (existsSync(sendingEnum)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0015_notifications_sending_enum.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(sendingEnum, "utf8")));
         await tx.execute(
           sql`INSERT INTO platform.extras_applied (name) VALUES ('0015_notifications_sending_enum.sql')`,
@@ -242,9 +261,10 @@ try {
   if (existsSync(claimedAt)) {
     const done = (await db.execute(
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0016_notifications_claimed_at.sql'`,
-    )) as any[];
+    )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(claimedAt, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0016_notifications_claimed_at.sql')`);
       });
@@ -265,6 +285,7 @@ try {
     )) as unknown[];
     if (!done.length) {
       await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(campaigns, "utf8")));
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0018_notifications_campaigns.sql')`);
       });
@@ -275,6 +296,14 @@ try {
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {
+  // Drizzle wraps the driver error: the SQLSTATE is on e.cause.code.
+  const code = (e as { cause?: { code?: string }; code?: string }).cause?.code ?? (e as { code?: string }).code;
+  if (code === "55P03") {
+    console.error(
+      "migration stopped: a lock was not granted within lock_timeout (5 s) — a long-running transaction holds the table. " +
+        "The failed block was rolled back; the previous release keeps serving. Retry when the table is quiet (RUNBOOK: Database recovery).",
+    );
+  }
   console.error("migration failed:", e);
   process.exit(1);
 } finally {
