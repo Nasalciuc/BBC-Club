@@ -4,15 +4,18 @@ import { createPlatform } from "@bbc/platform";
 import { createAuth } from "@bbc/identity";
 import { consoleSender } from "@bbc/email";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
-import { writeFileSync } from "node:fs";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Server-side sign-in for k6. Never HTTP sign-in from one IP (auth limits). Writes loadtest/sessions.json. */
 const env = loadEnv();
 const count = Number(process.env.SESSION_COUNT ?? "200");
-const db = createDb(env.DATABASE_URL, { max: 2, applicationName: "bbc-make-sessions" });
+const db = createDb(env.DATABASE_URL, {
+  max: 2,
+  applicationName: "bbc-make-sessions",
+  pooler: env.DB_POOLER,
+});
 const platform = createPlatform(db, { level: "warn" });
 for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
 const auth = createAuth({
@@ -59,7 +62,8 @@ try {
   }
   const out = fileURLToPath(new URL("./sessions.json", import.meta.url));
   mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, JSON.stringify(sessions));
+  writeFileSync(out, JSON.stringify(sessions), { mode: 0o600 });
+  chmodSync(out, 0o600);
   console.log(`wrote ${sessions.length} sessions to ${out}`);
 } finally {
   await db.close();

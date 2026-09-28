@@ -130,6 +130,10 @@ try {
         INSERT INTO platform.domain_events (type, version, aggregate_type, aggregate_id, payload, published_by)
         SELECT 'offer.published', 1, 'offer', 'vol-agg-' || g, '{}'::jsonb, 'volume'
         FROM generate_series(${from + 1}, ${to}) g
+        WHERE NOT EXISTS (
+          SELECT 1 FROM platform.domain_events d
+          WHERE d.aggregate_id = 'vol-agg-' || g AND d.published_by = 'volume'
+        )
         RETURNING id, occurred_at, aggregate_id
       )
       INSERT INTO platform.event_deliveries (event_id, event_occurred_at, consumer, aggregate_id, status, run_after)

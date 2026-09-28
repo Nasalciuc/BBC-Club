@@ -63,14 +63,14 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
     description: "set DB gauges on /metrics; POST OPS_WEBHOOK when pool_waiting>0 for 2 min or oldest_tx>30s",
     cron: "* * * * *",
     timeoutMs: 15_000,
-    handler: async ({ db, logger }) => {
+    handler: async ({ db, logger, signal }) => {
       const snap = await collectDbSnapshot(db);
       applyDbGauges(metrics, snap);
-      const alerts = await maybeAlertOps(snap, logger);
+      const alerts = await maybeAlertOps(snap, logger, Date.now(), signal);
       return {
         connections: snap.connections.reduce((s, r) => s + r.n, 0),
         lockWaits: snap.lockWaits,
-        poolWaiting: snap.poolWaiting,
+        poolWaiting: snap.poolWaiting ?? -1,
         oldestTxSeconds: snap.oldestTxSeconds,
         alerts,
       };

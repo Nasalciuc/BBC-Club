@@ -75,4 +75,50 @@ describe("database observability", () => {
       resetDbAlertState();
     }
   });
+
+  it("a failed pooler sample does not reset the waiting window", async () => {
+    resetDbAlertState();
+    const received: string[] = [];
+    const server = Bun.serve({
+      port: 0,
+      fetch: async (req) => {
+        received.push(await req.text());
+        return new Response("ok");
+      },
+    });
+    const prev = process.env.OPS_WEBHOOK;
+    process.env.OPS_WEBHOOK = `http://127.0.0.1:${server.port}/`;
+    const warns: string[] = [];
+    const logger = { warn: (_o: object, m?: string) => warns.push(m ?? "") };
+    try {
+      const t0 = 20_000;
+      expect(await maybeAlertOps({ ...emptySnap, poolWaiting: 3 }, logger, t0)).toBe(0);
+      expect(await maybeAlertOps({ ...emptySnap, poolWaiting: null }, logger, t0 + 60_000)).toBe(0);
+      expect(received).toEqual([]);
+      expect(warns.some((m) => m.includes("SHOW POOLS failed"))).toBe(true);
+      const later = await maybeAlertOps({ ...emptySnap, poolWaiting: 3 }, logger, t0 + 120_000);
+      expect(later).toBe(1);
+      expect(received.some((b) => b.includes("pool_waiting=3"))).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.OPS_WEBHOOK;
+      else process.env.OPS_WEBHOOK = prev;
+      server.stop();
+      resetDbAlertState();
+    }
+  });
+
+  it("an aborted job signal stops the webhook", async () => {
+    resetDbAlertState();
+    const prev = process.env.OPS_WEBHOOK;
+    process.env.OPS_WEBHOOK = "http://127.0.0.1:9/";
+    const ac = new AbortController();
+    ac.abort();
+    try {
+      await expect(maybeAlertOps({ ...emptySnap, oldestTxSeconds: 31 }, silent, 1_000, ac.signal)).rejects.toThrow();
+    } finally {
+      if (prev === undefined) delete process.env.OPS_WEBHOOK;
+      else process.env.OPS_WEBHOOK = prev;
+      resetDbAlertState();
+    }
+  });
 });

@@ -19,7 +19,8 @@ export type DbSnapshot = {
   oldestTx: { app: string; s: number }[];
   lockWaits: number;
   deadlocks: number;
-  poolWaiting: number;
+  /** null when SHOW POOLS failed. 0 means not configured or no clients waiting. */
+  poolWaiting: number | null;
   oldestTxSeconds: number;
 };
 
@@ -80,7 +81,7 @@ export async function collectDbSnapshot(db: Db): Promise<DbSnapshot> {
   };
 }
 
-async function pgbouncerWaiting(): Promise<number> {
+async function pgbouncerWaiting(): Promise<number | null> {
   const env = loadEnv();
   const url = env.PGBOUNCER_ADMIN_URL;
   if (!url) return 0;
@@ -95,7 +96,7 @@ async function pgbouncerWaiting(): Promise<number> {
     const rows = (await c.unsafe("SHOW POOLS")) as { cl_waiting?: number | string }[];
     return rows.reduce((sum, r) => sum + Number(r.cl_waiting ?? 0), 0);
   } catch {
-    return 0;
+    return null;
   } finally {
     await c.end({ timeout: 1 }).catch(() => {});
   }
@@ -108,31 +109,36 @@ export function applyDbGauges(metrics: Metrics, snap: DbSnapshot) {
   for (const r of snap.oldestTx) metrics.setGauge("db_oldest_tx_seconds", r.s, { app: r.app });
   metrics.setGauge("db_lock_waits", snap.lockWaits);
   metrics.setGauge("db_deadlocks_total", snap.deadlocks);
-  metrics.setGauge("pgbouncer_waiting_clients", snap.poolWaiting);
+  if (snap.poolWaiting == null) metrics.clearPrefix("pgbouncer_waiting_clients");
+  else metrics.setGauge("pgbouncer_waiting_clients", snap.poolWaiting);
 }
 
 export async function maybeAlertOps(
   snap: DbSnapshot,
   logger: { warn: (o: object, m?: string) => void },
   now = Date.now(),
+  signal?: AbortSignal,
 ): Promise<number> {
   const env = loadEnv();
   const hook = env.OPS_WEBHOOK;
+  const delivery = signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000);
   let posted = 0;
-  if (snap.poolWaiting > 0) {
+  if (snap.poolWaiting == null) {
+    logger.warn({}, "pgbouncer SHOW POOLS failed; waiting window unchanged");
+  } else if (snap.poolWaiting > 0) {
     waitingSince ??= now;
   } else {
     waitingSince = null;
   }
   const waitingMs = waitingSince ? now - waitingSince : 0;
-  if (hook && waitingMs >= 120_000) {
-    await postOps(hook, `pool_waiting=${snap.poolWaiting} for ${Math.round(waitingMs / 1000)}s`);
+  if (hook && snap.poolWaiting != null && waitingMs >= 120_000) {
+    await postOps(hook, `pool_waiting=${snap.poolWaiting} for ${Math.round(waitingMs / 1000)}s`, delivery);
     posted++;
     waitingSince = now;
   }
   if (snap.oldestTxSeconds > 30) {
     if (hook && !oldestAlerted) {
-      await postOps(hook, `oldest_tx=${snap.oldestTxSeconds}s (> 30s)`);
+      await postOps(hook, `oldest_tx=${snap.oldestTxSeconds}s (> 30s)`, delivery);
       posted++;
       oldestAlerted = true;
     }
@@ -148,11 +154,12 @@ export async function maybeAlertOps(
   return posted;
 }
 
-async function postOps(url: string, text: string) {
+async function postOps(url: string, text: string, signal: AbortSignal) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: `[bbc db] ${text}` }),
+    signal,
   });
   if (!res.ok) throw new Error(`OPS_WEBHOOK ${res.status}`);
 }
@@ -171,6 +178,7 @@ export async function collectDbReport(db: Db): Promise<DbReport> {
       sql.raw(`
       SELECT queryid::text, calls, mean_exec_time, total_exec_time, left(query, 200) AS query
       FROM pg_stat_statements
+      WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
       ORDER BY mean_exec_time DESC
       LIMIT 20`),
     )) as unknown[];
@@ -178,6 +186,7 @@ export async function collectDbReport(db: Db): Promise<DbReport> {
       sql.raw(`
       SELECT queryid::text, calls, mean_exec_time, total_exec_time, left(query, 200) AS query
       FROM pg_stat_statements
+      WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
       ORDER BY total_exec_time DESC
       LIMIT 20`),
     )) as unknown[];
