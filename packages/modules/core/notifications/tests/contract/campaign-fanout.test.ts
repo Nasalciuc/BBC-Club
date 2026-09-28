@@ -294,3 +294,37 @@ describe("a withdrawn or expired offer", () => {
     expect(await campaignOf(liveOffer)).toMatchObject({ status: "done", finished: true });
   });
 });
+
+describe("transaction boundaries and races", () => {
+  it("a delivery that fails after recording the campaign leaves no campaign; the redelivery records one", async () => {
+    const injected = new Error("injected after the campaign insert");
+    const payload = broadcast();
+    await db
+      .transaction(async (tx) => {
+        await onOfferPublished({ tx, members, sourceEventId: "1001" }, payload);
+        throw injected;
+      })
+      .catch((e: unknown) => {
+        if (e !== injected) throw e;
+      });
+    expect(await count(sql`SELECT count(*)::int AS n FROM notifications.campaigns`)).toBe(0);
+    await deliver(payload, "1001");
+    expect(await count(sql`SELECT count(*)::int AS n FROM notifications.campaigns`)).toBe(1);
+  });
+
+  it("the job started twice at once writes one set of notifications", async () => {
+    await seedMembers(1_000);
+    const offerId = crypto.randomUUID();
+    await deliver(broadcast(offerId), "1002");
+    // Both runners bypass the singleton lock on purpose: what must hold here is the data, not the scheduler.
+    const [a, b] = await Promise.all([run({ pageSize: 100 }), run({ pageSize: 100 })]);
+    expect(a.inserted + b.inserted).toBe(1_000);
+    expect(
+      await count(sql`SELECT count(*)::int AS n FROM notifications.notifications WHERE offer_id = ${offerId}::uuid`),
+    ).toBe(1_000);
+    expect(
+      await count(sql`SELECT count(DISTINCT member_id)::int AS n FROM notifications.notifications
+                      WHERE offer_id = ${offerId}::uuid`),
+    ).toBe(1_000);
+  });
+});
