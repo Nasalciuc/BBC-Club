@@ -72,6 +72,9 @@ jobs:
       - name: Build the e2e APK (cleartext to 10.0.2.2 only, see apps/mobile/app.config.ts)
         working-directory: apps/mobile
         env:
+          # Not the job's NODE_ENV=test (the API needs that): babel-preset-expo skips expo-router's
+          # EXPO_ROUTER_APP_ROOT transform under test, and the release bundle then fails in _ctx.android.js.
+          NODE_ENV: production
           EXPO_PUBLIC_API_URL: http://10.0.2.2:8000
           EXPO_PUBLIC_APP_ENV: e2e
           EXPO_NO_TELEMETRY: "1"
