@@ -117,4 +117,34 @@ describe("@bbc/members facade", () => {
     const p = await facade.getProfile(undefined, randomId());
     expect(p).toBeNull();
   });
+
+  it("a deleted member is invisible to profile reads and writes; only getStatus still says so", async () => {
+    const memberId = randomId();
+    try {
+      await db.execute(sql`INSERT INTO members.profile (member_id, status, display_name, home_airport, preferences)
+        VALUES (${memberId}, 'active', 'Alex', 'JFK', '{"cabin":"business"}'::jsonb)`);
+      await db.execute(
+        sql`UPDATE members.profile SET status = 'deleted', deleted_at = now() WHERE member_id = ${memberId}`,
+      );
+      const facade = createMembersFacade(db);
+
+      expect(await facade.getProfile(undefined, memberId)).toBeNull();
+      expect(
+        await facade.updateProfile(undefined, memberId, { displayName: "Changed", homeAirport: "LHR" }),
+      ).toBeNull();
+      expect(await facade.setTravelPreferences(undefined, memberId, { cabin: "first" })).toBeNull();
+      expect(await facade.getStatus(undefined, memberId)).toBe("deleted"); // dispatch suppresses with member_deleted
+
+      // Nothing was written: the row is exactly as the deletion left it.
+      const [row] = (await db.execute(sql`SELECT display_name, home_airport, preferences FROM members.profile
+        WHERE member_id = ${memberId}`)) as unknown as {
+        display_name: string;
+        home_airport: string;
+        preferences: unknown;
+      }[];
+      expect(row).toEqual({ display_name: "Alex", home_airport: "JFK", preferences: { cabin: "business" } });
+    } finally {
+      await cleanup([memberId]);
+    }
+  });
 });

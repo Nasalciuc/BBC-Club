@@ -75,22 +75,9 @@ export async function ingest(
 ): Promise<{ ok: true; offerId: string } | { ok: false; code: "CONFLICT" | "BAD_KEY" }> {
   if (!idempotencyKey) return { ok: false, code: "BAD_KEY" };
   const existing = await deps.db.select().from(offers).where(eq(offers.idempotencyKey, idempotencyKey)).limit(1);
-  if (existing[0]) {
-    const row = existing[0];
-    const same =
-      row.source === input.source &&
-      row.targeting === input.targeting &&
-      (row.targetMemberId ?? null) === (input.targetMemberId ?? null) &&
-      row.routeFrom === input.routeFrom.toUpperCase() &&
-      row.routeTo === input.routeTo.toUpperCase() &&
-      row.cabin === input.cabin &&
-      row.price === input.price &&
-      row.title === input.title;
-    if (!same) return { ok: false, code: "CONFLICT" };
-    return { ok: true, offerId: row.id };
-  }
+  if (existing[0]) return replay(existing[0], input);
 
-  return withTx(deps.db, async (tx) => {
+  return withTx(deps.db, async (tx): Promise<{ ok: true; offerId: string } | { ok: false; code: "CONFLICT" }> => {
     const publishAt = input.publishAt ? new Date(input.publishAt) : new Date();
     const validUntil = new Date(input.validUntil);
     const [row] = await tx
@@ -115,8 +102,15 @@ export async function ingest(
         status: "active",
         createdBy: input.createdBy ?? null,
       })
+      .onConflictDoNothing({ target: offers.idempotencyKey })
       .returning({ id: offers.id });
-    if (!row) throw new Error("ingest: insert returned no row");
+    if (!row) {
+      // The same key twice at once (a CRM retry racing the first call) and the other committed first: ON CONFLICT
+      // waited for it, and this statement sees its row. Replay it — or 409 if the payload differs — as a retry would.
+      const [first] = await tx.select().from(offers).where(eq(offers.idempotencyKey, idempotencyKey)).limit(1);
+      if (!first) throw new Error("ingest: insert returned no row");
+      return replay(first, input);
+    }
 
     await deps.events.publish(tx, {
       type: "offer.published",
@@ -138,4 +132,21 @@ export async function ingest(
     });
     return { ok: true as const, offerId: row.id };
   });
+}
+
+/** Same key: the same offer if the payload matches, 409 if it does not. */
+function replay(
+  row: typeof offers.$inferSelect,
+  input: z.infer<typeof IngestInput>,
+): { ok: true; offerId: string } | { ok: false; code: "CONFLICT" } {
+  const same =
+    row.source === input.source &&
+    row.targeting === input.targeting &&
+    (row.targetMemberId ?? null) === (input.targetMemberId ?? null) &&
+    row.routeFrom === input.routeFrom.toUpperCase() &&
+    row.routeTo === input.routeTo.toUpperCase() &&
+    row.cabin === input.cabin &&
+    row.price === input.price &&
+    row.title === input.title;
+  return same ? { ok: true, offerId: row.id } : { ok: false, code: "CONFLICT" };
 }
