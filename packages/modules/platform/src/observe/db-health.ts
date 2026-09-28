@@ -26,7 +26,10 @@ export type DbSnapshot = {
 
 export type DbReport = {
   generatedAt: string;
+  /** `pg_stat_database.stats_reset`. Index stats follow this, not the statement reset. */
   statsReset: string | null;
+  /** `pg_stat_statements_info.stats_reset`. `statsAgeDays` is computed from this. */
+  statementsReset: string | null;
   statsAgeDays: number | null;
   meaningfulAfterDays: number;
   slowestByMean: unknown[];
@@ -181,7 +184,17 @@ export async function collectDbReport(db: Db): Promise<DbReport> {
     sql.raw(`SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()`),
   )) as { stats_reset: Date | string | null }[];
   const statsReset = resetRows[0]?.stats_reset ? new Date(resetRows[0].stats_reset).toISOString() : null;
-  const statsAgeDays = statsReset ? (Date.now() - new Date(statsReset).getTime()) / 86_400_000 : null;
+
+  let statementsReset: string | null = null;
+  try {
+    const infoRows = (await db.execute(sql.raw(`SELECT stats_reset FROM pg_stat_statements_info`))) as {
+      stats_reset: Date | string | null;
+    }[];
+    statementsReset = infoRows[0]?.stats_reset ? new Date(infoRows[0].stats_reset).toISOString() : null;
+  } catch {
+    statementsReset = null;
+  }
+  const statsAgeDays = statementsReset ? (Date.now() - new Date(statementsReset).getTime()) / 86_400_000 : null;
 
   let slowestByMean: unknown[] = [];
   let slowestByTotal: unknown[] = [];
@@ -225,6 +238,7 @@ export async function collectDbReport(db: Db): Promise<DbReport> {
   return {
     generatedAt: new Date().toISOString(),
     statsReset,
+    statementsReset,
     statsAgeDays,
     meaningfulAfterDays: 7,
     slowestByMean,

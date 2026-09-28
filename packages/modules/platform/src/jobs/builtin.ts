@@ -88,6 +88,7 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
       logger.info(
         {
           statsReset: report.statsReset,
+          statementsReset: report.statementsReset,
           statsAgeDays: report.statsAgeDays,
           slowestByMean: report.slowestByMean.length,
           unusedIndexes: report.unusedIndexes.length,

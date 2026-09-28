@@ -53,9 +53,20 @@ describe("database observability", () => {
       headers: { Authorization: `Bearer ${t.operatorJwt}` },
     });
     expect(ok.status).toBe(200);
-    const body = (await ok.json()) as { generatedAt?: string; meaningfulAfterDays?: number };
+    const body = (await ok.json()) as {
+      generatedAt?: string;
+      meaningfulAfterDays?: number;
+      statementsReset?: string | null;
+      statsAgeDays?: number | null;
+      statsReset?: string | null;
+    };
     expect(body.generatedAt).toBeTruthy();
     expect(body.meaningfulAfterDays).toBe(7);
+    expect(body).toHaveProperty("statsReset");
+    expect(body.statementsReset).toBeTruthy();
+    expect(typeof body.statsAgeDays).toBe("number");
+    const ageDays = (Date.now() - new Date(body.statementsReset ?? "").getTime()) / 86_400_000;
+    expect(body.statsAgeDays).toBeCloseTo(ageDays, 5);
     await t.close();
   });
 
