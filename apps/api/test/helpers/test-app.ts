@@ -240,6 +240,23 @@ export async function testApp(
         )
         ON CONFLICT DO NOTHING`);
     },
+    /** Extra published JFK→LHR business fares. Query-budget uses these to catch a per-row query. */
+    async seedMoreJfkLhrFares() {
+      const until = new Date(Date.now() + 30 * 86_400_000).toISOString();
+      const from = new Date(Date.now() - 86_400_000).toISOString();
+      const carriers = ["UA", "DL", "LH", "KL", "QR", "EK", "SQ", "CX", "JL", "NH", "AY", "SK"];
+      for (const c of carriers) {
+        await db.execute(sql`
+          INSERT INTO catalog.fares (
+            route_from, route_to, cabin, carrier, carrier_name, product, nonstop, duration_minutes,
+            price, published_price, published_source, currency, source, valid_from, valid_until, published
+          ) VALUES (
+            'JFK', 'LHR', 'business', ${c}, ${c}, 'Lie-flat', true, 425,
+            '4100.00', '7600.00', 'Sabre · test', 'USD', 'manual', ${from}::timestamptz, ${until}::timestamptz, true
+          )
+          ON CONFLICT DO NOTHING`);
+      }
+    },
     async seedExpiredFare() {
       await this.seedCatalogBasics();
       const [{ id }]: any = await db.execute(sql`

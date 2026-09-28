@@ -63,6 +63,14 @@ describe("query budget per route", () => {
       const cap = BUDGET[name]!;
       expect(qs.length, `${name} ran ${qs.length} queries (budget ${cap}):\n${qs.join("\n")}`).toBeLessThanOrEqual(cap);
     }
+
+    await t.seedMoreJfkLhrFares();
+    const largerSearch = await queriesFor("/v1/search?from=JFK&to=LHR&cabin=business", cookie);
+    expect(
+      largerSearch.length,
+      `search grew from ${searchQ.length} to ${largerSearch.length} queries after 12 more fares:\n${largerSearch.join("\n")}`,
+    ).toBeLessThanOrEqual(searchQ.length + 2);
+
     await t.close();
   }, 60_000);
 });
