@@ -10,18 +10,31 @@ adb install -r "$APK"
 adb shell wm size
 adb shell wm density
 
-# The screen at a failure, in the job log itself: whether the keyboard is up (and where), and every element that
-# has a testID with its bounds. Screenshots are in the uploaded artifact (--debug-output).
+# The screen at a failure, in the job log itself: whether the keyboard is up (and where), every element that has a
+# testID with its bounds, the text on screen, the native screen stack, and the device log of this flow (JS errors and
+# crashes only, never console.log). Screenshots are in the uploaded artifact (--debug-output).
 screen_state() {
   adb shell dumpsys input_method | grep -E "mInputShown" || true
   adb shell dumpsys window | grep -E "InsetsSource.*type=ime" | head -3 || true
-  adb exec-out uiautomator dump /dev/tty 2>/dev/null | tr '>' '\n' |
+  local ui
+  ui=$(adb exec-out uiautomator dump /dev/tty 2>&1)
+  echo "$ui" | tr '>' '\n' |
     grep -E 'resource-id="[a-zA-Z]' | sed -E 's/.*resource-id="([^"]*)".*bounds="([^"]*)".*/  \1 \2/' || true
+  echo "  -- text on screen"
+  echo "$ui" | grep -oE 'text="[^"]+"' | head -20 | sed 's/^/  /' || true
+  echo "$ui" | grep -qE '<hierarchy' || echo "  (no hierarchy: ${ui:0:200})"
+  echo "  -- screen stack of the top activity"
+  adb shell dumpsys activity top | grep -E "ScreenStack|ScreenContainer|Screen\{|ScreenFragment|ReactSurface|ReactRoot" |
+    head -20 || true
+  echo "  -- device log (errors and warnings)"
+  adb logcat -d -v brief '*:S' ReactNativeJS:W ReactNative:W ReactNativeJNI:W AndroidRuntime:E libc:F DEBUG:F |
+    tail -n 60 || true
 }
 
 status=0
 for flow in register sign-in search-and-request delete-account; do
   echo "::group::maestro $flow"
+  adb logcat -c || true
   if ! maestro test --format junit --output "$OUT/$flow.xml" --debug-output "$OUT/debug/$flow" \
     "apps/mobile/e2e/$flow.yaml"; then
     echo "::error::Maestro flow failed: $flow"
