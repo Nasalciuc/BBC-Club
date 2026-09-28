@@ -81,7 +81,10 @@ jobs:
           CI: "1"
         run: |
           npx expo prebuild --platform android --no-install
-          cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64
+          # The generated gradle.properties caps metaspace at 512m; KSP (:expo-updates:kspReleaseKotlin) runs out.
+          # -D overrides it; Kotlin compiles in-process, so no Kotlin daemon keeps memory while the emulator runs.
+          cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64 \
+            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" -Pkotlin.compiler.execution.strategy=in-process
 
       - name: Install Maestro
         run: |
