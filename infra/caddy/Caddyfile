@@ -33,6 +33,14 @@
 		}
 	}
 
+	# db-observe gauges live in the worker process, not on an API replica
+	@worker_metrics path /worker-metrics
+	handle @worker_metrics {
+		@worker_remote not client_ip 127.0.0.1/32 ::1/128
+		respond @worker_remote 404
+		reverse_proxy {args[1]}:8001
+	}
+
 	# associated-domain files (AASA / assetlinks) — the real ones live on buybusinessclass.com;
 	# this route exists only if the site is served from this box too
 	handle_path /.well-known/* {
@@ -83,10 +91,10 @@
 
 {$API_DOMAIN} {
 	import /etc/caddy/origin-pulls.caddy
-	import api_site api
+	import api_site api worker
 }
 
 {$API_DOMAIN_STAGING} {
 	import /etc/caddy/origin-pulls.caddy
-	import api_site api-staging
+	import api_site api-staging worker-staging
 }

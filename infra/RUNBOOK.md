@@ -19,11 +19,12 @@ cd /opt/bbc
 docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env ps
 curl -s localhost:8000/ready | jq        # db, queue, staleJobs — one replica (Caddy @ops)
 curl -s localhost:8000/metrics | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
+curl -sS --resolve <API_DOMAIN>:443:127.0.0.1 https://<API_DOMAIN>/worker-metrics | grep -E 'db_|pgbouncer_'
 docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
   bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
 ```
 
-Request counters on `/metrics` are **per Bun process**. Caddy's `@ops` route (`/metrics` `/ready`) reaches one API replica on port 8000. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe` and are only on the worker's `:8001/metrics`. Alerts POST from that process to `OPS_WEBHOOK`; there is no scrape backend. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
+Request counters on `/metrics` are **per Bun process**. Caddy's `@ops` route (`/metrics` `/ready`) reaches one API replica on port 8000. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`. Caddy serves them only on `/worker-metrics` (same localhost gate, upstream `worker:8001`). Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
 
 GlitchTip uses **its own Postgres** (`glitchtip-postgres`). It is not in the pgBackRest stanza.
 
@@ -51,7 +52,7 @@ Schema is expand-only, so a later image always runs against the current database
 
 ## Database health
 
-Gauges (worker job `db-observe`, every minute, on the worker's `:8001/metrics`):
+Gauges (worker job `db-observe`, every minute, on `/worker-metrics` and the worker's `:8001/metrics`):
 
 | Gauge                           | Meaning                                                                         | Action                                                                                                   |
 | ------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
