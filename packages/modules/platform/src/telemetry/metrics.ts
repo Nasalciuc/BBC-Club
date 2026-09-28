@@ -9,10 +9,12 @@ const key = (name: string, l?: Labels) =>
         .join(",")}}`
     : name;
 
+/** Cumulative histogram edges in ms. 300 is the launch p99 target, so it is a bucket, not a gap. */
+export const DURATION_BUCKETS_MS = [5, 10, 25, 50, 75, 100, 150, 200, 300, 500, 750, 1000, 2000, 5000, 30000];
+
 export function createMetrics() {
   const counters = new Map<string, number>();
   const histos = new Map<string, { count: number; sum: number; buckets: Map<number, number> }>();
-  const BUCKETS = [5, 25, 100, 300, 1000, 5000, 30000];
   const gauges = new Map<string, () => Promise<number> | number>();
   const gaugeValues = new Map<string, number>();
 
@@ -23,10 +25,10 @@ export function createMetrics() {
     },
     observe(name: string, value: number, labels?: Labels) {
       const k = key(name, labels);
-      const h = histos.get(k) ?? { count: 0, sum: 0, buckets: new Map(BUCKETS.map((b) => [b, 0])) };
+      const h = histos.get(k) ?? { count: 0, sum: 0, buckets: new Map(DURATION_BUCKETS_MS.map((b) => [b, 0])) };
       h.count++;
       h.sum += value;
-      for (const b of BUCKETS) if (value <= b) h.buckets.set(b, (h.buckets.get(b) ?? 0) + 1);
+      for (const b of DURATION_BUCKETS_MS) if (value <= b) h.buckets.set(b, (h.buckets.get(b) ?? 0) + 1);
       histos.set(k, h);
     },
     /** Gauges are pulled at scrape time (queue depth, oldest pending age, last job status). */
