@@ -69,7 +69,9 @@ jobs:
           tail -50 api.log
           exit 1
 
-      - name: Build the e2e APK (cleartext to 10.0.2.2 only, see apps/mobile/app.config.ts)
+      # prebuild before the NDK step: the generated project does not pin a version of its own.
+      # Expo's root plugin fills ndkVersion from the React Native catalog that settings.gradle loads.
+      - name: Generate the Android project
         working-directory: apps/mobile
         env:
           # Not the job's NODE_ENV=test (the API needs that): babel-preset-expo skips expo-router's
@@ -79,8 +81,60 @@ jobs:
           EXPO_PUBLIC_APP_ENV: e2e
           EXPO_NO_TELEMETRY: "1"
           CI: "1"
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Read the NDK version from the generated Android project
+        id: ndk
+        working-directory: apps/mobile/android
         run: |
-          npx expo prebuild --platform android --no-install
+          explicit=$(grep -E 'ndkVersion[[:space:]]*=[[:space:]]*"[0-9.]+"' build.gradle 2>/dev/null | head -1 | sed -E 's/.*"([0-9.]+)".*/\1/' || true)
+          if [ -n "$explicit" ]; then
+            version="$explicit"
+          else
+            catalog=$(node --print "require('node:path').join(require('node:path').dirname(require.resolve('react-native/package.json')), 'gradle/libs.versions.toml')")
+            version=$(sed -nE 's/^ndkVersion[[:space:]]*=[[:space:]]*"([0-9.]+)"/\1/p' "$catalog" | head -1)
+          fi
+          if [ -z "$version" ]; then
+            echo "::error::could not read ndkVersion from the generated Android project"
+            exit 1
+          fi
+          echo "NDK version ${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Android NDK
+        id: ndk-cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: ${{ env.ANDROID_SDK_ROOT }}/ndk/${{ steps.ndk.outputs.version }}
+          key: ndk-${{ steps.ndk.outputs.version }}
+
+      - name: Install the Android NDK
+        if: steps.ndk-cache.outputs.cache-hit != 'true'
+        env:
+          NDK_VERSION: ${{ steps.ndk.outputs.version }}
+        run: |
+          dest="${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
+          yes | sdkmanager --licenses >/dev/null || true
+          for attempt in 1 2 3; do
+            rm -rf "$dest"
+            echo "Installing NDK ${NDK_VERSION} (attempt ${attempt}/3)"
+            if sdkmanager --install "ndk;${NDK_VERSION}" && [ -f "${dest}/source.properties" ]; then
+              exit 0
+            fi
+            rm -rf "$dest"
+          done
+          echo "::error::NDK ${NDK_VERSION} is not installed: ${dest}/source.properties is missing after 3 attempts. The download was incomplete or not a zip."
+          exit 1
+
+      - name: Build the e2e APK (cleartext to 10.0.2.2 only, see apps/mobile/app.config.ts)
+        working-directory: apps/mobile
+        env:
+          NODE_ENV: production
+          EXPO_PUBLIC_API_URL: http://10.0.2.2:8000
+          EXPO_PUBLIC_APP_ENV: e2e
+          EXPO_NO_TELEMETRY: "1"
+          CI: "1"
+        run: |
           # The generated gradle.properties caps metaspace at 512m; KSP (:expo-updates:kspReleaseKotlin) runs out.
           # -D overrides it; Kotlin compiles in-process, so no Kotlin daemon keeps memory while the emulator runs.
           cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64 \
