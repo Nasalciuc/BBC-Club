@@ -21,7 +21,7 @@ screen_state() {
   echo "$ui" | tr '>' '\n' |
     grep -E 'resource-id="[a-zA-Z]' | sed -E 's/.*resource-id="([^"]*)".*bounds="([^"]*)".*/  \1 \2/' || true
   echo "  -- text on screen"
-  echo "$ui" | grep -oE 'text="[^"]+"' | head -20 | sed 's/^/  /' || true
+  echo "$ui" | grep -oE 'text="[^"]+"' | sed -E 's/^text="[0-9 ]+"$/text="[digits redacted]"/' | head -20 | sed 's/^/ /' || true
   echo "$ui" | grep -qE '<hierarchy' || echo "  (no hierarchy: ${ui:0:200})"
   echo "  -- screen stack of the top activity"
   adb shell dumpsys activity top | grep -E "ScreenStack|ScreenContainer|Screen\{|ScreenFragment|ReactSurface|ReactRoot" |
