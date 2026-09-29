@@ -73,4 +73,18 @@ describe("loadProfileWith + routeFor", () => {
     const load = await loadProfileWith(async () => ok(profile({ status: "deleted" })), sleep);
     expect(routeFor(load, true)).toBe("/sign-in");
   });
+
+  it("password still pending beats onboarding and explore", async () => {
+    const noHome = await loadProfileWith(async () => ok(profile({ homeAirport: null })), sleep);
+    expect(routeFor(noHome, false, true)).toBe("/set-password");
+    const active = await loadProfileWith(async () => ok(profile()), sleep);
+    expect(routeFor(active, true, true)).toBe("/set-password");
+    const busy = await loadProfileWith(async () => fail(503), sleep);
+    expect(routeFor(busy, false, true)).toBe("/set-password");
+  });
+
+  it("a signed-out load ignores a stale pending-password flag", async () => {
+    const load = await loadProfileWith(async () => fail(401), sleep);
+    expect(routeFor(load, false, true)).toBe("/sign-in");
+  });
 });
