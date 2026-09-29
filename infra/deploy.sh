@@ -52,7 +52,11 @@ rollback_and_exit() {
     sed -i "s|^${VAR}=.*|${VAR}=${PREVIOUS}|" "$ENVF"
     if docker run --rm --entrypoint test "$PREVIOUS" -f apps/api/src/worker.ts; then
       $DC up -d --no-deps "$SVC" "$WORKER"
-      notify "🚨 deploy $MODE rolled back to $PREVIOUS ($why). Schema is expand-only → old code is safe." "${SEC_WEBHOOK:-}"
+      if wait_service_ready "$SVC" 8000 && wait_service_ready "$WORKER" 8001; then
+        notify "🚨 deploy $MODE rolled back to $PREVIOUS ($why). Schema is expand-only → old code is safe." "${SEC_WEBHOOK:-}"
+      else
+        notify "🚨 deploy $MODE rollback to $PREVIOUS started but /ready stayed red ($why)." "${SEC_WEBHOOK:-}"
+      fi
     else
       echo "▶ previous image has no worker; API direct to Postgres, cron on ${SVC}:8000"
       local pre="$INFRA_DIR/compose.pre-worker.yml"
@@ -62,8 +66,12 @@ rollback_and_exit() {
       wids="$($DC ps -q "$WORKER" || true)"
       if [[ -n "${wids// }" ]]; then docker stop $wids >/dev/null || true; docker rm $wids >/dev/null || true; fi
       $DC -f "$pre" up -d --no-deps "$SVC"
-      $DC -f "$pre" up -d --no-deps --force-recreate "$CRON"
-      notify "🚨 deploy $MODE rolled back to $PREVIOUS ($why). Previous image has no worker; cutover compose set aside (API direct to Postgres, cron on ${SVC}:8000)." "${SEC_WEBHOOK:-}"
+      if wait_service_ready "$SVC" 8000; then
+        $DC -f "$pre" up -d --no-deps --force-recreate "$CRON"
+        notify "🚨 deploy $MODE rolled back to $PREVIOUS ($why). Previous image has no worker; cutover compose set aside (API direct to Postgres, cron on ${SVC}:8000)." "${SEC_WEBHOOK:-}"
+      else
+        notify "🚨 deploy $MODE rollback to $PREVIOUS started but /ready stayed red ($why). Cron was left unchanged." "${SEC_WEBHOOK:-}"
+      fi
     fi
   else
     notify "🚨 first deploy of $MODE failed ($why) and there is nothing to roll back to. Logs: $DC logs $SVC --tail 200" "${SEC_WEBHOOK:-}"
@@ -79,6 +87,16 @@ wait_ready() {
     sleep 5
   done
   return 1
+}
+
+wait_service_ready() {
+  local svc="$1" port="$2"
+  local ids c
+  ids="$($DC ps -q "$svc" || true)"
+  [[ -n "${ids// }" ]] || return 1
+  for c in $ids; do
+    wait_ready "$c" "$port" || return 1
+  done
 }
 
 echo "▶ 1/7 pre-deploy dump ($MODE)"
