@@ -16,6 +16,7 @@ import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
 import { appStorage, PUSH_ASKED_AT_KEY } from "@/lib/storage-keys";
 import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
+import { newId } from "@/lib/id";
 import { enqueueRequest } from "@/lib/queue";
 import { env } from "@/lib/env";
 import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
@@ -39,7 +40,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
   const modalRef = useRef<BottomSheetModal>(null);
   const datesRef = useRef<DatesSheetHandle>(null);
   const askRef = useRef<NotificationsAskSheetHandle>(null);
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey, setIdempotencyKey] = useState(() => newId());
   const [busy, setBusy] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [phoneCountry, setPhoneCountry] = useState<CountryCode>(() => defaultPhoneCountry());
@@ -60,7 +61,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
         draft: { ...next, contact: { ...next.contact, phone: split.national } },
       });
       setPhoneCountry(split.country);
-      setIdempotencyKey(crypto.randomUUID());
+      setIdempotencyKey(newId());
       setBusy(false);
       setNoteOpen(false);
       modalRef.current?.present();
