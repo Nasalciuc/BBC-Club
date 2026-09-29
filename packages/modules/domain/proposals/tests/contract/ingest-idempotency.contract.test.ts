@@ -120,4 +120,28 @@ describe("ingest — the same key twice at once", () => {
     }
     expect(await count(sql`SELECT count(*)::int AS n FROM proposals.offers WHERE idempotency_key = ${key}`)).toBe(1);
   });
+
+  it("an omitted publishAt matches a default-now row, not a schedule the first call sent", async () => {
+    const deps: IngestDeps = {
+      db,
+      events: { publish: (tx, e) => platform.events.publish(tx, { ...e, publishedBy: "proposals" }) },
+    };
+    const scheduled = "2027-06-01T12:00:00.000Z";
+
+    const omittedKey = `pub:${crypto.randomUUID()}`;
+    const omitted = await ingest(deps, input, omittedKey);
+    expect(omitted.ok).toBe(true);
+    expect(await ingest(deps, input, omittedKey)).toEqual(omitted);
+
+    const scheduledKey = `pub:${crypto.randomUUID()}`;
+    const first = await ingest(deps, { ...input, publishAt: scheduled }, scheduledKey);
+    expect(first.ok).toBe(true);
+    expect(await ingest(deps, { ...input, publishAt: scheduled }, scheduledKey)).toEqual(first);
+    expect(await ingest(deps, input, scheduledKey)).toEqual({ ok: false, code: "CONFLICT" });
+
+    const nowKey = `pub:${crypto.randomUUID()}`;
+    const created = await ingest(deps, input, nowKey);
+    expect(created.ok).toBe(true);
+    expect(await ingest(deps, { ...input, publishAt: scheduled }, nowKey)).toEqual({ ok: false, code: "CONFLICT" });
+  });
 });
