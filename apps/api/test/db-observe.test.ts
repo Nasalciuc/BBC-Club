@@ -1,6 +1,7 @@
 /** Worker jobs db-observe / db-report and GET /v1/internal/db-report (ops:read). */
 import { connect } from "node:net";
 import { describe, expect, it } from "bun:test";
+import postgres from "postgres";
 import { maybeAlertOps, pgbouncerWaitingClients, resetDbAlertState } from "@bbc/platform";
 import { testApp } from "./helpers/test-app";
 
@@ -134,11 +135,23 @@ describe("database observability", () => {
   it("SHOW POOLS against compose PgBouncer returns rows", async () => {
     const base = process.env.PGBOUNCER_URL;
     if (!base || !(await portOpen(base))) return;
-    const admin = base.replace(/\/[^/?]*(\?|$)/, "/pgbouncer$1");
-    const sample = await pgbouncerWaitingClients(admin, silent);
-    expect(sample).not.toBeNull();
-    expect(typeof sample?.waiting).toBe("number");
-    expect(sample?.pools).toBeGreaterThanOrEqual(1);
+    const client = postgres(base, {
+      max: 1,
+      prepare: false,
+      connect_timeout: 3,
+      connection: { application_name: "pooler-probe" },
+      onnotice: () => {},
+    });
+    try {
+      await client`SELECT 1`;
+      const admin = base.replace(/\/[^/?]*(\?|$)/, "/pgbouncer$1");
+      const sample = await pgbouncerWaitingClients(admin, silent);
+      expect(sample).not.toBeNull();
+      expect(typeof sample?.waiting).toBe("number");
+      expect(sample?.pools).toBeGreaterThanOrEqual(1);
+    } finally {
+      await client.end({ timeout: 1 });
+    }
   });
 
   it("a refused admin connection warns once and returns null", async () => {
