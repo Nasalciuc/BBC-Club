@@ -12,8 +12,7 @@ export type SearchQuery = {
 export const SEARCH_LIMIT = 30; // the same page the future FT.SEARCH … LIMIT 0 30 returns — one contract for both paths
 
 export const faresRepo = {
-  /** Visible published fares in the validity window. Filters in SQL. At most SEARCH_LIMIT rows, cheapest first. */
-  async search(exec: Executor, q: SearchQuery) {
+  searchSelect(exec: Executor, q: SearchQuery) {
     const now = q.when ?? new Date();
     return exec
       .select()
@@ -32,18 +31,21 @@ export const faresRepo = {
       .limit(SEARCH_LIMIT);
   },
 
+  /** Visible published fares in the validity window. Filters in SQL. At most SEARCH_LIMIT rows, cheapest first. */
+  async search(exec: Executor, q: SearchQuery) {
+    return this.searchSelect(exec, q);
+  },
+
   /** Any row by id (ignore published/window) — caller maps expired → 410. */
   async getAny(exec: Executor, id: string) {
     const [row] = await exec.select().from(fares).where(eq(fares.id, id)).limit(1);
     return row ?? null;
   },
 
-  /** Cheapest published fare per destination from `home`, with airport enrichment. hasOffer left to BFF.
-   *  DISTINCT ON (route_to) keeps the first row of ORDER BY route_to, price — the cheapest. */
-  async destinations(exec: Executor, home: string) {
+  /** Same SELECT DISTINCT ON the destinations() path uses — hot-query tests EXPLAIN this builder. */
+  destinationsSelect(exec: Executor, home: string, now = new Date()) {
     const homeCode = home.toUpperCase();
-    const now = new Date();
-    const rows = await exec
+    return exec
       .selectDistinctOn([fares.routeTo], {
         code: fares.routeTo,
         name: airports.name,
@@ -65,6 +67,12 @@ export const faresRepo = {
         ),
       )
       .orderBy(asc(fares.routeTo), asc(fares.price)); // DISTINCT ON keeps the first row per routeTo = the cheapest
+  },
+
+  /** Cheapest published fare per destination from `home`, with airport enrichment. hasOffer left to BFF.
+   *  DISTINCT ON (route_to) keeps the first row of ORDER BY route_to, price — the cheapest. */
+  async destinations(exec: Executor, home: string) {
+    const rows = await this.destinationsSelect(exec, home);
     return rows.map((r) => ({
       ...r,
       lat: parseFloat(String(r.lat)),

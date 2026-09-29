@@ -2,6 +2,8 @@
 # HTTP jobs only — logic lives in the API (platform.jobs). Host jobs are in infra/host/crontab.
 * * * * * campaign-fanout
 0 4 * * * cleanup-devices
+* * * * * db-observe
+0 9 * * 1 db-report
 * * * * * dispatch
 */15 * * * * expire-fares
 */5 * * * * expire-offers

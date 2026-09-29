@@ -25,6 +25,8 @@ export function createJobs(
     metrics?: {
       inc(n: string, l?: Record<string, string>): void;
       observe(n: string, v: number, l?: Record<string, string>): void;
+      setGauge?(n: string, v: number, l?: Record<string, string>): void;
+      clearPrefix?(prefix: string): void;
     };
   },
 ) {

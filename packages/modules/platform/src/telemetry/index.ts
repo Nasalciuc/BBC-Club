@@ -1,2 +1,2 @@
 export { createLogger, maskEmail, type Logger } from "./logger";
-export { createMetrics, type Metrics } from "./metrics";
+export { createMetrics, DURATION_BUCKETS_MS, type Metrics } from "./metrics";

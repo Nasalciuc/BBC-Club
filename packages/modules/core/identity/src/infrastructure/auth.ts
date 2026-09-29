@@ -57,7 +57,7 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24, // rolling refresh once per day
-      cookieCache: { enabled: true, maxAge: 60 * 5 },
+      cookieCache: { enabled: true, maxAge: env.SESSION_COOKIE_CACHE_SECONDS },
     },
 
     rateLimit: {

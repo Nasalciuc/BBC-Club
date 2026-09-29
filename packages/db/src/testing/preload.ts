@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL ??= "postgres://bbc:bbc@localhost:55432/bbc_test";
 process.env.DATABASE_ADMIN_URL ??= process.env.DATABASE_URL;
+process.env.PGBOUNCER_URL ??= "postgres://bbc:bbc@localhost:55433/bbc_test";
 process.env.APP_ORIGIN ??= "http://localhost:8000";
 process.env.MOBILE_SCHEME ??= "bbcclub";
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret-0000";

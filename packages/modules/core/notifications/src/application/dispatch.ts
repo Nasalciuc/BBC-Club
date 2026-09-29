@@ -7,7 +7,7 @@ import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
 import type { PushSender } from "../ports/push";
 
-const CLAIM = 100;
+export const CLAIM = 100;
 const CONCURRENCY = 20;
 
 const PendingRow = z.object({
@@ -24,6 +24,31 @@ type PendingRow = z.infer<typeof PendingRow>;
 const ReclaimedRow = z.object({ id: z.string().uuid() });
 /** Columns in hand-written SQL come from the schema (col()), so a rename cannot leave a statement behind. */
 const N = notificationsTable;
+
+/** Same reaper UPDATE the dispatcher runs — hot-query tests EXPLAIN this. */
+export function dispatchReaperSql(stuck: SQL) {
+  return sql`
+      UPDATE ${N}
+      SET
+        ${col(N.attempts)} = ${col(N.attempts)} + 1,
+        ${col(N.status)} = CASE WHEN ${col(N.attempts)} + 1 >= 6 THEN 'failed' ELSE 'pending' END::notifications.notification_status,
+        ${col(N.claimedAt)} = NULL,
+        ${col(N.lastError)} = CASE WHEN ${col(N.attempts)} + 1 >= 6 THEN 'reaped' ELSE ${col(N.lastError)} END
+      WHERE ${col(N.status)} = 'sending' AND ${col(N.claimedAt)} < now() - ${stuck}
+      RETURNING ${col(N.id)}`;
+}
+
+/** Same pending claim the dispatcher runs — hot-query tests EXPLAIN this. */
+export function dispatchClaimSql(limit = CLAIM) {
+  return sql`
+          SELECT ${col(N.id)}, ${col(N.memberId)}, ${col(N.category)}, ${col(N.title)}, ${col(N.body)},
+                 ${col(N.deepLink)}, ${col(N.offerId)}, ${col(N.attempts)}
+          FROM ${N}
+          WHERE ${col(N.status)} = 'pending' AND ${col(N.scheduledFor)} <= now()
+          ORDER BY ${col(N.scheduledFor)}
+          FOR UPDATE SKIP LOCKED
+          LIMIT ${limit}`;
+}
 
 type TokenRow = typeof deviceTokens.$inferSelect;
 type SendResult = Awaited<ReturnType<PushSender["send"]>>;
@@ -76,34 +101,11 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
   };
   const stuck = deps.stuckAfter ?? sql`interval '5 minutes'`;
 
-  const reclaimed = await query(
-    deps.db,
-    sql`
-      UPDATE ${N}
-      SET
-        ${col(N.attempts)} = ${col(N.attempts)} + 1,
-        ${col(N.status)} = CASE WHEN ${col(N.attempts)} + 1 >= 6 THEN 'failed' ELSE 'pending' END::notifications.notification_status,
-        ${col(N.claimedAt)} = NULL,
-        ${col(N.lastError)} = CASE WHEN ${col(N.attempts)} + 1 >= 6 THEN 'reaped' ELSE ${col(N.lastError)} END
-      WHERE ${col(N.status)} = 'sending' AND ${col(N.claimedAt)} < now() - ${stuck}
-      RETURNING ${col(N.id)}`,
-    ReclaimedRow,
-  );
+  const reclaimed = await query(deps.db, dispatchReaperSql(stuck), ReclaimedRow);
   metrics.reclaimed = reclaimed.length;
 
   const work = await withTx(deps.db, async (tx) => {
-    const rows = await query(
-      tx,
-      sql`
-          SELECT ${col(N.id)}, ${col(N.memberId)}, ${col(N.category)}, ${col(N.title)}, ${col(N.body)},
-                 ${col(N.deepLink)}, ${col(N.offerId)}, ${col(N.attempts)}
-          FROM ${N}
-          WHERE ${col(N.status)} = 'pending' AND ${col(N.scheduledFor)} <= now()
-          ORDER BY ${col(N.scheduledFor)}
-          FOR UPDATE SKIP LOCKED
-          LIMIT ${CLAIM}`,
-      PendingRow,
-    );
+    const rows = await query(tx, dispatchClaimSql(CLAIM), PendingRow);
     const out: { row: PendingRow; tokens: TokenRow[] }[] = [];
     for (const row of rows) {
       metrics.claimed++;

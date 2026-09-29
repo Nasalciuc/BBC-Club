@@ -3,8 +3,11 @@ import type { Executor } from "@bbc/db";
 import { notificationsTable as n } from "@bbc/db/schema/notifications";
 
 export const notificationsRepo = {
-  async inbox(exec: Executor, actorMemberId: string, limit = 30) {
+  inboxSelect(exec: Executor, actorMemberId: string, limit = 30) {
     return exec.select().from(n).where(eq(n.memberId, actorMemberId)).orderBy(desc(n.createdAt)).limit(limit);
+  },
+  async inbox(exec: Executor, actorMemberId: string, limit = 30) {
+    return this.inboxSelect(exec, actorMemberId, limit);
   },
   async unreadCount(exec: Executor, actorMemberId: string) {
     const [row] = await exec

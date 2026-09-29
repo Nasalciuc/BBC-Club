@@ -19,7 +19,26 @@
 	handle @ops {
 		@remote not client_ip 127.0.0.1/32 ::1/128
 		respond @remote 404
-		reverse_proxy {args[0]}
+		reverse_proxy {
+			dynamic a {
+				name {args[0]}
+				port 8000
+				refresh 5s
+			}
+			lb_policy least_conn
+			lb_try_duration 5s
+			fail_duration 10s
+			max_fails 2
+			unhealthy_status 5xx
+		}
+	}
+
+	# db-observe gauges live in the worker process, not on an API replica
+	@worker_metrics path /worker-metrics
+	handle @worker_metrics {
+		@worker_remote not client_ip 127.0.0.1/32 ::1/128
+		respond @worker_remote 404
+		reverse_proxy {args[1]}:8001
 	}
 
 	# associated-domain files (AASA / assetlinks) — the real ones live on buybusinessclass.com;
@@ -38,7 +57,17 @@
 	}
 
 	handle {
-		reverse_proxy {args[0]} {
+		reverse_proxy {
+			dynamic a {
+				name {args[0]}
+				port 8000
+				refresh 5s
+			}
+			lb_policy least_conn
+			lb_try_duration 5s
+			fail_duration 10s
+			max_fails 2
+			unhealthy_status 5xx
 			header_up X-Forwarded-Proto {scheme}
 			transport http {
 				dial_timeout 5s
@@ -62,10 +91,10 @@
 
 {$API_DOMAIN} {
 	import /etc/caddy/origin-pulls.caddy
-	import api_site api:8000
+	import api_site api worker
 }
 
 {$API_DOMAIN_STAGING} {
 	import /etc/caddy/origin-pulls.caddy
-	import api_site api-staging:8000
+	import api_site api-staging worker-staging
 }

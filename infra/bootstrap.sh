@@ -132,7 +132,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
   echo "⚠ created $ENV_FILE from the example — fill it in, then re-run: sudo bash $INFRA_DIR/bootstrap.sh $MODE $WITH_STAGING"; exit 2
 fi
 chmod 600 "$ENV_FILE"; chown root:root "$ENV_FILE"
-missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done
+POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)
+missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE GLITCHTIP_DB_PASSWORD; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done
 if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done; fi
 [[ ${#missing[@]} -eq 0 ]] || { echo "❌ missing in $ENV_FILE: ${missing[*]}"; exit 2; }
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
@@ -143,6 +144,7 @@ if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   stg_missing=(); for k in POSTGRES_PASSWORD_STAGING BETTER_AUTH_SECRET INTERNAL_API_SECRET_STAGING API_IMAGE_STAGING APP_ORIGIN; do
     grep -qE "^${k}=.+" "$STG" || stg_missing+=("$k"); done
   [[ ${#stg_missing[@]} -eq 0 ]] || { echo "❌ missing in $STG: ${stg_missing[*]}"; exit 2; }
+  POSTGRES_PASSWORD_STAGING=$(grep -E '^POSTGRES_PASSWORD_STAGING=' "$STG" | cut -d= -f2-)
 fi
 
 say "7/9 host cron (backups, restore drill, disk check)"
@@ -159,13 +161,13 @@ $DC pull -q --ignore-buildable
 $DC up -d postgres
 for i in {1..30}; do $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
 $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres never became ready"; exit 1; }
-$DC run --rm --no-deps api bun run --filter @bbc/db db:migrate      # schema exists before anything serves traffic
+$DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc" api bun run --filter @bbc/db db:migrate
 $DC run --rm --no-deps api bun run scripts/seed-flags.ts || { echo "❌ flag seeding failed"; exit 1; }
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   $DC up -d postgres-staging
   for i in {1..30}; do $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
   $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres-staging never became ready"; exit 1; }
-  $DC run --rm --no-deps api-staging bun run --filter @bbc/db db:migrate \
+  $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run --filter @bbc/db db:migrate \
     || { echo "❌ staging migration failed — is API_IMAGE_STAGING a real published SHA tag?"; exit 1; }
   $DC run --rm --no-deps api-staging bun run scripts/seed-flags.ts \
     || { echo "❌ staging flag seeding failed — is API_IMAGE_STAGING a real published SHA tag?"; exit 1; }

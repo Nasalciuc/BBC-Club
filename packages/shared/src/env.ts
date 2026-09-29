@@ -33,6 +33,22 @@ export const ServerEnv = z.object({
   APNS_ENVIRONMENT: z.enum(["sandbox", "production"]).default("sandbox"),
   FCM_SERVICE_ACCOUNT_BASE64: z.string().optional(),
   PORT: z.coerce.number().int().positive().default(8000),
+  /** "all" = today's process (tests and local). Deployed: API serves members; worker owns poller and jobs. */
+  APP_ROLE: z.enum(["all", "api", "worker"]).default("all"),
+  WORKER_PORT: z.coerce.number().int().positive().default(8001),
+  /** "transaction" when DATABASE_URL is PgBouncer in transaction pooling. Worker/migrate/seeds stay "none". */
+  DB_POOLER: z.enum(["none", "transaction"]).default("none"),
+  SESSION_COOKIE_CACHE_SECONDS: z.coerce.number().int().min(10).max(300).default(60),
+  /** Only with LOADTEST=1. Comma-separated CIDRs/IPs treated as trusted proxies for X-Forwarded-For. */
+  LOADTEST: z.enum(["0", "1"]).optional(),
+  LOADTEST_TRUSTED_PROXIES: z.string().default(""),
+  /** Optional. Worker uses this for SHOW POOLS (PgBouncer admin database). */
+  PGBOUNCER_ADMIN_URL: z.string().url().optional(),
+  /**
+   * Slack-compatible incoming webhook. Worker db-observe POSTs when pool_waiting > 0
+   * for 2 minutes or oldest_tx > 30s. Empty in env files is unset.
+   */
+  OPS_WEBHOOK: z.union([z.string().url(), z.literal("")]).optional(),
 });
 export type ServerEnv = z.infer<typeof ServerEnv>;
 
@@ -103,6 +119,12 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
       .filter(([, value]) => !value)
       .map(([name]) => name);
     if (missing.length > 0) throw new Error(`PUSH_ADAPTER=live requires ${missing.join(", ")}`);
+  }
+  if (parsed.data.LOADTEST === "1" && parsed.data.NODE_ENV === "production") {
+    throw new Error("LOADTEST=1 is refused in production");
+  }
+  if (parsed.data.LOADTEST_TRUSTED_PROXIES.trim() && parsed.data.LOADTEST !== "1") {
+    throw new Error("LOADTEST_TRUSTED_PROXIES is accepted only with LOADTEST=1");
   }
   return parsed.data;
 }

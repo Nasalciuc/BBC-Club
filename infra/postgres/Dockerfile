@@ -2,6 +2,7 @@
 FROM postgres:16
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends pgbackrest ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
+ && test -f /usr/lib/postgresql/16/lib/pg_stat_statements.so \
  && mkdir -p /var/log/pgbackrest /var/spool/pgbackrest /var/lib/pgbackrest \
  && chown -R postgres:postgres /var/log/pgbackrest /var/spool/pgbackrest /var/lib/pgbackrest
 # All repo/pg options come from PGBACKREST_* env vars (pgbackrest reads them natively). No config-file interpolation.

@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import { createDb, type Db } from "../client";
+import { createDb, type Db, type DbOptions } from "../client";
 
 const TEMPLATE = "bbc_test_tpl";
 
@@ -24,7 +24,7 @@ export type IsolatedDb = { db: Db; url: string; name: string; drop(): Promise<vo
  */
 export async function isolatedDb(
   name: string,
-  opts: { fromTemplate?: boolean; max?: number } = {},
+  opts: { fromTemplate?: boolean; max?: number; logger?: DbOptions["logger"] } = {},
 ): Promise<IsolatedDb> {
   const root = adminUrl();
   if (!/test/i.test(new URL(root).pathname))
@@ -42,7 +42,7 @@ export async function isolatedDb(
     await admin.end();
   }
   const url = withDatabase(root, dbName);
-  const db = createDb(url, { max: opts.max ?? 2, applicationName: `test-${safe}` });
+  const db = createDb(url, { max: opts.max ?? 2, applicationName: `test-${safe}`, logger: opts.logger });
   return {
     db,
     url,

@@ -293,6 +293,40 @@ try {
     }
   }
 
+  const statementTimeout = join(migrationsDir, "0019_platform_statement_timeout.sql");
+  if (existsSync(statementTimeout)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0019_platform_statement_timeout.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(statementTimeout, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0019_platform_statement_timeout.sql')`,
+        );
+      });
+      console.log("role statement_timeout applied");
+    }
+  }
+
+  const pgss = join(migrationsDir, "0020_platform_pg_stat_statements.sql");
+  if (existsSync(pgss)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0020_platform_pg_stat_statements.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(pgss, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0020_platform_pg_stat_statements.sql')`,
+        );
+      });
+      console.log("pg_stat_statements applied");
+    }
+  }
+
   console.log("migrations up to date");
   process.exit(0);
 } catch (e) {

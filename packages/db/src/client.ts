@@ -13,18 +13,23 @@ export type DbOptions = {
   max?: number;
   /** Prepared statements are fine on a direct Postgres connection; disable behind pgbouncer (transaction mode). */
   prepare?: boolean;
+  /** "transaction" when connecting through PgBouncer in transaction mode: no prepared statements, no startup params. */
+  pooler?: "none" | "transaction";
   logger?: boolean | { logQuery: (q: string, params: unknown[]) => void };
   applicationName?: string;
 };
 
 export function createDb(url: string, opts: DbOptions = {}) {
+  const pooled = opts.pooler === "transaction";
   const client = postgres(url, {
     max: opts.max ?? 10,
-    prepare: opts.prepare ?? true,
+    prepare: pooled ? false : (opts.prepare ?? true),
     idle_timeout: 30,
     max_lifetime: 60 * 30,
     connect_timeout: 10,
-    connection: { application_name: opts.applicationName ?? "bbc-api", statement_timeout: 15_000 },
+    connection: pooled
+      ? { application_name: opts.applicationName ?? "bbc-api" }
+      : { application_name: opts.applicationName ?? "bbc-api", statement_timeout: 15_000 },
     transform: { undefined: null },
     onnotice: () => {},
   });

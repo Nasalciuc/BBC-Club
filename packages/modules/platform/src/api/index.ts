@@ -77,7 +77,9 @@ export function createPlatform(
 export { type Handler, type HandlerContext, type EventDefinition } from "../events/registry";
 export { type Flags } from "../flags";
 export { type Jobs, type JobContext } from "../jobs";
-export { type Logger, type Metrics } from "../telemetry";
+export { type Logger, type Metrics, DURATION_BUCKETS_MS } from "../telemetry";
+export { pollerClaimSql, pollerStatsSql } from "../events/poller";
+export { collectDbReport, maybeAlertOps, pgbouncerWaitingClients, resetDbAlertState } from "../observe/db-health";
 
 /** The host imports this from "@bbc/platform"; it is defined in jobs/builtin.ts. */
 export { registerPlatformJobs } from "../jobs/builtin";

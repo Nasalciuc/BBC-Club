@@ -1,6 +1,26 @@
 # Adds staging as EXTRA services in the same project. Same Caddy, second domain, separate DB.
 # Disposable: no backups, no WAL archiving, no error tracking. Removed when staging gets its own machine.
 services:
+  pgbouncer-staging:
+    image: edoburu/pgbouncer:v1.24.1-p0
+    restart: unless-stopped
+    networks: [data]
+    environment:
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc
+      DB_USER: bbc
+      DB_PASSWORD: ${POSTGRES_PASSWORD_STAGING}
+      DB_HOST: postgres-staging
+      DB_NAME: bbc
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      ADMIN_USERS: bbc
+      MAX_CLIENT_CONN: "500"
+      DEFAULT_POOL_SIZE: "10"
+      RESERVE_POOL_SIZE: "2"
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits
+    depends_on: { postgres-staging: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "pg_isready", "-h", "127.0.0.1"], interval: 5s, timeout: 3s, retries: 10 }
+
   api-staging:
     image: ${API_IMAGE_STAGING:?set API_IMAGE_STAGING to a SHA-tagged image (deploy.sh writes it)}
     restart: unless-stopped
@@ -11,9 +31,13 @@ services:
         required: false # checkout has staging.env.example only; bootstrap --with-staging writes the 600 file
     environment:
       PORT: "8000"
+      APP_ROLE: api
+      DB_POOLER: transaction
       LOG_LEVEL: debug
-      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc
-    depends_on: { postgres-staging: { condition: service_healthy } }
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@pgbouncer-staging:5432/bbc
+    depends_on:
+      postgres-staging: { condition: service_healthy }
+      pgbouncer-staging: { condition: service_healthy }
     healthcheck:
       test:
         [
@@ -26,7 +50,39 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s
-    stop_grace_period: 15s
+    stop_grace_period: 20s
+    deploy:
+      replicas: ${API_REPLICAS_STAGING:-2}
+      resources: { limits: { cpus: "1.0", memory: 512m } }
+
+  worker-staging:
+    image: ${API_IMAGE_STAGING:?set API_IMAGE_STAGING to a SHA-tagged image (deploy.sh writes it)}
+    restart: unless-stopped
+    command: ["bun", "apps/api/src/worker.ts"]
+    networks: [edge, data]
+    env_file:
+      - path: ./env/staging.env
+        required: false
+    environment:
+      APP_ROLE: worker
+      WORKER_PORT: "8001"
+      DB_POOLER: none
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc
+      PGBOUNCER_ADMIN_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@pgbouncer-staging:5432/pgbouncer
+    depends_on: { postgres-staging: { condition: service_healthy } }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://localhost:8001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    stop_grace_period: 60s
     deploy: { resources: { limits: { cpus: "1.0", memory: 512m } } }
 
   postgres-staging:
@@ -39,6 +95,16 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STAGING}
       POSTGRES_DB: bbc
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    command:
+      [
+        "postgres",
+        "-c",
+        "shared_preload_libraries=pg_stat_statements",
+        "-c",
+        "pg_stat_statements.max=10000",
+        "-c",
+        "pg_stat_statements.track=all",
+      ]
     volumes: ["postgres_staging_data:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
     deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
@@ -50,9 +116,9 @@ services:
     entrypoint: ["/bin/sh", "/etc/cron/run.sh"]
     volumes: ["./cron:/etc/cron:ro"]
     environment:
-      API_URL: "http://api-staging:8000"
+      API_URL: "http://worker-staging:8001"
       INTERNAL_API_SECRET: "${INTERNAL_API_SECRET_STAGING}"
-    depends_on: { api-staging: { condition: service_healthy } }
+    depends_on: { worker-staging: { condition: service_healthy } }
 
 volumes:
   postgres_staging_data: {}

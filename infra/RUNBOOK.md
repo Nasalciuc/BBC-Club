@@ -17,9 +17,16 @@ ssh -L 5432:localhost:5432 -L 3001:localhost:3001 root@<host>   # then connect t
 ```bash
 cd /opt/bbc
 docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env ps
-curl -s localhost:8000/ready | jq        # db, queue, staleJobs
-curl -s localhost:8000/metrics | grep -E 'queue_pending|queue_dead|queue_oldest'
+curl -s localhost:8000/ready | jq        # db, queue, staleJobs — one replica (Caddy @ops)
+curl -s localhost:8000/metrics | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
+curl -sS --resolve <API_DOMAIN>:443:127.0.0.1 https://<API_DOMAIN>/worker-metrics | grep -E 'db_|pgbouncer_'
+docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
+  bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
 ```
+
+Request counters on `/metrics` are **per Bun process**. Caddy's `@ops` route (`/metrics` `/ready`) reaches one API replica on port 8000. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`. Caddy serves them only on `/worker-metrics` (same localhost gate, upstream `worker:8001`). Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
+
+GlitchTip uses **its own Postgres** (`glitchtip-postgres`). It is not in the pgBackRest stanza.
 
 ## Deploy
 
@@ -27,7 +34,13 @@ curl -s localhost:8000/metrics | grep -E 'queue_pending|queue_dead|queue_oldest'
 bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: deploy.sh staging <image>
 ```
 
-Seven steps with automatic rollback if `/ready` stays red for 60 s. **Never deploy `:latest` to production** — the compose file refuses it. `deploy.sh` rejects any image that is not tagged with a commit SHA.
+`LOADTEST=1` in production.env is refused. Image tags must be a commit SHA (`:latest` is rejected).
+
+Sequence: (1) `pg_dump` (2) pull API+worker images (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d` the pooler (with its dependencies), then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to 2N, wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) prune. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
+
+Compose healthcheck is `/health`; the deploy gate is `/ready`. Caddy `api_site` resolves replicas with `dynamic a` (refresh 5 s), `least_conn`, passive health on 5xx.
+
+After `shared_preload_libraries=pg_stat_statements` changes, Postgres must restart once for the library to load; `CREATE EXTENSION` is migration `0020`.
 
 ## Roll back right now
 
@@ -35,7 +48,36 @@ Seven steps with automatic rollback if `/ready` stays red for 60 s. **Never depl
 bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<previous-sha>
 ```
 
-Schema is expand-only, so the previous image always runs against the current database.
+Schema is expand-only, so a later image always runs against the current database. If `apps/api/src/worker.ts` is missing from the previous image, `rollback_and_exit` does not start the worker. It brings the API up through `compose.pre-worker.yml` (direct Postgres, `DB_POOLER=none`) and points cron at `http://api:8000` (`compose.pre-worker.staging.yml` on staging). An image that contains the worker entrypoint rolls back with the current compose. Either path reports the rollback only after `/ready` on the restored API; the worker is checked on 8001 only when that image has `worker.ts`.
+
+## Database health
+
+Gauges (worker job `db-observe`, every minute, on `/worker-metrics` and the worker's `:8001/metrics`):
+
+| Gauge                           | Meaning                                                                         | Action                                                                                                   |
+| ------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `bbc_db_connections{app,state}` | `pg_stat_activity` by `application_name` and `state`                            | A pile of `idle in transaction` → find the PID, terminate if stuck                                       |
+| `bbc_db_oldest_tx_seconds{app}` | Oldest open transaction per app                                                 | **> 30 s** posts to `OPS_WEBHOOK` (Slack-compatible). Kill the session or the job that opened it         |
+| `bbc_db_lock_waits`             | `pg_locks` where `NOT granted`                                                  | Rising with oldest_tx → blocking writer                                                                  |
+| `bbc_db_deadlocks_total`        | `pg_stat_database.deadlocks`                                                    | Investigate the pair of statements                                                                       |
+| `bbc_pgbouncer_waiting_clients` | PgBouncer `SHOW POOLS` `cl_waiting` (needs `PGBOUNCER_ADMIN_URL` on the worker) | **> 0 for 2 minutes** posts to `OPS_WEBHOOK`. Raise `default_pool_size` only after checking slow queries |
+
+There is no Prometheus or Alertmanager in this stack. Thresholds are evaluated by the worker and posted to `OPS_WEBHOOK`.
+
+**Weekly report** (job `db-report`, Mondays 09:00 UTC) and live `GET /v1/internal/db-report` (`ops:read`, operator JWT):
+
+```bash
+# worker directly (the route is on every role; the job that fills the report runs here)
+docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
+  bun -e "fetch('http://localhost:8001/v1/internal/db-report',{headers:{Authorization:'Bearer <operator-jwt>'}}).then(r=>r.text()).then(console.log)"
+
+# through Caddy, which only serves api_site for the real host
+curl -sS --resolve <API_DOMAIN>:443:127.0.0.1 -H "Authorization: Bearer <operator-jwt>" https://<API_DOMAIN>/v1/internal/db-report | jq
+```
+
+The JSON has `statsAgeDays` and `statementsReset` from `pg_stat_statements_info` (that is the statement-report age; `pg_stat_statements_reset()` moves it). `statsReset` stays `pg_stat_database.stats_reset`, the database-wide reset time. It also has the 20 slowest statements by mean and by total time (`pg_stat_statements`), unused non-unique indexes, and dead-tuple ratios. **A laptop or CI database is not production.** Do not commit those dumps. The report is meaningful after **≥ 7 days** of traffic (`meaningfulAfterDays`). On a fresh cluster every index shows `idx_scan = 0`. `idx_scan = 0` is not proof an index is unused until you know when that index was created or last reset: `pg_stat_reset_single_table_counters` can zero one index without moving `statsReset`.
+
+Trigger now: `POST /v1/internal/run/db-report` with `X-Internal-Secret` against the **worker** (`http://worker:8001`).
 
 ## Stop a runaway feature without deploying
 

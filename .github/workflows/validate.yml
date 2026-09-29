@@ -62,3 +62,11 @@ jobs:
       # Static Maestro testID check only. Emulator E2E stays local until APK + API are
       # wired (macos-latest is ARM and cannot boot x86_64 AVD; nested virt unsupported).
       - run: bun run maestro:ids
+      - name: Caddyfile
+        run: |
+          docker run --rm \
+            -e ACME_EMAIL=ops@example.com \
+            -e API_DOMAIN=api.example.com \
+            -e API_DOMAIN_STAGING=api-staging.example.com \
+            -v "$PWD/infra/caddy:/etc/caddy:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
