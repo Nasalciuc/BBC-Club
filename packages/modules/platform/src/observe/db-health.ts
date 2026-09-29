@@ -26,7 +26,7 @@ export type DbSnapshot = {
 
 export type DbReport = {
   generatedAt: string;
-  /** `pg_stat_database.stats_reset`. Index stats follow this, not the statement reset. */
+  /** `pg_stat_database.stats_reset` only. A single-index reset does not move this timestamp. */
   statsReset: string | null;
   /** `pg_stat_statements_info.stats_reset`. `statsAgeDays` is computed from this. */
   statementsReset: string | null;
