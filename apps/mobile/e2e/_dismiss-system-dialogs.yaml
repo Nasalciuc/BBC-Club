@@ -1,0 +1,7 @@
+appId: com.buybusinessclass.club
+---
+- runFlow:
+    when:
+      visible: "isn't responding"
+    commands:
+      - tapOn: "Wait"

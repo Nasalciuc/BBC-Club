@@ -10,6 +10,47 @@ adb install -r "$APK"
 adb shell wm size
 adb shell wm density
 
+# The action already waited for sys.boot_completed. Give the launcher up to 60s to drop an ANR
+# dialog before the first flow. Maestro's Wait tap is the fallback if this expires.
+boot=$(adb shell getprop sys.boot_completed | tr -d '\r')
+echo "sys.boot_completed=${boot}"
+if [ "$boot" != "1" ]; then
+  echo "::warning::sys.boot_completed is '${boot}', expected 1"
+fi
+deadline=$((SECONDS + 60))
+last=""
+idle=0
+while [ "$SECONDS" -lt "$deadline" ]; do
+  dump=$(
+    {
+      adb shell dumpsys window
+      adb shell dumpsys window windows
+    } 2>/dev/null || true
+  )
+  sample=$(printf '%s\n' "$dump" | grep -E "mCurrentFocus|mFocusedApp|Application Error|AppErrorDialog|ANR|Not Responding|isn't responding" | head -30 || true)
+  echo "  -- launcher settle"
+  if [ -n "$sample" ]; then
+    printf '%s\n' "$sample" | sed 's/^/  /'
+  else
+    echo "  (no focus or ANR lines)"
+  fi
+  last=$sample
+  anr=0
+  if printf '%s\n' "$sample" | grep -qiE "Application Error|AppErrorDialog|ANR|Not Responding|isn't responding"; then
+    anr=1
+  fi
+  if [ "$anr" -eq 0 ] && printf '%s\n' "$sample" | grep -qE "mCurrentFocus=.*Launcher"; then
+    echo "  launcher idle"
+    idle=1
+    break
+  fi
+  sleep 2
+done
+if [ "$idle" -eq 0 ]; then
+  echo "::warning::launcher was not idle within 60s; Maestro will dismiss a leftover dialog"
+  printf '%s\n' "$last"
+fi
+
 # The screen at a failure, in the job log itself: whether the keyboard is up (and where), every element that has a
 # testID with its bounds, the text on screen, the native screen stack, and the device log of this flow (JS errors and
 # crashes only, never console.log). Screenshots are in the uploaded artifact (--debug-output).

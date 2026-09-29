@@ -164,6 +164,8 @@ jobs:
           arch: x86_64
           # A phone-sized screen (the default AVD is 320x640 at 160 dpi, smaller than any phone the app supports).
           profile: pixel_6
+          cores: 4
+          ram-size: 4096M
           disable-animations: true
           script: bash apps/mobile/e2e/run-android-ci.sh
 

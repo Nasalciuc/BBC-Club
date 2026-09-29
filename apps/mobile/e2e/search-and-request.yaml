@@ -2,6 +2,7 @@ appId: com.buybusinessclass.club
 ---
 # Android: the keyboard is closed before the sheet's submit button (it can sit under it; see register.yaml).
 - launchApp: { clearState: false }
+- runFlow: _dismiss-system-dialogs.yaml
 - tapOn: { id: "tab.explore" }
 - assertVisible: { id: "explore.root" }
 - tapOn: { id: "globe.pin.LHR" }
