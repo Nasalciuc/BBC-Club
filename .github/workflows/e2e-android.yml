@@ -112,18 +112,29 @@ jobs:
         if: steps.ndk-cache.outputs.cache-hit != 'true'
         env:
           NDK_VERSION: ${{ steps.ndk.outputs.version }}
+        shell: bash
         run: |
+          sdkmanager="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            sdkmanager="$(ls -d "${ANDROID_SDK_ROOT}"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | sort -V | tail -1 || true)"
+          fi
+          if [ -z "$sdkmanager" ] || [ ! -x "$sdkmanager" ]; then
+            echo "::error::sdkmanager not found under ${ANDROID_SDK_ROOT}/cmdline-tools"
+            ls -la "${ANDROID_SDK_ROOT}/cmdline-tools" 2>&1 || true
+            exit 1
+          fi
+          "$sdkmanager" --version
+          yes | "$sdkmanager" --licenses >/dev/null || true
           dest="${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}"
-          yes | sdkmanager --licenses >/dev/null || true
           for attempt in 1 2 3; do
             rm -rf "$dest"
             echo "Installing NDK ${NDK_VERSION} (attempt ${attempt}/3)"
-            if sdkmanager --install "ndk;${NDK_VERSION}" && [ -f "${dest}/source.properties" ]; then
+            if "$sdkmanager" --install "ndk;${NDK_VERSION}" && [ -f "${dest}/source.properties" ]; then
               exit 0
             fi
-            rm -rf "$dest"
           done
-          echo "::error::NDK ${NDK_VERSION} is not installed: ${dest}/source.properties is missing after 3 attempts. The download was incomplete or not a zip."
+          rm -rf "$dest"
+          echo "::error::NDK ${NDK_VERSION} was not installed after 3 attempts"
           exit 1
 
       - name: Build the e2e APK (cleartext to 10.0.2.2 only, see apps/mobile/app.config.ts)
