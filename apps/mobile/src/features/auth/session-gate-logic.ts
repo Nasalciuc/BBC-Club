@@ -36,15 +36,13 @@ export async function loadProfileWith(
   return { kind: "unavailable", status: lastStatus ?? 0 };
 }
 
-export type RouteTarget = "/sign-in" | "/set-password" | "/onboarding" | "/(tabs)/explore";
+export type RouteTarget = "/sign-in" | "/onboarding" | "/(tabs)/explore";
 
-export function routeFor(load: ProfileLoad, onboarded: boolean, passwordPending = false): RouteTarget {
+export function routeFor(load: ProfileLoad, onboarded: boolean): RouteTarget {
   if (load.kind === "signed-out") return "/sign-in";
-  if (load.kind === "ok" && load.profile.status === "deleted") return "/sign-in";
-  // Path A session has no credential yet. Do not send it to onboarding or Explore.
-  if (passwordPending) return "/set-password";
   // Explore renders its own offline / error state and retries; the member stays signed in.
   if (load.kind === "unavailable") return "/(tabs)/explore";
+  if (load.profile.status === "deleted") return "/sign-in";
   if (load.profile.homeAirport == null && !onboarded) return "/onboarding";
   return "/(tabs)/explore";
 }

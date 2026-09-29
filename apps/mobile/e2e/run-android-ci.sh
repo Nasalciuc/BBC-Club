@@ -27,7 +27,6 @@ screen_state() {
   adb shell dumpsys activity top | grep -E "ScreenStack|ScreenContainer|Screen\{|ScreenFragment|ReactSurface|ReactRoot" |
     head -20 || true
   echo "  -- device log (errors and warnings)"
-  # ReactNativeJS:W is how a Hermes error (for example a missing `crypto`) reaches this log.
   adb logcat -d -v brief '*:S' ReactNativeJS:W ReactNative:W ReactNativeJNI:W AndroidRuntime:E libc:F DEBUG:F |
     tail -n 60 || true
 }

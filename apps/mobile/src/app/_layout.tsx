@@ -20,7 +20,7 @@ import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
 import { signOut } from "@/features/auth/flows";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
-import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
+import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { routeFromDeepLink } from "@/lib/deeplinks";
 import { registerPushDevice } from "@/lib/push";
 import { onSessionRevoked } from "@/lib/session-events";
@@ -118,12 +118,6 @@ export default function RootLayout() {
       const leaf = typeof segments[0] === "string" ? segments[0] : "index";
 
       if (!session) return;
-      // Path A: an OTP session has no password yet. Checked before GATE_HOLD so a remount
-      // cannot send that session to onboarding or Explore.
-      if (leaf !== "set-password" && passwordStillPending()) {
-        router.replace("/set-password");
-        return;
-      }
       if (GATE_HOLD.has(leaf) || AUTH_ENTRY.has(leaf)) return;
 
       const dest = await resolvePostAuthRoute();

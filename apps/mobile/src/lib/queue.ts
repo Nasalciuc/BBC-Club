@@ -1,6 +1,5 @@
 import { createMMKV } from "react-native-mmkv";
 import type { RequestBody } from "@bbc/shared/api/v1/requests";
-import { newId } from "./id";
 import { flushItems, parseQueue, type QueuedRequest, type SubmitResult } from "./queue-logic";
 
 const storage = createMMKV({ id: "bbc-request-queue" });
@@ -28,7 +27,7 @@ function writeAll(items: QueuedRequest[]): void {
 
 export function enqueueRequest(body: RequestBody, idempotencyKey: string): QueuedRequest {
   const item: QueuedRequest = {
-    id: `q_${newId()}`,
+    id: `q_${crypto.randomUUID()}`,
     body,
     idempotencyKey,
     enqueuedAt: new Date().toISOString(),

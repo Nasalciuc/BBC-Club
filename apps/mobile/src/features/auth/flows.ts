@@ -3,7 +3,7 @@ import { authMessage, CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared
 import { postAccountPassword } from "@/lib/api";
 import { unregisterPushDevice } from "@/lib/push";
 import { clearQueue } from "@/lib/queue";
-import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
+import { appStorage, ONBOARDED_KEY } from "@/lib/storage-keys";
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
 
@@ -12,7 +12,6 @@ async function clearLocalSession(): Promise<void> {
   await unregisterPushDevice().catch(() => undefined);
   clearQueue();
   appStorage.remove(ONBOARDED_KEY);
-  appStorage.remove(PENDING_PASSWORD_KEY);
 }
 
 type Result = { ok: true; message?: string } | { ok: false; message: string; code?: string };
@@ -43,9 +42,7 @@ export async function signIn(email: string, password: string): Promise<Result> {
   try {
     const { error } = await withAuthTimeout(authClient.signIn.email({ email, password }));
     if (error) return fail(error);
-    const ready = (await requireSessionCookie()) ?? { ok: true as const };
-    if (ready.ok) appStorage.remove(PENDING_PASSWORD_KEY);
-    return ready;
+    return (await requireSessionCookie()) ?? { ok: true };
   } catch (e) {
     return fromNetwork(e);
   }
@@ -66,10 +63,7 @@ export async function verifyJoin(email: string, otp: string): Promise<Result> {
     const { error } = await withAuthTimeout(authClient.signIn.emailOtp({ email, otp }));
     if (error) return fail(error);
     // Without a SecureStore cookie, set-password's POST /v1/account/password is 401 "Please sign in."
-    const ready = await requireSessionCookie();
-    if (ready) return ready;
-    appStorage.set(PENDING_PASSWORD_KEY, true);
-    return { ok: true };
+    return (await requireSessionCookie()) ?? { ok: true };
   } catch (e) {
     return fromNetwork(e);
   }
@@ -100,9 +94,7 @@ export async function resetPassword(email: string, otp: string, password: string
     if (error) return fail(error);
     const signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
     if (signedIn.error) return fail(signedIn.error);
-    const ready = (await requireSessionCookie()) ?? { ok: true as const };
-    if (ready.ok) appStorage.remove(PENDING_PASSWORD_KEY);
-    return ready;
+    return (await requireSessionCookie()) ?? { ok: true };
   } catch (e) {
     return fromNetwork(e);
   }
@@ -119,7 +111,6 @@ export async function setPassword(newPassword: string): Promise<Result> {
     }
     return { ok: false, message: result.message, code: result.code };
   }
-  appStorage.remove(PENDING_PASSWORD_KEY);
   return { ok: true };
 }
 
