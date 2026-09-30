@@ -1,10 +1,16 @@
 name: e2e-android
 # The four Maestro flows on an Android emulator, against a real API and the test Postgres.
 # Nightly on main; on a PR only when the flows, this file or the e2e app config change.
+# workflow_dispatch input `attempts` runs that many emulator legs in parallel (pull requests and the nightly use 1).
 on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
+    inputs:
+      attempts:
+        description: Parallel emulator legs
+        type: number
+        default: 1
   pull_request:
     paths:
       - ".github/workflows/e2e-android.yml"
@@ -17,65 +23,49 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  maestro:
+  setup:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
-    env:
-      DATABASE_URL: postgres://bbc:bbc@localhost:55432/bbc_test
-      NODE_ENV: test
-      BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-0000
-      INTERNAL_API_SECRET: ci-internal-ci-internal-ci-internal-0
-      APP_ORIGIN: http://localhost:8000
-      MAESTRO_VERSION: "2.10.0"
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - id: matrix
+        env:
+          ATTEMPTS: ${{ github.event_name == 'workflow_dispatch' && inputs.attempts || '1' }}
+        run: |
+          python3 -c 'import json,os; n=int(os.environ["ATTEMPTS"]); open(os.environ["GITHUB_OUTPUT"],"a").write("value="+json.dumps(list(range(1,n+1)))+"\n")'
+
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      # First, so a runner without hardware acceleration fails in seconds, not after the APK build.
-      - name: KVM on this runner
-        run: |
-          ls -l /dev/kvm || { echo "::error::no /dev/kvm on this runner — the emulator cannot boot"; exit 1; }
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+      - id: apk-key
+        run: echo "value=${{ hashFiles('apps/mobile/**', '!apps/mobile/e2e/**', 'packages/ui/**', 'packages/shared/**', 'bun.lock', '.github/workflows/e2e-android.yml') }}" >> "$GITHUB_OUTPUT"
+      - id: apk-cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
+        with:
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          key: apk-${{ steps.apk-key.outputs.value }}
+
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         with: { bun-version: "1.3.4" }
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         with: { node-version: "22.14.0" }
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         with: { distribution: temurin, java-version: "17" }
-
-      - name: Start test Postgres
-        run: |
-          docker compose -f infra/compose.test.yml down --remove-orphans || true
-          docker compose -f infra/compose.test.yml up -d --wait
-
       - run: bun install --frozen-lockfile
-
-      - name: Migrate and seed (fixture, flags, the fixture member's password)
-        run: |
-          bun run --filter @bbc/db db:migrate
-          bun run --filter @bbc/db db:seed
-          bun run scripts/seed-flags.ts
-          bun run scripts/seed-fixture-auth.ts
-
-      # No POSTMARK_SERVER_TOKEN: the console sender keeps the OTP for GET /v1/test/last-otp (not production).
-      - name: Start the API
-        run: |
-          nohup bun apps/api/src/index.ts > api.log 2>&1 &
-          for i in $(seq 1 60); do
-            curl -fsS http://localhost:8000/health && exit 0
-            sleep 1
-          done
-          echo "::error::API did not answer /health in 60 s"
-          tail -50 api.log
-          exit 1
+        if: steps.apk-cache.outputs.cache-hit != 'true'
 
       # prebuild before the NDK step: the generated project does not pin a version of its own.
       # Expo's root plugin fills ndkVersion from the React Native catalog that settings.gradle loads.
+      # These EXPO_PUBLIC_* values are part of the APK. They are fixed here; the cache key covers the workflow file.
       - name: Generate the Android project
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         working-directory: apps/mobile
         env:
-          # Not the job's NODE_ENV=test (the API needs that): babel-preset-expo skips expo-router's
-          # EXPO_ROUTER_APP_ROOT transform under test, and the release bundle then fails in _ctx.android.js.
           NODE_ENV: production
           EXPO_PUBLIC_API_URL: http://10.0.2.2:8000
           EXPO_PUBLIC_APP_ENV: e2e
@@ -84,6 +74,7 @@ jobs:
         run: npx expo prebuild --platform android --no-install
 
       - name: Read the NDK version from the generated Android project
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         id: ndk
         working-directory: apps/mobile/android
         run: |
@@ -102,6 +93,7 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Cache the Android NDK
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         id: ndk-cache
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 # v4.2.4
         with:
@@ -109,7 +101,7 @@ jobs:
           key: ndk-${{ steps.ndk.outputs.version }}
 
       - name: Install the Android NDK
-        if: steps.ndk-cache.outputs.cache-hit != 'true'
+        if: steps.apk-cache.outputs.cache-hit != 'true' && steps.ndk-cache.outputs.cache-hit != 'true'
         env:
           NDK_VERSION: ${{ steps.ndk.outputs.version }}
         shell: bash
@@ -137,7 +129,12 @@ jobs:
           echo "::error::NDK ${NDK_VERSION} was not installed after 3 attempts"
           exit 1
 
+      - name: Set up Gradle
+        if: steps.apk-cache.outputs.cache-hit != 'true'
+        uses: gradle/actions/setup-gradle@8379f6a1328ee0e06e2bb424dadb7b159856a326 # v4.4.0
+
       - name: Build the e2e APK (cleartext to 10.0.2.2 only, see apps/mobile/app.config.ts)
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         working-directory: apps/mobile
         env:
           NODE_ENV: production
@@ -150,6 +147,82 @@ jobs:
           # -D overrides it; Kotlin compiles in-process, so no Kotlin daemon keeps memory while the emulator runs.
           cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64 \
             -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g" -Pkotlin.compiler.execution.strategy=in-process
+
+      - name: Record whether the APK was built or reused
+        run: |
+          if [ "${{ steps.apk-cache.outputs.cache-hit }}" = "true" ]; then
+            echo "APK: reused (key ${{ steps.apk-key.outputs.value }})"
+          else
+            echo "APK: built (key ${{ steps.apk-key.outputs.value }})"
+          fi
+
+      - name: Upload the e2e APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-apk-${{ github.run_id }}
+          path: apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+  maestro:
+    needs: [setup, build-apk]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: ${{ fromJson(needs.setup.outputs.matrix) }}
+    env:
+      DATABASE_URL: postgres://bbc:bbc@localhost:55432/bbc_test
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: ci-secret-ci-secret-ci-secret-0000
+      INTERNAL_API_SECRET: ci-internal-ci-internal-ci-internal-0
+      APP_ORIGIN: http://localhost:8000
+      MAESTRO_VERSION: "2.10.0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # First, so a runner without hardware acceleration fails in seconds, not after the APK build.
+      - name: KVM on this runner
+        run: |
+          ls -l /dev/kvm || { echo "::error::no /dev/kvm on this runner — the emulator cannot boot"; exit 1; }
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version: "1.3.4" }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: "22.14.0" }
+
+      - name: Download the e2e APK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: e2e-apk-${{ github.run_id }}
+          path: apps/mobile/android/app/build/outputs/apk/release
+
+      - name: Start test Postgres
+        run: |
+          docker compose -f infra/compose.test.yml down --remove-orphans || true
+          docker compose -f infra/compose.test.yml up -d --wait
+
+      - run: bun install --frozen-lockfile
+
+      - name: Migrate and seed (fixture, flags, the fixture member's password)
+        run: |
+          bun run --filter @bbc/db db:migrate
+          bun run --filter @bbc/db db:seed
+          bun run scripts/seed-flags.ts
+          bun run scripts/seed-fixture-auth.ts
+
+      # No POSTMARK_SERVER_TOKEN: the console sender keeps the OTP for GET /v1/test/last-otp (not production).
+      - name: Start the API
+        run: |
+          nohup bun apps/api/src/index.ts > api.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8000/health && exit 0
+            sleep 1
+          done
+          echo "::error::API did not answer /health in 60 s"
+          tail -50 api.log
+          exit 1
 
       - name: Install Maestro
         run: |
@@ -173,7 +246,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-android-${{ github.run_id }}
+          name: e2e-android-${{ github.run_id }}-${{ matrix.attempt }}
           path: |
             e2e-results/
             api.log

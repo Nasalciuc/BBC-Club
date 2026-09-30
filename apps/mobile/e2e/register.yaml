@@ -12,17 +12,12 @@ appId: com.buybusinessclass.club
 - hideKeyboard
 - tapOn: { id: "join.continue" }
 - assertVisible: { id: "verify.code" }
-# Fetch OTP from test-only helper — never log the code, never put it in the URL.
-# Maestro executes only the ${} in evalScript. A bare block is a no-op, so inputText receives undefined.
-- evalScript: |
-    ${
-    const base = 'http://localhost:8000';
-    const email = encodeURIComponent('new.member@test.dev');
-    const res = http.get(base + '/v1/test/last-otp?email=' + email);
-    const body = json(res.body);
-    if (!body || !body.otp) throw new Error('last-otp did not return a code');
-    output.otp = body.otp;
-    }
+# Fetch OTP from the test helper — never log the code, never put it in the URL.
+- runScript:
+    file: scripts/last-otp.js
+    env:
+      EMAIL: new.member@test.dev
+- assertTrue: ${output.otp != null && output.otp !== ''}
 - tapOn: { id: "verify.code" }
 - inputText: ${output.otp}
 - hideKeyboard

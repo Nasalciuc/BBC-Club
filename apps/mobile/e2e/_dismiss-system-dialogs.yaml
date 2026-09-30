@@ -1,7 +1,8 @@
 appId: com.buybusinessclass.club
 ---
+# Only a Pixel Launcher ANR. A dialog that names our app must fail the flow.
 - runFlow:
     when:
-      visible: "isn't responding"
+      visible: "Pixel Launcher isn't responding"
     commands:
       - tapOn: "Wait"

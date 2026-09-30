@@ -12,18 +12,8 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "fare.request" }
 - tapOn: { id: "request.depart" }
 - assertVisible: { id: "dates.root" }
-# Maestro executes only the ${} in evalScript. A bare block leaves output.departDay undefined.
-- evalScript: |
-    ${
-    const now = new Date();
-    function iso(offset) {
-      const t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-      const p = function (n) { return String(n).padStart(2, '0'); };
-      return t.getFullYear() + '-' + p(t.getMonth() + 1) + '-' + p(t.getDate());
-    }
-    output.departDay = 'calendar.day.' + iso(14);
-    output.returnDay = 'calendar.day.' + iso(21);
-    }
+- runScript: scripts/trip-dates.js
+- assertTrue: ${output.departDay != null && output.returnDay != null}
 # Twelve months in one scrolling sheet: the days two and three weeks out can be below the fold.
 - scrollUntilVisible:
     element:
