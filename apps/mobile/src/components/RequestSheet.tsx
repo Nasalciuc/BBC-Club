@@ -31,7 +31,7 @@ type Props = {
   onSeeRequests?: () => void;
 };
 
-const SNAP = ["90%"] as const;
+const REQUEST_SNAP_POINTS = ["90%"];
 
 export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function RequestSheet(
   { onDone, onSeeRequests },
@@ -167,7 +167,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
     <>
       <BottomSheetModal
         ref={modalRef}
-        snapPoints={[...SNAP]}
+        snapPoints={REQUEST_SNAP_POINTS}
         enablePanDownToClose={!busy}
         keyboardBehavior="interactive"
         backgroundStyle={styles.bg}
