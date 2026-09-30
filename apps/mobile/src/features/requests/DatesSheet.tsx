@@ -36,6 +36,7 @@ export const DatesSheet = forwardRef<DatesSheetHandle, { onUse: (s: Selection) =
     <BottomSheetModal
       ref={modal}
       snapPoints={["92%"]}
+      stackBehavior="push"
       enableDynamicSizing={false}
       backgroundStyle={styles.bg}
       handleIndicatorStyle={styles.handle}
