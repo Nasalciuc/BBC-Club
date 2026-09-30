@@ -10,24 +10,93 @@ adb install -r "$APK"
 adb shell wm size
 adb shell wm density
 
-# The screen at a failure, in the job log itself: whether the keyboard is up (and where), and every element that
-# has a testID with its bounds. Screenshots are in the uploaded artifact (--debug-output).
+# The action already waited for sys.boot_completed. The Pixel Launcher is not under test:
+# disable it and fail if an ANR window survives. An ANR of our app fails the job later.
+boot=$(adb shell getprop sys.boot_completed | tr -d '\r')
+echo "sys.boot_completed=${boot}"
+if [ "$boot" != "1" ]; then
+  echo "::warning::sys.boot_completed is '${boot}', expected 1"
+fi
+
+# shellcheck disable=SC1091
+source apps/mobile/e2e/launcher-guard.sh
+remove_launcher_from_test || exit 1
+
+echo "-- clocks"
+date -u
+adb shell date
+
+# The screen at a failure, in the job log itself: whether the keyboard is up (and where), every element that has a
+# testID with its bounds, the text on screen, the native screen stack, and the device log of this flow (JS errors and
+# crashes only, never console.log). Screenshots are in the uploaded artifact (--debug-output).
 screen_state() {
+  echo "  -- focus"
+  adb shell dumpsys window | grep -E "mCurrentFocus|mFocusedApp" | head -3 || true
   adb shell dumpsys input_method | grep -E "mInputShown" || true
   adb shell dumpsys window | grep -E "InsetsSource.*type=ime" | head -3 || true
-  adb exec-out uiautomator dump /dev/tty 2>/dev/null | tr '>' '\n' |
+  local ui
+  ui=$(adb exec-out uiautomator dump /dev/tty 2>&1)
+  echo "$ui" | tr '>' '\n' |
     grep -E 'resource-id="[a-zA-Z]' | sed -E 's/.*resource-id="([^"]*)".*bounds="([^"]*)".*/  \1 \2/' || true
+  echo "  -- text on screen"
+  echo "$ui" | grep -oE 'text="[^"]+"' | sed -E 's/^text="[0-9 ]+"$/text="[digits redacted]"/' | head -20 | sed 's/^/ /' || true
+  echo "$ui" | grep -qE '<hierarchy' || echo "  (no hierarchy: ${ui:0:200})"
+  echo "  -- screen stack of the top activity"
+  adb shell dumpsys activity top | grep -E "ScreenStack|ScreenContainer|Screen\{|ScreenFragment|ReactSurface|ReactRoot" |
+    head -20 || true
+  echo "  -- device log (errors and warnings)"
+  # Warning and above, so a Hermes ReferenceError (for example a missing crypto) is in this log.
+  adb logcat -d -v brief '*:S' ReactNativeJS:W ReactNative:W ReactNativeJNI:W AndroidRuntime:E libc:F DEBUG:F |
+    tail -n 60 || true
+}
+
+# Named exceptions only. Each entry is a substring of one E/ReactNativeJS or FATAL line,
+# and the comment above it must say why that line is not a product bug. Empty means every such line fails the job.
+JS_ERROR_ALLOWLIST=()
+
+js_error_lines() {
+  adb logcat -d -v brief '*:S' ReactNativeJS:E AndroidRuntime:E |
+    grep -E 'E/ReactNativeJS|FATAL EXCEPTION' || true
 }
 
 status=0
 for flow in register sign-in search-and-request delete-account; do
   echo "::group::maestro $flow"
+  adb logcat -c || true
+  flow_failed=0
   if ! maestro test --format junit --output "$OUT/$flow.xml" --debug-output "$OUT/debug/$flow" \
     "apps/mobile/e2e/$flow.yaml"; then
     echo "::error::Maestro flow failed: $flow"
-    screen_state
+    flow_failed=1
     status=1
+  fi
+  errors=$(js_error_lines)
+  if [ -n "$errors" ]; then
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      allowed=0
+      for pattern in "${JS_ERROR_ALLOWLIST[@]+"${JS_ERROR_ALLOWLIST[@]}"}"; do
+        if printf '%s\n' "$line" | grep -qF "$pattern"; then
+          allowed=1
+          echo "  allowed JS error ($flow): $line"
+          break
+        fi
+      done
+      if [ "$allowed" -eq 0 ]; then
+        echo "::error::E/ReactNativeJS or FATAL in $flow"
+        printf '%s\n' "$line"
+        status=1
+        flow_failed=1
+      fi
+    done <<EOF
+$errors
+EOF
+  fi
+  check_anr_after_flow "$flow" || { flow_failed=1; status=1; }
+  if [ "$flow_failed" -eq 1 ]; then
+    screen_state
   fi
   echo "::endgroup::"
 done
+echo "ANR windows seen this run: $ANR_SEEN"
 exit "$status"

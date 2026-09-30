@@ -11,6 +11,8 @@ export type NotificationsAskSheetHandle = {
   dismiss: () => void;
 };
 
+const ASK_SNAP_POINTS = ["42%"];
+
 function markAsked() {
   appStorage.set(PUSH_ASKED_AT_KEY, String(Date.now()));
 }
@@ -37,7 +39,8 @@ export const NotificationsAskSheet = forwardRef<NotificationsAskSheetHandle>(
     return (
       <BottomSheetModal
         ref={modalRef}
-        snapPoints={["42%"]}
+        snapPoints={ASK_SNAP_POINTS}
+        stackBehavior="push"
         enablePanDownToClose
         onDismiss={markAsked}
         backgroundStyle={styles.bg}
