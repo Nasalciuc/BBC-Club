@@ -12,7 +12,9 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "fare.request" }
 - tapOn: { id: "request.depart" }
 - assertVisible: { id: "dates.root" }
+# Maestro executes only the ${} in evalScript. A bare block leaves output.departDay undefined.
 - evalScript: |
+    ${
     const now = new Date();
     function iso(offset) {
       const t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
@@ -21,6 +23,7 @@ appId: com.buybusinessclass.club
     }
     output.departDay = 'calendar.day.' + iso(14);
     output.returnDay = 'calendar.day.' + iso(21);
+    }
 # Twelve months in one scrolling sheet: the days two and three weeks out can be below the fold.
 - scrollUntilVisible:
     element:
