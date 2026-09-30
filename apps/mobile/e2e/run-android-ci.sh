@@ -10,16 +10,13 @@ adb install -r "$APK"
 adb shell wm size
 adb shell wm density
 
-# The action already waited for sys.boot_completed. Hide new ANR dialogs, then tap Wait on one
-# that is already up. Maestro's Wait tap is the fallback if this expires.
+# The action already waited for sys.boot_completed. An ANR of our app fails the job.
+# Wait is only for the Pixel Launcher dialog, which is the emulator home screen, not our process.
 boot=$(adb shell getprop sys.boot_completed | tr -d '\r')
 echo "sys.boot_completed=${boot}"
 if [ "$boot" != "1" ]; then
   echo "::warning::sys.boot_completed is '${boot}', expected 1"
 fi
-adb shell settings put global hide_error_dialogs 1 || true
-hidden=$(adb shell settings get global hide_error_dialogs | tr -d '\r')
-echo "hide_error_dialogs=${hidden}"
 
 tap_wait() {
   local ui line bounds x y
@@ -45,8 +42,9 @@ tap_wait() {
 deadline=$((SECONDS + 60))
 last=""
 idle=0
+our_anr=0
 while [ "$SECONDS" -lt "$deadline" ]; do
-  sample=$(adb shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|Application Not Responding" | head -20 || true)
+  sample=$(adb shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|mFocusedApp|Application Not Responding" | head -20 || true)
   echo "  -- launcher settle"
   if [ -n "$sample" ]; then
     printf '%s\n' "$sample" | sed 's/^/  /'
@@ -54,16 +52,27 @@ while [ "$SECONDS" -lt "$deadline" ]; do
     echo "  (no focus or ANR lines)"
   fi
   last=$sample
+  if printf '%s\n' "$sample" | grep -q "Application Not Responding: com.buybusinessclass.club"; then
+    echo "::error::app ANR: com.buybusinessclass.club"
+    our_anr=1
+    break
+  fi
   if ! printf '%s\n' "$sample" | grep -qF "Application Not Responding"; then
     echo "  launcher idle"
     idle=1
     break
   fi
-  tap_wait || true
+  if printf '%s\n' "$sample" | grep -q "Application Not Responding: com.google.android.apps.nexuslauncher"; then
+    tap_wait || true
+  fi
   sleep 2
 done
+if [ "$our_anr" -eq 1 ]; then
+  printf '%s\n' "$last"
+  exit 1
+fi
 if [ "$idle" -eq 0 ]; then
-  echo "::warning::launcher was not idle within 60s; Maestro will dismiss a leftover dialog"
+  echo "::warning::Pixel Launcher was not idle within 60s; Maestro will tap Wait if the dialog is still up"
   printf '%s\n' "$last"
 fi
 
@@ -71,6 +80,8 @@ fi
 # testID with its bounds, the text on screen, the native screen stack, and the device log of this flow (JS errors and
 # crashes only, never console.log). Screenshots are in the uploaded artifact (--debug-output).
 screen_state() {
+  echo "  -- focus"
+  adb shell dumpsys window | grep -E "mCurrentFocus|mFocusedApp" | head -3 || true
   adb shell dumpsys input_method | grep -E "mInputShown" || true
   adb shell dumpsys window | grep -E "InsetsSource.*type=ime" | head -3 || true
   local ui
@@ -89,15 +100,50 @@ screen_state() {
     tail -n 60 || true
 }
 
+# Named exceptions only. Each entry is a substring of one E/ReactNativeJS or FATAL line,
+# and the comment above it must say why that line is not a product bug. Empty means every such line fails the job.
+JS_ERROR_ALLOWLIST=()
+
+js_error_lines() {
+  adb logcat -d -v brief '*:S' ReactNativeJS:E AndroidRuntime:E |
+    grep -E 'E/ReactNativeJS|FATAL EXCEPTION' || true
+}
+
 status=0
 for flow in register sign-in search-and-request delete-account; do
   echo "::group::maestro $flow"
   adb logcat -c || true
+  flow_failed=0
   if ! maestro test --format junit --output "$OUT/$flow.xml" --debug-output "$OUT/debug/$flow" \
     "apps/mobile/e2e/$flow.yaml"; then
     echo "::error::Maestro flow failed: $flow"
-    screen_state
+    flow_failed=1
     status=1
+  fi
+  errors=$(js_error_lines)
+  if [ -n "$errors" ]; then
+    while IFS= read -r line; do
+      [ -z "$line" ] && continue
+      allowed=0
+      for pattern in "${JS_ERROR_ALLOWLIST[@]+"${JS_ERROR_ALLOWLIST[@]}"}"; do
+        if printf '%s\n' "$line" | grep -qF "$pattern"; then
+          allowed=1
+          echo "  allowed JS error ($flow): $line"
+          break
+        fi
+      done
+      if [ "$allowed" -eq 0 ]; then
+        echo "::error::E/ReactNativeJS or FATAL in $flow"
+        printf '%s\n' "$line"
+        status=1
+        flow_failed=1
+      fi
+    done <<EOF
+$errors
+EOF
+  fi
+  if [ "$flow_failed" -eq 1 ]; then
+    screen_state
   fi
   echo "::endgroup::"
 done
