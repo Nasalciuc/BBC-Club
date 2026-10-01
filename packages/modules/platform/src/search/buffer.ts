@@ -20,7 +20,8 @@ export function createSearchBuffer(deps: {
     if (flushing) return flushing;
     flushing = (async () => {
       try {
-        enabled = await deps.flags.isEnabled("catalog.search_events", false);
+        const flagOn = await deps.flags.isEnabled("catalog.search_events", false);
+        enabled = deps.producer !== null && flagOn;
       } catch (err) {
         deps.logger.warn({ err: String(err) }, "search events flag unreadable");
         enabled = false;
