@@ -25,6 +25,16 @@ else
   DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml --env-file $PROD_ENV"
   [[ -f "$STG_ENV" ]] && DC="$DC -f $INFRA_DIR/compose.staging.yml --env-file $STG_ENV"
 fi
+# shellcheck disable=SC1091
+source "$INFRA_DIR/env-value.sh"
+stg_file=""
+if [[ "$MODE" == "staging" || -f "$STG_ENV" ]]; then
+  stg_file="$STG_ENV"
+  guard_staging "$stg_file"
+fi
+if redis_kafka_wanted "$PROD_ENV" "$stg_file"; then
+  DC="$DC --profile redis-kafka"
+fi
 
 if [[ "$MODE" == "production" ]]; then
   SVC=api; WORKER=worker; PG=postgres; POOLER=pgbouncer; CRON=cron; VAR=API_IMAGE; ENVF="$PROD_ENV"

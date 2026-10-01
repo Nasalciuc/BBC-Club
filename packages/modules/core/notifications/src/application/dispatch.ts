@@ -71,6 +71,13 @@ export type DispatchDeps = {
   signal?: AbortSignal;
   /** SQL interval fragment. Default is five minutes. Tests pass a shorter literal. */
   stuckAfter?: SQL;
+  /** `streams` enqueues claimed ids. Anything else sends in this process. Default is inline send. */
+  transport?: () => Promise<"pg" | "streams">;
+  enqueue?: (ids: string[]) => Promise<void>;
+  /** Stream worker only. Inline dispatch omits it. */
+  logger?: { debug?: (bindings: { notificationId: string }, message: string) => void };
+  /** Test seam. Called inside deliverSending after the claim is read and before tokens are. */
+  beforeTokens?: () => Promise<void>;
 };
 
 type Metrics = {
@@ -86,7 +93,56 @@ type Metrics = {
 type WorkItem = {
   row: PendingRow;
   outcomes: { tok: TokenRow; result: SendResult }[];
+  /**
+   * Claim text read by the stream worker. Undefined means the inline path, whose
+   * update stays id-only. Null means the column was null.
+   */
+  claimedAtText?: string | null;
 };
+
+type ClaimedWork = { row: PendingRow; tokens: TokenRow[]; claimedAtText?: string | null };
+
+/** Inline updates match the id. Stream updates also match the claim that was read. */
+function outcomeWhere(id: string, claim: string | null | undefined): SQL {
+  if (claim === undefined) return eq(notificationsTable.id, id);
+  const sameClaim =
+    claim === null
+      ? sql`${notificationsTable.claimedAt} is null`
+      : sql`${notificationsTable.claimedAt} = ${claim}::timestamptz`;
+  return (
+    and(eq(notificationsTable.id, id), eq(notificationsTable.status, "sending"), sameClaim) ??
+    eq(notificationsTable.id, id)
+  );
+}
+
+async function commitOutcome(
+  tx: Executor,
+  deps: DispatchDeps,
+  id: string,
+  claim: string | null | undefined,
+  patch: {
+    status: "sent" | "delivered" | "pending" | "failed" | "suppressed";
+    sentAt?: SQL;
+    deliveredAt?: SQL;
+    ticketId?: string | null;
+    attempts: SQL;
+    claimedAt: null;
+    scheduledFor?: SQL;
+    lastError?: string | null;
+  },
+): Promise<boolean> {
+  const where = outcomeWhere(id, claim);
+  if (claim === undefined) {
+    await tx.update(notificationsTable).set(patch).where(where);
+    return true;
+  }
+  const updated = await tx.update(notificationsTable).set(patch).where(where).returning({ id: notificationsTable.id });
+  if (updated.length === 0) {
+    deps.logger?.debug?.({ notificationId: id }, "stream outcome skipped; the claim changed");
+    return false;
+  }
+  return true;
+}
 
 /** Claim due rows, send outside the transaction, then record one outcome per notification. */
 export async function dispatch(deps: DispatchDeps): Promise<Record<string, number>> {
@@ -169,8 +225,113 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
     return metrics;
   }
 
-  const results = await mapLimit(work, CONCURRENCY, async ({ row, tokens }) => ({
+  const mode = deps.enqueue ? await deps.transport?.() : undefined;
+  if (mode === "streams" && deps.enqueue && work.length > 0) {
+    try {
+      await deps.enqueue(work.map((item) => item.row.id));
+      return metrics;
+    } catch {
+      // Redis refused the enqueue. Send here so the claimed rows are not left in `sending`.
+    }
+  }
+
+  await sendClaimed(deps, work, metrics);
+  return metrics;
+}
+
+/** Delivers rows a stream worker claimed. A row that is no longer `sending` is skipped, so a replay is a no-op. */
+export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise<Record<string, number>> {
+  const metrics: Metrics = {
+    claimed: ids.length,
+    sent: 0,
+    delivered: 0,
+    failed: 0,
+    suppressed: 0,
+    deactivated: 0,
+    reclaimed: 0,
+  };
+  if (ids.length === 0) return metrics;
+  const rows = await deps.db
+    .select({
+      id: notificationsTable.id,
+      memberId: notificationsTable.memberId,
+      category: notificationsTable.category,
+      title: notificationsTable.title,
+      body: notificationsTable.body,
+      deepLink: notificationsTable.deepLink,
+      offerId: notificationsTable.offerId,
+      attempts: notificationsTable.attempts,
+      claimedAtText: sql<string | null>`${notificationsTable.claimedAt}::text`,
+    })
+    .from(notificationsTable)
+    .where(and(inArray(notificationsTable.id, ids), eq(notificationsTable.status, "sending")));
+  await deps.beforeTokens?.();
+  const work: ClaimedWork[] = [];
+  for (const row of rows) {
+    // The stream worker runs after the row waited in the queue: re-check what the inline path checks inside its claim
+    // transaction (dispatch.ts:171–192) — the member's status, then the offer preferences — through the same claim guard.
+    const status = await deps.members.getStatus(deps.db, row.memberId);
+    if (status !== "active") {
+      const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
+        status: "suppressed",
+        attempts: sql`${notificationsTable.attempts}`,
+        claimedAt: null,
+        lastError: `member_${status}`,
+      });
+      if (wrote) metrics.suppressed++;
+      continue;
+    }
+    if (row.category === "offers_personal" || row.category === "offers_broadcast") {
+      const prefs = await deps.members.preferencesOf(deps.db, row.memberId);
+      const allowed = row.category === "offers_personal" ? prefs.offers_personal : prefs.offers_broadcast;
+      if (!allowed) {
+        const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
+          status: "suppressed",
+          attempts: sql`${notificationsTable.attempts}`,
+          claimedAt: null,
+          lastError: "pref_disabled",
+        });
+        if (wrote) metrics.suppressed++;
+        continue;
+      }
+    }
+    const tokens = await deps.db
+      .select()
+      .from(deviceTokens)
+      .where(and(eq(deviceTokens.memberId, row.memberId), eq(deviceTokens.active, true)));
+    if (tokens.length === 0) {
+      const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
+        status: "sent",
+        sentAt: sql`now()`,
+        attempts: sql`${notificationsTable.attempts} + 1`,
+        claimedAt: null,
+      });
+      if (wrote) metrics.sent++;
+      continue;
+    }
+    work.push({
+      row: {
+        id: row.id,
+        member_id: row.memberId,
+        category: row.category,
+        title: row.title,
+        body: row.body,
+        deep_link: row.deepLink,
+        offer_id: row.offerId,
+        attempts: row.attempts,
+      },
+      tokens,
+      claimedAtText: row.claimedAtText,
+    });
+  }
+  await sendClaimed(deps, work, metrics);
+  return metrics;
+}
+
+async function sendClaimed(deps: DispatchDeps, work: ClaimedWork[], metrics: Metrics): Promise<void> {
+  const results = await mapLimit(work, CONCURRENCY, async ({ row, tokens, claimedAtText }) => ({
     row,
+    claimedAtText,
     outcomes: await Promise.all(
       tokens.map(async (tok) => {
         try {
@@ -199,7 +360,6 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
   for (const item of results) {
     await withTx(deps.db, (tx) => recordOutcome(tx, deps, item, metrics));
   }
-  return metrics;
 }
 
 async function recordOutcome(tx: Executor, deps: DispatchDeps, item: WorkItem, metrics: Metrics): Promise<void> {
@@ -231,17 +391,15 @@ async function recordOutcome(tx: Executor, deps: DispatchDeps, item: WorkItem, m
   }
 
   if (anyOk) {
-    await tx
-      .update(notificationsTable)
-      .set({
-        status: "delivered",
-        ticketId,
-        sentAt: sql`now()`,
-        deliveredAt: sql`now()`,
-        attempts: sql`${notificationsTable.attempts} + 1`,
-        claimedAt: null,
-      })
-      .where(eq(notificationsTable.id, row.id));
+    const wrote = await commitOutcome(tx, deps, row.id, item.claimedAtText, {
+      status: "delivered",
+      ticketId,
+      sentAt: sql`now()`,
+      deliveredAt: sql`now()`,
+      attempts: sql`${notificationsTable.attempts} + 1`,
+      claimedAt: null,
+    });
+    if (!wrote) return;
     await deps.publish(tx, {
       type: "notification.delivered",
       version: 1,
@@ -261,28 +419,23 @@ async function recordOutcome(tx: Executor, deps: DispatchDeps, item: WorkItem, m
   }
 
   if (retryMs !== null && row.attempts < 6) {
-    await tx
-      .update(notificationsTable)
-      .set({
-        status: "pending",
-        claimedAt: null,
-        attempts: sql`${notificationsTable.attempts} + 1`,
-        scheduledFor: sql`now() + ${retryMs} * interval '1 millisecond'`,
-        lastError: lastFail,
-      })
-      .where(eq(notificationsTable.id, row.id));
+    await commitOutcome(tx, deps, row.id, item.claimedAtText, {
+      status: "pending",
+      claimedAt: null,
+      attempts: sql`${notificationsTable.attempts} + 1`,
+      scheduledFor: sql`now() + ${retryMs} * interval '1 millisecond'`,
+      lastError: lastFail,
+    });
     return;
   }
 
-  await tx
-    .update(notificationsTable)
-    .set({
-      status: "failed",
-      lastError: lastFail ?? "Fatal",
-      attempts: sql`${notificationsTable.attempts} + 1`,
-      claimedAt: null,
-    })
-    .where(eq(notificationsTable.id, row.id));
+  const wrote = await commitOutcome(tx, deps, row.id, item.claimedAtText, {
+    status: "failed",
+    lastError: lastFail ?? "Fatal",
+    attempts: sql`${notificationsTable.attempts} + 1`,
+    claimedAt: null,
+  });
+  if (!wrote) return;
   await deps.publish(tx, {
     type: "notification.failed",
     version: 1,

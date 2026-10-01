@@ -1,8 +1,14 @@
 import { EventRegistry, createPublisher, createPoller, tombstoneMember, type PollerOptions } from "../events";
 import { createFlags } from "../flags";
 import { createJobs } from "../jobs";
+import { enqueue, PUSH_GROUP, runWorker } from "../jobs/streams";
 import { createLogger, createMetrics } from "../telemetry";
 import { createRateLimiter } from "../ratelimit";
+import { createCache } from "../cache";
+import { consumeIdempotent } from "../kafka/consume";
+import { createKafkaProducer } from "../kafka/producer";
+import { createSearchBuffer } from "../search/buffer";
+import { createBreaker, createRedis, type Redis } from "../redis/client";
 import type { Db } from "@bbc/db";
 
 export type Platform = ReturnType<typeof createPlatform>;
@@ -11,14 +17,27 @@ export type Platform = ReturnType<typeof createPlatform>;
  *  Modules get `events.publish`, `flags`, `jobs.register`; the host also gets the poller and metrics. */
 export function createPlatform(
   db: Db,
-  opts: { level?: string; pretty?: boolean; handlerTimeoutMs?: number; onDead?: PollerOptions["onDead"] } = {},
+  opts: {
+    level?: string;
+    pretty?: boolean;
+    handlerTimeoutMs?: number;
+    onDead?: PollerOptions["onDead"];
+    redisUrl?: string;
+    kafkaBrokers?: string;
+  } = {},
 ) {
   const logger = createLogger(opts);
   const metrics = createMetrics();
+  const redisUrl = opts.redisUrl?.trim() || "";
+  const redis: Redis | null = redisUrl ? createRedis(redisUrl, logger) : null;
+  const guarded = createBreaker(metrics);
+  const cache = createCache({ redis, guarded, metrics });
   const registry = new EventRegistry();
-  const flags = createFlags(db, { logger });
+  const flags = createFlags(db, { logger, cache: redis ? cache : undefined });
   const jobs = createJobs(db, { logger, metrics });
-  const rateLimit = createRateLimiter({ db, flags, metrics, logger });
+  const rateLimit = createRateLimiter({ db, flags, metrics, logger, redis });
+  const kafkaBrokers = opts.kafkaBrokers?.trim() || "";
+  const producer = kafkaBrokers ? createKafkaProducer(kafkaBrokers, "bbc-platform") : null;
   const { publish } = createPublisher(registry, metrics);
   const poller = createPoller(
     db,
@@ -52,6 +71,11 @@ export function createPlatform(
   metrics.gauge("queue_dead", async () => (await stats()).dead);
   metrics.gauge("queue_oldest_pending_seconds", async () => (await stats()).oldestPendingSeconds);
 
+  const ac = new AbortController();
+  const closers: Array<() => Promise<void>> = [];
+  const search = createSearchBuffer({ producer, flags, metrics, logger });
+  if (producer) search.start(ac.signal);
+
   return {
     logger,
     metrics,
@@ -59,6 +83,51 @@ export function createPlatform(
     jobs,
     rateLimit,
     poller,
+    redis,
+    guarded,
+    cache,
+    search,
+    producer,
+    kafka: kafkaBrokers
+      ? {
+          consume: (consumeOpts: {
+            clientId: string;
+            groupId: string;
+            topic: string;
+            consumerName: string;
+            signal: AbortSignal;
+            handle: (eventId: string, value: unknown, tx: unknown) => Promise<void>;
+          }) =>
+            consumeIdempotent({
+              db,
+              brokers: kafkaBrokers,
+              logger,
+              metrics,
+              ...consumeOpts,
+            }),
+        }
+      : null,
+    signal: ac.signal,
+    lifecycle: {
+      onClose(fn: () => Promise<void>) {
+        closers.push(fn);
+      },
+    },
+    streams: redis
+      ? {
+          enqueue: (ids: string[]) => enqueue(redis, ids),
+          run: (consumer: string, handle: (ids: string[]) => Promise<void>) =>
+            runWorker({
+              redis,
+              group: PUSH_GROUP,
+              consumer,
+              count: 100,
+              minIdleMs: 60_000,
+              signal: ac.signal,
+              handle,
+            }),
+        }
+      : null,
     events: {
       defineEvent: registry.defineEvent.bind(registry),
       registerConsumer: registry.registerConsumer.bind(registry),
@@ -67,9 +136,28 @@ export function createPlatform(
       registry,
     },
     /** Called by /ready: the platform is healthy when the DB answers and the queue is not stuck. */
+    async connect() {
+      if (!redis) return;
+      await redis
+        .connect()
+        .catch((err) => logger.warn({ err: String(err) }, "redis connect failed; callers fall back"));
+    },
     async health() {
       const s = await poller.stats();
       return { ok: s.oldestPendingSeconds < 300 && s.dead === 0, queue: s };
+    },
+    async close() {
+      ac.abort();
+      for (const fn of closers) {
+        try {
+          await fn();
+        } catch (err) {
+          logger.warn({ err: String(err) }, "platform close hook failed");
+        }
+      }
+      if (producer)
+        await producer.close().catch((err) => logger.warn({ err: String(err) }, "kafka producer close failed"));
+      if (redis) await redis.close().catch((err) => logger.warn({ err: String(err) }, "redis close failed"));
     },
   };
 }
@@ -83,3 +171,7 @@ export { collectDbReport, maybeAlertOps, pgbouncerWaitingClients, resetDbAlertSt
 
 /** The host imports this from "@bbc/platform"; it is defined in jobs/builtin.ts. */
 export { registerPlatformJobs } from "../jobs/builtin";
+export { kafkaRelayHandler, RELAY_CONSUMER, DOMAIN_TOPIC } from "../kafka/relay";
+export { shardOf, SHARDS } from "../jobs/streams";
+export { SEARCH_TOPIC } from "../search/buffer";
+export { SearchEvent } from "../search/event";

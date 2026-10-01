@@ -41,6 +41,7 @@ jobs:
           docker compose -f infra/compose.test.yml up -d --wait
 
       - run: bun install --frozen-lockfile
+      - run: bun test scripts/env-profile.test.ts
       # Official binary — npm `gitleaks` / bunx stubs have no usable CLI.
       - name: Install gitleaks
         run: |

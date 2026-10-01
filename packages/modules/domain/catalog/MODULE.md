@@ -1,12 +1,12 @@
 # domain/catalog
 
-**Owns:** schema `catalog.*` — `fares` (route/cabin/price catalogue) and `airports` (IATA reference for pins + autocomplete).
-**Publishes:** none.
-**Consumes:** none.
+**Owns:** schema `catalog.*` — `fares` (route/cabin/price catalogue), `airports` (IATA reference for pins + autocomplete), and `demand_daily` (UTC-day search counts, no member id).
+**Publishes:** none on the journal. When `catalog.search_events` is on and `KAFKA_BROKERS` is set, `GET /v1/search` notes a route event that a flusher publishes to `bbc.search.v1`.
+**Consumes:** `bbc.search.v1` on the worker (`APP_ROLE` not `api`), group `catalog.demand`, idempotent via `platform.kafka_processed`.
 **Ports:** none (`needs: []`). Repository surface is the port — a Sabre / company-API adapter can replace `fares.repo` later without route changes.
 **Facade:** `searchFares` (at most 30), `getFare`, `destinations`, `searchAirports`, `getAirport`, `getAirports`, `importCsv`.
-**Routes:** `GET /v1/search`, `GET /v1/fares/:id` (410 if past `valid_until` or unpublished), `GET /v1/airports?q=` (max 8), `POST /v1/internal/catalog/import` (`catalog:import`).
-**Jobs:** `expire-fares` every 15 minutes — sets `published = false` where `valid_until < now()`, then clears the destinations cache.
-**Home map:** `destinations()` is `DISTINCT ON (route_to)` ordered by price, cached 60s per airport outside a caller transaction. A fare that expires mid-minute can stay on the map for ≤ 60s; its detail answers 410. Import and expire-fares clear the cache.
+**Routes:** `GET /v1/search` (rate rule `search`), `GET /v1/fares/:id` (410 if past `valid_until` or unpublished, rate rule `read`), `GET /v1/airports?q=` (max 8, rate rule `read`), `POST /v1/internal/catalog/import` (`catalog:import`), `GET /v1/internal/demand?days=7` (`ops:read`, no rate limit).
+**Jobs:** `expire-fares` every 15 minutes — sets `published = false` where `valid_until < now()`, then clears the destinations cache. `demand-rollup` at 03:15 UTC writes yesterday's sketches into `demand_daily`.
+**Home map:** `destinations()` is `DISTINCT ON (route_to)` ordered by price. Without Redis, a 60s process cache. With Redis, key `catalog:dest:{generation}:{HOME}` and `INCR catalog:dest:gen` on import and expire-fares, so every home misses without a SCAN. Airports use `catalog:airports:gen` the same way. A fare that expires mid-minute can stay on the map for ≤ 60s; its detail answers 410.
 **Out of scope:** promotional offers (`proposals.offers`), Sabre adapter, mobile wiring.
-**Invariants tested:** search JFK→LHR business → ≥3 · expired fare → 410 · airports `q=JF` ranks JFK · import idempotent · unauthenticated → 401 · timed fixture `arrive − depart == duration` · fa01 maps to 18:55 / 07:00 / +1 · same clocks under Europe/Chisinau and America/Los_Angeles · every `airports.csv` `tz` is IANA.
+**Invariants tested:** search JFK→LHR business → ≥3 · expired fare → 410 · airports `q=JF` ranks JFK · import idempotent · unauthenticated → 401 · timed fixture `arrive − depart == duration` · fa01 maps to 18:55 / 07:00 / +1 · same clocks under Europe/Chisinau and America/Los_Angeles · every `airports.csv` `tz` is IANA. Search events reject `memberId`, `ip`, and `deviceId`.
