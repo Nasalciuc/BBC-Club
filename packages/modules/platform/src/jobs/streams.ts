@@ -64,10 +64,14 @@ export async function runWorker(o: {
   signal: AbortSignal;
   handle: (ids: string[]) => Promise<void>;
 }) {
-  await ensureGroups(o.redis, o.group);
+  let groupsReady = false;
   while (!o.signal.aborted) {
     const pending: StreamId[] = [];
     try {
+      if (!groupsReady) {
+        await ensureGroups(o.redis, o.group);
+        groupsReady = true;
+      }
       for (let s = 0; s < SHARDS && pending.length < o.count; s++) {
         const key = shardKey(s);
         const claimed = await o.redis.xAutoClaim(key, o.group, o.consumer, o.minIdleMs, "0-0", {
@@ -91,8 +95,9 @@ export async function runWorker(o: {
       for (const item of pending) {
         await o.redis.xAck(item.key, o.group, item.streamId);
       }
-    } catch {
+    } catch (err) {
       if (o.signal.aborted) break;
+      if (String(err).includes("NOGROUP")) groupsReady = false;
       await new Promise((r) => setTimeout(r, 500));
     }
   }
