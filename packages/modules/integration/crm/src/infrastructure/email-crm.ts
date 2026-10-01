@@ -10,8 +10,23 @@ type Payload = {
   passengers: { adult: number; child: number; infant: number };
   note?: string | null;
   phone_valid?: boolean;
+  intent?: "quote" | "alternative" | "fare" | "offer";
+  replaces_fare_id?: string | null;
   _actions?: { quoted: string; booked: string; closed: string };
 };
+
+function opening(p: Payload): string {
+  if (p.intent === "quote") return `New quote request ${p.reference}`;
+  if (p.intent === "alternative") return `New alternative request ${p.reference}`;
+  return `New fare request ${p.reference}`;
+}
+
+function subjectFor(p: Payload, hop: string): string {
+  const tail = `${p.reference} · ${hop} · ${p.cabin_class}`;
+  if (p.intent === "quote") return `Quote request ${tail}`;
+  if (p.intent === "alternative") return `Alternative request ${tail}`;
+  return `Request ${tail}`;
+}
 
 export function emailCrm(deps: { email: EmailFacade; operatorsEmail: string }): CrmFacade {
   return {
@@ -25,8 +40,12 @@ export function emailCrm(deps: { email: EmailFacade; operatorsEmail: string }): 
       const p = raw as Payload;
       const route = p.flights.map((f) => `${f.from} → ${f.to}  ${f.date}`).join("\n");
       const first = p.flights[0];
+      const hop = `${first?.from ?? ""}→${first?.to ?? ""}`;
       const text = [
-        `New fare request ${p.reference}`,
+        opening(p),
+        ...(p.intent === "alternative" && p.replaces_fare_id
+          ? ["", `Type: Alternative to an expired fare (fare ${p.replaces_fare_id})`]
+          : []),
         "",
         route,
         `${p.cabin_class} · ${p.trip_type} · ${p.passengers.adult} adult(s), ${p.passengers.child} child(ren), ${p.passengers.infant} infant(s)`,
@@ -43,7 +62,7 @@ export function emailCrm(deps: { email: EmailFacade; operatorsEmail: string }): 
       ].join("\n");
       await deps.email.sendOperatorRequest({
         to: deps.operatorsEmail,
-        subject: `Request ${p.reference} · ${first?.from ?? ""}→${first?.to ?? ""} · ${p.cabin_class}`,
+        subject: subjectFor(p, hop),
         text,
         replyTo: p.client.email,
       });

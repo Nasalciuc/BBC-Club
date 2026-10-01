@@ -10,6 +10,7 @@ import type { Executor } from "@bbc/db";
 import { createRequestsRepo } from "./infrastructure/requests.repo";
 import { submit } from "./application/submit";
 import { setStatus } from "./application/set-status";
+import { effectiveIntent } from "./application/intent";
 import { actionLabel, escapeHtml, routeLabel, verifyAction } from "./application/operator-links";
 import { toRequestVM } from "./application/to-request-vm";
 import { createSendRequestsJob } from "./jobs/send-requests";
@@ -237,6 +238,11 @@ function opsRoutes(
     }
     const req = await repo.getById(conn, v.requestId);
     if (!req) return c.html(page("Request not found."), 404);
+    const intent = effectiveIntent({
+      intent: req.intent,
+      fareId: req.fareId,
+      offerId: req.offerId,
+    });
     return c.html(
       confirmPage({
         token: c.req.param("token"),
@@ -244,6 +250,10 @@ function opsRoutes(
         reference: req.reference,
         route: routeLabel(req.legs),
         name: req.contactName,
+        typeLine:
+          intent === "alternative" && req.replacesFareId
+            ? `Type: Alternative to an expired fare (fare ${req.replacesFareId})`
+            : null,
       }),
     );
   });
@@ -270,8 +280,10 @@ function confirmPage(input: {
   reference: string;
   route: string;
   name: string;
+  typeLine: string | null;
 }): string {
-  return `<!doctype html><html><body><p>${escapeHtml(input.reference)}</p><p>${escapeHtml(input.route)}</p><p>${escapeHtml(input.name)}</p><form method="post" action="/ops/requests/${escapeHtml(input.token)}"><button type="submit">Mark as ${escapeHtml(actionLabel(input.action))}</button></form></body></html>`;
+  const type = input.typeLine ? `<p>${escapeHtml(input.typeLine)}</p>` : "";
+  return `<!doctype html><html><body><p>${escapeHtml(input.reference)}</p><p>${escapeHtml(input.route)}</p><p>${escapeHtml(input.name)}</p>${type}<form method="post" action="/ops/requests/${escapeHtml(input.token)}"><button type="submit">Mark as ${escapeHtml(actionLabel(input.action))}</button></form></body></html>`;
 }
 
 function facade(db: Executor, repo: ReturnType<typeof createRequestsRepo>): RequestsFacade {

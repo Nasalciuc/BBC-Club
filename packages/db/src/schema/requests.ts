@@ -27,6 +27,9 @@ export const requests = requestsSchema.table(
     idempotencyKey: text("idempotency_key").notNull(),
     fareId: uuid("fare_id"),
     offerId: uuid("offer_id"),
+    /** quote | alternative. Null on a fare or offer request; the CHECK is the enum. */
+    intent: text("intent"),
+    replacesFareId: uuid("replaces_fare_id"),
     tripType: tripType("trip_type").notNull(),
     cabin: requestCabin("cabin").notNull(),
     legs: jsonb("legs").$type<RequestLeg[]>().notNull(),
@@ -68,11 +71,15 @@ export const requests = requestsSchema.table(
     index("requests_offer")
       .on(t.offerId)
       .where(sql`${t.offerId} IS NOT NULL`),
+    index("requests_replaces_fare")
+      .on(t.replacesFareId)
+      .where(sql`${t.replacesFareId} IS NOT NULL`),
     index("requests_crm")
       .on(t.crmRequestId)
       .where(sql`${t.crmRequestId} IS NOT NULL`),
     check("requests_legs_nonempty", sql`jsonb_array_length(${t.legs}) >= 1`),
     check("requests_one_source", sql`NOT (${t.fareId} IS NOT NULL AND ${t.offerId} IS NOT NULL)`),
+    check("requests_intent", sql`${t.intent} IS NULL OR ${t.intent} IN ('quote', 'alternative')`),
     check(
       "requests_sync_consistent",
       sql`(${t.sentToCrm} = false) OR (${t.crmRequestId} IS NOT NULL AND ${t.sentAt} IS NOT NULL)`,

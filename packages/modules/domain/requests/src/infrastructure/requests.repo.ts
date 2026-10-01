@@ -26,6 +26,10 @@ export const ClaimedRow = z.object({
   send_attempts: z.coerce.number().int(),
   phone_valid: z.coerce.boolean(),
   phone_e164: z.string().nullable(),
+  intent: z.enum(["quote", "alternative"]).nullable(),
+  replaces_fare_id: z.string().uuid().nullable(),
+  fare_id: z.string().uuid().nullable(),
+  offer_id: z.string().uuid().nullable(),
 });
 export type ClaimedRow = z.infer<typeof ClaimedRow>;
 
@@ -95,7 +99,8 @@ export function createRequestsRepo(db: Executor) {
         SELECT
           ${col(r.id)}, ${col(r.reference)}, ${col(r.contactName)}, ${col(r.contactPhone)}, ${col(r.contactEmail)},
           ${col(r.legs)}, ${col(r.tripType)}, ${col(r.cabin)}, ${col(r.passengers)}, ${col(r.source)},
-          ${col(r.appVersion)}, ${col(r.sendAttempts)}, ${col(r.phoneValid)}, ${col(r.phoneE164)}
+          ${col(r.appVersion)}, ${col(r.sendAttempts)}, ${col(r.phoneValid)}, ${col(r.phoneE164)},
+          ${col(r.intent)}, ${col(r.replacesFareId)}, ${col(r.fareId)}, ${col(r.offerId)}
         FROM ${r}
         WHERE ${col(r.sentToCrm)} = false
           AND ${col(r.sendAttempts)} < 6

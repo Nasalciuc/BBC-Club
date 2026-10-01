@@ -11,6 +11,9 @@ export const RequestSubmittedV1 = z.object({
   cabin: z.enum(["business", "first"]),
   fareId: z.string().uuid().nullable(),
   offerId: z.string().uuid().nullable(),
+  /** Present on new publishes; optional so historical journal rows still parse. */
+  intent: z.enum(["quote", "alternative"]).nullable().optional(),
+  replacesFareId: z.string().uuid().nullable().optional(),
   submittedAt: z.string().datetime(),
 });
 

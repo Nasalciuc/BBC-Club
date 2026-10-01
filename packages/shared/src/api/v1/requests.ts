@@ -35,9 +35,34 @@ export const RequestBody = z
     }),
     note: z.string().max(500).optional(),
     priceAtRequest: z.number().positive().optional(),
+    intent: z.enum(["quote", "alternative"]).optional(),
+    replacesFareId: z.string().uuid().optional(),
   })
-  .refine((b) => !(b.fareId && b.offerId), {
-    message: "a request comes from a fare or an offer, never both",
+  .superRefine((b, ctx) => {
+    if (b.fareId && b.offerId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "a request comes from a fare or an offer, never both",
+      });
+    }
+    if (b.intent && (b.fareId || b.offerId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "A quote or an alternative doesn't include a fare or an offer.",
+      });
+    }
+    if (b.intent === "alternative" && !b.replacesFareId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Tell us which fare this replaces.",
+      });
+    }
+    if (b.replacesFareId && b.intent !== "alternative") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Only an alternative names a fare to replace.",
+      });
+    }
   });
 export type RequestBody = z.infer<typeof RequestBody>;
 
