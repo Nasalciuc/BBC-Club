@@ -53,7 +53,7 @@ Or dispatch **release** (`platform=android`, `submit=false`). Needs repo secret 
 Owner, once:
 
 1. Create the app in Play Console.
-2. Upload the first AAB **manually** — Google requires it before API submissions work.
+2. Upload the first AAB with eas submit, or manually in Play Console if you prefer. If the API submission is refused because the app has no release yet, upload that first AAB manually, then use eas submit from the next one.
 3. Create the service-account key and upload it under **EAS → Credentials → Service Credentials → Add a Google Service Account Key**.
 
 ```bash
