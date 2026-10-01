@@ -20,6 +20,18 @@ Same facts as `docs/store/app-privacy.md`, in Play Console language. Update both
 | App info and performance | Crash logs / diagnostics | **No**    | —                                                  | —                                                                  | —                                       | No crash SDK                                                                                                          |
 | Device or other IDs      | Push token               | Yes       | Asked after the first request (`push.ts:19–23`)    | Expo push service when an Expo token is obtained (`push.ts:49–57`) | App functionality (quote notifications) | POST `/v1/devices` (`api.ts:288–309`)                                                                                 |
 
+## Who receives a request's contact fields
+
+The table above says name, email and phone are not shared. The hops are:
+
+- The API stores the request (`packages/modules/domain/requests/src/application/submit.ts:95–97`). The `send-requests` job hands `name`, `phone` and `email` to `crm.submitRequest` (`packages/modules/domain/requests/src/jobs/send-requests.ts:25`).
+- `CRM_ADAPTER=email`: `email-crm.ts` sends them through Postmark to `OPERATORS_EMAIL` (`packages/modules/integration/crm/src/infrastructure/email-crm.ts:24–37`).
+- `CRM_ADAPTER=http` — the production example (`infra/env/production.env.example:49`): **not implemented yet** (`packages/modules/integration/crm/src/module.ts:80` throws). Nothing leaves the API until it is.
+
+The **Shared** column is **No** because, under [Google Play’s definition](https://support.google.com/googleplay/android-developer/answer/10787469), transferring data to a **service provider** that processes it on the developer’s behalf and instructions is not “sharing”. Postmark and the CRM provider act as service providers processing on BuyBusinessClass’s behalf, and the operators who read the mailbox are BuyBusinessClass staff.
+
+DECISION (owner): confirm that the operators reading OPERATORS_EMAIL and the CRM behind CRM_ADAPTER=http are BuyBusinessClass or a processor acting on its instructions. If either is a separate company using the data for its own purposes, change "Shared" to Yes for name, email and phone.
+
 ## Security
 
 - Data in transit: production API must be `https://` (`apps/mobile/app.config.ts` `assertProductionEnv`).

@@ -2,7 +2,7 @@
 
 Derived from the code on this branch. Nothing here is used for tracking. There is **no** crash reporter and **no** analytics SDK today — a later error-reporting PR must update this file.
 
-Apple “linked to the user” = yes for every row (the member session). “Used for tracking” = no.
+Apple “linked to the user” = yes for each collected data type (the member session). “Used for tracking” = no.
 
 | Data type                                                  | Collected? | Linked | Tracking | Purpose           | Where the app collects or sends it                                                                                                                                                     |
 | ---------------------------------------------------------- | ---------- | ------ | -------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -20,11 +20,11 @@ Apple “linked to the user” = yes for every row (the member session). “Used
 
 ## Stored on device
 
-| What                                      | Store                    | File                                            |
-| ----------------------------------------- | ------------------------ | ----------------------------------------------- |
-| Session cookie (`bbcclub` / `bbc`)        | SecureStore              | `apps/mobile/src/features/auth/client.ts:11–16` |
-| Push `deviceId`                           | SecureStore              | `apps/mobile/src/lib/push.ts:9–16`              |
-| Onboarded / pending password / push-asked | MMKV `bbc-app`           | `apps/mobile/src/lib/storage-keys.ts:4–13`      |
-| Offline request queue (full request body) | MMKV `bbc-request-queue` | `apps/mobile/src/lib/queue.ts`                  |
+| What                                                                                  | Store                    | File                                            |
+| ------------------------------------------------------------------------------------- | ------------------------ | ----------------------------------------------- |
+| Session cookie (`bbcclub` / `bbc`)                                                    | SecureStore              | `apps/mobile/src/features/auth/client.ts:11–16` |
+| Push `deviceId`                                                                       | SecureStore              | `apps/mobile/src/lib/push.ts:9–16`              |
+| Onboarded / pending-password state flag (a boolean — never the password) / push-asked | MMKV `bbc-app`           | `apps/mobile/src/lib/storage-keys.ts:4–13`      |
+| Offline request queue (full request body)                                             | MMKV `bbc-request-queue` | `apps/mobile/src/lib/queue.ts`                  |
 
 OTP and passwords are not written to SecureStore or MMKV. OTP is not placed in route params.
