@@ -48,11 +48,12 @@ export function createSearchBuffer(deps: {
   return {
     note(event: SearchEvent) {
       if (!enabled) return;
+      const stamped = event.at ? event : { ...event, at: new Date().toISOString() };
       if (buf.length >= MAX) {
         buf.shift();
         deps.metrics.inc("search_events_dropped");
       }
-      buf.push(event);
+      buf.push(stamped);
       if (buf.length >= BATCH) void flush();
     },
     start(signal: AbortSignal) {

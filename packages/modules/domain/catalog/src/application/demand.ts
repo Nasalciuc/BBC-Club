@@ -38,7 +38,7 @@ async function ensure(redis: Sketch, day: string) {
 
 /** One accepted search event. The caller already dropped identity fields. */
 export async function recordSearch(redis: Sketch, event: SearchEvent) {
-  const day = utcDay();
+  const day = event.at ? utcDay(new Date(event.at)) : utcDay();
   await ensure(redis, day);
   const keys = demandKeys(day);
   const item = `${event.from}:${event.to}:${event.cabin}`;

@@ -8,6 +8,7 @@ export const SearchEvent = z
     month: z.string().regex(/^\d{4}-\d{2}$/),
     hadFares: z.boolean(),
     results: z.number().int().nonnegative(),
+    at: z.string().datetime().optional(),
   })
   .strict();
 
