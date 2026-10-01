@@ -33,7 +33,6 @@
     "expo-image": "~57.0.4",
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.9",
-    "expo-local-authentication": "~57.0.3",
     "expo-network": "~57.0.2",
     "expo-notifications": "~57.0.20",
     "expo-router": "~57.0.22",
