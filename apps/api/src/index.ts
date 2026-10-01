@@ -41,7 +41,9 @@ export async function buildApp(opts: BuildOptions = {}) {
   const platform = createPlatform(db, {
     level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug",
     pretty: env.NODE_ENV === "development",
+    redisUrl: env.REDIS_URL,
   });
+  await platform.connect();
   platform.metrics.gauge("push_live", () => (env.PUSH_ADAPTER === "live" ? 1 : 0));
   if (env.NODE_ENV === "production" && env.PUSH_ADAPTER !== "live") {
     platform.logger.warn(
@@ -170,6 +172,7 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   const shutdown = async () => {
     platform.logger.info({}, "shutting down");
+    await platform.close();
     await platform.poller.stop(); // finishes the in-flight delivery, then stops
     await db.close();
   };

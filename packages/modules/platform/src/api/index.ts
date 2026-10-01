@@ -3,6 +3,7 @@ import { createFlags } from "../flags";
 import { createJobs } from "../jobs";
 import { createLogger, createMetrics } from "../telemetry";
 import { createRateLimiter } from "../ratelimit";
+import { createBreaker, createRedis, type Redis } from "../redis/client";
 import type { Db } from "@bbc/db";
 
 export type Platform = ReturnType<typeof createPlatform>;
@@ -11,10 +12,19 @@ export type Platform = ReturnType<typeof createPlatform>;
  *  Modules get `events.publish`, `flags`, `jobs.register`; the host also gets the poller and metrics. */
 export function createPlatform(
   db: Db,
-  opts: { level?: string; pretty?: boolean; handlerTimeoutMs?: number; onDead?: PollerOptions["onDead"] } = {},
+  opts: {
+    level?: string;
+    pretty?: boolean;
+    handlerTimeoutMs?: number;
+    onDead?: PollerOptions["onDead"];
+    redisUrl?: string;
+  } = {},
 ) {
   const logger = createLogger(opts);
   const metrics = createMetrics();
+  const redisUrl = opts.redisUrl?.trim() || "";
+  const redis: Redis | null = redisUrl ? createRedis(redisUrl, logger) : null;
+  const guarded = createBreaker(metrics);
   const registry = new EventRegistry();
   const flags = createFlags(db, { logger });
   const jobs = createJobs(db, { logger, metrics });
@@ -59,6 +69,8 @@ export function createPlatform(
     jobs,
     rateLimit,
     poller,
+    redis,
+    guarded,
     events: {
       defineEvent: registry.defineEvent.bind(registry),
       registerConsumer: registry.registerConsumer.bind(registry),
@@ -67,9 +79,18 @@ export function createPlatform(
       registry,
     },
     /** Called by /ready: the platform is healthy when the DB answers and the queue is not stuck. */
+    async connect() {
+      if (!redis) return;
+      await redis
+        .connect()
+        .catch((err) => logger.warn({ err: String(err) }, "redis connect failed; callers fall back"));
+    },
     async health() {
       const s = await poller.stats();
       return { ok: s.oldestPendingSeconds < 300 && s.dead === 0, queue: s };
+    },
+    async close() {
+      if (redis) await redis.close().catch((err) => logger.warn({ err: String(err) }, "redis close failed"));
     },
   };
 }
