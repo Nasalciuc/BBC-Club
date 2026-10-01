@@ -20,7 +20,7 @@ export function ErrorState({ title, body, primary, secondary, reference, testID 
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
       {primary ? (
-        <Button testID={`${testID}.primary`} label={primary.label} onPress={primary.onPress} shape="card" />
+        <Button testID={`${testID}.primary`} label={primary.label} onPress={primary.onPress} shape="pill" />
       ) : null}
       {secondary ? (
         <Button
@@ -28,7 +28,7 @@ export function ErrorState({ title, body, primary, secondary, reference, testID 
           label={secondary.label}
           onPress={secondary.onPress}
           variant="ghost"
-          shape="card"
+          shape="pill"
         />
       ) : null}
       {reference ? <Text style={styles.ref}>{`REF ${reference}`}</Text> : null}
@@ -42,8 +42,8 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     gap: tokens.space.sm,
   },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, textAlign: "center" },
-  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary, textAlign: "center" },
+  title: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },
+  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
   ref: {
     ...rn(tokens.type.labelMono),
     color: tokens.colors.textTertiary,

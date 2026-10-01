@@ -91,19 +91,18 @@ export default function FareDetailScreen() {
         <ErrorState
           testID="fare.gone"
           variant="gone"
-          title="This fare has closed."
-          body={
-            closed
-              ? `Was ${formatPrice(closed.price, closed.currency)} · valid until ${new Date(closed.validUntil).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-              : "The price you saw is no longer available."
-          }
+          title="This fare has changed."
+          body="This fare is no longer available. A specialist can help you find another option."
           primary={{
-            label: closed ? `Request ${closed.from} → ${closed.to}` : "Request this route",
+            label: "Request an alternative",
             onPress: () =>
               sheetRef.current?.present({
                 profile,
+                mode: "alternative",
+                replacesFareId: typeof id === "string" ? id : undefined,
                 fromCode: closed?.from,
                 toCode: closed?.to,
+                city: closed?.to,
               }),
           }}
           secondary={{

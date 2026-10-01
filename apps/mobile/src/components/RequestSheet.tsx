@@ -9,7 +9,14 @@ import { Button, Chip, CloseButton, short, tokens, rn, type Selection } from "@b
 import { PhoneField } from "@/components/phone-field";
 import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
 import { retryMinutes, type RequestSource } from "@/features/requests/confirmation-logic";
-import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
+import {
+  buildDraft,
+  draftToBody,
+  sheetTitle,
+  useRequestDraft,
+  type RequestDraft,
+  type RequestMode,
+} from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
 import { newId } from "@/lib/id";
 import { enqueueRequest } from "@/lib/queue";
@@ -22,6 +29,8 @@ export type RequestSheetHandle = {
     fromCode?: string;
     toCode?: string;
     city?: string;
+    mode?: RequestMode;
+    replacesFareId?: string;
   }) => void;
   dismiss: () => void;
 };
@@ -148,7 +157,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
         <BottomSheetScrollView contentContainerStyle={styles.content} testID="request.sheet">
           <>
             <View style={styles.header}>
-              <Text style={styles.title}>Request this fare</Text>
+              <Text style={styles.title}>{sheetTitle(state.mode)}</Text>
               <CloseButton testID="request.close" onPress={() => modalRef.current?.dismiss()} />
             </View>
             <Text style={styles.mono}>{monoLine}</Text>
@@ -244,7 +253,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
 
             <Button
               testID="request.submit"
-              label={busy ? "Sending…" : "Request this fare"}
+              label={busy ? "Sending…" : sheetTitle(state.mode)}
               busy={busy}
               shape="card"
               onPress={() => void onSubmit()}

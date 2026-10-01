@@ -4,8 +4,10 @@ import type { FareVM } from "@bbc/shared/api/v1/fares";
 import type { Profile } from "@/lib/api";
 
 export type TripType = "round" | "oneway";
+export type RequestMode = "fare" | "offer" | "quote" | "alternative";
 
 export type RequestDraft = {
+  mode: RequestMode;
   tripType: TripType;
   legs: RequestLeg[];
   passengers: Passengers;
@@ -14,6 +16,7 @@ export type RequestDraft = {
   note: string;
   fareId?: string;
   offerId?: string;
+  replacesFareId?: string;
   priceAtRequest?: number;
   phoneError: string | null;
   submitError: string | null;
@@ -107,11 +110,15 @@ export function buildDraft(opts: {
   profile?: Profile | null;
   fromCode?: string;
   toCode?: string;
+  mode?: RequestMode;
+  replacesFareId?: string;
 }): RequestDraft {
   const from = opts.fare?.from.code ?? opts.fromCode ?? "JFK";
   const to = opts.fare?.to.code ?? opts.toCode ?? "LHR";
   const cabin = opts.fare?.cabin ?? "business";
+  const mode: RequestMode = opts.mode ?? (opts.fare?.offerId ? "offer" : opts.fare ? "fare" : "quote");
   return {
+    mode,
     tripType: "round",
     legs: [
       { from, to, date: "2026-10-12" },
@@ -125,7 +132,9 @@ export function buildDraft(opts: {
       email: opts.profile?.email ?? "",
     },
     note: "",
-    fareId: opts.fare?.id,
+    fareId: mode === "fare" ? opts.fare?.id : undefined,
+    offerId: mode === "offer" ? (opts.fare?.offerId ?? undefined) : undefined,
+    replacesFareId: mode === "alternative" ? opts.replacesFareId : undefined,
     priceAtRequest: opts.fare?.price.offer,
     phoneError: null,
     submitError: null,
@@ -136,11 +145,15 @@ export function buildDraft(opts: {
   };
 }
 
+export function sheetTitle(mode: RequestMode): string {
+  if (mode === "quote") return "Request a quote";
+  if (mode === "alternative") return "Request an alternative";
+  return "Request this fare";
+}
+
 export function draftToBody(draft: RequestDraft): RequestBody {
   const legs = draft.tripType === "oneway" ? draft.legs.slice(0, 1) : draft.legs;
-  return {
-    fareId: draft.fareId,
-    offerId: draft.offerId,
+  const shared = {
     tripType: draft.tripType,
     cabin: draft.cabin,
     legs,
@@ -149,6 +162,10 @@ export function draftToBody(draft: RequestDraft): RequestBody {
     note: draft.note || undefined,
     priceAtRequest: draft.priceAtRequest,
   };
+  if (draft.mode === "quote") return { ...shared, intent: "quote" };
+  if (draft.mode === "alternative") return { ...shared, intent: "alternative", replacesFareId: draft.replacesFareId };
+  if (draft.mode === "offer") return { ...shared, offerId: draft.offerId };
+  return { ...shared, fareId: draft.fareId };
 }
 
 export function useRequestDraft(initial: RequestDraft) {
