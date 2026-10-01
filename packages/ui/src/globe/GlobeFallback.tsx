@@ -1,9 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { useEffect, useState } from "react";
+import { AccessibilityInfo, AppState, StyleSheet, View } from "react-native";
+import { GestureDetector, Pressable } from "react-native-gesture-handler";
 import Svg, { Path } from "react-native-svg";
-import { rn } from "../rn-type";
 import { tokens } from "../tokens";
-import { GLOBE } from "./constants";
+import { createGlobeEngine } from "./globe-engine";
+import { GLOBE_SPEC, haloOpacity, projector, routeArcPath } from "./globe-logic";
 
 export type Pin = { code: string; lat: number; lng: number; hasOffer: boolean; fromPrice: string };
 
@@ -15,93 +16,108 @@ type Props = {
   size?: number;
 };
 
-/** Default mode until Mapbox exists — not a degraded one. Pins by equirectangular projection. */
+/** e2e builds hold the opening position: Maestro taps globe.pin.LHR, and parity compares the reduced-motion stills. */
+const HOLD_STILL = process.env.EXPO_PUBLIC_APP_ENV === "e2e";
+
+/**
+ * The Explore globe — orthographic, Natural Earth land, measured from Figma: 97:435 (London selected), 482:1115 (Globe ·
+ * Map style) and page 06 · Motion. All mutable state lives in the engine (globe-engine.ts); this component reads only
+ * props and state, so React Compiler can compile it and nothing depends on manual memoization.
+ * The name stays GlobeFallback until #48 merges, so this PR shares no file with it; the rename to Globe follows then.
+ */
 export function GlobeFallback({ pins, home, selected, onSelect, size = 520 }: Props) {
-  const project = (lat: number, lng: number) => {
-    const x = size / 2 + ((lng + 60) / 180) * (size / 2) * 0.82;
-    const y = size / 2 - ((lat - 40) / 90) * (size / 2) * 0.82;
-    return { x, y };
-  };
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
+  // One engine per mount: it builds the gesture once, so a re-render never hands GestureDetector a new gesture mid-drag.
+  const [engine] = useState(() => createGlobeEngine({ size, selected, reducedMotion: false, holdStill: HOLD_STILL }));
+  const [frame, setFrame] = useState(() => engine.initialFrame);
+  const [clock, setClock] = useState(0); // drives the halo pulse
+
+  useEffect(() => engine.attach({ frame: setFrame, clock: setClock }), [engine]);
+  useEffect(() => {
+    engine.update({ size, selected, reducedMotion });
+  }, [engine, size, selected, reducedMotion]);
+  useEffect(() => (appActive ? engine.run() : undefined), [engine, appActive]);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
+    const motion = AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);
+    const app = AppState.addEventListener("change", (s) => setAppActive(s === "active"));
+    return () => {
+      motion.remove();
+      app.remove();
+    };
+  }, []);
+
+  // Render: props and state only. Projecting a handful of pins and one arc is cheap; the land path is already in `frame`.
+  const proj = projector(size, frame.rotation, frame.zoom);
+  const halo = haloOpacity(clock, HOLD_STILL || reducedMotion);
   const sel = pins.find((p) => p.code === selected) ?? null;
+  const from = home ? proj.point([home.lng, home.lat]) : null;
+  const to = sel ? proj.point([sel.lng, sel.lat]) : null;
+  const arc = from && to ? routeArcPath(from, to, [size / 2, size / 2]) : "";
 
   return (
-    <View style={[styles.wrap, { width: size, height: size }]} pointerEvents="box-none">
-      <LinearGradient
-        colors={[...GLOBE.sphere.colors]}
-        locations={[...GLOBE.sphere.locations]}
-        start={GLOBE.sphere.center}
-        end={{ x: 1, y: 1 }}
-        style={[styles.sphere, { width: size, height: size, borderRadius: size / 2 }]}
-      />
-      {home && sel ? (
+    <GestureDetector gesture={engine.gesture}>
+      <View style={[styles.wrap, { width: size, height: size }]} collapsable={false}>
         <Svg width={size} height={size} style={StyleSheet.absoluteFill} pointerEvents="none">
           <Path
-            d={arc(project(home.lat, home.lng), project(sel.lat, sel.lng))}
-            stroke={tokens.colors.textOnDark}
-            strokeWidth={GLOBE.arc.width}
-            strokeDasharray={GLOBE.arc.dash.join(" ")}
-            fill="none"
+            d={proj.sphere()}
+            fill={tokens.colors.surfacePanel}
+            stroke={tokens.colors.textOnDarkMuted}
+            strokeOpacity={GLOBE_SPEC.rimOpacity}
+            strokeWidth={1}
           />
+          <Path d={frame.land} fill={tokens.colors.surfaceMuted} />
+          {arc ? (
+            <Path
+              d={arc}
+              fill="none"
+              stroke={tokens.colors.textOnDark}
+              strokeWidth={GLOBE_SPEC.arcStroke}
+              strokeDasharray={[...GLOBE_SPEC.arcDash]}
+            />
+          ) : null}
         </Svg>
-      ) : null}
-      {pins.map((pin) => {
-        const { x, y } = project(pin.lat, pin.lng);
-        const spec = pin.code === selected ? GLOBE.pin.selected : pin.hasOffer ? GLOBE.pin.offer : GLOBE.pin.fare;
-        const fill =
-          pin.code === selected
+        {pins.map((pin) => {
+          const xy = proj.point([pin.lng, pin.lat]);
+          if (!xy) return null; // Figma: pins disappear on the far hemisphere
+          const isSel = pin.code === selected;
+          const big = isSel || pin.hasOffer;
+          const dot = big ? GLOBE_SPEC.pin.offerDot : GLOBE_SPEC.pin.dot;
+          const colour = isSel
             ? tokens.colors.accentWarm
             : pin.hasOffer
               ? tokens.colors.textOnDark
-              : tokens.colors.textTertiary;
-        return (
-          <Pressable
-            key={pin.code}
-            testID={`globe.pin.${pin.code}`}
-            accessibilityRole="button"
-            accessibilityLabel={`${pin.code}, ${pin.fromPrice}`}
-            hitSlop={16}
-            onPress={() => onSelect(pin.code)}
-            style={[
-              styles.pin,
-              {
-                left: x - spec.size / 2,
-                top: y - spec.size / 2,
-                width: spec.size,
-                height: spec.size,
-                borderRadius: spec.size / 2,
-                backgroundColor: fill,
-                borderWidth: spec.halo,
-                borderColor: spec.haloColor,
-              },
-            ]}
-          />
-        );
-      })}
-      {sel ? (
-        <View style={[styles.label, { left: project(sel.lat, sel.lng).x - 60, top: project(sel.lat, sel.lng).y - 42 }]}>
-          <Text style={styles.labelText}>{`${sel.code} · ${sel.fromPrice}`}</Text>
-        </View>
-      ) : null}
-    </View>
+              : tokens.colors.textOnDarkMuted;
+          const hit = GLOBE_SPEC.pin.hit;
+          return (
+            <Pressable
+              key={pin.code}
+              testID={`globe.pin.${pin.code}`}
+              accessibilityRole="button"
+              accessibilityLabel={`${pin.code}, ${pin.fromPrice}`}
+              onPress={() => onSelect(pin.code)}
+              style={[styles.hit, { left: xy[0] - hit / 2, top: xy[1] - hit / 2, width: hit, height: hit }]}
+            >
+              {big ? (
+                <View
+                  style={[
+                    styles.round,
+                    { width: GLOBE_SPEC.pin.halo, height: GLOBE_SPEC.pin.halo, backgroundColor: colour, opacity: halo },
+                  ]}
+                />
+              ) : null}
+              <View style={[styles.round, { width: dot, height: dot, backgroundColor: colour }]} />
+            </Pressable>
+          );
+        })}
+      </View>
+    </GestureDetector>
   );
-}
-
-function arc(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const cx = (a.x + b.x) / 2;
-  const cy = Math.min(a.y, b.y) - Math.abs(b.x - a.x) * 0.35;
-  return `M${a.x} ${a.y} Q ${cx} ${cy} ${b.x} ${b.y}`;
 }
 
 const styles = StyleSheet.create({
   wrap: { alignSelf: "center" },
-  sphere: { position: "absolute" },
-  pin: { position: "absolute" },
-  label: {
-    position: "absolute",
-    backgroundColor: tokens.colors.surfacePage,
-    borderRadius: tokens.radius.field,
-    paddingHorizontal: tokens.space.sm,
-    paddingVertical: tokens.space.xs,
-  },
-  labelText: { ...rn(tokens.type.caption), color: tokens.colors.textPrimary },
+  hit: { position: "absolute", alignItems: "center", justifyContent: "center" },
+  round: { position: "absolute", borderRadius: 999 },
 });
