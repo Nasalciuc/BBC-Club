@@ -208,7 +208,19 @@ export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise
       .select()
       .from(deviceTokens)
       .where(and(eq(deviceTokens.memberId, row.memberId), eq(deviceTokens.active, true)));
-    if (tokens.length === 0) continue;
+    if (tokens.length === 0) {
+      await deps.db
+        .update(notificationsTable)
+        .set({
+          status: "sent",
+          sentAt: sql`now()`,
+          attempts: sql`${notificationsTable.attempts} + 1`,
+          claimedAt: null,
+        })
+        .where(eq(notificationsTable.id, row.id));
+      metrics.sent++;
+      continue;
+    }
     work.push({
       row: {
         id: row.id,

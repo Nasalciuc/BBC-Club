@@ -5,7 +5,7 @@ import { z } from "zod";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import type { MembersFacade } from "@bbc/members";
 import type { PushSender } from "../src/ports/push";
-import { dispatch, type DispatchDeps } from "../src/application/dispatch";
+import { deliverSending, dispatch, type DispatchDeps } from "../src/application/dispatch";
 
 let iso: IsolatedDb;
 beforeAll(async () => {
@@ -194,6 +194,26 @@ test("Unregistered deactivates the token", async () => {
   );
   expect(await tokenActive(token)).toBe(false);
   expect(await statusOf(id)).toBe("failed");
+});
+
+test("a stream row with no device leaves sending", async () => {
+  const memberId = `m-${crypto.randomUUID()}`;
+  const id = await insertSending(memberId, 2);
+  const metrics = await deliverSending(
+    deps({
+      send: async () => ({ ok: true, ticketId: "unused" }),
+    }),
+    [id],
+  );
+  expect(metrics.sent).toBe(1);
+  const raw = rowList(
+    await iso.db.execute(
+      sql`SELECT status, attempts, claimed_at FROM notifications.notifications WHERE id = ${id}::uuid`,
+    ),
+  )[0] as { status: string; attempts: number | string; claimed_at: unknown };
+  expect(raw.status).toBe("sent");
+  expect(Number(raw.attempts)).toBe(3);
+  expect(raw.claimed_at).toBeNull();
 });
 
 test("a transactional quote-ready row is not suppressed by offer preferences", async () => {
