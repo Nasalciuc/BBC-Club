@@ -155,7 +155,14 @@ chmod 644 /etc/cron.d/bbc && chown root:root /etc/cron.d/bbc
 say "8/9 start (database → migrations → API and ingress)"
 DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml --env-file $ENV_FILE"
 [[ "$WITH_STAGING" == "--with-staging" ]] && DC="$DC -f $INFRA_DIR/compose.staging.yml --env-file $INFRA_DIR/env/staging.env"
-if grep -qE '^(REDIS_URL|KAFKA_BROKERS)=.+' "$ENV_FILE" || { [[ "$WITH_STAGING" == "--with-staging" ]] && grep -qE '^(REDIS_URL|KAFKA_BROKERS)=.+' "$INFRA_DIR/env/staging.env"; }; then
+# shellcheck disable=SC1091
+source "$INFRA_DIR/env-value.sh"
+stg_file=""
+if [[ "$WITH_STAGING" == "--with-staging" ]]; then
+  stg_file="$INFRA_DIR/env/staging.env"
+  guard_staging "$stg_file"
+fi
+if redis_kafka_wanted "$ENV_FILE" "$stg_file"; then
   DC="$DC --profile redis-kafka"
 fi
 export ENV_FILE

@@ -13,4 +13,4 @@ Status: accepted · Date: 2026-10-01 · Amends ADR-IMPL-022 for read-path limits
 5. Kill switches and consumer pauses are never cached. Auth rate limits and session storage stay in Postgres.
 6. Redis is AGPLv3. We use it internally as a network service; we do not link it into the mobile app or ship it as a combined work.
 
-**Consequence.** Merging this ADR and its code changes nothing that runs until an operator sets `REDIS_URL`. Read limits (`read`, `search`) may then move to Redis; account-protecting limits do not.
+**Consequence.** Merging this ADR and its code changes nothing that runs until an operator sets `REDIS_URL`. Read limits (`read`, `search`) may then move to Redis; account-protecting limits do not. Redis and Kafka are production-only for now. Staging isolation — a separate Redis database index and a topic prefix, or separate services — is a later, separate decision; until then the scripts refuse staging values for `REDIS_URL`, `KAFKA_BROKERS`, and `REDIS_APP_PASSWORD`.
