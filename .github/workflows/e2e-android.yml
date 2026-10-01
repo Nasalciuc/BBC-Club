@@ -1,6 +1,6 @@
 name: e2e-android
 # The four Maestro flows on an Android emulator, against a real API and the test Postgres.
-# Nightly on main; on a PR only when the flows, this file or the e2e app config change.
+# Nightly on main; on a PR when the app, the flows, this file, or the e2e app config change.
 # workflow_dispatch input `attempts` runs that many emulator legs in parallel (pull requests and the nightly use 1).
 on:
   schedule:
@@ -17,6 +17,11 @@ on:
       - "apps/mobile/e2e/**"
       - "apps/mobile/app.config.*"
       - "apps/mobile/plugins/**"
+      - "apps/mobile/src/**"
+      - "apps/mobile/package.json"
+      - "packages/ui/**"
+      - "packages/shared/**"
+      - "bun.lock"
 concurrency:
   group: e2e-android-${{ github.ref }}
   cancel-in-progress: true
