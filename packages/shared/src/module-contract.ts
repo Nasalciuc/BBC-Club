@@ -80,6 +80,13 @@ export type ModulePlatform = {
     /** Null when Redis is not connected, so callers keep their process cache. */
     generation(key: string): Promise<string | null>;
   };
+  /** Null when REDIS_URL is unset. */
+  streams: {
+    enqueue(ids: string[]): Promise<void>;
+    run(consumer: string, handle: (ids: string[]) => Promise<void>): Promise<void>;
+  } | null;
+  lifecycle: { onClose(fn: () => Promise<void>): void };
+  signal: AbortSignal;
 };
 
 export type ModuleOutput<Exposes> = {

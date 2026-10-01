@@ -1,6 +1,7 @@
 import { EventRegistry, createPublisher, createPoller, tombstoneMember, type PollerOptions } from "../events";
 import { createFlags } from "../flags";
 import { createJobs } from "../jobs";
+import { enqueue, PUSH_GROUP, runWorker } from "../jobs/streams";
 import { createLogger, createMetrics } from "../telemetry";
 import { createRateLimiter } from "../ratelimit";
 import { createCache } from "../cache";
@@ -69,6 +70,9 @@ export function createPlatform(
   metrics.gauge("queue_dead", async () => (await stats()).dead);
   metrics.gauge("queue_oldest_pending_seconds", async () => (await stats()).oldestPendingSeconds);
 
+  const ac = new AbortController();
+  const closers: Array<() => Promise<void>> = [];
+
   return {
     logger,
     metrics,
@@ -97,6 +101,27 @@ export function createPlatform(
             }),
         }
       : null,
+    signal: ac.signal,
+    lifecycle: {
+      onClose(fn: () => Promise<void>) {
+        closers.push(fn);
+      },
+    },
+    streams: redis
+      ? {
+          enqueue: (ids: string[]) => enqueue(redis, ids),
+          run: (consumer: string, handle: (ids: string[]) => Promise<void>) =>
+            runWorker({
+              redis,
+              group: PUSH_GROUP,
+              consumer,
+              count: 100,
+              minIdleMs: 60_000,
+              signal: ac.signal,
+              handle,
+            }),
+        }
+      : null,
     events: {
       defineEvent: registry.defineEvent.bind(registry),
       registerConsumer: registry.registerConsumer.bind(registry),
@@ -116,6 +141,14 @@ export function createPlatform(
       return { ok: s.oldestPendingSeconds < 300 && s.dead === 0, queue: s };
     },
     async close() {
+      ac.abort();
+      for (const fn of closers) {
+        try {
+          await fn();
+        } catch (err) {
+          logger.warn({ err: String(err) }, "platform close hook failed");
+        }
+      }
       if (producer)
         await producer.close().catch((err) => logger.warn({ err: String(err) }, "kafka producer close failed"));
       if (redis) await redis.close().catch((err) => logger.warn({ err: String(err) }, "redis close failed"));
@@ -133,3 +166,4 @@ export { collectDbReport, maybeAlertOps, pgbouncerWaitingClients, resetDbAlertSt
 /** The host imports this from "@bbc/platform"; it is defined in jobs/builtin.ts. */
 export { registerPlatformJobs } from "../jobs/builtin";
 export { kafkaRelayHandler, RELAY_CONSUMER, DOMAIN_TOPIC } from "../kafka/relay";
+export { shardOf, SHARDS } from "../jobs/streams";
