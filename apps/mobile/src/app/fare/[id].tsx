@@ -2,52 +2,30 @@ import type { FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, ErrorState, Icon, ListRow, PricePair, SectionLabel, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, ErrorState, ListRow, PricePair, TabBar, tokens, rn } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
-import { formatPrice, formatValidUntil } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
 
-const CTA_RESERVE = 56 + 24 + 18;
+/** Frame photo band. No space token equals 340; bottom corners follow DESIGN.md (12), not the square frame. */
+const HERO_BAND = 340;
 
-function TimeBlock({ fare }: { fare: FareVM }) {
-  if (!fare.departLocal || !fare.arriveLocal) {
-    return <Text style={styles.factsMono}>{fare.nonstop ? "NONSTOP" : "1 STOP"} · TIMES ON REQUEST</Text>;
-  }
-  const dur =
-    fare.durationMinutes != null
-      ? `${Math.floor(fare.durationMinutes / 60)}H ${String(fare.durationMinutes % 60).padStart(2, "0")}`
-      : null;
-  const arriveClock = fare.arriveDayOffset > 0 ? `${fare.arriveLocal} +${fare.arriveDayOffset}` : fare.arriveLocal;
-  return (
-    <View style={styles.timeBlock}>
-      <View style={styles.timeCol}>
-        <Text style={styles.timeDisplay}>{fare.departLocal}</Text>
-        <Text style={styles.factsMono}>{fare.from.code}</Text>
-        {fare.departAt ? (
-          <Text style={styles.caption}>
-            {new Date(fare.departAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </Text>
-        ) : null}
-      </View>
-      <View style={styles.timeMid}>
-        <View style={styles.hairline} />
-        {dur ? <Text style={styles.dur}>{dur}</Text> : null}
-      </View>
-      <View style={[styles.timeCol, styles.timeRight]}>
-        <Text style={styles.timeDisplay}>{arriveClock}</Text>
-        <Text style={styles.factsMono}>{fare.to.code}</Text>
-        {fare.arriveAt ? (
-          <Text style={styles.caption}>
-            {new Date(fare.arriveAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
+function durationLabel(minutes: number): string {
+  return `${Math.floor(minutes / 60)}H ${String(minutes % 60).padStart(2, "0")}M`;
+}
+
+function placeLine(code: string, city: string): string {
+  return `${code} · ${city.toUpperCase()}`;
+}
+
+function clock(local: string | null, offset: number, code: string): string {
+  if (!local) return code;
+  return offset > 0 ? `${local} +${offset}` : local;
 }
 
 function dialSupport() {
@@ -153,73 +131,90 @@ export default function FareDetailScreen() {
   }
 
   const savings = fare.price.published != null ? Math.round(fare.price.published - fare.price.offer) : null;
-  const flightNumber = offer?.flightFacts?.flightNumber ?? null;
-  const included = [
-    fare.nonstop ? "Nonstop" : "One stop",
-    fare.product ?? (fare.cabin === "business" ? "Business class" : "First class"),
-    "Lounge access",
-  ];
-  const factsLine = [fare.nonstop ? "NONSTOP" : "1 STOP", fare.product?.toUpperCase(), offer?.flightFacts?.carrier]
+  const media = offer?.mediaUrl ?? null;
+  const cabinWord = fare.product ?? (fare.cabin === "first" ? "First" : "Business");
+  const carrierLine = `${fare.carrier.name} · ${cabinWord} · ${fare.nonstop ? "Nonstop" : "One stop"}`;
+  const datePart = fare.departAt
+    ? new Date(fare.departAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()
+    : null;
+  const factsLine = [datePart, fare.durationMinutes != null ? durationLabel(fare.durationMinutes) : null]
     .filter(Boolean)
     .join(" · ");
   const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  const openTab = (key: "explore" | "requests" | "profile") => {
+    router.push(
+      (key === "requests" ? "/(tabs)/requests" : key === "profile" ? "/(tabs)/profile" : "/(tabs)/explore") as Href,
+    );
+  };
 
   return (
     <View testID="fare.root" style={styles.root}>
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + tokens.space.md,
-          paddingHorizontal: tokens.space.lg,
-          paddingBottom: insets.bottom + CTA_RESERVE + tokens.space.xl,
-        }}
-      >
-        <BackButton testID="fare.back" onPress={() => router.back()} style={styles.back} />
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {media ? (
+          <View style={styles.hero}>
+            <Image
+              source={{ uri: media }}
+              style={StyleSheet.absoluteFill}
+              accessibilityIgnoresInvertColors
+              testID="fare.media"
+            />
+            <LinearGradient
+              colors={["transparent", tokens.colors.scrim]}
+              locations={[0.55, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={[styles.heroTop, { paddingTop: insets.top }]}>
+              <BackButton testID="fare.back" onPress={() => router.back()} style={styles.backPlate} />
+            </View>
+            <View style={styles.heroCopy}>
+              <Text style={styles.displayOnDark}>{fare.from.city}</Text>
+              <Text style={styles.displayOnDark}>{`to ${fare.to.city}`}</Text>
+              <Text style={styles.factsOnDark}>{fare.cabin === "first" ? "FIRST CLASS" : "BUSINESS CLASS"}</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.plain, { paddingTop: insets.top + tokens.space.md }]}>
+            <BackButton testID="fare.back" onPress={() => router.back()} style={styles.back} />
+            <Text style={styles.display}>{fare.from.city}</Text>
+            <Text style={styles.display}>{`to ${fare.to.city}`}</Text>
+          </View>
+        )}
 
-        {offer?.mediaUrl ? (
-          <Image
-            source={{ uri: offer.mediaUrl }}
-            style={styles.hero}
-            accessibilityIgnoresInvertColors
-            testID="fare.media"
-          />
-        ) : null}
+        <View style={styles.details}>
+          <Text style={styles.carrier}>{carrierLine}</Text>
+          <View style={styles.timeBlock}>
+            <View style={styles.timeCol}>
+              <Text style={styles.factsMono}>{placeLine(fare.from.code, fare.from.city)}</Text>
+              <Text style={styles.timeDisplay}>{clock(fare.departLocal, 0, fare.from.code)}</Text>
+            </View>
+            <View style={styles.timeCol}>
+              <Text style={styles.factsMono}>{placeLine(fare.to.code, fare.to.city)}</Text>
+              <Text style={styles.timeDisplay}>{clock(fare.arriveLocal, fare.arriveDayOffset, fare.to.code)}</Text>
+            </View>
+          </View>
+          {factsLine ? <Text style={styles.factsMono}>{factsLine}</Text> : null}
+          {media ? null : <Text style={styles.editorial}>{"Your next journey,\nthoughtfully arranged."}</Text>}
+          <PricePair price={fare.price} layout="editorial" />
+          {savings != null && savings > 0 ? (
+            <ListRow
+              testID="fare.whyLower"
+              label={`Why it’s $${savings.toLocaleString("en-US")} lower`}
+              onPress={() => setWhyOpen(true)}
+            />
+          ) : null}
+        </View>
+      </ScrollView>
 
-        <Text style={styles.display}>
-          {fare.from.city} → {fare.to.city}
+      <View style={styles.footer}>
+        <Button
+          testID="fare.request"
+          label="Request this fare"
+          shape="pill"
+          onPress={() => sheetRef.current?.present({ fare, profile })}
+        />
+        <Text style={styles.caption}>
+          {media ? "A specialist arranges everything by phone." : "No payment is taken in the app."}
         </Text>
-
-        <View style={styles.carrierRow}>
-          <View style={styles.logo}>
-            <Text style={styles.logoCode}>{fare.carrier.code ?? "··"}</Text>
-          </View>
-          <Text style={styles.carrierName}>{fare.carrier.name}</Text>
-          {flightNumber ? <Text style={styles.factsMono}>{flightNumber}</Text> : null}
-        </View>
-
-        <TimeBlock fare={fare} />
-        {factsLine ? <Text style={styles.factsMono}>{factsLine}</Text> : null}
-
-        <SectionLabel label="What's included" />
-        {included.map((line) => (
-          <View key={line} style={styles.checkRow}>
-            <Icon name="check" size={16} color={tokens.colors.textPrimary} />
-            <Text style={styles.body}>{line}</Text>
-          </View>
-        ))}
-
-        <View style={styles.priceBlock}>
-          <PricePair price={fare.price} size="lg" align="left" />
-        </View>
-
-        {savings != null && savings > 0 ? (
-          <ListRow
-            testID="fare.whyLower"
-            label={`Why it's $${savings.toLocaleString("en-US")} lower`}
-            onPress={() => setWhyOpen(true)}
-          />
-        ) : null}
-
-        <Text style={styles.caption}>{formatValidUntil(fare.validUntil)} · A specialist books it for you</Text>
         {supportPhone ? (
           <Pressable
             testID="fare.callSpecialist"
@@ -231,25 +226,19 @@ export default function FareDetailScreen() {
             <Text style={styles.caption}>Call a specialist</Text>
           </Pressable>
         ) : null}
-      </ScrollView>
-
-      <View style={[styles.sticky, { paddingBottom: insets.bottom + tokens.space.sm }]}>
-        <Button
-          testID="fare.request"
-          label="Request this fare"
-          shape="card"
-          onPress={() => sheetRef.current?.present({ fare, profile })}
-        />
+      </View>
+      <View style={{ paddingBottom: insets.bottom }}>
+        <TabBar testID="tabs.bar" active="explore" unread={0} onPress={openTab} />
       </View>
 
       <Modal visible={whyOpen} transparent animationType="fade" onRequestClose={() => setWhyOpen(false)}>
         <Pressable testID="fare.whyScrim" style={styles.modalScrim} onPress={() => setWhyOpen(false)}>
           <View style={styles.modalCard} testID="fare.whySheet">
-            <Text style={styles.title}>{`Why it's ${formatPrice(savings ?? 0, fare.price.currency)} lower`}</Text>
+            <Text style={styles.title}>{`Why it’s ${formatPrice(savings ?? 0, fare.price.currency)} lower`}</Text>
             <Text style={styles.body}>
               {`${formatPrice(fare.price.published!, fare.price.currency)} published − ${formatPrice(fare.price.offer, fare.price.currency)} club fare = ${formatPrice(savings ?? 0, fare.price.currency)}.`}
             </Text>
-            <Button testID="fare.whyClose" label="Got it" shape="card" onPress={() => setWhyOpen(false)} />
+            <Button testID="fare.whyClose" label="Got it" shape="pill" onPress={() => setWhyOpen(false)} />
           </View>
         </Pressable>
       </Modal>
@@ -262,47 +251,41 @@ export default function FareDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
-  back: { marginBottom: tokens.space.md },
+  scroll: { paddingBottom: tokens.space.lg },
+  back: { marginBottom: tokens.space.xl },
+  backPlate: {
+    backgroundColor: tokens.colors.surfaceCard,
+    borderRadius: tokens.radius.pill,
+  },
   hero: {
-    width: "100%",
-    height: 180,
-    borderRadius: tokens.radius.panel,
-    marginBottom: tokens.space.md,
+    height: HERO_BAND,
+    justifyContent: "space-between",
     backgroundColor: tokens.colors.surfaceMuted,
+    borderBottomLeftRadius: tokens.radius.card,
+    borderBottomRightRadius: tokens.radius.card,
+    overflow: "hidden",
   },
-  display: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, marginBottom: tokens.space.md },
-  carrierRow: { flexDirection: "row", alignItems: "center", gap: tokens.space.sm, marginBottom: tokens.space.md },
-  logo: {
-    width: 20,
-    height: 20,
-    borderRadius: tokens.radius.badge,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoCode: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary },
-  carrierName: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary, flex: 1 },
-  timeBlock: { flexDirection: "row", alignItems: "center", marginBottom: tokens.space.md },
-  timeCol: { gap: tokens.space.xxs },
-  timeRight: { alignItems: "flex-end" },
+  heroTop: { paddingHorizontal: tokens.space.lg },
+  heroCopy: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg, gap: tokens.space.xs },
+  plain: { paddingHorizontal: tokens.space.lg },
+  display: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
+  displayOnDark: { ...rn(tokens.type.display), color: tokens.colors.textOnDark },
+  factsOnDark: { ...rn(tokens.type.factsMono), color: tokens.colors.textOnDark, marginTop: tokens.space.xs },
+  details: { paddingHorizontal: tokens.space.lg, paddingTop: tokens.space.lg, gap: tokens.space.lg },
+  carrier: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  timeBlock: { flexDirection: "row", gap: tokens.space.lg },
+  timeCol: { flex: 1, gap: tokens.space.xxs },
   timeDisplay: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  timeMid: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: tokens.space.sm },
-  hairline: { height: 1, alignSelf: "stretch", backgroundColor: tokens.colors.borderDefault },
-  dur: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, marginTop: -tokens.space.sm },
-  factsMono: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
-  caption: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginTop: tokens.space.sm },
-  checkRow: { flexDirection: "row", alignItems: "center", gap: tokens.space.sm, marginBottom: tokens.space.xs },
-  body: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  priceBlock: { marginVertical: tokens.space.lg },
-  sticky: {
-    position: "absolute",
-    left: tokens.space.lg,
-    right: tokens.space.lg,
-    bottom: 0,
-    backgroundColor: tokens.colors.surfacePage,
+  factsMono: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  editorial: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
+  footer: {
+    paddingHorizontal: tokens.space.lg,
     paddingTop: tokens.space.sm,
+    gap: tokens.space.xs,
+    backgroundColor: tokens.colors.surfacePage,
   },
+  caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
+  body: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
   pressed: { opacity: 0.7 },
   modalScrim: {
     flex: 1,

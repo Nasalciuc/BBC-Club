@@ -16,3 +16,14 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "tab.profile" }
 - assertVisible: { id: "profile.root" }
 - takeScreenshot: 233-4453
+- tapOn: { id: "profile.settings" }
+- assertVisible: { id: "settings.root" }
+- takeScreenshot: 479-8226
+- tapOn: { id: "settings.back" }
+- tapOn: { id: "profile.edit" }
+- assertVisible: { id: "editProfile.root" }
+- takeScreenshot: 479-8296
+- tapOn: { id: "editProfile.back" }
+- tapOn: { id: "tab.requests" }
+- assertVisible: { id: "requests.root" }
+- takeScreenshot: 233-4069

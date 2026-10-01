@@ -88,12 +88,12 @@ export default function RequestConfirmedScreen() {
         {kind === "offer" && city ? <Text style={styles.city}>{`${city} is next.`}</Text> : null}
         {kind !== "saved" && route ? <Text style={styles.mono}>{route}</Text> : null}
         {kind === "saved" ? (
-          <Button testID="confirmation.done" label="Done" shape="card" onPress={() => router.back()} />
+          <Button testID="confirmation.done" label="Done" shape="pill" onPress={() => router.back()} />
         ) : (
           <Button
             testID="confirmation.viewRequest"
             label="View request"
-            shape="card"
+            shape="pill"
             onPress={() => {
               if (id) router.push(`/request/${id}` as Href);
             }}

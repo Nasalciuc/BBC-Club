@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, ErrorState, StatusBadge, Timeline, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, ErrorState, StatusBadge, TabBar, Timeline, tokens, rn } from "@bbc/ui";
 
 import { closedAt, requestView } from "@/features/requests/request-view-logic";
 import { requestMeta } from "@/features/requests/status";
@@ -206,7 +206,7 @@ export default function RequestDetailScreen() {
           <Button
             testID="request.call"
             label="Call your specialist"
-            shape="card"
+            shape="pill"
             variant="primary"
             onPress={dialSupport}
             style={styles.cta}
@@ -217,7 +217,7 @@ export default function RequestDetailScreen() {
           <Button
             testID="request.send"
             label="Send now"
-            shape="card"
+            shape="pill"
             variant="primary"
             busy={sending}
             onPress={() => {
@@ -230,6 +230,22 @@ export default function RequestDetailScreen() {
           />
         ) : null}
       </ScrollView>
+      <View style={{ paddingBottom: insets.bottom }}>
+        <TabBar
+          testID="tabs.bar"
+          active="requests"
+          unread={0}
+          onPress={(key) =>
+            router.push(
+              (key === "requests"
+                ? "/(tabs)/requests"
+                : key === "profile"
+                  ? "/(tabs)/profile"
+                  : "/(tabs)/explore") as Href,
+            )
+          }
+        />
+      </View>
     </View>
   );
 }

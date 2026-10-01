@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Linking, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
-import { EmptyState, RequestRow, SectionLabel, tokens, rn } from "@bbc/ui";
+import { EmptyState, RequestRow, tokens, rn } from "@bbc/ui";
 
 import { closedAt, requestView } from "@/features/requests/request-view-logic";
 import { badgeStatus, isOpen, requestMeta } from "@/features/requests/status";
@@ -124,7 +124,8 @@ export default function RequestsScreen() {
 
   return (
     <View testID="requests.root" style={[styles.root, { paddingTop: insets.top + tokens.space.md }]}>
-      <Text style={styles.title}>Requests</Text>
+      <Text style={styles.title}>Your requests.</Text>
+      <Text style={styles.intro}>Journeys in good hands.</Text>
       {hasMore ? (
         <Text testID="requests.hasMore" style={styles.hint}>
           Showing your 50 most recent
@@ -152,7 +153,7 @@ export default function RequestsScreen() {
               if (open.length === 0) return null;
               return (
                 <View>
-                  <SectionLabel label="Open" />
+                  <Text style={styles.section}>In progress</Text>
                   {open.map((row) => {
                     if (row.kind === "queued") {
                       const id = row.queued.id;
@@ -219,7 +220,7 @@ export default function RequestsScreen() {
             if (closed.length === 0) return null;
             return (
               <View>
-                <SectionLabel label="Closed" />
+                <Text style={styles.section}>Completed</Text>
                 {closed.map((r) => {
                   const view = requestView(r.status, closedAt(r));
                   return (
@@ -247,7 +248,9 @@ export default function RequestsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage, paddingHorizontal: tokens.space.lg },
   centered: { alignItems: "center", justifyContent: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, marginBottom: tokens.space.sm },
+  title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
+  intro: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  section: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, marginTop: tokens.space.lg },
   hint: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
   error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger },
 });

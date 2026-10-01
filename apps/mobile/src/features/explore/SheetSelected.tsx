@@ -60,9 +60,15 @@ export function SheetSelected({ state, dispatch, onRetry, onQuote }: Props) {
         </View>
       ) : null}
 
-      {state.status === "done" && state.results ? (
+      {(state.status === "done" || state.status === "paused") && state.results ? (
         <>
-          <SectionLabel label={`${state.results.length} fares · lowest first`} />
+          {state.status === "paused" ? (
+            <Text testID="search.paused" style={styles.paused}>
+              Searching paused for a moment. Try again shortly.
+            </Text>
+          ) : (
+            <SectionLabel label={`${state.results.length} fares · lowest first`} />
+          )}
           {state.results.map((fare) => (
             <FareRow
               key={fare.id}
@@ -95,9 +101,9 @@ export function SheetSelected({ state, dispatch, onRetry, onQuote }: Props) {
         />
       ) : null}
 
-      {state.status === "paused" ? (
+      {state.status === "paused" && !state.results ? (
         <Text testID="search.paused" style={styles.paused}>
-          Search is paused. Try again in a minute.
+          Searching paused for a moment. Try again shortly.
         </Text>
       ) : null}
 

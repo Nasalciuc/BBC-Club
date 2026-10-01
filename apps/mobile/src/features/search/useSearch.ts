@@ -63,7 +63,7 @@ function reducer(state: SearchState, action: SearchAction): SearchState {
     case "searchFailed":
       return { ...state, status: "error", errorMessage: action.message, results: null };
     case "searchPaused":
-      return { ...state, status: "paused", errorMessage: null, results: null };
+      return { ...state, status: "paused", errorMessage: null };
     default:
       return state;
   }
