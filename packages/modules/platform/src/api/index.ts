@@ -4,6 +4,7 @@ import { createJobs } from "../jobs";
 import { createLogger, createMetrics } from "../telemetry";
 import { createRateLimiter } from "../ratelimit";
 import { createCache } from "../cache";
+import { createKafkaProducer } from "../kafka/producer";
 import { createBreaker, createRedis, type Redis } from "../redis/client";
 import type { Db } from "@bbc/db";
 
@@ -19,6 +20,7 @@ export function createPlatform(
     handlerTimeoutMs?: number;
     onDead?: PollerOptions["onDead"];
     redisUrl?: string;
+    kafkaBrokers?: string;
   } = {},
 ) {
   const logger = createLogger(opts);
@@ -31,6 +33,8 @@ export function createPlatform(
   const flags = createFlags(db, { logger, cache: redis ? cache : undefined });
   const jobs = createJobs(db, { logger, metrics });
   const rateLimit = createRateLimiter({ db, flags, metrics, logger, redis });
+  const kafkaBrokers = opts.kafkaBrokers?.trim() || "";
+  const producer = kafkaBrokers ? createKafkaProducer(kafkaBrokers, "bbc-platform") : null;
   const { publish } = createPublisher(registry, metrics);
   const poller = createPoller(
     db,
@@ -74,6 +78,7 @@ export function createPlatform(
     redis,
     guarded,
     cache,
+    producer,
     events: {
       defineEvent: registry.defineEvent.bind(registry),
       registerConsumer: registry.registerConsumer.bind(registry),
@@ -93,6 +98,8 @@ export function createPlatform(
       return { ok: s.oldestPendingSeconds < 300 && s.dead === 0, queue: s };
     },
     async close() {
+      if (producer)
+        await producer.close().catch((err) => logger.warn({ err: String(err) }, "kafka producer close failed"));
       if (redis) await redis.close().catch((err) => logger.warn({ err: String(err) }, "redis close failed"));
     },
   };
@@ -107,3 +114,4 @@ export { collectDbReport, maybeAlertOps, pgbouncerWaitingClients, resetDbAlertSt
 
 /** The host imports this from "@bbc/platform"; it is defined in jobs/builtin.ts. */
 export { registerPlatformJobs } from "../jobs/builtin";
+export { kafkaRelayHandler, RELAY_CONSUMER, DOMAIN_TOPIC } from "../kafka/relay";
