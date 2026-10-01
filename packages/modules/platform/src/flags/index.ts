@@ -1,7 +1,8 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { flags as flagsTable } from "../infrastructure/schema";
 import type { Executor } from "@bbc/db";
+import { flags as flagsTable } from "../infrastructure/schema";
+import type { Cache } from "../cache";
 
 export type FlagValue = { enabled?: boolean; variant?: string; segment?: string[]; [k: string]: unknown };
 
@@ -22,21 +23,34 @@ function parseValue(raw: unknown): FlagValue | null {
  *  A missing row is not killed. isEnabled/variant still fall back to the caller default. */
 export function createFlags(
   db: Executor,
-  opts: { ttlMs?: number; logger?: { warn: (o: object, m?: string) => void } } = {},
+  opts: {
+    ttlMs?: number;
+    logger?: { warn: (o: object, m?: string) => void };
+    /** When set, ordinary flag reads go through it. Kill and pause never do. */
+    cache?: Cache;
+  } = {},
 ) {
   const ttl = opts.ttlMs ?? 30_000;
   const cache = new Map<string, { value: FlagValue | null; at: number }>();
 
+  async function readDb(key: string): Promise<FlagValue | null> {
+    const [row] = await db.select({ value: flagsTable.value }).from(flagsTable).where(eq(flagsTable.key, key)).limit(1);
+    return parseValue(row?.value);
+  }
+
   async function read(key: string): Promise<FlagValue | null> {
+    if (opts.cache) {
+      try {
+        return await opts.cache.getOrLoad(`flags:${key}`, Math.max(1, Math.ceil(ttl / 1000)), () => readDb(key));
+      } catch (e) {
+        opts.logger?.warn({ key, err: String(e) }, "flag read failed, using fallback");
+        return null;
+      }
+    }
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < ttl) return hit.value;
     try {
-      const [row] = await db
-        .select({ value: flagsTable.value })
-        .from(flagsTable)
-        .where(eq(flagsTable.key, key))
-        .limit(1);
-      const value = parseValue(row?.value);
+      const value = await readDb(key);
       cache.set(key, { value, at: Date.now() });
       return value;
     } catch (e) {
@@ -88,6 +102,7 @@ export function createFlags(
         .values({ key, value, description })
         .onConflictDoUpdate({ target: flagsTable.key, set: { value, description, updatedAt: sql`now()` } });
       cache.delete(key);
+      await opts.cache?.invalidate(`flags:${key}`);
     },
     invalidate: (key?: string) => (key ? cache.delete(key) : cache.clear()),
     /** Cached flag row. The limiter reads `ratelimit.<rule>` here — never a query the facade exposes. */

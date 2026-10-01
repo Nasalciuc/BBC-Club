@@ -28,7 +28,7 @@ export function createPlatform(
   const guarded = createBreaker(metrics);
   const cache = createCache({ redis, guarded, metrics });
   const registry = new EventRegistry();
-  const flags = createFlags(db, { logger });
+  const flags = createFlags(db, { logger, cache: redis ? cache : undefined });
   const jobs = createJobs(db, { logger, metrics });
   const rateLimit = createRateLimiter({ db, flags, metrics, logger });
   const { publish } = createPublisher(registry, metrics);
