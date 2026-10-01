@@ -73,6 +73,13 @@ export type ModulePlatform = {
       subject: string,
     ): Promise<{ allowed: boolean; remaining: number; resetMs: number; retryAfterMs?: number; limit: number }>;
   };
+  cache: {
+    getOrLoad<T>(key: string, ttlS: number, load: () => Promise<T>): Promise<T>;
+    invalidate(...keys: string[]): Promise<void>;
+    bump(key: string): Promise<void>;
+    /** Null when Redis is not connected, so callers keep their process cache. */
+    generation(key: string): Promise<string | null>;
+  };
 };
 
 export type ModuleOutput<Exposes> = {

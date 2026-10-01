@@ -3,6 +3,7 @@ import { createFlags } from "../flags";
 import { createJobs } from "../jobs";
 import { createLogger, createMetrics } from "../telemetry";
 import { createRateLimiter } from "../ratelimit";
+import { createCache } from "../cache";
 import { createBreaker, createRedis, type Redis } from "../redis/client";
 import type { Db } from "@bbc/db";
 
@@ -25,6 +26,7 @@ export function createPlatform(
   const redisUrl = opts.redisUrl?.trim() || "";
   const redis: Redis | null = redisUrl ? createRedis(redisUrl, logger) : null;
   const guarded = createBreaker(metrics);
+  const cache = createCache({ redis, guarded, metrics });
   const registry = new EventRegistry();
   const flags = createFlags(db, { logger });
   const jobs = createJobs(db, { logger, metrics });
@@ -71,6 +73,7 @@ export function createPlatform(
     poller,
     redis,
     guarded,
+    cache,
     events: {
       defineEvent: registry.defineEvent.bind(registry),
       registerConsumer: registry.registerConsumer.bind(registry),

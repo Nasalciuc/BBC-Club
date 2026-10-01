@@ -23,13 +23,21 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
   init: ({ db, platform }) => {
     const conn = db as unknown as Executor;
     const destinationsCache = createDestinationsCache();
+    const invalidateMaps = async () => {
+      destinationsCache.clear();
+      await platform.cache.bump("catalog:dest:gen");
+      await platform.cache.bump("catalog:airports:gen");
+    };
     const expose: CatalogFacade = {
       searchFares: (exec, q) => faresRepo.search(exec ?? conn, q),
       getFare: (exec, id) => faresRepo.getAny(exec ?? conn, id),
-      destinations: (exec, home) =>
-        exec
-          ? faresRepo.destinations(exec, home)
-          : destinationsCache.get(home, () => faresRepo.destinations(conn, home)),
+      destinations: async (exec, home) => {
+        if (exec) return faresRepo.destinations(exec, home);
+        const gen = await platform.cache.generation("catalog:dest:gen");
+        if (gen == null) return destinationsCache.get(home, () => faresRepo.destinations(conn, home));
+        const code = home.toUpperCase();
+        return platform.cache.getOrLoad(`catalog:dest:${gen}:${code}`, 60, () => faresRepo.destinations(conn, home));
+      },
       searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
       getAirports: (exec, codes) => airportsRepo.getMany(exec ?? conn, [...codes]),
@@ -125,8 +133,14 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const q = c.req.query("q") ?? "";
-        const rows = await airportsRepo.search(conn, q);
+        const q = (c.req.query("q") ?? "").slice(0, 64);
+        const gen = await platform.cache.generation("catalog:airports:gen");
+        const rows =
+          gen == null
+            ? await airportsRepo.search(conn, q)
+            : await platform.cache.getOrLoad(`catalog:airports:${gen}:${q.toLowerCase()}`, 60, () =>
+                airportsRepo.search(conn, q),
+              );
         return c.json(rows.map((r) => toAirportVM(r)));
       },
     );
@@ -151,7 +165,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         }
         try {
           const r = await expose.importCsv(parsed.data);
-          destinationsCache.clear();
+          await invalidateMaps();
           return c.json(r);
         } catch (e: unknown) {
           return c.json(apiError("VALIDATION", { message: e instanceof Error ? e.message : "import failed" }), 400);
@@ -172,7 +186,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
             timeoutMs: 30_000,
             handler: async () => {
               const out = await expireFares({ db: conn });
-              destinationsCache.clear();
+              await invalidateMaps();
               return out;
             },
           },
