@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Empty Ubuntu 24.04 → running production stack (+ optional staging). Idempotent.
-#   curl -fsSL https://raw.githubusercontent.com/Nasalciuc/BBC-Club/main/infra/bootstrap.sh | sudo bash -s -- production
-#   ... | sudo bash -s -- production --with-staging
+# Pin a reviewed commit — never pipe mutable main into sudo bash (see infra/RUNBOOK.md):
+#   SHA=<reviewed commit sha>
+#   curl -fsSL "https://raw.githubusercontent.com/Nasalciuc/BBC-Club/$SHA/infra/bootstrap.sh" -o /tmp/bootstrap.sh
+#   sha256sum /tmp/bootstrap.sh   # compare with the checksum in the PR / release notes
+#   sudo bash /tmp/bootstrap.sh production
+#   sudo bash /tmp/bootstrap.sh production --with-staging
 # This file lives at infra/bootstrap.sh.
 set -Eeuo pipefail
 trap 'echo "❌ bootstrap failed at line $LINENO" >&2' ERR
