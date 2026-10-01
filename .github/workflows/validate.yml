@@ -49,6 +49,7 @@ jobs:
           gitleaks version
       - run: gitleaks detect --no-banner --redact
 
+      - run: bun run privacy-manifest:check
       - run: bun run format
       - run: bun run lint
       - run: bun run arch:check
