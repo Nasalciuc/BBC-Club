@@ -4,6 +4,7 @@ import { createJobs } from "../jobs";
 import { createLogger, createMetrics } from "../telemetry";
 import { createRateLimiter } from "../ratelimit";
 import { createCache } from "../cache";
+import { consumeIdempotent } from "../kafka/consume";
 import { createKafkaProducer } from "../kafka/producer";
 import { createBreaker, createRedis, type Redis } from "../redis/client";
 import type { Db } from "@bbc/db";
@@ -79,6 +80,23 @@ export function createPlatform(
     guarded,
     cache,
     producer,
+    kafka: kafkaBrokers
+      ? {
+          consume: (consumeOpts: {
+            clientId: string;
+            groupId: string;
+            topic: string;
+            consumerName: string;
+            signal: AbortSignal;
+            handle: (eventId: string, value: unknown, tx: unknown) => Promise<void>;
+          }) =>
+            consumeIdempotent({
+              db,
+              brokers: kafkaBrokers,
+              ...consumeOpts,
+            }),
+        }
+      : null,
     events: {
       defineEvent: registry.defineEvent.bind(registry),
       registerConsumer: registry.registerConsumer.bind(registry),

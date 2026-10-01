@@ -144,6 +144,18 @@ export const rateLimitState = platform.table(
   (t) => [index("rate_limit_state_tat").on(t.tat)],
 );
 
+/** Kafka consumer idempotency. event_id is text: a journal id, or topic:partition:offset. */
+export const kafkaProcessed = platform.table(
+  "kafka_processed",
+  {
+    consumer: text("consumer").notNull(),
+    eventId: text("event_id").notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.consumer, t.eventId] })],
+);
+
 export const rateLimits = platform.table(
   "rate_limits",
   {
