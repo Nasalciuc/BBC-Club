@@ -62,11 +62,21 @@ function broadcast(offerId = crypto.randomUUID()) {
   };
 }
 
-async function deliver(payload: unknown, sourceEventId: string) {
+async function deliver(payload: unknown, sourceEventId: string, facade: MembersFacade = members) {
   await db.transaction(async (tx) => {
-    await onOfferPublished({ tx, members, sourceEventId }, payload);
+    await onOfferPublished({ tx, members: facade, sourceEventId }, payload);
   });
 }
+
+/** Fails the test if anything on it is called. Symbols and `then` stay undefined, so inspection and `await` never trip it. */
+const noMembers = new Proxy({} as MembersFacade, {
+  get: (_t, name) =>
+    typeof name === "symbol" || name === "then"
+      ? undefined
+      : () => {
+          throw new Error(`members.${name} was called`);
+        },
+});
 
 const count = async (q: ReturnType<typeof sql>) => Number(((await db.execute(q)) as unknown as { n: number }[])[0]?.n);
 const notificationCount = () => count(sql`SELECT count(*)::int AS n FROM notifications.notifications`);
@@ -76,16 +86,18 @@ function run(extra: Partial<CampaignFanoutDeps> = {}) {
 }
 
 describe("broadcast delivery", () => {
-  it("writes exactly one campaign and zero notifications, fast, whatever the audience", async () => {
+  it("writes exactly one campaign and zero notifications, without reading the audience", async () => {
     await seedMembers(5_000);
-    const t = performance.now();
-    await deliver(broadcast(), "101");
-    const ms = performance.now() - t;
-    expect(ms).toBeLessThan(100);
+    await deliver(broadcast(), "101", noMembers);
     expect(await count(sql`SELECT count(*)::int AS n FROM notifications.campaigns`)).toBe(1);
     expect(await notificationCount()).toBe(0);
     const [c] = (await db.execute(sql`SELECT status, category, body, deep_link FROM notifications.campaigns`)) as any[];
     expect(c).toMatchObject({ status: "pending", category: "offers_broadcast", body: "JFK → LHR" });
+  });
+
+  it("the facade reaches the handler: a personal offer trips it", async () => {
+    const personal = { ...broadcast(), targeting: "user", targetMemberId: crypto.randomUUID() };
+    await expect(deliver(personal, "102", noMembers)).rejects.toThrow("members.getStatus was called");
   });
 
   it("the same event delivered twice starts one campaign", async () => {
