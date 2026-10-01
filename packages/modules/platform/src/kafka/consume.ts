@@ -106,7 +106,9 @@ export async function consumeIdempotent(opts: {
             if (inserted.length === 0) return;
             await opts.handle(eventId, value, tx);
           }),
-        commit: () => message.commit(),
+        commit: async () => {
+          await message.commit();
+        },
         onFailure: (err, delayMs) => {
           opts.metrics?.inc("kafka_consume_failures");
           opts.logger?.warn(
