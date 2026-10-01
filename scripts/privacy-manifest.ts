@@ -4,6 +4,7 @@
  *  Dev-client pods stay out. Reviewed no-manifest hits live in privacy-supplement.json. */
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import plist from "@expo/plist";
 
 const ROOT = join(import.meta.dir, "..");
 const APP_JSON = join(ROOT, "apps/mobile/app.json");
@@ -92,16 +93,31 @@ function walkFiles(dir: string, out: string[]): void {
   }
 }
 
-export function parseAccessedApis(xml: string): { category: string; reasons: string[] }[] {
-  const out: { category: string; reasons: string[] }[] = [];
-  const re =
-    /<key>NSPrivacyAccessedAPIType<\/key>\s*<string>([^<]+)<\/string>\s*<key>NSPrivacyAccessedAPITypeReasons<\/key>\s*<array>([\s\S]*?)<\/array>/g;
-  for (const m of xml.matchAll(re)) {
-    const category = m[1];
-    const reasons = [...(m[2] ?? "").matchAll(/<string>([^<]+)<\/string>/g)].map((r) => r[1]!).sort();
-    if (category && reasons.length) out.push({ category, reasons });
+type Entry = { category: string; reasons: string[] };
+
+/** Reads NSPrivacyAccessedAPITypes from a PrivacyInfo.xcprivacy, in any key order. Throws on anything that is not a valid manifest —
+ *  a silently skipped file would make the union incomplete and --check would still pass. */
+export function parseAccessedApis(xml: string, file = "<input>"): Entry[] {
+  let doc: unknown;
+  try {
+    doc = plist.parse(xml);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`${file}: not a plist dictionary (${msg})`);
   }
-  return out;
+  if (!doc || typeof doc !== "object" || Array.isArray(doc)) throw new Error(`${file}: not a plist dictionary`);
+  const list = (doc as Record<string, unknown>).NSPrivacyAccessedAPITypes;
+  if (list === undefined) return [];
+  if (!Array.isArray(list)) throw new Error(`${file}: NSPrivacyAccessedAPITypes is not an array`);
+  return list.map((raw, i) => {
+    const e = raw as Record<string, unknown>;
+    const category = e?.NSPrivacyAccessedAPIType;
+    const reasons = e?.NSPrivacyAccessedAPITypeReasons;
+    if (typeof category !== "string" || !Array.isArray(reasons) || !reasons.every((r) => typeof r === "string")) {
+      throw new Error(`${file}: entry ${i} is missing NSPrivacyAccessedAPIType or its reasons`);
+    }
+    return { category, reasons: [...reasons] };
+  });
 }
 
 export function mergeReasons(rows: { category: string; reasons: string[] }[]): Accessed[] {
@@ -138,7 +154,7 @@ export function collect(sourceRows: SourceRow[] = []): Manifest {
       continue;
     }
     for (const file of files) {
-      const parsed = parseAccessedApis(readFileSync(file, "utf8"));
+      const parsed = parseAccessedApis(readFileSync(file, "utf8"), posix(relative(ROOT, file)));
       const rel = posix(relative(ROOT, file));
       if (parsed.length === 0) {
         sourceRows.push({

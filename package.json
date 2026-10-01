@@ -39,6 +39,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@expo/plist": "0.8.1",
     "@types/bun": "^1.3.4",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",
