@@ -30,7 +30,7 @@ export function createPlatform(
   const registry = new EventRegistry();
   const flags = createFlags(db, { logger, cache: redis ? cache : undefined });
   const jobs = createJobs(db, { logger, metrics });
-  const rateLimit = createRateLimiter({ db, flags, metrics, logger });
+  const rateLimit = createRateLimiter({ db, flags, metrics, logger, redis });
   const { publish } = createPublisher(registry, metrics);
   const poller = createPoller(
     db,
