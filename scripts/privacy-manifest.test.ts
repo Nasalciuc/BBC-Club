@@ -78,6 +78,57 @@ describe("privacy-manifest", () => {
     );
   });
 
+  it("throws when an entry uses an unknown element", () => {
+    const xml = plist(`<dict>
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <dikt>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <string>CA92.1</string>
+      </array>
+    </dikt>
+  </array>
+</dict>`);
+    expect(() => parseAccessedApis(xml, "typo.xcprivacy")).toThrow(/typo\.xcprivacy: unknown plist element <dikt>/);
+  });
+
+  it("throws when a reason uses an unknown element", () => {
+    const xml = plist(`<dict>
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array>
+        <strng>CA92.1</strng>
+      </array>
+    </dict>
+  </array>
+</dict>`);
+    expect(() => parseAccessedApis(xml, "typo.xcprivacy")).toThrow(/typo\.xcprivacy: unknown plist element <strng>/);
+  });
+
+  it("throws when an entry's reasons array is empty", () => {
+    const xml = plist(`<dict>
+  <key>NSPrivacyAccessedAPITypes</key>
+  <array>
+    <dict>
+      <key>NSPrivacyAccessedAPIType</key>
+      <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+      <key>NSPrivacyAccessedAPITypeReasons</key>
+      <array></array>
+    </dict>
+  </array>
+</dict>`);
+    expect(() => parseAccessedApis(xml, "empty.xcprivacy")).toThrow(
+      /empty\.xcprivacy: entry 0 has an empty reasons list/,
+    );
+  });
+
   it("unions reasons per category", () => {
     expect(
       mergeReasons([

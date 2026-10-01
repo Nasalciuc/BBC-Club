@@ -48,7 +48,13 @@ Or dispatch **release** (`platform=android`, `submit=false`). Needs repo secret 
 
 ## 5. Android submit
 
-`submit.production.android` tracks `internal` as `draft`. The Play service-account JSON lives on the machine or in EAS — it is gitignored and CI refuses it if tracked.
+`submit.production.android` is `track: internal` and `releaseStatus: draft`. There is **no** `serviceAccountKeyPath`: `eas submit` uses the Google Service Account key stored in the project's EAS credentials ([Expo: Submit to Play](https://docs.expo.dev/submit/android/)). The key never lives in CI or the repo. `.gitignore` and the tracked-secrets step in `validate.yml` stay as a second line of defence.
+
+Owner, once:
+
+1. Create the app in Play Console.
+2. Upload the first AAB **manually** — Google requires it before API submissions work.
+3. Create the service-account key and upload it under **EAS → Credentials → Service Credentials → Add a Google Service Account Key**.
 
 ```bash
 eas submit --profile production --platform android --id <build-id>

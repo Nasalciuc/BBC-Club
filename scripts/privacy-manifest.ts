@@ -95,12 +95,45 @@ function walkFiles(dir: string, out: string[]): void {
 
 type Entry = { category: string; reasons: string[] };
 
+const PLIST_ELEMENTS = new Set([
+  "plist",
+  "dict",
+  "key",
+  "string",
+  "array",
+  "integer",
+  "real",
+  "true",
+  "false",
+  "date",
+  "data",
+]);
+
+function stripXmlComments(xml: string): string {
+  return xml.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+/** @expo/plist 0.8.1 drops unknown tags silently. Reject them before parse so --check cannot pass an incomplete union. */
+function assertKnownPlistElements(xml: string, file: string): void {
+  const withoutMeta = xml.replace(/<\?[\s\S]*?\?>/g, "").replace(/<!DOCTYPE[\s\S]*?>/gi, "");
+  const re = /<\/?([A-Za-z_][\w:.-]*)\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(withoutMeta))) {
+    const name = m[1]!;
+    if (!PLIST_ELEMENTS.has(name)) {
+      throw new Error(`${file}: unknown plist element <${name}>`);
+    }
+  }
+}
+
 /** Reads NSPrivacyAccessedAPITypes from a PrivacyInfo.xcprivacy, in any key order. Throws on anything that is not a valid manifest —
  *  a silently skipped file would make the union incomplete and --check would still pass. */
 export function parseAccessedApis(xml: string, file = "<input>"): Entry[] {
+  const stripped = stripXmlComments(xml);
+  assertKnownPlistElements(stripped, file);
   let doc: unknown;
   try {
-    doc = plist.parse(xml);
+    doc = plist.parse(stripped);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`${file}: not a plist dictionary (${msg})`);
@@ -115,6 +148,9 @@ export function parseAccessedApis(xml: string, file = "<input>"): Entry[] {
     const reasons = e?.NSPrivacyAccessedAPITypeReasons;
     if (typeof category !== "string" || !Array.isArray(reasons) || !reasons.every((r) => typeof r === "string")) {
       throw new Error(`${file}: entry ${i} is missing NSPrivacyAccessedAPIType or its reasons`);
+    }
+    if (reasons.length === 0) {
+      throw new Error(`${file}: entry ${i} has an empty reasons list`);
     }
     return { category, reasons: [...reasons] };
   });
