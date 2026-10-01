@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 # Empty Ubuntu 24.04 → running production stack (+ optional staging). Idempotent.
-# Pin a reviewed commit — never pipe mutable main into sudo bash (see infra/RUNBOOK.md):
-#   SHA=<reviewed commit sha>
-#   curl -fsSL "https://raw.githubusercontent.com/Nasalciuc/BBC-Club/$SHA/infra/bootstrap.sh" -o /tmp/bootstrap.sh
-#   sha256sum /tmp/bootstrap.sh   # compare with the checksum in the PR / release notes
-#   sudo bash /tmp/bootstrap.sh production
-#   sudo bash /tmp/bootstrap.sh production --with-staging
+# Run from a reviewed, pinned commit — never pipe a branch into sudo bash. Procedure: infra/RUNBOOK.md, first deploy, step 1:
+# download bootstrap.sh at <sha>, compare its sha256, then: sudo bash bootstrap.sh production [--with-staging]
 # This file lives at infra/bootstrap.sh.
 set -Eeuo pipefail
 trap 'echo "❌ bootstrap failed at line $LINENO" >&2' ERR
