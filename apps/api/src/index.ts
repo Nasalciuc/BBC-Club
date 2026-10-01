@@ -50,7 +50,8 @@ export async function buildApp(opts: BuildOptions = {}) {
     redisUrl: env.REDIS_URL,
     kafkaBrokers: env.KAFKA_BROKERS,
   });
-  await platform.connect();
+  // A reconnecting client must not hold route registration. connect() already catches a rejection.
+  void platform.connect();
   platform.metrics.gauge("push_live", () => (env.PUSH_ADAPTER === "live" ? 1 : 0));
   if (env.NODE_ENV === "production" && env.PUSH_ADAPTER !== "live") {
     platform.logger.warn(
