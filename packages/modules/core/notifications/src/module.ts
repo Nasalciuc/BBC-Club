@@ -59,6 +59,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
               push: ports.push,
               members: ports.members,
               publish,
+              logger: platform.logger,
             },
             ids,
           ).then(() => undefined),

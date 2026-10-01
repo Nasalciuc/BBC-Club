@@ -5,7 +5,7 @@ import { z } from "zod";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import type { MembersFacade } from "@bbc/members";
 import type { PushSender } from "../src/ports/push";
-import { deliverSending, dispatch, type DispatchDeps } from "../src/application/dispatch";
+import { deliverSending, dispatch, dispatchReaperSql, type DispatchDeps } from "../src/application/dispatch";
 
 let iso: IsolatedDb;
 beforeAll(async () => {
@@ -214,6 +214,81 @@ test("a stream row with no device leaves sending", async () => {
   expect(raw.status).toBe("sent");
   expect(Number(raw.attempts)).toBe(3);
   expect(raw.claimed_at).toBeNull();
+});
+
+test("a reaper between the read and the update keeps its row", async () => {
+  const id = await insertSending(`m-${crypto.randomUUID()}`, 5);
+  const metrics = await deliverSending(
+    deps(
+      { send: async () => ({ ok: true, ticketId: "unused" }) },
+      {
+        beforeTokens: async () => {
+          await iso.db.execute(dispatchReaperSql(sql`interval '1 millisecond'`));
+        },
+      },
+    ),
+    [id],
+  );
+  expect(metrics.sent).toBe(0);
+  const row = await rowOf(id);
+  expect(row?.status).toBe("failed");
+  expect(row?.attempts).toBe(6);
+  expect(row?.last_error).toBe("reaped");
+});
+
+test("a claim stored with microseconds still matches", async () => {
+  const memberId = `m-${crypto.randomUUID()}`;
+  const id = crypto.randomUUID();
+  await iso.db.execute(sql`
+    INSERT INTO notifications.notifications
+      (id, member_id, category, title, body, status, attempts, claimed_at, scheduled_for)
+    VALUES (
+      ${id}::uuid, ${memberId}, 'transactional', 'Your quote is ready', 'micro',
+      'sending', 0, '2026-10-01 19:30:00.123456+00'::timestamptz, now()
+    )`);
+  const metrics = await deliverSending(deps({ send: async () => ({ ok: true, ticketId: "unused" }) }), [id]);
+  expect(metrics.sent).toBe(1);
+  expect(await statusOf(id)).toBe("sent");
+});
+
+test("a reaper during send keeps the failed row", async () => {
+  const memberId = `m-${crypto.randomUUID()}`;
+  const id = await insertSending(memberId, 5);
+  await insertToken(memberId, `tok-fail-${id}`);
+  const metrics = await deliverSending(
+    deps({
+      send: async () => {
+        await iso.db.execute(dispatchReaperSql(sql`interval '1 millisecond'`));
+        return { ok: false, reason: "Fatal" };
+      },
+    }),
+    [id],
+  );
+  expect(metrics.failed).toBe(0);
+  const row = await rowOf(id);
+  expect(row?.status).toBe("failed");
+  expect(row?.attempts).toBe(6);
+  expect(row?.last_error).toBe("reaped");
+});
+
+test("a reaper during send keeps the pending row", async () => {
+  const memberId = `m-${crypto.randomUUID()}`;
+  const id = await insertSending(memberId, 0);
+  await insertToken(memberId, `tok-retry-${id}`);
+  const metrics = await deliverSending(
+    deps({
+      send: async () => {
+        await iso.db.execute(dispatchReaperSql(sql`interval '1 millisecond'`));
+        return { ok: false, reason: "Transient", retryAfterMs: 1_000 };
+      },
+    }),
+    [id],
+  );
+  expect(metrics.failed).toBe(0);
+  const row = await rowOf(id);
+  expect(row?.status).toBe("pending");
+  expect(row?.attempts).toBe(1);
+  expect(row?.last_error).toBeNull();
 });
 
 test("a transactional quote-ready row is not suppressed by offer preferences", async () => {
