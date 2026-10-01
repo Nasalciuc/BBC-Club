@@ -7,7 +7,7 @@ The app is a private members’ concierge. It does **not** book or take payment.
 Create it against the environment under review:
 
 ```bash
-bun run scripts/seed-review-account.ts
+cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml --env-file env/production.env run --rm --no-deps api bun run scripts/seed-review-account.ts
 ```
 
 Requires `REVIEW_ACCOUNT_EMAIL` and `REVIEW_ACCOUNT_PASSWORD` from the environment (`packages/shared/src/env.ts`). The script is idempotent: if the email already exists it exits. Put the credentials in App Store Connect and Play Console **only**. Never commit them.

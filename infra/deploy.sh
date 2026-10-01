@@ -139,7 +139,8 @@ else
   }
   metrics_of "$CANARY" > "$METRICS_DIR/canary.txt" || { drop_canary; rollback_and_exit "canary /metrics unreadable"; }
   metrics_of "$OLD_ONE" > "$METRICS_DIR/old.txt" || { drop_canary; rollback_and_exit "old replica /metrics unreadable"; }
-  if ! REASON="$(bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt")"; then
+  chmod 0755 "$METRICS_DIR" && chmod 0644 "$METRICS_DIR"/*.txt
+  if ! REASON="$(docker run --rm -v "$METRICS_DIR:$METRICS_DIR:ro" "$IMAGE" bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt")"; then
     echo "$REASON"
     drop_canary
     rollback_and_exit "canary: ${REASON:-compare failed}"

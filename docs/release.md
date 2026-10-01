@@ -22,7 +22,7 @@ A production build with `EXPO_PUBLIC_APP_ENV=production` and a missing legal URL
 Against production:
 
 ```bash
-bun run scripts/seed-review-account.ts
+cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml --env-file env/production.env run --rm --no-deps api bun run scripts/seed-review-account.ts
 ```
 
 `REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` come from the environment. Paste them into App Store Connect and Play Console only.
