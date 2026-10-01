@@ -1,0 +1,18 @@
+appId: com.buybusinessclass.club
+---
+# Screenshots at 392.7 dp (run-parity-ci.sh sets wm density 440). Names are Figma frame ids.
+# Later stages of this PR append a takeScreenshot for each new frame. This file does not replace the four flows.
+- launchApp: { clearState: true }
+- runFlow: _dismiss-system-dialogs.yaml
+- tapOn: { id: "welcome.signIn" }
+- tapOn: { id: "signIn.email" }
+- inputText: "alex.morgan@company.com"
+- tapOn: { id: "signIn.password" }
+- inputText: "atlantic2026!"
+- hideKeyboard
+- tapOn: { id: "signIn.submit" }
+- assertVisible: { id: "explore.root" }
+- takeScreenshot: 89-386
+- tapOn: { id: "tab.profile" }
+- assertVisible: { id: "profile.root" }
+- takeScreenshot: 233-4453
