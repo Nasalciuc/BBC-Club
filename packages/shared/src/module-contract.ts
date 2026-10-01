@@ -58,6 +58,7 @@ export type ModulePlatform = {
   logger: HandlerLogger;
   flags: {
     isEnabled: (key: string, fallback?: boolean) => Promise<boolean>;
+    variant: (key: string, fallback: string) => Promise<string>;
     isKilled: (module: string) => Promise<boolean>;
     isConsumerPaused: (consumer: string) => Promise<boolean>;
   };

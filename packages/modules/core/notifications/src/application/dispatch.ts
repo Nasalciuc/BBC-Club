@@ -71,6 +71,9 @@ export type DispatchDeps = {
   signal?: AbortSignal;
   /** SQL interval fragment. Default is five minutes. Tests pass a shorter literal. */
   stuckAfter?: SQL;
+  /** `streams` enqueues claimed ids. Anything else sends in this process. Default is inline send. */
+  transport?: () => Promise<"pg" | "streams">;
+  enqueue?: (ids: string[]) => Promise<void>;
 };
 
 type Metrics = {
@@ -169,6 +172,66 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
     return metrics;
   }
 
+  const mode = deps.enqueue ? await deps.transport?.() : undefined;
+  if (mode === "streams" && deps.enqueue && work.length > 0) {
+    try {
+      await deps.enqueue(work.map((item) => item.row.id));
+      return metrics;
+    } catch {
+      // Redis refused the enqueue. Send here so the claimed rows are not left in `sending`.
+    }
+  }
+
+  await sendClaimed(deps, work, metrics);
+  return metrics;
+}
+
+/** Delivers rows a stream worker claimed. A row that is no longer `sending` is skipped, so a replay is a no-op. */
+export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise<Record<string, number>> {
+  const metrics: Metrics = {
+    claimed: ids.length,
+    sent: 0,
+    delivered: 0,
+    failed: 0,
+    suppressed: 0,
+    deactivated: 0,
+    reclaimed: 0,
+  };
+  if (ids.length === 0) return metrics;
+  const rows = await deps.db
+    .select()
+    .from(notificationsTable)
+    .where(and(inArray(notificationsTable.id, ids), eq(notificationsTable.status, "sending")));
+  const work: { row: PendingRow; tokens: TokenRow[] }[] = [];
+  for (const row of rows) {
+    const tokens = await deps.db
+      .select()
+      .from(deviceTokens)
+      .where(and(eq(deviceTokens.memberId, row.memberId), eq(deviceTokens.active, true)));
+    if (tokens.length === 0) continue;
+    work.push({
+      row: {
+        id: row.id,
+        member_id: row.memberId,
+        category: row.category,
+        title: row.title,
+        body: row.body,
+        deep_link: row.deepLink,
+        offer_id: row.offerId,
+        attempts: row.attempts,
+      },
+      tokens,
+    });
+  }
+  await sendClaimed(deps, work, metrics);
+  return metrics;
+}
+
+async function sendClaimed(
+  deps: DispatchDeps,
+  work: { row: PendingRow; tokens: TokenRow[] }[],
+  metrics: Metrics,
+): Promise<void> {
   const results = await mapLimit(work, CONCURRENCY, async ({ row, tokens }) => ({
     row,
     outcomes: await Promise.all(
@@ -199,7 +262,6 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
   for (const item of results) {
     await withTx(deps.db, (tx) => recordOutcome(tx, deps, item, metrics));
   }
-  return metrics;
 }
 
 async function recordOutcome(tx: Executor, deps: DispatchDeps, item: WorkItem, metrics: Metrics): Promise<void> {

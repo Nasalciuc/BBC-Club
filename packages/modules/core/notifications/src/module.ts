@@ -14,7 +14,7 @@ import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
 import { devicesRepo } from "./infrastructure/devices.repo";
 import { markRead } from "./application/mark-read";
-import { dispatch } from "./application/dispatch";
+import { dispatch, deliverSending } from "./application/dispatch";
 import { campaignFanout } from "./application/campaign-fanout";
 import { reconcileReceipts } from "./application/receipts";
 import { cleanupDevices } from "./application/cleanup-devices";
@@ -34,7 +34,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
   name: "notifications",
   layer: "core",
   needs: ["members", "push"],
-  init: ({ db, platform, ports }) => {
+  init: ({ db, platform, ports, env }) => {
     const conn = db as unknown as Executor;
     const routes = new Hono<AppEnv>();
     const publish = (
@@ -48,6 +48,28 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
         payload: unknown;
       },
     ) => platform.events.publish(tx, { ...e, publishedBy: "notifications" });
+
+    const streams = platform.streams;
+    if (streams && env.APP_ROLE !== "api") {
+      const loop = streams
+        .run(`push-${process.pid}`, (ids) =>
+          deliverSending(
+            {
+              db: conn,
+              push: ports.push,
+              members: ports.members,
+              publish,
+            },
+            ids,
+          ).then(() => undefined),
+        )
+        .catch((err: unknown) => {
+          platform.logger.error({ err: String(err) }, "push stream worker stopped");
+        });
+      platform.lifecycle.onClose(async () => {
+        await loop;
+      });
+    }
 
     registerRoute("GET", "/v1/inbox", "inbox:read", "read");
     routes.get(
@@ -217,6 +239,12 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
                 members: ports.members,
                 publish,
                 signal: ctx.signal,
+                transport: async () => {
+                  if (!platform.streams) return "pg";
+                  const variant = await platform.flags.variant("jobs.push.transport", "pg");
+                  return variant === "streams" ? "streams" : "pg";
+                },
+                enqueue: streams ? (ids) => streams.enqueue(ids) : undefined,
               }),
           },
         },
