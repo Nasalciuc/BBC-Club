@@ -1,0 +1,199 @@
+import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BackButton, Button, SectionLabel, tokens, rn } from "@bbc/ui";
+
+import { ListRow } from "@/components/list-row";
+import { deleteAccount, signOut } from "@/features/auth/flows";
+import {
+  mergeSavedProfile,
+  offersSwitchValue,
+  withOffers,
+  type SavedProfile,
+} from "@/features/profile/notifications-logic";
+import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
+import { PasswordSheet } from "@/features/profile/PasswordSheet";
+import { PhoneSheet } from "@/features/profile/PhoneSheet";
+import type { ProfileSheetHandle } from "@/features/profile/types";
+import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
+import { env } from "@/lib/env";
+
+export default function SettingsScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [openRequests, setOpenRequests] = useState(0);
+  const phoneRef = useRef<ProfileSheetHandle>(null);
+  const passwordRef = useRef<ProfileSheetHandle>(null);
+  const notificationsRef = useRef<ProfileSheetHandle>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const [profileResult, requestsResult] = await Promise.all([fetchProfile(), fetchRequests()]);
+      if (!profileResult.ok) {
+        setError(profileResult.message);
+        return;
+      }
+      setProfile(profileResult.data);
+      if (requestsResult.ok) {
+        setOpenRequests(requestsResult.data.items.filter((r) => r.status !== "booked" && r.status !== "closed").length);
+      }
+    })().catch(() => setError("Something went wrong."));
+  }, []);
+
+  async function onDeleteConfirmed() {
+    setBusy(true);
+    const result = await deleteAccount();
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message);
+      setConfirmDelete(false);
+      return;
+    }
+    setConfirmDelete(false);
+    router.replace("/join");
+  }
+
+  async function onSignOut() {
+    setBusy(true);
+    await signOut();
+    router.replace("/sign-in");
+  }
+
+  function onSheetSaved(next: SavedProfile) {
+    setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
+    setError(null);
+  }
+
+  const privacyUrl = env.EXPO_PUBLIC_PRIVACY_URL;
+  const termsUrl = env.EXPO_PUBLIC_TERMS_URL;
+  const helpUrl = env.EXPO_PUBLIC_HELP_URL;
+
+  return (
+    <View style={styles.root}>
+      <ScrollView
+        testID="settings.root"
+        contentContainerStyle={{
+          paddingTop: insets.top + tokens.space.sm,
+          paddingHorizontal: tokens.space.lg,
+          paddingBottom: insets.bottom + tokens.space.xxl,
+        }}
+      >
+        <BackButton testID="settings.back" onPress={() => router.back()} />
+        <Text style={styles.title}>Settings</Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <SectionLabel label="Account" />
+        <ListRow
+          testID="settings.phone"
+          label="Phone"
+          value={profile?.phone ?? "Add phone"}
+          onPress={() => phoneRef.current?.present()}
+        />
+        <ListRow
+          testID="settings.password"
+          label="Password"
+          value="On file"
+          onPress={() => passwordRef.current?.present()}
+        />
+        <ListRow
+          testID="settings.notifications"
+          label="Notifications"
+          value="On"
+          onPress={() => notificationsRef.current?.present()}
+        />
+        <Text style={styles.hint}>Request updates are always on.</Text>
+        <SectionLabel label="Legal & support" />
+        {privacyUrl ? (
+          <ListRow testID="settings.privacy" label="Privacy policy" onPress={() => void Linking.openURL(privacyUrl)} />
+        ) : null}
+        {termsUrl ? (
+          <ListRow testID="settings.terms" label="Terms of use" onPress={() => void Linking.openURL(termsUrl)} />
+        ) : null}
+        {helpUrl ? <ListRow testID="settings.help" label="Help" onPress={() => void Linking.openURL(helpUrl)} /> : null}
+        <PressableDelete onPress={() => setConfirmDelete(true)} />
+        <Button
+          testID="settings.signOut"
+          label="Sign out"
+          variant="ghost"
+          shape="card"
+          busy={busy}
+          onPress={() => void onSignOut()}
+          style={{ marginTop: tokens.space.lg }}
+        />
+      </ScrollView>
+      <Modal visible={confirmDelete} transparent animationType="fade" onRequestClose={() => setConfirmDelete(false)}>
+        <View style={styles.scrim}>
+          <View style={styles.modalCard} testID="profile.deleteConfirm">
+            <Text style={styles.modalTitle}>Delete your account?</Text>
+            <Text style={styles.modalBody}>
+              This removes your profile and closes {openRequests} open request
+              {openRequests === 1 ? "" : "s"}. Offers and request history disappear. You will need to join again to
+              request fares.
+            </Text>
+            <Button
+              testID="profile.deleteConfirm.confirm"
+              label="Delete account"
+              variant="destructive"
+              shape="card"
+              busy={busy}
+              onPress={() => void onDeleteConfirmed()}
+            />
+            <Button
+              testID="profile.deleteConfirm.cancel"
+              label="Cancel"
+              variant="ghost"
+              shape="card"
+              onPress={() => setConfirmDelete(false)}
+            />
+          </View>
+        </View>
+      </Modal>
+      {profile ? (
+        <>
+          <PasswordSheet ref={passwordRef} profile={profile} onSaved={onSheetSaved} />
+          <PhoneSheet ref={phoneRef} profile={profile} onSaved={onSheetSaved} />
+          <NotificationsSheet
+            ref={notificationsRef}
+            savedOffers={offersSwitchValue(profile)}
+            onSaved={(offers) => setProfile((prev) => (prev ? withOffers(prev, offers) : prev))}
+          />
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function PressableDelete({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable testID="settings.delete" accessibilityRole="button" onPress={onPress} style={styles.delete}>
+      <Text style={styles.deleteText}>Delete account</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
+  title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, marginBottom: tokens.space.lg },
+  error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger, marginBottom: tokens.space.sm },
+  hint: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginBottom: tokens.space.sm },
+  delete: { marginTop: tokens.space.xl },
+  deleteText: { ...rn(tokens.type.body), color: tokens.colors.statusDanger },
+  scrim: {
+    flex: 1,
+    backgroundColor: tokens.colors.scrim,
+    justifyContent: "center",
+    padding: tokens.space.lg,
+  },
+  modalCard: {
+    backgroundColor: tokens.colors.surfaceCard,
+    borderRadius: tokens.radius.panel,
+    padding: tokens.space.lg,
+    gap: tokens.space.md,
+  },
+  modalTitle: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
+  modalBody: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+});

@@ -16,12 +16,13 @@ appId: com.buybusinessclass.club
 - assertVisible: { id: "explore.root" }
 - tapOn: { id: "tab.profile" }
 - assertVisible: { id: "profile.root" }
-# The last row of a long screen: scroll to it first.
+- tapOn: { id: "profile.settings" }
+- assertVisible: { id: "settings.root" }
 - scrollUntilVisible:
     element:
-      id: "profile.delete"
+      id: "settings.delete"
     direction: DOWN
-- tapOn: { id: "profile.delete" }
+- tapOn: { id: "settings.delete" }
 - assertVisible: { id: "profile.deleteConfirm" }
 - tapOn: { id: "profile.deleteConfirm.confirm" }
 # After delete → join (Path A entry), not the feed.

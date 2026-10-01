@@ -1,4 +1,4 @@
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -65,6 +65,7 @@ export default function ExploreScreen() {
       profile,
       fromCode: state.from?.code,
       toCode: state.to?.code,
+      city: state.to?.city,
     });
   }
 
@@ -136,7 +137,7 @@ export default function ExploreScreen() {
           </>
         )}
       </HomeSheet>
-      <RequestSheet ref={requestRef} onSeeRequests={() => router.push("/(tabs)/requests" as Href)} />
+      <RequestSheet ref={requestRef} />
     </View>
   );
 }

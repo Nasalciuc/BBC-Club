@@ -133,7 +133,7 @@ export default function FareDetailScreen() {
             onPress: () => router.replace("/(tabs)/explore" as Href),
           }}
         />
-        <RequestSheet ref={sheetRef} onSeeRequests={() => router.push("/(tabs)/requests" as Href)} />
+        <RequestSheet ref={sheetRef} />
       </View>
     );
   }
@@ -254,7 +254,7 @@ export default function FareDetailScreen() {
         </Pressable>
       </Modal>
 
-      <RequestSheet ref={sheetRef} onSeeRequests={() => router.push("/(tabs)/requests" as Href)} />
+      <RequestSheet ref={sheetRef} />
     </View>
   );
 }

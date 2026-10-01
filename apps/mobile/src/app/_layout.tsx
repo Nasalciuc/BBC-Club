@@ -205,6 +205,34 @@ export default function RootLayout() {
                   }}
                 />
                 <Stack.Screen
+                  name="request/confirmed"
+                  options={{
+                    animation: "fade",
+                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="request/limited"
+                  options={{
+                    animation: "fade",
+                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="settings"
+                  options={{
+                    animation: "slide_from_right",
+                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="edit-profile"
+                  options={{
+                    animation: "slide_from_right",
+                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
                   name="dev/gallery"
                   options={{
                     animation: "slide_from_right",

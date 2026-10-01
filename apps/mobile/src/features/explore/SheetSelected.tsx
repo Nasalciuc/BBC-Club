@@ -95,6 +95,12 @@ export function SheetSelected({ state, dispatch, onRetry, onQuote }: Props) {
         />
       ) : null}
 
+      {state.status === "paused" ? (
+        <Text testID="search.paused" style={styles.paused}>
+          Search is paused. Try again in a minute.
+        </Text>
+      ) : null}
+
       {state.status === "error" && state.errorMessage ? (
         <ErrorState
           variant="error"
@@ -130,5 +136,6 @@ const styles = StyleSheet.create({
     marginTop: tokens.space.sm,
   },
   quoteText: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  paused: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.md },
   pressed: { opacity: 0.85 },
 });
