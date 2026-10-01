@@ -182,24 +182,14 @@ services:
   # GlitchTip's `redis` below is a different service — do not point the API there.
   redis-app:
     image: redis:8.10.1-alpine
+    profiles: ["redis-kafka"]
     <<: [*restart, *logging]
     networks: [data]
     environment:
-      REDIS_APP_PASSWORD: "${REDIS_APP_PASSWORD}"
+      REDIS_APP_PASSWORD: "${REDIS_APP_PASSWORD:-}"
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      [
-        "redis-server",
-        "--requirepass",
-        "${REDIS_APP_PASSWORD}",
-        "--maxmemory",
-        "256mb",
-        "--maxmemory-policy",
-        "allkeys-lru",
-        "--save",
-        "",
-        "--appendonly",
-        "no",
-      ]
+      - 'if [ -z "$$REDIS_APP_PASSWORD" ]; then echo "REDIS_APP_PASSWORD is required" >&2; exit 1; fi; exec redis-server --requirepass "$$REDIS_APP_PASSWORD" --maxmemory 256mb --maxmemory-policy allkeys-lru --save "" --appendonly no'
     healthcheck:
       test: ["CMD-SHELL", 'redis-cli -a "$REDIS_APP_PASSWORD" ping | grep -q PONG']
       interval: 5s
@@ -209,6 +199,7 @@ services:
 
   kafka:
     image: apache/kafka:4.3.1
+    profiles: ["redis-kafka"]
     <<: [*restart, *logging]
     networks: [data]
     environment:
@@ -242,8 +233,9 @@ services:
 
   kafka-init:
     image: apache/kafka:4.3.1
+    profiles: ["redis-kafka"]
     networks: [data]
-    depends_on: { kafka: { condition: service_started } }
+    depends_on: { kafka: { condition: service_healthy } }
     restart: "no"
     entrypoint: ["/bin/sh", "/init/topics.sh"]
     volumes: ["./kafka:/init:ro"]

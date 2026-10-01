@@ -400,7 +400,7 @@ without Cloudflare’s client cert must fail the TLS handshake.
 
 Unset `REDIS_URL` and `KAFKA_BROKERS` and the API stays on Postgres: flags cache in the process for 30 seconds, read and search rate limits use the in-process GCRA store, push dispatch sends inline, and search does not emit events. Kill switches and consumer pause always read Postgres and are never cached.
 
-**Turn Redis on.** Set `REDIS_APP_PASSWORD` (Compose only) and `REDIS_URL=redis://:PASSWORD@redis-app:6379` on the api and worker. Read and search limits move to Redis and fall back to memory if Redis errors, so a down Redis does not 503 those routes. Postgres rules (writes, auth) do not move. Destinations and airports cache under a generation key; import and `expire-fares` bump it.
+**Turn Redis on.** Set `REDIS_APP_PASSWORD` (Compose only) and `REDIS_URL=redis://:PASSWORD@redis-app:6379` on the api and worker. A password inside `REDIS_URL` must be URL-safe or percent-encoded. Read and search limits move to Redis and fall back to memory if Redis errors, so a down Redis does not 503 those routes. Postgres rules (writes, auth) do not move. Destinations and airports cache under a generation key; import and `expire-fares` bump it.
 
 **Turn Kafka on.** Set `KAFKA_BROKERS=kafka:9092`. The process registers consumer `platform.kafkaRelay` and publishes each committed journal event to `bbc.domain-events.v1`. Delivery is at-least-once. There is no per-aggregate order: a failed relay waits in backoff while a later event for the same aggregate can be published. Consumers must be idempotent and order-independent. A duplicate `topic:partition:offset` inserts nothing in `platform.kafka_processed` and has no second effect. The offset commits after that transaction.
 

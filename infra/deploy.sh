@@ -25,6 +25,9 @@ else
   DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml --env-file $PROD_ENV"
   [[ -f "$STG_ENV" ]] && DC="$DC -f $INFRA_DIR/compose.staging.yml --env-file $STG_ENV"
 fi
+if grep -qE '^(REDIS_URL|KAFKA_BROKERS)=.+' "$PROD_ENV" || { [[ -f "$STG_ENV" ]] && grep -qE '^(REDIS_URL|KAFKA_BROKERS)=.+' "$STG_ENV"; }; then
+  DC="$DC --profile redis-kafka"
+fi
 
 if [[ "$MODE" == "production" ]]; then
   SVC=api; WORKER=worker; PG=postgres; POOLER=pgbouncer; CRON=cron; VAR=API_IMAGE; ENVF="$PROD_ENV"
