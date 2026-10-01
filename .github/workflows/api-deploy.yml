@@ -1,4 +1,4 @@
-# Manual deploy of the API image: build → push to GHCR (7-char SHA tag only) → SSH → infra/deploy.sh.
+# Manual deploy of the API image: build → push to GHCR (7-char SHA tag) → SSH → infra/deploy.sh.
 # workflow_dispatch only. The push trigger below stays commented out: enabling it is a separate, owner-approved decision.
 name: api-deploy
 on:
@@ -45,8 +45,7 @@ jobs:
           context: .
           file: apps/api/Dockerfile
           push: true
-          tags: |
-            ${{ steps.meta.outputs.image }}
+          tags: ${{ steps.meta.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
