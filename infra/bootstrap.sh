@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Empty Ubuntu 24.04 → running production stack (+ optional staging). Idempotent.
-#   curl -fsSL https://raw.githubusercontent.com/Nasalciuc/BBC-Club/main/isolated/infra-production-v2/infra-v2/infra/bootstrap.sh | sudo bash -s -- production
+#   curl -fsSL https://raw.githubusercontent.com/Nasalciuc/BBC-Club/main/infra/bootstrap.sh | sudo bash -s -- production
 #   ... | sudo bash -s -- production --with-staging
-# After the monorepo assembly this file lives at infra/bootstrap.sh — the URL changes, the script does not.
+# This file lives at infra/bootstrap.sh.
 set -Eeuo pipefail
 trap 'echo "❌ bootstrap failed at line $LINENO" >&2' ERR
 MODE="${1:-production}"; WITH_STAGING="${2:-}"
