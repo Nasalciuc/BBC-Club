@@ -59,6 +59,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog schema applied/);
     expect(second.out).not.toMatch(/db:verify fitness fixes applied/);
     expect(second.out).not.toMatch(/requests phone_e164\/phone_valid applied/);
+    expect(second.out).not.toMatch(/requests intent applied/);
     expect(second.out).not.toMatch(/notifications request_id applied/);
     expect(second.out).not.toMatch(/catalog airports.tz applied/);
     expect(second.out).not.toMatch(/auth.otp_cooldown applied/);
@@ -93,6 +94,7 @@ describe("extras ledger", () => {
       "0018_notifications_campaigns.sql",
       "0019_platform_statement_timeout.sql",
       "0020_platform_pg_stat_statements.sql",
+      "0021_requests_intent.sql",
     ]);
   });
 });
