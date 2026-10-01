@@ -2,10 +2,23 @@ import { useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AirportRow, Button, Chip, EmptyState, ProgressLine, SearchField, Stepper, tokens, rn } from "@bbc/ui";
+import {
+  AirportRow,
+  Button,
+  Chip,
+  EmptyState,
+  ProgressLine,
+  SearchField,
+  StateMessage,
+  Stepper,
+  tokens,
+  rn,
+} from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
+import { airportSearchState } from "@/lib/airport-search-state";
 import { fetchAirports, patchProfile, putTravelPreferences } from "@/lib/api";
+import { stateCopy } from "@/lib/error-context";
 import { appStorage, ONBOARDED_KEY } from "@/lib/storage-keys";
 
 const EXPLORE = "/(tabs)/explore" as Href;
@@ -19,8 +32,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AirportVM | null>(null);
-  const [hits, setHits] = useState<AirportVM[]>([]);
-  const [searched, setSearched] = useState(false);
+  const [search, setSearch] = useState(() => airportSearchState<AirportVM>("idle"));
   const [cabin, setCabin] = useState<"business" | "first">("business");
   const [adult, setAdult] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -28,16 +40,14 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     if (query.trim().length < 2) {
-      setHits([]);
-      setSearched(false);
+      setSearch(airportSearchState("idle"));
       return;
     }
+    setSearch(airportSearchState("loading"));
     const t = setTimeout(() => {
       void (async () => {
         const result = await fetchAirports(query);
-        if (result.ok) setHits(result.data);
-        else setHits([]);
-        setSearched(true);
+        setSearch(airportSearchState(result));
       })();
     }, 200);
     return () => clearTimeout(t);
@@ -109,7 +119,7 @@ export default function OnboardingScreen() {
           }}
         />
 
-        {searched && query.trim().length >= 2 && hits.length === 0 && !selected ? (
+        {search.phase === "empty" && !selected ? (
           <EmptyState
             testID="onboarding.airport.empty"
             title="No airports found"
@@ -119,12 +129,30 @@ export default function OnboardingScreen() {
               onPress: () => {
                 setQuery("");
                 setSelected(null);
-                setSearched(false);
+                setSearch(airportSearchState("idle"));
+              },
+            }}
+          />
+        ) : search.phase === "error" && !selected ? (
+          <StateMessage
+            testID="onboarding.airport.error"
+            variant="error"
+            title={stateCopy("generic").title}
+            body={stateCopy("generic").body}
+            primary={{
+              label: "Try again",
+              onPress: () => {
+                const q = query;
+                setSearch(airportSearchState("loading"));
+                void (async () => {
+                  const result = await fetchAirports(q);
+                  setSearch(airportSearchState(result));
+                })();
               },
             }}
           />
         ) : (
-          hits.map((a) => (
+          search.airports.map((a) => (
             <AirportRow
               key={a.code}
               testID={`onboarding.airport.hit.${a.code}`}
@@ -135,8 +163,7 @@ export default function OnboardingScreen() {
               onPress={() => {
                 setSelected(a);
                 setQuery(`${a.city} · ${a.code}`);
-                setHits([]);
-                setSearched(false);
+                setSearch(airportSearchState("idle"));
               }}
             />
           ))

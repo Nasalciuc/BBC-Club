@@ -273,6 +273,8 @@ jobs:
       MAESTRO_VERSION: "2.10.0"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: KVM on this runner
         run: |
           ls -l /dev/kvm || { echo "::error::no /dev/kvm on this runner — the emulator cannot boot"; exit 1; }

@@ -1,10 +1,12 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { AirportRow, Button, CloseButton, EmptyState, SearchField, tokens, rn } from "@bbc/ui";
+import { AirportRow, Button, CloseButton, EmptyState, SearchField, StateMessage, tokens, rn } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
+import { airportSearchState } from "@/lib/airport-search-state";
 import { fetchAirports, patchProfile, type Profile } from "@/lib/api";
+import { stateCopy } from "@/lib/error-context";
 import type { ProfileSheetHandle } from "./types";
 
 export type { ProfileSheetHandle };
@@ -23,8 +25,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   const modalRef = useRef<BottomSheetModal>(null);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AirportVM | null>(null);
-  const [hits, setHits] = useState<AirportVM[]>([]);
-  const [searched, setSearched] = useState(false);
+  const [search, setSearch] = useState(() => airportSearchState<AirportVM>("idle"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +33,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
     present() {
       setQuery(profile.homeAirport ?? "");
       setSelected(null);
-      setHits([]);
-      setSearched(false);
+      setSearch(airportSearchState("idle"));
       setBusy(false);
       setError(null);
       modalRef.current?.present();
@@ -45,16 +45,14 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
 
   useEffect(() => {
     if (query.trim().length < 2) {
-      setHits([]);
-      setSearched(false);
+      setSearch(airportSearchState("idle"));
       return;
     }
+    setSearch(airportSearchState("loading"));
     const t = setTimeout(() => {
       void (async () => {
         const result = await fetchAirports(query);
-        if (result.ok) setHits(result.data);
-        else setHits([]);
-        setSearched(true);
+        setSearch(airportSearchState(result));
       })();
     }, 200);
     return () => clearTimeout(t);
@@ -109,7 +107,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
           }}
         />
 
-        {searched && query.trim().length >= 2 && hits.length === 0 && !selected ? (
+        {search.phase === "empty" && !selected ? (
           <EmptyState
             testID="profile.homeAirport.empty"
             title="No airports found"
@@ -119,12 +117,30 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
               onPress: () => {
                 setQuery("");
                 setSelected(null);
-                setSearched(false);
+                setSearch(airportSearchState("idle"));
+              },
+            }}
+          />
+        ) : search.phase === "error" && !selected ? (
+          <StateMessage
+            testID="profile.homeAirport.error"
+            variant="error"
+            title={stateCopy("generic").title}
+            body={stateCopy("generic").body}
+            primary={{
+              label: "Try again",
+              onPress: () => {
+                const q = query;
+                setSearch(airportSearchState("loading"));
+                void (async () => {
+                  const result = await fetchAirports(q);
+                  setSearch(airportSearchState(result));
+                })();
               },
             }}
           />
         ) : (
-          hits.map((a) => (
+          search.airports.map((a) => (
             <AirportRow
               key={a.code}
               testID={`profile.homeAirport.hit.${a.code}`}
@@ -135,8 +151,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
               onPress={() => {
                 setSelected(a);
                 setQuery(`${a.city} · ${a.code}`);
-                setHits([]);
-                setSearched(false);
+                setSearch(airportSearchState("idle"));
               }}
             />
           ))
