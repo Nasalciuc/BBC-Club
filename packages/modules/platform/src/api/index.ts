@@ -101,6 +101,8 @@ export function createPlatform(
             consumeIdempotent({
               db,
               brokers: kafkaBrokers,
+              logger,
+              metrics,
               ...consumeOpts,
             }),
         }
