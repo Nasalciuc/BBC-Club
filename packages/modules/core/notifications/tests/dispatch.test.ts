@@ -307,3 +307,110 @@ test("a transactional quote-ready row is not suppressed by offer preferences", a
   expect(collapseId).toBe(id);
   expect(await statusOf(id)).toBe("delivered");
 });
+
+function membersOf(
+  status: string,
+  prefs: { offers_personal: boolean; offers_broadcast: boolean } = {
+    offers_personal: true,
+    offers_broadcast: true,
+  },
+): MembersFacade {
+  return {
+    getStatus: async () => status,
+    preferencesOf: async () => prefs,
+  } as MembersFacade;
+}
+
+test("a suspended member is suppressed before the stream send", async () => {
+  const id = await insertSending(`m-${crypto.randomUUID()}`, 1);
+  let sends = 0;
+  const metrics = await deliverSending(
+    deps(
+      {
+        send: async () => {
+          sends += 1;
+          return { ok: true, ticketId: "late" };
+        },
+      },
+      { members: membersOf("suspended") },
+    ),
+    [id],
+  );
+  expect(sends).toBe(0);
+  expect(metrics.suppressed).toBe(1);
+  const row = await rowOf(id);
+  expect(row?.status).toBe("suppressed");
+  expect(row?.last_error).toBe("member_suspended");
+});
+
+test("offer notifications turned off after enqueue are suppressed", async () => {
+  const memberId = `m-${crypto.randomUUID()}`;
+  const id = crypto.randomUUID();
+  await iso.db.execute(sql`
+    INSERT INTO notifications.notifications
+      (id, member_id, category, title, body, status, attempts, claimed_at, scheduled_for)
+    VALUES (
+      ${id}::uuid, ${memberId}, 'offers_personal', 'A fare', 'still sending',
+      'sending', 1, now() - interval '1 hour', now()
+    )`);
+  let sends = 0;
+  const metrics = await deliverSending(
+    deps(
+      {
+        send: async () => {
+          sends += 1;
+          return { ok: true, ticketId: "late" };
+        },
+      },
+      { members: membersOf("active", { offers_personal: false, offers_broadcast: true }) },
+    ),
+    [id],
+  );
+  expect(sends).toBe(0);
+  expect(metrics.suppressed).toBe(1);
+  const row = await rowOf(id);
+  expect(row?.status).toBe("suppressed");
+  expect(row?.last_error).toBe("pref_disabled");
+});
+
+test("a reaper before the suppression keeps its row", async () => {
+  const id = await insertSending(`m-${crypto.randomUUID()}`, 5);
+  const metrics = await deliverSending(
+    deps(
+      { send: async () => ({ ok: true, ticketId: "unused" }) },
+      {
+        members: membersOf("suspended"),
+        beforeTokens: async () => {
+          await iso.db.execute(dispatchReaperSql(sql`interval '1 millisecond'`));
+        },
+      },
+    ),
+    [id],
+  );
+  expect(metrics.suppressed).toBe(0);
+  const row = await rowOf(id);
+  expect(row?.status).toBe("failed");
+  expect(row?.last_error).toBe("reaped");
+});
+
+test("an active member with a token is still delivered", async () => {
+  const memberId = `m-${crypto.randomUUID()}`;
+  const id = await insertSending(memberId, 1);
+  await insertToken(memberId, `tok-live-${id}`);
+  let sends = 0;
+  const metrics = await deliverSending(
+    deps(
+      {
+        send: async () => {
+          sends += 1;
+          return { ok: true, ticketId: "live" };
+        },
+      },
+      { members: membersOf("active") },
+    ),
+    [id],
+  );
+  expect(sends).toBe(1);
+  expect(metrics.sent).toBe(1);
+  expect(await statusOf(id)).toBe("delivered");
+});

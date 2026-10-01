@@ -121,7 +121,7 @@ async function commitOutcome(
   id: string,
   claim: string | null | undefined,
   patch: {
-    status: "sent" | "delivered" | "pending" | "failed";
+    status: "sent" | "delivered" | "pending" | "failed" | "suppressed";
     sentAt?: SQL;
     deliveredAt?: SQL;
     ticketId?: string | null;
@@ -268,6 +268,33 @@ export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise
   await deps.beforeTokens?.();
   const work: ClaimedWork[] = [];
   for (const row of rows) {
+    // The stream worker runs after the row waited in the queue: re-check what the inline path checks inside its claim
+    // transaction (dispatch.ts:171–192) — the member's status, then the offer preferences — through the same claim guard.
+    const status = await deps.members.getStatus(deps.db, row.memberId);
+    if (status !== "active") {
+      const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
+        status: "suppressed",
+        attempts: sql`${notificationsTable.attempts}`,
+        claimedAt: null,
+        lastError: `member_${status}`,
+      });
+      if (wrote) metrics.suppressed++;
+      continue;
+    }
+    if (row.category === "offers_personal" || row.category === "offers_broadcast") {
+      const prefs = await deps.members.preferencesOf(deps.db, row.memberId);
+      const allowed = row.category === "offers_personal" ? prefs.offers_personal : prefs.offers_broadcast;
+      if (!allowed) {
+        const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
+          status: "suppressed",
+          attempts: sql`${notificationsTable.attempts}`,
+          claimedAt: null,
+          lastError: "pref_disabled",
+        });
+        if (wrote) metrics.suppressed++;
+        continue;
+      }
+    }
     const tokens = await deps.db
       .select()
       .from(deviceTokens)
