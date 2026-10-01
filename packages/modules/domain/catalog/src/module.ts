@@ -1,13 +1,17 @@
 import { Hono } from "hono";
+import { desc, gte, sql } from "drizzle-orm";
 import type { Db, Executor } from "@bbc/db";
+import { demandDaily } from "@bbc/db/schema/catalog";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
+import { SearchEvent } from "@bbc/platform";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
+import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
 import { importCatalog, ImportBody } from "./application/import";
 import { toAirportVM, toFareVM } from "./application/to-fare-vm";
@@ -20,7 +24,7 @@ function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date 
 export const catalogModule = (): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
   name: "catalog",
   layer: "domain",
-  init: ({ db, platform }) => {
+  init: ({ db, platform, env }) => {
     const conn = db as unknown as Executor;
     const destinationsCache = createDestinationsCache();
     const invalidateMaps = async () => {
@@ -182,6 +186,62 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
       },
     );
 
+    registerRoute("GET", "/v1/internal/demand", "ops:read");
+    routes.get(
+      "/internal/demand",
+      authorize("ops:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const days = Number(c.req.query("days") ?? "7");
+        if (!Number.isInteger(days) || days < 1 || days > 90) {
+          return c.json(apiError("VALIDATION", { message: "days must be an integer from 1 to 90" }), 400);
+        }
+        const since = new Date(Date.now() - days * 86_400_000);
+        const rows = await conn
+          .select({
+            from: demandDaily.routeFrom,
+            to: demandDaily.routeTo,
+            cabin: demandDaily.cabin,
+            searches: sql<number>`sum(${demandDaily.searches})::int`.mapWith(Number),
+            searchesWithoutFare: sql<number>`sum(${demandDaily.searchesWithoutFare})::int`.mapWith(Number),
+          })
+          .from(demandDaily)
+          .where(gte(demandDaily.day, since))
+          .groupBy(demandDaily.routeFrom, demandDaily.routeTo, demandDaily.cabin)
+          .orderBy(desc(sql`sum(${demandDaily.searchesWithoutFare})`), desc(sql`sum(${demandDaily.searches})`));
+        return c.json({ days, routes: rows });
+      },
+    );
+
+    if (platform.kafka && platform.redis && env.APP_ROLE !== "api" && env.KAFKA_BROKERS) {
+      const redis = platform.redis;
+      const loop = platform.kafka
+        .consume({
+          clientId: "bbc-demand",
+          groupId: "catalog.demand",
+          topic: "bbc.search.v1",
+          consumerName: "catalog.demand",
+          signal: platform.signal,
+          handle: async (_eventId, value) => {
+            const parsed = SearchEvent.safeParse(value);
+            if (!parsed.success) {
+              platform.metrics.inc("search_events_rejected");
+              return;
+            }
+            await recordSearch(redis, parsed.data);
+          },
+        })
+        .catch((err: unknown) => {
+          platform.logger.error({ err: String(err) }, "demand consumer stopped");
+        });
+      platform.lifecycle.onClose(async () => {
+        await loop;
+      });
+    }
+
     return {
       exposes: expose,
       routes: [{ basePath: "/v1", app: routes }],
@@ -197,6 +257,18 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
               const out = await expireFares({ db: conn });
               await invalidateMaps();
               return out;
+            },
+          },
+        },
+        {
+          name: "demand-rollup",
+          spec: {
+            cron: "15 3 * * *",
+            singleton: true,
+            timeoutMs: 60_000,
+            handler: async () => {
+              if (!platform.redis) return { skipped: 1, rows: 0 };
+              return { skipped: 0, ...(await rollupDemand(platform.redis, conn)) };
             },
           },
         },

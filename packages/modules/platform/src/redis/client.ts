@@ -1,4 +1,5 @@
 import { createClient } from "redis";
+import bloom from "@redis/bloom";
 
 /** RESP3 + client-side caching. disableOfflineQueue: a dead socket fails the command at once. */
 export function createRedis(url: string, logger: { warn(o: object, m?: string): void }) {
@@ -7,6 +8,7 @@ export function createRedis(url: string, logger: { warn(o: object, m?: string): 
     RESP: 3,
     clientSideCache: { ttl: 0, maxEntries: 10_000, evictPolicy: "LRU" },
     disableOfflineQueue: true,
+    modules: bloom,
     socket: {
       reconnectStrategy: (retries) => Math.min(retries * 200, 5_000),
       connectTimeout: 2_000,

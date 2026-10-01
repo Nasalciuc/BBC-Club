@@ -94,6 +94,7 @@ describe("extras ledger", () => {
       "0019_platform_statement_timeout.sql",
       "0020_platform_pg_stat_statements.sql",
       "0022_platform_kafka_processed_extras.sql",
+      "0023_catalog_demand_daily_extras.sql",
     ]);
   });
 });

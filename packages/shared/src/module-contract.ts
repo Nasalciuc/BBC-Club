@@ -98,6 +98,31 @@ export type ModulePlatform = {
   } | null;
   lifecycle: { onClose(fn: () => Promise<void>): void };
   signal: AbortSignal;
+  metrics: { inc(name: string, labels?: Record<string, string>, by?: number): void };
+  /** Null when REDIS_URL is unset. Sketches only — the record stays in Postgres. */
+  redis: null | {
+    topK: {
+      reserve(key: string, k: number): Promise<unknown>;
+      incrBy(key: string, item: { item: string; incrementBy: number }): Promise<unknown>;
+      listWithCount(key: string): Promise<{ item: string; count: number }[]>;
+    };
+    cms: {
+      initByProb(key: string, error: number, probability: number): Promise<unknown>;
+      incrBy(key: string, item: { item: string; incrementBy: number }): Promise<unknown>;
+      query(key: string, items: string[]): Promise<number[]>;
+    };
+  };
+  /** Null when KAFKA_BROKERS is unset. */
+  kafka: null | {
+    consume(opts: {
+      clientId: string;
+      groupId: string;
+      topic: string;
+      consumerName: string;
+      signal: AbortSignal;
+      handle: (eventId: string, value: unknown, tx: unknown) => Promise<void>;
+    }): Promise<void>;
+  };
 };
 
 export type ModuleOutput<Exposes> = {

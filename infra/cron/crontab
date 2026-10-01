@@ -4,6 +4,7 @@
 0 4 * * * cleanup-devices
 * * * * * db-observe
 0 9 * * 1 db-report
+15 3 * * * demand-rollup
 * * * * * dispatch
 */15 * * * * expire-fares
 */5 * * * * expire-offers
