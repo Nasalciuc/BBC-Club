@@ -7,6 +7,7 @@ import { createRateLimiter } from "../ratelimit";
 import { createCache } from "../cache";
 import { consumeIdempotent } from "../kafka/consume";
 import { createKafkaProducer } from "../kafka/producer";
+import { createSearchBuffer } from "../search/buffer";
 import { createBreaker, createRedis, type Redis } from "../redis/client";
 import type { Db } from "@bbc/db";
 
@@ -72,6 +73,8 @@ export function createPlatform(
 
   const ac = new AbortController();
   const closers: Array<() => Promise<void>> = [];
+  const search = createSearchBuffer({ producer, flags, metrics, logger });
+  if (producer) search.start(ac.signal);
 
   return {
     logger,
@@ -83,6 +86,7 @@ export function createPlatform(
     redis,
     guarded,
     cache,
+    search,
     producer,
     kafka: kafkaBrokers
       ? {
@@ -167,3 +171,5 @@ export { collectDbReport, maybeAlertOps, pgbouncerWaitingClients, resetDbAlertSt
 export { registerPlatformJobs } from "../jobs/builtin";
 export { kafkaRelayHandler, RELAY_CONSUMER, DOMAIN_TOPIC } from "../kafka/relay";
 export { shardOf, SHARDS } from "../jobs/streams";
+export { SEARCH_TOPIC } from "../search/buffer";
+export { SearchEvent } from "../search/event";

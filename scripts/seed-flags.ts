@@ -13,6 +13,8 @@ const db = createDb(url, { max: 1, applicationName: "bbc-seed-flags" });
 const FLAGS: [string, Record<string, unknown>, string][] = [
   ["members.allow_non_crm_signups", { enabled: false }, "ADR-PROD-001: an unknown CRM email is waitlist, never active"],
   ["app.min_supported_version", { variant: "0.1.0" }, "forced-update threshold served by /v1/app-config"],
+  ["catalog.search_events", { enabled: false }, "ADR-032: search events stay off until an operator turns them on"],
+  ["jobs.push.transport", { variant: "pg" }, "ADR-031: push dispatch stays in Postgres until variant=streams"],
 ];
 
 try {

@@ -76,6 +76,15 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
 
         const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
+        const month = (when ?? new Date()).toISOString().slice(0, 7);
+        platform.search.note({
+          from,
+          to,
+          cabin,
+          month,
+          hadFares: items.length > 0,
+          results: items.length,
+        });
         return c.json({
           from: toAirportVM(fromApt),
           to: toAirportVM(toApt),

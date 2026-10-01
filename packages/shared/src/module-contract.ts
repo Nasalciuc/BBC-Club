@@ -81,6 +81,16 @@ export type ModulePlatform = {
     /** Null when Redis is not connected, so callers keep their process cache. */
     generation(key: string): Promise<string | null>;
   };
+  search: {
+    note(event: {
+      from: string;
+      to: string;
+      cabin: "business" | "first";
+      month: string;
+      hadFares: boolean;
+      results: number;
+    }): void;
+  };
   /** Null when REDIS_URL is unset. */
   streams: {
     enqueue(ids: string[]): Promise<void>;
