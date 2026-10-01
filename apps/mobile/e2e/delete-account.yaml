@@ -24,6 +24,9 @@ appId: com.buybusinessclass.club
     direction: DOWN
 - tapOn: { id: "settings.delete" }
 - assertVisible: { id: "profile.deleteConfirm" }
+- tapOn: { id: "profile.deleteConfirm.password" }
+- inputText: "atlantic2026!"
+- hideKeyboard
 - tapOn: { id: "profile.deleteConfirm.confirm" }
 # After delete → join (Path A entry), not the feed.
 - assertVisible: { id: "join.email" }

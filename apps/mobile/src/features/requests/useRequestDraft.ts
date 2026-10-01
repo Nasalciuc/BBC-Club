@@ -19,6 +19,7 @@ export type RequestDraft = {
   replacesFareId?: string;
   priceAtRequest?: number;
   phoneError: string | null;
+  returnError: string | null;
   submitError: string | null;
   phase: "form" | "confirm" | "saved";
   confirmedPhone: string | null;
@@ -35,6 +36,7 @@ type Action =
   | { type: "setContact"; field: "name" | "phone" | "email"; value: string }
   | { type: "setNote"; note: string }
   | { type: "setPhoneError"; error: string | null }
+  | { type: "setReturnError"; error: string | null }
   | { type: "setSubmitError"; error: string | null }
   | {
       type: "confirm";
@@ -62,7 +64,7 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
                   date: state.legs[0]!.date,
                 },
               ];
-      return { ...state, tripType: action.tripType, legs };
+      return { ...state, tripType: action.tripType, legs, returnError: null };
     }
     case "setDepart": {
       const legs = [...state.legs];
@@ -75,7 +77,7 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
       else if (legs[0]) {
         legs.push({ from: legs[0].to, to: legs[0].from, date: action.date });
       }
-      return { ...state, legs };
+      return { ...state, legs, returnError: null };
     }
     case "setPassengers":
       return { ...state, passengers: action.passengers };
@@ -89,6 +91,8 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
       return { ...state, note: action.note };
     case "setPhoneError":
       return { ...state, phoneError: action.error };
+    case "setReturnError":
+      return { ...state, returnError: action.error };
     case "setSubmitError":
       return { ...state, submitError: action.error };
     case "confirm":
@@ -137,12 +141,17 @@ export function buildDraft(opts: {
     replacesFareId: mode === "alternative" ? opts.replacesFareId : undefined,
     priceAtRequest: opts.fare?.price.offer,
     phoneError: null,
+    returnError: null,
     submitError: null,
     phase: "form",
     confirmedPhone: null,
     confirmedRoute: null,
     confirmedDates: null,
   };
+}
+
+export function missingReturn(tripType: TripType, returnDate?: string): boolean {
+  return tripType === "round" && (returnDate == null || returnDate.length === 0);
 }
 
 export function sheetTitle(mode: RequestMode): string {

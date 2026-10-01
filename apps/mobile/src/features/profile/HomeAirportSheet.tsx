@@ -1,7 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { AirportRow, Button, CloseButton, SearchField, tokens, rn } from "@bbc/ui";
+import { AirportRow, Button, CloseButton, EmptyState, SearchField, tokens, rn } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
 import { fetchAirports, patchProfile, type Profile } from "@/lib/api";
@@ -24,6 +24,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AirportVM | null>(null);
   const [hits, setHits] = useState<AirportVM[]>([]);
+  const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +33,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
       setQuery(profile.homeAirport ?? "");
       setSelected(null);
       setHits([]);
+      setSearched(false);
       setBusy(false);
       setError(null);
       modalRef.current?.present();
@@ -44,12 +46,15 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   useEffect(() => {
     if (query.trim().length < 2) {
       setHits([]);
+      setSearched(false);
       return;
     }
     const t = setTimeout(() => {
       void (async () => {
         const result = await fetchAirports(query);
         if (result.ok) setHits(result.data);
+        else setHits([]);
+        setSearched(true);
       })();
     }, 200);
     return () => clearTimeout(t);
@@ -104,21 +109,38 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
           }}
         />
 
-        {hits.map((a) => (
-          <AirportRow
-            key={a.code}
-            testID={`profile.homeAirport.hit.${a.code}`}
-            code={a.code}
-            city={a.city}
-            airport={a.name}
-            countryCode={a.countryCode}
-            onPress={() => {
-              setSelected(a);
-              setQuery(`${a.city} · ${a.code}`);
-              setHits([]);
+        {searched && query.trim().length >= 2 && hits.length === 0 && !selected ? (
+          <EmptyState
+            testID="profile.homeAirport.empty"
+            title="No airports found"
+            body="Try a city name or a three-letter airport code, such as JFK."
+            primary={{
+              label: "Clear search",
+              onPress: () => {
+                setQuery("");
+                setSelected(null);
+                setSearched(false);
+              },
             }}
           />
-        ))}
+        ) : (
+          hits.map((a) => (
+            <AirportRow
+              key={a.code}
+              testID={`profile.homeAirport.hit.${a.code}`}
+              code={a.code}
+              city={a.city}
+              airport={a.name}
+              countryCode={a.countryCode}
+              onPress={() => {
+                setSelected(a);
+                setQuery(`${a.city} · ${a.code}`);
+                setHits([]);
+                setSearched(false);
+              }}
+            />
+          ))
+        )}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -126,7 +148,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
           testID="profile.homeAirport.save"
           label={busy ? "Saving…" : "Save"}
           busy={busy}
-          shape="card"
+          shape="pill"
           onPress={() => void onSave()}
         />
       </BottomSheetScrollView>

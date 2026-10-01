@@ -17,6 +17,8 @@ import {
 
 export type DatesSheetHandle = { present: (s: Selection) => void };
 
+const DATE_SNAP_POINTS = ["92%"] as const;
+
 export const DatesSheet = forwardRef<DatesSheetHandle, { onUse: (s: Selection) => void }>(function DatesSheet(
   { onUse },
   ref,
@@ -35,7 +37,7 @@ export const DatesSheet = forwardRef<DatesSheetHandle, { onUse: (s: Selection) =
   return (
     <BottomSheetModal
       ref={modal}
-      snapPoints={["92%"]}
+      snapPoints={[...DATE_SNAP_POINTS]}
       stackBehavior="push"
       enableDynamicSizing={false}
       backgroundStyle={styles.bg}
@@ -80,7 +82,7 @@ export const DatesSheet = forwardRef<DatesSheetHandle, { onUse: (s: Selection) =
             testID="dates.use"
             label={cta.label}
             disabled={!cta.enabled}
-            shape="card"
+            shape="pill"
             onPress={() => {
               if (sel) {
                 onUse(sel);

@@ -7,24 +7,29 @@ type Props = {
   variant: "error" | "gone" | "offline";
   title: string;
   body: string;
-  primary?: { label: string; onPress: () => void };
-  secondary?: { label: string; onPress: () => void };
+  primary?: { label: string; onPress: () => void; testID?: string };
+  secondary?: { label: string; onPress: () => void; testID?: string };
   reference?: string;
   testID: string;
 };
 
-/** No illustrations. Copy and recovery actions come from the screen. */
-export function ErrorState({ title, body, primary, secondary, reference, testID }: Props) {
+/** One recoverable message. Figma ErrorState / StateMessage on 135:848. */
+export function StateMessage({ title, body, primary, secondary, reference, testID }: Props) {
   return (
     <View style={styles.wrap} testID={testID}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
       {primary ? (
-        <Button testID={`${testID}.primary`} label={primary.label} onPress={primary.onPress} shape="pill" />
+        <Button
+          testID={primary.testID ?? `${testID}.primary`}
+          label={primary.label}
+          onPress={primary.onPress}
+          shape="pill"
+        />
       ) : null}
       {secondary ? (
         <Button
-          testID={`${testID}.secondary`}
+          testID={secondary.testID ?? `${testID}.secondary`}
           label={secondary.label}
           onPress={secondary.onPress}
           variant="ghost"
@@ -35,6 +40,9 @@ export function ErrorState({ title, body, primary, secondary, reference, testID 
     </View>
   );
 }
+
+/** Kept so existing screens compile. Same component as StateMessage. */
+export const ErrorState = StateMessage;
 
 const styles = StyleSheet.create({
   wrap: {

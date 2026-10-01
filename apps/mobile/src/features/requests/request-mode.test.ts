@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
-import { buildDraft, draftToBody, sheetTitle } from "./useRequestDraft";
+import { buildDraft, draftToBody, missingReturn, sheetTitle } from "./useRequestDraft";
 
 const FARE_ID = "00000000-0000-4000-8000-000000000002";
 const OFFER_ID = "00000000-0000-4000-8000-000000000003";
@@ -58,4 +58,14 @@ test("an offer sends the offer id and no intent", () => {
   expect(body.intent).toBeUndefined();
   expect(body.offerId).toBe(OFFER_ID);
   expect(body.fareId).toBeUndefined();
+});
+
+test("a round trip without a return date is missing a return", () => {
+  expect(missingReturn("round", undefined)).toBe(true);
+  expect(missingReturn("round", "")).toBe(true);
+});
+
+test("a one-way trip does not need a return date", () => {
+  expect(missingReturn("oneway", undefined)).toBe(false);
+  expect(missingReturn("round", "2026-10-19")).toBe(false);
 });

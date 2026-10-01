@@ -8,6 +8,7 @@ import { BackButton, Button, ErrorState, StatusBadge, TabBar, Timeline, tokens, 
 import { closedAt, requestView } from "@/features/requests/request-view-logic";
 import { requestMeta } from "@/features/requests/status";
 import { fetchRequest, submitRequest } from "@/lib/api";
+import { stateCopy } from "@/lib/error-context";
 import { env } from "@/lib/env";
 import { getQueued, sendOne, type QueuedRequest } from "@/lib/queue";
 
@@ -139,13 +140,14 @@ export default function RequestDetailScreen() {
   }
 
   if (error || !vm) {
+    const copy = stateCopy("route");
     return (
       <View testID="request.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
         <ErrorState
           testID="request.error"
           variant="error"
-          title="Something went wrong."
-          body={error ?? "This request could not be found."}
+          title={copy.title}
+          body={error ?? copy.body}
           primary={{ label: "Back", onPress: () => router.back() }}
         />
       </View>

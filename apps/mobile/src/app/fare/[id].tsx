@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, ErrorState, ListRow, PricePair, TabBar, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, ErrorState, ListRow, PricePair, StateMessage, TabBar, tokens, rn } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
+import { stateCopy } from "@/lib/error-context";
 import { formatPrice } from "@/lib/format";
 
 /** Frame photo band. No space token equals 340; bottom corners follow DESIGN.md (12), not the square frame. */
@@ -86,43 +87,64 @@ export default function FareDetailScreen() {
 
   if (gone) {
     const closed = gone === true ? null : gone;
+    const copy = stateCopy("gone");
     return (
-      <View testID="fare.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <ErrorState
-          testID="fare.gone"
-          variant="gone"
-          title="This fare has changed."
-          body="This fare is no longer available. A specialist can help you find another option."
-          primary={{
-            label: "Request an alternative",
-            onPress: () =>
-              sheetRef.current?.present({
-                profile,
-                mode: "alternative",
-                replacesFareId: typeof id === "string" ? id : undefined,
-                fromCode: closed?.from,
-                toCode: closed?.to,
-                city: closed?.to,
-              }),
-          }}
-          secondary={{
-            label: "See other fares",
-            onPress: () => router.replace("/(tabs)/explore" as Href),
-          }}
-        />
+      <View testID="fare.root" style={[styles.root, { paddingTop: insets.top }]}>
+        <View style={styles.goneNav}>
+          <BackButton testID="fare.back" onPress={() => router.back()} />
+        </View>
+        <View style={styles.goneBody}>
+          <StateMessage
+            testID="fare.gone"
+            variant="gone"
+            title={copy.title}
+            body={copy.body}
+            primary={{
+              label: "Request an alternative",
+              testID: "fare.alternative",
+              onPress: () =>
+                sheetRef.current?.present({
+                  profile,
+                  mode: "alternative",
+                  replacesFareId: typeof id === "string" ? id : undefined,
+                  fromCode: closed?.from,
+                  toCode: closed?.to,
+                  city: closed?.to,
+                }),
+            }}
+          />
+          <Text style={styles.caption}>A specialist will call you shortly.</Text>
+        </View>
+        <View style={{ paddingBottom: insets.bottom }}>
+          <TabBar
+            testID="tabs.bar"
+            active="explore"
+            unread={0}
+            onPress={(key) =>
+              router.push(
+                (key === "requests"
+                  ? "/(tabs)/requests"
+                  : key === "profile"
+                    ? "/(tabs)/profile"
+                    : "/(tabs)/explore") as Href,
+              )
+            }
+          />
+        </View>
         <RequestSheet ref={sheetRef} />
       </View>
     );
   }
 
   if (error || !fare) {
+    const copy = stateCopy("route");
     return (
       <View testID="fare.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
         <ErrorState
           testID="fare.error"
           variant="error"
-          title="Something went wrong."
-          body={error ?? "This fare could not be found."}
+          title={copy.title}
+          body={error ?? copy.body}
           primary={{ label: "Try again", onPress: () => router.back() }}
         />
       </View>
@@ -233,11 +255,13 @@ export default function FareDetailScreen() {
       <Modal visible={whyOpen} transparent animationType="fade" onRequestClose={() => setWhyOpen(false)}>
         <Pressable testID="fare.whyScrim" style={styles.modalScrim} onPress={() => setWhyOpen(false)}>
           <View style={styles.modalCard} testID="fare.whySheet">
-            <Text style={styles.title}>{`Why it’s ${formatPrice(savings ?? 0, fare.price.currency)} lower`}</Text>
-            <Text style={styles.body}>
-              {`${formatPrice(fare.price.published!, fare.price.currency)} published − ${formatPrice(fare.price.offer, fare.price.currency)} club fare = ${formatPrice(savings ?? 0, fare.price.currency)}.`}
-            </Text>
-            <Button testID="fare.whyClose" label="Got it" shape="pill" onPress={() => setWhyOpen(false)} />
+            <StateMessage
+              testID="fare.whyMessage"
+              variant="error"
+              title={`Why it’s ${formatPrice(savings ?? 0, fare.price.currency)} lower`}
+              body={`${formatPrice(fare.price.published!, fare.price.currency)} published − ${formatPrice(fare.price.offer, fare.price.currency)} club fare = ${formatPrice(savings ?? 0, fare.price.currency)}.`}
+              primary={{ label: "Got it", testID: "fare.whyClose", onPress: () => setWhyOpen(false) }}
+            />
           </View>
         </Pressable>
       </Modal>
@@ -250,6 +274,8 @@ export default function FareDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
+  goneNav: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.md },
+  goneBody: { flex: 1, justifyContent: "center", gap: tokens.space.sm },
   scroll: { paddingBottom: tokens.space.lg },
   back: { marginBottom: tokens.space.xl },
   backPlate: {

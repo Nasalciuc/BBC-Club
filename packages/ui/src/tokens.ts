@@ -127,6 +127,15 @@ export const tokens = {
   "xl": 32,
   "xxl": 48
 },
+  motion: {
+  "entrance": 900,
+  "stagger": 150,
+  "headline": 200,
+  "press": 120,
+  "release": 160,
+  "panel": 300,
+  "rise": 12
+},
 } as const;
 export type ColorToken = keyof typeof tokens.colors;
 export type TypeToken = keyof typeof tokens.type;

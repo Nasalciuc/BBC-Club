@@ -4,7 +4,7 @@ import { useRouter, type Href } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
-import { Button, Chip, CloseButton, short, tokens, rn, type Selection } from "@bbc/ui";
+import { Button, Chip, CloseButton, StateMessage, short, tokens, rn, type Selection } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
 import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
@@ -12,12 +12,14 @@ import { retryMinutes, type RequestSource } from "@/features/requests/confirmati
 import {
   buildDraft,
   draftToBody,
+  missingReturn,
   sheetTitle,
   useRequestDraft,
   type RequestDraft,
   type RequestMode,
 } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
+import { stateCopy, submitFailureKind } from "@/lib/error-context";
 import { newId } from "@/lib/id";
 import { enqueueRequest } from "@/lib/queue";
 import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
@@ -89,6 +91,10 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   }
 
   async function onSubmit() {
+    if (missingReturn(state.tripType, state.legs[1]?.date)) {
+      dispatch({ type: "setReturnError", error: "Select a return date or choose One way." });
+      return;
+    }
     const phone = validatePhone(state.contact.phone, phoneCountry);
     if (!phone.valid) {
       dispatch({ type: "setPhoneError", error: phone.error });
@@ -112,14 +118,13 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     const result = await submitRequest(body, keyRef.current);
     setBusy(false);
     if (!result.ok) {
-      if (result.code === "RATE_LIMITED") {
+      const kind = submitFailureKind(result.code);
+      if (kind === "rateLimited") {
         modalRef.current?.dismiss();
         router.push(`/request/limited?minutes=${retryMinutes(result.retryAfterS)}` as Href);
         return;
       }
-      // Timeout / mid-flight offline: same idempotency key → queue + saved confirm.
-      // Real 4xx stays an error (no queue).
-      if (result.code === "TIMEOUT" || result.code === "OFFLINE") {
+      if (kind === "queued") {
         enqueueRequest(body, keyRef.current);
         const route = `${body.legs[0]!.from} → ${body.legs[body.legs.length - 1]!.to}`;
         openConfirmation({ id: "", queued: true, route });
@@ -188,8 +193,14 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
                 testID="request.return"
                 label="RETURN"
                 value={state.legs[1]?.date ? short(state.legs[1].date) : "Select date"}
+                error={Boolean(state.returnError)}
                 onPress={() => presentDates("return")}
               />
+            ) : null}
+            {state.returnError ? (
+              <Text testID="request.returnError" style={styles.error}>
+                {state.returnError}
+              </Text>
             ) : null}
             <Field
               testID="request.travelers"
@@ -249,13 +260,21 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
               </Pressable>
             )}
 
-            {state.submitError ? <Text style={styles.error}>{state.submitError}</Text> : null}
+            {state.submitError ? (
+              <StateMessage
+                testID="request.notSent"
+                variant="error"
+                title={stateCopy("notSent").title}
+                body={state.submitError || stateCopy("notSent").body}
+                primary={{ label: "Try again", onPress: () => void onSubmit() }}
+              />
+            ) : null}
 
             <Button
               testID="request.submit"
               label={busy ? "Sending…" : sheetTitle(state.mode)}
               busy={busy}
-              shape="card"
+              shape="pill"
               onPress={() => void onSubmit()}
             />
             <Text style={styles.caption}>A specialist will call you shortly.</Text>
@@ -277,11 +296,13 @@ function DateRow({
   testID,
   label,
   value,
+  error,
   onPress,
 }: {
   testID: string;
   label: string;
   value: string;
+  error?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -293,7 +314,7 @@ function DateRow({
       style={({ pressed }) => [styles.fieldWrap, pressed && styles.pressed]}
     >
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Text style={styles.dateValue}>{value}</Text>
+      <Text style={[styles.field, styles.dateValue, error && styles.fieldError]}>{value}</Text>
     </Pressable>
   );
 }
@@ -358,6 +379,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
   },
   fieldEmpty: { borderColor: tokens.colors.primary },
+  fieldError: { borderColor: tokens.colors.statusDanger },
   fieldMulti: { minHeight: 88, textAlignVertical: "top" },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
   link: { ...rn(tokens.type.bodySm), color: tokens.colors.primary },

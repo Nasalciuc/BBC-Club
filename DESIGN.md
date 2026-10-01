@@ -221,6 +221,15 @@ components:
     typography: "{typography.button}"
     rounded: "{rounded.pill}"
     height: 56px
+
+motion:
+  entrance: 900
+  stagger: 150
+  headline: 200
+  press: 120
+  release: 160
+  panel: 300
+  rise: 12
 ---
 
 # BBC Club — Design System

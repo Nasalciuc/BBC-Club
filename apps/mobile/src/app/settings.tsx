@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, SectionLabel, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, SectionLabel, StateMessage, tokens, rn } from "@bbc/ui";
 
 import { ListRow } from "@/components/list-row";
 import { deleteAccount, signOut } from "@/features/auth/flows";
@@ -18,6 +18,7 @@ import { PhoneSheet } from "@/features/profile/PhoneSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
+import { deleteFailureKind, stateCopy } from "@/lib/error-context";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export default function SettingsScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [wrongPassword, setWrongPassword] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [openRequests, setOpenRequests] = useState(0);
   const phoneRef = useRef<ProfileSheetHandle>(null);
@@ -47,11 +51,16 @@ export default function SettingsScreen() {
 
   async function onDeleteConfirmed() {
     setBusy(true);
-    const result = await deleteAccount();
+    setWrongPassword(false);
+    const result = await deleteAccount(deletePassword);
     setBusy(false);
     if (!result.ok) {
-      setError(result.message);
+      if (deleteFailureKind(result.code) === "wrongPassword") {
+        setWrongPassword(true);
+        return;
+      }
       setConfirmDelete(false);
+      setDeleteFailed(true);
       return;
     }
     setConfirmDelete(false);
@@ -114,7 +123,22 @@ export default function SettingsScreen() {
           <ListRow testID="settings.terms" label="Terms of use" onPress={() => void Linking.openURL(termsUrl)} />
         ) : null}
         {helpUrl ? <ListRow testID="settings.help" label="Help" onPress={() => void Linking.openURL(helpUrl)} /> : null}
-        <PressableDelete onPress={() => setConfirmDelete(true)} />
+        {deleteFailed ? (
+          <StateMessage
+            testID="settings.deleteFailed"
+            variant="error"
+            title={stateCopy("deleteFailed").title}
+            body={stateCopy("deleteFailed").body}
+            primary={{ label: "Try again", onPress: () => setDeleteFailed(false) }}
+          />
+        ) : null}
+        <PressableDelete
+          onPress={() => {
+            setDeletePassword("");
+            setWrongPassword(false);
+            setConfirmDelete(true);
+          }}
+        />
         <Button
           testID="settings.signOut"
           label="Sign out"
@@ -130,15 +154,30 @@ export default function SettingsScreen() {
           <View style={styles.modalCard} testID="profile.deleteConfirm">
             <Text style={styles.modalTitle}>Delete your account?</Text>
             <Text style={styles.modalBody}>
-              This removes your profile and closes {openRequests} open request
-              {openRequests === 1 ? "" : "s"}. Offers and request history disappear. You will need to join again to
-              request fares.
+              Your profile, preferences and request history are removed from the app. This can’t be undone.
+              {openRequests > 0 ? ` This closes ${openRequests} open request${openRequests === 1 ? "" : "s"}.` : ""}
             </Text>
+            <Text style={styles.modalLabel}>Password</Text>
+            <TextInput
+              testID="profile.deleteConfirm.password"
+              value={deletePassword}
+              onChangeText={(v) => {
+                setDeletePassword(v);
+                setWrongPassword(false);
+              }}
+              secureTextEntry
+              style={[styles.password, wrongPassword && styles.passwordError]}
+            />
+            {wrongPassword ? (
+              <Text testID="profile.deleteConfirm.wrongPassword" style={styles.wrong}>
+                {stateCopy("wrongPassword").title}
+              </Text>
+            ) : null}
             <Button
               testID="profile.deleteConfirm.confirm"
               label="Delete account"
               variant="destructive"
-              shape="card"
+              shape="pill"
               busy={busy}
               onPress={() => void onDeleteConfirmed()}
             />
@@ -146,7 +185,7 @@ export default function SettingsScreen() {
               testID="profile.deleteConfirm.cancel"
               label="Cancel"
               variant="ghost"
-              shape="card"
+              shape="pill"
               onPress={() => setConfirmDelete(false)}
             />
           </View>
@@ -196,4 +235,16 @@ const styles = StyleSheet.create({
   },
   modalTitle: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
   modalBody: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  modalLabel: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary },
+  password: {
+    ...rn(tokens.type.body),
+    color: tokens.colors.textPrimary,
+    borderWidth: 1,
+    borderColor: tokens.colors.borderDefault,
+    borderRadius: tokens.radius.field,
+    paddingHorizontal: tokens.space.md,
+    paddingVertical: tokens.space.sm,
+  },
+  passwordError: { borderColor: tokens.colors.statusDanger },
+  wrong: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });

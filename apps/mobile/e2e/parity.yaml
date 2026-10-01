@@ -27,3 +27,8 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "tab.requests" }
 - assertVisible: { id: "requests.root" }
 - takeScreenshot: 233-4069
+- tapOn: { id: "tab.explore" }
+- assertVisible: { id: "explore.root" }
+- tapOn: { id: "explore.search" }
+- assertVisible: { id: "explore.airportQuery" }
+- takeScreenshot: 104-838

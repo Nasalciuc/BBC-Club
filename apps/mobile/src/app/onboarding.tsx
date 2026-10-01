@@ -2,7 +2,7 @@ import { useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AirportRow, Button, Chip, ProgressLine, SearchField, Stepper, tokens, rn } from "@bbc/ui";
+import { AirportRow, Button, Chip, EmptyState, ProgressLine, SearchField, Stepper, tokens, rn } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
 import { fetchAirports, patchProfile, putTravelPreferences } from "@/lib/api";
@@ -20,6 +20,7 @@ export default function OnboardingScreen() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AirportVM | null>(null);
   const [hits, setHits] = useState<AirportVM[]>([]);
+  const [searched, setSearched] = useState(false);
   const [cabin, setCabin] = useState<"business" | "first">("business");
   const [adult, setAdult] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -28,12 +29,15 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (query.trim().length < 2) {
       setHits([]);
+      setSearched(false);
       return;
     }
     const t = setTimeout(() => {
       void (async () => {
         const result = await fetchAirports(query);
         if (result.ok) setHits(result.data);
+        else setHits([]);
+        setSearched(true);
       })();
     }, 200);
     return () => clearTimeout(t);
@@ -84,8 +88,8 @@ export default function OnboardingScreen() {
       >
         <View style={styles.header}>
           <ProgressLine fraction={1} />
-          <Text style={styles.title}>Where do you usually fly from?</Text>
-          <Text style={styles.body}>So we start with the right fares. You can change this later.</Text>
+          <Text style={styles.title}>Where do you fly from?</Text>
+          <Text style={styles.body}>City, airport or code.</Text>
         </View>
 
         <Text style={styles.section}>Home airport</Text>
@@ -105,21 +109,38 @@ export default function OnboardingScreen() {
           }}
         />
 
-        {hits.map((a) => (
-          <AirportRow
-            key={a.code}
-            testID={`onboarding.airport.hit.${a.code}`}
-            code={a.code}
-            city={a.city}
-            airport={a.name}
-            countryCode={a.countryCode}
-            onPress={() => {
-              setSelected(a);
-              setQuery(`${a.city} · ${a.code}`);
-              setHits([]);
+        {searched && query.trim().length >= 2 && hits.length === 0 && !selected ? (
+          <EmptyState
+            testID="onboarding.airport.empty"
+            title="No airports found"
+            body="Try a city name or a three-letter airport code, such as JFK."
+            primary={{
+              label: "Clear search",
+              onPress: () => {
+                setQuery("");
+                setSelected(null);
+                setSearched(false);
+              },
             }}
           />
-        ))}
+        ) : (
+          hits.map((a) => (
+            <AirportRow
+              key={a.code}
+              testID={`onboarding.airport.hit.${a.code}`}
+              code={a.code}
+              city={a.city}
+              airport={a.name}
+              countryCode={a.countryCode}
+              onPress={() => {
+                setSelected(a);
+                setQuery(`${a.city} · ${a.code}`);
+                setHits([]);
+                setSearched(false);
+              }}
+            />
+          ))
+        )}
 
         <Text style={styles.section}>Cabin</Text>
         <View style={styles.chips}>
@@ -151,7 +172,7 @@ export default function OnboardingScreen() {
           testID="onboarding.continue"
           label={busy ? "Saving…" : "Continue"}
           busy={busy}
-          shape="card"
+          shape="pill"
           variant="primary"
           onPress={() => void onContinue()}
         />

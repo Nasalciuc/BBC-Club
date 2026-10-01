@@ -90,7 +90,7 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
           testID="profile.phone.save"
           label={busy ? "Saving…" : "Save"}
           busy={busy}
-          shape="card"
+          shape="pill"
           onPress={() => void onSave()}
         />
       </BottomSheetScrollView>

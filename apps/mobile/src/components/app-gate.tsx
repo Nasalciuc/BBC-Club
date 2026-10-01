@@ -1,11 +1,12 @@
 import Constants from "expo-constants";
 import { Linking } from "react-native";
 import { useEffect, useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Button, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text, View } from "react-native";
+import { StateMessage, tokens, rn } from "@bbc/ui";
 
 import { fetchAppConfig } from "@/lib/api";
 import { env } from "@/lib/env";
+import { stateCopy } from "@/lib/error-context";
 
 function compareSemver(a: string, b: string): number {
   const pa = a.split(".").map((n) => Number(n) || 0);
@@ -52,48 +53,57 @@ export function AppGate({ children }: { children: ReactNode }) {
   }, [current]);
 
   if (blocked === "update") {
+    const copy = stateCopy("update");
+    const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
     return (
       <View testID="appGate.update" style={styles.root}>
         <Text style={styles.wordmark}>BUYBUSINESSCLASS</Text>
-        <Text style={styles.title}>{"We've improved the app."}</Text>
-        <Text style={styles.body}>Please update to keep requesting fares.</Text>
-        <Button
-          testID="appGate.update.cta"
-          label="Update"
-          shape="card"
-          onPress={() => void Linking.openURL("https://buybusinessclass.com")}
+        <StateMessage
+          testID="appGate.update.message"
+          variant="error"
+          title={copy.title}
+          body={copy.body}
+          primary={{
+            label: "Update",
+            testID: "appGate.update.cta",
+            onPress: () => void Linking.openURL("https://buybusinessclass.com"),
+          }}
+          secondary={
+            phone
+              ? {
+                  label: `Need a fare now? Call ${phone}`,
+                  testID: "appGate.update.call",
+                  onPress: () => void Linking.openURL(`tel:${phone}`),
+                }
+              : undefined
+          }
         />
-        {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
-          <Pressable
-            testID="appGate.update.call"
-            accessibilityRole="button"
-            onPress={() => void Linking.openURL(`tel:${env.EXPO_PUBLIC_SUPPORT_PHONE}`)}
-          >
-            <Text style={styles.link}>{`Need a fare now? Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}</Text>
-          </Pressable>
-        ) : null}
         <Text style={styles.version}>{`VERSION ${current} (${build})`}</Text>
       </View>
     );
   }
 
   if (blocked === "maintenance") {
+    const copy = stateCopy("maintenance");
+    const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
     return (
       <View testID="appGate.maintenance" style={styles.root}>
         <Text style={styles.wordmark}>BUYBUSINESSCLASS</Text>
-        <Text style={styles.title}>Back in a moment.</Text>
-        <Text style={styles.body}>
-          {maintenanceCopy ? `Expected back at ${maintenanceCopy}` : "We're making a quick improvement."}
-        </Text>
-        {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
-          <Button
-            testID="appGate.maintenance.call"
-            label={`Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}
-            variant="ghost"
-            shape="card"
-            onPress={() => void Linking.openURL(`tel:${env.EXPO_PUBLIC_SUPPORT_PHONE}`)}
-          />
-        ) : null}
+        <StateMessage
+          testID="appGate.maintenance.message"
+          variant="error"
+          title={copy.title}
+          body={maintenanceCopy ? `Expected back at ${maintenanceCopy}` : copy.body}
+          primary={
+            phone
+              ? {
+                  label: `Call ${phone}`,
+                  testID: "appGate.maintenance.call",
+                  onPress: () => void Linking.openURL(`tel:${phone}`),
+                }
+              : undefined
+          }
+        />
       </View>
     );
   }
@@ -110,9 +120,5 @@ const styles = StyleSheet.create({
     gap: tokens.space.md,
   },
   wordmark: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary, textAlign: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, textAlign: "center" },
-  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary, textAlign: "center" },
-  link: { ...rn(tokens.type.bodySm), color: tokens.colors.primary, textAlign: "center" },
-  caption: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, textAlign: "center" },
   version: { ...rn(tokens.type.labelMono), color: tokens.colors.textTertiary, textAlign: "center" },
 });
