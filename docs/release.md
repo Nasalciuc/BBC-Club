@@ -51,10 +51,10 @@ Or dispatch **release** (`platform=android`, `submit=false`). Needs repo secret 
 `submit.production.android` tracks `internal` as `draft`. The Play service-account JSON lives on the machine or in EAS — it is gitignored and CI refuses it if tracked.
 
 ```bash
-eas submit --profile production --platform android --latest
+eas submit --profile production --platform android --id <build-id>
 ```
 
-Or dispatch **release** with `submit=true` after a green build.
+Or dispatch **release** with `submit=true`. That workflow submits **this run's** build id (`eas submit --id`), never `--latest`.
 
 ## 6. iOS — pending
 

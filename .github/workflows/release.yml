@@ -9,7 +9,7 @@ on:
         options: [android, ios]
         default: android
       submit:
-        description: Submit the latest Android production build to the internal draft track
+        description: Submit this run's Android production build to the internal draft track
         type: boolean
         default: false
 concurrency:
@@ -20,7 +20,7 @@ permissions:
   actions: write
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
@@ -43,11 +43,13 @@ jobs:
             exit 0
           fi
           echo "No successful e2e-android run on $GITHUB_SHA — dispatching on main"
-          old=$(gh run list --workflow e2e-android --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          old=$(gh run list --workflow e2e-android --branch main --event workflow_dispatch --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty')
           gh workflow run e2e-android --ref main
           run_id=""
           for _ in $(seq 1 36); do
-            now=$(gh run list --workflow e2e-android --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            now=$(gh run list --workflow e2e-android --branch main --event workflow_dispatch --limit 1 \
+              --json databaseId --jq '.[0].databaseId // empty')
             if [ -n "$now" ] && [ "$now" != "$old" ]; then
               run_id=$now
               break
@@ -73,14 +75,24 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - name: EAS production build
+        id: build
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: bunx eas-cli build --profile production --platform "${{ inputs.platform }}" --non-interactive
+        run: |
+          set -euo pipefail
+          out=$(bunx eas-cli build --profile production --platform "${{ inputs.platform }}" --non-interactive --json --wait)
+          id=$(printf '%s' "$out" | jq -r '.[0].id // empty')
+          status=$(printf '%s' "$out" | jq -r '.[0].status // empty' | tr '[:upper:]' '[:lower:]')
+          if [ -z "$id" ] || [ "$status" != "finished" ]; then
+            echo "EAS build did not finish: id=${id:-none} status=${status:-none}"
+            exit 1
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
       - name: Submit Android internal draft
         if: ${{ inputs.submit }}
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: bunx eas-cli submit --profile production --platform android --latest --non-interactive
+        run: bunx eas-cli submit --profile production --platform android --id "${{ steps.build.outputs.id }}" --non-interactive
