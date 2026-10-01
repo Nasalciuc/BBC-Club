@@ -57,6 +57,8 @@ infra/env/*.env
 **/infra/env/*.env
 *.dump
 *.sql.gz
+google-play-service-account.json
+*service-account*.json
 
 # ── regenerable artefacts (never committed; `graphify update` rebuilds them) ──
 graphify-out/

@@ -29,7 +29,9 @@
     "test:unit": "turbo run test:unit",
     "test:db": "docker compose -f infra/compose.test.yml up -d --wait && turbo run test:db",
     "db:verify": "bun run --filter @bbc/db db:verify",
-    "validate:quick": "bun run format && bun run lint && bun run arch:check && bun run typecheck && bun run tokens:check && bun run design:lint && bun run module:check && bun run maestro:ids && bun run sql:columns && bun run migrations:destructive && bun run cf:gen --check && bun test scripts/check-consumer-handler.test.ts scripts/check-mobile-fetch.test.ts scripts/canary-compare.test.ts scripts/env-profile.test.ts && python scripts/graph-shape.py",
+    "privacy-manifest": "bun run scripts/privacy-manifest.ts",
+    "privacy-manifest:check": "bun run scripts/privacy-manifest.ts --check",
+    "validate:quick": "bun run format && bun run lint && bun run arch:check && bun run typecheck && bun run tokens:check && bun run design:lint && bun run module:check && bun run maestro:ids && bun run sql:columns && bun run migrations:destructive && bun run cf:gen --check && bun test scripts/check-consumer-handler.test.ts scripts/check-mobile-fetch.test.ts scripts/canary-compare.test.ts scripts/privacy-manifest.test.ts scripts/env-profile.test.ts && bun run privacy-manifest:check && python scripts/graph-shape.py",
     "validate:prepush": "bun run validate:quick && bunx turbo run test:db",
     "validate": "bun run validate:quick && bun run test:unit && bun run test:db && bun run db:verify",
     "e2e": "maestro test apps/mobile/e2e",
@@ -37,6 +39,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@expo/plist": "0.8.1",
     "@types/bun": "^1.3.4",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
     "@typescript-eslint/parser": "^8.25.0",

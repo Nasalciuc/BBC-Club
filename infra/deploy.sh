@@ -144,18 +144,23 @@ if [[ -z "$OLD_ONE" ]]; then
   echo "no old replica; canary judged on /ready only"
 else
   METRICS_DIR="$(mktemp -d)"
+  chmod 0700 "$METRICS_DIR"
+  cleanup_metrics() { rm -rf "$METRICS_DIR"; }
   metrics_of() {
     docker exec "$1" bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
   }
-  metrics_of "$CANARY" > "$METRICS_DIR/canary.txt" || { drop_canary; rollback_and_exit "canary /metrics unreadable"; }
-  metrics_of "$OLD_ONE" > "$METRICS_DIR/old.txt" || { drop_canary; rollback_and_exit "old replica /metrics unreadable"; }
-  if ! REASON="$(bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt")"; then
+  metrics_of "$CANARY" > "$METRICS_DIR/canary.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "canary /metrics unreadable"; }
+  metrics_of "$OLD_ONE" > "$METRICS_DIR/old.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "old replica /metrics unreadable"; }
+  chmod 0600 "$METRICS_DIR"/*.txt
+  # Image USER is bbc; run the one-shot compare as root so 0600 host files stay private.
+  if ! REASON="$(docker run --rm --user 0:0 -v "$METRICS_DIR:$METRICS_DIR:ro" "$IMAGE" bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt")"; then
     echo "$REASON"
+    cleanup_metrics
     drop_canary
     rollback_and_exit "canary: ${REASON:-compare failed}"
   fi
   echo "$REASON"
-  rm -rf "$METRICS_DIR"
+  cleanup_metrics
 fi
 
 echo "▶ 5/7 roll $SVC (scale $((N + 1)) → $((N * 2)) → $N)"
