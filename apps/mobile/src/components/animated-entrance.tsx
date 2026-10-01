@@ -17,7 +17,7 @@ type Props = PropsWithChildren<{
 export function AnimatedEntrance({ children, delay = 0, fade = false }: Props) {
   const reduceMotion = useReducedMotion();
   const opacity = useSharedValue(0);
-  const translateY = useSharedValue(fade || reduceMotion ? 0 : 12);
+  const translateY = useSharedValue(fade || reduceMotion ? 0 : tokens.motion.rise);
 
   useEffect(() => {
     const ease = Easing.bezier(0.16, 1, 0.3, 1);
