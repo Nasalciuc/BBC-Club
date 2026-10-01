@@ -13,23 +13,13 @@ function isHttpsUrl(value: string | undefined): boolean {
   }
 }
 
-function isUrl(value: string | undefined): boolean {
-  if (!value) return false;
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** Production-only. Names every missing or invalid variable in one throw. Phone stays optional. */
 export function assertProductionEnv(env: Record<string, string | undefined>): void {
   if (env.EXPO_PUBLIC_APP_ENV !== "production") return;
   const missing: string[] = [];
   if (!isHttpsUrl(env.EXPO_PUBLIC_API_URL)) missing.push("EXPO_PUBLIC_API_URL");
-  if (!isUrl(env.EXPO_PUBLIC_PRIVACY_URL)) missing.push("EXPO_PUBLIC_PRIVACY_URL");
-  if (!isUrl(env.EXPO_PUBLIC_TERMS_URL)) missing.push("EXPO_PUBLIC_TERMS_URL");
+  if (!isHttpsUrl(env.EXPO_PUBLIC_PRIVACY_URL)) missing.push("EXPO_PUBLIC_PRIVACY_URL");
+  if (!isHttpsUrl(env.EXPO_PUBLIC_TERMS_URL)) missing.push("EXPO_PUBLIC_TERMS_URL");
   if (missing.length) {
     throw new Error(`Production build refused: ${missing.join(", ")}`);
   }

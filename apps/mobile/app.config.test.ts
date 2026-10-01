@@ -57,4 +57,28 @@ describe("assertProductionEnv", () => {
   it("leaves EXPO_PUBLIC_SUPPORT_PHONE optional", () => {
     expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_SUPPORT_PHONE: undefined })).not.toThrow();
   });
+
+  it("refuses an http privacy URL", () => {
+    expect(() =>
+      assertProductionEnv({ ...complete, EXPO_PUBLIC_PRIVACY_URL: "http://buybusinessclass.com/privacy" }),
+    ).toThrow(/EXPO_PUBLIC_PRIVACY_URL/);
+  });
+
+  it("refuses an http terms URL", () => {
+    expect(() =>
+      assertProductionEnv({ ...complete, EXPO_PUBLIC_TERMS_URL: "http://buybusinessclass.com/terms" }),
+    ).toThrow(/EXPO_PUBLIC_TERMS_URL/);
+  });
+
+  it("refuses a file privacy URL", () => {
+    expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_PRIVACY_URL: "file:///privacy" })).toThrow(
+      /EXPO_PUBLIC_PRIVACY_URL/,
+    );
+  });
+
+  it("refuses a file terms URL", () => {
+    expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_TERMS_URL: "file:///terms" })).toThrow(
+      /EXPO_PUBLIC_TERMS_URL/,
+    );
+  });
 });
