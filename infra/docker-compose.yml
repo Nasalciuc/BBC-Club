@@ -167,7 +167,9 @@ services:
     deploy: { resources: { limits: { memory: 64m } } }
 
   minio:
-    image: minio/minio:latest
+    # MinIO stopped publishing its community image on 23 Oct 2025 (minio/minio is gone from Docker Hub).
+    # Chainguard's build of the same server, pinned by digest — bump it with infra/RUNBOOK.md, "Images pinned by digest".
+    image: cgr.dev/chainguard/minio:latest@sha256:9dcc028b309030afa86fc1fc8d93907ae373ea3fb75277cca3fc77e4645932b7
     <<: [*restart, *logging]
     networks: [data]
     command: server /data --console-address ":9001"
@@ -175,7 +177,6 @@ services:
       MINIO_ROOT_USER: "${MINIO_USER}"
       MINIO_ROOT_PASSWORD: "${MINIO_PASSWORD}"
     volumes: ["minio_data:/data"]
-    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 15s, timeout: 5s, retries: 5 }
     deploy: { resources: { limits: { memory: 256m } } }
 
   # App Redis. Private, unpublished. The API uses it only when REDIS_URL is set (ADR-IMPL-029).

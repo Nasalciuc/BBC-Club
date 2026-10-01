@@ -417,3 +417,12 @@ Routes with no fare sort first. The payload has no member id, IP, or device id.
 **Failure.** Redis down: cache reads call the database, rate limits use memory, streams enqueue falls back to inline send, demand rollup writes nothing. Kafka down: the relay delivery retries; search latency does not change because the request never awaits the broker. A full search buffer drops the oldest event and increments `search_events_dropped`.
 
 **Do not publish 6379 or 9092.** RedisInsight and kafka-ui are not services in Compose. If you need them, SSH-tunnel to the host and point them at the internal DNS names `redis-app` and `kafka`. The GlitchTip `redis` service is a different instance. Do not point the API at it.
+
+## Images pinned by digest
+
+MinIO runs Chainguard's build (`cgr.dev/chainguard/minio`), pinned by digest, because the free tier publishes only `latest`
+and MinIO no longer publishes its own image. To take Chainguard's fixes:
+
+1. `docker pull cgr.dev/chainguard/minio:latest && docker inspect --format '{{index .RepoDigests 0}}' cgr.dev/chainguard/minio:latest`
+2. Replace the digest on the `minio` line of `infra/docker-compose.yml` in a PR; CI must pull it.
+3. After merge, deploy as usual; `minio` is recreated with the same `minio_data` volume.
