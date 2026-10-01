@@ -38,17 +38,21 @@ export function createFlags(
     return parseValue(row?.value);
   }
 
+  const localMs = 5_000;
+
   async function read(key: string): Promise<FlagValue | null> {
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.at < (opts.cache ? localMs : ttl)) return hit.value;
     if (opts.cache) {
       try {
-        return await opts.cache.getOrLoad(`flags:${key}`, Math.max(1, Math.ceil(ttl / 1000)), () => readDb(key));
+        const value = await opts.cache.getOrLoad(`flags:${key}`, Math.max(1, Math.ceil(ttl / 1000)), () => readDb(key));
+        cache.set(key, { value, at: Date.now() });
+        return value;
       } catch (e) {
         opts.logger?.warn({ key, err: String(e) }, "flag read failed, using fallback");
         return null;
       }
     }
-    const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < ttl) return hit.value;
     try {
       const value = await readDb(key);
       cache.set(key, { value, at: Date.now() });
