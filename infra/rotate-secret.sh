@@ -20,8 +20,13 @@ APP_DIR="$(cd "$INFRA_DIR/.." && pwd)"
 cd "$APP_DIR"
 ENV_FILE="$INFRA_DIR/env/${MODE}.env"
 [[ -f "$ENV_FILE" ]] || { echo "no $ENV_FILE"; exit 1; }
+# shellcheck disable=SC1091
+source "$INFRA_DIR/env-value.sh"
 if [[ "$ACTION" == "--promote" ]]; then
-  NEXT=$(grep -E "^${KEY}_NEXT=" "$ENV_FILE" | cut -d= -f2-); [[ -n "$NEXT" ]] || { echo "no ${KEY}_NEXT"; exit 1; }
+  # Read as Compose reads it, then refuse anything this script did not generate: empty quotes, a template line, a value the
+  # parser cannot read, or characters that would break the sed below. The secret itself is never printed.
+  NEXT="$(env_value "$ENV_FILE" "${KEY}_NEXT")"
+  [[ "$NEXT" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo "❌ ${KEY}_NEXT is missing, unreadable, or not one this script generated — run: bash $0 $MODE $KEY"; exit 1; }
   sed -i "s|^${KEY}=.*|${KEY}=${NEXT}|; /^${KEY}_NEXT=/d" "$ENV_FILE"
   echo "✅ ${KEY} promoted. Restart: docker compose ... up -d api"
 else
