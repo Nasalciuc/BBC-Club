@@ -129,6 +129,9 @@ services:
     environment:
       POSTGRES_USER: bbc
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # pg_dump, psql and pgBackRest run inside this container over the local socket, which asks for a password
+      # (--auth-local=scram-sha-256). The same secret as POSTGRES_PASSWORD — nothing new is exposed.
+      PGPASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: bbc
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
       PGBACKREST_STANZA: bbc

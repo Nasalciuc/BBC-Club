@@ -45,14 +45,19 @@ else
   N="${API_REPLICAS_STAGING:-2}"
   CANARY_SECONDS="${CANARY_SECONDS:-120}"
 fi
-source <(grep -hE '^(OPS_WEBHOOK|SEC_WEBHOOK|POSTGRES_PASSWORD|POSTGRES_PASSWORD_STAGING|LOADTEST)=' "$PROD_ENV" "$ENVF" 2>/dev/null || true)
+# Read values the way Compose does (quotes, CRLF, trailing comments): the parser bootstrap.sh uses. The deployed file wins.
+for k in OPS_WEBHOOK SEC_WEBHOOK POSTGRES_PASSWORD POSTGRES_PASSWORD_STAGING LOADTEST; do
+  v="$(env_value "$PROD_ENV" "$k")"
+  if [[ "$ENVF" != "$PROD_ENV" ]]; then w="$(env_value "$ENVF" "$k")"; [[ -n "$w" ]] && v="$w"; fi
+  printf -v "$k" '%s' "$v"
+done
 notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
 
 if [[ "$MODE" == "production" ]] && [[ "${LOADTEST:-}" == "1" ]]; then
   echo "❌ LOADTEST=1 is refused in production"; exit 1
 fi
 
-PREVIOUS=$(grep -E "^${VAR}=" "$ENVF" | cut -d= -f2- || true)
+PREVIOUS="$(env_value "$ENVF" "$VAR")"
 started=$(date +%s)
 
 rollback_and_exit() {

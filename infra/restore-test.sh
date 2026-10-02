@@ -15,17 +15,28 @@ fi
 APP_DIR="$(cd "$INFRA_DIR/.." && pwd)"
 cd "$APP_DIR"
 ENV_FILE="$INFRA_DIR/env/production.env"
-source <(grep -E '^(OPS_WEBHOOK|SEC_WEBHOOK)=' "$ENV_FILE" || true)
+# shellcheck disable=SC1091
+source "$INFRA_DIR/env-value.sh"
+OPS_WEBHOOK="$(env_value "$ENV_FILE" OPS_WEBHOOK)"
+SEC_WEBHOOK="$(env_value "$ENV_FILE" SEC_WEBHOOK)"
+# docker run --env-file reads lines literally (quotes and trailing comments included), unlike Compose. Hand it a clean copy:
+# every PGBACKREST_* key read the way Compose reads it, plus the password the restored cluster's local socket asks for.
+CLEAN_ENV="$(mktemp)"
+chmod 600 "$CLEAN_ENV"
+for k in $(grep -oE '^[[:space:]]*PGBACKREST_[A-Z0-9_]+' "$ENV_FILE" | sed -E 's/^[[:space:]]+//' | sort -u); do
+  printf '%s=%s\n' "$k" "$(env_value "$ENV_FILE" "$k")" >> "$CLEAN_ENV"
+done
+printf 'PGPASSWORD=%s\n' "$(env_value "$ENV_FILE" POSTGRES_PASSWORD)" >> "$CLEAN_ENV"
 notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
 STAMP=$(date +%Y%m%d-%H%M%S); VOL="bbc_restoretest_$STAMP"; CT="bbc-restoretest-$STAMP"
-cleanup() { docker rm -f "$CT" >/dev/null 2>&1 || true; docker volume rm "$VOL" >/dev/null 2>&1 || true; }
+cleanup() { docker rm -f "$CT" >/dev/null 2>&1 || true; docker volume rm "$VOL" >/dev/null 2>&1 || true; rm -f "$CLEAN_ENV"; }
 trap cleanup EXIT
 
 echo "▶ restore latest backup into $VOL (image bbc-postgres:16, pgbackrest env from production.env)"
 docker volume create "$VOL" >/dev/null
-docker run --rm --env-file "$ENV_FILE" -e PGBACKREST_STANZA=bbc -u postgres -v "$VOL:/var/lib/postgresql/data" bbc-postgres:16 \
+docker run --rm --env-file "$CLEAN_ENV" -e PGBACKREST_STANZA=bbc -u postgres -v "$VOL:/var/lib/postgresql/data" bbc-postgres:16 \
   pgbackrest --stanza=bbc --delta --archive-mode=off restore
-docker run -d --name "$CT" --env-file "$ENV_FILE" -e POSTGRES_PASSWORD=unused -v "$VOL:/var/lib/postgresql/data" bbc-postgres:16 \
+docker run -d --name "$CT" --env-file "$CLEAN_ENV" -e POSTGRES_PASSWORD=unused -v "$VOL:/var/lib/postgresql/data" bbc-postgres:16 \
   postgres -c archive_mode=off >/dev/null
 for i in {1..40}; do docker exec "$CT" pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
 
