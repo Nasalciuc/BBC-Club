@@ -134,19 +134,32 @@ services:
       PGBACKREST_STANZA: bbc
     command:
       - postgres
-      - -c=shared_buffers=512MB
-      - -c=effective_cache_size=1536MB
-      - -c=work_mem=8MB
-      - -c=maintenance_work_mem=128MB
-      - -c=max_connections=100
-      - -c=shared_preload_libraries=pg_stat_statements
-      - -c=pg_stat_statements.max=10000
-      - -c=pg_stat_statements.track=all
-      - -c=wal_level=replica
-      - -c=archive_mode=on
-      - -c=archive_command=pgbackrest --stanza=bbc archive-push %p
-      - -c=archive_timeout=300
-      - -c=log_min_duration_statement=1000
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=100
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=10000
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=pgbackrest --stanza=bbc archive-push %p
+      - -c
+      - archive_timeout=300
+      - -c
+      - log_min_duration_statement=1000
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - pgbackrest_spool:/var/spool/pgbackrest
