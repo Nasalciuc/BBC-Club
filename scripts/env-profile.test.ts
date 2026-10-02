@@ -379,3 +379,84 @@ describe("compose parity", () => {
     }
   }
 });
+
+/** Sources the parser, binds $F to a throwaway env file holding `content`, then runs `snippet`. */
+async function withEnv(content: string, snippet: string) {
+  const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+  const file = join(dir, "case.env");
+  writeFileSync(file, content);
+  const result = await bash(`source ${lib}\nF=${shPath(file)}\n${snippet}`);
+  rmSync(dir, { recursive: true, force: true });
+  return result;
+}
+
+describe("required settings", () => {
+  async function known(content: string): Promise<string> {
+    const result = await withEnv(content, `if env_known "$F" SECRET; then echo yes; else echo no; fi`);
+    expect(result.code, result.err).toBe(0);
+    return result.out.trim();
+  }
+
+  it("accepts a filled value", async () => {
+    expect(await known("SECRET=abc123\n")).toBe("yes");
+  });
+
+  it("accepts a filled value with a trailing comment and CRLF", async () => {
+    expect(await known("SECRET=abc123   # note\r\n")).toBe("yes");
+  });
+
+  it("refuses an absent key", async () => {
+    expect(await known("OTHER=1\n")).toBe("no");
+  });
+
+  it("refuses an empty value", async () => {
+    expect(await known("SECRET=\n")).toBe("no");
+  });
+
+  it("refuses empty quotes", async () => {
+    expect(await known('SECRET=""\n')).toBe("no");
+  });
+
+  it("refuses an unfilled template line, which Compose reads as its comment", async () => {
+    expect(await known("SECRET=                    # openssl rand -base64 48\n")).toBe("no");
+  });
+
+  it("refuses a value the parser cannot resolve", async () => {
+    expect(await known("SECRET=${HOST}\n")).toBe("no");
+  });
+
+  it("refuses an export line", async () => {
+    expect(await known("export SECRET=abc123\n")).toBe("no");
+  });
+});
+
+describe("optional settings", () => {
+  async function optional(content: string) {
+    const result = await withEnv(content, `printf '[%s]' "$(env_optional "$F" HOOK)"`);
+    expect(result.code, result.err).toBe(0);
+    return result;
+  }
+
+  it("returns a filled webhook without its quotes or CR", async () => {
+    expect((await optional('HOOK="https://hooks.example/x"\r\n')).out).toBe("[https://hooks.example/x]");
+  });
+
+  it("returns nothing, quietly, for an unfilled template line", async () => {
+    const result = await optional("HOOK=        # Slack incoming webhook\n");
+    expect(result.out).toBe("[]");
+    expect(result.err).toBe("");
+  });
+
+  it("returns nothing, and says so, for a line it cannot read", async () => {
+    const result = await optional("HOOK=https://hooks.example/${PART}\n");
+    expect(result.out).toBe("[]");
+    expect(result.err).toContain("HOOK");
+    expect(result.err).toContain("could not be read");
+  });
+
+  it("returns nothing, quietly, for an absent key", async () => {
+    const result = await optional("OTHER=1\n");
+    expect(result.out).toBe("[]");
+    expect(result.err).toBe("");
+  });
+});

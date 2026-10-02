@@ -33,5 +33,7 @@ test("cost per check", () => {
   for (let i = 0; i < n; i++) l.check(`m:${i % 5_000}`, 120, 60_000, 60);
   const us = ((performance.now() - t0) * 1000) / n;
   console.log(`memory limiter: ${us.toFixed(2)} µs per check`);
-  expect(us).toBeLessThan(5);
+  // A budget, not a benchmark: CI runners are shared and noisy. An O(keys) scan of the 5,000 keys — the regression
+  // this guards against — costs hundreds of µs per check; 25 µs catches it without failing on a slow runner.
+  expect(us).toBeLessThan(25);
 });
