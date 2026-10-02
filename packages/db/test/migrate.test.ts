@@ -95,6 +95,11 @@ describe("extras ledger", () => {
       "0019_platform_statement_timeout.sql",
       "0020_platform_pg_stat_statements.sql",
       "0021_requests_intent.sql",
+      "0022_platform_kafka_processed_extras.sql",
     ]);
+    const demand: { rel: string | null }[] = await db.execute(
+      sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
+    );
+    expect(demand[0]?.rel).toBe("catalog.demand_daily");
   });
 });

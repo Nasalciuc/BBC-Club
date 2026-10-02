@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Empty Ubuntu 24.04 → running production stack (+ optional staging). Idempotent.
-#   curl -fsSL https://raw.githubusercontent.com/Nasalciuc/BBC-Club/main/isolated/infra-production-v2/infra-v2/infra/bootstrap.sh | sudo bash -s -- production
-#   ... | sudo bash -s -- production --with-staging
-# After the monorepo assembly this file lives at infra/bootstrap.sh — the URL changes, the script does not.
+# Pin a reviewed commit — never pipe mutable main into sudo bash (see infra/RUNBOOK.md):
+#   SHA=<reviewed commit sha>
+#   curl -fsSL "https://raw.githubusercontent.com/Nasalciuc/BBC-Club/$SHA/infra/bootstrap.sh" -o /tmp/bootstrap.sh
+#   sha256sum /tmp/bootstrap.sh   # compare with the checksum in the PR / release notes
+#   sudo bash /tmp/bootstrap.sh production
+#   sudo bash /tmp/bootstrap.sh production --with-staging
+# This file lives at infra/bootstrap.sh.
 set -Eeuo pipefail
 trap 'echo "❌ bootstrap failed at line $LINENO" >&2' ERR
 MODE="${1:-production}"; WITH_STAGING="${2:-}"
@@ -155,6 +159,16 @@ chmod 644 /etc/cron.d/bbc && chown root:root /etc/cron.d/bbc
 say "8/9 start (database → migrations → API and ingress)"
 DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml --env-file $ENV_FILE"
 [[ "$WITH_STAGING" == "--with-staging" ]] && DC="$DC -f $INFRA_DIR/compose.staging.yml --env-file $INFRA_DIR/env/staging.env"
+# shellcheck disable=SC1091
+source "$INFRA_DIR/env-value.sh"
+stg_file=""
+if [[ "$WITH_STAGING" == "--with-staging" ]]; then
+  stg_file="$INFRA_DIR/env/staging.env"
+  guard_staging "$stg_file"
+fi
+if redis_kafka_wanted "$ENV_FILE" "$stg_file"; then
+  DC="$DC --profile redis-kafka"
+fi
 export ENV_FILE
 $DC build -q postgres
 $DC pull -q --ignore-buildable

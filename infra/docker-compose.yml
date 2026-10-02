@@ -178,6 +178,69 @@ services:
     healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 15s, timeout: 5s, retries: 5 }
     deploy: { resources: { limits: { memory: 256m } } }
 
+  # App Redis. Private, unpublished. The API uses it only when REDIS_URL is set (ADR-IMPL-029).
+  # GlitchTip's `redis` below is a different service — do not point the API there.
+  redis-app:
+    image: redis:8.10.1-alpine
+    profiles: ["redis-kafka"]
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      REDIS_APP_PASSWORD: "${REDIS_APP_PASSWORD:-}"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'if [ -z "$$REDIS_APP_PASSWORD" ]; then echo "REDIS_APP_PASSWORD is required" >&2; exit 1; fi; exec redis-server --requirepass "$$REDIS_APP_PASSWORD" --maxmemory 256mb --maxmemory-policy allkeys-lru --save "" --appendonly no'
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$REDIS_APP_PASSWORD" ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy: { resources: { limits: { memory: 320m } } }
+
+  kafka:
+    image: apache/kafka:4.3.1
+    profiles: ["redis-kafka"]
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qg"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+    volumes: [kafka_data:/var/lib/kafka/data]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || kafka-topics.sh --bootstrap-server localhost:9092 --list",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+    deploy: { resources: { limits: { memory: 1g } } }
+
+  kafka-init:
+    image: apache/kafka:4.3.1
+    profiles: ["redis-kafka"]
+    networks: [data]
+    depends_on: { kafka: { condition: service_healthy } }
+    restart: "no"
+    entrypoint: ["/bin/sh", "/init/topics.sh"]
+    volumes: ["./kafka:/init:ro"]
+    deploy: { resources: { limits: { memory: 512m } } }
+
   redis:
     image: redis:7-alpine
     <<: [*restart, *logging]
@@ -239,3 +302,4 @@ volumes:
   kuma_data: {}
   caddy_data: {}
   caddy_config: {}
+  kafka_data: {}

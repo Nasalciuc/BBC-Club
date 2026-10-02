@@ -49,6 +49,10 @@ export const ServerEnv = z.object({
    * for 2 minutes or oldest_tx > 30s. Empty in env files is unset.
    */
   OPS_WEBHOOK: z.union([z.string().url(), z.literal("")]).optional(),
+  /** Optional. Unset: every path stays on Postgres / process memory (ADR-IMPL-029). */
+  REDIS_URL: z.union([z.string().url(), z.literal("")]).optional(),
+  /** Optional comma-separated host:port list. Unset: the Kafka relay is not registered (ADR-IMPL-030). */
+  KAFKA_BROKERS: z.string().optional(),
 });
 export type ServerEnv = z.infer<typeof ServerEnv>;
 

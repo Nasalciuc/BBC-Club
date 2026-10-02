@@ -4,7 +4,13 @@ import { authOrigins, loadEnv } from "@bbc/shared/env";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { apiError } from "@bbc/shared/errors";
 import { createDb } from "@bbc/db";
-import { createPlatform, registerPlatformJobs, collectDbReport } from "@bbc/platform";
+import {
+  createPlatform,
+  registerPlatformJobs,
+  collectDbReport,
+  kafkaRelayHandler,
+  RELAY_CONSUMER,
+} from "@bbc/platform";
 import { lastDevOtp } from "@bbc/email";
 import type { IdentityFacade } from "@bbc/identity";
 import { installBaseMiddleware } from "./middleware/base";
@@ -41,7 +47,11 @@ export async function buildApp(opts: BuildOptions = {}) {
   const platform = createPlatform(db, {
     level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug",
     pretty: env.NODE_ENV === "development",
+    redisUrl: env.REDIS_URL,
+    kafkaBrokers: env.KAFKA_BROKERS,
   });
+  // A reconnecting client must not hold route registration. connect() already catches a rejection.
+  void platform.connect();
   platform.metrics.gauge("push_live", () => (env.PUSH_ADAPTER === "live" ? 1 : 0));
   if (env.NODE_ENV === "production" && env.PUSH_ADAPTER !== "live") {
     platform.logger.warn(
@@ -52,6 +62,10 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   // 1. events: the catalogue is the only source of types
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
+  if (platform.producer) {
+    const relay = kafkaRelayHandler(platform.producer);
+    for (const type of Object.keys(EVENT_CATALOGUE)) platform.events.registerConsumer(type, RELAY_CONSUMER, relay);
+  }
   registerPlatformJobs(platform.jobs, platform.metrics);
 
   const app = new Hono<PrincipalVars>();
@@ -170,6 +184,7 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   const shutdown = async () => {
     platform.logger.info({}, "shutting down");
+    await platform.close();
     await platform.poller.stop(); // finishes the in-flight delivery, then stops
     await db.close();
   };

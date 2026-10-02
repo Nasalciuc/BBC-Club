@@ -375,12 +375,11 @@ without Cloudflare’s client cert must fail the TLS handshake.
    starts Compose, so a placeholder tag makes the first pull fail. Either run the deploy workflow once to
    push a SHA-tagged image and set `API_IMAGE` to it, or build on the host:
    `docker build -f apps/api/Dockerfile -t ghcr.io/nasalciuc/bbc-api:$(git rev-parse --short HEAD) .`
-   (both require the assembled monorepo — see PLAN.md D2).
 1. Bootstrap from a **pinned commit**, never from `main` — piping a mutable branch into `sudo bash` runs
    whatever is on it at that moment:
    ```bash
    SHA=<the reviewed commit sha>
-   BASE=https://raw.githubusercontent.com/Nasalciuc/BBC-Club/$SHA/isolated/infra-production-v2/infra-v2/infra
+   BASE=https://raw.githubusercontent.com/Nasalciuc/BBC-Club/$SHA/infra
    curl -fsSL "$BASE/bootstrap.sh" -o /tmp/bootstrap.sh
    sha256sum /tmp/bootstrap.sh    # compare with the checksum in the PR / release notes
    sudo bash /tmp/bootstrap.sh production
@@ -395,3 +394,26 @@ without Cloudflare’s client cert must fail the TLS handshake.
 ## Staging on the same box
 
 `bash infra/deploy.sh staging <image>` — separate database, separate secrets (`infra/env/staging.env`), same Caddy (second domain). Move it to its own machine at the first real offer (ADR-IMPL-010 §7).
+
+## Redis, Kafka, Streams, and demand
+
+Unset `REDIS_URL` and `KAFKA_BROKERS` and the API stays on Postgres: flags cache in the process for 30 seconds, read and search rate limits use the in-process GCRA store, push dispatch sends inline, and search does not emit events. Kill switches and consumer pause always read Postgres and are never cached.
+
+**Turn Redis on.** Set `REDIS_APP_PASSWORD` (Compose only) and `REDIS_URL=redis://:PASSWORD@redis-app:6379` on the api and worker. A password inside `REDIS_URL` must be URL-safe or percent-encoded. Read and search limits move to Redis and fall back to memory if Redis errors, so a down Redis does not 503 those routes. Postgres rules (writes, auth) do not move. Destinations and airports cache under a generation key; import and `expire-fares` bump it.
+
+**Turn Kafka on.** Set `KAFKA_BROKERS=kafka:9092`. The process registers consumer `platform.kafkaRelay` and publishes each committed journal event to `bbc.domain-events.v1`. Delivery is at-least-once. There is no per-aggregate order: a failed relay waits in backoff while a later event for the same aggregate can be published. Consumers must be idempotent and order-independent. A duplicate `topic:partition:offset` inserts nothing in `platform.kafka_processed` and has no second effect. The offset commits after that transaction.
+
+**Push streams.** Flag `jobs.push.transport` defaults to `pg` (`scripts/seed-flags.ts`). Set the variant to `streams` only while Redis is up. Dispatch then enqueues claimed notification ids; the worker (any role except `api`) delivers rows still in `sending`. If the enqueue throws, dispatch sends inline. Flipping the flag back to `pg` stops new enqueues. The worker still finishes ids already in the stream. Row status is the duplicate guard.
+
+**Demand.** Flag `catalog.search_events` defaults to off. When it is on, `GET /v1/search` only pushes onto a bounded buffer. A flusher publishes `bbc.search.v1`. The worker updates that UTC day's Top-K and Count-Min Sketches. `demand-rollup` (03:15 UTC) writes yesterday into `catalog.demand_daily`. Read it with the internal secret:
+
+```bash
+curl -sS -H "Authorization: Bearer $INTERNAL_API_SECRET" \
+  "https://<host>/v1/internal/demand?days=7"
+```
+
+Routes with no fare sort first. The payload has no member id, IP, or device id.
+
+**Failure.** Redis down: cache reads call the database, rate limits use memory, streams enqueue falls back to inline send, demand rollup writes nothing. Kafka down: the relay delivery retries; search latency does not change because the request never awaits the broker. A full search buffer drops the oldest event and increments `search_events_dropped`.
+
+**Do not publish 6379 or 9092.** RedisInsight and kafka-ui are not services in Compose. If you need them, SSH-tunnel to the host and point them at the internal DNS names `redis-app` and `kafka`. The GlitchTip `redis` service is a different instance. Do not point the API at it.

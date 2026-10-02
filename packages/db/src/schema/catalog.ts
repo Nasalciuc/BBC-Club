@@ -1,4 +1,15 @@
-import { pgSchema, text, char, numeric, integer, boolean, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import {
+  pgSchema,
+  text,
+  char,
+  numeric,
+  integer,
+  boolean,
+  index,
+  uniqueIndex,
+  check,
+  primaryKey,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { id, createdAt, updatedAt, tz } from "./_helpers";
 
@@ -54,6 +65,25 @@ export const fares = catalog.table(
       sql`length(${t.routeFrom}) = 3 AND length(${t.routeTo}) = 3 AND ${t.routeFrom} <> ${t.routeTo}`,
     ),
     check("fares_published_has_source", sql`${t.publishedPrice} IS NULL OR ${t.publishedSource} IS NOT NULL`),
+  ],
+);
+
+/** Daily search demand. No member id. JSON routes use from/to; the columns are route_from/route_to. */
+export const demandDaily = catalog.table(
+  "demand_daily",
+  {
+    day: tz("day").notNull(),
+    routeFrom: char("route_from", { length: 3 }).notNull(),
+    routeTo: char("route_to", { length: 3 }).notNull(),
+    cabin: fareCabin("cabin").notNull(),
+    searches: integer("searches").notNull(),
+    searchesWithoutFare: integer("searches_without_fare").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.day, t.routeFrom, t.routeTo, t.cabin] }),
+    check("demand_daily_counts_nonneg", sql`${t.searches} >= 0 AND ${t.searchesWithoutFare} >= 0`),
+    check("demand_daily_nofare_lte", sql`${t.searchesWithoutFare} <= ${t.searches}`),
   ],
 );
 

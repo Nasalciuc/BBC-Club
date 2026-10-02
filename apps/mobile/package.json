@@ -33,7 +33,6 @@
     "expo-image": "~57.0.4",
     "expo-linear-gradient": "~57.0.1",
     "expo-linking": "~57.0.9",
-    "expo-local-authentication": "~57.0.3",
     "expo-network": "~57.0.2",
     "expo-notifications": "~57.0.20",
     "expo-router": "~57.0.22",
@@ -73,7 +72,7 @@
     "ios": "expo run:ios",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test:unit": "bun test src/lib/queue-logic.test.ts src/lib/app-meta.test.ts src/lib/timeout.test.ts src/lib/deeplink-logic.test.ts src/lib/phone.test.ts src/lib/error-context.test.ts src/lib/push-ask-logic.test.ts src/features/auth/session-gate-logic.test.ts src/features/requests/request-view-logic.test.ts src/features/requests/confirmation-logic.test.ts src/features/requests/request-mode.test.ts src/features/profile/notifications-logic.test.ts src/lib/airport-search-state.test.ts",
+    "test:unit": "bun test app.config.test.ts src/lib/queue-logic.test.ts src/lib/app-meta.test.ts src/lib/timeout.test.ts src/lib/deeplink-logic.test.ts src/lib/phone.test.ts src/lib/error-context.test.ts src/lib/push-ask-logic.test.ts src/features/auth/session-gate-logic.test.ts src/features/requests/request-view-logic.test.ts src/features/requests/confirmation-logic.test.ts src/features/requests/request-mode.test.ts src/features/profile/notifications-logic.test.ts src/lib/airport-search-state.test.ts",
     "export": "expo export --platform ios"
   }
 }

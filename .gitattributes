@@ -1,4 +1,7 @@
 # Generated crontab must stay LF so cron:gen parity matches on Windows checkouts.
 infra/cron/crontab text eol=lf
+infra/env-value.sh text eol=lf
+infra/bootstrap.sh text eol=lf
+infra/deploy.sh text eol=lf
 infra/caddy/cloudflare_ranges.caddy text eol=lf
 packages/shared/src/net/cloudflare-ranges.ts text eol=lf

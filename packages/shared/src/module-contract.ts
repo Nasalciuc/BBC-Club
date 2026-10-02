@@ -58,6 +58,7 @@ export type ModulePlatform = {
   logger: HandlerLogger;
   flags: {
     isEnabled: (key: string, fallback?: boolean) => Promise<boolean>;
+    variant: (key: string, fallback: string) => Promise<string>;
     isKilled: (module: string) => Promise<boolean>;
     isConsumerPaused: (consumer: string) => Promise<boolean>;
   };
@@ -72,6 +73,55 @@ export type ModulePlatform = {
       rule: string,
       subject: string,
     ): Promise<{ allowed: boolean; remaining: number; resetMs: number; retryAfterMs?: number; limit: number }>;
+  };
+  cache: {
+    getOrLoad<T>(key: string, ttlS: number, load: () => Promise<T>): Promise<T>;
+    invalidate(...keys: string[]): Promise<void>;
+    bump(key: string): Promise<void>;
+    /** Null when Redis is not connected, so callers keep their process cache. */
+    generation(key: string): Promise<string | null>;
+  };
+  search: {
+    note(event: {
+      from: string;
+      to: string;
+      cabin: "business" | "first";
+      month: string;
+      hadFares: boolean;
+      results: number;
+    }): void;
+  };
+  /** Null when REDIS_URL is unset. */
+  streams: {
+    enqueue(ids: string[]): Promise<void>;
+    run(consumer: string, handle: (ids: string[]) => Promise<void>): Promise<void>;
+  } | null;
+  lifecycle: { onClose(fn: () => Promise<void>): void };
+  signal: AbortSignal;
+  metrics: { inc(name: string, labels?: Record<string, string>, by?: number): void };
+  /** Null when REDIS_URL is unset. Sketches only — the record stays in Postgres. */
+  redis: null | {
+    topK: {
+      reserve(key: string, k: number): Promise<unknown>;
+      incrBy(key: string, item: { item: string; incrementBy: number }): Promise<unknown>;
+      listWithCount(key: string): Promise<{ item: string; count: number }[]>;
+    };
+    cms: {
+      initByProb(key: string, error: number, probability: number): Promise<unknown>;
+      incrBy(key: string, item: { item: string; incrementBy: number }): Promise<unknown>;
+      query(key: string, items: string[]): Promise<number[]>;
+    };
+  };
+  /** Null when KAFKA_BROKERS is unset. */
+  kafka: null | {
+    consume(opts: {
+      clientId: string;
+      groupId: string;
+      topic: string;
+      consumerName: string;
+      signal: AbortSignal;
+      handle: (eventId: string, value: unknown, tx: unknown) => Promise<void>;
+    }): Promise<void>;
   };
 };
 

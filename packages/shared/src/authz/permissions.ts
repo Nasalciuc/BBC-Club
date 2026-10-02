@@ -56,6 +56,7 @@ export const rolePermissions: Record<Role, readonly Permission[]> = {
     "jobs:run",
     "ops:act",
     "catalog:import",
+    "ops:read",
     "campaigns:manage",
     "requests:update-any",
   ],
