@@ -48,9 +48,24 @@ fi
 # Read values the way Compose does (quotes, CRLF, trailing comments): the parser bootstrap.sh uses. The deployed file wins.
 for k in OPS_WEBHOOK SEC_WEBHOOK POSTGRES_PASSWORD POSTGRES_PASSWORD_STAGING LOADTEST; do
   v="$(env_value "$PROD_ENV" "$k")"
-  if [[ "$ENVF" != "$PROD_ENV" ]]; then w="$(env_value "$ENVF" "$k")"; [[ -n "$w" ]] && v="$w"; fi
+  [[ "$v" == "#"* ]] && v=""
+  if [[ "$ENVF" != "$PROD_ENV" ]]; then
+    w="$(env_value "$ENVF" "$k")"
+    [[ "$w" == "#"* ]] && w=""
+    [[ -n "$w" ]] && v="$w"
+  fi
+  if [[ "$v" == "$ENV_VALUE_UNKNOWN" ]]; then
+    if [[ "$k" == "OPS_WEBHOOK" || "$k" == "SEC_WEBHOOK" ]]; then
+      echo "⚠ $k could not be read — alerts for this deploy are skipped; check that line by hand"
+      v=""
+    else
+      echo "❌ $k could not be read — check that line by hand"; exit 1
+    fi
+  fi
   printf -v "$k" '%s' "$v"
 done
+need=POSTGRES_PASSWORD; [[ "$MODE" == "staging" ]] && need=POSTGRES_PASSWORD_STAGING
+[[ "${!need}" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo "❌ $need must use only A-Z a-z 0-9 . _ ~ - (it goes into connection URLs). Regenerate: openssl rand -hex 32"; exit 1; }
 notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
 
 if [[ "$MODE" == "production" ]] && [[ "${LOADTEST:-}" == "1" ]]; then
@@ -58,6 +73,7 @@ if [[ "$MODE" == "production" ]] && [[ "${LOADTEST:-}" == "1" ]]; then
 fi
 
 PREVIOUS="$(env_value "$ENVF" "$VAR")"
+[[ -z "$PREVIOUS" || "$PREVIOUS" =~ ^[^:]+:[0-9a-f]{7,40}$ ]] || { echo "❌ $VAR must be empty or an image tagged with a commit SHA (got: $PREVIOUS)"; exit 1; }
 started=$(date +%s)
 
 rollback_and_exit() {

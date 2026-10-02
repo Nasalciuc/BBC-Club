@@ -17,20 +17,34 @@ cd "$APP_DIR"
 ENV_FILE="$INFRA_DIR/env/production.env"
 # shellcheck disable=SC1091
 source "$INFRA_DIR/env-value.sh"
-OPS_WEBHOOK="$(env_value "$ENV_FILE" OPS_WEBHOOK)"
-SEC_WEBHOOK="$(env_value "$ENV_FILE" SEC_WEBHOOK)"
+OPS_WEBHOOK="$(env_optional "$ENV_FILE" OPS_WEBHOOK)"
+SEC_WEBHOOK="$(env_optional "$ENV_FILE" SEC_WEBHOOK)"
+notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
+# Install the cleanup before anything exists, so a failure while building the secrets file still reports and still removes
+# only what this run created.
+CLEAN_ENV="" CT="" VOL="" reported=0
+cleanup() {
+  local code=$?
+  [[ -n "$CT" ]] && docker rm -f "$CT" >/dev/null 2>&1 || true
+  [[ -n "$VOL" ]] && docker volume rm "$VOL" >/dev/null 2>&1 || true
+  [[ -n "$CLEAN_ENV" ]] && rm -f "$CLEAN_ENV"
+  if (( code != 0 && reported == 0 )); then
+    notify "🚨 RESTORE DRILL STOPPED before it could report — look at the output above." "${SEC_WEBHOOK:-}"
+  fi
+}
+trap cleanup EXIT
 # docker run --env-file reads lines literally (quotes and trailing comments included), unlike Compose. Hand it a clean copy:
 # every PGBACKREST_* key read the way Compose reads it, plus the password the restored cluster's local socket asks for.
 CLEAN_ENV="$(mktemp)"
 chmod 600 "$CLEAN_ENV"
 for k in $(grep -oE '^[[:space:]]*PGBACKREST_[A-Z0-9_]+' "$ENV_FILE" | sed -E 's/^[[:space:]]+//' | sort -u); do
-  printf '%s=%s\n' "$k" "$(env_value "$ENV_FILE" "$k")" >> "$CLEAN_ENV"
+  v="$(env_value "$ENV_FILE" "$k")"
+  [[ "$v" == "$ENV_VALUE_UNKNOWN" || "$v" == "#"* ]] && { echo "❌ $k could not be read, or is not filled in — check that line by hand"; exit 1; }
+  printf '%s=%s\n' "$k" "$v" >> "$CLEAN_ENV"
 done
+env_known "$ENV_FILE" POSTGRES_PASSWORD || { echo "❌ POSTGRES_PASSWORD could not be read, or is not filled in — check that line by hand"; exit 1; }
 printf 'PGPASSWORD=%s\n' "$(env_value "$ENV_FILE" POSTGRES_PASSWORD)" >> "$CLEAN_ENV"
-notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
 STAMP=$(date +%Y%m%d-%H%M%S); VOL="bbc_restoretest_$STAMP"; CT="bbc-restoretest-$STAMP"
-cleanup() { docker rm -f "$CT" >/dev/null 2>&1 || true; docker volume rm "$VOL" >/dev/null 2>&1 || true; rm -f "$CLEAN_ENV"; }
-trap cleanup EXIT
 
 echo "▶ restore latest backup into $VOL (image bbc-postgres:16, pgbackrest env from production.env)"
 docker volume create "$VOL" >/dev/null
@@ -48,4 +62,4 @@ part=$(q "SELECT count(*) FROM pg_partitioned_table p JOIN pg_class c ON c.oid=p
 users=$(q 'SELECT count(*) FROM auth."user"'); [[ "$users" =~ ^[0-9]+$ ]] || { echo "❌ auth.user unreadable"; fail=1; }
 age=$(q "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - max(occurred_at)))::int, -1) FROM platform.domain_events"); [[ "$age" != "ERR" ]] || { echo "❌ journal unreadable"; fail=1; }
 if (( fail == 0 )); then notify "✅ restore drill ok — 8 schemas, journal partitioned, ${users} users, newest event ${age}s old"
-else notify "🚨 RESTORE DRILL FAILED — backups are not trustworthy. Investigate today." "${SEC_WEBHOOK:-}"; exit 1; fi
+else reported=1; notify "🚨 RESTORE DRILL FAILED — backups are not trustworthy. Investigate today." "${SEC_WEBHOOK:-}"; exit 1; fi
