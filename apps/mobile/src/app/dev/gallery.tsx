@@ -8,6 +8,7 @@ import {
   Chip,
   EmptyState,
   ErrorState,
+  StateMessage,
   FareRow,
   GlobeFallback,
   ListRow,
@@ -333,8 +334,8 @@ export default function GalleryScreen() {
         onPress={noop}
       />
 
-      <SectionLabel label="ErrorState" />
-      <ErrorState
+      <SectionLabel label="StateMessage" />
+      <StateMessage
         testID="gallery.error"
         variant="error"
         title="Something went wrong."

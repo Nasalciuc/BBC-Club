@@ -97,7 +97,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
           testID="profile.password.save"
           label={busy ? "Saving…" : "Save"}
           busy={busy}
-          shape="card"
+          shape="pill"
           onPress={() => void onSave()}
         />
       </BottomSheetScrollView>

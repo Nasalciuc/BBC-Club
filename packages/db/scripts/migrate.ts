@@ -141,6 +141,21 @@ try {
     }
   }
 
+  const requestsIntent = join(migrationsDir, "0021_requests_intent.sql");
+  if (existsSync(requestsIntent)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0021_requests_intent.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(requestsIntent, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0021_requests_intent.sql')`);
+      });
+      console.log("requests intent applied");
+    }
+  }
+
   const notifRequestId = join(migrationsDir, "0009_notifications_request_id.sql");
   if (existsSync(notifRequestId)) {
     const done = (await db.execute(

@@ -70,7 +70,7 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
           testID="profile.travelers.save"
           label={busy ? "Saving…" : "Save"}
           busy={busy}
-          shape="card"
+          shape="pill"
           onPress={() => void onSave()}
         />
       </BottomSheetScrollView>

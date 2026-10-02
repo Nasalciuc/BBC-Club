@@ -1,17 +1,24 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
-import { AirportRow, tokens, rn } from "@bbc/ui";
+import { AirportRow, SectionLabel, tokens, rn } from "@bbc/ui";
 
 import { fetchAirports } from "@/lib/api";
+import { readRecentAirports } from "./recent-airports";
 
 type Props = {
   onSelect: (airport: AirportVM) => void;
+  suggestions?: AirportVM[];
 };
 
-export function SheetTyping({ onSelect }: Props) {
+export function SheetTyping({ onSelect, suggestions = [] }: Props) {
   const [airportQuery, setAirportQuery] = useState("");
   const [airportHits, setAirportHits] = useState<AirportVM[]>([]);
+  const [recent, setRecent] = useState<AirportVM[]>(() => readRecentAirports());
+
+  useEffect(() => {
+    setRecent(readRecentAirports());
+  }, []);
 
   useEffect(() => {
     if (airportQuery.trim().length < 2) {
@@ -27,28 +34,61 @@ export function SheetTyping({ onSelect }: Props) {
     return () => clearTimeout(t);
   }, [airportQuery]);
 
+  const emptyQuery = airportQuery.trim().length < 2;
+  const recentCodes = new Set(recent.map((a) => a.code));
+  const airports = suggestions.filter((a) => !recentCodes.has(a.code)).slice(0, 8);
+
   return (
     <View style={styles.airportPicker}>
       <TextInput
         testID="explore.airportQuery"
         value={airportQuery}
         onChangeText={setAirportQuery}
-        placeholder="City or code"
+        placeholder="Where would you like to go?"
         placeholderTextColor={tokens.colors.textTertiary}
         style={styles.airportInput}
         autoFocus
       />
-      {airportHits.map((a) => (
-        <AirportRow
-          key={a.code}
-          testID={`explore.airport.${a.code}`}
-          code={a.code}
-          city={a.city}
-          airport={a.name}
-          countryCode={a.countryCode}
-          onPress={() => onSelect(a)}
-        />
-      ))}
+      {emptyQuery ? (
+        <>
+          {airports.length > 0 ? <SectionLabel label="Airports" /> : null}
+          {airports.map((a) => (
+            <AirportRow
+              key={a.code}
+              testID={`explore.airport.${a.code}`}
+              code={a.code}
+              city={a.city}
+              airport={a.name}
+              countryCode={a.countryCode}
+              onPress={() => onSelect(a)}
+            />
+          ))}
+          {recent.length > 0 ? <SectionLabel label="Recent" /> : null}
+          {recent.map((a) => (
+            <AirportRow
+              key={`recent.${a.code}`}
+              testID={`explore.airport.recent.${a.code}`}
+              code={a.code}
+              city={a.city}
+              airport={a.name}
+              countryCode={a.countryCode}
+              onPress={() => onSelect(a)}
+            />
+          ))}
+        </>
+      ) : (
+        airportHits.map((a) => (
+          <AirportRow
+            key={a.code}
+            testID={`explore.airport.${a.code}`}
+            code={a.code}
+            city={a.city}
+            airport={a.name}
+            countryCode={a.countryCode}
+            onPress={() => onSelect(a)}
+          />
+        ))
+      )}
     </View>
   );
 }

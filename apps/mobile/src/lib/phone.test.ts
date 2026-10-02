@@ -35,6 +35,30 @@ describe("defaultPhoneCountry", () => {
   });
 });
 
+describe("phone rules on 173:3619", () => {
+  it("empty or short national numbers ask for a number", () => {
+    const r = validatePhone("", "US");
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.error).toBe("Enter a phone number so we can call you.");
+  });
+
+  it("a short plus-prefixed string asks for a number", () => {
+    const r = validatePhone("+12", "US");
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.error).toBe("Enter a phone number so we can call you.");
+  });
+
+  it("an invalid national string is rejected after submit", () => {
+    const r = validatePhone("0000000", "US");
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.error).toBe("That phone number doesn't look right.");
+  });
+
+  it("a leading plus ignores the default country", () => {
+    expect(validatePhone("+447911123456", "US").e164).toBe("+447911123456");
+  });
+});
+
 describe("splitStoredPhone / callingCodeLabel", () => {
   it("splits E.164 into country + national", () => {
     expect(splitStoredPhone("+12125550148")).toEqual({ country: "US", national: "2125550148" });

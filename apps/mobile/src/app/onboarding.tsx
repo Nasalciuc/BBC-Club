@@ -2,10 +2,23 @@ import { useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AirportRow, Button, Chip, ProgressLine, SearchField, Stepper, tokens, rn } from "@bbc/ui";
+import {
+  AirportRow,
+  Button,
+  Chip,
+  EmptyState,
+  ProgressLine,
+  SearchField,
+  StateMessage,
+  Stepper,
+  tokens,
+  rn,
+} from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
+import { airportSearchState } from "@/lib/airport-search-state";
 import { fetchAirports, patchProfile, putTravelPreferences } from "@/lib/api";
+import { stateCopy } from "@/lib/error-context";
 import { appStorage, ONBOARDED_KEY } from "@/lib/storage-keys";
 
 const EXPLORE = "/(tabs)/explore" as Href;
@@ -19,7 +32,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AirportVM | null>(null);
-  const [hits, setHits] = useState<AirportVM[]>([]);
+  const [search, setSearch] = useState(() => airportSearchState<AirportVM>("idle"));
   const [cabin, setCabin] = useState<"business" | "first">("business");
   const [adult, setAdult] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -27,13 +40,14 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     if (query.trim().length < 2) {
-      setHits([]);
+      setSearch(airportSearchState("idle"));
       return;
     }
+    setSearch(airportSearchState("loading"));
     const t = setTimeout(() => {
       void (async () => {
         const result = await fetchAirports(query);
-        if (result.ok) setHits(result.data);
+        setSearch(airportSearchState(result));
       })();
     }, 200);
     return () => clearTimeout(t);
@@ -84,8 +98,8 @@ export default function OnboardingScreen() {
       >
         <View style={styles.header}>
           <ProgressLine fraction={1} />
-          <Text style={styles.title}>Where do you usually fly from?</Text>
-          <Text style={styles.body}>So we start with the right fares. You can change this later.</Text>
+          <Text style={styles.title}>Where do you fly from?</Text>
+          <Text style={styles.body}>City, airport or code.</Text>
         </View>
 
         <Text style={styles.section}>Home airport</Text>
@@ -105,21 +119,55 @@ export default function OnboardingScreen() {
           }}
         />
 
-        {hits.map((a) => (
-          <AirportRow
-            key={a.code}
-            testID={`onboarding.airport.hit.${a.code}`}
-            code={a.code}
-            city={a.city}
-            airport={a.name}
-            countryCode={a.countryCode}
-            onPress={() => {
-              setSelected(a);
-              setQuery(`${a.city} · ${a.code}`);
-              setHits([]);
+        {search.phase === "empty" && !selected ? (
+          <EmptyState
+            testID="onboarding.airport.empty"
+            title="No airports found"
+            body="Try a city name or a three-letter airport code, such as JFK."
+            primary={{
+              label: "Clear search",
+              onPress: () => {
+                setQuery("");
+                setSelected(null);
+                setSearch(airportSearchState("idle"));
+              },
             }}
           />
-        ))}
+        ) : search.phase === "error" && !selected ? (
+          <StateMessage
+            testID="onboarding.airport.error"
+            variant="error"
+            title={stateCopy("generic").title}
+            body={stateCopy("generic").body}
+            primary={{
+              label: "Try again",
+              onPress: () => {
+                const q = query;
+                setSearch(airportSearchState("loading"));
+                void (async () => {
+                  const result = await fetchAirports(q);
+                  setSearch(airportSearchState(result));
+                })();
+              },
+            }}
+          />
+        ) : (
+          search.airports.map((a) => (
+            <AirportRow
+              key={a.code}
+              testID={`onboarding.airport.hit.${a.code}`}
+              code={a.code}
+              city={a.city}
+              airport={a.name}
+              countryCode={a.countryCode}
+              onPress={() => {
+                setSelected(a);
+                setQuery(`${a.city} · ${a.code}`);
+                setSearch(airportSearchState("idle"));
+              }}
+            />
+          ))
+        )}
 
         <Text style={styles.section}>Cabin</Text>
         <View style={styles.chips}>
@@ -151,7 +199,7 @@ export default function OnboardingScreen() {
           testID="onboarding.continue"
           label={busy ? "Saving…" : "Continue"}
           busy={busy}
-          shape="card"
+          shape="pill"
           variant="primary"
           onPress={() => void onContinue()}
         />

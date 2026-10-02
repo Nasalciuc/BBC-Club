@@ -79,7 +79,7 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
           testID="profile.cabin.save"
           label={busy ? "Saving…" : "Save"}
           busy={busy}
-          shape="card"
+          shape="pill"
           onPress={() => void onSave()}
         />
       </BottomSheetScrollView>

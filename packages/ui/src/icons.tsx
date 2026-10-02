@@ -18,6 +18,7 @@ import {
   PlaneTakeoff,
   Plus,
   Search,
+  Settings,
   UserCircle,
   Users,
   X,
@@ -27,6 +28,7 @@ import { tokens } from "./tokens";
 /** One icon family, identical on both platforms. Stroke 1.5 matches our 1-pt hairlines. */
 export const icons = {
   search: Search,
+  settings: Settings,
   departure: PlaneTakeoff,
   arrival: PlaneLanding,
   plane: Plane,

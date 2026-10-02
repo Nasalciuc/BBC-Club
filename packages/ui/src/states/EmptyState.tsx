@@ -16,7 +16,7 @@ export function EmptyState({ title, body, primary, testID }: Props) {
     <View style={styles.wrap} testID={testID}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
-      <Button testID={`${testID}.primary`} label={primary.label} onPress={primary.onPress} shape="card" />
+      <Button testID={`${testID}.primary`} label={primary.label} onPress={primary.onPress} shape="pill" />
     </View>
   );
 }

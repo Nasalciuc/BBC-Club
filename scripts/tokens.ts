@@ -20,6 +20,7 @@ const y = parse(fm[1].replace(/\r/g, "")) as {
   rounded: Record<string, string>;
   spacing: Record<string, string>;
   components: Record<string, Record<string, string>>;
+  motion?: Record<string, number | string>;
 };
 
 const px = (v: string) => Number(String(v).replace("px", ""));
@@ -42,6 +43,12 @@ const type = Object.fromEntries(
 );
 const radius = Object.fromEntries(Object.entries(y.rounded).map(([k, v]) => [camel(k), px(v) >= 9999 ? 999 : px(v)]));
 const space = Object.fromEntries(Object.entries(y.spacing).map(([k, v]) => [camel(k), px(v)]));
+const motion = Object.fromEntries(
+  Object.entries(y.motion ?? {}).map(([k, v]) => [
+    camel(k),
+    typeof v === "number" ? v : Number(String(v).replace("ms", "")),
+  ]),
+);
 
 const ts = `// GENERATED from DESIGN.md — do not edit. Run \`bun run tokens\`.
 export const tokens = {
@@ -49,6 +56,7 @@ export const tokens = {
   type: ${JSON.stringify(type, null, 2)},
   radius: ${JSON.stringify(radius, null, 2)},
   space: ${JSON.stringify(space, null, 2)},
+  motion: ${JSON.stringify(motion, null, 2)},
 } as const;
 export type ColorToken = keyof typeof tokens.colors;
 export type TypeToken = keyof typeof tokens.type;

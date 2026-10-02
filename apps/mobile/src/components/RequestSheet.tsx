@@ -1,45 +1,50 @@
 import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import NetInfo from "@react-native-community/netinfo";
-import * as Notifications from "expo-notifications";
+import { useRouter, type Href } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
-import { Button, Chip, CloseButton, Icon, short, tokens, rn, type Selection } from "@bbc/ui";
+import { Button, Chip, CloseButton, StateMessage, short, tokens, rn, type Selection } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
-import {
-  NotificationsAskSheet,
-  type NotificationsAskSheetHandle,
-} from "@/features/notifications/NotificationsAskSheet";
 import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
-import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
-import { appStorage, PUSH_ASKED_AT_KEY } from "@/lib/storage-keys";
-import { buildDraft, draftToBody, useRequestDraft, type RequestDraft } from "@/features/requests/useRequestDraft";
+import { retryMinutes, type RequestSource } from "@/features/requests/confirmation-logic";
+import {
+  buildDraft,
+  draftToBody,
+  missingReturn,
+  sheetTitle,
+  useRequestDraft,
+  type RequestDraft,
+  type RequestMode,
+} from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
+import { stateCopy, submitFailureKind } from "@/lib/error-context";
 import { newId } from "@/lib/id";
 import { enqueueRequest } from "@/lib/queue";
-import { env } from "@/lib/env";
 import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
 
 export type RequestSheetHandle = {
-  present: (opts: { fare?: FareVM | null; profile?: Profile | null; fromCode?: string; toCode?: string }) => void;
+  present: (opts: {
+    fare?: FareVM | null;
+    profile?: Profile | null;
+    fromCode?: string;
+    toCode?: string;
+    city?: string;
+    mode?: RequestMode;
+    replacesFareId?: string;
+  }) => void;
   dismiss: () => void;
-};
-
-type Props = {
-  onDone?: () => void;
-  onSeeRequests?: () => void;
 };
 
 const REQUEST_SNAP_POINTS = ["90%"];
 
-export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function RequestSheet(
-  { onDone, onSeeRequests },
-  ref,
-) {
+export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet(_props, ref) {
   const modalRef = useRef<BottomSheetModal>(null);
   const datesRef = useRef<DatesSheetHandle>(null);
-  const askRef = useRef<NotificationsAskSheetHandle>(null);
+  const sourceRef = useRef<RequestSource>("offer");
+  const cityRef = useRef("");
+  const router = useRouter();
   const [idempotencyKey, setIdempotencyKey] = useState(() => newId());
   const [busy, setBusy] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -56,6 +61,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
     present(opts) {
       const next = buildDraft(opts);
       const split = splitStoredPhone(next.contact.phone, defaultPhoneCountry());
+      sourceRef.current = opts.fare ? "offer" : "search";
+      cityRef.current = opts.fare?.to.city ?? opts.city ?? opts.toCode ?? "";
       dispatch({
         type: "reset",
         draft: { ...next, contact: { ...next.contact, phone: split.national } },
@@ -71,7 +78,23 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
     },
   }));
 
+  function openConfirmation(input: { id: string; queued: boolean; route: string }) {
+    modalRef.current?.dismiss();
+    const query = new URLSearchParams({
+      id: input.id,
+      source: sourceRef.current,
+      queued: input.queued ? "1" : "0",
+      city: cityRef.current,
+      route: input.route,
+    });
+    router.push(`/request/confirmed?${query.toString()}` as Href);
+  }
+
   async function onSubmit() {
+    if (missingReturn(state.tripType, state.legs[1]?.date)) {
+      dispatch({ type: "setReturnError", error: "Select a return date or choose One way." });
+      return;
+    }
     const phone = validatePhone(state.contact.phone, phoneCountry);
     if (!phone.valid) {
       dispatch({ type: "setPhoneError", error: phone.error });
@@ -87,13 +110,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
     if (!online) {
       enqueueRequest(body, keyRef.current);
       const route = `${body.legs[0]!.from} → ${body.legs[body.legs.length - 1]!.to}`;
-      dispatch({
-        type: "confirm",
-        phone: phone.e164,
-        route,
-        dates: body.legs.map((l) => l.date).join(" · "),
-        saved: true,
-      });
+      openConfirmation({ id: "", queued: true, route });
       return;
     }
 
@@ -101,58 +118,27 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
     const result = await submitRequest(body, keyRef.current);
     setBusy(false);
     if (!result.ok) {
-      // Timeout / mid-flight offline: same idempotency key → queue + saved confirm.
-      // Real 4xx stays an error (no queue).
-      if (result.code === "TIMEOUT" || result.code === "OFFLINE") {
+      const kind = submitFailureKind(result.code);
+      if (kind === "rateLimited") {
+        modalRef.current?.dismiss();
+        router.push(`/request/limited?minutes=${retryMinutes(result.retryAfterS)}` as Href);
+        return;
+      }
+      if (kind === "queued") {
         enqueueRequest(body, keyRef.current);
         const route = `${body.legs[0]!.from} → ${body.legs[body.legs.length - 1]!.to}`;
-        dispatch({
-          type: "confirm",
-          phone: phone.e164,
-          route,
-          dates: body.legs.map((l) => l.date).join(" · "),
-          saved: true,
-        });
+        openConfirmation({ id: "", queued: true, route });
         return;
       }
       dispatch({ type: "setSubmitError", error: result.message });
       return;
     }
-    dispatch({
-      type: "confirm",
-      phone: phone.e164,
-      route: result.data.route,
-      dates: result.data.dates,
-    });
+    openConfirmation({ id: result.data.id, queued: false, route: result.data.route });
   }
 
   const monoLine = `${state.legs[0]?.from ?? "JFK"} → ${state.legs[0]?.to ?? "LHR"} · ${state.cabin.toUpperCase()}${
     state.priceAtRequest != null ? ` · FROM $${state.priceAtRequest.toLocaleString("en-US")}` : ""
   }`;
-
-  const confirmed = state.phase === "confirm" || state.phase === "saved";
-
-  useEffect(() => {
-    if (state.phase !== "confirm") return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const current = await Notifications.getPermissionsAsync();
-        if (cancelled) return;
-        const raw = appStorage.getString(PUSH_ASKED_AT_KEY);
-        const parsed = raw == null || raw === "" ? null : Number(raw);
-        const askedAt = parsed != null && Number.isFinite(parsed) ? parsed : null;
-        const status: PermissionStatus =
-          current.status === "granted" || current.status === "denied" ? current.status : "undetermined";
-        if (shouldAskForPush(status, askedAt)) askRef.current?.present();
-      } catch {
-        // Permission state is best-effort; the request itself already succeeded.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [state.phase]);
 
   function presentDates(editing: Selection["editing"]) {
     datesRef.current?.present({
@@ -174,156 +160,127 @@ export const RequestSheet = forwardRef<RequestSheetHandle, Props>(function Reque
         handleIndicatorStyle={styles.handle}
       >
         <BottomSheetScrollView contentContainerStyle={styles.content} testID="request.sheet">
-          {confirmed ? (
-            <>
-              <View style={styles.checkWrap}>
-                <Icon name="check" size={24} color={tokens.colors.textPrimary} />
-              </View>
-              <Text style={styles.display}>
-                {state.phase === "saved" ? "Saved. It goes out when you’re back online." : "Request received."}
-              </Text>
-              <Text style={styles.body}>
-                {state.phase === "saved"
-                  ? "You’re offline right now. Nothing more to do — a specialist will call you shortly after it arrives."
-                  : `A specialist will call you shortly on ${state.confirmedPhone}.`}
-              </Text>
-              <Text style={styles.mono}>
-                {state.confirmedRoute} · {state.confirmedDates} · {state.cabin.toUpperCase()}
-              </Text>
-              <Button
-                testID="request.done"
-                label="Done"
-                shape="card"
-                onPress={() => {
-                  modalRef.current?.dismiss();
-                  onDone?.();
-                }}
+          <>
+            <View style={styles.header}>
+              <Text style={styles.title}>{sheetTitle(state.mode)}</Text>
+              <CloseButton testID="request.close" onPress={() => modalRef.current?.dismiss()} />
+            </View>
+            <Text style={styles.mono}>{monoLine}</Text>
+
+            <View style={styles.chips}>
+              <Chip
+                testID="request.tripType.round"
+                label="Round trip"
+                selected={state.tripType === "round"}
+                onPress={() => dispatch({ type: "setTripType", tripType: "round" })}
               />
+              <Chip
+                testID="request.tripType.oneway"
+                label="One way"
+                selected={state.tripType === "oneway"}
+                onPress={() => dispatch({ type: "setTripType", tripType: "oneway" })}
+              />
+            </View>
+
+            <DateRow
+              testID="request.depart"
+              label="DEPART"
+              value={state.legs[0]?.date ? short(state.legs[0].date) : "Select date"}
+              onPress={() => presentDates("depart")}
+            />
+            {state.tripType === "round" ? (
+              <DateRow
+                testID="request.return"
+                label="RETURN"
+                value={state.legs[1]?.date ? short(state.legs[1].date) : "Select date"}
+                error={Boolean(state.returnError)}
+                onPress={() => presentDates("return")}
+              />
+            ) : null}
+            {state.returnError ? (
+              <Text testID="request.returnError" style={styles.error}>
+                {state.returnError}
+              </Text>
+            ) : null}
+            <Field
+              testID="request.travelers"
+              label="TRAVELERS"
+              value={String(state.passengers.adult)}
+              onChangeText={(v) => {
+                const n = Math.max(1, Math.min(9, Number(v) || 1));
+                dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult: n } });
+              }}
+              keyboardType="number-pad"
+            />
+            <Field
+              testID="request.name"
+              label="NAME"
+              value={state.contact.name}
+              onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
+              empty={!state.contact.name}
+            />
+            <PhoneField
+              testID="request.phone"
+              countryTestID="phone.country"
+              value={state.contact.phone}
+              country={phoneCountry}
+              empty={!state.contact.phone}
+              onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
+              onCountryChange={(c) => {
+                setPhoneCountry(c);
+                dispatch({ type: "setPhoneError", error: null });
+              }}
+            />
+            {state.phoneError ? <Text style={styles.error}>{state.phoneError}</Text> : null}
+            <Field
+              testID="request.email"
+              label="EMAIL"
+              value={state.contact.email}
+              onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
+              empty={!state.contact.email}
+              keyboardType="email-address"
+            />
+
+            {noteOpen ? (
+              <Field
+                testID="request.note"
+                label="NOTE"
+                value={state.note}
+                onChangeText={(v) => dispatch({ type: "setNote", note: v })}
+                multiline
+              />
+            ) : (
               <Pressable
-                testID="request.seeRequests"
-                accessibilityRole="link"
-                onPress={() => {
-                  modalRef.current?.dismiss();
-                  onSeeRequests?.();
-                }}
+                testID="request.note"
+                accessibilityRole="button"
+                onPress={() => setNoteOpen(true)}
                 style={({ pressed }) => pressed && styles.pressed}
               >
-                <Text style={styles.link}>See it in Requests</Text>
+                <Text style={styles.link}>+ Add a note</Text>
               </Pressable>
-              {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
-                <Text style={styles.caption}>{`Don't want to wait? Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}</Text>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <View style={styles.header}>
-                <Text style={styles.title}>Request this fare</Text>
-                <CloseButton testID="request.close" onPress={() => modalRef.current?.dismiss()} />
-              </View>
-              <Text style={styles.mono}>{monoLine}</Text>
+            )}
 
-              <View style={styles.chips}>
-                <Chip
-                  testID="request.tripType.round"
-                  label="Round trip"
-                  selected={state.tripType === "round"}
-                  onPress={() => dispatch({ type: "setTripType", tripType: "round" })}
-                />
-                <Chip
-                  testID="request.tripType.oneway"
-                  label="One way"
-                  selected={state.tripType === "oneway"}
-                  onPress={() => dispatch({ type: "setTripType", tripType: "oneway" })}
-                />
-              </View>
+            {state.submitError ? (
+              <StateMessage
+                testID="request.notSent"
+                variant="error"
+                title={stateCopy("notSent").title}
+                body={state.submitError || stateCopy("notSent").body}
+                primary={{ label: "Try again", onPress: () => void onSubmit() }}
+              />
+            ) : null}
 
-              <DateRow
-                testID="request.depart"
-                label="DEPART"
-                value={state.legs[0]?.date ? short(state.legs[0].date) : "Select date"}
-                onPress={() => presentDates("depart")}
-              />
-              {state.tripType === "round" ? (
-                <DateRow
-                  testID="request.return"
-                  label="RETURN"
-                  value={state.legs[1]?.date ? short(state.legs[1].date) : "Select date"}
-                  onPress={() => presentDates("return")}
-                />
-              ) : null}
-              <Field
-                testID="request.travelers"
-                label="TRAVELERS"
-                value={String(state.passengers.adult)}
-                onChangeText={(v) => {
-                  const n = Math.max(1, Math.min(9, Number(v) || 1));
-                  dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult: n } });
-                }}
-                keyboardType="number-pad"
-              />
-              <Field
-                testID="request.name"
-                label="NAME"
-                value={state.contact.name}
-                onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
-                empty={!state.contact.name}
-              />
-              <PhoneField
-                testID="request.phone"
-                countryTestID="phone.country"
-                value={state.contact.phone}
-                country={phoneCountry}
-                empty={!state.contact.phone}
-                onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
-                onCountryChange={(c) => {
-                  setPhoneCountry(c);
-                  dispatch({ type: "setPhoneError", error: null });
-                }}
-              />
-              {state.phoneError ? <Text style={styles.error}>{state.phoneError}</Text> : null}
-              <Field
-                testID="request.email"
-                label="EMAIL"
-                value={state.contact.email}
-                onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
-                empty={!state.contact.email}
-                keyboardType="email-address"
-              />
-
-              {noteOpen ? (
-                <Field
-                  testID="request.note"
-                  label="NOTE"
-                  value={state.note}
-                  onChangeText={(v) => dispatch({ type: "setNote", note: v })}
-                  multiline
-                />
-              ) : (
-                <Pressable
-                  testID="request.note"
-                  accessibilityRole="button"
-                  onPress={() => setNoteOpen(true)}
-                  style={({ pressed }) => pressed && styles.pressed}
-                >
-                  <Text style={styles.link}>+ Add a note</Text>
-                </Pressable>
-              )}
-
-              {state.submitError ? <Text style={styles.error}>{state.submitError}</Text> : null}
-
-              <Button
-                testID="request.submit"
-                label={busy ? "Sending…" : "Request this fare"}
-                busy={busy}
-                shape="card"
-                onPress={() => void onSubmit()}
-              />
-              <Text style={styles.caption}>A specialist will call you shortly.</Text>
-            </>
-          )}
+            <Button
+              testID="request.submit"
+              label={busy ? "Sending…" : sheetTitle(state.mode)}
+              busy={busy}
+              shape="pill"
+              onPress={() => void onSubmit()}
+            />
+            <Text style={styles.caption}>A specialist will call you shortly.</Text>
+          </>
         </BottomSheetScrollView>
       </BottomSheetModal>
-      <NotificationsAskSheet ref={askRef} />
       <DatesSheet
         ref={datesRef}
         onUse={(s) => {
@@ -339,11 +296,13 @@ function DateRow({
   testID,
   label,
   value,
+  error,
   onPress,
 }: {
   testID: string;
   label: string;
   value: string;
+  error?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -355,7 +314,7 @@ function DateRow({
       style={({ pressed }) => [styles.fieldWrap, pressed && styles.pressed]}
     >
       <Text style={styles.fieldLabel}>{label}</Text>
-      <Text style={styles.dateValue}>{value}</Text>
+      <Text style={[styles.field, styles.dateValue, error && styles.fieldError]}>{value}</Text>
     </Pressable>
   );
 }
@@ -420,6 +379,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
   },
   fieldEmpty: { borderColor: tokens.colors.primary },
+  fieldError: { borderColor: tokens.colors.statusDanger },
   fieldMulti: { minHeight: 88, textAlignVertical: "top" },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
   link: { ...rn(tokens.type.bodySm), color: tokens.colors.primary },

@@ -1,5 +1,6 @@
 import { withTx, type Executor } from "@bbc/db";
 import type { RequestsRepo } from "../infrastructure/requests.repo";
+import { effectiveIntent } from "../application/intent";
 import { signAction, type OperatorAction } from "../application/operator-links";
 
 type Logger = { warn: (obj: object, msg: string) => void };
@@ -34,6 +35,12 @@ export function createSendRequestsJob(deps: {
           cabin_class: row.cabin === "business" ? "Business Class" : "First Class",
           passengers: row.passengers,
           phone_valid: row.phone_valid,
+          intent: effectiveIntent({
+            intent: row.intent,
+            fareId: row.fare_id,
+            offerId: row.offer_id,
+          }),
+          replaces_fare_id: row.replaces_fare_id,
           _source: row.source,
           _app_version: row.app_version,
           _request_id: row.id,

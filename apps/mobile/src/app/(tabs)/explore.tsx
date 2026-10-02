@@ -1,4 +1,4 @@
-import { useRouter, type Href } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -12,6 +12,7 @@ import { cheapestFareOnRoute, fareHref } from "@/features/explore/open-offer";
 import { SheetExpanded } from "@/features/explore/SheetExpanded";
 import { SheetRest, useExploreHome } from "@/features/explore/SheetRest";
 import { SheetSelected } from "@/features/explore/SheetSelected";
+import { rememberAirport } from "@/features/explore/recent-airports";
 import { SheetTyping } from "@/features/explore/SheetTyping";
 import { useDestinations } from "@/features/globe/useDestinations";
 import { useSearch } from "@/features/search/useSearch";
@@ -41,10 +42,20 @@ export default function ExploreScreen() {
   }, [state.to, sheetIndex]);
 
   function selectDestination(airport: AirportVM) {
+    rememberAirport(airport);
     dispatch({ type: "selectDestination", airport });
     setPickingAirport(false);
     setSheetIndex(1);
   }
+
+  const suggestions = (home?.destinations ?? []).map((d) => ({
+    code: d.code,
+    city: d.city,
+    name: d.name,
+    countryCode: d.countryCode,
+    lat: d.lat,
+    lng: d.lng,
+  }));
 
   function onSelectPin(code: string) {
     const pin = pinToAirport(code);
@@ -65,6 +76,7 @@ export default function ExploreScreen() {
       profile,
       fromCode: state.from?.code,
       toCode: state.to?.code,
+      city: state.to?.city,
     });
   }
 
@@ -105,22 +117,25 @@ export default function ExploreScreen() {
           />
         ) : (
           <>
-            <SearchField
-              testID="explore.search"
-              placeholder="Where to?"
-              value={searchValue}
-              onPress={() => {
-                setPickingAirport(true);
-                setSheetIndex(2);
-              }}
-              onClear={() => {
-                dispatch({ type: "clearDestination" });
-                setSheetIndex(0);
-              }}
-              disabled={offline}
-              disabledReason="Search needs a connection"
-            />
-            {pickingAirport ? <SheetTyping onSelect={selectDestination} /> : null}
+            {pickingAirport ? (
+              <SheetTyping suggestions={suggestions} onSelect={selectDestination} />
+            ) : (
+              <SearchField
+                testID="explore.search"
+                placeholder="Where to?"
+                value={searchValue}
+                onPress={() => {
+                  setPickingAirport(true);
+                  setSheetIndex(2);
+                }}
+                onClear={() => {
+                  dispatch({ type: "clearDestination" });
+                  setSheetIndex(0);
+                }}
+                disabled={offline}
+                disabledReason="Search needs a connection"
+              />
+            )}
             {state.to && !pickingAirport ? (
               <SheetSelected state={state} dispatch={dispatch} onRetry={retry} onQuote={openQuote} />
             ) : null}
@@ -136,7 +151,7 @@ export default function ExploreScreen() {
           </>
         )}
       </HomeSheet>
-      <RequestSheet ref={requestRef} onSeeRequests={() => router.push("/(tabs)/requests" as Href)} />
+      <RequestSheet ref={requestRef} />
     </View>
   );
 }

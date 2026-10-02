@@ -9,6 +9,7 @@ const Schema = z.object({
   EXPO_PUBLIC_SUPPORT_PHONE: z.string().min(1).optional(),
   EXPO_PUBLIC_PRIVACY_URL: z.string().url().optional(),
   EXPO_PUBLIC_TERMS_URL: z.string().url().optional(),
+  EXPO_PUBLIC_HELP_URL: z.string().url().optional(),
 });
 
 const parsed = Schema.safeParse({
@@ -17,6 +18,7 @@ const parsed = Schema.safeParse({
   EXPO_PUBLIC_SUPPORT_PHONE: process.env.EXPO_PUBLIC_SUPPORT_PHONE || undefined,
   EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL || undefined,
   EXPO_PUBLIC_TERMS_URL: process.env.EXPO_PUBLIC_TERMS_URL || undefined,
+  EXPO_PUBLIC_HELP_URL: process.env.EXPO_PUBLIC_HELP_URL || undefined,
 });
 
 if (!parsed.success) {

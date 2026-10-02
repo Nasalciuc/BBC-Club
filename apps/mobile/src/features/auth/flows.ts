@@ -129,11 +129,12 @@ export async function signOut(): Promise<void> {
 }
 
 /** Account deletion (Apple 5.1.1(v)); the confirmation sheet re-asks the password before calling this. */
-export async function deleteAccount(): Promise<Result> {
+export async function deleteAccount(password: string): Promise<Result> {
   try {
+    const { error } = await withAuthTimeout(authClient.deleteUser({ password }));
+    if (error) return fail(error);
     await clearLocalSession();
-    const { error } = await withAuthTimeout(authClient.deleteUser({}));
-    return error ? fail(error) : { ok: true };
+    return { ok: true };
   } catch (e) {
     return fromNetwork(e);
   }

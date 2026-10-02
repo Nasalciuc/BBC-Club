@@ -10,8 +10,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
-    "test:db": "bun test tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts"
+    "test": "bun test tests/unit tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
+    "test:db": "bun test tests/unit tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts"
   },
   "dependencies": {
     "@bbc/db": "workspace:*",

@@ -14,6 +14,8 @@ type Props = {
   onSaved: (offers: boolean) => void;
 };
 
+const NOTIFICATIONS_SNAP_POINTS = ["50%"] as const;
+
 export const NotificationsSheet = forwardRef<ProfileSheetHandle, Props>(function NotificationsSheet(
   { savedOffers, onSaved },
   ref,
@@ -69,7 +71,7 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle, Props>(function
   return (
     <BottomSheetModal
       ref={modalRef}
-      snapPoints={["50%"]}
+      snapPoints={[...NOTIFICATIONS_SNAP_POINTS]}
       enablePanDownToClose={!busy}
       backgroundStyle={styles.bg}
       handleIndicatorStyle={styles.handle}
@@ -90,7 +92,7 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle, Props>(function
             <Button
               testID="notifications.openSettings"
               label="Open Settings"
-              shape="card"
+              shape="pill"
               onPress={() => {
                 void Linking.openSettings();
               }}

@@ -87,6 +87,8 @@ export async function submit(
         idempotencyKey,
         fareId: body.fareId ?? null,
         offerId: body.offerId ?? null,
+        intent: body.intent ?? null,
+        replacesFareId: body.replacesFareId ?? null,
         tripType: body.tripType,
         cabin: body.cabin,
         legs: body.legs,
@@ -128,6 +130,8 @@ export async function submit(
         cabin: body.cabin,
         fareId: body.fareId ?? null,
         offerId: body.offerId ?? null,
+        intent: body.intent ?? null,
+        replacesFareId: body.replacesFareId ?? null,
         submittedAt: new Date().toISOString(),
       }),
     });

@@ -32,12 +32,9 @@ appId: com.buybusinessclass.club
 - inputText: "2125550148"
 - hideKeyboard
 - tapOn: { id: "request.submit" }
-- assertVisible: { text: "Request received." }
+- assertVisible: { id: "confirmation.root" }
 - tapOn:
     id: push-ask.not-now
     optional: true
-- tapOn: { text: "See it in Requests" }
-- assertVisible: { id: "requests.root" }
-- tapOn:
-    id: "requests.row.*"
+- tapOn: { id: "confirmation.viewRequest" }
 - assertVisible: { id: "request.root" }

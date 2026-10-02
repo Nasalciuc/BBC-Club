@@ -10,7 +10,7 @@ export type SearchState = {
   cabin: "business" | "first";
   passengers: { adult: number; child: number; infant: number };
   results: FareVM[] | null;
-  status: "idle" | "searching" | "done" | "empty" | "error";
+  status: "idle" | "searching" | "done" | "empty" | "error" | "paused";
   errorMessage: string | null;
 };
 
@@ -23,7 +23,8 @@ export type SearchAction =
   | { type: "setPassengers"; passengers: SearchState["passengers"] }
   | { type: "searchStarted" }
   | { type: "searchDone"; results: FareVM[] }
-  | { type: "searchFailed"; message: string };
+  | { type: "searchFailed"; message: string }
+  | { type: "searchPaused" };
 
 const INITIAL: SearchState = {
   from: null,
@@ -61,6 +62,8 @@ function reducer(state: SearchState, action: SearchAction): SearchState {
       };
     case "searchFailed":
       return { ...state, status: "error", errorMessage: action.message, results: null };
+    case "searchPaused":
+      return { ...state, status: "paused", errorMessage: null };
     default:
       return state;
   }
@@ -95,6 +98,10 @@ export function useSearch(options: Options = {}) {
       const result = await searchFares({ from: from.code, to: to.code, cabin });
       if (controller.signal.aborted) return;
       if (!result.ok) {
+        if (result.code === "RATE_LIMITED") {
+          dispatch({ type: "searchPaused" });
+          return;
+        }
         dispatch({ type: "searchFailed", message: result.message });
         return;
       }
