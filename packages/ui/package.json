@@ -14,7 +14,18 @@
     "test:unit": "bun test src"
   },
   "dependencies": {
-    "@bbc/shared": "workspace:*"
+    "@bbc/shared": "workspace:*",
+    "d3-geo": "3.1.1",
+    "topojson-client": "3.1.0"
+  },
+  "devDependencies": {
+    "@types/d3-geo": "3.1.1",
+    "@types/geojson": "7946.0.16",
+    "@types/topojson-client": "3.1.5",
+    "@types/topojson-simplify": "3.0.3",
+    "@types/topojson-specification": "1.0.5",
+    "topojson-simplify": "3.0.3",
+    "world-atlas": "2.0.2"
   },
   "peerDependencies": {
     "react": "*",
@@ -23,6 +34,7 @@
     "@gorhom/bottom-sheet": "*",
     "expo-image": "*",
     "expo-linear-gradient": "*",
+    "react-native-gesture-handler": "*",
     "react-native-svg": "*"
   }
 }
