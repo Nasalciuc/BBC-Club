@@ -1,4 +1,4 @@
-# Shared by bootstrap.sh and deploy.sh. Answers one question about an env file: is KEY set to a non-empty value, as Compose would read it?
+# Shared by the infra scripts. Answers one question about an env file: what is KEY's value, as Compose would read it?
 # Grammar — docs.docker.com, "Set, use, and manage variables in a Compose file with interpolation", ".env file syntax":
 #   KEY=VAL · KEY = VAL · KEY: VAL — the last assignment wins; CR line endings are dropped.
 #   Unquoted: a "#" after whitespace starts a comment ("VAL # c" → VAL); "VAL#x" keeps the "#".
@@ -6,7 +6,8 @@
 #   'Single-quoted': literal, and may span several lines.
 # Fail closed: where Compose would interpolate ($ in an unquoted or double-quoted value), or where the line uses a form Docker does not
 # document (an "export " prefix, an unterminated double quote), the value is ENV_VALUE_UNKNOWN — non-empty on purpose. Callers treat it
-# as "set": the redis-kafka profile turns on, and guard_staging refuses.
+# as "set": the redis-kafka profile turns on, and guard_staging refuses. A required setting (env_known) treats it as missing; an
+# optional one (env_optional) as unset, and says so on stderr.
 #
 # shellcheck shell=bash
 
@@ -79,6 +80,28 @@ env_value() {
     if [[ "$rest" == *'$'* ]]; then val="$ENV_VALUE_UNKNOWN"; else val="$rest"; fi
   done < "$file"
   printf '%s' "$val"
+}
+
+# A required setting holds a real value: non-empty, resolved by this parser, and not an unfilled template line. Compose reads
+# "KEY=      # hint" as the value "# hint", so a value that starts with "#" counts as not filled in.
+env_known() {
+  local v
+  v="$(env_value "$1" "$2")"
+  [[ -n "$v" && "$v" != "$ENV_VALUE_UNKNOWN" && "$v" != "#"* ]]
+}
+
+# An optional setting, such as a webhook: its value, or nothing when it is not filled in or cannot be read. An unreadable line
+# says so on stderr, so an alert that goes quiet never goes quiet silently.
+env_optional() {
+  local v
+  v="$(env_value "$1" "$2")"
+  if [[ "$v" == "$ENV_VALUE_UNKNOWN" ]]; then
+    echo "⚠ $2 in $1 could not be read — check that line by hand; it is treated as unset" >&2
+    v=""
+  elif [[ "$v" == "#"* ]]; then
+    v=""
+  fi
+  printf '%s' "$v"
 }
 
 # Profile on when production, or an attached staging file, has a real URL or broker list.

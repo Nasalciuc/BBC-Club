@@ -135,6 +135,8 @@ say "6/9 secrets"
 source "$INFRA_DIR/env-value.sh"
 # A password inside a connection URL must need no escaping, or the URL breaks.
 url_safe() { [[ "$2" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo "❌ $1 in $3 may use only A-Z a-z 0-9 . _ ~ - (it goes into connection URLs). Regenerate: openssl rand -hex 32"; exit 2; }; }
+# The image deploy.sh rolls back to obeys deploy.sh's contract: tagged with a commit SHA.
+sha_tagged() { [[ "$2" =~ ^[^:]+:[0-9a-f]{7,40}$ ]] || { echo "❌ $1 in $3 must name an image tagged with a commit SHA (got: $2)"; exit 2; }; }
 ENV_FILE="$INFRA_DIR/env/${MODE}.env"
 if [[ ! -f "$ENV_FILE" ]]; then
   install -m 600 -o root -g root "$INFRA_DIR/env/${MODE}.env.example" "$ENV_FILE"
@@ -142,21 +144,23 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 chmod 600 "$ENV_FILE"; chown root:root "$ENV_FILE"
 POSTGRES_PASSWORD="$(env_value "$ENV_FILE" POSTGRES_PASSWORD)"
-missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE GLITCHTIP_DB_PASSWORD; do [[ -n "$(env_value "$ENV_FILE" "$k")" ]] || missing+=("$k"); done
-if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do [[ -n "$(env_value "$ENV_FILE" "$k")" ]] || missing+=("$k"); done; fi
-[[ ${#missing[@]} -eq 0 ]] || { echo "❌ missing in $ENV_FILE: ${missing[*]}"; exit 2; }
+missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE GLITCHTIP_DB_PASSWORD; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done
+if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
+[[ ${#missing[@]} -eq 0 ]] || { echo "❌ not filled in, or unreadable, in $ENV_FILE: ${missing[*]}"; exit 2; }
 url_safe POSTGRES_PASSWORD "$POSTGRES_PASSWORD" "$ENV_FILE"
 url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"
+sha_tagged API_IMAGE "$(env_value "$ENV_FILE" API_IMAGE)" "$ENV_FILE"
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   STG="$INFRA_DIR/env/staging.env"
   [[ -f "$STG" ]] || { install -m 600 "$INFRA_DIR/env/staging.env.example" "$STG"; echo "⚠ fill $STG and re-run"; exit 2; }
   chmod 600 "$STG"
   chown root:root "$STG"
   stg_missing=(); for k in POSTGRES_PASSWORD_STAGING BETTER_AUTH_SECRET INTERNAL_API_SECRET_STAGING API_IMAGE_STAGING APP_ORIGIN; do
-    [[ -n "$(env_value "$STG" "$k")" ]] || stg_missing+=("$k"); done
-  [[ ${#stg_missing[@]} -eq 0 ]] || { echo "❌ missing in $STG: ${stg_missing[*]}"; exit 2; }
+    env_known "$STG" "$k" || stg_missing+=("$k"); done
+  [[ ${#stg_missing[@]} -eq 0 ]] || { echo "❌ not filled in, or unreadable, in $STG: ${stg_missing[*]}"; exit 2; }
   POSTGRES_PASSWORD_STAGING="$(env_value "$STG" POSTGRES_PASSWORD_STAGING)"
   url_safe POSTGRES_PASSWORD_STAGING "$POSTGRES_PASSWORD_STAGING" "$STG"
+  sha_tagged API_IMAGE_STAGING "$(env_value "$STG" API_IMAGE_STAGING)" "$STG"
 fi
 
 say "7/9 host cron (backups, restore drill, disk check)"
@@ -202,7 +206,7 @@ for i in {1..60}; do
   if ready api && { [[ "$WITH_STAGING" != "--with-staging" ]] || ready api-staging; }; then
     echo "✅ stack up ($MODE${WITH_STAGING:+ + staging})"; echo
     echo "next:"
-    echo "  1. DNS: $(grep '^API_DOMAIN=' "$ENV_FILE" | cut -d= -f2-) → $(curl -s ifconfig.me) (Cloudflare proxied, Full strict)"
+    echo "  1. DNS: $(env_value "$ENV_FILE" API_DOMAIN) → $(curl -s ifconfig.me) (Cloudflare proxied, Full strict)"
     [[ "$MODE" == "production" ]] && echo "  2. backups: bash $INFRA_DIR/pgbackrest-init.sh   then   bash $INFRA_DIR/restore-test.sh"
     echo "  3. Uptime Kuma via tunnel: ssh -L 3001:uptime-kuma:3001 root@$(hostname) — add /health (1m) + /ready (5m)"
     echo "  4. put every secret in the company password manager"
