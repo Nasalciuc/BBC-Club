@@ -142,8 +142,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 chmod 600 "$ENV_FILE"; chown root:root "$ENV_FILE"
 POSTGRES_PASSWORD="$(env_value "$ENV_FILE" POSTGRES_PASSWORD)"
-missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE GLITCHTIP_DB_PASSWORD; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done
-if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done; fi
+missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE GLITCHTIP_DB_PASSWORD; do [[ -n "$(env_value "$ENV_FILE" "$k")" ]] || missing+=("$k"); done
+if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do [[ -n "$(env_value "$ENV_FILE" "$k")" ]] || missing+=("$k"); done; fi
 [[ ${#missing[@]} -eq 0 ]] || { echo "❌ missing in $ENV_FILE: ${missing[*]}"; exit 2; }
 url_safe POSTGRES_PASSWORD "$POSTGRES_PASSWORD" "$ENV_FILE"
 url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"
@@ -153,7 +153,7 @@ if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   chmod 600 "$STG"
   chown root:root "$STG"
   stg_missing=(); for k in POSTGRES_PASSWORD_STAGING BETTER_AUTH_SECRET INTERNAL_API_SECRET_STAGING API_IMAGE_STAGING APP_ORIGIN; do
-    grep -qE "^${k}=.+" "$STG" || stg_missing+=("$k"); done
+    [[ -n "$(env_value "$STG" "$k")" ]] || stg_missing+=("$k"); done
   [[ ${#stg_missing[@]} -eq 0 ]] || { echo "❌ missing in $STG: ${stg_missing[*]}"; exit 2; }
   POSTGRES_PASSWORD_STAGING="$(env_value "$STG" POSTGRES_PASSWORD_STAGING)"
   url_safe POSTGRES_PASSWORD_STAGING "$POSTGRES_PASSWORD_STAGING" "$STG"
