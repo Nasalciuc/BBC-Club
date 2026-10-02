@@ -8,14 +8,13 @@ import {
   GLOBE_SPEC,
   approach,
   atOpening,
-  clampTilt,
-  clampZoom,
   detailFor,
-  dragRotation,
   globeMode,
+  panBy,
+  pinchBy,
   projector,
-  radiusFor,
   rotationAt,
+  touchesAfter,
   type Detail,
   type GlobeMode,
   type Rotation,
@@ -53,7 +52,7 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
   let interacting = false;
   let lastInteractionEnd: number | null = null;
   let rotateFrom: { t0: number; lambda0: number } | null = null;
-  let gestureStart: { rotation: Rotation; zoom: number } | null = null;
+  let touches = 0; // active gestures: pan and pinch run together
   let lastStep = 0;
   let lastPaint = 0;
   let now = 0;
@@ -87,33 +86,33 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     sinks?.frame(frame);
   }
 
+  // Pan and pinch run together: each applies only its own change since its last event (panBy, pinchBy), and the globe
+  // stays touched until the last of them ends — one gesture ending never freezes, rebases or replays the other.
   const begin = () => {
+    touches = touchesAfter(touches, "begin");
     interacting = true;
-    gestureStart = { rotation, zoom };
   };
   const end = () => {
+    touches = touchesAfter(touches, "end");
+    if (touches > 0) return;
     interacting = false;
     lastInteractionEnd = now;
-    gestureStart = null;
     if (holdStill) paint("still");
   };
   const pan = Gesture.Pan()
     .runOnJS(true)
     .minDistance(8)
     .onBegin(begin)
-    .onUpdate((e) => {
-      if (!gestureStart) return;
-      rotation = dragRotation(gestureStart.rotation, e.translationX, e.translationY, radiusFor(settings.size, zoom));
+    .onChange((e) => {
+      ({ rotation, zoom } = panBy({ rotation, zoom }, e.changeX, e.changeY, settings.size));
       if (holdStill) paint("paused"); // e2e builds have no loop
     })
     .onFinalize(end);
   const pinch = Gesture.Pinch()
     .runOnJS(true)
     .onBegin(begin)
-    .onUpdate((e) => {
-      if (!gestureStart) return;
-      zoom = clampZoom(gestureStart.zoom * e.scale);
-      rotation = [rotation[0], clampTilt(rotation[1])];
+    .onChange((e) => {
+      ({ rotation, zoom } = pinchBy({ rotation, zoom }, e.scaleChange));
       if (holdStill) paint("paused");
     })
     .onFinalize(end);

@@ -10,8 +10,11 @@ import {
   isOnNearSide,
   normalizeLambda,
   projector,
+  panBy,
+  pinchBy,
   rotationAt,
   routeArcPath,
+  touchesAfter,
   type GlobeInputs,
   type LonLat,
   type Point,
@@ -132,5 +135,42 @@ describe("gestures and detail", () => {
     expect(detailFor("rotating", false, 1)).toBe("mid");
     expect(detailFor("still", false, 1)).toBe("high");
     expect(detailFor("rotating", false, 2)).toBe("high");
+  });
+});
+
+describe("pan and pinch together (Gesture.Simultaneous)", () => {
+  const size = 520;
+  const degPerPx = (zoom: number) => 180 / Math.PI / ((size * GLOBE_SPEC.radius * zoom) / GLOBE_SPEC.frame);
+  it("a pinch that ends mid-drag leaves the pan in control", () => {
+    let touches = touchesAfter(0, "begin"); // pan
+    touches = touchesAfter(touches, "begin"); // pinch
+    touches = touchesAfter(touches, "end"); // one finger lifts: the pinch ends
+    expect(touches).toBe(1); // still touched: no resume, no freeze
+    const v = panBy({ rotation: [30, -35], zoom: 1 }, 10, 0, size);
+    expect(v.rotation[0]).toBeCloseTo(30 + 10 * degPerPx(1), 9);
+  });
+  it("a pinch that starts mid-drag never replays the distance already dragged", () => {
+    let v = { rotation: [30, -35] as Rotation, zoom: 1 };
+    for (let i = 0; i < 5; i++) v = panBy(v, 10, 0, size); // 50 px
+    const before = v.rotation[0];
+    v = pinchBy(v, 1); // the pinch begins without changing scale
+    expect(v.rotation[0]).toBe(before);
+    for (let i = 0; i < 5; i++) v = panBy(v, 10, 0, size); // 50 px more
+    expect(v.rotation[0]).toBeCloseTo(30 + 100 * degPerPx(1), 9);
+  });
+  it("zooming mid-drag never rescales the past: later pixels turn fewer degrees", () => {
+    let v = panBy({ rotation: [30, -35], zoom: 1 }, 100, 0, size);
+    const afterFirst = v.rotation[0];
+    v = pinchBy(v, 2);
+    expect(v.rotation[0]).toBe(afterFirst);
+    v = panBy(v, 100, 0, size);
+    expect(v.rotation[0] - afterFirst).toBeCloseTo(100 * degPerPx(2), 9);
+    expect(v.rotation[0] - afterFirst).toBeCloseTo((afterFirst - 30) / 2, 9);
+  });
+  it("pinches compose and stay within the zoom limits; the touch count never goes negative", () => {
+    let v = { rotation: [30, -35] as Rotation, zoom: 1 };
+    for (let i = 0; i < 10; i++) v = pinchBy(v, 1.5);
+    expect(v.zoom).toBe(GLOBE_SPEC.zoom.max);
+    expect(touchesAfter(touchesAfter(0, "end"), "end")).toBe(0);
   });
 });

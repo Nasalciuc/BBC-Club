@@ -151,6 +151,27 @@ export function dragRotation(start: Rotation, dx: number, dy: number, radiusPx: 
   return [normalizeLambda(start[0] + dx * deg), clampTilt(start[1] - dy * deg)];
 }
 
+/** The view the two gestures move: a pan turns it, a pinch zooms it. */
+export type View = { rotation: Rotation; zoom: number };
+
+/**
+ * Pan and pinch run together (Gesture.Simultaneous). Each applies only its change since its own previous event, at the zoom
+ * of that moment — so one gesture starting or ending never rebases or replays the other, and a pinch in the middle of a
+ * drag never rescales the distance already dragged.
+ */
+export const panBy = (v: View, changeX: number, changeY: number, size: number): View => ({
+  rotation: dragRotation(v.rotation, changeX, changeY, radiusFor(size, v.zoom)),
+  zoom: v.zoom,
+});
+export const pinchBy = (v: View, scaleChange: number): View => ({
+  rotation: v.rotation,
+  zoom: clampZoom(v.zoom * scaleChange),
+});
+
+/** The globe stays touched until the last active gesture ends. */
+export const touchesAfter = (active: number, event: "begin" | "end"): number =>
+  event === "begin" ? active + 1 : Math.max(0, active - 1);
+
 export const atOpening = (rotation: Rotation, zoom: number) =>
   Math.abs(normalizeLambda(rotation[0] - GLOBE_SPEC.opening[0])) < 0.05 &&
   Math.abs(rotation[1] - GLOBE_SPEC.opening[1]) < 0.05 &&
