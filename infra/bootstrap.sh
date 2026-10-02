@@ -130,16 +130,23 @@ iptables-save | grep -q 'BBC-CF-WEB' || { echo "❌ BBC-CF-WEB missing from save
 ip6tables-save | grep -q 'BBC-CF-WEB6' || { echo "❌ BBC-CF-WEB6 missing from saved ip6tables — refusing to continue"; exit 1; }
 
 say "6/9 secrets"
+# Read env files with the parser Compose agrees with (quotes, CRLF, comments): the same password must reach both.
+# shellcheck disable=SC1091
+source "$INFRA_DIR/env-value.sh"
+# A password inside a connection URL must need no escaping, or the URL breaks.
+url_safe() { [[ "$2" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo "❌ $1 in $3 may use only A-Z a-z 0-9 . _ ~ - (it goes into connection URLs). Regenerate: openssl rand -hex 32"; exit 2; }; }
 ENV_FILE="$INFRA_DIR/env/${MODE}.env"
 if [[ ! -f "$ENV_FILE" ]]; then
   install -m 600 -o root -g root "$INFRA_DIR/env/${MODE}.env.example" "$ENV_FILE"
   echo "⚠ created $ENV_FILE from the example — fill it in, then re-run: sudo bash $INFRA_DIR/bootstrap.sh $MODE $WITH_STAGING"; exit 2
 fi
 chmod 600 "$ENV_FILE"; chown root:root "$ENV_FILE"
-POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)
+POSTGRES_PASSWORD="$(env_value "$ENV_FILE" POSTGRES_PASSWORD)"
 missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE GLITCHTIP_DB_PASSWORD; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done
 if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done; fi
 [[ ${#missing[@]} -eq 0 ]] || { echo "❌ missing in $ENV_FILE: ${missing[*]}"; exit 2; }
+url_safe POSTGRES_PASSWORD "$POSTGRES_PASSWORD" "$ENV_FILE"
+url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   STG="$INFRA_DIR/env/staging.env"
   [[ -f "$STG" ]] || { install -m 600 "$INFRA_DIR/env/staging.env.example" "$STG"; echo "⚠ fill $STG and re-run"; exit 2; }
@@ -148,7 +155,8 @@ if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   stg_missing=(); for k in POSTGRES_PASSWORD_STAGING BETTER_AUTH_SECRET INTERNAL_API_SECRET_STAGING API_IMAGE_STAGING APP_ORIGIN; do
     grep -qE "^${k}=.+" "$STG" || stg_missing+=("$k"); done
   [[ ${#stg_missing[@]} -eq 0 ]] || { echo "❌ missing in $STG: ${stg_missing[*]}"; exit 2; }
-  POSTGRES_PASSWORD_STAGING=$(grep -E '^POSTGRES_PASSWORD_STAGING=' "$STG" | cut -d= -f2-)
+  POSTGRES_PASSWORD_STAGING="$(env_value "$STG" POSTGRES_PASSWORD_STAGING)"
+  url_safe POSTGRES_PASSWORD_STAGING "$POSTGRES_PASSWORD_STAGING" "$STG"
 fi
 
 say "7/9 host cron (backups, restore drill, disk check)"
@@ -159,8 +167,6 @@ chmod 644 /etc/cron.d/bbc && chown root:root /etc/cron.d/bbc
 say "8/9 start (database → migrations → API and ingress)"
 DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml --env-file $ENV_FILE"
 [[ "$WITH_STAGING" == "--with-staging" ]] && DC="$DC -f $INFRA_DIR/compose.staging.yml --env-file $INFRA_DIR/env/staging.env"
-# shellcheck disable=SC1091
-source "$INFRA_DIR/env-value.sh"
 stg_file=""
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   stg_file="$INFRA_DIR/env/staging.env"
@@ -176,14 +182,16 @@ $DC up -d postgres
 for i in {1..30}; do $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
 $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres never became ready"; exit 1; }
 $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc" api bun run --filter @bbc/db db:migrate
-$DC run --rm --no-deps api bun run scripts/seed-flags.ts || { echo "❌ flag seeding failed"; exit 1; }
+# Seeding runs before PgBouncer exists (--no-deps): connect straight to postgres, as the migration above does.
+$DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc" api bun run scripts/seed-flags.ts \
+  || { echo "❌ flag seeding failed"; exit 1; }
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   $DC up -d postgres-staging
   for i in {1..30}; do $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
   $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres-staging never became ready"; exit 1; }
   $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run --filter @bbc/db db:migrate \
     || { echo "❌ staging migration failed — is API_IMAGE_STAGING a real published SHA tag?"; exit 1; }
-  $DC run --rm --no-deps api-staging bun run scripts/seed-flags.ts \
+  $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run scripts/seed-flags.ts \
     || { echo "❌ staging flag seeding failed — is API_IMAGE_STAGING a real published SHA tag?"; exit 1; }
 fi
 $DC up -d
