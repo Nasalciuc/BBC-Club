@@ -9,3 +9,9 @@ Status: accepted · Date: 2026-09-11 · Supersedes nothing; implements ADR-IMPL-
 **Consequences.** A new VPS becomes staging in ~15 minutes with `bootstrap.sh`. A failed deploy restores itself. A backup nobody restored is caught within a month, automatically. Anyone with SSH and the password manager can operate the system — which is the point of the runbook.
 
 **Amendment (code review, same day).** pgBackRest must run inside the Postgres container (archive_command executes there) with options as `PGBACKREST_*` env vars — the config file does not interpolate. One Caddy holds both domains; staging is extra services in the same compose project (a second Caddy on 8443 could never obtain a certificate). Caddy does not depend on the API. Networks: `edge` (caddy, api) and internal `data`. Host cron owns backups, the restore drill and the disk alert; the container cron only fires HTTP jobs. `restore-test.sh` uses the production image (uid parity). `deploy.sh` guards the first deploy (no rollback target). Cloudflare `trusted_proxies` so per-IP logic sees the client. `apps/api/Dockerfile` and `api-deploy.yml` are part of this ADR.
+
+**Amendment (1 Oct 2026) — MinIO image.** MinIO's community image was withdrawn on 23 Oct 2025. The stack runs Chainguard's maintained
+build of the unmodified server, pinned by digest and bumped by hand (`infra/RUNBOOK.md`, _Images pinned by digest_). It is used internally
+over the private `data` network — no AGPL obligation beyond this notice.
+**Open — DECISION (owner):** nothing creates a bucket and `minio_data` has no backup. Before anything is stored there: either add bucket
+creation and a backup, or serve media from external storage and remove MinIO. Until then, MinIO holds nothing that cannot be lost.
