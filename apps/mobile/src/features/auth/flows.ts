@@ -1,7 +1,6 @@
 import { authClient, waitForSessionCookie } from "./client";
-import { passwordOnFile } from "./session-gate-logic";
 import { authMessage, CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
-import { postAccountPassword } from "@/lib/api";
+import { fetchPasswordStatus, postAccountPassword } from "@/lib/api";
 import { unregisterPushDevice } from "@/lib/push";
 import { clearQueue } from "@/lib/queue";
 import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
@@ -39,14 +38,11 @@ async function requireSessionCookie(): Promise<Result | null> {
   return { ok: false, message: SESSION_NOT_READY, code: "UNAUTHORIZED" };
 }
 
-/** Whether the signed-in member already has a password. Unreadable counts as no — set-password copes with a 409. */
+/** Whether the signed-in member already has a password — the server's answer, by better-auth's own rule (a credential
+ *  account with a stored password). Unreadable counts as no: set-password then meets a 409 only if one is stored. */
 async function hasPasswordOnFile(): Promise<boolean> {
-  try {
-    const { data } = await withAuthTimeout(authClient.listAccounts());
-    return passwordOnFile(data);
-  } catch {
-    return false;
-  }
+  const status = await fetchPasswordStatus();
+  return status.ok && status.data.hasPassword;
 }
 
 /** Sign In: email + password. */

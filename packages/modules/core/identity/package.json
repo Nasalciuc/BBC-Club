@@ -17,6 +17,7 @@
   "dependencies": {
     "@bbc/db": "workspace:*",
     "@bbc/email": "workspace:*",
+    "@bbc/platform": "workspace:*",
     "@bbc/shared": "workspace:*",
     "@better-auth/expo": "~1.6.0",
     "better-auth": "~1.6.0",

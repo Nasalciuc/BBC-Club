@@ -48,13 +48,3 @@ export function routeFor(load: ProfileLoad, onboarded: boolean, passwordPending 
   if (load.profile.homeAirport == null && !onboarded) return "/onboarding";
   return "/(tabs)/explore";
 }
-
-/** Whether better-auth's account list holds a password (a "credential" account). Anything unreadable counts as no. */
-export function passwordOnFile(accounts: unknown): boolean {
-  return (
-    Array.isArray(accounts) &&
-    accounts.some(
-      (a) => typeof a === "object" && a !== null && (a as { providerId?: unknown }).providerId === "credential",
-    )
-  );
-}

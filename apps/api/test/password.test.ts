@@ -36,6 +36,31 @@ describe("POST /v1/account/password", () => {
     await t.close();
   });
 
+  it("a credential row with no stored password is not a password: setting one is 200", async () => {
+    const t = await testApp({ suite: "pw-empty-cred" });
+    await t.withEmptyCredential(t.memberA.id);
+    const status = async () =>
+      (await t.app.request("/v1/account/password", { headers: { Cookie: t.memberA.cookie } })).json();
+    expect(await status()).toEqual({ hasPassword: false });
+    const r = await t.app.request("/v1/account/password", {
+      method: "POST",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ newPassword: "newClubPass2026!" }),
+    });
+    expect(r.status).toBe(200);
+    expect(await status()).toEqual({ hasPassword: true });
+    await t.close();
+  });
+
+  it("GET reports a stored password, and needs a session", async () => {
+    const t = await testApp({ suite: "pw-status" });
+    const r = await t.app.request("/v1/account/password", { headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ hasPassword: true });
+    expect((await t.app.request("/v1/account/password")).status).toBe(401);
+    await t.close();
+  });
+
   it("wrong current password is 400", async () => {
     const t = await testApp({ suite: "pw-wrong" });
     const r = await t.app.request("/v1/account/password", {

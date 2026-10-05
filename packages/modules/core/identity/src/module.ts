@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
@@ -12,7 +12,19 @@ import type { IdentityFacade } from "./api";
 import type { EmailFacade } from "@bbc/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
+import { rateLimit } from "@bbc/platform/ratelimit";
 import { account } from "./infrastructure/schema";
+
+/** better-auth's own rule (setPassword, changePassword, deleteUser): a credential account *with* a stored password.
+ *  A credential row can exist with a null password — that is not a password. */
+async function hasStoredPassword(exec: Executor, userId: string): Promise<boolean> {
+  const rows = await exec
+    .select({ id: account.id })
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, "credential"), isNotNull(account.password)))
+    .limit(1);
+  return rows.length > 0;
+}
 
 const WRONG_PASSWORD = "That password isn't right.";
 
@@ -40,6 +52,23 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
 
     const routes = new Hono<AppEnv>();
 
+    registerRoute("GET", "/v1/account/password", "profile:read-self", "read");
+    routes.get(
+      "/account/password",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("profile:read-self", {
+        module: "identity",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const actor = actorMemberId(c.get("principal"));
+        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+        // The app asks after a join code: a member who already has a password goes straight in.
+        return c.json({ hasPassword: await hasStoredPassword(conn, actor) });
+      },
+    );
+
     registerRoute("POST", "/v1/account/password", "profile:update-self");
     routes.post(
       "/account/password",
@@ -60,20 +89,15 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
             400,
           );
         }
-        const existing = await conn
-          .select({ id: account.id })
-          .from(account)
-          .where(and(eq(account.userId, actor), eq(account.providerId, "credential")))
-          .limit(1);
-        const hasCredential = existing.length > 0;
+        const hasPassword = await hasStoredPassword(conn, actor);
         const currentPassword = parsed.data.currentPassword;
-        if (hasCredential && !currentPassword) {
+        if (hasPassword && !currentPassword) {
           // A member who joins again by email code already has a password: nothing to set. 409, so the app moves on.
           return c.json(apiError("CONFLICT", { message: "This account already has a password." }), 409);
         }
 
         try {
-          if (hasCredential && currentPassword) {
+          if (hasPassword && currentPassword) {
             await auth.api.changePassword({
               headers: c.req.raw.headers,
               body: {
@@ -98,7 +122,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
           if (status === 400)
             return c.json(
               apiError("VALIDATION", {
-                message: hasCredential
+                message: hasPassword
                   ? WRONG_PASSWORD
                   : err && typeof err === "object"
                     ? ((err as { body?: { message?: string } }).body?.message ?? "Invalid password")
