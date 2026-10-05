@@ -1,4 +1,5 @@
 import { authClient, waitForSessionCookie } from "./client";
+import { passwordOnFile } from "./session-gate-logic";
 import { authMessage, CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
 import { postAccountPassword } from "@/lib/api";
 import { unregisterPushDevice } from "@/lib/push";
@@ -38,6 +39,16 @@ async function requireSessionCookie(): Promise<Result | null> {
   return { ok: false, message: SESSION_NOT_READY, code: "UNAUTHORIZED" };
 }
 
+/** Whether the signed-in member already has a password. Unreadable counts as no — set-password copes with a 409. */
+async function hasPasswordOnFile(): Promise<boolean> {
+  try {
+    const { data } = await withAuthTimeout(authClient.listAccounts());
+    return passwordOnFile(data);
+  } catch {
+    return false;
+  }
+}
+
 /** Sign In: email + password. */
 export async function signIn(email: string, password: string): Promise<Result> {
   try {
@@ -68,7 +79,9 @@ export async function verifyJoin(email: string, otp: string): Promise<Result> {
     // Without a SecureStore cookie, set-password's POST /v1/account/password is 401 "Please sign in."
     const ready = await requireSessionCookie();
     if (ready) return ready;
-    appStorage.set(PENDING_PASSWORD_KEY, true);
+    // An existing member may join by email code too: only a member without a password is asked to choose one.
+    if (await hasPasswordOnFile()) appStorage.remove(PENDING_PASSWORD_KEY);
+    else appStorage.set(PENDING_PASSWORD_KEY, true);
     return { ok: true };
   } catch (e) {
     return fromNetwork(e);
@@ -116,6 +129,11 @@ export async function setPassword(newPassword: string): Promise<Result> {
   if (!result.ok) {
     if (result.code === "UNAUTHORIZED" || result.status === 401) {
       return { ok: false, message: SESSION_NOT_READY, code: "UNAUTHORIZED" };
+    }
+    if (result.code === "CONFLICT" || result.status === 409) {
+      // The account already has a password (joined again by email code): nothing to set, nothing to block on.
+      appStorage.remove(PENDING_PASSWORD_KEY);
+      return { ok: true };
     }
     return { ok: false, message: result.message, code: result.code };
   }

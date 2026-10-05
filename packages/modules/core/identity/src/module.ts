@@ -68,7 +68,8 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
         const hasCredential = existing.length > 0;
         const currentPassword = parsed.data.currentPassword;
         if (hasCredential && !currentPassword) {
-          return c.json(apiError("VALIDATION", { message: "Current password is required." }), 400);
+          // A member who joins again by email code already has a password: nothing to set. 409, so the app moves on.
+          return c.json(apiError("CONFLICT", { message: "This account already has a password." }), 409);
         }
 
         try {

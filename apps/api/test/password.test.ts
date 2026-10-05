@@ -22,16 +22,17 @@ describe("POST /v1/account/password", () => {
     await t.close();
   });
 
-  it("C6 probe (before fix this was 400): credential + only newPassword is 400", async () => {
+  it("credential + only newPassword is 409: the password is already set", async () => {
     const t = await testApp({ suite: "pw-has-cred" });
     const r = await t.app.request("/v1/account/password", {
       method: "POST",
       headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
       body: JSON.stringify({ newPassword: "newClubPass2026!" }),
     });
-    expect(r.status).toBe(400);
-    const body = (await r.json()) as { error?: { message?: string } };
-    expect(body.error?.message).toBe("Current password is required.");
+    expect(r.status).toBe(409);
+    const body = (await r.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("CONFLICT");
+    expect(body.error?.message).toBe("This account already has a password.");
     await t.close();
   });
 

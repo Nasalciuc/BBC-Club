@@ -13,7 +13,8 @@ type Logo = "none" | "left" | "center";
 
 type Props = PropsWithChildren<{
   footer?: ReactNode;
-  onBack?: Href;
+  /** Where back goes when there is no history — or what it does, when leaving needs more than a navigation. */
+  onBack?: Href | (() => void);
   logo?: Logo;
   heroPercent?: number;
   panelRadius?: number;
@@ -34,6 +35,10 @@ export function AuthShell({
   const top = Math.max(insets.top, Club.space.md) + Club.space.xs;
 
   const goBack = () => {
+    if (typeof onBack === "function") {
+      onBack();
+      return;
+    }
     if (router.canGoBack()) {
       router.back();
       return;

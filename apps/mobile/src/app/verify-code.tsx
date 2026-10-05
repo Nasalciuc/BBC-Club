@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { setPendingOtp } from "@/features/auth/otp-holder";
 import { resendCode, verifyJoin } from "@/features/auth/flows";
+import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { Otp } from "@/features/auth/schemas";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
@@ -67,11 +68,19 @@ export default function VerifyCodeScreen() {
     setBusy(true);
     setError(null);
     const result = await verifyJoin(normalizedEmail, otpResult.data);
-    setBusy(false);
     if (!result.ok) {
+      setBusy(false);
       setError(result.message);
       return;
     }
+    // A member who already has a password goes straight in; only a new member chooses one.
+    if (!passwordStillPending()) {
+      const dest = await resolvePostAuthRoute();
+      setBusy(false);
+      router.replace(dest);
+      return;
+    }
+    setBusy(false);
     router.replace({
       pathname: "/set-password",
       params: { purpose: "join" },

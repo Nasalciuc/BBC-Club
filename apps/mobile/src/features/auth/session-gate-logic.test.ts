@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import type { ApiResult, Profile } from "@/lib/api";
-import { loadProfileWith, routeFor } from "./session-gate-logic";
+import { loadProfileWith, passwordOnFile, routeFor } from "./session-gate-logic";
 
 const sleep = async () => undefined;
 
@@ -86,5 +86,23 @@ describe("loadProfileWith + routeFor", () => {
   it("a signed-out load ignores a stale pending-password flag", async () => {
     const load = await loadProfileWith(async () => fail(401), sleep);
     expect(routeFor(load, false, true)).toBe("/sign-in");
+  });
+});
+
+describe("passwordOnFile", () => {
+  it("is true when a credential account exists", () => {
+    expect(passwordOnFile([{ providerId: "credential", accountId: "u1" }])).toBe(true);
+  });
+
+  it("is false for a member who only ever used an email code", () => {
+    expect(passwordOnFile([])).toBe(false);
+    expect(passwordOnFile([{ providerId: "google", accountId: "g1" }])).toBe(false);
+  });
+
+  it("is false for anything unreadable", () => {
+    expect(passwordOnFile(null)).toBe(false);
+    expect(passwordOnFile(undefined)).toBe(false);
+    expect(passwordOnFile({ providerId: "credential" })).toBe(false);
+    expect(passwordOnFile([null, 1, "credential"])).toBe(false);
   });
 });
