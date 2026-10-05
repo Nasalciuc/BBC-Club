@@ -192,6 +192,13 @@ export async function testApp(
     async withPathAPassword(memberId: string) {
       await db.execute(sql`DELETE FROM auth.account WHERE user_id = ${memberId} AND provider_id = 'credential'`);
     },
+    /** A credential row with no stored password: better-auth does not count it as a password. */
+    async withEmptyCredential(memberId: string) {
+      await db.execute(sql`DELETE FROM auth.account WHERE user_id = ${memberId} AND provider_id = 'credential'`);
+      await db.execute(
+        sql`INSERT INTO auth.account (id, user_id, account_id, provider_id) VALUES (${`empty-${memberId}`}, ${memberId}, ${memberId}, 'credential')`,
+      );
+    },
     async seedNotification(memberId: string) {
       const [{ id }]: any = await db.execute(
         sql`INSERT INTO notifications.notifications (member_id, category, title, status) VALUES (${memberId}, 'transactional', 'Welcome to the club', 'sent') RETURNING id`,

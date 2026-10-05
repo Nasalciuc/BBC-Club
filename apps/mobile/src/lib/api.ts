@@ -247,6 +247,19 @@ export async function putNotificationPreferences(
   });
 }
 
+/** GET /v1/account/password — whether a password is stored. The server decides, by better-auth's own rule. */
+export async function fetchPasswordStatus(): Promise<ApiResult<{ hasPassword: boolean }>> {
+  return asResult(async () => {
+    const res = await apiFetch("/v1/account/password");
+    if (!res.ok) {
+      const body = (await parseJson(res)) as { error?: { code?: string; message?: string } } | null;
+      return failFromBody(res, body);
+    }
+    const body = (await parseJson(res)) as { hasPassword?: unknown } | null;
+    return { ok: true, data: { hasPassword: body?.hasPassword === true } };
+  });
+}
+
 /** POST /v1/account/password — Path A set, or change when currentPassword is sent. */
 export async function postAccountPassword(
   newPassword: string,

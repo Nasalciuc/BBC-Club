@@ -22,16 +22,42 @@ describe("POST /v1/account/password", () => {
     await t.close();
   });
 
-  it("C6 probe (before fix this was 400): credential + only newPassword is 400", async () => {
+  it("credential + only newPassword is 409: the password is already set", async () => {
     const t = await testApp({ suite: "pw-has-cred" });
     const r = await t.app.request("/v1/account/password", {
       method: "POST",
       headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
       body: JSON.stringify({ newPassword: "newClubPass2026!" }),
     });
-    expect(r.status).toBe(400);
-    const body = (await r.json()) as { error?: { message?: string } };
-    expect(body.error?.message).toBe("Current password is required.");
+    expect(r.status).toBe(409);
+    const body = (await r.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("CONFLICT");
+    expect(body.error?.message).toBe("This account already has a password.");
+    await t.close();
+  });
+
+  it("a credential row with no stored password is not a password: setting one is 200", async () => {
+    const t = await testApp({ suite: "pw-empty-cred" });
+    await t.withEmptyCredential(t.memberA.id);
+    const status = async () =>
+      (await t.app.request("/v1/account/password", { headers: { Cookie: t.memberA.cookie } })).json();
+    expect(await status()).toEqual({ hasPassword: false });
+    const r = await t.app.request("/v1/account/password", {
+      method: "POST",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ newPassword: "newClubPass2026!" }),
+    });
+    expect(r.status).toBe(200);
+    expect(await status()).toEqual({ hasPassword: true });
+    await t.close();
+  });
+
+  it("GET reports a stored password, and needs a session", async () => {
+    const t = await testApp({ suite: "pw-status" });
+    const r = await t.app.request("/v1/account/password", { headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ hasPassword: true });
+    expect((await t.app.request("/v1/account/password")).status).toBe(401);
     await t.close();
   });
 

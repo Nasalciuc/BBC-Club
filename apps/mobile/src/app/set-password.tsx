@@ -1,10 +1,10 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { BackHandler, StyleSheet, Text, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { clearPendingOtp, takePendingOtp } from "@/features/auth/otp-holder";
-import { resetPassword, setPassword } from "@/features/auth/flows";
+import { resetPassword, setPassword, signOut } from "@/features/auth/flows";
 import { Password } from "@/features/auth/schemas";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { AuthShell } from "@/components/auth-shell";
@@ -15,6 +15,13 @@ import { Club } from "@/constants/club";
 
 function hasNumberOrSymbol(value: string) {
   return /[\d\W]/.test(value);
+}
+
+/** Back on the join path leaves the join: drop the session the email code opened, return to the welcome screen. */
+async function leaveJoin(router: ReturnType<typeof useRouter>): Promise<void> {
+  clearPendingOtp();
+  await signOut();
+  router.replace("/");
 }
 
 export default function SetPasswordScreen() {
@@ -30,6 +37,16 @@ export default function SetPasswordScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => () => clearPendingOtp(), []);
+
+  // Android's back gesture leaves the join too. On the reset path back keeps working as before.
+  useEffect(() => {
+    if (purpose === "reset") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      void leaveJoin(router);
+      return true;
+    });
+    return () => sub.remove();
+  }, [purpose, router]);
 
   const longEnough = password.length >= 8;
   const complexEnough = hasNumberOrSymbol(password);
@@ -77,7 +94,7 @@ export default function SetPasswordScreen() {
   return (
     <AuthShell
       heroPercent={0.25}
-      onBack="/sign-in"
+      onBack={purpose === "reset" ? "/sign-in" : () => void leaveJoin(router)}
       footer={
         <ClubButton
           testID="setPassword.continue"
@@ -88,6 +105,7 @@ export default function SetPasswordScreen() {
         />
       }
     >
+      <Stack.Screen options={{ gestureEnabled: purpose === "reset" }} />
       <View style={styles.copy}>
         <Text style={styles.kicker}>Your key</Text>
         <Text style={styles.headline}>Choose your password</Text>
