@@ -27,6 +27,22 @@ export { TabBar } from "./layout/TabBar";
 
 export { GlobeFallback, type Pin } from "./globe/GlobeFallback";
 export { GLOBE } from "./globe/constants";
+export { GLOBE_SPEC, haloOpacity } from "./globe/globe-logic";
+export { HOME_SHEET_SNAPS, homeSheetHeight } from "./layout/home-sheet-snaps";
+export { landFor } from "./globe/land";
+export {
+  FIGMA_ZOOM,
+  OPENING_CENTER,
+  ZOOM_RANGE,
+  globePadding,
+  pickPin,
+  pinFeatures,
+  routeCamera,
+  routeLine,
+  type GlobeCamera,
+  type LngLat,
+  type Pick,
+} from "./globe/globe-geo";
 
 export { EmptyState } from "./states/EmptyState";
 export { ErrorState, StateMessage } from "./states/ErrorState";

@@ -14,8 +14,25 @@ Set these on the EAS **production** environment (dashboard or `eas env:create`),
 - `EXPO_PUBLIC_PRIVACY_URL` — https URL (required; `assertProductionEnv` refuses the build without it)
 - `EXPO_PUBLIC_TERMS_URL` — https URL (required)
 - `EXPO_PUBLIC_SUPPORT_PHONE` — optional E.164. Empty hides Call support.
+- `EXPO_PUBLIC_MAPBOX_TOKEN` — the Mapbox **public** token, `pk.…` (required; ADR-IMPL-035). Visibility _Sensitive_.
+  Never a secret `sk.` token: `assertProductionEnv` refuses it.
 
-A production build with `EXPO_PUBLIC_APP_ENV=production` and a missing legal URL fails at `apps/mobile/app.config.ts`.
+A production build with `EXPO_PUBLIC_APP_ENV=production` and a missing legal URL or Mapbox token fails at
+`apps/mobile/app.config.ts`. Before launch the Mapbox account needs a payment card: without one its free tier is limited
+to 100 monthly active users, and every reinstall counts as a new one. Set Mapbox usage alerts at the same time.
+
+## 1b. EAS environment — preview (staging)
+
+The `preview` profile reads the EAS **preview** environment; `eas.json` sets only `EXPO_PUBLIC_APP_ENV=staging`.
+
+- `EXPO_PUBLIC_API_URL` — the staging API over https: the tunnel today, `https://api-staging.buybusinessclass.com`
+  once the company DNS points there. `assertStagingEnv` refuses a build or an update without it. Changing it needs an
+  OTA update only, never a new build.
+- `EXPO_PUBLIC_MAPBOX_TOKEN` — the same `pk.` token. Without it the app draws the fallback globe.
+
+**Native modules change the runtime.** Adding or upgrading one (Mapbox, for instance) needs a new build _and_ a new
+`version` in `app.json`: `runtimeVersion` follows the app version, so OTA updates for the new version never reach an
+older APK that lacks the module — `@rnmapbox/maps` throws on import there.
 
 ## 2. Review account
 

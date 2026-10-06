@@ -4,7 +4,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
-import { ErrorState, GlobeFallback, HomeSheet, SearchField, tokens } from "@bbc/ui";
+import { ErrorState, HomeSheet, SearchField, tokens } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { OfflineBanner } from "@/features/explore/OfflineBanner";
@@ -14,6 +14,7 @@ import { SheetRest, useExploreHome } from "@/features/explore/SheetRest";
 import { SheetSelected } from "@/features/explore/SheetSelected";
 import { rememberAirport } from "@/features/explore/recent-airports";
 import { SheetTyping } from "@/features/explore/SheetTyping";
+import { Globe } from "@/features/globe/Globe";
 import { useDestinations } from "@/features/globe/useDestinations";
 import { useSearch } from "@/features/search/useSearch";
 import { fetchProfile, type Profile } from "@/lib/api";
@@ -28,7 +29,7 @@ export default function ExploreScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const { home, homeLoading, homeError, defaultFrom, retryHome } = useExploreHome();
   const { state, dispatch, retry } = useSearch({ defaultFrom });
-  const { pins, homeCoord, pinToAirport } = useDestinations(home, state.to?.code ?? null);
+  const { pins, homeCoord, pinToAirport } = useDestinations(home, state.to);
 
   useEffect(() => {
     void (async () => {
@@ -100,12 +101,17 @@ export default function ExploreScreen() {
 
   return (
     <View testID="explore.root" style={styles.root}>
+      {/* The globe first: Mapbox draws an opaque map, so the banner must sit above it. */}
+      <Globe
+        pins={pins}
+        home={homeCoord}
+        selected={state.to?.code ?? null}
+        onSelect={onSelectPin}
+        state={state.to ? "selected" : "rest"}
+        sheetIndex={sheetIndex}
+        hidden={sheetIndex >= 2}
+      />
       <OfflineBanner topInset={insets.top} onOfflineChange={setOffline} />
-      {sheetIndex < 2 ? (
-        <View style={styles.globeWrap} pointerEvents="box-none">
-          <GlobeFallback pins={pins} home={homeCoord} selected={state.to?.code ?? null} onSelect={onSelectPin} />
-        </View>
-      ) : null}
       <HomeSheet index={sheetIndex} onChange={setSheetIndex}>
         {homeError ? (
           <ErrorState
@@ -157,14 +163,6 @@ export default function ExploreScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: tokens.colors.primary },
-  globeWrap: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 520,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  // Figma P3.1 / P3.2: the night page behind the globe.
+  root: { flex: 1, backgroundColor: tokens.colors.surfaceNight },
 });

@@ -1,6 +1,7 @@
 # ADR-IMPL-033 — The Explore globe
 
-Status: accepted · Date: 2026-10-02
+Status: accepted · Date: 2026-10-02 · Superseded in part by ADR-IMPL-035 (Mapbox), 2026-10-05: this drawn globe
+remains the fallback — e2e builds, no Mapbox token or native module, a Mapbox failure.
 
 **Context.** Explore shows a flat disc with pins. Figma specifies a rotating orthographic globe with real land, and rotation and zoom are wanted now.
 

@@ -6,7 +6,8 @@ import { tokens } from "../tokens";
 import { createGlobeEngine } from "./globe-engine";
 import { GLOBE_SPEC, haloOpacity, projector, routeArcPath } from "./globe-logic";
 
-export type Pin = { code: string; lat: number; lng: number; hasOffer: boolean; fromPrice: string };
+/** `city` names the pin for screen readers; `fromPrice` is empty for a destination chosen from search without a fare. */
+export type Pin = { code: string; city?: string; lat: number; lng: number; hasOffer: boolean; fromPrice: string };
 
 type Props = {
   pins: Pin[];
@@ -95,7 +96,9 @@ export function GlobeFallback({ pins, home, selected, onSelect, size = 520 }: Pr
               key={pin.code}
               testID={`globe.pin.${pin.code}`}
               accessibilityRole="button"
-              accessibilityLabel={`${pin.code}, ${pin.fromPrice}`}
+              accessibilityLabel={
+                pin.fromPrice ? `${pin.city ?? pin.code}, from ${pin.fromPrice}` : (pin.city ?? pin.code)
+              }
               onPress={() => onSelect(pin.code)}
               style={[styles.hit, { left: xy[0] - hit / 2, top: xy[1] - hit / 2, width: hit, height: hit }]}
             >
