@@ -92,6 +92,8 @@ export default function MapboxGlobe({
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
   const [clock, setClock] = useState(0);
   const [a11yIndex, setA11yIndex] = useState(0);
+  // The Camera mounts only after the map has its layout: framing waits for the map to finish loading.
+  const [mapReady, setMapReady] = useState(false);
 
   const moving = appActive && !hidden && !reducedMotion;
 
@@ -137,11 +139,14 @@ export default function MapboxGlobe({
   const homeLat = home?.lat;
   const homeLng = home?.lng;
   useEffect(() => {
+    if (!mapReady) return;
     // A programmatic move counts as a touch: the slow turn waits until this framing has settled.
     view.current.touchedAt = Date.now();
     const duration = reducedMotion ? 0 : MOVE_MS.frame;
     if (destLat === undefined || destLng === undefined) {
       camera.current?.setCamera({
+        // Back to Figma's opening view: the idle turn resumes from there, not from the last route.
+        centerCoordinate: [...OPENING_CENTER],
         zoomLevel: FIGMA_ZOOM,
         padding: globePadding("rest", size.height),
         animationDuration: duration,
@@ -158,7 +163,7 @@ export default function MapboxGlobe({
       animationDuration: duration,
       animationMode: "easeTo",
     });
-  }, [destLat, destLng, homeLat, homeLng, size.width, size.height, reducedMotion]);
+  }, [mapReady, destLat, destLng, homeLat, homeLng, size.width, size.height, reducedMotion]);
 
   function onCameraChanged(s: MapState) {
     const [lng = OPENING_CENTER[0], lat = OPENING_CENTER[1]] = s.properties.center;
@@ -232,6 +237,11 @@ export default function MapboxGlobe({
         attributionPosition={{ bottom: ornament.bottom, right: 8 }}
         onCameraChanged={onCameraChanged}
         onMapLoadingError={onFailed}
+        onDidFinishLoadingMap={() => setMapReady(true)}
+        // A tap on the ocean moves nothing, but it is a touch: the slow turn pauses for it too.
+        onPress={() => {
+          view.current.touchedAt = Date.now();
+        }}
       >
         <Camera
           ref={camera}

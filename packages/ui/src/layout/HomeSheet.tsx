@@ -19,6 +19,9 @@ export function HomeSheet({ index, onChange, children }: Props) {
     <BottomSheet
       index={index}
       snapPoints={[...SNAP_POINTS]}
+      // v5 sizes to content by default and inserts that height as an extra snap, shifting every index. Explore and the
+      // globe read indices as HOME_SHEET_SNAPS: keep exactly these three.
+      enableDynamicSizing={false}
       onChange={onChange}
       enablePanDownToClose={false}
       animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
