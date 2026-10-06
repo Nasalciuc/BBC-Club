@@ -8,6 +8,7 @@ module.exports = {
   "surface-card": "#FFFFFF",
   "surface-panel": "#1E293B",
   "surface-muted": "#334155",
+  "surface-night": "#0F172A",
   "text-primary": "#1E293B",
   "text-secondary": "#64748B",
   "text-tertiary": "#94A3B8",

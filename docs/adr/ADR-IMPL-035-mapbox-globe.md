@@ -1,0 +1,44 @@
+# ADR-IMPL-035 — The Explore globe on Mapbox
+
+Status: accepted · Date: 2026-10-05 · Decided by: the owner · Supersedes: ADR-IMPL-033 "Why not Mapbox"
+
+**Context.** The drawn globe (ADR-IMPL-033) ships by OTA and matches Figma, but members could tap only London: Paris
+sat 13 points from it under London's 48-point tap area, Tokyo and Singapore were on the far side, Dubai fell off a
+393-point screen, and a chosen route was framed behind the sheet. The owner wants the globe on Mapbox now.
+
+**Decision.** Explore draws its globe with `@rnmapbox/maps` 10.3.7 on the Mapbox Maps SDK 11.23.1, globe projection.
+
+- **Style in code, not Mapbox Studio** (`MapboxGlobe.tsx`): ocean `surface-panel`, land `surface-muted`, space and
+  horizon `surface-night`, no labels, no roads. The land is the same Natural Earth data as the drawn globe (`landFor`),
+  as a GeoJSON source: no tiles are downloaded, the globe works offline, and the shapes match Figma.
+- **Sizes from Figma** (`globe-geo.ts`, tested): zoom 1.605 gives Figma's 248-point radius; pinch 1×–3×; pins 8 / 12
+  points, offer halos 28 pulsing every 2 s; the route is a dashed great circle, unwrapped across the antimeridian.
+- **Taps** (`pickPin`): the nearest pin wins; only a tap that lands between two pins (within 8 points of both) zooms
+  toward them. Home is drawn, never picked.
+- **Framing** (`routeCamera`, `globePadding`): London, Paris or Rome from New York keep Figma's opening view; any
+  other route centres its great-circle midpoint and zooms out until both ends fit the width, above the sheet.
+- **Motion**: Figma's 3° a second westward turn, paused by a touch and resumed after 4 s; none with reduced motion.
+- **Mapbox's logo and attribution** stay visible, as Mapbox's terms require, just above the sheet's top edge.
+- **Telemetry is off** (`setTelemetryEnabled(false)`). Mapbox still receives an anonymous identifier to count monthly
+  active users; `docs/store/data-safety.md` and `app-privacy.md` say so.
+- **Accessibility**: the map is one adjustable element — swiping up and down walks the destinations, a double tap
+  chooses one.
+- **Fallback** (`Globe.tsx`): the e2e APK (Maestro taps the drawn pins, offline), a build without a token, a build
+  without the native module, and any Mapbox error at render all draw `GlobeFallback`. `@rnmapbox/maps` throws on
+  import without its native module, so it is loaded through `import()` only after `NativeModules.RNMBXModule` exists.
+- **Versioning**: the app version moves to 0.2.0. `runtimeVersion` follows it, so OTA updates for 0.2.0 never reach a
+  0.1.0 APK that has no Mapbox.
+- **Environment**: `EXPO_PUBLIC_MAPBOX_TOKEN` (public `pk.` token) and the staging `EXPO_PUBLIC_API_URL` live in the
+  EAS environments, not in git (`docs/release.md` §1, §1b). Production refuses to build without the token, and refuses
+  a secret one.
+
+**Rejected.** MapLibre: its globe exists only in GL JS for the web, not in MapLibre Native, which React Native uses.
+Mapbox Studio styles: they move the design out of code review and need a style URL per environment. Mapbox vector
+tiles: Figma's globe has no detail they would add, and they cost requests and offline behaviour.
+
+**Costs.** A native build: every tester installs the 0.2.0 APK once. The APK grows by roughly 10–15 MB. Mapbox bills
+per monthly active user: the account needs a payment card before launch (without one the limit is 100 MAU, and each
+reinstall is a new one), plus usage alerts.
+
+**Rules that follow.** Any change to the native modules is a new build and a new app version. The drawn globe stays
+maintained: it is what e2e and any failure show.

@@ -25,8 +25,8 @@
       "extends": "base",
       "distribution": "internal",
       "channel": "preview",
+      "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api-staging.buybusinessclass.com",
         "EXPO_PUBLIC_APP_ENV": "staging"
       },
       "android": { "buildType": "apk" }

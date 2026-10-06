@@ -1,12 +1,35 @@
 import { describe, expect, it } from "bun:test";
-import { assertProductionEnv } from "./app.config";
+import { assertProductionEnv, assertStagingEnv } from "./app.config";
 
 const complete = {
   EXPO_PUBLIC_APP_ENV: "production",
   EXPO_PUBLIC_API_URL: "https://api.buybusinessclass.com",
   EXPO_PUBLIC_PRIVACY_URL: "https://buybusinessclass.com/privacy",
   EXPO_PUBLIC_TERMS_URL: "https://buybusinessclass.com/terms",
+  EXPO_PUBLIC_MAPBOX_TOKEN: "pk.test",
 };
+
+describe("assertStagingEnv", () => {
+  it("refuses a staging build without an https API address", () => {
+    expect(() => assertStagingEnv({ EXPO_PUBLIC_APP_ENV: "staging" })).toThrow(/EXPO_PUBLIC_API_URL/);
+    expect(() =>
+      assertStagingEnv({ EXPO_PUBLIC_APP_ENV: "staging", EXPO_PUBLIC_API_URL: "http://10.0.2.2:8000" }),
+    ).toThrow(/EXPO_PUBLIC_API_URL/);
+  });
+
+  it("accepts the tunnel or the company domain", () => {
+    expect(() =>
+      assertStagingEnv({
+        EXPO_PUBLIC_APP_ENV: "staging",
+        EXPO_PUBLIC_API_URL: "https://airport-time-resulted-expanded.trycloudflare.com",
+      }),
+    ).not.toThrow();
+  });
+
+  it("never checks another environment", () => {
+    expect(() => assertStagingEnv({ EXPO_PUBLIC_APP_ENV: "e2e" })).not.toThrow();
+  });
+});
 
 describe("assertProductionEnv", () => {
   it("names a missing privacy URL", () => {
@@ -30,7 +53,19 @@ describe("assertProductionEnv", () => {
       assertProductionEnv({
         EXPO_PUBLIC_APP_ENV: "production",
       }),
-    ).toThrow(/EXPO_PUBLIC_API_URL.*EXPO_PUBLIC_PRIVACY_URL.*EXPO_PUBLIC_TERMS_URL/s);
+    ).toThrow(/EXPO_PUBLIC_API_URL.*EXPO_PUBLIC_PRIVACY_URL.*EXPO_PUBLIC_TERMS_URL.*EXPO_PUBLIC_MAPBOX_TOKEN/s);
+  });
+
+  it("names a missing Mapbox token", () => {
+    expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_MAPBOX_TOKEN: undefined })).toThrow(
+      /EXPO_PUBLIC_MAPBOX_TOKEN/,
+    );
+  });
+
+  it("refuses a secret Mapbox token", () => {
+    expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_MAPBOX_TOKEN: "sk.secret" })).toThrow(
+      /EXPO_PUBLIC_MAPBOX_TOKEN/,
+    );
   });
 
   it("refuses an http API", () => {

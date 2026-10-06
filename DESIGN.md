@@ -11,6 +11,7 @@ colors:
   surface-card: "#FFFFFF"
   surface-panel: "#1E293B"
   surface-muted: "#334155"
+  surface-night: "#0F172A"
   text-primary: "#1E293B"
   text-secondary: "#64748B"
   text-tertiary: "#94A3B8"
@@ -209,6 +210,9 @@ components:
     backgroundColor: "{colors.surface-page}"
     textColor: "{colors.text-primary}"
     padding: "{spacing.lg}"
+  globe-page:
+    backgroundColor: "{colors.surface-night}"
+    textColor: "{colors.text-on-dark}"
   panel-subline:
     textColor: "{colors.text-on-dark-muted}"
     typography: "{typography.body-sm}"
