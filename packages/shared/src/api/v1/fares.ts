@@ -39,6 +39,23 @@ export const FareVM = z.object({
 });
 export type FareVM = z.infer<typeof FareVM>;
 
+/** Whether this runtime can show a time in `tz` — the check the catalogue import makes (assertIanaZone). Remembered per
+ *  name: a home screen repeats the same few zones. */
+const formattable = new Map<string, boolean>();
+function isFormattableZone(tz: string): boolean {
+  let ok = formattable.get(tz);
+  if (ok === undefined) {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: tz });
+      ok = true;
+    } catch {
+      ok = false; // "", "not/a_zone", or a runtime without Intl
+    }
+    if (formattable.size < 1000) formattable.set(tz, ok);
+  }
+  return ok;
+}
+
 export const AirportVM = z.object({
   code: z.string().length(3),
   city: z.string(),
@@ -47,8 +64,9 @@ export const AirportVM = z.object({
   lat: z.number(),
   lng: z.number(),
   /** IANA zone, for the local time at the destination. Optional both ways: an older server sends none. Display-only:
-   *  a malformed value becomes undefined instead of failing the whole response. */
-  tz: z.string().optional().catch(undefined),
+   *  a zone this runtime cannot format in ("", "not/a_zone", a number) becomes undefined instead of failing the whole
+   *  response, and the local time is simply not shown. */
+  tz: z.string().refine(isFormattableZone).optional().catch(undefined),
 });
 export type AirportVM = z.infer<typeof AirportVM>;
 

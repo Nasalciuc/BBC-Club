@@ -64,8 +64,14 @@ describe("search contract — both upgrade orders", () => {
     }
   });
 
-  it("a malformed time zone never breaks an airport — it becomes undefined", () => {
-    expect(AirportVM.parse({ ...jfk, tz: 7 }).tz).toBeUndefined();
-    expect(AirportVM.parse({ ...jfk, tz: "America/New_York" }).tz).toBe("America/New_York");
+  it("a time zone the app cannot format in never breaks an airport — it becomes undefined", () => {
+    for (const odd of [7, "", "not/a_zone", "UTC+3", " Europe/Paris"]) {
+      expect(AirportVM.parse({ ...jfk, tz: odd }).tz).toBeUndefined();
+    }
+    for (const tz of ["America/New_York", "Europe/Chisinau", "UTC"])
+      expect(AirportVM.parse({ ...jfk, tz }).tz).toBe(tz);
+    const search = SearchResultVM.parse({ from: { ...jfk, tz: "" }, to: zrh, items: [], offer: null, estimate });
+    expect(search.from.tz).toBeUndefined();
+    expect(search.estimate).toEqual(estimate); // the rest of the search is untouched
   });
 });

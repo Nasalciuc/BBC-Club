@@ -49,7 +49,8 @@ hold them (owner, 7 Oct 2026).
   list does not cover (`UNCONFIRMED_COUNTRIES`: AM, AZ, CY, GE, GL, KZ, RU — the formula would guess, and Cyprus priced
   as Asia is not Cyprus priced as Europe). A country leaves that set once one route is compared with the site.
 - **Resilient contract** — the app parses the whole search with `SearchResultVM`; `estimate` is `.catch(null)` and
-  `AirportVM.tz` is `.catch(undefined)`, so a value this app does not understand hides the estimate or the zone instead of
+  `AirportVM.tz` is `.catch(undefined)` — with a zone this runtime cannot format in counted as not understood (the
+  check the catalogue import makes) — so a value this app does not understand hides the estimate or the zone instead of
   failing the search.
 - **Flags** — `catalog.estimates` (the module's convention, like `catalog.search_events`), off unless set; seeded off by
   `scripts/seed-flags.ts` at the next bootstrap, insert-only. Both rows are read only when a search has no fare, so
