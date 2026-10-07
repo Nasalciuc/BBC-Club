@@ -23,7 +23,7 @@ async function seedVolume() {
       ('FCO','Fiumicino','Rome','Italy','IT','europe',41.8003,12.2389,80,'Europe/Rome'),
       ('DXB','Dubai International','Dubai','United Arab Emirates','AE','middle_east',25.2532,55.3657,92,'Asia/Dubai'),
       ('HND','Haneda','Tokyo','Japan','JP','asia',35.5494,139.7798,94,'Asia/Tokyo')
-    ON CONFLICT (code) DO NOTHING`);
+    ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, city = EXCLUDED.city, country = EXCLUDED.country, country_code = EXCLUDED.country_code, region = EXCLUDED.region, lat = EXCLUDED.lat, lng = EXCLUDED.lng, popularity = EXCLUDED.popularity, tz = EXCLUDED.tz`);
   await iso.db.execute(
     sql.raw(`
     INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, nonstop, price, currency, source, valid_from, valid_until, published)

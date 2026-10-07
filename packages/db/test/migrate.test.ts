@@ -96,6 +96,7 @@ describe("extras ledger", () => {
       "0020_platform_pg_stat_statements.sql",
       "0021_requests_intent.sql",
       "0022_platform_kafka_processed_extras.sql",
+      "0023_catalog_airports_search.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

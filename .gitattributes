@@ -5,3 +5,4 @@ infra/bootstrap.sh text eol=lf
 infra/deploy.sh text eol=lf
 infra/caddy/cloudflare_ranges.caddy text eol=lf
 packages/shared/src/net/cloudflare-ranges.ts text eol=lf
+packages/db/seeds/*.tsv text eol=lf -whitespace

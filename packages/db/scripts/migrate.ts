@@ -8,6 +8,7 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createDb } from "../src/client";
+import { loadAirportsReference } from "./airports-reference";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -341,6 +342,26 @@ try {
       console.log("pg_stat_statements applied");
     }
   }
+
+  // After 0006 (catalog schema): pg_trgm, unaccent and airports.search_terms. ADR-IMPL-036.
+  const airportsSearch = join(migrationsDir, "0023_catalog_airports_search.sql");
+  if (existsSync(airportsSearch)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0023_catalog_airports_search.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(airportsSearch, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0023_catalog_airports_search.sql')`);
+      });
+      console.log("catalog airports search applied");
+    }
+  }
+
+  // Insert-only: airports that exist (curated seed, catalogue import) keep their values. ADR-IMPL-036.
+  const added = await loadAirportsReference(db);
+  if (added) console.log(`airports reference: ${added} added`);
 
   console.log("migrations up to date");
   process.exit(0);

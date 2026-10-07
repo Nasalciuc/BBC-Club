@@ -218,7 +218,7 @@ export async function testApp(
           ('CDG', 'Charles de Gaulle', 'Paris', 'France', 'FR', 'europe', 49.0097, 2.5479, 95),
           ('HND', 'Haneda', 'Tokyo', 'Japan', 'JP', 'asia', 35.5494, 139.7798, 94),
           ('DXB', 'Dubai International', 'Dubai', 'United Arab Emirates', 'AE', 'middle_east', 25.2532, 55.3657, 92)
-        ON CONFLICT (code) DO NOTHING`);
+        ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, city = EXCLUDED.city, country = EXCLUDED.country, country_code = EXCLUDED.country_code, region = EXCLUDED.region, lat = EXCLUDED.lat, lng = EXCLUDED.lng, popularity = EXCLUDED.popularity`);
       const until = new Date(Date.now() + 30 * 86_400_000).toISOString();
       const from = new Date(Date.now() - 86_400_000).toISOString();
       const carriers = [

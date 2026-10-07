@@ -101,6 +101,13 @@ export const airports = catalog.table(
     lng: numeric("lng", { precision: 9, scale: 6 }).notNull(),
     popularity: integer("popularity").notNull().default(0),
     tz: text("tz").notNull().default("UTC"),
+    /** Other names a member may type: metro and former codes (LON, KIV), the town it sits in. Search only. */
+    searchTerms: text("search_terms"),
+    /** Lower-case, accent-free copies for search, written only by the airports_normalize trigger (0023). Never set them. */
+    cityNorm: text("city_norm"),
+    nameNorm: text("name_norm"),
+    countryNorm: text("country_norm"),
+    termsNorm: text("terms_norm"),
     createdAt: createdAt(),
   },
   (t) => [index("airports_city").on(t.city), index("airports_region").on(t.region)],

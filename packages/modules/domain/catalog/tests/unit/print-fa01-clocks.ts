@@ -38,6 +38,7 @@ const vm = toFareVM(
       lng: "-73.778100",
       popularity: 100,
       tz: "America/New_York",
+      searchTerms: null,
       createdAt: new Date("2026-09-01T00:00:00.000Z"),
     },
     to: {
@@ -51,6 +52,7 @@ const vm = toFareVM(
       lng: "-0.454300",
       popularity: 98,
       tz: "Europe/London",
+      searchTerms: null,
       createdAt: new Date("2026-09-01T00:00:00.000Z"),
     },
   },
