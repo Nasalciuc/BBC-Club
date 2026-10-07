@@ -3,7 +3,7 @@ import type { airports, fares } from "@bbc/db/schema/catalog";
 import { calendarDayOffset, formatInZone } from "./flight-local";
 
 type FareRow = typeof fares.$inferSelect;
-type AirportRow = typeof airports.$inferSelect;
+type AirportRow = Omit<typeof airports.$inferSelect, "cityNorm" | "nameNorm" | "countryNorm" | "termsNorm">;
 
 export function toAirportVM(row: AirportRow): AirportVM {
   return {

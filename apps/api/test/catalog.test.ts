@@ -64,6 +64,36 @@ describe("catalog routes", () => {
     await t.close();
   });
 
+  // ADR-IMPL-036: the reference airports make any city findable; the search forgives accents, typos and nicknames.
+  it("GET /v1/airports finds what members actually type", async () => {
+    const t = await testApp({ suite: "catalog-airport-search" });
+    await t.seedCatalogBasics();
+    const codes = async (q: string) => {
+      const r = await t.app.request(`/v1/airports?q=${encodeURIComponent(q)}`, {
+        headers: { Cookie: t.memberA.cookie },
+      });
+      expect(r.status).toBe(200);
+      return ((await r.json()) as { code: string }[]).map((a) => a.code);
+    };
+    expect((await codes("LHR"))[0]).toBe("LHR"); // the exact code comes first
+    expect(await codes("lodon")).toContain("LHR"); // a typo
+    expect(await codes("new yrok")).toContain("JFK");
+    expect(await codes("Zürich")).toContain("ZRH"); // accents either way
+    expect(await codes("Chișinău")).toContain("RMO");
+    expect(await codes("sao paulo")).toContain("GRU");
+    expect(await codes("KIV")).toContain("RMO"); // Chișinău's former code
+    expect(await codes("TYO")).toContain("NRT"); // a metro code
+    expect(await codes("Bucharest")).toContain("OTP"); // the city served, not the town (Otopeni)
+    expect(await codes("new york")).toContain("EWR"); // Newark serves New York
+    expect(await codes("Japan")).toEqual(expect.arrayContaining(["HND", "NRT"])); // a country
+    expect((await codes("UK"))[0]).toBe("LHR"); // a country nickname means the country, busiest first
+    expect((await codes("USA"))[0]).toBe("JFK"); // not the regional airport whose code is USA
+    expect((await codes("lo")).length).toBeLessThanOrEqual(8);
+    expect(await codes("%")).toEqual([]); // a wildcard character is matched literally, not as "anything"
+    expect(await codes("_")).toEqual([]);
+    await t.close();
+  });
+
   it("unauthenticated search → 401; import requires internal secret", async () => {
     const t = await testApp({ suite: "catalog-authz" });
     expect((await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business")).status).toBe(401);
@@ -198,6 +228,7 @@ describe("fare parity", () => {
           lng: "0",
           popularity: 0,
           tz: "America/New_York",
+          searchTerms: null,
           createdAt: now,
         },
         to: {
@@ -211,6 +242,7 @@ describe("fare parity", () => {
           lng: "0",
           popularity: 0,
           tz: "Europe/London",
+          searchTerms: null,
           createdAt: now,
         },
       },

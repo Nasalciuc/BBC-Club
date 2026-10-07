@@ -42,6 +42,7 @@ export function mapFa01(): FareVM {
         lng: "-73.778100",
         popularity: 100,
         tz: "America/New_York",
+        searchTerms: null,
         createdAt: now,
       },
       to: {
@@ -55,6 +56,7 @@ export function mapFa01(): FareVM {
         lng: "-0.454300",
         popularity: 98,
         tz: "Europe/London",
+        searchTerms: null,
         createdAt: now,
       },
     },

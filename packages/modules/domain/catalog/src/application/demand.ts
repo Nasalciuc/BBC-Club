@@ -29,11 +29,21 @@ export function demandKeys(day: string) {
   };
 }
 
+/** RESERVE / INITBYPROB fail once the day's sketch exists — the normal case after the first search. Any other error
+ *  (connection, memory, wrong type) is real and surfaces. */
+export async function createOnce(op: Promise<unknown>): Promise<void> {
+  try {
+    await op;
+  } catch (e) {
+    if (!/already exists|item exists|key exists/i.test(e instanceof Error ? e.message : String(e))) throw e;
+  }
+}
+
 async function ensure(redis: Sketch, day: string) {
   const keys = demandKeys(day);
-  await redis.topK.reserve(keys.routes, TOP).catch(() => undefined);
-  await redis.cms.initByProb(keys.counts, 0.01, 0.001).catch(() => undefined);
-  await redis.cms.initByProb(keys.nofare, 0.01, 0.001).catch(() => undefined);
+  await createOnce(redis.topK.reserve(keys.routes, TOP));
+  await createOnce(redis.cms.initByProb(keys.counts, 0.01, 0.001));
+  await createOnce(redis.cms.initByProb(keys.nofare, 0.01, 0.001));
 }
 
 /** One accepted search event. The caller already dropped identity fields. */
