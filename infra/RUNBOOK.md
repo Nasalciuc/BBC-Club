@@ -98,6 +98,36 @@ ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;
 
 Deliveries queue up as `paused`; resume with the same flag `false`, then `poller.resume(consumer)` via `POST /v1/internal/run/queue-health`.
 
+## Price rules for estimates (ADR-IMPL-037)
+
+The company's price rules are not in the repository. The owner keeps `pricing-rules.json` (one line of JSON) off the
+server and pipes it in over SSH, so it never lands on the disk. Check first — `--dry-run` prints the fingerprint and the
+poster check and writes nothing — then write:
+
+```bash
+# staging
+ssh <server> 'docker exec -i "$(docker ps -qf name=bbc-api-staging | head -1)" bun run scripts/load-pricing-rules.ts --dry-run' < pricing-rules.json
+ssh <server> 'docker exec -i "$(docker ps -qf name=bbc-api-staging | head -1)" bun run scripts/load-pricing-rules.ts' < pricing-rules.json
+# production: through the single worker (a name filter for the API would also match staging)
+ssh <server> 'cd <checkout> && docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker bun run scripts/load-pricing-rules.ts --dry-run' < pricing-rules.json
+ssh <server> 'cd <checkout> && docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker bun run scripts/load-pricing-rules.ts' < pricing-rules.json
+```
+
+Windows PowerShell has no `<`: `Get-Content -Raw pricing-rules.json | ssh <server> '…'` does the same.
+
+The poster check must equal the poster (JFK → ZRH, business, round trip). Searches use the new rules within ~35 s. Then
+estimates on, in that environment's database (staging: `docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`;
+production only after the company's written approval). Off is the same with `false` (~35 s):
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.estimates','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+```
+
+Which rules are live: `SELECT value->>'fingerprint', value->>'loadedAt' FROM platform.flags WHERE key = 'catalog.pricing_rules';`.
+`bbc_search_estimates_unavailable{reason}` rising while estimates are on: the rules are missing (load them) or were
+edited by hand (load them again). Never edit that row by hand; never paste the file into a chat, an issue or a log.
+
 ## The queue is stuck (oldest pending > 5 min)
 
 1. `curl -s localhost:8000/metrics | grep queue_` — depth, age, dead.

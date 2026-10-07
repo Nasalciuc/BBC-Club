@@ -59,6 +59,8 @@ infra/env/*.env
 *.sql.gz
 google-play-service-account.json
 *service-account*.json
+# The company's price rules (ADR-IMPL-037): the owner keeps them, the server and CI hold them — never this repository.
+*pricing-rules*.json
 
 # ── regenerable artefacts (never committed; `graphify update` rebuilds them) ──
 graphify-out/

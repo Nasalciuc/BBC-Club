@@ -15,6 +15,11 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
   ["app.min_supported_version", { variant: "0.1.0" }, "forced-update threshold served by /v1/app-config"],
   ["catalog.search_events", { enabled: false }, "ADR-032: search events stay off until an operator turns them on"],
   ["jobs.push.transport", { variant: "pg" }, "ADR-031: push dispatch stays in Postgres until variant=streams"],
+  [
+    "catalog.estimates",
+    { enabled: false },
+    "ADR-IMPL-037: formula estimates stay off until an operator turns them on (production: after the company's written approval)",
+  ],
 ];
 
 try {

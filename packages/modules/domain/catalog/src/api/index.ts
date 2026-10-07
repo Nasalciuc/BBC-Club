@@ -1,10 +1,10 @@
 import type { Executor } from "@bbc/db";
-import type { fares, airports } from "@bbc/db/schema/catalog";
+import type { fares } from "@bbc/db/schema/catalog";
 import { toAirportVM, toFareVM } from "../application/to-fare-vm";
 
 export type FareRow = typeof fares.$inferSelect;
-/** An airport as the catalog serves it. The *Norm search columns are the trigger's (0023), internal to search. */
-export type AirportRow = Omit<typeof airports.$inferSelect, "cityNorm" | "nameNorm" | "countryNorm" | "termsNorm">;
+export type { AirportRow } from "../application/to-fare-vm";
+import type { AirportRow } from "../application/to-fare-vm";
 
 export { toAirportVM, toFareVM };
 

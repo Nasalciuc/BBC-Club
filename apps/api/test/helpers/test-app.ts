@@ -93,6 +93,8 @@ export async function testApp(
     flags: {
       kill: (m: string) => built.platform.flags.set(`${m}.killed`, { enabled: true }),
       revive: (m: string) => built.platform.flags.set(`${m}.killed`, { enabled: false }),
+      set: (key: string, value: { enabled?: boolean; variant?: string; [k: string]: unknown }) =>
+        built.platform.flags.set(key, value),
     },
     /** Rebuild the host on the same isolated DB (killswitch / boot-time flags). */
     async restart() {
