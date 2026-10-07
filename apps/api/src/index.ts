@@ -21,6 +21,7 @@ import { authorize, registerRoute } from "./middleware/authorize";
 import { rateLimit } from "./middleware/rate-limit";
 import { ModuleRegistry } from "./registry";
 import { appConfig } from "./presentation/mobile/app-config";
+import { staleJobs } from "./cron/stale";
 import { modules } from "./modules"; // the ordered list of ModuleDescriptors (identity, members, proposals, …)
 
 export type BuildOptions = {
@@ -132,9 +133,8 @@ export async function buildApp(opts: BuildOptions = {}) {
     const h = await platform.health().catch(() => ({ ok: false, queue: null }));
     checks.queue = h.queue;
     const runs = await platform.jobs.lastRuns().catch(() => ({}));
-    const stale = Object.entries(runs)
-      .filter(([, r]) => r.at && Date.now() - new Date(r.at).getTime() > 36 * 3600_000)
-      .map(([j]) => j);
+    // Each scheduled job against its own schedule; manual and removed jobs never count (src/cron/stale.ts).
+    const stale = staleJobs(runs, platform.jobs.schedule());
     checks.staleJobs = stale;
     const ok = checks.db === true && h.ok && stale.length === 0;
     return c.json({ ok, ...checks }, ok ? 200 : 503);
