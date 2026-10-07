@@ -87,8 +87,20 @@ export function authOrigins(env: ServerEnv): string[] {
   return [env.APP_ORIGIN, `${env.MOBILE_SCHEME}://`, ...parseCorsOrigins(env.CORS_ORIGINS)];
 }
 
+/**
+ * An empty value means unset where the schema rejects "" — `REVIEW_ACCOUNT_EMAIL=` in an env file must not fail the
+ * email check and stop the server; an empty `CRM_ADAPTER=` takes its default. Where the schema itself accepts ""
+ * (`OPS_WEBHOOK`, `CORS_ORIGINS`), the empty value is kept exactly as written. Read from the schema, not from a list.
+ */
+export function withoutRejectedEmptyValues(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const shape = ServerEnv.shape as Record<string, z.ZodTypeAny>;
+  return Object.fromEntries(
+    Object.entries(source).filter(([key, value]) => value !== "" || !shape[key] || shape[key].safeParse("").success),
+  );
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
-  const parsed = ServerEnv.safeParse(source);
+  const parsed = ServerEnv.safeParse(withoutRejectedEmptyValues(source));
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n  ");
     throw new Error(`Invalid environment:\n  ${missing}`);
