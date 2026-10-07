@@ -10,7 +10,7 @@ permissions:
   contents: read
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       DATABASE_URL: postgres://bbc:bbc@localhost:55432/bbc_test
@@ -19,10 +19,10 @@ jobs:
       INTERNAL_API_SECRET: ci-internal-ci-internal-ci-internal-0
       APP_ORIGIN: http://localhost:8000
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         # origin/main for check-destructive-migrations (it reads only migrations new or changed on this branch)
         with: { fetch-depth: 0 }
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with: { bun-version: "1.3.4" }
 
       - name: Refuse tracked store secrets
@@ -41,6 +41,10 @@ jobs:
           docker compose -f infra/compose.test.yml up -d --wait
 
       - run: bun install --frozen-lockfile
+      # Every package.json and bun.lock agree. --frozen-lockfile let a workspace dependency added without a lockfile
+      # update pass (#55); regenerating the lockfile and diffing catches it.
+      - name: Lockfile in sync with every package.json
+        run: bun install --lockfile-only && git diff --exit-code -- bun.lock
       - run: bun test scripts/env-profile.test.ts
       # Official binary — npm `gitleaks` / bunx stubs have no usable CLI.
       - name: Install gitleaks
@@ -61,6 +65,17 @@ jobs:
       - run: bun run sql:columns
       # New or changed migrations: DROP / TRUNCATE / ALTER … TYPE / DELETE without WHERE need `-- destructive: <reason>`.
       - run: bun run migrations:destructive
+      # The drizzle snapshot matches the schema: generate must propose nothing. A drifted snapshot once made generate
+      # emit a migration that recreated existing objects and would have failed on every existing database.
+      - name: Drizzle snapshot matches the schema
+        run: |
+          # stdin closed and a time limit: an interactive question (a rename?) fails fast instead of hanging the job.
+          (cd packages/db && timeout 120 bun run db:generate < /dev/null)
+          if [ -n "$(git status --porcelain -- packages/db/migrations)" ]; then
+            git status --porcelain -- packages/db/migrations
+            echo "drizzle-kit generate produced a migration: commit it, or (if the objects come from a named step) a no-op sync like 20261007131000_snapshot_sync"
+            exit 1
+          fi
 
       - run: bun run --filter @bbc/db db:migrate
       - run: bun run test:unit
