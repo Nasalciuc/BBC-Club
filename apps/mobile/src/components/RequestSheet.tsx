@@ -276,6 +276,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             <Button
               testID="request.submit"
               label={busy ? "Sending…" : sheetTitle(state.mode)}
+              variant="primary"
               busy={busy}
               shape="pill"
               onPress={() => void onSubmit()}

@@ -37,7 +37,7 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
   }));
 
   async function onSave() {
-    const parsed = validatePhone(phone, country);
+    const parsed = validatePhone(phone, country, "profile");
     if (!parsed.valid) {
       setError(parsed.error);
       return;
@@ -88,7 +88,8 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
 
         <Button
           testID="profile.phone.save"
-          label={busy ? "Saving…" : "Save"}
+          label={busy ? "Saving…" : "Save phone"}
+          variant="primary"
           busy={busy}
           shape="pill"
           onPress={() => void onSave()}

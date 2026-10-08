@@ -20,6 +20,8 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Figma 238:5260 · Password saved: the sheet stays, says so, and closes on Done.
+  const [saved, setSaved] = useState(false);
 
   useImperativeHandle(ref, () => ({
     present() {
@@ -28,6 +30,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       setConfirmPassword("");
       setBusy(false);
       setError(null);
+      setSaved(false);
       modalRef.current?.present();
     },
     dismiss() {
@@ -40,8 +43,9 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       setError("Enter your current password.");
       return;
     }
-    if (newPassword.length < 8) {
-      setError("New password must be at least 8 characters.");
+    if (newPassword.length < 8 || !/[\d\W]/.test(newPassword)) {
+      // The rule the sheet states (Figma 238:4974) — the same check Set password makes.
+      setError("At least 8 characters, with one number or symbol.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -57,7 +61,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       return;
     }
     onSaved(profile);
-    modalRef.current?.dismiss();
+    setSaved(true);
   }
 
   return (
@@ -70,36 +74,66 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       handleIndicatorStyle={styles.handle}
     >
       <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.password.sheet">
-        <View style={styles.header}>
-          <Text style={styles.title}>Password</Text>
-          <CloseButton testID="profile.password.close" onPress={() => modalRef.current?.dismiss()} />
-        </View>
+        {saved ? (
+          <>
+            <View style={styles.header}>
+              <Text style={styles.title}>Password updated</Text>
+              <CloseButton testID="profile.password.close" onPress={() => modalRef.current?.dismiss()} />
+            </View>
+            <Text style={styles.headline} testID="profile.password.saved">
+              Your new password is ready for your next sign-in.
+            </Text>
+            <Text style={styles.body}>Keep it private. We will never ask for your password by phone.</Text>
+            <Button
+              testID="profile.password.done"
+              label="Done"
+              variant="primary"
+              shape="pill"
+              onPress={() => modalRef.current?.dismiss()}
+            />
+          </>
+        ) : (
+          <>
+            <View style={styles.header}>
+              <Text style={styles.title}>Change password</Text>
+              <CloseButton testID="profile.password.close" onPress={() => modalRef.current?.dismiss()} />
+            </View>
 
-        <Field
-          testID="profile.password.current"
-          label="CURRENT"
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-          secure
-        />
-        <Field testID="profile.password.new" label="NEW" value={newPassword} onChangeText={setNewPassword} secure />
-        <Field
-          testID="profile.password.confirm"
-          label="CONFIRM"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secure
-        />
+            <Field
+              testID="profile.password.current"
+              label="CURRENT PASSWORD"
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secure
+            />
+            <Field
+              testID="profile.password.new"
+              label="NEW PASSWORD"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secure
+            />
+            <Field
+              testID="profile.password.confirm"
+              label="CONFIRM NEW PASSWORD"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secure
+            />
+            <Text style={styles.rule}>At least 8 characters, with one number or symbol.</Text>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Button
-          testID="profile.password.save"
-          label={busy ? "Saving…" : "Save"}
-          busy={busy}
-          shape="pill"
-          onPress={() => void onSave()}
-        />
+            <Button
+              testID="profile.password.save"
+              label={busy ? "Saving…" : "Save password"}
+              variant="primary"
+              busy={busy}
+              shape="pill"
+              onPress={() => void onSave()}
+            />
+          </>
+        )}
       </BottomSheetScrollView>
     </BottomSheetModal>
   );
@@ -159,4 +193,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
   },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  rule: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
+  headline: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },
+  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
 });

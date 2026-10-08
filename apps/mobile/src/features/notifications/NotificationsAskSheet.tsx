@@ -57,6 +57,7 @@ export const NotificationsAskSheet = forwardRef<NotificationsAskSheetHandle>(
           <Button
             testID="push-ask.turn-on"
             label="Turn on notifications"
+            variant="primary"
             shape="card"
             onPress={() => {
               void (async () => {

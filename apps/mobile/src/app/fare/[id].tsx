@@ -230,6 +230,7 @@ export default function FareDetailScreen() {
         <Button
           testID="fare.request"
           label="Request this fare"
+          variant="primary"
           shape="pill"
           onPress={() => sheetRef.current?.present({ fare, profile })}
         />

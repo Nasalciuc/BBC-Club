@@ -92,6 +92,7 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle, Props>(function
             <Button
               testID="notifications.openSettings"
               label="Open Settings"
+              variant="ghost"
               shape="pill"
               onPress={() => {
                 void Linking.openSettings();

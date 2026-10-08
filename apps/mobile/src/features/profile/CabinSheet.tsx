@@ -77,7 +77,8 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
 
         <Button
           testID="profile.cabin.save"
-          label={busy ? "Saving…" : "Save"}
+          label={busy ? "Saving…" : "Save cabin"}
+          variant="primary"
           busy={busy}
           shape="pill"
           onPress={() => void onSave()}

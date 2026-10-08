@@ -68,7 +68,8 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
 
         <Button
           testID="profile.travelers.save"
-          label={busy ? "Saving…" : "Save"}
+          label={busy ? "Saving…" : "Save travelers"}
+          variant="primary"
           busy={busy}
           shape="pill"
           onPress={() => void onSave()}

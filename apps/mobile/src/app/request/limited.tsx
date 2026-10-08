@@ -33,6 +33,7 @@ export default function RequestLimitedScreen() {
           <Button
             testID="request.rateLimited.call"
             label="Call your specialist"
+            variant="primary"
             shape="pill"
             onPress={() => void Linking.openURL(call)}
           />

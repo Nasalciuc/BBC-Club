@@ -65,6 +65,11 @@ are on request.` otherwise. The formula prices only routes touching North Americ
   field — offered, never chosen: the member taps it or types another. A zone that names no place (`UTC`, an
   abbreviation) asks nothing.
 
+- **Interior pills are navy** — Figma's Button is `Tone: Primary` on every light screen (EmptyState, ErrorState,
+  the request sheet, the calendar, the edit sheets, Fare detail, Continue); the code's `Button` defaults to `inverted`
+  (the light pill of the dark Entry screens), so those call sites now say `variant="primary"`. The default stays, for
+  Entry and for the confirmation screens, where Figma says Inverted.
+
 **Consequences.** Home is the screen Figma draws, in every state, and the three preferences the member sets on it
 reach the search and the request. Tests: `travel-preferences.test.ts` (labels, `when`, the North-America rule),
 `local-time.test.ts` (clock, DST, missing zone), `search-reducer.test.ts` (an estimate only on an empty result),

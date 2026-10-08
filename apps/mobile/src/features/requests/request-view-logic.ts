@@ -23,12 +23,13 @@ export function closedAt(r: { createdAt: string; timeline: readonly { status: st
 export function requestView(status: string, at?: string | null): RequestView {
   switch (status) {
     case "received":
+      // Figma 233:4248 (P5 / Request detail · received).
       return {
         badge: "received",
         showTimeline: true,
         timelineStatus: status,
-        sentence: null,
-        caption: null,
+        sentence: "We have your request. A specialist will call shortly to discuss your flight.",
+        caption: "We have your travel details.",
         closedLine: null,
       };
     case "assigned":
@@ -50,12 +51,13 @@ export function requestView(status: string, at?: string | null): RequestView {
         closedLine: null,
       };
     case "booked":
+      // Figma 233:4388 (P5 / Request detail · booked).
       return {
         badge: "booked",
         showTimeline: true,
         timelineStatus: status,
-        sentence: null,
-        caption: null,
+        sentence: "Your specialist completed this booking by phone. Your itinerary was sent by email.",
+        caption: "Your specialist confirms your flights.",
         closedLine: null,
       };
     case "closed":
@@ -87,6 +89,24 @@ export function requestView(status: string, at?: string | null): RequestView {
         closedLine: null,
       };
   }
+}
+
+/**
+ * The line under the in-progress list (Figma 233:4639 · Just received, 240:5199 · Not sent). One request that was just
+ * received is reassured; anything not sent is pointed at. Nothing otherwise.
+ */
+export function listHints(open: readonly { status: string }[]): string[] {
+  const notSent = open.filter((r) => r.status === "not_sent" || r.status === "queued").length;
+  if (notSent > 0) {
+    return [
+      notSent === 1 ? "One request needs your attention." : `${notSent} requests need your attention.`,
+      "Open your request to check the details and try again.",
+    ];
+  }
+  if (open.length === 1 && open[0]?.status === "received") {
+    return ["Your request is with us. A specialist will call shortly."];
+  }
+  return [];
 }
 
 function closedLine(at?: string | null): string {

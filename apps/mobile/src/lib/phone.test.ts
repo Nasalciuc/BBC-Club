@@ -16,7 +16,7 @@ describe("validatePhone", () => {
   it("rejects the screenshot digit string under US (regression)", () => {
     const r = validatePhone("154668456877", "US");
     expect(r.valid).toBe(false);
-    if (!r.valid) expect(r.error).toBe("That phone number doesn't look right.");
+    if (!r.valid) expect(r.error).toBe("Enter a complete phone number, including country code.");
   });
 
   it("rejects too-short input", () => {
@@ -51,7 +51,13 @@ describe("phone rules on 173:3619", () => {
   it("an invalid national string is rejected after submit", () => {
     const r = validatePhone("0000000", "US");
     expect(r.valid).toBe(false);
-    if (!r.valid) expect(r.error).toBe("That phone number doesn't look right.");
+    if (!r.valid) expect(r.error).toBe("Enter a complete phone number, including country code.");
+  });
+
+  it("Edit · Phone words the same rejection as its Figma frame does", () => {
+    const r = validatePhone("0000000", "US", "profile");
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.error).toBe("Enter a valid phone number, including the country code.");
   });
 
   it("a leading plus ignores the default country", () => {

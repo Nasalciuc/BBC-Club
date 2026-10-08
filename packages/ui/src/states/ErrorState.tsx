@@ -20,10 +20,12 @@ export function StateMessage({ title, body, primary, secondary, reference, testI
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.body}>{body}</Text>
       {primary ? (
+        // Figma ErrorState / StateMessage: the primary pill is Tone Primary (navy) on the light page.
         <Button
           testID={primary.testID ?? `${testID}.primary`}
           label={primary.label}
           onPress={primary.onPress}
+          variant="primary"
           shape="pill"
         />
       ) : null}
