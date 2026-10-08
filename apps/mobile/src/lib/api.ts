@@ -384,9 +384,12 @@ export async function searchFares(q: {
   from: string;
   to: string;
   cabin: "business" | "first";
+  /** ISO datetime: only fares valid at that instant. Omitted for flexible dates (the search that can estimate). */
+  when?: string;
 }): Promise<ApiResult<SearchResultVMType>> {
   return asResult(async () => {
     const params = new URLSearchParams({ from: q.from, to: q.to, cabin: q.cabin });
+    if (q.when) params.set("when", q.when);
     const res = await apiFetch(`/v1/search?${params}`);
     if (!res.ok) {
       return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);

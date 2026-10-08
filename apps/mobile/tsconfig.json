@@ -10,7 +10,8 @@
       "@bbc/shared/*": ["../../packages/shared/src/*"],
       "@bbc/ui": ["../../packages/ui/src/index.ts"],
       "@bbc/ui/tokens": ["../../packages/ui/src/tokens.ts"],
-      "@bbc/ui/icons": ["../../packages/ui/src/icons.tsx"]
+      "@bbc/ui/icons": ["../../packages/ui/src/icons.tsx"],
+      "@bbc/ui/calendar-logic": ["../../packages/ui/src/calendar/calendar-logic.ts"]
     },
     "noUncheckedIndexedAccess": false,
     "verbatimModuleSyntax": false

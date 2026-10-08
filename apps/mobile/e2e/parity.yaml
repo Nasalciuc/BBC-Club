@@ -32,3 +32,17 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "explore.search" }
 - assertVisible: { id: "explore.airportQuery" }
 - takeScreenshot: 104-838
+# ADR-IMPL-041 — Home as Figma draws it: Cancel leaves typing, a pin opens the route with its preference chips.
+- tapOn: { id: "explore.cancel" }
+- hideKeyboard
+- assertVisible: { id: "explore.search" }
+- tapOn: { id: "globe.pin.LHR" }
+- assertVisible: { id: "explore.chips" }
+- assertVisible: { id: "explore.quote" }
+- takeScreenshot: 89-387
+- tapOn: { id: "explore.chip.dates" }
+- assertVisible: { id: "dates.root" }
+- takeScreenshot: 325-5878
+- tapOn: { id: "dates.close" }
+- tapOn: { id: "explore.profile" }
+- assertVisible: { id: "profile.root" }

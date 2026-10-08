@@ -19,6 +19,7 @@ export { SearchField } from "./fields/SearchField";
 
 export { CarouselRow, OfferCard } from "./cards/OfferCard";
 export { FareRow } from "./cards/FareRow";
+export { ESTIMATE_COPY, EstimateRow } from "./cards/EstimateRow";
 export { fareFacts } from "./cards/fare-facts";
 export { RequestRow } from "./cards/RequestRow";
 

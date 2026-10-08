@@ -106,9 +106,11 @@ type Props = {
   home: HomeVM | null;
   homeLoading: boolean;
   onOpenOffer: (card: ProposalCardVM) => void;
+  /** Figma 89:386: `See all` beside OFFERS TO INSPIRE expands the sheet to every section (89:389). */
+  onSeeAll: () => void;
 };
 
-export function SheetRest({ home, homeLoading, onOpenOffer }: Props) {
+export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
   const inspire = home?.sections.find((s) => s.key === "inspire")?.items ?? [];
 
   if (homeLoading) {
@@ -122,7 +124,10 @@ export function SheetRest({ home, homeLoading, onOpenOffer }: Props) {
 
   return (
     <>
-      <SectionLabel label="Offers to inspire" />
+      <SectionLabel
+        label="Offers to inspire"
+        action={{ label: "See all", onPress: onSeeAll, testID: "explore.seeAll" }}
+      />
       <CarouselRow testID="explore.inspire">
         {inspire.map((item) => (
           <OfferCard
