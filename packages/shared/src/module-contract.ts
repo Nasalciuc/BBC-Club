@@ -61,6 +61,9 @@ export type ModulePlatform = {
     variant: (key: string, fallback: string) => Promise<string>;
     isKilled: (module: string) => Promise<boolean>;
     isConsumerPaused: (consumer: string) => Promise<boolean>;
+    /** The whole cached row value, or null (no row, or unreadable — it never throws). For settings an operator keeps
+     *  beside the module's flags (ADR-IMPL-037: `catalog.pricing_rules`); the caller validates the shape. */
+    read: (key: string) => Promise<Record<string, unknown> | null>;
   };
   events: {
     publish: (exec: unknown, input: PublishInput) => Promise<unknown>;

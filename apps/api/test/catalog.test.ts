@@ -3,6 +3,8 @@ import { testApp } from "./helpers/test-app";
 import { FareVM, AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
 import { toFareVM, type CatalogFacade } from "@bbc/catalog";
 import { fixture } from "@bbc/shared/fixture";
+import { storedPricingRules } from "../../../packages/modules/domain/catalog/src/pricing/rules";
+import { FIXTURE_RULES } from "../../../packages/modules/domain/catalog/tests/unit/pricing-rules.fixture";
 
 describe("catalog routes", () => {
   it("GET /v1/search?from=JFK&to=LHR&cabin=business → ≥3 fares", async () => {
@@ -61,6 +63,81 @@ describe("catalog routes", () => {
     expect(body[0].code).toBe("JFK");
     expect(body.length).toBeLessThanOrEqual(8);
     expect(() => AirportVM.parse(body[0])).not.toThrow();
+    await t.close();
+  });
+
+  // ADR-IMPL-037: the company's formula as an indicative price — only where an undated search has no fare, only when the
+  // catalog.estimates flag is on, and only with valid rules in catalog.pricing_rules. Never mixed with fares, never in
+  // the reference-price fields. The rules here are made up (FIXTURE_RULES): the company's are not in this repository.
+  it("GET /v1/search shows the formula's estimate only where there is no fare", async () => {
+    const t = await testApp({ suite: "catalog-estimates" });
+    await t.seedCatalogBasics();
+    const search = async (from: string, to: string, cabin = "business", when?: string) => {
+      const query = new URLSearchParams({ from, to, cabin, ...(when ? { when } : {}) });
+      const r = await t.app.request(`/v1/search?${query}`, { headers: { Cookie: t.memberA.cookie } });
+      expect(r.status).toBe(200);
+      return (await r.json()) as {
+        from: { tz?: string };
+        items: unknown[];
+        estimate?: { amount: number; currency: string; trip: string; cabin: string; basis: string } | null;
+      };
+    };
+
+    // Off by default: no estimate anywhere.
+    expect((await search("JFK", "ZRH")).estimate).toBeNull();
+
+    // On, but this environment has no rules yet: still no estimate, and the search does not fail.
+    await t.flags.set("catalog.estimates", { enabled: true });
+    expect((await search("JFK", "ZRH")).estimate).toBeNull();
+
+    await t.flags.set("catalog.pricing_rules", storedPricingRules(FIXTURE_RULES));
+    const zurich = await search("JFK", "ZRH");
+    expect(zurich.items).toEqual([]);
+    expect(zurich.estimate).toEqual({
+      amount: 1633,
+      currency: "USD",
+      trip: "round_trip",
+      cabin: "business",
+      basis: "formula",
+    });
+    expect(zurich.from.tz).toBe("America/New_York"); // for the local time at the destination
+    expect((await search("ZRH", "JFK")).estimate?.amount).toBe(1633); // the formula has no direction
+
+    const london = await search("JFK", "LHR"); // published fares exist: they win
+    expect(london.items.length).toBeGreaterThan(0);
+    expect(london.estimate).toBeNull();
+
+    expect((await search("RMO", "LHR")).estimate).toBeNull(); // outside North America: on request, never invented
+
+    // First follows the chosen cabin: above business on this route, so it shows.
+    expect((await search("JFK", "ZRH", "first")).estimate).toEqual({
+      amount: 1776,
+      currency: "USD",
+      trip: "round_trip",
+      cabin: "first",
+      basis: "formula",
+    });
+
+    // Two airports of the same metro: the formula has a price, nothing is shown.
+    expect((await search("JFK", "EWR")).estimate).toBeNull();
+
+    // A dated search: the route may have fares on other days, and published fares win — no undated estimate.
+    expect((await search("JFK", "ZRH", "business", "2026-11-20T00:00:00Z")).estimate).toBeNull();
+
+    // Rules edited by hand (their fingerprint is no longer their own): refused, no estimate.
+    const stored = storedPricingRules(FIXTURE_RULES);
+    await t.flags.set("catalog.pricing_rules", {
+      ...stored,
+      rules: { ...stored.rules, hawaii_extra: { business: 1, first: 2, premium_economy: 3 } },
+    });
+    expect((await search("JFK", "ZRH")).estimate).toBeNull();
+
+    // Shown and missing estimates are counted, so the rollout can be watched.
+    const metrics = await (await t.app.request("/metrics")).text();
+    expect(metrics).toContain('bbc_search_estimates_shown{cabin="business"}');
+    expect(metrics).toContain('bbc_search_estimates_shown{cabin="first"} 1');
+    expect(metrics).toContain('bbc_search_estimates_unavailable{reason="missing"} 1');
+    expect(metrics).toContain('bbc_search_estimates_unavailable{reason="invalid"} 1');
     await t.close();
   });
 

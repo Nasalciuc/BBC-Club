@@ -14,7 +14,8 @@ import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
 import { importCatalog, ImportBody } from "./application/import";
-import { toAirportVM, toFareVM } from "./application/to-fare-vm";
+import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
+import { readStoredRules } from "./pricing/rules";
 import type { CatalogFacade } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
@@ -89,11 +90,24 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
           hadFares: items.length > 0,
           results: items.length,
         });
+        // No fare in this cabin: the company's formula, as an indicative price (ADR-IMPL-037). Undated searches only —
+        // with a date, the route may have fares on other days, and published fares always win. Both flag rows are read
+        // only then, so searches with fares cost nothing extra; both are cached (~35 s to reach every replica), and a
+        // failed read counts as off. The rules are not in the repository: each environment holds them in
+        // `catalog.pricing_rules` (scripts/load-pricing-rules.ts); without valid rules there is no estimate, never an error.
+        let estimate: ReturnType<typeof toEstimateVM> = null;
+        if (items.length === 0 && !when && (await platform.flags.isEnabled("catalog.estimates", false))) {
+          const stored = readStoredRules(await platform.flags.read("catalog.pricing_rules"));
+          if (stored.ok) estimate = toEstimateVM(stored.rules, fromApt, toApt, cabin);
+          else platform.metrics.inc("search_estimates_unavailable", { reason: stored.reason });
+        }
+        if (estimate) platform.metrics.inc("search_estimates_shown", { cabin });
         return c.json({
           from: toAirportVM(fromApt),
           to: toAirportVM(toApt),
           items,
           offer: null,
+          estimate,
         });
       },
     );

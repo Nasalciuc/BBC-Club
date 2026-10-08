@@ -39,6 +39,23 @@ export const FareVM = z.object({
 });
 export type FareVM = z.infer<typeof FareVM>;
 
+/** Whether this runtime can show a time in `tz` — the check the catalogue import makes (assertIanaZone). Remembered per
+ *  name: a home screen repeats the same few zones. */
+const formattable = new Map<string, boolean>();
+function isFormattableZone(tz: string): boolean {
+  let ok = formattable.get(tz);
+  if (ok === undefined) {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: tz });
+      ok = true;
+    } catch {
+      ok = false; // "", "not/a_zone", or a runtime without Intl
+    }
+    if (formattable.size < 1000) formattable.set(tz, ok);
+  }
+  return ok;
+}
+
 export const AirportVM = z.object({
   code: z.string().length(3),
   city: z.string(),
@@ -46,8 +63,26 @@ export const AirportVM = z.object({
   countryCode: z.string().length(2),
   lat: z.number(),
   lng: z.number(),
+  /** IANA zone, for the local time at the destination. Optional both ways: an older server sends none. Display-only:
+   *  a zone this runtime cannot format in ("", "not/a_zone", a number) becomes undefined instead of failing the whole
+   *  response, and the local time is simply not shown. */
+  tz: z.string().refine(isFormattableZone).optional().catch(undefined),
 });
 export type AirportVM = z.infer<typeof AirportVM>;
+
+/**
+ * An indicative price from the company's formula (ADR-IMPL-037). Never a fare: no carrier, no validity, not bookable —
+ * and never a reference price (`PricePair.published` is for FTC-evidenced prices only). Fixed literals, so every other
+ * value fails parsing instead of reaching the screen.
+ */
+export const EstimateVM = z.object({
+  amount: z.number().positive(),
+  currency: z.literal("USD"),
+  trip: z.literal("round_trip"),
+  cabin: z.enum(["business", "first"]),
+  basis: z.literal("formula"),
+});
+export type EstimateVM = z.infer<typeof EstimateVM>;
 
 export const DestinationPinVM = AirportVM.extend({
   fromPrice: z.number().positive(),
@@ -62,6 +97,10 @@ export const SearchResultVM = z.object({
   items: z.array(FareVM),
   /** ProposalCardVM when a promotion exists on the route. */
   offer: ProposalCardVM.nullable(),
+  /** Only when an undated search finds no fare in the chosen cabin and the environment has estimates on (ADR-IMPL-037).
+   *  Optional both ways. The app parses the whole search with this schema, so an estimate it does not understand (a value
+   *  added by a newer server) becomes null — the search still works, the estimate is not shown. */
+  estimate: EstimateVM.nullable().optional().catch(null),
 });
 export type SearchResultVM = z.infer<typeof SearchResultVM>;
 

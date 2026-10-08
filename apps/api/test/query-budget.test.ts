@@ -1,6 +1,8 @@
 /** Query count budgets measured on the test fixture, then enforced. Failures list every query. */
 import { describe, expect, it } from "bun:test";
 import { testApp } from "./helpers/test-app";
+import { storedPricingRules } from "../../../packages/modules/domain/catalog/src/pricing/rules";
+import { FIXTURE_RULES } from "../../../packages/modules/domain/catalog/tests/unit/pricing-rules.fixture";
 
 /** Measured 28 Sep on the isolated fixture (not production). A new query in a loop must fail this. */
 const BUDGET: Record<string, number> = {
@@ -63,6 +65,15 @@ describe("query budget per route", () => {
       const cap = BUDGET[name]!;
       expect(qs.length, `${name} ran ${qs.length} queries (budget ${cap}):\n${qs.join("\n")}`).toBeLessThanOrEqual(cap);
     }
+
+    // ADR-IMPL-037: a search with no fare and estimates on reads two flag rows (cached) and computes in memory.
+    await t.flags.set("catalog.estimates", { enabled: true });
+    await t.flags.set("catalog.pricing_rules", storedPricingRules(FIXTURE_RULES));
+    const estimateSearch = await queriesFor("/v1/search?from=JFK&to=ZRH&cabin=business", cookie);
+    expect(
+      estimateSearch.length,
+      `no-fare search with estimates ran ${estimateSearch.length} queries (budget ${BUDGET["GET /v1/search"]}):\n${estimateSearch.join("\n")}`,
+    ).toBeLessThanOrEqual(BUDGET["GET /v1/search"]!);
 
     await t.seedMoreJfkLhrFares();
     const largerSearch = await queriesFor("/v1/search?from=JFK&to=LHR&cabin=business", cookie);
