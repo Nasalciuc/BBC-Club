@@ -31,6 +31,7 @@ export { GLOBE } from "./globe/constants";
 export { GLOBE_SPEC, haloOpacity } from "./globe/globe-logic";
 export { HOME_SHEET_SNAPS, homeSheetHeight } from "./layout/home-sheet-snaps";
 export { landFor } from "./globe/land";
+export { nightPolygon, solarAltitude, sunPosition } from "./globe/terminator";
 export {
   FIGMA_ZOOM,
   OPENING_CENTER,
