@@ -124,7 +124,7 @@ describe("staging demo", () => {
       body: JSON.stringify({ cabin: "first" }),
     });
     await t.db.execute(sql`UPDATE members.profile SET home_airport = 'LAX' WHERE member_id = ${first.memberId}`);
-    expect((await (await t.app.request("/v1/requests", cookie)).json()).items.length).toBe(4);
+    expect(((await (await t.app.request("/v1/requests", cookie)).json()) as { items: unknown[] }).items.length).toBe(4);
 
     // The next run puts everything back — the row count returns to the clean state's: nothing left behind, nothing
     // of another member's touched.
@@ -138,7 +138,7 @@ describe("staging demo", () => {
     expect(FeedVM.parse(await (await t.app.request("/v1/proposals", cookie)).json()).items.map((i) => i.state)).toEqual(
       ["unseen", "unseen", "unseen"],
     );
-    expect((await (await t.app.request("/v1/requests", cookie)).json()).items.length).toBe(3);
+    expect(((await (await t.app.request("/v1/requests", cookie)).json()) as { items: unknown[] }).items.length).toBe(3);
 
     // The account deleted by a tester: the next run makes a new one, and the demo rows follow it.
     await t.db.execute(sql`DELETE FROM auth."user" WHERE id = ${first.memberId}`);
@@ -148,7 +148,9 @@ describe("staging demo", () => {
     expect(await seedStagingDemo(t.db, { id: renewed.memberId, email }, now)).toEqual(counts);
     const renewedCookie = { headers: { Cookie: await t.auth.cookieFor(email, password) } };
     expect(FeedVM.parse(await (await t.app.request("/v1/proposals", renewedCookie)).json()).items.length).toBe(3);
-    expect((await (await t.app.request("/v1/requests", renewedCookie)).json()).items.length).toBe(3);
+    expect(
+      ((await (await t.app.request("/v1/requests", renewedCookie)).json()) as { items: unknown[] }).items.length,
+    ).toBe(3);
 
     // Never a real member: an e-mail that names a linked member (or an operator) is refused, and nothing changes.
     await expect(
