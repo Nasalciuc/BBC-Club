@@ -13,6 +13,8 @@ const BUDGET: Record<string, number> = {
   "GET /v1/requests/:id": 20,
   "GET /v1/profile": 25,
   "POST /v1/requests": 40,
+  "GET /v1/airports/popular": 10,
+  "GET /v1/airports/home-suggestion": 10,
 };
 
 describe("query budget per route", () => {
@@ -45,6 +47,8 @@ describe("query budget per route", () => {
     const listQ = await queriesFor("/v1/requests", cookie);
     const detailQ = await queriesFor(`/v1/requests/${req.id}`, cookie);
     const profileQ = await queriesFor("/v1/profile", cookie);
+    const popularQ = await queriesFor("/v1/airports/popular?from=JFK", cookie);
+    const homeSuggestionQ = await queriesFor("/v1/airports/home-suggestion?tz=America%2FNew_York", cookie);
     const postLog = await (async () => {
       log.length = 0;
       const res = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { idempotencyKey: crypto.randomUUID() });
@@ -60,6 +64,8 @@ describe("query budget per route", () => {
       ["GET /v1/requests/:id", detailQ],
       ["GET /v1/profile", profileQ],
       ["POST /v1/requests", postLog],
+      ["GET /v1/airports/popular", popularQ],
+      ["GET /v1/airports/home-suggestion", homeSuggestionQ],
     ];
     for (const [name, qs] of cases) {
       const cap = BUDGET[name]!;

@@ -455,6 +455,11 @@ curl -sS -H "Authorization: Bearer $INTERNAL_API_SECRET" \
 
 Routes with no fare sort first. The payload has no member id, IP, or device id.
 
+**Popular from <city>** (ADR-IMPL-039) reads the same table: a route shows from 5 searches in the last seven UTC days,
+names only. With the flag off, or before the first rollup, members see the hubs and
+`bbc_popular_destinations_shown{source="searches"}` stays at 0. After turning the flag on, the first searched routes
+appear the morning after the first rollup (03:15 UTC), within the 5-minute cache.
+
 **Failure.** Redis down: cache reads call the database, rate limits use memory, streams enqueue falls back to inline send, demand rollup writes nothing. Kafka down: the relay delivery retries; search latency does not change because the request never awaits the broker. A full search buffer drops the oldest event and increments `search_events_dropped`.
 
 **Do not publish 6379 or 9092.** RedisInsight and kafka-ui are not services in Compose. If you need them, SSH-tunnel to the host and point them at the internal DNS names `redis-app` and `kafka`. The GlitchTip `redis` service is a different instance. Do not point the API at it.
