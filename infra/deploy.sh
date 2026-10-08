@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rolling deploy: dump → pull → migrate (direct Postgres) → one canary → roll API → recreate worker → prune.
+# Rolling deploy: dump → pull → migrate (direct Postgres) → one canary → roll API → recreate worker → staging demo → prune.
 #   bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:8f3c21a
 #   bash infra/deploy.sh staging    ghcr.io/nasalciuc/bbc-api:8f3c21a
 set -Eeuo pipefail
@@ -130,17 +130,17 @@ wait_service_ready() {
   done
 }
 
-echo "▶ 1/7 pre-deploy dump ($MODE)"
+echo "▶ 1/8 pre-deploy dump ($MODE)"
 mkdir -p /var/backups/pre-deploy
 $DC exec -T "$PG" pg_dump -U bbc -Fc bbc > "/var/backups/pre-deploy/${MODE}-$(date +%Y%m%d-%H%M%S).dump"
 find /var/backups/pre-deploy -type f -mtime +7 -delete
 
-echo "▶ 2/7 pull $IMAGE"
+echo "▶ 2/8 pull $IMAGE"
 if grep -qE "^${VAR}=" "$ENVF"; then sed -i "s|^${VAR}=.*|${VAR}=${IMAGE}|" "$ENVF"; else echo "${VAR}=${IMAGE}" >> "$ENVF"; fi
 $DC pull -q "$SVC"
 $DC pull -q "$WORKER"
 
-echo "▶ 3/7 migrations (expand-only, direct Postgres — never the pooler)"
+echo "▶ 3/8 migrations (expand-only, direct Postgres — never the pooler)"
 if [[ "$MODE" == "production" ]]; then
   MIGRATE_URL="postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc"
 else
@@ -151,7 +151,7 @@ if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$S
   notify "🚨 deploy $MODE aborted at migration. Old API still serving." "${SEC_WEBHOOK:-}"; exit 1
 fi
 
-echo "▶ 4/7 canary one new $SVC replica for ${CANARY_SECONDS}s"
+echo "▶ 4/8 canary one new $SVC replica for ${CANARY_SECONDS}s"
 $DC up -d "$POOLER" || rollback_and_exit "pooler did not start"
 OLD="$($DC ps -q "$SVC" || true)"
 $DC up -d --no-deps --no-recreate --scale "$SVC=$((N + 1))" "$SVC" || rollback_and_exit "canary scale-up failed"
@@ -184,7 +184,7 @@ else
   cleanup_metrics
 fi
 
-echo "▶ 5/7 roll $SVC (scale $((N + 1)) → $((N * 2)) → $N)"
+echo "▶ 5/8 roll $SVC (scale $((N + 1)) → $((N * 2)) → $N)"
 $DC up -d --no-deps --no-recreate --scale "$SVC=$((N * 2))" "$SVC" || { drop_canary; rollback_and_exit "api scale-up failed"; }
 NEW="$(comm -13 <(printf '%s\n' $OLD | sort) <($DC ps -q "$SVC" | sort) || true)"
 if [[ -z "${NEW// }" ]]; then
@@ -200,12 +200,23 @@ if [[ -n "${OLD// }" ]]; then
 fi
 $DC up -d --no-deps --no-recreate --scale "$SVC=$N" "$SVC"
 
-echo "▶ 6/7 recreate $WORKER (one process — never two pollers) and $CRON"
+echo "▶ 6/8 recreate $WORKER (one process — never two pollers) and $CRON"
 $DC up -d --no-deps --force-recreate "$WORKER" || rollback_and_exit "worker recreate failed"
 W="$($DC ps -q "$WORKER" | head -n1)"
 [[ -n "$W" ]] || rollback_and_exit "worker container missing"
 wait_ready "$W" 8001 || rollback_and_exit "worker /ready red"
 $DC up -d --no-deps --force-recreate "$CRON" || rollback_and_exit "cron recreate failed"
 
-echo "▶ 7/7 cleanup"; docker image prune -f >/dev/null
+if [[ "$MODE" == "staging" ]]; then
+  echo "▶ 7/8 staging demo (ADR-IMPL-040): the review account carries Figma's situations, dated from today"
+  # Direct Postgres, never the pooler. The script refuses any database but staging's. A failure never undoes the
+  # deploy — the API is already serving — but it is said out loud.
+  if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$SVC" bun run scripts/seed-staging-demo.ts; then
+    notify "⚠ deploy staging: the demo data did not refresh — run infra/deploy.sh's step 7 by hand (RUNBOOK, Staging demo data)" "${OPS_WEBHOOK:-}"
+  fi
+else
+  echo "▶ 7/8 staging demo — production: skipped (the review account is created by hand, docs/release.md)"
+fi
+
+echo "▶ 8/8 cleanup"; docker image prune -f >/dev/null
 notify "✅ deploy $MODE ok — $IMAGE in $(( $(date +%s) - started ))s"
