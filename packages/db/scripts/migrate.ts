@@ -8,7 +8,7 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createDb } from "../src/client";
-import { loadAirportsReference } from "./airports-reference";
+import { applyReferenceFixes, loadAirportsReference } from "./airports-reference";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -359,7 +359,10 @@ try {
     }
   }
 
-  // Insert-only: airports that exist (curated seed, catalogue import) keep their values. ADR-IMPL-036.
+  // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
+  // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
+  const corrected = await applyReferenceFixes(db);
+  if (corrected) console.log(`airports reference: ${corrected} corrected`);
   const added = await loadAirportsReference(db);
   if (added) console.log(`airports reference: ${added} added`);
 

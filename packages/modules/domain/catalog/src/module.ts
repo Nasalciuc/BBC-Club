@@ -9,10 +9,12 @@ import { SearchEvent } from "@bbc/platform";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { airportsRepo } from "./infrastructure/airports.repo";
+import { discoveryRepo } from "./infrastructure/discovery.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
+import { homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody } from "./application/import";
 import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
 import { readStoredRules } from "./pricing/rules";
@@ -169,6 +171,55 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
                 airportsRepo.search(conn, q),
               );
         return c.json(rows.map((r) => toAirportVM(r)));
+      },
+    );
+
+    // ADR-IMPL-039: "Popular from <city>" — searched routes first, then the hubs; names only. Cached 5 minutes with the
+    // airports' generation (an import refreshes it); without Redis, three small queries.
+    registerRoute("GET", "/v1/airports/popular", "fares:read", "read");
+    routes.get(
+      "/airports/popular",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const from = (c.req.query("from") ?? "").toUpperCase();
+        if (!/^[A-Z]{3}$/.test(from)) return c.json(apiError("VALIDATION", { message: "from (IATA) required" }), 400);
+        const origin = await airportsRepo.get(conn, from);
+        if (!origin) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+        const gen = await platform.cache.generation("catalog:airports:gen");
+        const picked =
+          gen == null
+            ? await popularFrom(conn, origin)
+            : await platform.cache.getOrLoad(`catalog:popular:${gen}:${from}`, 300, () => popularFrom(conn, origin));
+        platform.metrics.inc("popular_destinations_shown", { source: "searches" }, picked.fromSearches);
+        platform.metrics.inc(
+          "popular_destinations_shown",
+          { source: "hubs" },
+          picked.destinations.length - picked.fromSearches,
+        );
+        return c.json({ from: toAirportVM(origin), destinations: picked.destinations.map((a) => toAirportVM(a)) });
+      },
+    );
+
+    // ADR-IMPL-039: the home airport suggested at onboarding, from the phone's time zone.
+    registerRoute("GET", "/v1/airports/home-suggestion", "fares:read", "read");
+    routes.get(
+      "/airports/home-suggestion",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const zones = homeZones(c.req.query("tz") ?? "");
+        if (!zones) return c.json(apiError("VALIDATION", { message: "tz must be an IANA time zone" }), 400);
+        const airport = zones.length > 0 ? await discoveryRepo.busiestIn(conn, zones) : null;
+        return c.json({ airport: airport ? toAirportVM(airport) : null });
       },
     );
 

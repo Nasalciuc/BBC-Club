@@ -11,6 +11,10 @@ Every airport with scheduled service and an IATA code (ADR-IMPL-036), built on 6
 Rows load insert-only (`scripts/airports-reference.ts`): the curated `airports.csv` and the company's catalogue import
 keep their own values for any airport they hold.
 
+City names were corrected on 8 Oct 2026 (ADR-IMPL-038): from OurAirports' spelling where it differed only in marks or
+letter case, and by hand for the city served, island names, English names, renamed cities and misspellings. Every
+correction is listed in `airports-reference-fixes.tsv`.
+
 ## MIT License — mwgg/Airports
 
 The MIT License (MIT)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { REFERENCE_TSV, parseReference } from "../scripts/airports-reference";
+import { FIXES_TSV, REFERENCE_TSV, parseFixes, parseReference } from "../scripts/airports-reference";
 
 const rows = parseReference(readFileSync(REFERENCE_TSV, "utf8"));
 const REGIONS = new Set(["africa", "americas", "asia", "europe", "middle_east", "oceania"]);
@@ -79,5 +79,79 @@ describe("airports-reference.tsv", () => {
     expect(by("NRT")?.city).toBe("Tokyo");
     expect(by("RMO")?.searchTerms).toContain("KIV");
     expect(by("EWR")?.searchTerms).toContain("New York City");
+  });
+});
+
+/** Letters without their marks, lower case — what "differs only in accents" means. Postgres's unaccent agrees. */
+const plain = (s: string) =>
+  s
+    .replace(/[łŁ]/g, "l")
+    .replace(/[øØ]/g, "o")
+    .replace(/[đĐðÐ]/g, "d")
+    .replace(/ı/g, "i")
+    .replace(/[þÞ]/g, "th")
+    .replace(/[æÆ]/g, "ae")
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+
+describe("airports-reference-fixes.tsv — the corrected cities (ADR-IMPL-038)", () => {
+  const fixes = parseFixes(readFileSync(FIXES_TSV, "utf8"));
+  const byCode = new Map(rows.map((r) => [r.code, r]));
+  const curated = new Map(
+    readFileSync(new URL("../seeds/airports.csv", import.meta.url), "utf8")
+      .trim()
+      .split("\n")
+      .slice(1)
+      .map((l) => l.split(","))
+      .map((f) => [f[0]!, f[2]!] as const),
+  );
+
+  it("names each airport once, and says what the reference holds now", () => {
+    expect(fixes.length).toBeGreaterThan(700);
+    expect(new Set(fixes.map((f) => f.code)).size).toBe(fixes.length);
+    for (const f of fixes) {
+      expect(`${f.code} ${byCode.get(f.code)?.city}`).toBe(`${f.code} ${f.to}`);
+      expect(f.from).not.toBe(f.to);
+    }
+  });
+
+  it("changes only marks and letter case where it says accents", () => {
+    for (const f of fixes.filter((x) => x.reason === "accents")) expect(plain(f.to)).toBe(plain(f.from));
+  });
+
+  it("keeps old and local names searchable — at the end of the reference's search terms", () => {
+    for (const f of fixes.filter((x) => x.searchable.length)) {
+      expect(byCode.get(f.code)?.searchTerms?.endsWith(f.searchable.join(" | "))).toBe(true);
+    }
+  });
+
+  it("agrees with the curated seed on every curated airport's city", () => {
+    for (const [code, city] of curated) expect(`${code} ${byCode.get(code)?.city}`).toBe(`${code} ${city}`);
+  });
+
+  it("writes cities cleanly: composed Unicode, no slash, no double space, Romanian comma-below letters", () => {
+    for (const r of rows) {
+      expect(r.city).toBe(r.city.normalize("NFC"));
+      expect(r.city).not.toContain("/");
+      expect(r.city).not.toContain("  ");
+      if (r.countryCode === "RO" || r.countryCode === "MD") expect(r.city).not.toMatch(/[şţŞŢ]/);
+    }
+  });
+
+  it("shows the city members fly to", () => {
+    const city = (code: string) => byCode.get(code)?.city;
+    expect(city("CVG")).toBe("Cincinnati");
+    expect(city("EZE")).toBe("Buenos Aires");
+    expect(city("IAD")).toBe("Washington");
+    expect(city("NGO")).toBe("Nagoya");
+    expect(city("XIY")).toBe("Xi'an");
+    expect(city("IST")).toBe("Istanbul");
+    expect(city("DPS")).toBe("Bali");
+    expect(city("BOB")).toBe("Bora Bora");
+    expect(city("BEG")).toBe("Belgrade");
+    expect(city("RMO")).toBe("Chișinău");
+    expect(city("CIA")).toBe("Rome");
+    expect(byCode.get("EZE")?.searchTerms).toContain("Ezeiza");
   });
 });

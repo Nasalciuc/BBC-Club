@@ -165,6 +165,13 @@ describe("catalog routes", () => {
     expect(await codes("Japan")).toEqual(expect.arrayContaining(["HND", "NRT"])); // a country
     expect((await codes("UK"))[0]).toBe("LHR"); // a country nickname means the country, busiest first
     expect((await codes("USA"))[0]).toBe("JFK"); // not the regional airport whose code is USA
+    // ADR-IMPL-038: the corrected cities — found by the city members fly to, typed without its marks, and by the
+    // locality's own name where it is one people use.
+    expect((await codes("Cincinnati"))[0]).toBe("CVG"); // not "Hebron"
+    expect((await codes("bora bora"))[0]).toBe("BOB");
+    expect((await codes("bodo"))[0]).toBe("BOO"); // Bodø
+    expect((await codes("lodz"))[0]).toBe("LCJ"); // Łódź
+    expect(await codes("Ezeiza")).toContain("EZE"); // Buenos Aires now, its own name still searchable
     expect((await codes("lo")).length).toBeLessThanOrEqual(8);
     expect(await codes("%")).toEqual([]); // a wildcard character is matched literally, not as "anything"
     expect(await codes("_")).toEqual([]);
