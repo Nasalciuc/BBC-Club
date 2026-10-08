@@ -70,6 +70,13 @@ are on request.` otherwise. The formula prices only routes touching North Americ
   (the light pill of the dark Entry screens), so those call sites now say `variant="primary"`. The default stays, for
   Entry and for the confirmation screens, where Figma says Inverted.
 
+- **One type system** (Figma 02 · Text styles; the owner's choice of 8 Oct) — Entry no longer keeps Inter, Source
+  Serif 4 and JetBrains Mono: `constants/club.ts` reads every role from the generated tokens through `rn()`, so Welcome,
+  Join, Verify, Set password, Sign in and Recovery set their type in Fraunces, Geist and Geist Mono like the interior.
+  `_layout.tsx` loads only those (the splash waits for fewer files); the three retired packages leave `package.json`
+  with the next dependency refresh, where `bun.lock` is regenerated. `DESIGN.md` says so, and records the one place
+  Figma follows the code: `tab-mono` stays 11/13 (Figma's 9/9 is below the legibility floor the file sets).
+
 **Consequences.** Home is the screen Figma draws, in every state, and the three preferences the member sets on it
 reach the search and the request. Tests: `travel-preferences.test.ts` (labels, `when`, the North-America rule),
 `local-time.test.ts` (clock, DST, missing zone), `search-reducer.test.ts` (an estimate only on an empty result),

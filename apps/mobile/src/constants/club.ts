@@ -1,3 +1,5 @@
+import { rn, tokens } from "@bbc/ui";
+
 export const Club = {
   colors: {
     black: "#000000",
@@ -38,69 +40,19 @@ export const Club = {
   layout: {
     phoneMaxWidth: 430,
   },
+  // One type system on every screen (DESIGN.md, ADR-IMPL-041): Entry reads the same roles as the interior, from the
+  // generated tokens, mapped to the bundled Fraunces / Geist / Geist Mono files by rn().
   type: {
-    // TODO(design): swap to Newsreader when ratified
-    display: {
-      fontFamily: "SourceSerif4_400Regular",
-      fontSize: 34,
-      lineHeight: 37,
-      letterSpacing: -0.4,
-    },
-    headline: {
-      fontFamily: "SourceSerif4_400Regular",
-      fontSize: 28,
-      lineHeight: 32,
-      letterSpacing: -0.3,
-    },
-    title: {
-      fontFamily: "SourceSerif4_400Regular",
-      fontSize: 20,
-      lineHeight: 24,
-      letterSpacing: 0,
-    },
-    titleSm: {
-      fontFamily: "SourceSerif4_400Regular",
-      fontSize: 16,
-      lineHeight: 20,
-      letterSpacing: 0,
-    },
-    body: {
-      fontFamily: "Inter_400Regular",
-      fontSize: 17,
-      lineHeight: 25,
-    },
-    bodySm: {
-      fontFamily: "Inter_400Regular",
-      fontSize: 15,
-      lineHeight: 21,
-    },
-    caption: {
-      fontFamily: "Inter_400Regular",
-      fontSize: 13,
-      lineHeight: 18,
-    },
-    button: {
-      fontFamily: "Inter_500Medium",
-      fontSize: 17,
-      lineHeight: 17,
-    },
-    labelMono: {
-      fontFamily: "JetBrainsMono_500Medium",
-      fontSize: 11,
-      lineHeight: 14,
-      letterSpacing: 1.5,
-    },
-    factsMono: {
-      fontFamily: "JetBrainsMono_400Regular",
-      fontSize: 12,
-      lineHeight: 17,
-      letterSpacing: 1,
-    },
-    tabMono: {
-      fontFamily: "JetBrainsMono_500Medium",
-      fontSize: 9,
-      lineHeight: 9,
-      letterSpacing: 1,
-    },
+    display: rn(tokens.type.display),
+    headline: rn(tokens.type.headline),
+    title: rn(tokens.type.title),
+    titleSm: rn(tokens.type.titleSm),
+    body: rn(tokens.type.body),
+    bodySm: rn(tokens.type.bodySm),
+    caption: rn(tokens.type.caption),
+    button: rn(tokens.type.button),
+    labelMono: rn(tokens.type.labelMono),
+    factsMono: rn(tokens.type.factsMono),
+    tabMono: rn(tokens.type.tabMono),
   },
 } as const;
