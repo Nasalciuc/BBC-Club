@@ -42,3 +42,24 @@ reinstall is a new one), plus usage alerts.
 
 **Rules that follow.** Any change to the native modules is a new build and a new app version. The drawn globe stays
 maintained: it is what e2e and any failure show.
+
+## Amendment — 7 Oct 2026: satellite imagery, atmosphere and stars
+
+The owner chose a photographic Earth, like Mapbox's own globe example, over Figma's flat globe. The globe now loads
+Mapbox's `satellite-streets-v12` style (imagery with the names of countries and cities; roads only appear past the
+globe's zoom range) and draws an `Atmosphere`: a pale horizon (`globe-atmosphere`), a
+deep-blue sky (`globe-atmosphere-high`), near-black space (`globe-space`) with stars at 0.6. Pins and the route are
+unchanged, except a thin night ring around each dot, which keeps it readable over bright imagery. They are added after
+the style, so they sit above its labels.
+
+What this changes from the decision above:
+
+- **Network.** Imagery is downloaded from Mapbox the first time a region is seen, then served from Mapbox's cache. With
+  no network and nothing cached, the style cannot load: `onMapLoadingError` switches Explore to the drawn globe, which
+  still works offline. The e2e APK keeps the drawn globe.
+- **Privacy.** Mapbox now also receives tile requests, so it sees the device's IP address while the globe loads
+  imagery (store documents updated). Telemetry stays off.
+- **Cost.** Still billed per monthly active user; the Maps SDK's MAU price includes its tiles.
+- **Figma.** Figma's globe frames still show the flat style; they are to be updated to this look. Pins, route, zoom,
+  framing and motion still follow Figma.
+- **Delivery.** JavaScript only: it ships by OTA to the 0.2.0 APK.

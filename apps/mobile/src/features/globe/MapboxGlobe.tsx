@@ -6,7 +6,15 @@
  * from tokens, no labels, no roads, no tiles to download. Figma: P3.1 Home · Rest (89:386), P3.2 London selected
  * (89:387), Globe · Map style (482:1115), page 06 · Motion.
  */
-import Mapbox, { Camera, CircleLayer, LineLayer, MapView, ShapeSource, type MapState } from "@rnmapbox/maps";
+import Mapbox, {
+  Atmosphere,
+  Camera,
+  CircleLayer,
+  LineLayer,
+  MapView,
+  ShapeSource,
+  type MapState,
+} from "@rnmapbox/maps";
 import { type ComponentProps, type ComponentRef, useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, AppState, type LayoutChangeEvent, StyleSheet, View } from "react-native";
 
@@ -18,7 +26,6 @@ import {
   globePadding,
   haloOpacity,
   homeSheetHeight,
-  landFor,
   pickPin,
   pinFeatures,
   routeCamera,
@@ -34,24 +41,21 @@ void Mapbox.setAccessToken(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "");
 // No usage telemetry. Mapbox still counts one anonymous monthly active user for billing (docs/store/data-safety.md).
 Mapbox.setTelemetryEnabled(false);
 
-const STYLE = JSON.stringify({
-  version: 8,
-  name: "BBC Club · globe",
-  projection: { name: "globe" },
-  // Space and horizon are the night page colour, with no glow and no stars: Figma's flat globe on #0F172A.
-  fog: {
-    color: tokens.colors.surfaceNight,
-    "high-color": tokens.colors.surfaceNight,
-    "space-color": tokens.colors.surfaceNight,
-    "horizon-blend": 0,
-    "star-intensity": 0,
-  },
-  sources: { land: { type: "geojson", data: landFor("high") } },
-  layers: [
-    { id: "ocean", type: "background", paint: { "background-color": tokens.colors.surfacePanel } },
-    { id: "land", type: "fill", source: "land", paint: { "fill-color": tokens.colors.surfaceMuted } },
-  ],
-});
+/**
+ * The Earth as photographed, with the names of countries and cities, under an atmosphere and stars — Mapbox's globe
+ * example (the owner's choice, 7 Oct 2026 — ADR-IMPL-035, amended). Our route and pins are added after the style, so
+ * they sit above its labels. Imagery needs the network the first time; Mapbox caches what was seen. A map that cannot
+ * load falls back to the drawn globe.
+ */
+const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-streets-v12";
+/** Mapbox's satellite-globe atmosphere: a pale horizon, a deep-blue sky, near-black space with stars. */
+const ATMOSPHERE = {
+  color: tokens.colors.globeAtmosphere,
+  highColor: tokens.colors.globeAtmosphereHigh,
+  horizonBlend: 0.02,
+  spaceColor: tokens.colors.globeSpace,
+  starIntensity: 0.6,
+} as const;
 
 /** The library does not export its press-event type; the one ShapeSource hands its onPress is the same. */
 type OnPressEvent = Parameters<NonNullable<ComponentProps<typeof ShapeSource>["onPress"]>>[0];
@@ -227,7 +231,7 @@ export default function MapboxGlobe({
     >
       <MapView
         style={StyleSheet.absoluteFill}
-        styleJSON={STYLE}
+        styleURL={SATELLITE_STYLE}
         projection="globe"
         rotateEnabled={false}
         pitchEnabled={false}
@@ -243,6 +247,7 @@ export default function MapboxGlobe({
           view.current.touchedAt = Date.now();
         }}
       >
+        <Atmosphere style={ATMOSPHERE} />
         <Camera
           ref={camera}
           defaultSettings={{
@@ -299,6 +304,9 @@ export default function MapboxGlobe({
                 tokens.colors.textOnDark,
                 tokens.colors.textOnDarkMuted,
               ],
+              // Over bright imagery (desert, snow, cloud) a thin night ring keeps the dot readable.
+              circleStrokeColor: tokens.colors.surfaceNight,
+              circleStrokeWidth: 1.5,
             }}
           />
         </ShapeSource>
