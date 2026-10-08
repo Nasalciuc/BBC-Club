@@ -182,7 +182,7 @@ Never edit a migration that already ran.
 
 **3. Data was lost or corrupted.** Restore, from the smallest scope that works:
 
-- **One table, just after a deploy:** step 1/7 wrote `/var/backups/pre-deploy/<mode>-<timestamp>.dump`; files are kept 7 days. Restore that table into a scratch database, then copy the rows back:
+- **One table, just after a deploy:** step 1/8 wrote `/var/backups/pre-deploy/<mode>-<timestamp>.dump`; files are kept 7 days. Restore that table into a scratch database, then copy the rows back:
   - `pg_restore -d scratch --data-only -t <table> <dump>`
   - then `INSERT … SELECT` across.
 - **Everything, to a point in time:** use pgBackRest (§ Restore the database):
@@ -424,6 +424,17 @@ without Cloudflare’s client cert must fail the TLS handshake.
 ## Staging on the same box
 
 `bash infra/deploy.sh staging <image>` — separate database, separate secrets (`infra/env/staging.env`), same Caddy (second domain). Move it to its own machine at the first real offer (ADR-IMPL-010 §7).
+
+## Staging demo data (ADR-IMPL-040)
+
+On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, the pins with their fares, the three offers, a request in each state, the inbox. Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:
+
+```bash
+cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f compose.staging.yml --env-file env/production.env --env-file env/staging.env \
+  run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run scripts/seed-staging-demo.ts
+```
+
+It prints `staging demo ready — … dates from <today>`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing. The poster route JFK → ZRH is left without a fare on purpose, so the estimate (ADR-IMPL-037) can be shown there once `catalog.estimates` is on and the rules are loaded.
 
 ## Redis, Kafka, Streams, and demand
 

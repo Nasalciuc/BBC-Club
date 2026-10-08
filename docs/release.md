@@ -42,7 +42,7 @@ Against production:
 cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml --env-file env/production.env run --rm --no-deps api bun run scripts/seed-review-account.ts
 ```
 
-`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` come from the environment. Paste them into App Store Connect and Play Console only.
+`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` come from the environment. Paste them into App Store Connect and Play Console only. The script is idempotent and may be run again at any time: it keeps the account verified and active, and puts the password back to the environment's if the reviewer changed it. In production it creates the account only — the demo data of staging (ADR-IMPL-040) never runs there.
 
 ## 3. e2e on the exact commit
 

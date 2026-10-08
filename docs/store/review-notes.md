@@ -10,7 +10,9 @@ Create it against the environment under review:
 cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml --env-file env/production.env run --rm --no-deps api bun run scripts/seed-review-account.ts
 ```
 
-Requires `REVIEW_ACCOUNT_EMAIL` and `REVIEW_ACCOUNT_PASSWORD` from the environment (`packages/shared/src/env.ts`). The script is idempotent: if the email already exists it exits. Put the credentials in App Store Connect and Play Console **only**. Never commit them.
+Requires `REVIEW_ACCOUNT_EMAIL` and `REVIEW_ACCOUNT_PASSWORD` from the environment (`packages/shared/src/env.ts`). The script is idempotent: run again, it keeps the account verified and active and puts the password back to the environment's. Put the credentials in App Store Connect and Play Console **only**. Never commit them.
+
+On staging the same account also carries the demo situations — pins, offers, requests, inbox — refreshed at every deploy (`scripts/seed-staging-demo.ts`, ADR-IMPL-040). Production gets the account alone.
 
 ## Path for the reviewer
 
