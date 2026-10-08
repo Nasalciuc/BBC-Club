@@ -38,6 +38,7 @@ const hash = createHash("sha256");
 for (const f of walk(migrationsDir).sort()) hash.update(f).update(readFileSync(f));
 // migrate.ts also loads the reference airports: a changed list must rebuild the template too.
 hash.update(readFileSync(join(here, "../../seeds/airports-reference.tsv")));
+hash.update(readFileSync(join(here, "../../seeds/airports-reference-fixes.tsv")));
 const migrationsHash = hash.digest("hex").slice(0, 16);
 
 const admin = postgres(ADMIN_URL, { max: 1, onnotice: () => {} });
