@@ -57,6 +57,14 @@ are on request.` otherwise. The formula prices only routes touching North Americ
   (89:389); `monogram()` moves to `lib/monogram.ts`, shared by Profile and the header; `@bbc/ui/calendar-logic` is a
   subpath export so pure modules (and their tests) take the date helpers without React Native.
 
+- **Discovery in the app** (ADR-IMPL-039's two endpoints, 536:11093 and 536:11191) — before typing, the sheet asks
+  `GET /v1/airports/popular?from=<origin>` and shows `POPULAR FROM <CITY>` (at most four, never a recent one or the
+  origin) over `RECENT`; without an answer (an older server, a failure) the home destinations stand in under
+  `AIRPORTS`, as before. Onboarding asks `GET /v1/airports/home-suggestion?tz=<phone zone>` once; with an airport it
+  reads `City, airport or code — suggested from your time zone.` and offers that airport as one row under the empty
+  field — offered, never chosen: the member taps it or types another. A zone that names no place (`UTC`, an
+  abbreviation) asks nothing.
+
 **Consequences.** Home is the screen Figma draws, in every state, and the three preferences the member sets on it
 reach the search and the request. Tests: `travel-preferences.test.ts` (labels, `when`, the North-America rule),
 `local-time.test.ts` (clock, DST, missing zone), `search-reducer.test.ts` (an estimate only on an empty result),

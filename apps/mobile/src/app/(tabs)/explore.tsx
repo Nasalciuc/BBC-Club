@@ -208,7 +208,7 @@ export default function ExploreScreen() {
         ) : (
           <>
             {pickingAirport ? (
-              <SheetTyping suggestions={suggestions} onSelect={selectDestination} />
+              <SheetTyping from={state.from} suggestions={suggestions} onSelect={selectDestination} />
             ) : (
               <SearchField
                 testID="explore.search"
