@@ -70,9 +70,19 @@ describe("discovery", () => {
     // runtime's ICU is skipped: a phone that old could not report it either.
     const icu = new Set(Intl.supportedValuesOf("timeZone"));
     const targets = new Set(Object.values(ZONE_ALIASES));
+    // Windows ICU omits some zones from supportedValuesOf that DateTimeFormat still resolves to themselves
+    // (Asia/Choibalsan). A phone on this runtime can still report that name.
+    const knownToIcu = (z: string) => {
+      if (icu.has(z)) return true;
+      try {
+        return new Intl.DateTimeFormat("en-US", { timeZone: z }).resolvedOptions().timeZone === z;
+      } catch {
+        return false;
+      }
+    };
     const used = (await t.db.execute(sql`SELECT DISTINCT tz FROM catalog.airports`)) as unknown as { tz: string }[];
     expect(used.length).toBeGreaterThan(300);
-    const unreachable = used.map((r) => r.tz).filter((z) => homeZones(z) !== null && !icu.has(z) && !targets.has(z));
+    const unreachable = used.map((r) => r.tz).filter((z) => homeZones(z) !== null && !knownToIcu(z) && !targets.has(z));
     expect(unreachable).toEqual([]);
     await t.close();
   });
