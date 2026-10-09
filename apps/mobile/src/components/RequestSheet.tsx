@@ -17,6 +17,7 @@ import {
   useRequestDraft,
   type RequestDraft,
   type RequestMode,
+  type SearchContext,
 } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
 import { stateCopy, submitFailureKind } from "@/lib/error-context";
@@ -33,6 +34,8 @@ export type RequestSheetHandle = {
     city?: string;
     mode?: RequestMode;
     replacesFareId?: string;
+    /** Home's dates, cabin and travelers for this search — prefilled, still editable here. */
+    search?: SearchContext | null;
   }) => void;
   dismiss: () => void;
 };
@@ -273,6 +276,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             <Button
               testID="request.submit"
               label={busy ? "Sending…" : sheetTitle(state.mode)}
+              variant="primary"
               busy={busy}
               shape="pill"
               onPress={() => void onSubmit()}

@@ -105,13 +105,13 @@ export default function SettingsScreen() {
         <ListRow
           testID="settings.password"
           label="Password"
-          value="On file"
+          value="Change"
           onPress={() => passwordRef.current?.present()}
         />
         <ListRow
           testID="settings.notifications"
           label="Notifications"
-          value="On"
+          value="Preferences"
           onPress={() => notificationsRef.current?.present()}
         />
         <Text style={styles.hint}>Request updates are always on.</Text>

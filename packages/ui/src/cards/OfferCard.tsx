@@ -37,7 +37,8 @@ export function OfferCard({ title, fromPrice, imageUrl, onPress, testID }: Props
         <Text style={styles.title} numberOfLines={2}>
           {title}
         </Text>
-        {fromPrice ? <Text style={styles.price}>{fromPrice}</Text> : null}
+        {/* Figma 89:389: an offer without a price reads EXPLORE in the price slot. */}
+        <Text style={styles.price}>{fromPrice ?? "EXPLORE"}</Text>
       </View>
     </Pressable>
   );

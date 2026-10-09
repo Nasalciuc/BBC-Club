@@ -1,6 +1,8 @@
 import { useReducer } from "react";
 import type { RequestBody, RequestLeg, Passengers } from "@bbc/shared/api/v1/requests";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
+// The pure date helpers, not the component index: this module is imported by tests that run without React Native.
+import { addDays, todayLocal } from "@bbc/ui/calendar-logic";
 import type { Profile } from "@/lib/api";
 
 export type TripType = "round" | "oneway";
@@ -109,6 +111,22 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
   }
 }
 
+/** What Home already knows when it opens the sheet: the member's choices for this search (ADR-IMPL-041). */
+export type SearchContext = {
+  dates: { depart: string | null; return: string | null; flexible: boolean };
+  cabin: "business" | "first";
+  passengers: Passengers;
+};
+
+/** Suggested dates when none were chosen: two weeks out, a week long — never a fixed day that the calendar outgrows. */
+export const DEFAULT_DEPART_IN_DAYS = 14;
+export const DEFAULT_TRIP_NIGHTS = 7;
+
+export function defaultDates(today: string = todayLocal()): { depart: string; ret: string } {
+  const depart = addDays(today, DEFAULT_DEPART_IN_DAYS);
+  return { depart, ret: addDays(depart, DEFAULT_TRIP_NIGHTS) };
+}
+
 export function buildDraft(opts: {
   fare?: FareVM | null;
   profile?: Profile | null;
@@ -116,19 +134,28 @@ export function buildDraft(opts: {
   toCode?: string;
   mode?: RequestMode;
   replacesFareId?: string;
+  search?: SearchContext | null;
+  today?: string;
 }): RequestDraft {
   const from = opts.fare?.from.code ?? opts.fromCode ?? "JFK";
   const to = opts.fare?.to.code ?? opts.toCode ?? "LHR";
-  const cabin = opts.fare?.cabin ?? "business";
+  // The fare's cabin wins; then the cabin chosen for this search; then the profile's usual cabin.
+  const cabin = opts.fare?.cabin ?? opts.search?.cabin ?? opts.profile?.preferences?.cabin ?? "business";
+  const passengers: Passengers = opts.search?.passengers ??
+    opts.profile?.preferences?.passengers ?? { adult: 1, child: 0, infant: 0 };
   const mode: RequestMode = opts.mode ?? (opts.fare?.offerId ? "offer" : opts.fare ? "fare" : "quote");
+  const suggested = defaultDates(opts.today);
+  const depart = opts.search?.dates.depart ?? suggested.depart;
+  const ret = opts.search?.dates.depart ? opts.search.dates.return : suggested.ret;
+  const tripType: TripType = opts.search?.dates.depart && !opts.search.dates.return ? "oneway" : "round";
   return {
     mode,
-    tripType: "round",
+    tripType,
     legs: [
-      { from, to, date: "2026-10-12" },
-      { from: to, to: from, date: "2026-10-19" },
+      { from, to, date: depart },
+      { from: to, to: from, date: ret ?? addDays(depart, DEFAULT_TRIP_NIGHTS) },
     ],
-    passengers: { adult: 1, child: 0, infant: 0 },
+    passengers,
     cabin,
     contact: {
       name: opts.profile?.displayName ?? "",

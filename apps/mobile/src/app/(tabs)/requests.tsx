@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 import { EmptyState, RequestRow, tokens, rn } from "@bbc/ui";
 
-import { closedAt, requestView } from "@/features/requests/request-view-logic";
+import { closedAt, listHints, requestView } from "@/features/requests/request-view-logic";
 import { badgeStatus, isOpen, requestMeta } from "@/features/requests/status";
 import { fetchRequests, submitRequest } from "@/lib/api";
 import { env } from "@/lib/env";
@@ -113,6 +113,8 @@ export default function RequestsScreen() {
   ];
   const empty = open.length === 0 && closed.length === 0;
   const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  // Figma 233:4639 / 240:5199: one line under the in-progress list — reassurance or a nudge.
+  const hints = listHints(open.map((row) => ({ status: row.kind === "queued" ? "queued" : row.request.status })));
 
   if (loading) {
     return (
@@ -137,9 +139,9 @@ export default function RequestsScreen() {
         <EmptyState
           testID="requests.empty"
           title="No requests yet."
-          body="Search a route or pick an offer to get started."
+          body="Explore destinations and request a fare. Your requests will appear here."
           primary={{
-            label: "Search",
+            label: "Explore",
             onPress: () => router.push("/(tabs)/explore" as Href),
           }}
         />
@@ -214,6 +216,11 @@ export default function RequestsScreen() {
                       />
                     );
                   })}
+                  {hints.map((line, i) => (
+                    <Text key={line} testID={`requests.hint.${i}`} style={styles.listHint}>
+                      {line}
+                    </Text>
+                  ))}
                 </View>
               );
             }
@@ -252,5 +259,6 @@ const styles = StyleSheet.create({
   intro: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   section: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, marginTop: tokens.space.lg },
   hint: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
+  listHint: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.xs },
   error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger },
 });

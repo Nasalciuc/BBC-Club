@@ -71,8 +71,18 @@ export function splitStoredPhone(
   return { country: fallbackCountry, national: raw };
 }
 
+/** The invalid-number line, as each Figma frame writes it: the request sheet (135:852) and Edit · Phone (325:8525). */
+export const PHONE_INVALID_COPY = {
+  request: "Enter a complete phone number, including country code.",
+  profile: "Enter a valid phone number, including the country code.",
+} as const;
+
 /** Validate on submit — never while the member is still typing. If raw starts with +, country is ignored. */
-export function validatePhone(raw: string, defaultCountry: CountryCode = "US"): PhoneResult {
+export function validatePhone(
+  raw: string,
+  defaultCountry: CountryCode = "US",
+  where: keyof typeof PHONE_INVALID_COPY = "request",
+): PhoneResult {
   const trimmed = raw.trim();
   if (trimmed.length < 7 && !trimmed.startsWith("+")) {
     return { valid: false, e164: null, error: "Enter a phone number so we can call you." };
@@ -82,7 +92,7 @@ export function validatePhone(raw: string, defaultCountry: CountryCode = "US"): 
   }
   const result: ParsedPhone = parseMemberPhone(trimmed, defaultCountry);
   if (!result.valid) {
-    return { valid: false, e164: null, error: "That phone number doesn't look right." };
+    return { valid: false, e164: null, error: PHONE_INVALID_COPY[where] };
   }
   return { valid: true, e164: result.e164 };
 }

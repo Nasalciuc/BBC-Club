@@ -32,7 +32,7 @@ Companion to `DESIGN.md`. Token refs are canonical; this file adds the decisions
 
 ## Navigation
 
-**tab-bar** — three items PROPOSALS / INBOX / PROFILE, `tab-mono` labels, 18px line icons; inactive `text-secondary`, active `primary`; unread dot on Inbox. No pills, no highlight bars, no hamburger, no drawer.
+**tab-bar** — three items EXPLORE / REQUESTS / PROFILE (as `DESIGN.md` and Figma 03 · Components say), `tab-mono` labels, line icons; inactive `text-secondary`, active `primary`; unread = 6px `accent-warm` dot on Requests. No pills, no highlight bars, no hamburger, no drawer.
 Back: white arrow on photographs (entry, detail hero); Android hardware back mirrors it. Forward = push slide-left 300ms; back = pop slide-right; tab switch = no slide.
 
 ## Surfaces

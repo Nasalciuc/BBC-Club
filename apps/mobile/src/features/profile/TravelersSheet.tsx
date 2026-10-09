@@ -3,6 +3,7 @@ import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Button, CloseButton, Stepper, tokens, rn } from "@bbc/ui";
 
+import { withAdults } from "@/features/explore/travel-preferences";
 import { putTravelPreferences, type Profile } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
 
@@ -35,8 +36,9 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
   async function onSave() {
     setBusy(true);
     setError(null);
+    // Adults only here: children and infants already in the profile stay.
     const result = await putTravelPreferences({
-      passengers: { adult, child: 0, infant: 0 },
+      passengers: withAdults(profile.preferences?.passengers, adult),
     });
     setBusy(false);
     if (!result.ok) {
@@ -68,7 +70,8 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
 
         <Button
           testID="profile.travelers.save"
-          label={busy ? "Saving…" : "Save"}
+          label={busy ? "Saving…" : "Save travelers"}
+          variant="primary"
           busy={busy}
           shape="pill"
           onPress={() => void onSave()}

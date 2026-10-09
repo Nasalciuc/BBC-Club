@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
-import { closedAt, requestView } from "./request-view-logic";
+import { closedAt, listHints, requestView } from "./request-view-logic";
 
-test("received stays Received with no invented caption", () => {
+test("received is Received, with the sentence and the step caption of 233:4248", () => {
   const v = requestView("received");
   expect(v.badge).toBe("received");
   expect(v.showTimeline).toBe(true);
-  expect(v.caption).toBeNull();
-  expect(v.sentence).toBeNull();
+  expect(v.sentence).toBe("We have your request. A specialist will call shortly to discuss your flight.");
+  expect(v.caption).toBe("We have your travel details.");
 });
 
 test("assigned is Received, with the specialist sentence and caption", () => {
@@ -23,11 +23,24 @@ test("quoted is Quote ready", () => {
   expect(v.caption).toBe("Review the quote with your specialist.");
 });
 
-test("booked is Booked by phone, with no invented caption", () => {
+test("booked is Booked by phone, with the sentence and the step caption of 233:4388", () => {
   const v = requestView("booked");
   expect(v.badge).toBe("booked");
   expect(v.showTimeline).toBe(true);
-  expect(v.caption).toBeNull();
+  expect(v.sentence).toBe("Your specialist completed this booking by phone. Your itinerary was sent by email.");
+  expect(v.caption).toBe("Your specialist confirms your flights.");
+});
+
+test("the list's hint: one just-received request is reassured, anything not sent is pointed at", () => {
+  expect(listHints([{ status: "received" }])).toEqual(["Your request is with us. A specialist will call shortly."]);
+  expect(listHints([{ status: "received" }, { status: "quoted" }])).toEqual([]);
+  expect(listHints([{ status: "quoted" }])).toEqual([]);
+  expect(listHints([{ status: "not_sent" }, { status: "received" }])).toEqual([
+    "One request needs your attention.",
+    "Open your request to check the details and try again.",
+  ]);
+  expect(listHints([{ status: "queued" }, { status: "not_sent" }])[0]).toBe("2 requests need your attention.");
+  expect(listHints([])).toEqual([]);
 });
 
 test("closedAt prefers the closed timeline event over createdAt", () => {

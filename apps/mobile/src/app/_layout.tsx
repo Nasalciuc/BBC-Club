@@ -3,9 +3,6 @@ import { MaterialSymbols_400Regular } from "@expo-google-fonts/material-symbols"
 import { Fraunces_400Regular, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
 import { Geist_400Regular, Geist_500Medium } from "@expo-google-fonts/geist";
 import { GeistMono_400Regular, GeistMono_500Medium } from "@expo-google-fonts/geist-mono";
-import { Inter_400Regular, Inter_500Medium } from "@expo-google-fonts/inter";
-import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
-import { SourceSerif4_400Regular } from "@expo-google-fonts/source-serif-4";
 import { useFonts } from "expo-font";
 import * as Linking from "expo-linking";
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
@@ -58,12 +55,8 @@ export default function RootLayout() {
   // (apiFetch 401) and explicit signOut navigate to /sign-in.
 
   // Fonts swap in when ready (RN 0.72+); do not block Stack on useFonts (Expo Router migrate).
+  // One type system (DESIGN.md, ADR-IMPL-041): Fraunces, Geist, Geist Mono on every screen, Entry included.
   useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    SourceSerif4_400Regular,
-    JetBrainsMono_400Regular,
-    JetBrainsMono_500Medium,
     Fraunces_400Regular,
     Fraunces_600SemiBold,
     Geist_400Regular,
@@ -71,9 +64,6 @@ export default function RootLayout() {
     GeistMono_400Regular,
     GeistMono_500Medium,
     MaterialSymbols_400Regular,
-    Inter: Inter_400Regular,
-    Newsreader: SourceSerif4_400Regular,
-    "JetBrains Mono": JetBrainsMono_400Regular,
     Fraunces: Fraunces_400Regular,
     Geist: Geist_400Regular,
     "Geist Mono": GeistMono_400Regular,

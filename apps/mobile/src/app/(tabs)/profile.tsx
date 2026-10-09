@@ -3,24 +3,22 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
-import { Icon, tokens, rn } from "@bbc/ui";
+import { EmptyState, Icon, ListRow, RequestRow, tokens, rn } from "@bbc/ui";
 
 import { telHref } from "@/features/requests/confirmation-logic";
+import { badgeStatus, requestMeta } from "@/features/requests/status";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
-
-function monogram(name: string | null | undefined): string {
-  if (!name?.trim()) return "";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
+import { clientSince } from "@/features/profile/profile-logic";
+import { monogram } from "@/lib/monogram";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [recent, setRecent] = useState<RequestVM[]>([]);
+  // Null until the requests answered: a failed fetch must not read as "No requests yet." (Figma 233:4550 is for a new
+  // client, not for an error).
+  const [recent, setRecent] = useState<RequestVM[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +51,7 @@ export default function ProfileScreen() {
   const initials = monogram(profile?.displayName);
   const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
   const home = profile?.homeAirport;
+  const since = clientSince(profile?.memberSince);
 
   return (
     <ScrollView
@@ -103,18 +102,35 @@ export default function ProfileScreen() {
         </Pressable>
       ) : null}
       <Text style={styles.section}>Recent requests</Text>
-      {recent.map((item) => (
-        <Pressable
-          key={item.id}
-          testID={`profile.request.${item.id}`}
-          accessibilityRole="button"
-          onPress={() => router.push(`/request/${item.id}` as Href)}
-          style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-        >
-          <Text style={styles.rowRoute}>{item.route}</Text>
-          <Text style={styles.rowMeta}>{item.dates}</Text>
-        </Pressable>
-      ))}
+      {recent === null ? null : recent.length === 0 ? (
+        // Figma 233:4550 (P5 / Profile · New client).
+        <EmptyState
+          testID="profile.requests.empty"
+          title="No requests yet."
+          body="Explore destinations and request a fare. Your requests will appear here."
+          primary={{ label: "Explore", onPress: () => router.push("/(tabs)/explore" as Href) }}
+        />
+      ) : (
+        recent.map((item) => (
+          <RequestRow
+            key={item.id}
+            testID={`profile.request.${item.id}`}
+            route={item.route}
+            meta={requestMeta(item)}
+            badgeStatus={badgeStatus(item.status)}
+            onPress={() => router.push(`/request/${item.id}` as Href)}
+          />
+        ))
+      )}
+      <Text style={styles.section}>Your account.</Text>
+      <ListRow
+        testID="profile.account.phone"
+        label="Phone"
+        value={profile?.phone ?? "Add phone"}
+        onPress={() => router.push("/settings" as Href)}
+      />
+      {since ? <Text style={styles.since}>{since}</Text> : null}
+      {!since && profile?.email ? <Text style={styles.since}>{profile.email}</Text> : null}
     </ScrollView>
   );
 }
@@ -152,9 +168,12 @@ const styles = StyleSheet.create({
   edit: { ...rn(tokens.type.body), color: tokens.colors.primary },
   call: { marginBottom: tokens.space.lg },
   callText: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  section: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
-  row: { paddingVertical: tokens.space.sm, gap: tokens.space.xxs },
-  rowRoute: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  rowMeta: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary },
+  section: {
+    ...rn(tokens.type.labelMono),
+    color: tokens.colors.textSecondary,
+    marginTop: tokens.space.lg,
+    marginBottom: tokens.space.sm,
+  },
+  since: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginTop: tokens.space.sm },
   pressed: { opacity: 0.7 },
 });

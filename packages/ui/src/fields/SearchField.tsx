@@ -13,6 +13,8 @@ type Props = {
   /** When true, renders a TextInput so sheets can type a query. */
   editable?: boolean;
   onChangeText?: (text: string) => void;
+  /** Editable only: focus and raise the keyboard as the field appears (Figma 89:388 opens typing). */
+  autoFocus?: boolean;
   testID: string;
 };
 
@@ -26,6 +28,7 @@ export function SearchField({
   disabledReason,
   editable = false,
   onChangeText,
+  autoFocus = false,
   testID,
 }: Props) {
   const filled = value != null && value.text.length > 0;
@@ -47,19 +50,9 @@ export function SearchField({
           style={styles.input}
           autoCorrect={false}
           autoCapitalize="none"
+          autoFocus={autoFocus}
         />
-        {filled && onClear ? (
-          <Pressable
-            testID={`${testID}.clear`}
-            accessibilityRole="button"
-            accessibilityLabel="Clear"
-            hitSlop={12}
-            onPress={onClear}
-            style={styles.clear}
-          >
-            <Icon name="clear" size={16} />
-          </Pressable>
-        ) : null}
+        {filled && onClear ? <ClearLink testID={testID} onPress={onClear} /> : null}
       </View>
     );
   }
@@ -91,18 +84,23 @@ export function SearchField({
           {disabled ? (disabledReason ?? placeholder) : placeholder}
         </Text>
       )}
-      {filled && onClear ? (
-        <Pressable
-          testID={`${testID}.clear`}
-          accessibilityRole="button"
-          accessibilityLabel="Clear destination"
-          hitSlop={12}
-          onPress={onClear}
-          style={styles.clear}
-        >
-          <Icon name="clear" size={16} />
-        </Pressable>
-      ) : null}
+      {filled && onClear ? <ClearLink testID={testID} onPress={onClear} /> : null}
+    </Pressable>
+  );
+}
+
+/** Figma SearchField · Filled / Focused: `Clear` is a text link at the field's right edge (89:387, 89:388), not an ×. */
+function ClearLink({ testID, onPress }: { testID: string; onPress: () => void }) {
+  return (
+    <Pressable
+      testID={`${testID}.clear`}
+      accessibilityRole="button"
+      accessibilityLabel="Clear"
+      hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.clear, pressed && styles.clearPressed]}
+    >
+      <Text style={styles.clearLabel}>Clear</Text>
     </Pressable>
   );
 }
@@ -132,12 +130,7 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
   },
-  clear: {
-    width: 24,
-    height: 24,
-    borderRadius: tokens.radius.pill,
-    backgroundColor: tokens.colors.borderDefault,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  clear: { minHeight: 44, justifyContent: "center", paddingLeft: tokens.space.xs },
+  clearPressed: { opacity: 0.6 },
+  clearLabel: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
 });

@@ -2,14 +2,16 @@
  * The Explore globe on Mapbox (ADR-IMPL-035). Loaded only by Globe.tsx, and only on a build that has the native module:
  * importing @rnmapbox/maps without it throws.
  *
- * The style is written here, not in Mapbox Studio: the same Natural Earth land as the drawn globe, Figma's colours
- * from tokens, no labels, no roads, no tiles to download. Figma: P3.1 Home · Rest (89:386), P3.2 London selected
- * (89:387), Globe · Map style (482:1115), page 06 · Motion.
+ * Mapbox's satellite-streets style (the owner's choice, 7 Oct 2026): imagery with the names of countries and cities,
+ * downloaded the first time a region is seen, then served from Mapbox's cache. Our pins and route sit above it.
+ * Figma: P3.1 Home · Rest (89:386), P3.2 London selected (89:387), Globe · Map style (482:1115), page 06 · Motion,
+ * 07 · Additions A6 (536:11212).
  */
 import Mapbox, {
   Atmosphere,
   Camera,
   CircleLayer,
+  FillLayer,
   LineLayer,
   MapView,
   ShapeSource,
@@ -26,6 +28,7 @@ import {
   globePadding,
   haloOpacity,
   homeSheetHeight,
+  nightPolygon,
   pickPin,
   pinFeatures,
   routeCamera,
@@ -63,7 +66,13 @@ type OnPressEvent = Parameters<NonNullable<ComponentProps<typeof ShapeSource>["o
 /** Figma Motion: one turn in 120 s is 3° a second, west; resume 4 s after the last touch (GLOBE_SPEC). */
 const TURN_DEG_PER_S = 360 / (GLOBE_SPEC.periodMs / 1000);
 const HALO_TICK_MS = 200;
-const MOVE_MS = { frame: 900, zoom: 500 } as const;
+/** A6 · CINEMATIC FLIGHT: the camera flies the great circle to a chosen destination in under a second; Motion spec 4:
+ *  the route then draws itself in 600 ms, home to destination. Back to Rest is the old ease. */
+const MOVE_MS = { frame: 900, flight: 950, arc: 600, zoom: 500 } as const;
+const ARC_TICK_MS = 30;
+/** A6 · DAY AND NIGHT: the dark side, shaded from the real time, updated every minute. */
+const NIGHT_TICK_MS = 60_000;
+const NIGHT_OPACITY = 0.35;
 
 export type MapboxGlobeProps = {
   pins: Pin[];
@@ -77,6 +86,8 @@ export type MapboxGlobeProps = {
   hidden: boolean;
   /** The map could not load (a bad token, a style error): Globe draws the fallback instead of a blank screen. */
   onFailed: () => void;
+  /** The map has loaded and drawn: Globe fades it in over the drawn globe (A6 · INSTANT GLOBE). */
+  onReady: () => void;
 };
 
 export default function MapboxGlobe({
@@ -88,6 +99,7 @@ export default function MapboxGlobe({
   sheetIndex,
   hidden,
   onFailed,
+  onReady,
 }: MapboxGlobeProps) {
   const camera = useRef<ComponentRef<typeof Camera>>(null);
   const view = useRef({ center: [...OPENING_CENTER] as LngLat, zoom: FIGMA_ZOOM, touchedAt: 0 });
@@ -98,6 +110,14 @@ export default function MapboxGlobe({
   const [a11yIndex, setA11yIndex] = useState(0);
   // The Camera mounts only after the map has its layout: framing waits for the map to finish loading.
   const [mapReady, setMapReady] = useState(false);
+  // Once the style is in, a failing tile, glyph or sprite is a blemish, not a dead map: only an error before the style
+  // loaded hands Explore back to the drawn globe (onMapLoadingError fires for any of them, repeatedly).
+  const styleLoaded = useRef(false);
+  // How much of the route is drawn, 0..1 — Motion spec 4 reveals it in route order once the flight has landed.
+  const [arc, setArc] = useState(1);
+  // The night side, recomputed on the minute while the globe is visible (one GeoJSON in state: the halo and arc ticks
+  // re-render without rebuilding it).
+  const [night, setNight] = useState(() => nightPolygon(new Date()));
 
   const moving = appActive && !hidden && !reducedMotion;
 
@@ -136,7 +156,16 @@ export default function MapboxGlobe({
     return () => clearInterval(t);
   }, [moving, selected]);
 
-  // A chosen destination frames its route above the sheet; clearing it hands the globe back to the rest position.
+  // The night side follows the clock while the globe is on screen; a globe coming back from the background catches up.
+  useEffect(() => {
+    if (!appActive || hidden) return;
+    setNight(nightPolygon(new Date()));
+    const t = setInterval(() => setNight(nightPolygon(new Date())), NIGHT_TICK_MS);
+    return () => clearInterval(t);
+  }, [appActive, hidden]);
+
+  // A chosen destination flies the camera along the great circle and frames the route above the sheet; clearing it
+  // eases the globe back to the rest position.
   const dest = pins.find((p) => p.code === selected) ?? null;
   const destLat = dest?.lat;
   const destLng = dest?.lng;
@@ -146,14 +175,13 @@ export default function MapboxGlobe({
     if (!mapReady) return;
     // A programmatic move counts as a touch: the slow turn waits until this framing has settled.
     view.current.touchedAt = Date.now();
-    const duration = reducedMotion ? 0 : MOVE_MS.frame;
     if (destLat === undefined || destLng === undefined) {
       camera.current?.setCamera({
         // Back to Figma's opening view: the idle turn resumes from there, not from the last route.
         centerCoordinate: [...OPENING_CENTER],
         zoomLevel: FIGMA_ZOOM,
         padding: globePadding("rest", size.height),
-        animationDuration: duration,
+        animationDuration: reducedMotion ? 0 : MOVE_MS.frame,
         animationMode: "easeTo",
       });
       return;
@@ -164,10 +192,34 @@ export default function MapboxGlobe({
       centerCoordinate: cam.center,
       zoomLevel: cam.zoom,
       padding: globePadding("selected", size.height),
-      animationDuration: duration,
-      animationMode: "easeTo",
+      animationDuration: reducedMotion ? 0 : MOVE_MS.flight,
+      animationMode: reducedMotion ? "easeTo" : "flyTo",
     });
   }, [mapReady, destLat, destLng, homeLat, homeLng, size.width, size.height, reducedMotion]);
+
+  // The route draws itself, home to destination, in 600 ms once the flight has landed (Motion spec 4). Reduce motion
+  // shows it whole at once, as the Figma RM frames do.
+  useEffect(() => {
+    if (destLat === undefined || destLng === undefined || homeLat === undefined || homeLng === undefined) return;
+    if (reducedMotion || !mapReady) {
+      setArc(1);
+      return;
+    }
+    setArc(0);
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const start = setTimeout(() => {
+      const began = Date.now();
+      interval = setInterval(() => {
+        const progress = Math.min(1, (Date.now() - began) / MOVE_MS.arc);
+        setArc(progress);
+        if (progress >= 1 && interval) clearInterval(interval);
+      }, ARC_TICK_MS);
+    }, MOVE_MS.flight);
+    return () => {
+      clearTimeout(start);
+      if (interval) clearInterval(interval);
+    };
+  }, [mapReady, destLat, destLng, homeLat, homeLng, reducedMotion]);
 
   function onCameraChanged(s: MapState) {
     const [lng = OPENING_CENTER[0], lat = OPENING_CENTER[1]] = s.properties.center;
@@ -240,8 +292,25 @@ export default function MapboxGlobe({
         logoPosition={{ bottom: ornament.bottom, left: 8 }}
         attributionPosition={{ bottom: ornament.bottom, right: 8 }}
         onCameraChanged={onCameraChanged}
-        onMapLoadingError={onFailed}
-        onDidFinishLoadingMap={() => setMapReady(true)}
+        onMapLoadingError={() => {
+          if (!styleLoaded.current) onFailed();
+        }}
+        onDidFinishLoadingStyle={() => {
+          styleLoaded.current = true;
+        }}
+        // Loaded (Mapbox's MapLoaded: the style in and every visible tile rendered), or idle with what could be loaded
+        // (a tile may have failed): either way there is a globe to show. Not onDidFinishRenderingMapFully:
+        // @rnmapbox/maps 10.3.7 never emits it (iOS does not export it, Android declares it and never sends it) — the
+        // satellite would never fade in.
+        onDidFinishLoadingMap={() => {
+          setMapReady(true);
+          onReady();
+        }}
+        onMapIdle={() => {
+          if (!styleLoaded.current) return;
+          setMapReady(true);
+          onReady();
+        }}
         // A tap on the ocean moves nothing, but it is a touch: the slow turn pauses for it too.
         onPress={() => {
           view.current.touchedAt = Date.now();
@@ -259,8 +328,15 @@ export default function MapboxGlobe({
           minZoomLevel={selected === null ? FIGMA_ZOOM : ZOOM_RANGE.min}
           maxZoomLevel={ZOOM_RANGE.max}
         />
+        <ShapeSource id="night" shape={night}>
+          <FillLayer
+            id="night-shade"
+            style={{ fillColor: tokens.colors.surfaceNight, fillOpacity: NIGHT_OPACITY, fillAntialias: false }}
+          />
+        </ShapeSource>
         {line ? (
-          <ShapeSource id="route" shape={line}>
+          // lineMetrics: line-trim-offset is measured along the line and needs the source to carry those metrics.
+          <ShapeSource id="route" shape={line} lineMetrics>
             <LineLayer
               id="route-line"
               style={{
@@ -268,6 +344,8 @@ export default function MapboxGlobe({
                 lineWidth: GLOBE_SPEC.arcStroke,
                 // Figma: 4 px dash, 4 px gap. Mapbox measures dashes in line widths.
                 lineDasharray: GLOBE_SPEC.arcDash.map((d) => d / GLOBE_SPEC.arcStroke),
+                // The undrawn part of the route is transparent: [drawn so far, end].
+                lineTrimOffset: [arc, 1],
               }}
             />
           </ShapeSource>

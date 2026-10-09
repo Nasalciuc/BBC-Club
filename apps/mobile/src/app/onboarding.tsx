@@ -16,8 +16,9 @@ import {
 } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
+import { deviceTimeZone } from "@/features/explore/discovery-logic";
 import { airportSearchState } from "@/lib/airport-search-state";
-import { fetchAirports, patchProfile, putTravelPreferences } from "@/lib/api";
+import { fetchAirports, fetchHomeSuggestion, patchProfile, putTravelPreferences } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
 import { appStorage, ONBOARDED_KEY } from "@/lib/storage-keys";
 
@@ -37,6 +38,21 @@ export default function OnboardingScreen() {
   const [adult, setAdult] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ADR-IMPL-039 / Figma 536:11191: the busiest airport in the phone's time zone, offered — never chosen — for the member.
+  const [suggested, setSuggested] = useState<AirportVM | null>(null);
+
+  useEffect(() => {
+    const tz = deviceTimeZone();
+    if (!tz) return;
+    let cancelled = false;
+    void (async () => {
+      const result = await fetchHomeSuggestion(tz);
+      if (!cancelled && result.ok) setSuggested(result.data.airport);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -99,7 +115,9 @@ export default function OnboardingScreen() {
         <View style={styles.header}>
           <ProgressLine fraction={1} />
           <Text style={styles.title}>Where do you fly from?</Text>
-          <Text style={styles.body}>City, airport or code.</Text>
+          <Text style={styles.body}>
+            {suggested ? "City, airport or code — suggested from your time zone." : "City, airport or code."}
+          </Text>
         </View>
 
         <Text style={styles.section}>Home airport</Text>
@@ -118,6 +136,21 @@ export default function OnboardingScreen() {
             setSelected(null);
           }}
         />
+
+        {suggested && !selected && query.trim().length < 2 ? (
+          <AirportRow
+            testID={`onboarding.airport.suggested.${suggested.code}`}
+            code={suggested.code}
+            city={suggested.city}
+            airport={suggested.name}
+            countryCode={suggested.countryCode}
+            onPress={() => {
+              setSelected(suggested);
+              setQuery(`${suggested.city} · ${suggested.code}`);
+              setSearch(airportSearchState("idle"));
+            }}
+          />
+        ) : null}
 
         {search.phase === "empty" && !selected ? (
           <EmptyState

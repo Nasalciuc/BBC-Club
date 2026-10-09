@@ -24,6 +24,12 @@ import {
   type HomeVM as HomeVMType,
   type SearchResultVM as SearchResultVMType,
 } from "@bbc/shared/api/v1/fares";
+import {
+  HomeSuggestionVM,
+  PopularVM,
+  type HomeSuggestionVM as HomeSuggestionVMType,
+  type PopularVM as PopularVMType,
+} from "@bbc/shared/api/v1/discovery";
 import type { ProfileVM as Profile } from "@bbc/shared/api/v1/profile";
 import {
   RequestBody,
@@ -384,9 +390,12 @@ export async function searchFares(q: {
   from: string;
   to: string;
   cabin: "business" | "first";
+  /** ISO datetime: only fares valid at that instant. Omitted for flexible dates (the search that can estimate). */
+  when?: string;
 }): Promise<ApiResult<SearchResultVMType>> {
   return asResult(async () => {
     const params = new URLSearchParams({ from: q.from, to: q.to, cabin: q.cabin });
+    if (q.when) params.set("when", q.when);
     const res = await apiFetch(`/v1/search?${params}`);
     if (!res.ok) {
       return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
@@ -417,6 +426,36 @@ export async function fetchAirports(query: string): Promise<ApiResult<AirportVMT
       if (parsed.success) items.push(parsed.data);
     }
     return { ok: true, data: items };
+  });
+}
+
+/** GET /v1/airports/popular?from= — "Popular from <city>" (ADR-IMPL-039): at most four destinations, names only. */
+export async function fetchPopular(from: string): Promise<ApiResult<PopularVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/airports/popular?from=${encodeURIComponent(from)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const parsed = PopularVM.safeParse(await parseJson(res));
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
+  });
+}
+
+/** GET /v1/airports/home-suggestion?tz= — the busiest airport in the phone's time zone, or null (ADR-IMPL-039). */
+export async function fetchHomeSuggestion(tz: string): Promise<ApiResult<HomeSuggestionVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/airports/home-suggestion?tz=${encodeURIComponent(tz)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const parsed = HomeSuggestionVM.safeParse(await parseJson(res));
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
   });
 }
 

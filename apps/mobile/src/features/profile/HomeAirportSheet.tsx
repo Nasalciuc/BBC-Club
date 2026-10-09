@@ -161,7 +161,8 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
 
         <Button
           testID="profile.homeAirport.save"
-          label={busy ? "Saving…" : "Save"}
+          label={busy ? "Saving…" : "Save airport"}
+          variant="primary"
           busy={busy}
           shape="pill"
           onPress={() => void onSave()}

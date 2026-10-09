@@ -19,10 +19,13 @@ export type DatesSheetHandle = { present: (s: Selection) => void };
 
 const DATE_SNAP_POINTS = ["92%"] as const;
 
-export const DatesSheet = forwardRef<DatesSheetHandle, { onUse: (s: Selection) => void }>(function DatesSheet(
-  { onUse },
-  ref,
-) {
+type Props = {
+  onUse: (s: Selection) => void;
+  /** Home only: the way back to `Oct · flexible` — an undated search, the one that can carry an estimate. */
+  onFlexible?: () => void;
+};
+
+export const DatesSheet = forwardRef<DatesSheetHandle, Props>(function DatesSheet({ onUse, onFlexible }, ref) {
   const modal = useRef<BottomSheetModal>(null);
   const [sel, setSel] = useState<Selection | null>(null);
   const today = todayLocal();
@@ -82,6 +85,7 @@ export const DatesSheet = forwardRef<DatesSheetHandle, { onUse: (s: Selection) =
             testID="dates.use"
             label={cta.label}
             disabled={!cta.enabled}
+            variant="primary"
             shape="pill"
             onPress={() => {
               if (sel) {
@@ -90,6 +94,21 @@ export const DatesSheet = forwardRef<DatesSheetHandle, { onUse: (s: Selection) =
               }
             }}
           />
+          {onFlexible ? (
+            <Pressable
+              testID="dates.flexible"
+              accessibilityRole="button"
+              accessibilityLabel="Keep the dates flexible"
+              hitSlop={8}
+              onPress={() => {
+                onFlexible();
+                modal.current?.dismiss();
+              }}
+              style={({ pressed }) => [styles.flexible, pressed && styles.flexiblePressed]}
+            >
+              <Text style={styles.flexibleLabel}>Keep the dates flexible</Text>
+            </Pressable>
+          ) : null}
           <Text style={styles.note}>Preferred dates. Your specialist confirms availability.</Text>
         </View>
       </View>
@@ -147,6 +166,9 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg },
   footer: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg, gap: tokens.space.xs },
   note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
+  flexible: { minHeight: 44, alignItems: "center", justifyContent: "center" },
+  flexiblePressed: { opacity: 0.6 },
+  flexibleLabel: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   legs: {
     flexDirection: "row",
     gap: tokens.space.sm,

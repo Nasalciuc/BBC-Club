@@ -270,7 +270,8 @@ Tokens and components in this file are canonical. Details live in `design/compon
 
 - Roles never swap: every headline is serif (`display`, `headline`, `title`, `title-sm`) at weight 400; buttons are `button` (Geist 17/500); labels and flight facts are mono uppercase letterspaced.
 - Body never below `body-sm` (15px); `caption` (13px) carries only non-essential lines.
-- Interior fonts are bundled (Fraunces, Geist, Geist Mono). Entry keeps Inter, Source Serif 4, and JetBrains Mono. Hold the splash until they load. Prototype tools may substitute Playfair/Georgia and Menlo — prototypes only.
+- One type system on every screen, Entry included: the bundled Fraunces, Geist and Geist Mono (Figma 02 · Text styles; ADR-IMPL-041). Hold the splash until they load. Prototype tools may substitute Playfair/Georgia and Menlo — prototypes only.
+- `tab-mono` is 11/13 here and in the app; Figma's text style says 9/9, below the legibility floor this file sets (caption 13, body-sm 15). Figma follows the code on this one line.
 
 ## Layout and Responsiveness
 
