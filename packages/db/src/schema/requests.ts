@@ -31,7 +31,7 @@ export const requests = requestsSchema.table(
     intent: text("intent"),
     replacesFareId: uuid("replaces_fare_id"),
     /** The indicative price the search showed for a quote's route, recomputed by the server (ADR-IMPL-042). Whole USD;
-     *  null on every other request. Added by the named step 0024, not by a drizzle migration. */
+     *  null on every other request. Added by the named steps 0024 and 0025, not by a drizzle migration. */
     shownEstimateAmount: integer("shown_estimate_amount"),
     shownEstimateCurrency: text("shown_estimate_currency"),
     tripType: tripType("trip_type").notNull(),
@@ -63,6 +63,12 @@ export const requests = requestsSchema.table(
     index("requests_member")
       .on(t.memberId, t.createdAt)
       .where(sql`${t.memberId} IS NOT NULL`),
+    /** The member's list: requests in progress first, newest first within each group (0025). The second key is the
+     *  list's ORDER BY expression, written the same way, so the list reads 51 entries however many requests a member
+     *  has. */
+    index("requests_member_list")
+      .on(t.memberId, sql`(${t.status} IN ('booked', 'closed'))`, t.createdAt.desc().nullsFirst())
+      .where(sql`${t.memberId} IS NOT NULL`),
     index("requests_unsent")
       .on(t.createdAt)
       .where(sql`${t.sentToCrm} = false`),
@@ -86,7 +92,8 @@ export const requests = requestsSchema.table(
     check("requests_intent", sql`${t.intent} IS NULL OR ${t.intent} IN ('quote', 'alternative')`),
     check(
       "requests_shown_estimate",
-      sql`(${t.shownEstimateAmount} IS NULL AND ${t.shownEstimateCurrency} IS NULL) OR (${t.shownEstimateAmount} > 0 AND ${t.shownEstimateCurrency} = 'USD')`,
+      // Each side says IS NOT NULL: a CHECK passes on NULL, so the second side alone let half a pair in (0024 → 0025).
+      sql`(${t.shownEstimateAmount} IS NULL AND ${t.shownEstimateCurrency} IS NULL) OR (${t.shownEstimateAmount} IS NOT NULL AND ${t.shownEstimateCurrency} IS NOT NULL AND ${t.shownEstimateAmount} > 0 AND ${t.shownEstimateCurrency} = 'USD')`,
     ),
     check(
       "requests_sync_consistent",

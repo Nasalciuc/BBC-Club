@@ -9,6 +9,9 @@ import type { AirportRow } from "../application/to-fare-vm";
 
 export { toAirportVM, toFareVM };
 
+/** An estimate as the facade answers it: what the search shows, and the fingerprint of the rules behind it. */
+export type IndicativeEstimate = EstimateVM & { rules: string };
+
 /** Cheapest published fare per destination from home — shape of destinations(). */
 export type DestinationPin = {
   code: string;
@@ -35,13 +38,15 @@ export type CatalogFacade = {
   /** Batch lookup; order is not guaranteed. Replaces getAirport in loops. */
   getAirports(exec: Executor | undefined, codes: readonly string[]): Promise<AirportRow[]>;
   /**
-   * The indicative price an undated search shows for this route right now (ADR-IMPL-037), or null: estimates off, no
-   * valid rules, an unknown airport, a published fare in this cabin, or a route the formula does not price. The quote
-   * request that follows the search asks the same question (ADR-IMPL-042), so the specialist sees what the member saw.
+   * The indicative price an undated search shows for this route right now (ADR-IMPL-037), with the fingerprint of the
+   * rules that computed it, or null: estimates off, no valid rules, an unknown airport, a published fare in this cabin,
+   * or a route the formula does not price. A quote request whose app showed the estimate asks the same question
+   * (ADR-IMPL-042), so the specialist sees the member's number. A killed catalog still answers (its facade stays so
+   * dependents boot): `catalog.estimates` off is the switch for estimates.
    */
   indicativeFor(
     exec: Executor | undefined,
     q: { from: string; to: string; cabin: "business" | "first" },
-  ): Promise<EstimateVM | null>;
+  ): Promise<IndicativeEstimate | null>;
   importCsv(input: unknown): Promise<{ imported: number }>;
 };

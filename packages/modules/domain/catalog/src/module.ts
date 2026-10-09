@@ -38,20 +38,25 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
     /** One rule for the search and for the quote request that follows it (ADR-IMPL-037, ADR-IMPL-042): the company's
      *  formula, when estimates are on and this environment holds valid rules. Both flag rows are cached (~35 s to reach
      *  every replica) and a failed read counts as off; without valid rules there is no estimate, never an error. */
-    async function indicativeEstimate(
-      from: Parameters<typeof toEstimateVM>[1],
-      to: Parameters<typeof toEstimateVM>[2],
-      cabin: "business" | "first",
-      metric: "search" | "request",
-    ): Promise<ReturnType<typeof toEstimateVM>> {
+    async function estimateRules(metric: "search" | "request") {
       if (!(await platform.flags.isEnabled("catalog.estimates", false))) return null;
       const stored = readStoredRules(await platform.flags.read("catalog.pricing_rules"));
       if (!stored.ok) {
         platform.metrics.inc(`${metric}_estimates_unavailable`, { reason: stored.reason });
         return null;
       }
+      return stored;
+    }
+
+    async function indicativeEstimate(
+      from: Parameters<typeof toEstimateVM>[1],
+      to: Parameters<typeof toEstimateVM>[2],
+      cabin: "business" | "first",
+    ): Promise<ReturnType<typeof toEstimateVM>> {
+      const stored = await estimateRules("search");
+      if (!stored) return null;
       const estimate = toEstimateVM(stored.rules, from, to, cabin);
-      if (estimate) platform.metrics.inc(`${metric}_estimates_shown`, { cabin });
+      if (estimate) platform.metrics.inc("search_estimates_shown", { cabin });
       return estimate;
     }
 
@@ -69,8 +74,10 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
       getAirports: (exec, codes) => airportsRepo.getMany(exec ?? conn, [...codes]),
       indicativeFor: async (exec, q) => {
-        // The flags first: with estimates off (production today) the question costs no query.
-        if (!(await platform.flags.isEnabled("catalog.estimates", false))) return null;
+        // The cached flag rows first: with estimates off (production today) or no valid rules, the question costs no
+        // query. The request module counts what it stores (`request_estimates_stored`), after its insert.
+        const stored = await estimateRules("request");
+        if (!stored) return null;
         const from = q.from.toUpperCase();
         const to = q.to.toUpperCase();
         const e = exec ?? conn;
@@ -82,7 +89,8 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         const toApt = airports.find((a) => a.code === to);
         // Published fares always win: the search showed them, not an estimate.
         if (!fromApt || !toApt || rows.length > 0) return null;
-        return indicativeEstimate(fromApt, toApt, q.cabin, "request");
+        const estimate = toEstimateVM(stored.rules, fromApt, toApt, q.cabin);
+        return estimate ? { ...estimate, rules: stored.fingerprint } : null;
       },
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
@@ -132,7 +140,7 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         // with a date, the route may have fares on other days, and published fares always win. The flag rows are read
         // only then, so searches with fares cost nothing extra. The rules are not in the repository: each environment
         // holds them in `catalog.pricing_rules` (scripts/load-pricing-rules.ts).
-        const estimate = items.length === 0 && !when ? await indicativeEstimate(fromApt, toApt, cabin, "search") : null;
+        const estimate = items.length === 0 && !when ? await indicativeEstimate(fromApt, toApt, cabin) : null;
         return c.json({
           from: toAirportVM(fromApt),
           to: toAirportVM(toApt),

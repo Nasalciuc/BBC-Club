@@ -81,17 +81,11 @@ describe("submit — transaction boundaries", () => {
     ).toBe(1);
   });
 
-  it("a quote keeps the estimate the catalog gives its outbound route; a fare request and a replay never ask", async () => {
+  it("a quote whose app showed the estimate keeps the catalog's number; a fare request and a replay never ask", async () => {
     const asked: { from: string; to: string; cabin: string }[] = [];
     const estimate = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
       asked.push(q);
-      return {
-        amount: 2055,
-        currency: "USD" as const,
-        trip: "round_trip" as const,
-        cabin: q.cabin,
-        basis: "formula" as const,
-      };
+      return { amount: 2055, currency: "USD" as const, cabin: q.cabin, rules: "0123456789abcdef" };
     };
     const round = {
       ...body,
@@ -100,6 +94,7 @@ describe("submit — transaction boundaries", () => {
         { from: "JFK", to: "ZRH", date: "2027-10-12" },
         { from: "ZRH", to: "JFK", date: "2027-10-19" },
       ],
+      estimateShown: true,
       // Not in RequestBody: dropped by the parse, never stored.
       estimate: { amount: 1, currency: "USD" },
       price: 1,
@@ -117,7 +112,7 @@ describe("submit — transaction boundaries", () => {
       sql`SELECT payload FROM platform.domain_events
           WHERE type = 'request.submitted' AND payload->>'requestId' = ${quote.ok ? quote.request.id : ""}`,
     )) as unknown as { payload: { shownEstimate: unknown } }[];
-    expect(journal?.payload.shownEstimate).toEqual({ amount: 2055, currency: "USD" });
+    expect(journal?.payload.shownEstimate).toEqual({ amount: 2055, currency: "USD", rules: "0123456789abcdef" });
 
     const replay = await submit(db, round, actor, key, { publish, rateLimit: allowAll, indicative: estimate });
     expect(replay).toMatchObject({ ok: true, created: false });
@@ -138,5 +133,46 @@ describe("submit — transaction boundaries", () => {
     );
     expect(alternative).toMatchObject({ ok: true, created: true });
     expect(asked).toHaveLength(1);
+  });
+
+  it("a quote whose app did not show an estimate never asks — an older app, a dated search, an offer card", async () => {
+    const asked: unknown[] = [];
+    const estimate = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
+      asked.push(q);
+      return { amount: 2055, currency: "USD" as const, cabin: q.cabin };
+    };
+    for (const shown of [undefined, false]) {
+      const key = `idem-${crypto.randomUUID()}`;
+      const quote = await submit(
+        db,
+        { ...body, intent: "quote", ...(shown === undefined ? {} : { estimateShown: shown }) },
+        actor,
+        key,
+        { publish, rateLimit: allowAll, indicative: estimate },
+      );
+      expect(quote).toMatchObject({ ok: true, created: true });
+      const [row] = (await db.execute(
+        sql`SELECT shown_estimate_amount AS amount FROM requests.requests WHERE idempotency_key = ${key}`,
+      )) as unknown as { amount: number | null }[];
+      expect(row?.amount).toBeNull();
+    }
+    expect(asked).toEqual([]);
+  });
+
+  it("a rate-limited quote stops before the estimate: the limit costs no catalog read", async () => {
+    const asked: unknown[] = [];
+    const estimate = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
+      asked.push(q);
+      return { amount: 2055, currency: "USD" as const, cabin: q.cabin };
+    };
+    const limited = await submit(
+      db,
+      { ...body, intent: "quote", estimateShown: true },
+      actor,
+      `idem-${crypto.randomUUID()}`,
+      { publish, rateLimit: { check: async () => ({ allowed: false, retryAfterMs: 1000 }) }, indicative: estimate },
+    );
+    expect(limited).toMatchObject({ ok: false, code: "RATE_LIMITED" });
+    expect(asked).toEqual([]);
   });
 });

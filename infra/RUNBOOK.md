@@ -115,10 +115,7 @@ ssh <server> 'cd <checkout> && docker compose -f infra/docker-compose.yml -f inf
 
 Windows PowerShell has no `<`: `Get-Content -Raw pricing-rules.json | ssh <server> '…'` does the same.
 
-The poster check must equal the poster (JFK → ZRH, business, round trip). Searches use the new rules within ~35 s, and
-so do quote requests: from then on a quote on a route with no published fare carries the estimate its search showed —
-stored on the request and written into the specialist's e-mail as `Indicative estimate shown: $2,055 round trip,
-business (formula)` (ADR-IMPL-042). Then
+The poster check must equal the poster (JFK → ZRH, business, round trip). Searches use the new rules within ~35 s. Then
 estimates on, in that environment's database (staging: `docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`;
 production only after the company's written approval). Off is the same with `false` (~35 s):
 
@@ -127,9 +124,40 @@ INSERT INTO platform.flags(key,value) VALUES ('catalog.estimates','{"enabled":tr
 ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
 ```
 
+With estimates on, a quote request whose app showed the estimate (A2c and later) carries it — stored on the request,
+published with the rules' fingerprint and written into the specialist's e-mail as `Indicative estimate shown: $2,055
+round trip, business (formula)` (ADR-IMPL-042). `catalog.estimates` off stops estimates everywhere; `catalog.killed`
+stops Explore but not the estimate a queued request may still ask for.
+
 Which rules are live: `SELECT value->>'fingerprint', value->>'loadedAt' FROM platform.flags WHERE key = 'catalog.pricing_rules';`.
-`bbc_search_estimates_unavailable{reason}` rising while estimates are on: the rules are missing (load them) or were
-edited by hand (load them again). Never edit that row by hand; never paste the file into a chat, an issue or a log.
+`bbc_search_estimates_unavailable{reason}` and `bbc_request_estimates_unavailable{reason}` rising while estimates are on:
+`missing` — load the rules; `invalid` — they were edited by hand, load them again; for requests also `error` (the catalog
+read failed: look for `request estimate unavailable` in the API log), `timeout` (it took over a second) — those quotes
+went through without the estimate. `bbc_request_estimates_stored{cabin}` counts the estimates that reached a request.
+Never edit that row by hand; never paste the file into a chat, an issue or a log.
+
+## A request that was never sent (ADR-IMPL-042)
+
+`send-requests` passes each request to the CRM within a minute; a failure is tried again every five minutes, six times.
+Then it gives up: the log says `request send gave up` (with the request id), `bbc_request_sends_given_up` rises on the
+worker's metrics, `OPS_WEBHOOK` gets one line, and the member reads `Not sent` — with a call button from the A2c app
+on; older apps still say it is saved on the phone. Nothing resends it by itself. Fix the cause (the CRM, `OPERATORS_EMAIL`, Postmark — the log line has the error), then re-queue it; the next
+minute's run sends it:
+
+```sql
+SELECT id, reference, send_attempts, last_error, created_at FROM requests.requests
+WHERE sent_to_crm = false AND status <> 'closed' AND send_attempts >= 6 ORDER BY created_at;
+UPDATE requests.requests SET send_attempts = 0, sent_at = NULL WHERE id = '<uuid>' AND sent_to_crm = false;
+```
+
+A request still waiting after 45 minutes with fewer attempts means the worker is not running the job: check the worker
+(`/ready` on 8001) and `platform.job_runs` for `send-requests`. Nothing alerts on this by itself: every `OPS_WEBHOOK`
+post comes from the worker, so a stopped worker posts nothing — an outside check on `/ready` at 8001 (an uptime
+monitor) is the alert, when one is set up.
+
+The note in a request's e-mail is the member's own text, quoted (`> `) under `Note from the member:` — a link in it is
+the member's, not ours. A status note sent with the internal status webhook (`POST /v1/internal/requests/:id/status`,
+`note`) is shown to the member under the current step of the request's timeline: write it for the member.
 
 ## The queue is stuck (oldest pending > 5 min)
 
@@ -181,7 +209,9 @@ FROM pg_stat_activity WHERE datname = current_database() AND xact_start IS NOT N
 2. `migrations-registered.test.ts` fails if either is missing.
 3. A destructive statement in it needs `-- destructive: <reason>` on the line above (`bun run migrations:destructive`), and it ships as its own announced PR.
 
-Never edit a migration that already ran.
+Never edit a migration that already ran. Named steps that correct one another run together:
+`0025_requests_estimate_pair_and_list.sql` replaces the CHECK `0024_requests_shown_estimate.sql` added, so deleting
+0024's ledger row alone would run it again after 0025 and put the weaker CHECK back — delete both rows, or neither.
 
 **3. Data was lost or corrupted.** Restore, from the smallest scope that works:
 

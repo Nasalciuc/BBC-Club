@@ -1,6 +1,6 @@
-/** ADR-IMPL-042: a quote request carries the indicative price its search showed — recomputed by the server, stored on
- *  the row, published with request.submitted and written into the specialist's e-mail. And the member's note reaches
- *  the specialist at last. */
+/** ADR-IMPL-042: a quote request whose app showed the indicative price carries it — recomputed by the server, stored
+ *  on the row, published with request.submitted (with the rules' fingerprint) and written into the specialist's
+ *  e-mail. A quote whose app showed none carries none. And the member's note reaches the specialist at last. */
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { storedPricingRules } from "../../../packages/modules/domain/catalog/src/pricing/rules";
@@ -15,6 +15,8 @@ const round = (from: string, to: string, over: Record<string, unknown> = {}) => 
     { from: to, to: from, date: "2027-10-19" },
   ],
   priceAtRequest: undefined,
+  // The app showed the indicative fare before the member asked (the frontend's estimate row).
+  estimateShown: true,
   ...over,
 });
 
@@ -33,7 +35,7 @@ describe("a quote request carries the estimate its search showed", () => {
   it("stores, publishes and sends the server's estimate — and nothing the app sent", async () => {
     const t = await testApp({ suite: "requests-estimate" });
     await t.seedCatalogBasics();
-    // Eight requests: alternate the two members, so neither meets the request rate limit (burst 5).
+    // Nine requests: alternate the two members, so neither meets the request rate limit (burst 5).
     let n = 0;
     const post = async (body: Record<string, unknown>) => {
       const member = n++ % 2 === 0 ? t.memberA : t.memberB;
@@ -61,7 +63,17 @@ describe("a quote request carries the estimate its search showed", () => {
     expect(await shown(t, zurich)).toEqual({ amount: 1633, currency: "USD" });
     const journal = await t.journal.byType("request.submitted");
     const published = journal.find((e) => e.payload.requestId === zurich);
-    expect(published?.payload.shownEstimate).toEqual({ amount: 1633, currency: "USD" });
+    // The fingerprint names the rules that computed the number (it identifies them, never reveals them).
+    expect(published?.payload.shownEstimate).toEqual({
+      amount: 1633,
+      currency: "USD",
+      rules: storedPricingRules(FIXTURE_RULES).fingerprint,
+    });
+
+    // An app that did not show an estimate — an older app, a dated search, an offer card — gets none.
+    expect(
+      await shown(t, await post({ intent: "quote", ...round("JFK", "ZRH", { estimateShown: undefined }) })),
+    ).toEqual({ amount: null, currency: null });
 
     // A request without an intent, a fare or an offer is a quote too (effectiveIntent).
     expect(await shown(t, await post(round("JFK", "ZRH")))).toEqual({ amount: 1633, currency: "USD" });
@@ -98,8 +110,9 @@ describe("a quote request carries the estimate its search showed", () => {
     expect(sent.find((p) => p._request_id === off)?.shown_estimate).toBeNull();
 
     const metrics = await (await t.app.request("/metrics")).text();
-    expect(metrics).toContain('bbc_request_estimates_shown{cabin="business"} 2');
-    expect(metrics).toContain('bbc_request_estimates_shown{cabin="first"} 1');
+    // Counted once stored: two business quotes and one first carry an estimate.
+    expect(metrics).toContain('bbc_request_estimates_stored{cabin="business"} 2');
+    expect(metrics).toContain('bbc_request_estimates_stored{cabin="first"} 1');
     await t.close();
   }, 60_000);
 
@@ -113,6 +126,22 @@ describe("a quote request carries the estimate its search showed", () => {
     expect(await shown(t, id)).toEqual({ amount: null, currency: null });
     const metrics = await (await t.app.request("/metrics")).text();
     expect(metrics).toContain('bbc_request_estimates_unavailable{reason="missing"} 1');
+    await t.close();
+  });
+
+  it("a catalog that fails gives no estimate: the request still goes through, and the failure is counted", async () => {
+    const t = await testApp({ suite: "requests-estimate-broken" });
+    await t.seedCatalogBasics();
+    await t.flags.set("catalog.estimates", { enabled: true });
+    await t.flags.set("catalog.pricing_rules", storedPricingRules(FIXTURE_RULES));
+    // The fare read fails in this isolated database: an error from the catalog, never a refused request.
+    await t.db.execute(sql`ALTER TABLE catalog.fares RENAME TO fares_unreachable`);
+    const res = await t.submitRequestAs(t.memberA, t.sampleRequestBody({ intent: "quote", ...round("JFK", "ZRH") }));
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: string };
+    expect(await shown(t, id)).toEqual({ amount: null, currency: null });
+    const metrics = await (await t.app.request("/metrics")).text();
+    expect(metrics).toContain('bbc_request_estimates_unavailable{reason="error"} 1');
     await t.close();
   });
 });

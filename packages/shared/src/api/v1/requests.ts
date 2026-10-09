@@ -1,11 +1,19 @@
 import { z } from "zod";
 import { isMemberPhone } from "../../phone";
+import { calendarDay } from "../../requests/display";
 
-/** date = YYYY-MM-DD only — never an ISO timestamp (a local 21:00 must not become tomorrow). */
+/** An airport is three letters (IATA), upper-cased (`jfk` reads as JFK): the code is the route, the title and the push
+ *  (ADR-IMPL-042). */
+const IATA = /^[A-Za-z]{3}$/;
+
+/** date = YYYY-MM-DD only — never an ISO timestamp (a local 21:00 must not become tomorrow) — and a real day. */
 export const RequestLeg = z.object({
-  from: z.string().length(3).toUpperCase(),
-  to: z.string().length(3).toUpperCase(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  from: z.string().regex(IATA).toUpperCase(),
+  to: z.string().regex(IATA).toUpperCase(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((d) => calendarDay(d) !== null, { message: "Choose a date on the calendar." }),
 });
 export type RequestLeg = z.infer<typeof RequestLeg>;
 
@@ -37,6 +45,11 @@ export const RequestBody = z
     priceAtRequest: z.number().positive().optional(),
     intent: z.enum(["quote", "alternative"]).optional(),
     replacesFareId: z.string().uuid().optional(),
+    /** The app showed the indicative fare for this route and cabin before the member asked for a quote (ADR-IMPL-042).
+     *  A yes, never a number: the server recomputes the estimate, and only when this is true — an app that does not
+     *  say so (an older one, a dated search, an offer card) gets none, so an e-mail never claims an estimate the
+     *  member did not see. */
+    estimateShown: z.boolean().optional(),
   })
   .superRefine((b, ctx) => {
     if (b.fareId && b.offerId) {
@@ -73,18 +86,20 @@ export const RequestVM = z.object({
   route: z.string(),
   /** The destination's city, for the title (Figma 233:4069: `London`). Null when the airport is unknown; optional so
    *  an app reads an older server, and an older app ignores it (ADR-IMPL-042). */
-  city: z.string().nullable().optional(),
+  city: z.string().nullable().optional().catch(null),
   /** Round trip, one way or multi-city — the detail's facts line (Figma 233:4171: `ROUND TRIP`). Optional both ways; a
    *  kind this app does not know reads as none, so the request still lists. */
   tripType: z.enum(["round", "oneway", "multi"]).optional().catch(undefined),
   /** The number the specialist calls: the request's own contact phone, the member's (Figma 233:4242, `WE WILL CALL`).
-   *  Optional both ways. */
-  phone: z.string().nullable().optional(),
+   *  Optional both ways; a value this app cannot read reads as none, so the request still lists. */
+  phone: z.string().nullable().optional().catch(null),
   dates: z.string(),
   cabin: z.enum(["business", "first"]),
   passengers: Passengers,
   priceAtRequest: z.number().nullable(),
-  status: z.enum(["received", "assigned", "quoted", "booked", "closed", "not_sent"]),
+  /** A state a newer server adds reads as received in an older app — the request stays on the list instead of
+   *  vanishing from it (the app parses rows one by one and drops those that fail). */
+  status: z.enum(["received", "assigned", "quoted", "booked", "closed", "not_sent"]).catch("received"),
   createdAt: z.string().datetime(),
   timeline: z.array(
     z.object({

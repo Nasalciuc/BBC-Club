@@ -1,22 +1,42 @@
 import { withTx, type Executor } from "@bbc/db";
-import type { RequestsRepo } from "../infrastructure/requests.repo";
+import { MAX_SEND_ATTEMPTS, type RequestsRepo } from "../infrastructure/requests.repo";
 import { effectiveIntent } from "../application/intent";
 import { signAction, type OperatorAction } from "../application/operator-links";
 
-type Logger = { warn: (obj: object, msg: string) => void };
+type Logger = { warn: (obj: object, msg: string) => void; error: (obj: object, msg: string) => void };
 
-/** Every minute. CRM call lives here, outside submit tx. Six attempts; then stays not_sent for member retry. */
+/**
+ * Every minute. The CRM call lives here, outside the submit transaction. A failed request is tried again five minutes
+ * later, six times in all (MAX_SEND_ATTEMPTS); then nothing resends it — the member reads `not_sent` and is asked to
+ * call, the giving up is logged, counted (`bbc_request_sends_given_up`) and posted to OPS_WEBHOOK, and an operator
+ * re-queues it (infra/RUNBOOK.md, "A request that was never sent").
+ */
 export function createSendRequestsJob(deps: {
   db: Executor;
   repo: RequestsRepo;
   crm: { submitRequest(payload: unknown): Promise<{ crmRequestId: string }> };
   logger: Logger;
+  metrics: { inc(name: string, labels?: Record<string, string>): void };
+  /** Posts one line to the ops channel; never throws (a failed post is logged by the caller's wrapper). */
+  notifyOps: (text: string) => Promise<void>;
   appOrigin: string;
   opsLinkSecret: string;
 }) {
+  const gaveUp = async (id: string | null, reference: string | null, reason: string) => {
+    deps.metrics.inc("request_sends_given_up");
+    deps.logger.error({ requestId: id, reference, err: reason }, "request send gave up");
+    await deps.notifyOps(
+      `request ${reference ?? id ?? "?"} was not sent after ${MAX_SEND_ATTEMPTS} attempts — re-queue it (RUNBOOK)`,
+    );
+  };
+
   return async function run() {
     let sent = 0;
-    const rows = await withTx(deps.db, (tx) => deps.repo.claimUnsent(tx, 20));
+    const { rows, rejected } = await withTx(deps.db, (tx) => deps.repo.claimUnsent(tx, 20));
+    for (const bad of rejected) {
+      deps.logger.warn({ requestId: bad.id, err: bad.reason }, "request send failed");
+      if (bad.attempts >= MAX_SEND_ATTEMPTS) await gaveUp(bad.id, null, bad.reason);
+    }
 
     for (const row of rows) {
       try {
@@ -60,10 +80,11 @@ export function createSendRequestsJob(deps: {
         sent++;
       } catch (err) {
         const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
-        await withTx(deps.db, (tx) => deps.repo.markFailed(tx, row.id, message));
+        const attempts = await withTx(deps.db, (tx) => deps.repo.markFailed(tx, row.id, message));
         deps.logger.warn({ requestId: row.id, err: message }, "request send failed");
+        if (attempts >= MAX_SEND_ATTEMPTS) await gaveUp(row.id, row.reference, message);
       }
     }
-    return { sent, attempted: rows.length };
+    return { sent, attempted: rows.length, rejected: rejected.length };
   };
 }

@@ -14,6 +14,7 @@ import { effectiveIntent } from "./application/intent";
 import { actionLabel, escapeHtml, routeLabel, verifyAction } from "./application/operator-links";
 import { toRequestVM } from "./application/to-request-vm";
 import { destinationCities, routeEnds } from "./application/route";
+import { askEstimate } from "./application/estimate";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
@@ -52,22 +53,44 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       destinationCities(
         rows,
         (codes) => ports.catalog.getAirports(undefined, codes),
-        (err) =>
-          platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "request cities unavailable"),
+        (err) => {
+          platform.metrics.inc("request_cities_unavailable");
+          platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "request cities unavailable");
+        },
       );
     const cityOf = (cities: Map<string, string>, row: { legs: unknown; tripType: string }) => {
       const to = routeEnds(row.legs, row.tripType)?.to;
       return (to && cities.get(to)) || null;
     };
-    // An estimate decorates a request; it never decides whether one is accepted. A failed lookup is logged and the
-    // request goes through without it.
-    const indicative = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
+    // An estimate decorates a request; it never decides whether one is accepted. A failed, slow or malformed answer is
+    // counted and logged, and the request goes through without it (application/estimate.ts).
+    const indicative = (q: { from: string; to: string; cabin: "business" | "first" }) =>
+      askEstimate(() => ports.catalog.indicativeFor(undefined, q), {
+        unavailable: (reason, err) => {
+          platform.metrics.inc("request_estimates_unavailable", { reason });
+          platform.logger.warn(
+            { reason, err: err instanceof Error ? err.message : err === undefined ? undefined : String(err) },
+            "request estimate unavailable",
+          );
+        },
+      });
+    // One line to the ops channel (OPS_WEBHOOK, as the worker's DB alerts); a failed post is logged, never thrown.
+    const notifyOps = async (text: string) => {
+      const hook = env.OPS_WEBHOOK;
+      if (!hook) {
+        platform.logger.warn({ text }, "ops alert (OPS_WEBHOOK unset — not posted)");
+        return;
+      }
       try {
-        return await ports.catalog.indicativeFor(undefined, q);
+        const res = await fetch(hook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: `[bbc requests] ${text}` }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) platform.logger.warn({ status: res.status }, "ops alert not posted");
       } catch (err) {
-        platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "request estimate unavailable");
-        platform.metrics.inc("request_estimates_unavailable", { reason: "error" });
-        return null;
+        platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "ops alert not posted");
       }
     };
 
@@ -112,6 +135,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           return c.json(apiError("VALIDATION"), 400);
         }
         const created = result.request;
+        // Counted once the row exists (a replay or a lost race stores nothing new): estimates that reached a request.
+        if (result.created && created.shownEstimateAmount !== null) {
+          platform.metrics.inc("request_estimates_stored", { cabin: created.cabin });
+        }
         return c.json(
           toRequestVM(created, [], cityOf(await citiesFor([created]), created)),
           result.created ? 201 : 200,
@@ -229,6 +256,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
               repo,
               crm: ports.crm,
               logger: platform.logger,
+              metrics: platform.metrics,
+              notifyOps,
               appOrigin: env.APP_ORIGIN,
               opsLinkSecret: env.OPS_LINK_SECRET ?? "",
             }),

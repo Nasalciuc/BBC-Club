@@ -1,27 +1,7 @@
-/**
- * The route a request is about (ADR-IMPL-042): the outbound leg for a round trip and a one-way trip (`JFK → LHR`); for
- * a multi-city trip, origin to its last stop before coming home. Never "first origin → last destination" for a round
- * trip — the last leg comes home, and that read `JFK → JFK` in the app, the quote-ready push and the operator's page.
- * `legs` is the stored jsonb, read defensively.
- */
-export function routeEnds(legs: unknown, tripType: string | null | undefined): { from: string; to: string } | null {
-  if (!Array.isArray(legs) || legs.length === 0) return null;
-  const first = legs[0] as { from?: unknown; to?: unknown } | null;
-  const last = legs[legs.length - 1] as { from?: unknown; to?: unknown } | null;
-  if (typeof first?.from !== "string") return null;
-  if (tripType === "multi" && typeof last?.to === "string") {
-    // A tour that ends at home is about where it went last, not about home.
-    const to = last.to === first.from && typeof last.from === "string" ? last.from : last.to;
-    return { from: first.from, to };
-  }
-  return typeof first.to === "string" ? { from: first.from, to: first.to } : null;
-}
+import { routeEnds } from "@bbc/shared/requests/display";
 
-/** `JFK → LHR`, or "" when the legs say nothing usable. */
-export function requestRoute(legs: unknown, tripType: string | null | undefined): string {
-  const ends = routeEnds(legs, tripType);
-  return ends ? `${ends.from} → ${ends.to}` : "";
-}
+// The route rule lives in packages/shared, so the server and the app read a request the same way (ADR-IMPL-042).
+export { requestRoute, routeEnds } from "@bbc/shared/requests/display";
 
 /**
  * The destination's city for each request (Figma 233:4069: `London`), keyed by airport code — one batched read for a

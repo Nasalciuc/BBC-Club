@@ -44,11 +44,32 @@ function dbType(r: any): string {
   if (r.data_type === "character" && r.character_maximum_length) return `char(${r.character_maximum_length})`;
   return r.data_type;
 }
-const idxCols = (def: string) =>
-  (def.match(/\(([^)]*)\)(?:\s+WHERE.*)?$/)?.[1] ?? "")
-    .split(",")
-    .map((x) => x.trim().replace(/"/g, "").split(" ")[0])
-    .join(",");
+/** An index's keys in order, as getTableConfig names them: a column's name, `?` for an expression. The key list is read
+ *  with balanced parentheses and quotes, so an expression key (`((status = ANY (…)))`, requests_member_list) cannot cut
+ *  it short and the WHERE clause is never read as the keys. */
+const COLUMN_KEY = /^"?([a-z_][a-z0-9_$]*)"?(?:\s|$)/;
+const idxCols = (def: string) => {
+  const keys: string[] = [];
+  let depth = 0;
+  let quoted = false;
+  let key = "";
+  for (const ch of def.slice(def.indexOf("(", def.search(/ USING /)))) {
+    if (quoted || ch === "'") {
+      quoted = quoted ? ch !== "'" : true;
+    } else if (ch === "(" && ++depth === 1) {
+      continue;
+    } else if (ch === ")" && --depth === 0) {
+      keys.push(key);
+      break;
+    } else if (ch === "," && depth === 1) {
+      keys.push(key);
+      key = "";
+      continue;
+    }
+    key += ch;
+  }
+  return keys.map((k) => COLUMN_KEY.exec(k.trim())?.[1] ?? "?").join(",");
+};
 
 test("the Drizzle schema and the migrated database are the same", async () => {
   const drift: string[] = [];
@@ -219,6 +240,27 @@ test("foreign keys are the same, ON DELETE included — and none crosses a schem
     );
     for (const k of code) if (!inDb.has(k)) drift.push(`FK missing in DB: ${name} ${k}`);
     for (const k of inDb) if (!code.has(k)) drift.push(`FK only in DB: ${name} ${k}`);
+  }
+  if (drift.length) console.log(drift.map((d) => "  " + d).join("\n"));
+  expect(drift).toEqual([]);
+});
+
+// ADR-IMPL-042: a named step (0024, 0025) and the Drizzle schema both declare a CHECK; nothing compared them. By name,
+// both ways: Postgres rewrites a definition (`IN` becomes `= ANY (ARRAY[…])`, casts appear), so the text is not
+// compared — the behaviour of each new CHECK is tested where it is introduced (migrate.test.ts).
+test("CHECK constraints are the same, by name", async () => {
+  const drift: string[] = [];
+  for (const t of tables()) {
+    const c = getTableConfig(t);
+    const sch = c.schema ?? "public";
+    const name = `${sch}.${c.name}`;
+    const code = new Set<string>(c.checks.map((ch) => ch.name));
+    const rows: any[] = await db.execute(sql`
+      SELECT con.conname AS name FROM pg_constraint con
+      WHERE con.contype = 'c' AND con.conrelid = (quote_ident(${sch}) || '.' || quote_ident(${c.name}))::regclass`);
+    const inDb = new Set<string>(rows.map((r) => String(r.name)));
+    for (const k of code) if (!inDb.has(k)) drift.push(`CHECK missing in DB: ${name} ${k}`);
+    for (const k of inDb) if (!code.has(k)) drift.push(`CHECK only in DB: ${name} ${k}`);
   }
   if (drift.length) console.log(drift.map((d) => "  " + d).join("\n"));
   expect(drift).toEqual([]);

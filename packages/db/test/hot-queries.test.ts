@@ -2,11 +2,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
-import { planOf, seqScans, sqlOf, usesIndex } from "../src/testing/plan";
+import { nodes, planOf, seqScans, sqlOf, usesIndex } from "../src/testing/plan";
 import { pollerClaimSql, pollerStatsSql } from "@bbc/platform";
 import { dispatchClaimSql, dispatchReaperSql } from "../../modules/core/notifications/src/application/dispatch";
 import { faresRepo } from "../../modules/domain/catalog/src/infrastructure/fares.repo";
-import { createRequestsRepo } from "../../modules/domain/requests/src/infrastructure/requests.repo";
+import { claimUnsentSql, createRequestsRepo } from "../../modules/domain/requests/src/infrastructure/requests.repo";
 import { notificationsRepo } from "../../modules/core/notifications/src/infrastructure/notifications.repo";
 
 const MEMBER = "hot-member";
@@ -63,6 +63,11 @@ async function seedVolume() {
            'Alex', '+12125550148', 'alex@test.dev', 'ios'
     FROM generate_series(1, 20000) g`),
   );
+  // As in production: nearly every request has been passed on; one in a hundred still waits for the job.
+  await iso.db.execute(
+    sql.raw(`UPDATE requests.requests SET sent_to_crm = true, sent_at = now(), crm_request_id = 'crm-' || reference
+             WHERE reference LIKE 'HOT%' AND substring(reference from 4)::int % 100 <> 0`),
+  );
   await iso.db.execute(sql`ANALYZE`);
 }
 
@@ -74,7 +79,14 @@ describe("hot queries choose their index", () => {
 
   afterAll(() => iso.drop());
 
-  const HOT: { name: string; statement: () => ReturnType<typeof sql>; index: string; noSeqScanOn: string[] }[] = [
+  const HOT: {
+    name: string;
+    statement: () => ReturnType<typeof sql>;
+    index: string;
+    noSeqScanOn: string[];
+    /** The index already holds the order: no sort over the rows it reads (a sort means every row was read). */
+    noSort?: true;
+  }[] = [
     {
       name: "poller claim",
       statement: () => pollerClaimSql(50),
@@ -109,7 +121,14 @@ describe("hot queries choose their index", () => {
     {
       name: "requests by member",
       statement: () => sqlOf(createRequestsRepo(iso.db).listForMemberSelect(iso.db, MEMBER)),
-      index: "requests_member",
+      index: "requests_member_list",
+      noSeqScanOn: ["requests"],
+      noSort: true,
+    },
+    {
+      name: "send claim",
+      statement: () => claimUnsentSql(20),
+      index: "requests_unsent",
       noSeqScanOn: ["requests"],
     },
     {
@@ -133,6 +152,7 @@ describe("hot queries choose their index", () => {
         const p = await planOf(iso.db, q.statement());
         expect(usesIndex(p, q.index), `${q.name} expected index ${q.index}`).toBe(true);
         for (const t of q.noSeqScanOn) expect(seqScans(p)).not.toContain(t);
+        if (q.noSort) expect(nodes(p).filter((n) => n["Node Type"].includes("Sort"))).toEqual([]);
       },
       30_000,
     );

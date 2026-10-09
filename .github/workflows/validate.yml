@@ -74,7 +74,7 @@ jobs:
           (cd packages/db && timeout 120 bun run db:generate < /dev/null)
           if [ -n "$(git status --porcelain -- packages/db/migrations)" ]; then
             git status --porcelain -- packages/db/migrations
-            echo "drizzle-kit generate produced a migration: commit it, or (if the objects come from a named step) a no-op sync like 20261007131000_snapshot_sync"
+            echo "drizzle-kit generate produced a migration: commit it, or (if the objects come from a named step) a no-op sync like 20261008214247_snapshot_sync (SELECT 1 + the updated snapshot.json)"
             exit 1
           fi
 

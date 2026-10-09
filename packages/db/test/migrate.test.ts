@@ -30,7 +30,7 @@ function runMigrate(): Promise<{ code: number; out: string }> {
 }
 
 describe("extras ledger", () => {
-  it("second migrate applies nothing; ensure_event_partitions exists; ledger has 0001, 0005–0011", async () => {
+  it("second migrate applies nothing; ensure_event_partitions exists; the ledger has every named step", async () => {
     const first = await runMigrate();
     expect(first.code).toBe(0);
 
@@ -41,7 +41,8 @@ describe("extras ledger", () => {
         'deliveries_dead',
         'deliveries_paused',
         'fares_home_destinations',
-        'notif_sending_claimed'
+        'notif_sending_claimed',
+        'requests_member_list'
       )
       ORDER BY indexname`);
     expect(indexes.map((r) => r.indexname)).toEqual([
@@ -50,6 +51,7 @@ describe("extras ledger", () => {
       "deliveries_pending_created",
       "fares_home_destinations",
       "notif_sending_claimed",
+      "requests_member_list",
     ]);
 
     const second = await runMigrate();
@@ -61,6 +63,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/requests phone_e164\/phone_valid applied/);
     expect(second.out).not.toMatch(/requests intent applied/);
     expect(second.out).not.toMatch(/requests shown estimate applied/);
+    expect(second.out).not.toMatch(/requests estimate pair and list applied/);
     expect(second.out).not.toMatch(/notifications request_id applied/);
     expect(second.out).not.toMatch(/catalog airports.tz applied/);
     expect(second.out).not.toMatch(/auth.otp_cooldown applied/);
@@ -99,10 +102,38 @@ describe("extras ledger", () => {
       "0022_platform_kafka_processed_extras.sql",
       "0023_catalog_airports_search.sql",
       "0024_requests_shown_estimate.sql",
+      "0025_requests_estimate_pair_and_list.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
     );
     expect(demand[0]?.rel).toBe("catalog.demand_daily");
+  });
+
+  // ADR-IMPL-042: both or neither. A CHECK passes when its expression is NULL, so each half of a pair is tried alone.
+  it("requests_shown_estimate takes both or neither, a positive amount, USD only", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (amount: number | null, currency: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`
+          INSERT INTO requests.requests (id, reference, idempotency_key, trip_type, cabin, legs, passengers,
+            contact_name, contact_phone, contact_email, source, shown_estimate_amount, shown_estimate_currency)
+          VALUES (gen_random_uuid(), ${`R-CHECK${n}`}, ${`check-${n}`}, 'round', 'business',
+            '[{"from":"JFK","to":"ZRH","date":"2027-10-12"}]'::jsonb, '{"adult":1,"child":0,"infant":0}'::jsonb,
+            'Alex Morgan', '+12125550148', 'alex@test.dev', 'ios', ${amount}, ${currency})`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null, null)).toBe("ok");
+    expect(await insert(2055, "USD")).toBe("ok");
+    expect(await insert(null, "USD")).toBe("23514");
+    expect(await insert(2055, null)).toBe("23514");
+    expect(await insert(0, "USD")).toBe("23514");
+    expect(await insert(2055, "EUR")).toBe("23514");
   });
 });
