@@ -42,8 +42,9 @@ hold them (owner, 7 Oct 2026).
   `EstimateVM` has fixed literals (`USD`, `round_trip`, `formula`), so any other value fails parsing. It never uses
   `PricePair`: `published` is reserved for FTC-evidenced reference prices. Both upgrade orders work: an older app drops
   the new fields; a newer app accepts their absence from an older server.
-- **When** — only when an undated search has no fare in the chosen cabin; published fares always win. The app sends no
-  date. With one (`when`), the route may have fares on other days, so there is no estimate.
+- **When** — only when an undated search has no fare in the chosen cabin; published fares always win. The app sends a
+  date (`when`) only when the member picks a day in the calendar (ADR-IMPL-041); then the route may have fares on other
+  days, so there is no estimate, and a quote asked from that search carries none (ADR-IMPL-042, `estimateShown`).
 - **Never where it would mislead** (review of 7 Oct 2026) — no estimate between two airports under 100 km apart (one
   metro: the formula would price JFK–EWR as a flight), and none for a country between continents that the site's airport
   list does not cover (`UNCONFIRMED_COUNTRIES`: AM, AZ, CY, GE, GL, KZ, RU — the formula would guess, and Cyprus priced

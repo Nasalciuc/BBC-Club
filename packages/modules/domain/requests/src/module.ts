@@ -13,19 +13,24 @@ import { setStatus } from "./application/set-status";
 import { effectiveIntent } from "./application/intent";
 import { actionLabel, escapeHtml, routeLabel, verifyAction } from "./application/operator-links";
 import { toRequestVM } from "./application/to-request-vm";
+import { destinationCities, routeEnds } from "./application/route";
+import { askEstimate } from "./application/estimate";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
 import type { CrmFacade } from "@bbc/crm";
+import type { CatalogFacade } from "@bbc/catalog";
 
 type Ports = {
   crm: CrmFacade;
+  /** The estimate a quote's search showed (ADR-IMPL-042) — a question, asked through the catalog's facade. */
+  catalog: CatalogFacade;
 };
 
 export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
   name: "requests",
   layer: "domain",
-  needs: ["crm"],
+  needs: ["crm", "catalog"],
   init: ({ db, platform, ports, env }) => {
     const conn = db as unknown as Executor;
     const repo = createRequestsRepo(conn);
@@ -43,6 +48,51 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       await platform.events.publish(tx, { ...e, publishedBy: "requests" });
     };
     const expose = facade(conn, repo);
+    // The destination's city for each request's title — one batched airport read per page, never fatal.
+    const citiesFor = (rows: readonly { legs: unknown; tripType: string }[]) =>
+      destinationCities(
+        rows,
+        (codes) => ports.catalog.getAirports(undefined, codes),
+        (err) => {
+          platform.metrics.inc("request_cities_unavailable");
+          platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "request cities unavailable");
+        },
+      );
+    const cityOf = (cities: Map<string, string>, row: { legs: unknown; tripType: string }) => {
+      const to = routeEnds(row.legs, row.tripType)?.to;
+      return (to && cities.get(to)) || null;
+    };
+    // An estimate decorates a request; it never decides whether one is accepted. A failed, slow or malformed answer is
+    // counted and logged, and the request goes through without it (application/estimate.ts).
+    const indicative = (q: { from: string; to: string; cabin: "business" | "first" }) =>
+      askEstimate(() => ports.catalog.indicativeFor(undefined, q), {
+        unavailable: (reason, err) => {
+          platform.metrics.inc("request_estimates_unavailable", { reason });
+          platform.logger.warn(
+            { reason, err: err instanceof Error ? err.message : err === undefined ? undefined : String(err) },
+            "request estimate unavailable",
+          );
+        },
+      });
+    // One line to the ops channel (OPS_WEBHOOK, as the worker's DB alerts); a failed post is logged, never thrown.
+    const notifyOps = async (text: string) => {
+      const hook = env.OPS_WEBHOOK;
+      if (!hook) {
+        platform.logger.warn({ text }, "ops alert (OPS_WEBHOOK unset — not posted)");
+        return;
+      }
+      try {
+        const res = await fetch(hook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: `[bbc requests] ${text}` }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) platform.logger.warn({ status: res.status }, "ops alert not posted");
+      } catch (err) {
+        platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "ops alert not posted");
+      }
+    };
 
     const routes = new Hono<AppEnv>();
 
@@ -70,7 +120,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         const body = await c.req.json().catch(() => ({}));
         let result;
         try {
-          result = await submit(conn, body, actor, key, { publish, rateLimit: platform.rateLimit });
+          result = await submit(conn, body, actor, key, { publish, rateLimit: platform.rateLimit, indicative });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
           if (details) return c.json(apiError("VALIDATION", { details }), 400);
@@ -84,7 +134,15 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
           return c.json(apiError("VALIDATION"), 400);
         }
-        return c.json(toRequestVM(result.request), result.created ? 201 : 200);
+        const created = result.request;
+        // Counted once the row exists (a replay or a lost race stores nothing new): estimates that reached a request.
+        if (result.created && created.shownEstimateAmount !== null) {
+          platform.metrics.inc("request_estimates_stored", { cabin: created.cabin });
+        }
+        return c.json(
+          toRequestVM(created, [], cityOf(await citiesFor([created]), created)),
+          result.created ? 201 : 200,
+        );
       },
     );
 
@@ -102,12 +160,15 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
         const rows = await repo.listForMember(undefined, memberId);
         const page = rows.slice(0, 50);
-        const timelines = await repo.timelinesFor(
-          undefined,
-          page.map((r) => r.id),
-        );
+        const [timelines, cities] = await Promise.all([
+          repo.timelinesFor(
+            undefined,
+            page.map((r) => r.id),
+          ),
+          citiesFor(page),
+        ]);
         return c.json({
-          items: page.map((r) => toRequestVM(r, timelines.get(r.id) ?? [])),
+          items: page.map((r) => toRequestVM(r, timelines.get(r.id) ?? [], cityOf(cities, r))),
           hasMore: rows.length > 50,
         });
       },
@@ -127,8 +188,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
         const row = await repo.getForMember(undefined, memberId, c.req.param("id"));
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
-        const timeline = await repo.timeline(undefined, row.id);
-        return c.json(toRequestVM(row, timeline));
+        const [timeline, cities] = await Promise.all([repo.timeline(undefined, row.id), citiesFor([row])]);
+        return c.json(toRequestVM(row, timeline, cityOf(cities, row)));
       },
     );
 
@@ -195,6 +256,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
               repo,
               crm: ports.crm,
               logger: platform.logger,
+              metrics: platform.metrics,
+              notifyOps,
               appOrigin: env.APP_ORIGIN,
               opsLinkSecret: env.OPS_LINK_SECRET ?? "",
             }),
@@ -248,7 +311,7 @@ function opsRoutes(
         token: c.req.param("token"),
         action: v.action,
         reference: req.reference,
-        route: routeLabel(req.legs),
+        route: routeLabel(req.legs, req.tripType),
         name: req.contactName,
         typeLine:
           intent === "alternative" && req.replacesFareId

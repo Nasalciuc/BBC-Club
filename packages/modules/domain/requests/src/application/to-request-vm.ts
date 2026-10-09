@@ -1,40 +1,48 @@
 import { RequestVM as RequestVMSchema, type RequestVM } from "@bbc/shared/api/v1/requests";
+import { requestDates, requestRoute } from "@bbc/shared/requests/display";
 import type { requests, requestEvents } from "@bbc/db/schema/requests";
+import { MAX_SEND_ATTEMPTS } from "../infrastructure/requests.repo";
 
 type RequestRow = typeof requests.$inferSelect;
 type EventRow = typeof requestEvents.$inferSelect;
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** Longer than the job's six attempts five minutes apart (~30 min): a request still not passed on by then is not on its
+ *  way, whatever the attempts say — the worker may be down. */
+export const UNSENT_TOO_LONG_MS = 45 * 60_000;
 
-function formatDates(legs: { date: string }[]): string {
-  if (!legs.length) return "";
-  const fmt = (iso: string) => {
-    const parts = iso.split("-").map(Number);
-    const y = parts[0];
-    const m = parts[1];
-    const d = parts[2];
-    if (!y || !m || !d) return iso;
-    const month = MONTHS[m - 1];
-    return month ? `${month} ${d}` : iso;
-  };
-  const first = legs[0];
-  const last = legs[legs.length - 1];
-  if (!first || !last) return "";
-  if (legs.length === 1) return fmt(first.date);
-  return `${fmt(first.date)}–${fmt(last.date)}`;
+/**
+ * The state a member reads. A state the CRM or an operator set wins — even if our own send has not been recorded (the
+ * e-mail went out, the bookkeeping failed). A request we hold but have not passed on yet is received (Figma 233:4639:
+ * "Your request is with us."): the job passes it on at its next run. It is `not_sent` once the job has given up, or
+ * once it has waited too long for any reason.
+ */
+export function memberStatus(
+  row: Pick<RequestRow, "sentToCrm" | "status" | "sendAttempts" | "createdAt">,
+  now: number,
+): RequestVM["status"] {
+  if (row.sentToCrm || row.status !== "received") return row.status;
+  const gaveUp = row.sendAttempts >= MAX_SEND_ATTEMPTS || now - row.createdAt.getTime() > UNSENT_TOO_LONG_MS;
+  return gaveUp ? "not_sent" : "received";
 }
 
-/** Map a DB row (+ optional timeline) to the shared RequestVM. Reference is blank until CRM echoes. */
-export function toRequestVM(row: RequestRow, timeline: EventRow[] = []): RequestVM {
-  const status = RequestVMSchema.shape.status.parse(!row.sentToCrm ? "not_sent" : row.status);
-  const first = row.legs[0];
-  const last = row.legs[row.legs.length - 1];
+/** Map a DB row (+ optional timeline, + the destination's city) to the shared RequestVM. Reference is blank until CRM
+ *  echoes. */
+export function toRequestVM(
+  row: RequestRow,
+  timeline: EventRow[] = [],
+  city: string | null = null,
+  now: number = Date.now(),
+): RequestVM {
+  const status = RequestVMSchema.shape.status.parse(memberStatus(row, now));
 
   return {
     id: row.id,
     reference: row.sentToCrm ? row.reference : "",
-    route: first && last ? `${first.from} → ${last.to}` : "",
-    dates: formatDates(row.legs),
+    route: requestRoute(row.legs, row.tripType),
+    city,
+    tripType: row.tripType,
+    phone: row.phoneE164 ?? (row.contactPhone || null),
+    dates: requestDates(row.legs),
     cabin: row.cabin,
     passengers: row.passengers,
     priceAtRequest: row.priceAtRequest != null ? parseFloat(row.priceAtRequest) : null,

@@ -2,7 +2,11 @@
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["tsconfig.base.json", ".env.example"],
   "tasks": {
-    "typecheck": { "dependsOn": ["^typecheck"], "inputs": ["src/**", "tsconfig.json", "package.json"], "outputs": [] },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "inputs": ["src/**", "test/**", "tests/**", "*.ts", "tsconfig.json", "package.json"],
+      "outputs": []
+    },
     "test:unit": {
       "dependsOn": ["^typecheck"],
       "inputs": ["src/**", "tests/unit/**", "test/**/*.unit.test.ts"],

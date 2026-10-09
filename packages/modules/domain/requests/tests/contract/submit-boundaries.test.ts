@@ -28,6 +28,7 @@ const body = {
   contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
 };
 const allowAll = { check: async () => ({ allowed: true }) };
+const noEstimate = async () => null;
 type PublishInput = Parameters<Parameters<typeof submit>[4]["publish"]>[1];
 const publish = async (tx: Executor, e: PublishInput): Promise<void> => {
   await platform.events.publish(tx, { ...e, publishedBy: "requests" });
@@ -43,7 +44,9 @@ describe("submit — transaction boundaries", () => {
       await publish(tx, e);
       throw injected;
     };
-    await expect(submit(db, body, actor, key, { publish: failing, rateLimit: allowAll })).rejects.toBe(injected);
+    await expect(
+      submit(db, body, actor, key, { publish: failing, rateLimit: allowAll, indicative: noEstimate }),
+    ).rejects.toBe(injected);
     expect(await count(sql`SELECT count(*)::int AS n FROM requests.requests WHERE idempotency_key = ${key}`)).toBe(0);
     expect(await count(sql`SELECT count(*)::int AS n FROM requests.request_events`)).toBe(0);
     expect(
@@ -51,7 +54,7 @@ describe("submit — transaction boundaries", () => {
     ).toBe(0);
 
     // The same key then goes through: nothing half-written stands in its way.
-    const ok = await submit(db, body, actor, key, { publish, rateLimit: allowAll });
+    const ok = await submit(db, body, actor, key, { publish, rateLimit: allowAll, indicative: noEstimate });
     expect(ok).toMatchObject({ ok: true, created: true });
   });
 
@@ -65,8 +68,8 @@ describe("submit — transaction boundaries", () => {
       await publish(tx, e);
     };
     const [a, b] = await Promise.all([
-      submit(db, body, actor, key, { publish: slowFirst, rateLimit: allowAll }),
-      submit(db, body, actor, key, { publish: slowFirst, rateLimit: allowAll }),
+      submit(db, body, actor, key, { publish: slowFirst, rateLimit: allowAll, indicative: noEstimate }),
+      submit(db, body, actor, key, { publish: slowFirst, rateLimit: allowAll, indicative: noEstimate }),
     ]);
     const results = [a, b].map((r) => (r.ok ? { created: r.created, id: r.request.id } : { code: r.code }));
     expect(results.map((r) => ("created" in r ? r.created : r.code)).sort()).toEqual([false, true]);
@@ -76,5 +79,100 @@ describe("submit — transaction boundaries", () => {
       await count(sql`SELECT count(*)::int AS n FROM platform.domain_events
                       WHERE type = 'request.submitted' AND payload->>'requestId' = ${results[0] && "id" in results[0] ? results[0].id : ""}`),
     ).toBe(1);
+  });
+
+  it("a quote whose app showed the estimate keeps the catalog's number; a fare request and a replay never ask", async () => {
+    const asked: { from: string; to: string; cabin: string }[] = [];
+    const estimate = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
+      asked.push(q);
+      return { amount: 2055, currency: "USD" as const, cabin: q.cabin, rules: "0123456789abcdef" };
+    };
+    const round = {
+      ...body,
+      tripType: "round",
+      legs: [
+        { from: "JFK", to: "ZRH", date: "2027-10-12" },
+        { from: "ZRH", to: "JFK", date: "2027-10-19" },
+      ],
+      estimateShown: true,
+      // Not in RequestBody: dropped by the parse, never stored.
+      estimate: { amount: 1, currency: "USD" },
+      price: 1,
+    };
+    const key = `idem-${crypto.randomUUID()}`;
+    const quote = await submit(db, round, actor, key, { publish, rateLimit: allowAll, indicative: estimate });
+    expect(quote).toMatchObject({ ok: true, created: true });
+    expect(asked).toEqual([{ from: "JFK", to: "ZRH", cabin: "business" }]);
+    const [row] = (await db.execute(
+      sql`SELECT shown_estimate_amount AS amount, shown_estimate_currency AS currency FROM requests.requests
+          WHERE idempotency_key = ${key}`,
+    )) as unknown as { amount: number; currency: string }[];
+    expect(row).toEqual({ amount: 2055, currency: "USD" });
+    const [journal] = (await db.execute(
+      sql`SELECT payload FROM platform.domain_events
+          WHERE type = 'request.submitted' AND payload->>'requestId' = ${quote.ok ? quote.request.id : ""}`,
+    )) as unknown as { payload: { shownEstimate: unknown } }[];
+    expect(journal?.payload.shownEstimate).toEqual({ amount: 2055, currency: "USD", rules: "0123456789abcdef" });
+
+    const replay = await submit(db, round, actor, key, { publish, rateLimit: allowAll, indicative: estimate });
+    expect(replay).toMatchObject({ ok: true, created: false });
+    const fare = await submit(
+      db,
+      { ...round, fareId: "11111111-1111-4111-8111-111111111111" },
+      actor,
+      `idem-${crypto.randomUUID()}`,
+      { publish, rateLimit: allowAll, indicative: estimate },
+    );
+    expect(fare).toMatchObject({ ok: true, created: true });
+    const alternative = await submit(
+      db,
+      { ...round, intent: "alternative", replacesFareId: "11111111-1111-4111-8111-111111111111" },
+      actor,
+      `idem-${crypto.randomUUID()}`,
+      { publish, rateLimit: allowAll, indicative: estimate },
+    );
+    expect(alternative).toMatchObject({ ok: true, created: true });
+    expect(asked).toHaveLength(1);
+  });
+
+  it("a quote whose app did not show an estimate never asks — an older app, a dated search, an offer card", async () => {
+    const asked: unknown[] = [];
+    const estimate = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
+      asked.push(q);
+      return { amount: 2055, currency: "USD" as const, cabin: q.cabin };
+    };
+    for (const shown of [undefined, false]) {
+      const key = `idem-${crypto.randomUUID()}`;
+      const quote = await submit(
+        db,
+        { ...body, intent: "quote", ...(shown === undefined ? {} : { estimateShown: shown }) },
+        actor,
+        key,
+        { publish, rateLimit: allowAll, indicative: estimate },
+      );
+      expect(quote).toMatchObject({ ok: true, created: true });
+      const [row] = (await db.execute(
+        sql`SELECT shown_estimate_amount AS amount FROM requests.requests WHERE idempotency_key = ${key}`,
+      )) as unknown as { amount: number | null }[];
+      expect(row?.amount).toBeNull();
+    }
+    expect(asked).toEqual([]);
+  });
+
+  it("a rate-limited quote stops before the estimate: the limit costs no catalog read", async () => {
+    const asked: unknown[] = [];
+    const estimate = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
+      asked.push(q);
+      return { amount: 2055, currency: "USD" as const, cabin: q.cabin };
+    };
+    const limited = await submit(
+      db,
+      { ...body, intent: "quote", estimateShown: true },
+      actor,
+      `idem-${crypto.randomUUID()}`,
+      { publish, rateLimit: { check: async () => ({ allowed: false, retryAfterMs: 1000 }) }, indicative: estimate },
+    );
+    expect(limited).toMatchObject({ ok: false, code: "RATE_LIMITED" });
+    expect(asked).toEqual([]);
   });
 });

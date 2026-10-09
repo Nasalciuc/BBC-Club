@@ -25,9 +25,9 @@ Same facts as `docs/store/app-privacy.md`, in Play Console language. Update both
 
 The table above says name, email and phone are not shared. The hops are:
 
-- The API stores the request (`packages/modules/domain/requests/src/application/submit.ts:95–97`). The `send-requests` job hands `name`, `phone` and `email` to `crm.submitRequest` (`packages/modules/domain/requests/src/jobs/send-requests.ts:25`).
-- `CRM_ADAPTER=email`: `email-crm.ts` sends them through Postmark to `OPERATORS_EMAIL` (`packages/modules/integration/crm/src/infrastructure/email-crm.ts:24–37`).
-- `CRM_ADAPTER=http` — the production example (`infra/env/production.env.example:49`): **not implemented yet** (`packages/modules/integration/crm/src/module.ts:80` throws). Nothing leaves the API until it is.
+- The API stores the request (`packages/modules/domain/requests/src/application/submit.ts`). The `send-requests` job hands `name`, `phone`, `email` and the member's optional note to `crm.submitRequest` (`packages/modules/domain/requests/src/jobs/send-requests.ts`); the e-mail quotes the note under `Note from the member:` (ADR-IMPL-042).
+- `CRM_ADAPTER=email`: `email-crm.ts` sends them through Postmark to `OPERATORS_EMAIL` (`packages/modules/integration/crm/src/infrastructure/email-crm.ts`, `submitRequest`).
+- `CRM_ADAPTER=http` is not built (`packages/modules/integration/crm/src/module.ts:80` throws) and stops the API at boot. The production example is `CRM_ADAPTER=email` (`infra/env/production.env.example:49`).
 
 The **Shared** column is **No** because, under [Google Play’s definition](https://support.google.com/googleplay/android-developer/answer/10787469), transferring data to a **service provider** that processes it on the developer’s behalf and instructions is not “sharing”. Postmark and the CRM provider act as service providers processing on BuyBusinessClass’s behalf, and the operators who read the mailbox are BuyBusinessClass staff.
 

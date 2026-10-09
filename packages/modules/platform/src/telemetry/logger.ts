@@ -21,6 +21,7 @@ const REDACT = [
   "x-internal-secret",
   "email",
   "phone",
+  "note",
   "*.password",
   "*.otp",
   "*.token",
@@ -28,19 +29,25 @@ const REDACT = [
   "*.phone",
   "*.*.email",
   "*.*.phone",
+  "*.note",
+  "*.*.note",
   "*.body",
   "*.request",
   "*.client",
 ];
 
-export function createLogger(opts: { level?: string; pretty?: boolean } = {}) {
-  return pino({
-    level: opts.level ?? "info",
-    redact: { paths: REDACT, censor: "[redacted]" },
-    base: undefined, // no pid/hostname noise; the container already labels lines
-    timestamp: pino.stdTimeFunctions.isoTime,
-    transport: opts.pretty ? { target: "pino-pretty", options: { colorize: true } } : undefined,
-  });
+/** `destination` is for tests that read what a line would carry; the process writes to stdout. */
+export function createLogger(opts: { level?: string; pretty?: boolean } = {}, destination?: pino.DestinationStream) {
+  return pino(
+    {
+      level: opts.level ?? "info",
+      redact: { paths: REDACT, censor: "[redacted]" },
+      base: undefined, // no pid/hostname noise; the container already labels lines
+      timestamp: pino.stdTimeFunctions.isoTime,
+      transport: opts.pretty && !destination ? { target: "pino-pretty", options: { colorize: true } } : undefined,
+    },
+    destination,
+  );
 }
 export type Logger = ReturnType<typeof createLogger>;
 

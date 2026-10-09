@@ -30,6 +30,10 @@ export const requests = requestsSchema.table(
     /** quote | alternative. Null on a fare or offer request; the CHECK is the enum. */
     intent: text("intent"),
     replacesFareId: uuid("replaces_fare_id"),
+    /** The indicative price the search showed for a quote's route, recomputed by the server (ADR-IMPL-042). Whole USD;
+     *  null on every other request. Added by the named steps 0024 and 0025, not by a drizzle migration. */
+    shownEstimateAmount: integer("shown_estimate_amount"),
+    shownEstimateCurrency: text("shown_estimate_currency"),
     tripType: tripType("trip_type").notNull(),
     cabin: requestCabin("cabin").notNull(),
     legs: jsonb("legs").$type<RequestLeg[]>().notNull(),
@@ -59,6 +63,12 @@ export const requests = requestsSchema.table(
     index("requests_member")
       .on(t.memberId, t.createdAt)
       .where(sql`${t.memberId} IS NOT NULL`),
+    /** The member's list: requests in progress first, newest first within each group (0025). The second key is the
+     *  list's ORDER BY expression, written the same way, so the list reads 51 entries however many requests a member
+     *  has. */
+    index("requests_member_list")
+      .on(t.memberId, sql`(${t.status} IN ('booked', 'closed'))`, t.createdAt.desc().nullsFirst())
+      .where(sql`${t.memberId} IS NOT NULL`),
     index("requests_unsent")
       .on(t.createdAt)
       .where(sql`${t.sentToCrm} = false`),
@@ -80,6 +90,11 @@ export const requests = requestsSchema.table(
     check("requests_legs_nonempty", sql`jsonb_array_length(${t.legs}) >= 1`),
     check("requests_one_source", sql`NOT (${t.fareId} IS NOT NULL AND ${t.offerId} IS NOT NULL)`),
     check("requests_intent", sql`${t.intent} IS NULL OR ${t.intent} IN ('quote', 'alternative')`),
+    check(
+      "requests_shown_estimate",
+      // Each side says IS NOT NULL: a CHECK passes on NULL, so the second side alone let half a pair in (0024 → 0025).
+      sql`(${t.shownEstimateAmount} IS NULL AND ${t.shownEstimateCurrency} IS NULL) OR (${t.shownEstimateAmount} IS NOT NULL AND ${t.shownEstimateCurrency} IS NOT NULL AND ${t.shownEstimateAmount} > 0 AND ${t.shownEstimateCurrency} = 'USD')`,
+    ),
     check(
       "requests_sync_consistent",
       sql`(${t.sentToCrm} = false) OR (${t.crmRequestId} IS NOT NULL AND ${t.sentAt} IS NOT NULL)`,
