@@ -68,7 +68,13 @@ their children's ages), and every round-trip request read `JFK → JFK` (the sec
   `schemaFilter` predates I1: `drizzle-kit generate` ignores it, and the snapshot holds the requests tables.)
   `schema-parity.test.ts` now compares CHECK constraints by name, both ways, and an index's key positions even when one
   is an expression — not an expression's text, a key's direction or a CHECK's body: `migrate.test.ts` tests what this
-  CHECK refuses and `hot-queries.test.ts` that the list reads its index without a sort.
+  CHECK refuses and `hot-queries.test.ts` that the list reads its index without a sort. 0025 builds that index inside
+  its own transaction, not `CONCURRENTLY` in a step of its own: replacing the CHECK already holds the table's
+  `ACCESS EXCLUSIVE` lock until the step commits, so the index only adds its build to that wait — 18 ms at 10,000
+  requests, 91 ms at 100,000, 0.9 s at a million (Postgres 16) — and a failed build rolls back with the step, where a
+  failed `CONCURRENTLY` build leaves an INVALID index that `IF NOT EXISTS` then keeps (infra/RUNBOOK.md). `lock_timeout`
+  (5 s) bounds the wait for the lock. A table of millions of requests would take the CHECK (`NOT VALID`, then
+  `VALIDATE CONSTRAINT`) and the index to steps of their own.
 
 **Known limits, and what is the owner's to decide.**
 
