@@ -115,7 +115,10 @@ ssh <server> 'cd <checkout> && docker compose -f infra/docker-compose.yml -f inf
 
 Windows PowerShell has no `<`: `Get-Content -Raw pricing-rules.json | ssh <server> '…'` does the same.
 
-The poster check must equal the poster (JFK → ZRH, business, round trip). Searches use the new rules within ~35 s. Then
+The poster check must equal the poster (JFK → ZRH, business, round trip). Searches use the new rules within ~35 s, and
+so do quote requests: from then on a quote on a route with no published fare carries the estimate its search showed —
+stored on the request and written into the specialist's e-mail as `Indicative estimate shown: $2,055 round trip,
+business (formula)` (ADR-IMPL-042). Then
 estimates on, in that environment's database (staging: `docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`;
 production only after the company's written approval). Off is the same with `false` (~35 s):
 

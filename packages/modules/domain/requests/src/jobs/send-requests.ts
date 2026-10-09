@@ -34,6 +34,12 @@ export function createSendRequestsJob(deps: {
           trip_type: row.trip_type,
           cabin_class: row.cabin === "business" ? "Business Class" : "First Class",
           passengers: row.passengers,
+          note: row.note,
+          // What the member saw before asking for a quote (ADR-IMPL-042). Round trip: the formula's only trip.
+          shown_estimate:
+            row.shown_estimate_amount !== null && row.shown_estimate_currency !== null
+              ? { amount: row.shown_estimate_amount, currency: row.shown_estimate_currency, cabin: row.cabin }
+              : null,
           phone_valid: row.phone_valid,
           intent: effectiveIntent({
             intent: row.intent,

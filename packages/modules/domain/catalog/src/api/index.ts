@@ -1,5 +1,6 @@
 import type { Executor } from "@bbc/db";
 import type { fares } from "@bbc/db/schema/catalog";
+import type { EstimateVM } from "@bbc/shared/api/v1/fares";
 import { toAirportVM, toFareVM } from "../application/to-fare-vm";
 
 export type FareRow = typeof fares.$inferSelect;
@@ -33,5 +34,14 @@ export type CatalogFacade = {
   getAirport(exec: Executor | undefined, code: string): Promise<AirportRow | null>;
   /** Batch lookup; order is not guaranteed. Replaces getAirport in loops. */
   getAirports(exec: Executor | undefined, codes: readonly string[]): Promise<AirportRow[]>;
+  /**
+   * The indicative price an undated search shows for this route right now (ADR-IMPL-037), or null: estimates off, no
+   * valid rules, an unknown airport, a published fare in this cabin, or a route the formula does not price. The quote
+   * request that follows the search asks the same question (ADR-IMPL-042), so the specialist sees what the member saw.
+   */
+  indicativeFor(
+    exec: Executor | undefined,
+    q: { from: string; to: string; cabin: "business" | "first" },
+  ): Promise<EstimateVM | null>;
   importCsv(input: unknown): Promise<{ imported: number }>;
 };

@@ -30,6 +30,10 @@ export const ClaimedRow = z.object({
   replaces_fare_id: z.string().uuid().nullable(),
   fare_id: z.string().uuid().nullable(),
   offer_id: z.string().uuid().nullable(),
+  /** The member's note — children's ages, a preferred time to call. The specialist's e-mail carries it. */
+  note: z.string().nullable(),
+  shown_estimate_amount: z.number().int().positive().nullable(),
+  shown_estimate_currency: z.literal("USD").nullable(),
 });
 export type ClaimedRow = z.infer<typeof ClaimedRow>;
 
@@ -100,7 +104,8 @@ export function createRequestsRepo(db: Executor) {
           ${col(r.id)}, ${col(r.reference)}, ${col(r.contactName)}, ${col(r.contactPhone)}, ${col(r.contactEmail)},
           ${col(r.legs)}, ${col(r.tripType)}, ${col(r.cabin)}, ${col(r.passengers)}, ${col(r.source)},
           ${col(r.appVersion)}, ${col(r.sendAttempts)}, ${col(r.phoneValid)}, ${col(r.phoneE164)},
-          ${col(r.intent)}, ${col(r.replacesFareId)}, ${col(r.fareId)}, ${col(r.offerId)}
+          ${col(r.intent)}, ${col(r.replacesFareId)}, ${col(r.fareId)}, ${col(r.offerId)}, ${col(r.note)},
+          ${col(r.shownEstimateAmount)}, ${col(r.shownEstimateCurrency)}
         FROM ${r}
         WHERE ${col(r.sentToCrm)} = false
           AND ${col(r.sendAttempts)} < 6

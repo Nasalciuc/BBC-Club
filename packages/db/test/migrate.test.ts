@@ -60,6 +60,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/db:verify fitness fixes applied/);
     expect(second.out).not.toMatch(/requests phone_e164\/phone_valid applied/);
     expect(second.out).not.toMatch(/requests intent applied/);
+    expect(second.out).not.toMatch(/requests shown estimate applied/);
     expect(second.out).not.toMatch(/notifications request_id applied/);
     expect(second.out).not.toMatch(/catalog airports.tz applied/);
     expect(second.out).not.toMatch(/auth.otp_cooldown applied/);
@@ -97,6 +98,7 @@ describe("extras ledger", () => {
       "0021_requests_intent.sql",
       "0022_platform_kafka_processed_extras.sql",
       "0023_catalog_airports_search.sql",
+      "0024_requests_shown_estimate.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

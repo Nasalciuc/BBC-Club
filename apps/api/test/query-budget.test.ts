@@ -81,6 +81,33 @@ describe("query budget per route", () => {
       `no-fare search with estimates ran ${estimateSearch.length} queries (budget ${BUDGET["GET /v1/search"]}):\n${estimateSearch.join("\n")}`,
     ).toBeLessThanOrEqual(BUDGET["GET /v1/search"]!);
 
+    // ADR-IMPL-042: a quote with estimates on asks the catalog once — the cached flags, then airports and fares in one
+    // round trip each. Measured against the same POST budget.
+    const quoteLog = await (async () => {
+      log.length = 0;
+      const res = await t.submitRequestAs(
+        t.memberB,
+        t.sampleRequestBody({
+          intent: "quote",
+          priceAtRequest: undefined,
+          legs: [
+            { from: "JFK", to: "ZRH", date: "2027-10-12" },
+            { from: "ZRH", to: "JFK", date: "2027-10-19" },
+          ],
+        }),
+        { idempotencyKey: crypto.randomUUID() },
+      );
+      expect(res.status).toBe(201);
+      return [...log];
+    })();
+    expect(
+      quoteLog.length,
+      `quote with estimates ran ${quoteLog.length} queries (budget ${BUDGET["POST /v1/requests"]}):\n${quoteLog.join("\n")}`,
+    ).toBeLessThanOrEqual(BUDGET["POST /v1/requests"]!);
+    expect(quoteLog.length, "the estimate costs at most two reads over a plain request").toBeLessThanOrEqual(
+      postLog.length + 2,
+    );
+
     await t.seedMoreJfkLhrFares();
     const largerSearch = await queriesFor("/v1/search?from=JFK&to=LHR&cabin=business", cookie);
     expect(

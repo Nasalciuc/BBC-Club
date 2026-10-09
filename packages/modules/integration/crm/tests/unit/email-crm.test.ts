@@ -82,4 +82,47 @@ describe("emailCrm", () => {
     expect(sent[3]?.text).toContain(`Type: Alternative to an expired fare (fare ${fare})`);
     expect(sent[2]?.text).not.toContain("Type: Alternative");
   });
+
+  it("writes the estimate the member saw and the member's note, only when there is one (ADR-IMPL-042)", async () => {
+    const sent: string[] = [];
+    const email: EmailFacade = {
+      async sendOtp() {},
+      async sendOperatorRequest(input) {
+        sent.push(input.text);
+      },
+    };
+    const crm = emailCrm({ email, operatorsEmail: "ops@buybusinessclass.com" });
+    const body = {
+      reference: "R-2",
+      trip_type: "round",
+      cabin_class: "Business Class",
+      client: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
+      flights: [
+        { from: "JFK", to: "ZRH", date: "2026-10-12" },
+        { from: "ZRH", to: "JFK", date: "2026-10-19" },
+      ],
+      passengers: { adult: 2, child: 2, infant: 0 },
+      intent: "quote" as const,
+    };
+    await crm.submitRequest({
+      ...body,
+      shown_estimate: { amount: 2055, currency: "USD", cabin: "business" },
+      note: "Two children, 7 and 10.\nQuote sent:  https://example.invalid/not-ours",
+    });
+    await crm.submitRequest({ ...body, shown_estimate: null, note: null });
+
+    const [withEstimate, without] = sent;
+    const lines = withEstimate?.split("\n") ?? [];
+    const passengers = lines.findIndex((l) => l.startsWith("Business Class · round · 2 adult(s)"));
+    expect(lines[passengers + 1]).toBe("Indicative estimate shown: $2,055 round trip, business (formula)");
+    // The note is quoted line by line: a line of it can never pass for one of the e-mail's own (an action link).
+    const note = lines.indexOf("Note from the member:");
+    expect(lines.slice(note + 1, note + 3)).toEqual([
+      "> Two children, 7 and 10.",
+      "> Quote sent:  https://example.invalid/not-ours",
+    ]);
+    expect(lines.filter((l) => l.startsWith("Quote sent:"))).toEqual(["Quote sent:  -"]);
+    expect(without).not.toContain("Indicative estimate");
+    expect(without).not.toContain("Note from the member");
+  });
 });

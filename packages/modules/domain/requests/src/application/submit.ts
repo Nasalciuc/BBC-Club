@@ -4,7 +4,9 @@ import { withTx, type Executor } from "@bbc/db";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
+import type { EstimateVM } from "@bbc/shared/api/v1/fares";
 import { parseMemberPhone } from "@bbc/shared/phone";
+import { effectiveIntent } from "./intent";
 
 type Publish = (
   tx: Executor,
@@ -39,6 +41,8 @@ export async function submit(
         subject: string,
       ) => Promise<{ allowed: boolean; retryAfterMs?: number }>;
     };
+    /** The indicative price the search shows for a route (catalog, ADR-IMPL-042). Never throws: null when unknown. */
+    indicative: (q: { from: string; to: string; cabin: "business" | "first" }) => Promise<EstimateVM | null>;
   },
 ) {
   const body = RequestBody.parse(raw);
@@ -62,6 +66,16 @@ export async function submit(
     if (!member.allowed)
       return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: member.retryAfterMs };
   }
+
+  // A quote (no fare, no offer) carries the estimate the search showed for its outbound route — recomputed here, never
+  // taken from the app: a price sent with the body is not in RequestBody and is dropped by the parse (ADR-IMPL-042).
+  // Read before the transaction: it is a cached flag and, with estimates on, two indexed reads.
+  const outbound = body.legs[0];
+  const quote =
+    effectiveIntent({ intent: body.intent ?? null, fareId: body.fareId ?? null, offerId: body.offerId ?? null }) ===
+    "quote";
+  const shown =
+    quote && outbound ? await deps.indicative({ from: outbound.from, to: outbound.to, cabin: body.cabin }) : null;
 
   return withTx(exec, async (tx) => {
     const existing = await tx.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
@@ -89,6 +103,8 @@ export async function submit(
         offerId: body.offerId ?? null,
         intent: body.intent ?? null,
         replacesFareId: body.replacesFareId ?? null,
+        shownEstimateAmount: shown ? shown.amount : null,
+        shownEstimateCurrency: shown ? shown.currency : null,
         tripType: body.tripType,
         cabin: body.cabin,
         legs: body.legs,
@@ -132,6 +148,7 @@ export async function submit(
         offerId: body.offerId ?? null,
         intent: body.intent ?? null,
         replacesFareId: body.replacesFareId ?? null,
+        shownEstimate: shown ? { amount: shown.amount, currency: shown.currency } : null,
         submittedAt: new Date().toISOString(),
       }),
     });

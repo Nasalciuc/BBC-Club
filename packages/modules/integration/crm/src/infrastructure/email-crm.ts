@@ -9,6 +9,8 @@ type Payload = {
   flights: { from: string; to: string; date: string }[];
   passengers: { adult: number; child: number; infant: number };
   note?: string | null;
+  /** The indicative price the member's search showed, recomputed by the server (ADR-IMPL-042). Round trip. */
+  shown_estimate?: { amount: number; currency: string; cabin: string } | null;
   phone_valid?: boolean;
   intent?: "quote" | "alternative" | "fare" | "offer";
   replaces_fare_id?: string | null;
@@ -19,6 +21,27 @@ function opening(p: Payload): string {
   if (p.intent === "quote") return `New quote request ${p.reference}`;
   if (p.intent === "alternative") return `New alternative request ${p.reference}`;
   return `New fare request ${p.reference}`;
+}
+
+/** `Indicative estimate shown: $2,055 round trip, business (formula)` — the wording approved with ADR-IMPL-037. */
+function estimateLine(e: NonNullable<Payload["shown_estimate"]>): string {
+  let amount: string;
+  try {
+    amount = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: e.currency,
+      maximumFractionDigits: 0,
+    }).format(e.amount);
+  } catch {
+    amount = `${e.currency} ${e.amount}`;
+  }
+  return `Indicative estimate shown: ${amount} round trip, ${e.cabin} (formula)`;
+}
+
+/** The member's own words, quoted line by line under a heading: a note can never pass for a line of this e-mail — an
+ *  action link above all (ADR-IMPL-042). */
+function noteLines(note: string): string[] {
+  return ["Note from the member:", ...note.split(/\r\n|\r|\n/).map((line) => `> ${line}`)];
 }
 
 function subjectFor(p: Payload, hop: string): string {
@@ -49,11 +72,12 @@ export function emailCrm(deps: { email: EmailFacade; operatorsEmail: string }): 
         "",
         route,
         `${p.cabin_class} · ${p.trip_type} · ${p.passengers.adult} adult(s), ${p.passengers.child} child(ren), ${p.passengers.infant} infant(s)`,
+        ...(p.shown_estimate ? [estimateLine(p.shown_estimate)] : []),
         "",
         `Member: ${p.client.name}`,
         `Phone: ${p.client.phone}${p.phone_valid === false ? "  (not validated)" : ""}`,
         `Email: ${p.client.email}`,
-        ...(p.note ? ["", `Note: ${p.note}`] : []),
+        ...(p.note ? ["", ...noteLines(p.note)] : []),
         "",
         "When you have acted on it, mark it (each link asks you to confirm):",
         `Quote sent:  ${p._actions?.quoted ?? "-"}`,

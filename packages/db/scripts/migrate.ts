@@ -157,6 +157,22 @@ try {
     }
   }
 
+  // After 0005 (requests schema): the estimate a quote request's search showed. ADR-IMPL-042.
+  const requestsShownEstimate = join(migrationsDir, "0024_requests_shown_estimate.sql");
+  if (existsSync(requestsShownEstimate)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0024_requests_shown_estimate.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(requestsShownEstimate, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0024_requests_shown_estimate.sql')`);
+      });
+      console.log("requests shown estimate applied");
+    }
+  }
+
   const notifRequestId = join(migrationsDir, "0009_notifications_request_id.sql");
   if (existsSync(notifRequestId)) {
     const done = (await db.execute(

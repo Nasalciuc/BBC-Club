@@ -35,6 +35,26 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
       await platform.cache.bump("catalog:dest:gen");
       await platform.cache.bump("catalog:airports:gen");
     };
+    /** One rule for the search and for the quote request that follows it (ADR-IMPL-037, ADR-IMPL-042): the company's
+     *  formula, when estimates are on and this environment holds valid rules. Both flag rows are cached (~35 s to reach
+     *  every replica) and a failed read counts as off; without valid rules there is no estimate, never an error. */
+    async function indicativeEstimate(
+      from: Parameters<typeof toEstimateVM>[1],
+      to: Parameters<typeof toEstimateVM>[2],
+      cabin: "business" | "first",
+      metric: "search" | "request",
+    ): Promise<ReturnType<typeof toEstimateVM>> {
+      if (!(await platform.flags.isEnabled("catalog.estimates", false))) return null;
+      const stored = readStoredRules(await platform.flags.read("catalog.pricing_rules"));
+      if (!stored.ok) {
+        platform.metrics.inc(`${metric}_estimates_unavailable`, { reason: stored.reason });
+        return null;
+      }
+      const estimate = toEstimateVM(stored.rules, from, to, cabin);
+      if (estimate) platform.metrics.inc(`${metric}_estimates_shown`, { cabin });
+      return estimate;
+    }
+
     const expose: CatalogFacade = {
       searchFares: (exec, q) => faresRepo.search(exec ?? conn, q),
       getFare: (exec, id) => faresRepo.getAny(exec ?? conn, id),
@@ -48,6 +68,22 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
       searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
       getAirports: (exec, codes) => airportsRepo.getMany(exec ?? conn, [...codes]),
+      indicativeFor: async (exec, q) => {
+        // The flags first: with estimates off (production today) the question costs no query.
+        if (!(await platform.flags.isEnabled("catalog.estimates", false))) return null;
+        const from = q.from.toUpperCase();
+        const to = q.to.toUpperCase();
+        const e = exec ?? conn;
+        const [airports, rows] = await Promise.all([
+          airportsRepo.getMany(e, [from, to]),
+          faresRepo.search(e, { from, to, cabin: q.cabin }),
+        ]);
+        const fromApt = airports.find((a) => a.code === from);
+        const toApt = airports.find((a) => a.code === to);
+        // Published fares always win: the search showed them, not an estimate.
+        if (!fromApt || !toApt || rows.length > 0) return null;
+        return indicativeEstimate(fromApt, toApt, q.cabin, "request");
+      },
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
@@ -93,17 +129,10 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
           results: items.length,
         });
         // No fare in this cabin: the company's formula, as an indicative price (ADR-IMPL-037). Undated searches only —
-        // with a date, the route may have fares on other days, and published fares always win. Both flag rows are read
-        // only then, so searches with fares cost nothing extra; both are cached (~35 s to reach every replica), and a
-        // failed read counts as off. The rules are not in the repository: each environment holds them in
-        // `catalog.pricing_rules` (scripts/load-pricing-rules.ts); without valid rules there is no estimate, never an error.
-        let estimate: ReturnType<typeof toEstimateVM> = null;
-        if (items.length === 0 && !when && (await platform.flags.isEnabled("catalog.estimates", false))) {
-          const stored = readStoredRules(await platform.flags.read("catalog.pricing_rules"));
-          if (stored.ok) estimate = toEstimateVM(stored.rules, fromApt, toApt, cabin);
-          else platform.metrics.inc("search_estimates_unavailable", { reason: stored.reason });
-        }
-        if (estimate) platform.metrics.inc("search_estimates_shown", { cabin });
+        // with a date, the route may have fares on other days, and published fares always win. The flag rows are read
+        // only then, so searches with fares cost nothing extra. The rules are not in the repository: each environment
+        // holds them in `catalog.pricing_rules` (scripts/load-pricing-rules.ts).
+        const estimate = items.length === 0 && !when ? await indicativeEstimate(fromApt, toApt, cabin, "search") : null;
         return c.json({
           from: toAirportVM(fromApt),
           to: toAirportVM(toApt),

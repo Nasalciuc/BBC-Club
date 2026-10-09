@@ -207,6 +207,7 @@
       "name": "@bbc/requests",
       "version": "0.1.0",
       "dependencies": {
+        "@bbc/catalog": "workspace:*",
         "@bbc/crm": "workspace:*",
         "@bbc/db": "workspace:*",
         "@bbc/platform": "workspace:*",

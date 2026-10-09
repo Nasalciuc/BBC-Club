@@ -17,15 +17,18 @@ import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
 import type { CrmFacade } from "@bbc/crm";
+import type { CatalogFacade } from "@bbc/catalog";
 
 type Ports = {
   crm: CrmFacade;
+  /** The estimate a quote's search showed (ADR-IMPL-042) — a question, asked through the catalog's facade. */
+  catalog: CatalogFacade;
 };
 
 export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
   name: "requests",
   layer: "domain",
-  needs: ["crm"],
+  needs: ["crm", "catalog"],
   init: ({ db, platform, ports, env }) => {
     const conn = db as unknown as Executor;
     const repo = createRequestsRepo(conn);
@@ -43,6 +46,17 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       await platform.events.publish(tx, { ...e, publishedBy: "requests" });
     };
     const expose = facade(conn, repo);
+    // An estimate decorates a request; it never decides whether one is accepted. A failed lookup is logged and the
+    // request goes through without it.
+    const indicative = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
+      try {
+        return await ports.catalog.indicativeFor(undefined, q);
+      } catch (err) {
+        platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "request estimate unavailable");
+        platform.metrics.inc("request_estimates_unavailable", { reason: "error" });
+        return null;
+      }
+    };
 
     const routes = new Hono<AppEnv>();
 
@@ -70,7 +84,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         const body = await c.req.json().catch(() => ({}));
         let result;
         try {
-          result = await submit(conn, body, actor, key, { publish, rateLimit: platform.rateLimit });
+          result = await submit(conn, body, actor, key, { publish, rateLimit: platform.rateLimit, indicative });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
           if (details) return c.json(apiError("VALIDATION", { details }), 400);

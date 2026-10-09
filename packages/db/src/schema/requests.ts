@@ -30,6 +30,10 @@ export const requests = requestsSchema.table(
     /** quote | alternative. Null on a fare or offer request; the CHECK is the enum. */
     intent: text("intent"),
     replacesFareId: uuid("replaces_fare_id"),
+    /** The indicative price the search showed for a quote's route, recomputed by the server (ADR-IMPL-042). Whole USD;
+     *  null on every other request. Added by the named step 0024, not by a drizzle migration. */
+    shownEstimateAmount: integer("shown_estimate_amount"),
+    shownEstimateCurrency: text("shown_estimate_currency"),
     tripType: tripType("trip_type").notNull(),
     cabin: requestCabin("cabin").notNull(),
     legs: jsonb("legs").$type<RequestLeg[]>().notNull(),
@@ -80,6 +84,10 @@ export const requests = requestsSchema.table(
     check("requests_legs_nonempty", sql`jsonb_array_length(${t.legs}) >= 1`),
     check("requests_one_source", sql`NOT (${t.fareId} IS NOT NULL AND ${t.offerId} IS NOT NULL)`),
     check("requests_intent", sql`${t.intent} IS NULL OR ${t.intent} IN ('quote', 'alternative')`),
+    check(
+      "requests_shown_estimate",
+      sql`(${t.shownEstimateAmount} IS NULL AND ${t.shownEstimateCurrency} IS NULL) OR (${t.shownEstimateAmount} > 0 AND ${t.shownEstimateCurrency} = 'USD')`,
+    ),
     check(
       "requests_sync_consistent",
       sql`(${t.sentToCrm} = false) OR (${t.crmRequestId} IS NOT NULL AND ${t.sentAt} IS NOT NULL)`,
