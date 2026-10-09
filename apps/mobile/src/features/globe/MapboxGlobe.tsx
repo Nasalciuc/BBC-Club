@@ -298,7 +298,10 @@ export default function MapboxGlobe({
         onDidFinishLoadingStyle={() => {
           styleLoaded.current = true;
         }}
-        // Loaded, or idle with what could be loaded (a tile may have failed): either way there is a globe to show.
+        // Loaded (Mapbox's MapLoaded: the style in and every visible tile rendered), or idle with what could be loaded
+        // (a tile may have failed): either way there is a globe to show. Not onDidFinishRenderingMapFully:
+        // @rnmapbox/maps 10.3.7 never emits it (iOS does not export it, Android declares it and never sends it) — the
+        // satellite would never fade in.
         onDidFinishLoadingMap={() => {
           setMapReady(true);
           onReady();

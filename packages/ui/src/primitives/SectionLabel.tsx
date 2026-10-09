@@ -17,7 +17,7 @@ export function SectionLabel({ label, action, trailing }: Props) {
         {label.toUpperCase()}
       </Text>
       {trailing && !action ? (
-        <Text testID={trailing.testID} style={styles.label} numberOfLines={1}>
+        <Text testID={trailing.testID} style={styles.label}>
           {trailing.label.toUpperCase()}
         </Text>
       ) : null}
@@ -38,14 +38,19 @@ export function SectionLabel({ label, action, trailing }: Props) {
 }
 
 const styles = StyleSheet.create({
+  // When the label and its right-hand side do not fit on one line (a narrow phone, a long city, a large font scale),
+  // the right-hand side wraps under the label: nothing is cut (DESIGN.md).
   row: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "baseline",
+    columnGap: tokens.space.sm,
+    rowGap: tokens.space.xxs,
     marginTop: tokens.space.lg,
     marginBottom: tokens.space.sm,
   },
-  label: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
+  label: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary, flexShrink: 1 },
   action: { ...rn(tokens.type.bodySm), color: tokens.colors.primary },
   pressed: { opacity: 0.6 },
 });

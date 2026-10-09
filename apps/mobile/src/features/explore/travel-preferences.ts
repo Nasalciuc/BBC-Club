@@ -35,6 +35,12 @@ export function travelersLabel(p: Passengers): string {
   return `${n} ${n === 1 ? "traveler" : "travelers"}`;
 }
 
+/** The travelers sheets edit adults only: children and infants already in the party stay, never reset to 0. One adult
+ *  at least (the request's minimum). */
+export function withAdults(party: Passengers | undefined, adult: number): Passengers {
+  return { adult: Math.max(1, adult), child: party?.child ?? 0, infant: party?.infant ?? 0 };
+}
+
 /** The two mono lines of the empty states (89:390, 89:391, 536:11155). */
 export function preferencesLines(
   dates: SearchDates,

@@ -3,7 +3,7 @@ import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Button, Chip, CloseButton, Stepper, tokens, rn } from "@bbc/ui";
 
-import { type Cabin, type Passengers, travelersLabel } from "./travel-preferences";
+import { type Cabin, type Passengers, travelersLabel, withAdults } from "./travel-preferences";
 
 /**
  * The cabin and traveler pickers behind Home's preference chips (89:387). They change this search only — the
@@ -71,19 +71,18 @@ export type TravelersSheetHandle = { present: (current: Passengers) => void; dis
 export const SearchTravelersSheet = forwardRef<TravelersSheetHandle, { onPick: (passengers: Passengers) => void }>(
   function SearchTravelersSheet({ onPick }, ref) {
     const modalRef = useRef<BottomSheetModal>(null);
-    const [adult, setAdult] = useState(1);
+    // Adults only here: children and infants the search already carries (the profile's) stay in the party.
+    const [party, setParty] = useState<Passengers>(() => withAdults(undefined, 1));
 
     useImperativeHandle(ref, () => ({
       present(current) {
-        setAdult(Math.max(1, current.adult));
+        setParty(withAdults(current, current.adult));
         modalRef.current?.present();
       },
       dismiss() {
         modalRef.current?.dismiss();
       },
     }));
-
-    const passengers: Passengers = { adult, child: 0, infant: 0 };
 
     return (
       <BottomSheetModal
@@ -97,15 +96,22 @@ export const SearchTravelersSheet = forwardRef<TravelersSheetHandle, { onPick: (
             <Text style={styles.title}>Travelers</Text>
             <CloseButton testID="explore.travelers.close" onPress={() => modalRef.current?.dismiss()} />
           </View>
-          <Stepper testID="explore.travelers.adults" label="Adults" value={adult} onChange={setAdult} min={1} max={9} />
+          <Stepper
+            testID="explore.travelers.adults"
+            label="Adults"
+            value={party.adult}
+            onChange={(adult) => setParty((p) => withAdults(p, adult))}
+            min={1}
+            max={9}
+          />
           <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
           <Button
             testID="explore.travelers.use"
-            label={`Use ${travelersLabel(passengers)}`}
+            label={`Use ${travelersLabel(party)}`}
             variant="primary"
             shape="pill"
             onPress={() => {
-              onPick(passengers);
+              onPick(party);
               modalRef.current?.dismiss();
             }}
           />

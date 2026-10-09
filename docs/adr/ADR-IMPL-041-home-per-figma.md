@@ -30,7 +30,9 @@ with the same fixed dates whatever the member had chosen.
   profile's defaults stay where the member set them. Labels and the mono summary of the empty states come from
   `travel-preferences.ts` (`1 traveler`, never `1 adult`). A chosen departure day goes to `GET /v1/search` as `when`
   (noon UTC of that day: the fares valid then); flexible dates search undated, the only search that can carry an
-  estimate (ADR-IMPL-037). A cabin change re-runs the search; travelers only prefill the request.
+  estimate (ADR-IMPL-037). A cabin change re-runs the search; travelers only prefill the request. The travelers sheets
+  (Home's and Profile's) set the adults and keep the children and infants already in the party (`withAdults`, tested
+  in `travel-preferences.test.ts`).
 - **The indicative fare** — `useSearch` now keeps `estimate` and the server's `from`/`to` (with `tz`). With no fare and
   an estimate: `INDICATIVE FARE` + the local time, then `EstimateRow` (`packages/ui/src/cards/EstimateRow.tsx`:
   FareRow's shape, `≈` where the carrier mark sits, `From $2,055 · round trip`, `ESTIMATE · NO PUBLISHED FARE YET`,
@@ -38,10 +40,12 @@ with the same fixed dates whatever the member had chosen.
   `noFareCopy` — `Let us find your fare.` when the route touches North America (`US`, `CA`, `MX`), `Fares from <city>
 are on request.` otherwise. The formula prices only routes touching North America (ADR-IMPL-037), so the rule is
   correct wherever an estimate could have existed; the three codes live in the app until the server sends a coverage
-  field (P1b).
+  field (P1b). On a narrow phone or at a large font scale a line of `EstimateRow` may wrap; none is cut (DESIGN.md).
 - **Local time** — `localTimeLabel(city, tz)` → `LONDON · 8:42 PM`, re-rendered on the minute, at the right edge of the
   fare-list label (`SectionLabel.trailing`). `AirportVM.tz` is already dropped by the contract when the runtime cannot
-  format in it, so a missing zone means no label, never a wrong one.
+  format in it, so a missing zone means no label, never a wrong one. When the label and the time do not fit on one
+  line with 12 pt between them (a narrow phone, a long city, a large font scale), the time wraps under the label;
+  nothing is cut.
 - **Footer** — `HomeSheet.footer`, rendered through gorhom's `BottomSheetFooter` so it follows the sheet: the
   `Request a quote` pill docked 12 pt above the sheet's edge (89:387), shown with results or an estimate, never beside
   an EmptyState's own pill (one filled button per screen).
@@ -80,7 +84,8 @@ are on request.` otherwise. The formula prices only routes touching North Americ
 **Consequences.** Home is the screen Figma draws, in every state, and the three preferences the member sets on it
 reach the search and the request. Tests: `travel-preferences.test.ts` (labels, `when`, the North-America rule),
 `local-time.test.ts` (clock, DST, missing zone), `search-reducer.test.ts` (an estimate only on an empty result),
-`build-draft.test.ts` (dates from today, the cabin/travelers precedence), `home-sheet-snaps.test.ts`. `parity.yaml`
+`build-draft.test.ts` (dates from today, the cabin/travelers precedence), `home-sheet-snaps.test.ts` — in CI too: the
+app's `test:unit` runs every test file (`bun test app.config.test.ts src`); a fixed list left eight out. `parity.yaml`
 walks Cancel → pin → chips → the calendar → the profile pill. On staging the indicative fare appears once the price
 rules and `catalog.estimates` are on (RUNBOOK, "Price rules for estimates"); until then the route falls to
 `Let us find your fare.` — the correct state. Not here: `Popular from New York` and the suggested home airport

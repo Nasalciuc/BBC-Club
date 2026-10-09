@@ -7,6 +7,7 @@ import {
   preferencesLines,
   searchWhen,
   travelersLabel,
+  withAdults,
 } from "./travel-preferences";
 
 const OCT_8 = new Date(2026, 9, 8, 10, 0, 0);
@@ -34,6 +35,14 @@ describe("cabin and travelers", () => {
     expect(travelersLabel({ adult: 1, child: 0, infant: 0 })).toBe("1 traveler");
     expect(travelersLabel({ adult: 2, child: 0, infant: 0 })).toBe("2 travelers");
     expect(travelersLabel({ adult: 1, child: 1, infant: 1 })).toBe("3 travelers");
+  });
+
+  it("changes the adults and keeps the children and infants already in the party", () => {
+    const family = { adult: 2, child: 1, infant: 1 };
+    expect(withAdults(family, 3)).toEqual({ adult: 3, child: 1, infant: 1 });
+    expect(travelersLabel(withAdults(family, 1))).toBe("3 travelers");
+    expect(withAdults(family, 0).adult).toBe(1);
+    expect(withAdults(undefined, 2)).toEqual({ adult: 2, child: 0, infant: 0 });
   });
 });
 

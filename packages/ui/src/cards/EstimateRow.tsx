@@ -37,12 +37,8 @@ export function EstimateRow({ amount, onPress, testID }: Props) {
       </View>
       <View style={styles.body}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.facts} numberOfLines={1}>
-          {ESTIMATE_COPY.facts}
-        </Text>
-        <Text style={styles.caption} numberOfLines={2}>
-          {ESTIMATE_COPY.caption}
-        </Text>
+        <Text style={styles.facts}>{ESTIMATE_COPY.facts}</Text>
+        <Text style={styles.caption}>{ESTIMATE_COPY.caption}</Text>
       </View>
     </Pressable>
   );
@@ -75,7 +71,7 @@ const styles = StyleSheet.create({
   },
   markText: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary },
   body: { flex: 1, gap: tokens.space.xxs },
-  // The price pair wraps before it shrinks (DESIGN.md): the title may take two lines at large font scales.
+  // Up to 1.3× font scale the row grows and nothing is cut (DESIGN.md): every line may wrap.
   title: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
   facts: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
   caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },

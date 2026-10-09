@@ -67,11 +67,13 @@ What this changes from the decision above:
 ## Amendment — 8 Oct 2026: instant globe, cinematic flight, day and night (Figma 07 · Additions, A6)
 
 - **Instant globe.** `Globe.tsx` mounts the drawn globe (`GlobeFallback`) at once and the Mapbox globe over it at
-  opacity 0, untouchable, until the map reports itself loaded or idle with its style in; then the satellite fades in
-  over 600 ms (Reanimated; 0 ms under Reduce motion) and the drawn globe unmounts 50 ms later. No empty space while
-  imagery downloads; the drawn globe's pins answer taps meanwhile. With the satellite style a tile, glyph or sprite
-  can fail on a weak connection: only an error **before the style loaded** (a bad token, an unreachable style) or a
-  render error hands Explore to the drawn globe for good; later errors are blemishes Mapbox retries. On the light page
+  opacity 0, untouchable, until the map reports itself loaded (Mapbox's MapLoaded: the style in and every visible tile
+  rendered) or idle with its style in; then the satellite fades in over 600 ms (Reanimated; 0 ms under Reduce motion)
+  and the drawn globe unmounts 50 ms later. Not `onDidFinishRenderingMapFully`: @rnmapbox/maps 10.3.7 never emits it
+  (iOS does not export the event, Android declares it and never sends it), so the satellite would never appear. No empty
+  space while imagery downloads; the drawn globe's pins answer taps meanwhile. With the satellite style a tile, glyph or
+  sprite can fail on a weak connection: only an error **before the style loaded** (a bad token, an unreachable style) or
+  a render error hands Explore to the drawn globe for good; later errors are blemishes Mapbox retries. On the light page
   (typing, expanded, an empty route) the map stays mounted but is not displayed.
 - **Cinematic flight.** Choosing a destination moves the camera with Mapbox's `flyTo` along the great circle in 950 ms
   (`MOVE_MS.flight`), then the route draws itself home-to-destination in 600 ms (Motion spec 4) through
