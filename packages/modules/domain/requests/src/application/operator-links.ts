@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { requestRoute } from "./route";
 
 export type OperatorAction = "quoted" | "booked" | "closed";
 const TTL_S = 7 * 24 * 3600;
@@ -41,12 +42,9 @@ export function escapeHtml(value: string): string {
   });
 }
 
-export function routeLabel(legs: unknown): string {
-  if (!Array.isArray(legs) || legs.length === 0) return "";
-  const first = legs[0] as { from?: string; to?: string };
-  const last = legs[legs.length - 1] as { from?: string; to?: string };
-  if (!first?.from || !last?.to) return "";
-  return `${first.from} → ${last.to}`;
+/** The operator page's route line — the same route the member sees (ADR-IMPL-042). */
+export function routeLabel(legs: unknown, tripType: string | null | undefined): string {
+  return requestRoute(legs, tripType);
 }
 
 export function actionLabel(action: OperatorAction): string {

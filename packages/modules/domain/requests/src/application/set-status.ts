@@ -3,6 +3,7 @@ import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
 import { event } from "@bbc/shared/events";
 import type { RequestsRepo } from "../infrastructure/requests.repo";
+import { requestRoute } from "./route";
 
 export const RequestStatusPayload = z.object({
   requestId: z.string().uuid(),
@@ -35,10 +36,8 @@ export async function setStatus(exec: Executor, raw: unknown, deps: { repo: Requ
     const row = await deps.repo.setStatus(tx, evt.requestId, evt.status, evt.note ?? null, evt.agentId ?? "crm");
     if (!row) return { ok: false as const, code: "NOT_FOUND" as const };
 
-    const legs = current.legs as { from: string; to: string }[];
-    const firstLeg = legs?.[0];
-    const lastLeg = legs?.[legs.length - 1];
-    const route = firstLeg && lastLeg ? `${firstLeg.from} → ${lastLeg.to}` : undefined;
+    // The quote-ready push reads this: `JFK → LHR — tap to call your specialist`, never the way home.
+    const route = requestRoute(current.legs, current.tripType) || undefined;
 
     await deps.publish(tx, {
       type: "request.status_changed",

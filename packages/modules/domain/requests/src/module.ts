@@ -13,6 +13,7 @@ import { setStatus } from "./application/set-status";
 import { effectiveIntent } from "./application/intent";
 import { actionLabel, escapeHtml, routeLabel, verifyAction } from "./application/operator-links";
 import { toRequestVM } from "./application/to-request-vm";
+import { destinationCities, routeEnds } from "./application/route";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
@@ -46,6 +47,18 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       await platform.events.publish(tx, { ...e, publishedBy: "requests" });
     };
     const expose = facade(conn, repo);
+    // The destination's city for each request's title — one batched airport read per page, never fatal.
+    const citiesFor = (rows: readonly { legs: unknown; tripType: string }[]) =>
+      destinationCities(
+        rows,
+        (codes) => ports.catalog.getAirports(undefined, codes),
+        (err) =>
+          platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "request cities unavailable"),
+      );
+    const cityOf = (cities: Map<string, string>, row: { legs: unknown; tripType: string }) => {
+      const to = routeEnds(row.legs, row.tripType)?.to;
+      return (to && cities.get(to)) || null;
+    };
     // An estimate decorates a request; it never decides whether one is accepted. A failed lookup is logged and the
     // request goes through without it.
     const indicative = async (q: { from: string; to: string; cabin: "business" | "first" }) => {
@@ -98,7 +111,11 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
           return c.json(apiError("VALIDATION"), 400);
         }
-        return c.json(toRequestVM(result.request), result.created ? 201 : 200);
+        const created = result.request;
+        return c.json(
+          toRequestVM(created, [], cityOf(await citiesFor([created]), created)),
+          result.created ? 201 : 200,
+        );
       },
     );
 
@@ -116,12 +133,15 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
         const rows = await repo.listForMember(undefined, memberId);
         const page = rows.slice(0, 50);
-        const timelines = await repo.timelinesFor(
-          undefined,
-          page.map((r) => r.id),
-        );
+        const [timelines, cities] = await Promise.all([
+          repo.timelinesFor(
+            undefined,
+            page.map((r) => r.id),
+          ),
+          citiesFor(page),
+        ]);
         return c.json({
-          items: page.map((r) => toRequestVM(r, timelines.get(r.id) ?? [])),
+          items: page.map((r) => toRequestVM(r, timelines.get(r.id) ?? [], cityOf(cities, r))),
           hasMore: rows.length > 50,
         });
       },
@@ -141,8 +161,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
         const row = await repo.getForMember(undefined, memberId, c.req.param("id"));
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
-        const timeline = await repo.timeline(undefined, row.id);
-        return c.json(toRequestVM(row, timeline));
+        const [timeline, cities] = await Promise.all([repo.timeline(undefined, row.id), citiesFor([row])]);
+        return c.json(toRequestVM(row, timeline, cityOf(cities, row)));
       },
     );
 
@@ -262,7 +282,7 @@ function opsRoutes(
         token: c.req.param("token"),
         action: v.action,
         reference: req.reference,
-        route: routeLabel(req.legs),
+        route: routeLabel(req.legs, req.tripType),
         name: req.contactName,
         typeLine:
           intent === "alternative" && req.replacesFareId

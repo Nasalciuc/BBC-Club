@@ -7,6 +7,7 @@ import { RequestBody } from "@bbc/shared/api/v1/requests";
 import type { EstimateVM } from "@bbc/shared/api/v1/fares";
 import { parseMemberPhone } from "@bbc/shared/phone";
 import { effectiveIntent } from "./intent";
+import { requestRoute } from "./route";
 
 type Publish = (
   tx: Executor,
@@ -87,10 +88,8 @@ export async function submit(
 
     const id = randomUUID();
     const reference = `R-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-    const firstLeg = body.legs[0];
-    const lastLeg = body.legs[body.legs.length - 1];
-    if (!firstLeg || !lastLeg) return { ok: false as const, code: "VALIDATION" as const };
-    const route = `${firstLeg.from} → ${lastLeg.to}`;
+    const route = requestRoute(body.legs, body.tripType);
+    if (!route) return { ok: false as const, code: "VALIDATION" as const };
 
     const [row] = await tx
       .insert(requests)

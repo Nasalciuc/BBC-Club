@@ -69,7 +69,17 @@ export type RequestBody = z.infer<typeof RequestBody>;
 export const RequestVM = z.object({
   id: z.string().uuid(),
   reference: z.string(),
+  /** `JFK → LHR`: the outbound leg (a round trip's last leg comes home). */
   route: z.string(),
+  /** The destination's city, for the title (Figma 233:4069: `London`). Null when the airport is unknown; optional so
+   *  an app reads an older server, and an older app ignores it (ADR-IMPL-042). */
+  city: z.string().nullable().optional(),
+  /** Round trip, one way or multi-city — the detail's facts line (Figma 233:4171: `ROUND TRIP`). Optional both ways; a
+   *  kind this app does not know reads as none, so the request still lists. */
+  tripType: z.enum(["round", "oneway", "multi"]).optional().catch(undefined),
+  /** The number the specialist calls: the request's own contact phone, the member's (Figma 233:4242, `WE WILL CALL`).
+   *  Optional both ways. */
+  phone: z.string().nullable().optional(),
   dates: z.string(),
   cabin: z.enum(["business", "first"]),
   passengers: Passengers,

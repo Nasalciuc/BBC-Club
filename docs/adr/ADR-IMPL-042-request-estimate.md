@@ -8,9 +8,9 @@ not know which number the member had seen — the e-mail carried the route, the 
 wants to measure how often an estimate turns into a booking. Approved with P1 on 7 Oct 2026 (sections 9–11 of the P1
 debate); split from P1a so the search could ship first.
 
-A defect on the same path, found while building it: the member's note never reached the specialist (`claimUnsent` did
-not select it, so the e-mail's note was always empty — and the note is where the app asks members to put their
-children's ages).
+Two defects on the same path, found while building it: the member's note never reached the specialist (`claimUnsent`
+did not select it, so the e-mail's note was always empty — and the note is where the app asks members to put
+their children's ages), and every round-trip request read `JFK → JFK` (the second section below).
 
 **Decision.**
 
@@ -48,3 +48,34 @@ win; outside North America; fare and alternative requests; first follows the cab
 `submit-boundaries.test.ts` (a body price is dropped, a replay does not ask), `email-crm.test.ts` (the line and the
 quoted note, only when present — a note's line never passes for an action link), `migrate.test.ts` (the ledger), the
 drizzle guard.
+
+## Requests read back their destination
+
+**Context.** The route of a request was built as `first leg's origin → last leg's destination` in five places (the
+member view, the event, the status change, the operator page, the quote-ready push). For a round trip the last leg comes
+home: every round trip read `JFK → JFK` — in the Requests list, the request detail, the push ("JFK → JFK — tap to call
+your specialist") and the operator's confirmation page. Figma (233:4069, 233:4171) titles a request with the destination
+city, `London`, over `JFK → LHR · BUSINESS`.
+
+**Decision.** One function, `requestRoute(legs, tripType)` in `application/route.ts`: the outbound leg for a round
+trip and one way (`JFK → LHR`); for a multi-city trip, origin to its last stop before coming home. Every place that
+wrote a route uses it. `RequestVM` gains `city: string | null`, optional — the destination's city from the catalog's
+airports, read in one batch per page (`getAirports`), null when the airport is unknown or the read fails (logged; the
+answer still goes out, so a created request never comes back as a 500); an older app ignores it, a newer app falls back
+to the route when it is absent. For the detail (Figma 233:4171, 233:4242) it also gains `tripType` (the facts line's
+`ROUND TRIP`) and `phone` — the number the specialist calls, the request's own contact phone, which only its member
+reads (ownership is in the `WHERE`). Both optional, like `city`; a trip type an app does not know reads as none
+(`.catch`), so the request still lists. `dates` names one month once (`Oct 12–19`, as the frames do; `Oct 30–Nov 6`
+across months). And a request the server holds but has not passed on yet reads `received` to its member — the job
+passes it on within the minute, and Figma's just-received frame (233:4639, "Your request is with us.") is that moment;
+it read `not_sent` until then, so every new request was briefly "not sent" with a nudge to try again. It reads
+`not_sent` only once the job has given up (six attempts). Contract change in `packages/shared` under this ADR.
+
+**Consequences.** Requests, the detail, the push and the operator page name the destination. Journal rows written before
+this change keep their old `route` text; only new events carry the corrected one. The app's title uses `city` in its
+next release (A2c). Tests: `request-route.test.ts` (round, one way, multi-city ending at home, empty),
+`requests-route.test.ts` (the created request, the list, the detail, the operator page, both events; one way; an
+unknown airport has no city; the trip type and the phone; an app built before them still parses the answer),
+`request-route.test.ts` (one batched read; a failed read answers no cities and is reported, never thrown),
+`requests.test.ts` (a new request reads `received`; `not_sent` once the job gives up), `query-budget.test.ts` (list
+and detail within budget).

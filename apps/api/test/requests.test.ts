@@ -8,7 +8,8 @@ describe("POST /v1/requests", () => {
     const r = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
     expect(r.status).toBe(201);
     const body = (await r.json()) as { id: string; status: string; reference: string };
-    expect(body.status).toBe("not_sent");
+    // Held, not yet passed on: received to its member (ADR-IMPL-042) — "not sent" only once the job gives up.
+    expect(body.status).toBe("received");
     expect(body.reference).toBe("");
     await t.drainAll();
     expect(t.crm.submitted.length).toBe(0);
@@ -243,6 +244,10 @@ describe("send-requests job", () => {
     await t.platform.jobs.run("send-requests");
     const [row2]: any = await t.db.execute(sql`SELECT send_attempts FROM requests.requests WHERE id = ${id}`);
     expect(Number(row2.send_attempts)).toBe(attempts);
+
+    // Given up: now, and only now, the member reads "not sent".
+    const detail = await t.app.request(`/v1/requests/${id}`, { headers: { Cookie: t.memberA.cookie } });
+    expect(((await detail.json()) as { status: string }).status).toBe("not_sent");
 
     await t.close();
   });
