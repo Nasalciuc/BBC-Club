@@ -30,6 +30,7 @@ import {
   type HomeSuggestionVM as HomeSuggestionVMType,
   type PopularVM as PopularVMType,
 } from "@bbc/shared/api/v1/discovery";
+import { PlacePhotosVM, type PlacePhotoVM as PlacePhotoVMType } from "@bbc/shared/api/v1/places";
 import type { ProfileVM as Profile } from "@bbc/shared/api/v1/profile";
 import {
   RequestBody,
@@ -456,6 +457,24 @@ export async function fetchHomeSuggestion(tz: string): Promise<ApiResult<HomeSug
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }
     return { ok: true, data: parsed.data };
+  });
+}
+
+/**
+ * GET /v1/places/photos?codes= — the photo of each city (ADR-IMPL-043): a code the server does not know is absent, and
+ * an item this app cannot read is dropped by the contract, never the whole answer.
+ */
+export async function fetchPlacePhotos(codes: readonly string[]): Promise<ApiResult<PlacePhotoVMType[]>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/places/photos?codes=${codes.map((c) => encodeURIComponent(c)).join(",")}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const parsed = PlacePhotosVM.safeParse(await parseJson(res));
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data.items };
   });
 }
 

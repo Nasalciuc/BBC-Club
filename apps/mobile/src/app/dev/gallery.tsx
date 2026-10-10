@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fixture } from "@bbc/shared/fixture";
+
+import { CLUB_PICTURE } from "@/features/places/usePlacePhotos";
 import {
   AirportRow,
   Button,
@@ -14,7 +16,9 @@ import {
   ListRow,
   OfferCard,
   CarouselRow,
+  PhotoCredit,
   PricePair,
+  ProfileHero,
   RequestCard,
   SearchField,
   SectionLabel,
@@ -149,16 +153,40 @@ export default function GalleryScreen() {
 
       <SectionLabel label="OfferCard" />
       <CarouselRow testID="gallery.carousel">
-        <OfferCard testID="gallery.offer.full" title="London" fromPrice="FROM $4,200" imageUrl={null} onPress={noop} />
-        <OfferCard testID="gallery.offer.noprice" title="Paris" imageUrl={null} onPress={noop} />
+        <OfferCard
+          testID="gallery.offer.full"
+          title="London"
+          fromPrice="FROM $4,200"
+          image={null}
+          fallback={CLUB_PICTURE}
+          onPress={noop}
+        />
+        <OfferCard testID="gallery.offer.noprice" title="Paris" image={null} fallback={CLUB_PICTURE} onPress={noop} />
         <OfferCard
           testID="gallery.offer.noimage"
           title="Tokyo"
           fromPrice="FROM $4,650"
-          imageUrl={null}
+          image={null}
+          fallback={null}
           onPress={noop}
         />
       </CarouselRow>
+
+      {/* Figma 436:1221; the club's image stands in for the city's photo (ADR-IMPL-043). */}
+      <SectionLabel label="ProfileHero" />
+      <ProfileHero
+        testID="gallery.profileHero"
+        name="Alex Morgan"
+        home="Flies from JFK"
+        image={null}
+        fallback={CLUB_PICTURE}
+      />
+      <PhotoCredit
+        testID="gallery.photoCredit"
+        label="Photo: Jane Doe · CC BY-SA 4.0 · Wikimedia Commons"
+        accessibilityLabel="Photo by Jane Doe, CC BY-SA 4.0, Wikimedia Commons"
+        onPress={noop}
+      />
 
       <SectionLabel label="PricePair" />
       <View style={styles.row}>

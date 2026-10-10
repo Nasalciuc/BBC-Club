@@ -201,7 +201,7 @@ on. Call us and we’ll take it from here.` with `Call us`, the screen's one fil
 listed. With an older server the title falls back to the route (or `Your request`) and the detail omits the trip type
 and the number — so this release's OTA goes out in an environment only after the API with ADR-IMPL-042 runs there.
 `EXPO_PUBLIC_SUPPORT_PHONE` must be set in the EAS environment for any call button to show (`docs/release.md`). Not
-here: Profile's home-airport photograph and its Edit / Call us pair (233:4453 — the photograph needs a source), the
+here: Profile's home-airport photograph and its Edit / Call us pair (233:4453; built since in ADR-IMPL-043), the
 published fare on a request, a specialist's own number (Figma's note on 296:5916 asks for it from the backend; until
 then the call goes to the club's line), and parity screenshots of the detail frames (the e2e fixture seeds no
 requests — a seed for each state belongs with it). Tests: `request-card.test.ts` (the card and detail lines, the title

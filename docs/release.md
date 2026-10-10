@@ -20,7 +20,9 @@ Set these on the EAS **production** environment (dashboard or `eas env:create`),
 
 A production build with `EXPO_PUBLIC_APP_ENV=production` and a missing legal URL or Mapbox token fails at
 `apps/mobile/app.config.ts`. Before launch the Mapbox account needs a payment card: without one its free tier is limited
-to 100 monthly active users, and every reinstall counts as a new one. Set Mapbox usage alerts at the same time.
+to 100 monthly active users, and every reinstall counts as a new one. Set Mapbox usage alerts at the same time — the
+Static Images API among them: the same token draws a city's satellite view where no photograph exists (ADR-IMPL-043),
+billed per request beyond its free tier.
 
 ## 1b. EAS environment — preview (staging)
 

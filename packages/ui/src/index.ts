@@ -8,6 +8,8 @@ export { CloseButton } from "./primitives/CloseButton";
 export { ProgressLine } from "./primitives/ProgressLine";
 export { Chip } from "./primitives/Chip";
 export { ListRow } from "./primitives/ListRow";
+export { Photo, type PhotoSource } from "./primitives/Photo";
+export { PhotoCredit } from "./primitives/PhotoCredit";
 export { PricePair } from "./primitives/PricePair";
 export { SectionLabel } from "./primitives/SectionLabel";
 export { StatusBadge, statusCopy, type BadgeStatus } from "./primitives/StatusBadge";
@@ -21,6 +23,7 @@ export { CarouselRow, OfferCard } from "./cards/OfferCard";
 export { FareRow } from "./cards/FareRow";
 export { ESTIMATE_COPY, EstimateRow } from "./cards/EstimateRow";
 export { fareFacts } from "./cards/fare-facts";
+export { ProfileHero } from "./cards/ProfileHero";
 export { RequestCard } from "./cards/RequestCard";
 
 export { HomeSheet } from "./layout/HomeSheet";

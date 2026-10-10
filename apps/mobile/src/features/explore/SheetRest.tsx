@@ -4,6 +4,8 @@ import type { AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import { CarouselRow, OfferCard, SectionLabel, tokens } from "@bbc/ui";
 
+import { cardPicture } from "@/features/places/place-photo-logic";
+import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { fetchHome, fetchProfile } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
@@ -112,6 +114,8 @@ type Props = {
 
 export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
   const inspire = home?.sections.find((s) => s.key === "inspire")?.items ?? [];
+  // ADR-IMPL-043: an offer without its own picture shows its city's photo; the club's image until there is one.
+  const photoFor = usePlacePhotos(inspire.map((item) => item.route.to));
 
   if (homeLoading) {
     return (
@@ -135,7 +139,8 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
             testID={`explore.offer.${item.id}`}
             title={item.title}
             fromPrice={formatPrice(item.price.offer, item.price.currency)}
-            imageUrl={item.mediaUrl ?? null}
+            image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
+            fallback={CLUB_PICTURE}
             onPress={() => onOpenOffer(item)}
           />
         ))}

@@ -32,7 +32,9 @@ Companion to `DESIGN.md`. Token refs are canonical; this file adds the decisions
 **price-pair** — `stack` on cards and fare rows (struck published fare over the offer); `editorial` on a fare's page (`Your fare` and the price in `display`, the published fare beside it); `detail` on a request's detail (Figma 26:29: `YOUR FARE` over the price, a 144pt column, the published fare beside it). On a request the price is `text-primary`, not bronze (the conflict in ADR-IMPL-041, A2c); Figma 26:36's description ("Detail for fare pages") predates that use.
 **inbox-row** — one `body` sentence + `caption` date; unread = 6px `primary` dot left + weight 500; read = `text-secondary`.
 **list-row** — `body` label, thin chevron `text-tertiary` right; "Sign out" has no chevron.
-**photo-placeholder** — `surface-muted`, exact image slot (blurhash in production); never a spinner.
+**photo-placeholder** — `surface-muted`, exact image slot (blurhash in production); never a spinner. A photo that cannot load shows the club's cabin photograph instead (`Photo`, ADR-IMPL-043).
+**profile-hero** — Figma `Proposal / ProfileHero` (436:1221): the home airport's city photograph, 304 pt high, `rounded.card`, under a flat `surface-night` scrim at 32 %; the member's name in `headline` (`text-on-dark`, two lines at most) and `Flies from JFK` in `body-sm` on a white pill (36 pt, `border-default` hairline) — a pill that does not act, as Figma draws it (reported in ADR-IMPL-043). Under it, `Edit` and `Call us`: two white pills 48 pt high, 12 pt apart.
+**photo-credit** — one `caption` line in `text-tertiary` under a photograph shown full width (a fare's photo band, Profile's): `Photo: Jane Doe · CC BY-SA 4.0 · Wikimedia Commons`, `Imagery © Mapbox © OpenStreetMap © Maxar` under a satellite view; it opens the photo's page (44 pt hit area). A card's photo is credited on the fare page it opens.
 
 ## Navigation
 
@@ -53,3 +55,5 @@ Back: white arrow on photographs (entry, detail hero); Android hardware back mir
 ## Photography
 
 Empty spaces only (no people), insider perspective (from the suite, from the table), muted cinematic grade, deep shadows, restrained warm light; never landmarks, crowds, postcards, HDR. Scrim over the bottom 45% wherever text sits. Card images 2× WebP from CDN; hero 3×.
+
+City photographs (ADR-IMPL-043) are the exception this paragraph does not yet name: an offer without its own picture, a fare's photo band and Profile show the city's photograph from Wikimedia Commons or Pexels (people left out by their description), else its satellite view, else the cabin photograph. Many are skylines or landmarks — reported in ADR-IMPL-043; the club's own photo replaces any city's.

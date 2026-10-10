@@ -1,20 +1,23 @@
 import type { ReactNode } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Photo, type PhotoSource } from "../primitives/Photo";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 
 type Props = {
   title: string;
   fromPrice?: string | null;
-  imageUrl: string | null;
-  blurhash?: string | null;
+  /** The offer's own picture, else its city's photo (ADR-IMPL-043); null — the fallback. */
+  image: PhotoSource | null;
+  /** The club's own image, when there is no photo or it cannot load. */
+  fallback: PhotoSource | null;
   onPress: () => void;
   testID: string;
 };
 
 /** Carousel card 180 × 120. Scrim is the one gradient DESIGN.md permits over a photograph. */
-export function OfferCard({ title, fromPrice, imageUrl, onPress, testID }: Props) {
+export function OfferCard({ title, fromPrice, image, fallback, onPress, testID }: Props) {
   return (
     <Pressable
       testID={testID}
@@ -23,11 +26,7 @@ export function OfferCard({ title, fromPrice, imageUrl, onPress, testID }: Props
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={StyleSheet.absoluteFill} accessibilityIgnoresInvertColors />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, styles.placeholder]} />
-      )}
+      <Photo source={image} fallback={fallback} style={StyleSheet.absoluteFill} />
       <LinearGradient
         colors={["transparent", tokens.colors.scrim]}
         locations={[0.45, 1]}
@@ -62,7 +61,6 @@ export function CarouselRow({ children, testID }: { children: ReactNode; testID:
 const styles = StyleSheet.create({
   card: { width: 180, height: 120, borderRadius: tokens.radius.card, overflow: "hidden" },
   pressed: { opacity: 0.92 },
-  placeholder: { backgroundColor: tokens.colors.surfaceMuted },
   copy: {
     position: "absolute",
     left: tokens.space.sm,
