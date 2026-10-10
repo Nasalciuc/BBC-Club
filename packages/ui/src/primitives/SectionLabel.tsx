@@ -7,12 +7,14 @@ type Props = {
   action?: { label: string; onPress: () => void; testID: string };
   /** A second mono label at the right edge — the destination's local time on 536:10864 (`LONDON · 8:42 PM`). */
   trailing?: { label: string; testID: string } | null;
+  /** No rhythm of its own: the parent spaces it (a request's detail, Figma 233:4173, sets 24 / 8 pt itself). */
+  flush?: boolean;
 };
 
 /** The 24-above / 12-below rhythm. Callers pass the label; the component uppercases. */
-export function SectionLabel({ label, action, trailing }: Props) {
+export function SectionLabel({ label, action, trailing, flush = false }: Props) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, flush && styles.flush]}>
       <Text style={styles.label} accessibilityRole="header">
         {label.toUpperCase()}
       </Text>
@@ -50,6 +52,7 @@ const styles = StyleSheet.create({
     marginTop: tokens.space.lg,
     marginBottom: tokens.space.sm,
   },
+  flush: { marginTop: 0, marginBottom: 0 },
   label: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary, flexShrink: 1 },
   action: { ...rn(tokens.type.bodySm), color: tokens.colors.primary },
   pressed: { opacity: 0.6 },

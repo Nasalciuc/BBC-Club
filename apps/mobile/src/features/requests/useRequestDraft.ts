@@ -20,6 +20,9 @@ export type RequestDraft = {
   offerId?: string;
   replacesFareId?: string;
   priceAtRequest?: number;
+  /** The route and cabin whose indicative fare Home showed before the member asked for a quote (ADR-IMPL-042); null
+   *  when it showed none. The request says so only while it still asks about that route and cabin. */
+  estimateFor: { from: string; to: string; cabin: "business" | "first" } | null;
   phoneError: string | null;
   returnError: string | null;
   submitError: string | null;
@@ -135,6 +138,8 @@ export function buildDraft(opts: {
   mode?: RequestMode;
   replacesFareId?: string;
   search?: SearchContext | null;
+  /** Home showed the indicative fare for this route and cabin (`EstimateRow`) when the member asked for a quote. */
+  estimateShown?: boolean;
   today?: string;
 }): RequestDraft {
   const from = opts.fare?.from.code ?? opts.fromCode ?? "JFK";
@@ -167,6 +172,7 @@ export function buildDraft(opts: {
     offerId: mode === "offer" ? (opts.fare?.offerId ?? undefined) : undefined,
     replacesFareId: mode === "alternative" ? opts.replacesFareId : undefined,
     priceAtRequest: opts.fare?.price.offer,
+    estimateFor: mode === "quote" && opts.estimateShown === true ? { from, to, cabin } : null,
     phoneError: null,
     returnError: null,
     submitError: null,
@@ -187,6 +193,15 @@ export function sheetTitle(mode: RequestMode): string {
   return "Request this fare";
 }
 
+/** The member saw an estimate for exactly what this quote asks about: the outbound route and the cabin. */
+export function showedEstimate(draft: RequestDraft): boolean {
+  const seen = draft.estimateFor;
+  const outbound = draft.legs[0];
+  return Boolean(
+    seen && outbound && outbound.from === seen.from && outbound.to === seen.to && draft.cabin === seen.cabin,
+  );
+}
+
 export function draftToBody(draft: RequestDraft): RequestBody {
   const legs = draft.tripType === "oneway" ? draft.legs.slice(0, 1) : draft.legs;
   const shared = {
@@ -198,7 +213,9 @@ export function draftToBody(draft: RequestDraft): RequestBody {
     note: draft.note || undefined,
     priceAtRequest: draft.priceAtRequest,
   };
-  if (draft.mode === "quote") return { ...shared, intent: "quote" };
+  // A yes, never a number: the server recomputes the estimate, and only when the app says it showed one.
+  if (draft.mode === "quote")
+    return { ...shared, intent: "quote", ...(showedEstimate(draft) ? { estimateShown: true } : {}) };
   if (draft.mode === "alternative") return { ...shared, intent: "alternative", replacesFareId: draft.replacesFareId };
   if (draft.mode === "offer") return { ...shared, offerId: draft.offerId };
   return { ...shared, fareId: draft.fareId };

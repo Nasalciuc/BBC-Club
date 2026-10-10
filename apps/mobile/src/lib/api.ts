@@ -550,10 +550,22 @@ export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[
     if (!Array.isArray(items)) {
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }
+    // Row by row: one request this app cannot read must not take the others with it. The contract reads new states
+    // and new fields as known ones (ADR-IMPL-042), so a dropped row means a server this app does not understand —
+    // said in development, where it can be fixed; never a member's data in the message.
     const parsed: RequestVMType[] = [];
+    let dropped = 0;
+    let firstIssue = "";
     for (const row of items) {
       const v = RequestVM.safeParse(row);
       if (v.success) parsed.push(v.data);
+      else {
+        dropped += 1;
+        if (!firstIssue) firstIssue = v.error.issues[0]?.path.join(".") ?? "";
+      }
+    }
+    if (dropped > 0 && __DEV__) {
+      console.warn(`[fetchRequests] ${dropped} of ${items.length} requests did not read (first at "${firstIssue}")`);
     }
     const hasMore = RequestList.shape.hasMore.catch(false).parse((raw as { hasMore?: unknown })?.hasMore);
     return { ok: true, data: { items: parsed, hasMore } };

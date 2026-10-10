@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { deleteFailureKind, stateCopy, submitFailureKind } from "./error-context";
+import { deleteFailureKind, readFailureCopy, refreshFailedLine, stateCopy, submitFailureKind } from "./error-context";
 
 test("a gone fare uses the expired-fare copy", () => {
   expect(stateCopy("gone")).toEqual({
@@ -38,4 +38,23 @@ describe("system screens", () => {
   test("maintenance is temporary", () => {
     expect(stateCopy("maintenance").title).toBe("Back in a moment.");
   });
+});
+
+test("a screen that reads requests offline says when it will load — never the sending copy", () => {
+  expect(readFailureCopy("OFFLINE", "requests")).toEqual({
+    title: "You’re offline.",
+    body: "Your requests load when you’re back online.",
+  });
+  expect(readFailureCopy("TIMEOUT", "request").body).toBe("This request loads when you’re back online.");
+  expect(readFailureCopy("NOT_FOUND", "request")).toEqual(stateCopy("route"));
+  expect(readFailureCopy(undefined, "requests").body).not.toContain("send");
+});
+
+test("over a list already on screen, a failed reload never says the screen could not be loaded", () => {
+  expect(refreshFailedLine("OFFLINE")).toBe("You’re offline. Your requests load when you’re back online.");
+  expect(refreshFailedLine("INTERNAL")).toBe("We couldn’t refresh your requests just now.");
+  // Nothing loaded yet, only what waits on the phone on screen: there was nothing to refresh.
+  expect(refreshFailedLine("INTERNAL", false)).toBe("We couldn’t load your other requests just now.");
+  expect(refreshFailedLine("TIMEOUT", false)).toBe("You’re offline. Your requests load when you’re back online.");
+  expect(refreshFailedLine(undefined)).not.toContain("could not be loaded");
 });

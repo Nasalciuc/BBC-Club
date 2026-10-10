@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["expo/types", "bun"]
+  },
+  "include": ["src/**/*.test.ts", "app.config.test.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules"]
+}

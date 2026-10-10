@@ -55,3 +55,31 @@ export function submitFailureKind(code?: string): "notSent" | "queued" | "rateLi
   if (code === "TIMEOUT" || code === "OFFLINE") return "queued";
   return "notSent";
 }
+
+/**
+ * A screen that reads requests and could not: offline (or a timeout) says so and when it will work — never the
+ * sending copy ("We'll send this…"), there is nothing to send here. Anything else is the screen's own failure.
+ */
+export function readFailureCopy(
+  code: string | undefined,
+  what: "request" | "requests",
+): { title: string; body: string } {
+  if (code === "OFFLINE" || code === "TIMEOUT") {
+    return {
+      title: "You’re offline.",
+      body:
+        what === "request"
+          ? "This request loads when you’re back online."
+          : "Your requests load when you’re back online.",
+    };
+  }
+  return stateCopy("route");
+}
+
+/** Over a list already on screen, when a reload did not answer: what is shown may be out of date — never "This screen
+ *  could not be loaded", which the list on screen contradicts. `loaded` false: the server has not answered once yet,
+ *  and only the requests waiting on the phone are shown — nothing was there to refresh. */
+export function refreshFailedLine(code: string | undefined, loaded = true): string {
+  if (code === "OFFLINE" || code === "TIMEOUT") return "You’re offline. Your requests load when you’re back online.";
+  return loaded ? "We couldn’t refresh your requests just now." : "We couldn’t load your other requests just now.";
+}

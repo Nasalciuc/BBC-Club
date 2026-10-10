@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  CircleCheck,
   Eye,
   EyeOff,
   Globe,
@@ -52,6 +53,8 @@ export const icons = {
   back: ChevronLeft,
   eyeOff: EyeOff,
   circle: Circle,
+  /** Timeline step done (Figma 46:114). */
+  "circle-check": CircleCheck,
   proposals: Plane,
 } as const;
 

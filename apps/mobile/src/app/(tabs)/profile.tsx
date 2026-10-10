@@ -1,14 +1,16 @@
-import { useRouter, type Href } from "expo-router";
+import { useIsFocused, useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
-import { EmptyState, Icon, ListRow, RequestRow, tokens, rn } from "@bbc/ui";
+import { EmptyState, Icon, ListRow, RequestCard, tokens, rn } from "@bbc/ui";
 
 import { telHref } from "@/features/requests/confirmation-logic";
-import { badgeStatus, requestMeta } from "@/features/requests/status";
+import { requestCard } from "@/features/requests/request-card";
+import { recentRequests } from "@/features/requests/request-view-logic";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
+import { displayPhone } from "@/lib/phone";
 import { clientSince } from "@/features/profile/profile-logic";
 import { monogram } from "@/lib/monogram";
 
@@ -21,23 +23,34 @@ export default function ProfileScreen() {
   const [recent, setRecent] = useState<RequestVM[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const focused = useIsFocused();
 
+  // Each time Profile comes into view: a new request, a state the specialist changed, a phone edited in Settings show
+  // at once. The spinner is for the first load only; later loads keep what is on screen.
   useEffect(() => {
+    if (!focused) return;
+    let cancelled = false;
     void (async () => {
       const [profileResult, requestsResult] = await Promise.all([fetchProfile(), fetchRequests()]);
+      if (cancelled) return;
+      setLoading(false);
       if (!profileResult.ok) {
         setError(profileResult.message);
-        setLoading(false);
         return;
       }
+      setError(null);
       setProfile(profileResult.data);
-      if (requestsResult.ok) setRecent(requestsResult.data.items.slice(0, 3));
-      setLoading(false);
+      if (requestsResult.ok) setRecent(recentRequests(requestsResult.data.items));
     })().catch(() => {
-      setError("Something went wrong.");
-      setLoading(false);
+      if (!cancelled) {
+        setError("Something went wrong.");
+        setLoading(false);
+      }
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [focused]);
 
   if (loading) {
     return (
@@ -64,7 +77,9 @@ export default function ProfileScreen() {
       }}
     >
       <View style={styles.top}>
-        <Text style={styles.kicker}>Your profile.</Text>
+        <Text style={styles.kicker} accessibilityRole="header">
+          Your profile.
+        </Text>
         <Pressable
           testID="profile.settings"
           accessibilityRole="button"
@@ -95,13 +110,20 @@ export default function ProfileScreen() {
         <Pressable
           testID="profile.call"
           accessibilityRole="button"
-          onPress={() => void Linking.openURL(call)}
+          onPress={() => {
+            Linking.openURL(call).catch(() => undefined);
+          }}
           style={({ pressed }) => [styles.call, pressed && styles.pressed]}
         >
           <Text style={styles.callText}>Call us</Text>
         </Pressable>
       ) : null}
-      <Text style={styles.section}>Recent requests</Text>
+      {/* Requests that did not load are left out, title included — the next visit tries again. */}
+      {recent === null ? null : (
+        <Text style={[styles.section, styles.afterCard]} accessibilityRole="header">
+          Recent requests
+        </Text>
+      )}
       {recent === null ? null : recent.length === 0 ? (
         // Figma 233:4550 (P5 / Profile · New client).
         <EmptyState
@@ -111,22 +133,37 @@ export default function ProfileScreen() {
           primary={{ label: "Explore", onPress: () => router.push("/(tabs)/explore" as Href) }}
         />
       ) : (
-        recent.map((item) => (
-          <RequestRow
-            key={item.id}
-            testID={`profile.request.${item.id}`}
-            route={item.route}
-            meta={requestMeta(item)}
-            badgeStatus={badgeStatus(item.status)}
-            onPress={() => router.push(`/request/${item.id}` as Href)}
-          />
-        ))
+        // Figma 233:4453: the compact request card, 12 pt apart.
+        <View style={styles.cards}>
+          {recent.map((item) => {
+            const card = requestCard(item);
+            return (
+              <RequestCard
+                key={item.id}
+                size="compact"
+                testID={`profile.request.${item.id}`}
+                title={card.title}
+                facts={card.facts}
+                when={card.when}
+                badgeStatus={card.badge}
+                accessibilityLabel={card.spoken}
+                onPress={() => router.push(`/request/${item.id}` as Href)}
+              />
+            );
+          })}
+        </View>
       )}
-      <Text style={styles.section}>Your account.</Text>
+      <Text
+        style={[styles.section, styles.accountTitle, recent === null && styles.afterCard]}
+        accessibilityRole="header"
+      >
+        Your account.
+      </Text>
       <ListRow
         testID="profile.account.phone"
         label="Phone"
-        value={profile?.phone ?? "Add phone"}
+        // Figma 233:4453: `+1 (212) 555-0148`, as the request's detail writes it; none (or blank) asks for one.
+        value={displayPhone(profile?.phone) ?? "Add phone"}
         onPress={() => router.push("/settings" as Href)}
       />
       {since ? <Text style={styles.since}>{since}</Text> : null}
@@ -145,7 +182,8 @@ const styles = StyleSheet.create({
     marginBottom: tokens.space.lg,
   },
   kicker: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger, marginBottom: tokens.space.sm },
+  // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
+  error: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
   card: {
     backgroundColor: tokens.colors.surfaceCard,
     borderRadius: tokens.radius.card,
@@ -168,12 +206,18 @@ const styles = StyleSheet.create({
   edit: { ...rn(tokens.type.body), color: tokens.colors.primary },
   call: { marginBottom: tokens.space.lg },
   callText: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  // Figma 233:4453: `Recent requests` and `Your account.` are serif titles, 24 pt from what they introduce.
   section: {
-    ...rn(tokens.type.labelMono),
-    color: tokens.colors.textSecondary,
+    ...rn(tokens.type.title),
+    color: tokens.colors.textPrimary,
     marginTop: tokens.space.lg,
-    marginBottom: tokens.space.sm,
+    marginBottom: tokens.space.lg,
   },
+  // The card and `Call us` above already leave 24 pt (Figma 233:4453: one 24 pt gap, not two) — under the recent
+  // requests' title, or under `Your account.` when the recent requests did not load.
+  afterCard: { marginTop: 0 },
+  accountTitle: { marginBottom: tokens.space.xs },
+  cards: { gap: tokens.space.sm },
   since: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginTop: tokens.space.sm },
   pressed: { opacity: 0.7 },
 });

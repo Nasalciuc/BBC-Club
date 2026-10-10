@@ -1,91 +1,64 @@
 import NetInfo from "@react-native-community/netinfo";
-import { useRouter, type Href } from "expo-router";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Linking, StyleSheet, Text, View } from "react-native";
+import { useIsFocused, useRouter, type Href } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
-import { EmptyState, RequestRow, tokens, rn } from "@bbc/ui";
+import { EmptyState, ErrorState, RequestCard, tokens, rn } from "@bbc/ui";
 
-import { closedAt, listHints, requestView } from "@/features/requests/request-view-logic";
-import { badgeStatus, isOpen, requestMeta } from "@/features/requests/status";
+import { isOffline } from "@/features/explore/offline-logic";
+import { queuedView, requestCard } from "@/features/requests/request-card";
+import { listHints } from "@/features/requests/request-view-logic";
+import { isOpen } from "@/features/requests/status";
+import { noteUnreadQuotes } from "@/features/requests/useUnreadQuotes";
 import { fetchRequests, submitRequest } from "@/lib/api";
-import { env } from "@/lib/env";
-import { flushQueue, listQueued, type QueuedRequest } from "@/lib/queue";
+import { readFailureCopy, refreshFailedLine } from "@/lib/error-context";
+import { flushQueue, listQueued, subscribeQueue, type QueuedRequest } from "@/lib/queue";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-type ListItem =
-  { kind: "server"; request: RequestVM } | { kind: "queued"; queued: QueuedRequest; route: string; meta: string };
-
-function formatLegDates(legs: { date: string }[]): string {
-  const fmt = (iso: string) => {
-    const parts = iso.split("-").map(Number);
-    const y = parts[0];
-    const m = parts[1];
-    const d = parts[2];
-    if (!y || !m || !d) return iso;
-    const month = MONTHS[m - 1];
-    return month ? `${month} ${d}` : iso;
-  };
-  const first = legs[0];
-  const last = legs[legs.length - 1];
-  if (!first) return "";
-  if (!last || legs.length === 1) return fmt(first.date);
-  return `${fmt(first.date)}–${fmt(last.date)}`;
-}
-
-function queuedMeta(q: QueuedRequest): { route: string; meta: string } {
-  const first = q.body.legs[0];
-  const last = q.body.legs[q.body.legs.length - 1];
-  const route = first && last ? `${first.from} → ${last.to}` : "";
-  const cabin = q.body.cabin === "business" ? "Business" : "First";
-  const adults = q.body.passengers.adult === 1 ? "1 adult" : `${q.body.passengers.adult} adults`;
-  const price =
-    q.body.priceAtRequest != null
-      ? `from ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(q.body.priceAtRequest)}`
-      : null;
-  const meta = [formatLegDates(q.body.legs), cabin, adults, price].filter(Boolean).join(" · ");
-  return { route, meta };
-}
-
-function openUrl(url: string) {
-  void Linking.openURL(url);
-}
+type ListItem = { kind: "server"; request: RequestVM } | { kind: "queued"; view: RequestVM; rejected: boolean };
 
 export default function RequestsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [items, setItems] = useState<RequestVM[]>([]);
-  const [queued, setQueued] = useState<QueuedRequest[]>([]);
+  const focused = useIsFocused();
+  // Null until the server has answered once: a failed first answer is an error, never "No requests yet."
+  const [items, setItems] = useState<RequestVM[] | null>(null);
+  const [queued, setQueued] = useState<QueuedRequest[]>(() => listQueued());
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ title: string; body: string; code?: string } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const queuedCount = useRef(queued.length);
+
+  // The list follows the server: each time the tab comes into view (a request made from Explore, a state changed by
+  // the specialist), and below when the phone comes back online. Only the first load shows the spinner; later ones keep
+  // the list and its scroll where they are. Coming into view also sends what waits on the phone (one flush at a time,
+  // lib/queue.ts).
+  useEffect(() => {
+    if (!focused) return;
+    setReloadToken((n) => n + 1);
+    void flushQueue((body, key) => submitRequest(body, key)).catch(() => undefined);
+  }, [focused]);
 
   useEffect(() => {
+    if (reloadToken === 0) return;
     let cancelled = false;
     void (async () => {
-      setLoading(true);
-      try {
-        await flushQueue((body, key) => submitRequest(body, key));
-      } catch {
-        // flushQueue isolates per item; this keeps fetchRequests running
-      }
       const result = await fetchRequests();
       if (cancelled) return;
       setLoading(false);
-      setQueued(listQueued());
       if (!result.ok) {
-        setError(result.message);
+        setFailure({ ...readFailureCopy(result.code, "requests"), code: result.code });
         return;
       }
       setItems(result.data.items);
       setHasMore(result.data.hasMore);
-      setError(null);
+      setFailure(null);
+      noteUnreadQuotes(result.data.items);
     })().catch(() => {
       if (!cancelled) {
         setLoading(false);
-        setError("Something went wrong.");
+        setFailure(readFailureCopy(undefined, "requests"));
       }
     });
     return () => {
@@ -93,30 +66,50 @@ export default function RequestsScreen() {
     };
   }, [reloadToken]);
 
+  // Back online after being offline: reload. NetInfo calls the listener at once with the current state — that first
+  // call only sets where we start from.
   useEffect(() => {
-    const sub = NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable !== false) {
-        setReloadToken((n) => n + 1);
-      }
+    let wasOffline: boolean | null = null;
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const offline = isOffline(state);
+      if (wasOffline === true && !offline) setReloadToken((n) => n + 1);
+      wasOffline = offline;
     });
-    return () => sub();
+    return () => unsubscribe();
   }, []);
 
-  const openServer = items.filter((r) => isOpen(r.status));
-  const closed = items.filter((r) => !isOpen(r.status));
+  // The queue changes from anywhere (the app-wide flush, Send now, a new request saved offline): re-read it; when one
+  // left the phone, the server has it now.
+  useEffect(() => {
+    const reread = () => {
+      const next = listQueued();
+      if (next.length < queuedCount.current) setReloadToken((n) => n + 1);
+      queuedCount.current = next.length;
+      setQueued(next);
+    };
+    const unsubscribe = subscribeQueue(reread);
+    // A change between the first render's read and this subscription would otherwise be missed.
+    reread();
+    return unsubscribe;
+  }, []);
+
+  const server = items ?? [];
+  const openServer = server.filter((r) => isOpen(r.status));
+  const closed = server.filter((r) => !isOpen(r.status));
   const open: ListItem[] = [
-    ...queued.map((q) => {
-      const { route, meta } = queuedMeta(q);
-      return { kind: "queued" as const, queued: q, route, meta };
-    }),
+    ...queued.map((q) => ({ kind: "queued" as const, view: queuedView(q), rejected: Boolean(q.rejectedAt) })),
     ...openServer.map((request) => ({ kind: "server" as const, request })),
   ];
-  const empty = open.length === 0 && closed.length === 0;
-  const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  const empty = items !== null && open.length === 0 && closed.length === 0;
   // Figma 233:4639 / 240:5199: one line under the in-progress list — reassurance or a nudge.
-  const hints = listHints(open.map((row) => ({ status: row.kind === "queued" ? "queued" : row.request.status })));
+  const hints = listHints(
+    open.map((row) => ({
+      status: row.kind === "queued" ? (row.rejected ? "rejected" : "queued") : row.request.status,
+    })),
+  );
+  const openRequest = (id: string) => router.push({ pathname: "/request/[id]", params: { id } } as Href);
 
-  if (loading) {
+  if (loading && items === null && queued.length === 0) {
     return (
       <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
         <ActivityIndicator color={tokens.colors.primary} />
@@ -124,16 +117,57 @@ export default function RequestsScreen() {
     );
   }
 
+  // Nothing to show and the server did not answer: say so, with a way to try again — a member with ten requests is
+  // never told they have none (DESIGN.md: error and empty are separate frames).
+  if (items === null && queued.length === 0 && failure) {
+    return (
+      <View testID="requests.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
+        <ErrorState
+          testID="requests.error"
+          variant="error"
+          title={failure.title}
+          body={failure.body}
+          primary={{ label: "Try again", testID: "requests.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
+        />
+      </View>
+    );
+  }
+
+  const card = (r: RequestVM, testID: string) => {
+    const c = requestCard(r);
+    return (
+      <RequestCard
+        key={r.id}
+        testID={testID}
+        title={c.title}
+        facts={c.facts}
+        when={c.when}
+        badgeStatus={c.badge}
+        accessibilityLabel={c.spoken}
+        onPress={() => openRequest(r.id)}
+      />
+    );
+  };
+
   return (
     <View testID="requests.root" style={[styles.root, { paddingTop: insets.top + tokens.space.md }]}>
-      <Text style={styles.title}>Your requests.</Text>
+      <Text style={styles.title} accessibilityRole="header">
+        Your requests.
+      </Text>
       <Text style={styles.intro}>Journeys in good hands.</Text>
       {hasMore ? (
         <Text testID="requests.hasMore" style={styles.hint}>
           Showing your 50 most recent
         </Text>
       ) : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {/* The list stays; a reload that failed says so, calmly — what is shown may be out of date. With nothing loaded
+          yet, the requests waiting on the phone stay on screen and the line says the rest did not load; Requests asks
+          again each time it comes into view and when the phone is back online. */}
+      {failure ? (
+        <Text testID="requests.reloadFailed" style={styles.hint}>
+          {refreshFailedLine(failure.code, items !== null)}
+        </Text>
+      ) : null}
 
       {empty ? (
         <EmptyState
@@ -155,67 +189,17 @@ export default function RequestsScreen() {
               if (open.length === 0) return null;
               return (
                 <View>
-                  <Text style={styles.section}>In progress</Text>
-                  {open.map((row) => {
-                    if (row.kind === "queued") {
-                      const id = row.queued.id;
-                      return (
-                        <RequestRow
-                          key={id}
-                          testID={`requests.row.${id}`}
-                          retryTestID={`requests.retry.${id}`}
-                          route={row.route}
-                          meta={row.meta}
-                          badgeStatus="not_sent"
-                          onPress={() => router.push({ pathname: "/request/[id]", params: { id } } as Href)}
-                          onRetry={() => {
-                            void (async () => {
-                              try {
-                                await flushQueue((body, key) => submitRequest(body, key), { only: id });
-                              } catch {
-                                // per-item isolation lives in flushQueue
-                              }
-                              setReloadToken((n) => n + 1);
-                            })().catch(() => {
-                              setReloadToken((n) => n + 1);
-                            });
-                          }}
-                        />
-                      );
-                    }
-                    const r = row.request;
-                    return (
-                      <RequestRow
-                        key={r.id}
-                        testID={`requests.row.${r.id}`}
-                        callTestID={`requests.call.${r.id}`}
-                        retryTestID={`requests.retry.${r.id}`}
-                        route={r.route}
-                        meta={requestMeta(r)}
-                        badgeStatus={badgeStatus(r.status)}
-                        onPress={() => router.push({ pathname: "/request/[id]", params: { id: r.id } } as Href)}
-                        onCall={
-                          r.status === "quoted" && supportPhone ? () => openUrl(`tel:${supportPhone}`) : undefined
-                        }
-                        onRetry={
-                          r.status === "not_sent"
-                            ? () => {
-                                void (async () => {
-                                  try {
-                                    await flushQueue((body, key) => submitRequest(body, key));
-                                  } catch {
-                                    // per-item isolation lives in flushQueue
-                                  }
-                                  setReloadToken((n) => n + 1);
-                                })().catch(() => {
-                                  setReloadToken((n) => n + 1);
-                                });
-                              }
-                            : undefined
-                        }
-                      />
-                    );
-                  })}
+                  <Text style={styles.section} accessibilityRole="header">
+                    In progress
+                  </Text>
+                  <View style={styles.cards}>
+                    {open.map((row) => {
+                      const r = row.kind === "queued" ? row.view : row.request;
+                      // Figma 240:5199: a request that has not reached us says its details are saved; opening it
+                      // offers `Send now`. Calls and retries live in the request, never on the card.
+                      return card(r, `requests.row.${r.id}`);
+                    })}
+                  </View>
                   {hints.map((line, i) => (
                     <Text key={line} testID={`requests.hint.${i}`} style={styles.listHint}>
                       {line}
@@ -227,21 +211,10 @@ export default function RequestsScreen() {
             if (closed.length === 0) return null;
             return (
               <View>
-                <Text style={styles.section}>Completed</Text>
-                {closed.map((r) => {
-                  const view = requestView(r.status, closedAt(r));
-                  return (
-                    <RequestRow
-                      key={r.id}
-                      testID={`requests.row.${r.id}`}
-                      route={r.route}
-                      meta={view.closedLine ?? requestMeta(r)}
-                      badgeStatus={view.badge}
-                      muted
-                      onPress={() => router.push({ pathname: "/request/[id]", params: { id: r.id } } as Href)}
-                    />
-                  );
-                })}
+                <Text style={styles.section} accessibilityRole="header">
+                  Completed
+                </Text>
+                <View style={styles.cards}>{closed.map((r) => card(r, `requests.row.${r.id}`))}</View>
               </View>
             );
           }}
@@ -256,9 +229,16 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage, paddingHorizontal: tokens.space.lg },
   centered: { alignItems: "center", justifyContent: "center" },
   title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  intro: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  section: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, marginTop: tokens.space.lg },
-  hint: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
-  listHint: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.xs },
-  error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger },
+  // Figma 233:4069: 24 pt between the title, the intro, a section's title and its cards; 12 pt between cards.
+  intro: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.lg },
+  section: {
+    ...rn(tokens.type.title),
+    color: tokens.colors.textPrimary,
+    marginTop: tokens.space.lg,
+    marginBottom: tokens.space.lg,
+  },
+  cards: { gap: tokens.space.sm },
+  // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
+  hint: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.sm },
+  listHint: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.lg },
 });

@@ -1,12 +1,10 @@
-import { Tabs, usePathname, useRouter, type Href } from "expo-router";
-import { useEffect, useState } from "react";
+import { Tabs, usePathname, useRouter } from "expo-router";
 import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabBar } from "@bbc/ui";
 
-import { fetchRequests } from "@/lib/api";
-
-type TabKey = "explore" | "requests" | "profile";
+import { TAB_ROUTES, type TabKey } from "@/features/navigation/tab-routes";
+import { useUnreadQuotes } from "@/features/requests/useUnreadQuotes";
 
 function activeFromPath(pathname: string): TabKey {
   if (pathname.includes("requests")) return "requests";
@@ -14,32 +12,19 @@ function activeFromPath(pathname: string): TabKey {
   return "explore";
 }
 
-const ROUTES: Record<TabKey, Href> = {
-  explore: "/(tabs)/explore" as Href,
-  requests: "/(tabs)/requests" as Href,
-  profile: "/(tabs)/profile" as Href,
-};
-
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
   const active = activeFromPath(pathname);
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    void (async () => {
-      const result = await fetchRequests();
-      if (!result.ok) return;
-      setUnread(result.data.items.filter((r) => r.status === "quoted").length);
-    })();
-  }, [pathname]);
+  // The same dot as on a screen pushed over the tabs (RootTabBar): requests whose quote is ready.
+  const unread = useUnreadQuotes();
 
   return (
     <View style={{ flex: 1, paddingBottom: insets.bottom }}>
       <Tabs
         tabBar={() => (
-          <TabBar testID="tabs.bar" active={active} unread={unread} onPress={(key) => router.push(ROUTES[key])} />
+          <TabBar testID="tabs.bar" active={active} unread={unread} onPress={(key) => router.push(TAB_ROUTES[key])} />
         )}
         screenOptions={{ headerShown: false }}
       >

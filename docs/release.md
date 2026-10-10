@@ -13,7 +13,8 @@ Set these on the EAS **production** environment (dashboard or `eas env:create`),
 
 - `EXPO_PUBLIC_PRIVACY_URL` — https URL (required; `assertProductionEnv` refuses the build without it)
 - `EXPO_PUBLIC_TERMS_URL` — https URL (required)
-- `EXPO_PUBLIC_SUPPORT_PHONE` — optional E.164. Empty hides Call support.
+- `EXPO_PUBLIC_SUPPORT_PHONE` — optional E.164. Empty hides every call to the club (Profile's `Call us`, a request's
+  `Call your specialist` and `Call us`).
 - `EXPO_PUBLIC_MAPBOX_TOKEN` — the Mapbox **public** token, `pk.…` (required; ADR-IMPL-035). Visibility _Sensitive_.
   Never a secret `sk.` token: `assertProductionEnv` refuses it.
 
@@ -29,6 +30,8 @@ The `preview` profile reads the EAS **preview** environment; `eas.json` sets onl
   once the company DNS points there. `assertStagingEnv` refuses a build or an update without it. Changing it needs an
   OTA update only, never a new build.
 - `EXPO_PUBLIC_MAPBOX_TOKEN` — the same `pk.` token. Without it the app draws the fallback globe.
+- `EXPO_PUBLIC_SUPPORT_PHONE` — the club's line, E.164. Without it a quoted request shows no `Call your specialist`
+  and a request that could not be passed on no `Call us` (ADR-IMPL-041, A2c), and Profile has no `Call us`.
 
 **Native modules change the runtime.** Adding or upgrading one (Mapbox, for instance) needs a new build _and_ a new
 `version` in `app.json`: `runtimeVersion` follows the app version, so OTA updates for the new version never reach an

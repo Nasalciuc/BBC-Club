@@ -76,3 +76,38 @@ describe("buildDraft — cabin and travelers", () => {
     expect(draft.passengers).toEqual({ adult: 1, child: 0, infant: 0 });
   });
 });
+
+describe("estimateShown — a yes only for what the member saw (ADR-IMPL-042)", () => {
+  it("a quote opened over the indicative fare says so; the server recomputes the number", () => {
+    const draft = buildDraft({ mode: "quote", fromCode: "JFK", toCode: "ZRH", estimateShown: true, today: TODAY });
+    expect(draft.estimateFor).toEqual({ from: "JFK", to: "ZRH", cabin: "business" });
+    const body = draftToBody(draft);
+    expect(body.estimateShown).toBe(true);
+    expect(body).not.toHaveProperty("estimate");
+  });
+
+  it("no estimate on screen, no yes — and never for a fare, an offer or an alternative", () => {
+    expect(draftToBody(buildDraft({ mode: "quote", fromCode: "JFK", toCode: "ZRH", today: TODAY }))).not.toHaveProperty(
+      "estimateShown",
+    );
+    const alternative = buildDraft({
+      mode: "alternative",
+      fromCode: "JFK",
+      toCode: "ZRH",
+      replacesFareId: "11111111-1111-4111-8111-111111111111",
+      estimateShown: true,
+      today: TODAY,
+    });
+    expect(alternative.estimateFor).toBeNull();
+    expect(draftToBody(alternative)).not.toHaveProperty("estimateShown");
+  });
+
+  it("a quote that no longer asks about the route or cabin the member saw stops saying yes", () => {
+    const draft = buildDraft({ mode: "quote", fromCode: "JFK", toCode: "ZRH", estimateShown: true, today: TODAY });
+    expect(draftToBody({ ...draft, cabin: "first" })).not.toHaveProperty("estimateShown");
+    const elsewhere = { ...draft, legs: [{ from: "JFK", to: "GVA", date: "2026-10-22" }, ...draft.legs.slice(1)] };
+    expect(draftToBody(elsewhere)).not.toHaveProperty("estimateShown");
+    // One way still asks about the route whose round-trip estimate the member saw: the e-mail says round trip.
+    expect(draftToBody({ ...draft, tripType: "oneway" }).estimateShown).toBe(true);
+  });
+});

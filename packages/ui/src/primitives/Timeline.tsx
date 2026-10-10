@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
+import { Icon } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 
@@ -18,11 +19,11 @@ type Event = {
 };
 
 type Props = {
-  /** Current request status — drives which steps are filled. */
+  /** Current request status — drives which steps are done. `queued`, `not_sent` and `closed` keep every step hollow. */
   status: string;
-  /** Server timeline events; used for dates on completed steps. */
+  /** Server timeline events: a specialist's note on the current step replaces its caption. */
   events?: Event[];
-  /** Frame caption for the current step when the event itself has no note. */
+  /** The line under the current step when its event has no note ("Review the quote with your specialist."). */
   currentCaption?: string | null;
   testID?: string;
 };
@@ -32,39 +33,52 @@ function stepIndex(status: string): number {
   return STEPS.findIndex((s) => s.key === status);
 }
 
-function dateFor(key: StepKey, events: Event[]): string | null {
-  const match = events.find((e) => e.status === key);
-  if (!match) return null;
-  const d = new Date(match.at);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-/** Four fixed request steps. Future steps stay hollow with an em dash. */
+/** The latest note for a step: a request quoted twice shows the second quote's note, not the first. */
 function noteFor(key: StepKey, events: Event[]): string | null {
-  const match = events.find((e) => e.status === key);
-  const note = match?.note?.trim();
-  return note ? note : null;
+  for (let k = events.length - 1; k >= 0; k--) {
+    const event = events[k];
+    if (event?.status !== key) continue;
+    const note = event.note?.trim();
+    return note ? note : null;
+  }
+  return null;
 }
 
+/**
+ * Figma 46:114: four milestones in a card. A done step has a check in a circle and a dark connector down to the next
+ * done step; the current step says what happens now; future steps stay quiet (hollow, secondary). Review is a milestone
+ * here, never a badge. Each step also says in words whether it is done, current or still to come — never the icon
+ * alone (DESIGN.md, Accessibility).
+ */
 export function Timeline({ status, events = [], currentCaption = null, testID }: Props) {
   const current = stepIndex(status);
 
   return (
-    <View testID={testID} style={styles.root}>
+    <View testID={testID} style={styles.card}>
       {STEPS.map((step, i) => {
         const done = current >= i;
-        const date = done ? dateFor(step.key, events) : null;
         const caption = i === current ? (noteFor(step.key, events) ?? currentCaption) : null;
+        const last = i === STEPS.length - 1;
+        const state = i < current ? "done" : i === current ? "current step" : "not yet";
         return (
-          <View key={step.key} style={styles.row} testID={testID ? `${testID}.${step.key}` : undefined}>
-            <View style={[styles.dot, done ? styles.dotFilled : styles.dotHollow]} />
-            <View style={styles.body}>
-              <View style={styles.copy}>
-                <Text style={[styles.label, !done && styles.labelMuted]}>{step.label}</Text>
-                {caption ? <Text style={styles.caption}>{caption}</Text> : null}
-              </View>
-              <Text style={[styles.date, !done && styles.dateMuted]}>{done ? (date ?? "—") : "—"}</Text>
+          <View
+            key={step.key}
+            style={styles.row}
+            testID={testID ? `${testID}.${step.key}` : undefined}
+            accessible
+            accessibilityLabel={`${step.label}, ${state}${caption ? `. ${caption}` : ""}`}
+          >
+            {last ? null : <View style={[styles.connector, current >= i + 1 && styles.connectorDone]} />}
+            <View style={styles.marker}>
+              <Icon
+                name={done ? "circle-check" : "circle"}
+                size={24}
+                color={done ? tokens.colors.textPrimary : tokens.colors.borderDefault}
+              />
+            </View>
+            <View style={styles.copy}>
+              <Text style={[styles.label, !done && styles.labelQuiet]}>{step.label}</Text>
+              {caption ? <Text style={styles.caption}>{caption}</Text> : null}
             </View>
           </View>
         );
@@ -73,28 +87,31 @@ export function Timeline({ status, events = [], currentCaption = null, testID }:
   );
 }
 
+const MARKER = 24;
+
 const styles = StyleSheet.create({
-  root: { gap: tokens.space.md },
-  row: { flexDirection: "row", alignItems: "center", gap: tokens.space.sm },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: tokens.radius.pill,
-    borderWidth: 1.5,
-  },
-  dotFilled: {
-    backgroundColor: tokens.colors.primary,
-    borderColor: tokens.colors.primary,
-  },
-  dotHollow: {
-    backgroundColor: "transparent",
+  card: {
+    backgroundColor: tokens.colors.surfaceCard,
+    borderWidth: 1,
     borderColor: tokens.colors.borderDefault,
+    borderRadius: tokens.radius.card,
+    padding: tokens.space.lg,
   },
-  body: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: tokens.space.sm },
+  // 80 pt a step, as the frame draws it; a step grows (never clips) at larger text sizes.
+  row: { flexDirection: "row", alignItems: "flex-start", gap: tokens.space.md, minHeight: 80 },
+  marker: { width: MARKER, height: MARKER },
+  // From the circle's foot to the next circle's head: the drawn circle sits 2 pt inside its 24 pt box.
+  connector: {
+    position: "absolute",
+    left: MARKER / 2 - 0.5,
+    top: MARKER - 2,
+    bottom: -2,
+    width: 1,
+    backgroundColor: tokens.colors.borderDefault,
+  },
+  connectorDone: { backgroundColor: tokens.colors.textPrimary },
   copy: { flex: 1, gap: tokens.space.xxs },
   label: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  labelMuted: { color: tokens.colors.textTertiary },
-  date: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  dateMuted: { color: tokens.colors.textTertiary },
+  labelQuiet: { color: tokens.colors.textSecondary },
+  caption: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
 });

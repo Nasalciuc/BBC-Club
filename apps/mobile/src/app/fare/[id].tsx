@@ -1,13 +1,14 @@
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, ErrorState, ListRow, PricePair, StateMessage, TabBar, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, ErrorState, ListRow, PricePair, StateMessage, tokens, rn } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
+import { RootTabBar } from "@/components/RootTabBar";
 import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
 import { stateCopy } from "@/lib/error-context";
@@ -32,7 +33,7 @@ function clock(local: string | null, offset: number, code: string): string {
 function dialSupport() {
   const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
   if (!phone) return;
-  void Linking.openURL(`tel:${phone}`);
+  Linking.openURL(`tel:${phone}`).catch(() => undefined);
 }
 
 export default function FareDetailScreen() {
@@ -116,20 +117,7 @@ export default function FareDetailScreen() {
           <Text style={styles.caption}>A specialist will call you shortly.</Text>
         </View>
         <View style={{ paddingBottom: insets.bottom }}>
-          <TabBar
-            testID="tabs.bar"
-            active="explore"
-            unread={0}
-            onPress={(key) =>
-              router.push(
-                (key === "requests"
-                  ? "/(tabs)/requests"
-                  : key === "profile"
-                    ? "/(tabs)/profile"
-                    : "/(tabs)/explore") as Href,
-              )
-            }
-          />
+          <RootTabBar active="explore" />
         </View>
         <RequestSheet ref={sheetRef} />
       </View>
@@ -162,12 +150,6 @@ export default function FareDetailScreen() {
     .filter(Boolean)
     .join(" · ");
   const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
-  const openTab = (key: "explore" | "requests" | "profile") => {
-    router.push(
-      (key === "requests" ? "/(tabs)/requests" : key === "profile" ? "/(tabs)/profile" : "/(tabs)/explore") as Href,
-    );
-  };
-
   return (
     <View testID="fare.root" style={styles.root}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -250,7 +232,7 @@ export default function FareDetailScreen() {
         ) : null}
       </View>
       <View style={{ paddingBottom: insets.bottom }}>
-        <TabBar testID="tabs.bar" active="explore" unread={0} onPress={openTab} />
+        <RootTabBar active="explore" />
       </View>
 
       <Modal visible={whyOpen} transparent animationType="fade" onRequestClose={() => setWhyOpen(false)}>

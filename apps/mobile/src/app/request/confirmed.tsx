@@ -3,14 +3,16 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Icon, TabBar, tokens, rn } from "@bbc/ui";
+import { Button, Icon, tokens, rn } from "@bbc/ui";
 
+import { RootTabBar } from "@/components/RootTabBar";
 import {
   NotificationsAskSheet,
   type NotificationsAskSheetHandle,
 } from "@/features/notifications/NotificationsAskSheet";
 import { confirmationKind, type RequestSource } from "@/features/requests/confirmation-logic";
 import { fetchProfile } from "@/lib/api";
+import { displayPhone } from "@/lib/phone";
 import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
 import { appStorage, PUSH_ASKED_AT_KEY } from "@/lib/storage-keys";
 
@@ -24,21 +26,29 @@ export default function RequestConfirmedScreen() {
     queued?: string;
     city?: string;
     route?: string;
+    facts?: string;
+    phone?: string;
   }>();
   const source: RequestSource = params.source === "search" ? "search" : "offer";
   const kind = confirmationKind(source, params.queued === "1");
-  const [phone, setPhone] = useState<string | null>(null);
+  // The number this request will be called on, as the sheet sent it (Figma 135:856: `+1 (212) 555-0148`, as the
+  // request's detail writes it); the profile's only when an older sheet passed none.
+  const requestPhone = typeof params.phone === "string" && params.phone ? params.phone : null;
+  const [profilePhone, setProfilePhone] = useState<string | null>(null);
+  const phone = requestPhone ?? profilePhone;
 
   useEffect(() => {
+    // Saved on the phone (offline): this screen names no number, and there is no network to ask.
+    if (requestPhone || kind === "saved") return;
     let cancelled = false;
     void (async () => {
       const profile = await fetchProfile();
-      if (!cancelled && profile.ok) setPhone(profile.data.phone);
-    })();
+      if (!cancelled && profile.ok) setProfilePhone(displayPhone(profile.data.phone));
+    })().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [requestPhone, kind]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +73,8 @@ export default function RequestConfirmedScreen() {
 
   const city = typeof params.city === "string" ? params.city : "";
   const route = typeof params.route === "string" ? params.route : "";
+  // Figma 135:856: `JFK → LHR · OCT 12–19 · ROUND TRIP · 1 ADULT` under the city; the route alone from an older sheet.
+  const facts = typeof params.facts === "string" && params.facts ? params.facts : route;
   const id = typeof params.id === "string" ? params.id : "";
 
   return (
@@ -86,7 +98,11 @@ export default function RequestConfirmedScreen() {
           </Text>
         )}
         {kind === "offer" && city ? <Text style={styles.city}>{`${city} is next.`}</Text> : null}
-        {kind !== "saved" && route ? <Text style={styles.mono}>{route}</Text> : null}
+        {kind !== "saved" && facts ? (
+          <Text testID="confirmation.facts" style={styles.mono}>
+            {facts}
+          </Text>
+        ) : null}
         {kind === "saved" ? (
           <Button testID="confirmation.done" label="Done" shape="pill" onPress={() => router.back()} />
         ) : (
@@ -101,20 +117,7 @@ export default function RequestConfirmedScreen() {
         )}
       </View>
       <View style={{ paddingBottom: insets.bottom }}>
-        <TabBar
-          testID="tabs.bar"
-          active="explore"
-          unread={0}
-          onPress={(key) =>
-            router.push(
-              (key === "requests"
-                ? "/(tabs)/requests"
-                : key === "profile"
-                  ? "/(tabs)/profile"
-                  : "/(tabs)/explore") as Href,
-            )
-          }
-        />
+        <RootTabBar active="explore" />
       </View>
       <NotificationsAskSheet ref={askRef} />
     </View>
