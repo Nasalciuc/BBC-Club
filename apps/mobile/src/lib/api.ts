@@ -30,6 +30,7 @@ import {
   type HomeSuggestionVM as HomeSuggestionVMType,
   type PopularVM as PopularVMType,
 } from "@bbc/shared/api/v1/discovery";
+import { PlacePhotosVM, type PlacePhotoVM as PlacePhotoVMType } from "@bbc/shared/api/v1/places";
 import type { ProfileVM as Profile } from "@bbc/shared/api/v1/profile";
 import {
   RequestBody,
@@ -459,6 +460,24 @@ export async function fetchHomeSuggestion(tz: string): Promise<ApiResult<HomeSug
   });
 }
 
+/**
+ * GET /v1/places/photos?codes= — the photo of each city (ADR-IMPL-043): a code the server does not know is absent, and
+ * an item this app cannot read is dropped by the contract, never the whole answer.
+ */
+export async function fetchPlacePhotos(codes: readonly string[]): Promise<ApiResult<PlacePhotoVMType[]>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/places/photos?codes=${codes.map((c) => encodeURIComponent(c)).join(",")}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const parsed = PlacePhotosVM.safeParse(await parseJson(res));
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data.items };
+  });
+}
+
 /** GET /v1/fares/:id — 410 when expired; may include optional `error.context` closed-fare facts. */
 export async function fetchFare(id: string): Promise<ApiResult<FareVMType>> {
   return asResult(async () => {
@@ -550,10 +569,22 @@ export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[
     if (!Array.isArray(items)) {
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }
+    // Row by row: one request this app cannot read must not take the others with it. The contract reads new states
+    // and new fields as known ones (ADR-IMPL-042), so a dropped row means a server this app does not understand —
+    // said in development, where it can be fixed; never a member's data in the message.
     const parsed: RequestVMType[] = [];
+    let dropped = 0;
+    let firstIssue = "";
     for (const row of items) {
       const v = RequestVM.safeParse(row);
       if (v.success) parsed.push(v.data);
+      else {
+        dropped += 1;
+        if (!firstIssue) firstIssue = v.error.issues[0]?.path.join(".") ?? "";
+      }
+    }
+    if (dropped > 0 && __DEV__) {
+      console.warn(`[fetchRequests] ${dropped} of ${items.length} requests did not read (first at "${firstIssue}")`);
     }
     const hasMore = RequestList.shape.hasMore.catch(false).parse((raw as { hasMore?: unknown })?.hasMore);
     return { ok: true, data: { items: parsed, hasMore } };

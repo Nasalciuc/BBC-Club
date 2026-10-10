@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { fixture } from "@bbc/shared/fixture";
+
+import { CLUB_PICTURE } from "@/features/places/usePlacePhotos";
 import {
   AirportRow,
   Button,
@@ -14,12 +16,15 @@ import {
   ListRow,
   OfferCard,
   CarouselRow,
+  PhotoCredit,
   PricePair,
-  RequestRow,
+  ProfileHero,
+  RequestCard,
   SearchField,
   SectionLabel,
   StatusBadge,
   Stepper,
+  type BadgeStatus,
   TabBar,
   Timeline,
   Calendar,
@@ -148,16 +153,40 @@ export default function GalleryScreen() {
 
       <SectionLabel label="OfferCard" />
       <CarouselRow testID="gallery.carousel">
-        <OfferCard testID="gallery.offer.full" title="London" fromPrice="FROM $4,200" imageUrl={null} onPress={noop} />
-        <OfferCard testID="gallery.offer.noprice" title="Paris" imageUrl={null} onPress={noop} />
+        <OfferCard
+          testID="gallery.offer.full"
+          title="London"
+          fromPrice="FROM $4,200"
+          image={null}
+          fallback={CLUB_PICTURE}
+          onPress={noop}
+        />
+        <OfferCard testID="gallery.offer.noprice" title="Paris" image={null} fallback={CLUB_PICTURE} onPress={noop} />
         <OfferCard
           testID="gallery.offer.noimage"
           title="Tokyo"
           fromPrice="FROM $4,650"
-          imageUrl={null}
+          image={null}
+          fallback={null}
           onPress={noop}
         />
       </CarouselRow>
+
+      {/* Figma 436:1221; the club's image stands in for the city's photo (ADR-IMPL-043). */}
+      <SectionLabel label="ProfileHero" />
+      <ProfileHero
+        testID="gallery.profileHero"
+        name="Alex Morgan"
+        home="Flies from JFK"
+        image={null}
+        fallback={CLUB_PICTURE}
+      />
+      <PhotoCredit
+        testID="gallery.photoCredit"
+        label="Photo: Jane Doe · CC BY-SA 4.0 · Wikimedia Commons"
+        accessibilityLabel="Photo by Jane Doe, CC BY-SA 4.0, Wikimedia Commons"
+        onPress={noop}
+      />
 
       <SectionLabel label="PricePair" />
       <View style={styles.row}>
@@ -165,6 +194,11 @@ export default function GalleryScreen() {
         <PricePair price={fareTimed.price} size="lg" />
         <PricePair price={{ offer: 3900, currency: "USD" }} size="sm" />
       </View>
+      {/* Figma 26:29: a request's fare (the detail), with and without the published fare beside it; then a fare's
+          page (the editorial). */}
+      <PricePair price={{ offer: fareTimed.price.offer, currency: fareTimed.price.currency }} layout="detail" />
+      <PricePair price={fareTimed.price} layout="detail" />
+      <PricePair price={fareTimed.price} layout="editorial" />
 
       <SectionLabel label="StatusBadge" />
       <View style={styles.row}>
@@ -172,7 +206,9 @@ export default function GalleryScreen() {
         <StatusBadge status="quote_ready" />
         <StatusBadge status="booked" />
         <StatusBadge status="not_sent" />
-        <StatusBadge status="mystery_future_status" />
+        {/* A state a newer server adds reads as Received (and warns in development). */}
+        <StatusBadge status={"mystery_future_status" as BadgeStatus} />
+        <StatusBadge status="quote_ready" size="sm" />
       </View>
 
       <SectionLabel label="Calendar" />
@@ -284,55 +320,75 @@ export default function GalleryScreen() {
         }))}
       />
 
-      <SectionLabel label="RequestRow" />
-      <RequestRow
-        testID="gallery.request.received"
-        route="JFK → LHR"
-        meta="Oct 12–19 · Business · 1 adult · from $4,200"
-        badgeStatus="received"
-        onPress={noop}
-      />
-      <RequestRow
-        testID="gallery.request.quote"
-        route="JFK → CDG"
-        meta="Nov 3–10 · Business · 2 adults · from $3,850"
-        badgeStatus="quote_ready"
-        onPress={noop}
-        onCall={noop}
-        callTestID="gallery.request.call"
-      />
-      <RequestRow
-        testID="gallery.request.closed"
-        route="JFK → LHR"
-        meta="Closed · Oct 3"
-        badgeStatus={null}
-        muted
-        onPress={noop}
-      />
-      <RequestRow
-        testID="gallery.request.booked"
-        route="JFK → HND"
-        meta="Dec 1–12 · Business · 1 adult · from $4,650"
-        badgeStatus="booked"
-        muted
-        onPress={noop}
-      />
-      <RequestRow
-        testID="gallery.request.notSent"
-        route="JFK → DXB"
-        meta="Oct 20–27 · Business · 1 adult · from $3,900"
-        badgeStatus="not_sent"
-        onPress={noop}
-        onRetry={noop}
-        retryTestID="gallery.request.retry"
-      />
-      <RequestRow
-        testID="gallery.request.long"
-        route="JFK → Singapore Changi via Frankfurt"
-        meta="Very long meta line with cabin and passenger and price details that should truncate"
-        badgeStatus="received"
-        onPress={noop}
-      />
+      <SectionLabel label="RequestCard" />
+      <View style={styles.cardStack}>
+        <RequestCard
+          testID="gallery.request.quote"
+          title="London"
+          facts="JFK → LHR · BUSINESS"
+          when="OCT 12–19 · 1 ADULT"
+          badgeStatus="quote_ready"
+          onPress={noop}
+        />
+        <RequestCard
+          testID="gallery.request.received"
+          title="Paris"
+          facts="JFK → CDG · BUSINESS"
+          when="NOV 3 · 2 ADULTS"
+          badgeStatus="received"
+          onPress={noop}
+        />
+        <RequestCard
+          testID="gallery.request.notSent"
+          title="London"
+          facts="JFK → LHR · BUSINESS"
+          when="Your travel details are saved"
+          badgeStatus="not_sent"
+          onPress={noop}
+        />
+        <RequestCard
+          testID="gallery.request.booked"
+          title="Tokyo"
+          facts="JFK → NRT · BUSINESS"
+          when="AUG 2 · 1 ADULT"
+          badgeStatus="booked"
+          onPress={noop}
+        />
+        <RequestCard
+          testID="gallery.request.closed"
+          title="London"
+          facts="JFK → LHR · BUSINESS"
+          when="CLOSED · OCT 3"
+          badgeStatus={null}
+          onPress={noop}
+        />
+        <RequestCard
+          testID="gallery.request.compact"
+          size="compact"
+          title="Dubai"
+          facts="JFK → DXB · FIRST"
+          when="DEC 18 · 1 ADULT"
+          badgeStatus="received"
+          onPress={noop}
+        />
+        <RequestCard
+          testID="gallery.request.long"
+          title="Rio de Janeiro"
+          facts="JFK → GIG · BUSINESS"
+          when="OCT 30–NOV 6 · 2 ADULTS · 1 CHILD · 1 INFANT"
+          badgeStatus="received"
+          onPress={noop}
+        />
+        {/* A city too long to share its line with the badge at the default text size: the badge moves below it. */}
+        <RequestCard
+          testID="gallery.request.longCity"
+          title="Santa Cruz de Tenerife"
+          facts="JFK → TFN · BUSINESS"
+          when="NOV 3 · 1 ADULT"
+          badgeStatus="quote_ready"
+          onPress={noop}
+        />
+      </View>
 
       <SectionLabel label="StateMessage" />
       <StateMessage
@@ -385,6 +441,7 @@ const styles = StyleSheet.create({
   note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
   row: { flexDirection: "row", flexWrap: "wrap", gap: tokens.space.xs, alignItems: "center" },
   gap: { height: tokens.space.sm },
+  cardStack: { gap: tokens.space.sm },
   closedLine: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   closedSentence: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
 });

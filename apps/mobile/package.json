@@ -72,7 +72,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test:unit": "bun test app.config.test.ts src",
     "export": "expo export --platform ios"
   }

@@ -8,14 +8,18 @@ import { rateLimit } from "@bbc/platform/ratelimit";
 import { SearchEvent } from "@bbc/platform";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
+import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { discoveryRepo } from "./infrastructure/discovery.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
+import { placePhotosRepo } from "./infrastructure/place-photos.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
 import { homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody } from "./application/import";
+import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
+import type { Fetch } from "./application/place-photo-sources";
 import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
 import { readStoredRules } from "./pricing/rules";
 import type { CatalogFacade } from "./api";
@@ -24,11 +28,16 @@ function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date 
   return row.published && row.validFrom <= now && row.validUntil > now;
 }
 
-export const catalogModule = (): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
+/** `fetch` is for tests: the place-photo sources (Wikidata, Commons, Pexels) answered by fixtures. */
+export const catalogModule = (
+  opts: { fetch?: Fetch } = {},
+): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
   name: "catalog",
   layer: "domain",
   init: ({ db, platform, env }) => {
     const conn = db as unknown as Executor;
+    /** ADR-IMPL-043: place photos. On unless an operator turns the flag row off; then no photo is served or looked up. */
+    const placePhotosOn = () => platform.flags.isEnabled("catalog.place_photos", true);
     const destinationsCache = createDestinationsCache();
     const invalidateMaps = async () => {
       destinationsCache.clear();
@@ -260,6 +269,99 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
       },
     );
 
+    // ADR-IMPL-043: the photo for each city asked about — a photograph's addresses and credit, a satellite view's
+    // centre, or nothing yet. Airports never asked about before get a row the resolve-place-photos job fills.
+    registerRoute("GET", "/v1/places/photos", "fares:read", "read");
+    routes.get(
+      "/places/photos",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const codes = parseCodes(c.req.query("codes"));
+        if (!codes) {
+          return c.json(
+            apiError("VALIDATION", { message: `codes: 1 to ${PLACE_PHOTOS_MAX_CODES} IATA codes, comma-separated` }),
+            400,
+          );
+        }
+        if (!(await placePhotosOn())) return c.json({ items: [] satisfies PlacePhotoVM[] });
+        const rows = await placePhotosRepo.getMany(conn, codes);
+        const known = new Map(rows.map((r) => [r.code.trim(), toPlacePhotoVM(r)]));
+        const added = new Set(
+          await placePhotosRepo.addPending(
+            conn,
+            codes.filter((code) => !known.has(code)),
+          ),
+        );
+        if (added.size > 0) platform.metrics.inc("place_photos_requested", {}, added.size);
+        const items = codes.flatMap((code): PlacePhotoVM[] => {
+          const vm = known.get(code);
+          if (vm) return [vm];
+          return added.has(code) ? [{ code, kind: "none" }] : [];
+        });
+        return c.json({ items });
+      },
+    );
+
+    // ADR-IMPL-043: an operator's own photo for a city (a wrong or poor one found automatically): it replaces what the
+    // job found, never expires, and DELETE hands the city back to the job.
+    registerRoute("PUT", "/v1/internal/places/:code/photo", "catalog:import");
+    routes.put(
+      "/internal/places/:code/photo",
+      authorize("catalog:import", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const code = c.req.param("code").toUpperCase();
+        if (!/^[A-Z]{3}$/.test(code)) return c.json(apiError("VALIDATION", { message: "code (IATA) required" }), 400);
+        const parsed = PlacePhotoOverride.safeParse(await c.req.json().catch(() => ({})));
+        if (!parsed.success) {
+          return c.json(
+            apiError("VALIDATION", {
+              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+            }),
+            400,
+          );
+        }
+        if (!(await airportsRepo.get(conn, code))) {
+          return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+        }
+        const { card, hero, credit } = parsed.data;
+        const row = await placePhotosRepo.setOverride(conn, code, {
+          cardUrl: card,
+          heroUrl: hero,
+          author: credit?.author ?? null,
+          license: credit?.license ?? null,
+          link: credit?.link ?? null,
+        });
+        return c.json(toPlacePhotoVM(row));
+      },
+    );
+
+    registerRoute("DELETE", "/v1/internal/places/:code/photo", "catalog:import");
+    routes.delete(
+      "/internal/places/:code/photo",
+      authorize("catalog:import", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const code = c.req.param("code").toUpperCase();
+        if (!/^[A-Z]{3}$/.test(code)) return c.json(apiError("VALIDATION", { message: "code (IATA) required" }), 400);
+        if (!(await placePhotosRepo.clearOverride(conn, code))) {
+          return c.json(apiError("NOT_FOUND", { message: "no operator photo for this airport" }), 404);
+        }
+        return c.body(null, 204);
+      },
+    );
+
     registerRoute("POST", "/v1/internal/catalog/import", "catalog:import");
     routes.post(
       "/internal/catalog/import",
@@ -371,6 +473,30 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
             handler: async () => {
               if (!platform.redis) return { skipped: 1, rows: 0 };
               return { skipped: 0, ...(await rollupDemand(platform.redis, conn)) };
+            },
+          },
+        },
+        {
+          // ADR-IMPL-043: ten due airports a minute — new ones first. Nothing due: one query, no request outside.
+          name: "resolve-place-photos",
+          spec: {
+            cron: "* * * * *",
+            singleton: true,
+            timeoutMs: 50_000,
+            handler: async (ctx) => {
+              if (!(await placePhotosOn())) return { skipped: 1 };
+              return resolvePlacePhotos({
+                db: conn,
+                sources: {
+                  fetch: opts.fetch ?? fetch,
+                  // Wikimedia's User-Agent policy: who is asking, and where to reach them.
+                  userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; place photos)`,
+                  signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                },
+                pexelsKey: env.PEXELS_API_KEY,
+                metrics: platform.metrics,
+                logger: platform.logger,
+              });
             },
           },
         },

@@ -12,5 +12,6 @@
 */10 * * * * queue-health
 15 * * * * receipts
 */15 * * * * reconcile-profiles
+* * * * * resolve-place-photos
 0 4 * * * retention
 * * * * * send-requests

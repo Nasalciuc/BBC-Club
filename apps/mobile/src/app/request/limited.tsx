@@ -1,8 +1,9 @@
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Linking, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, TabBar, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, tokens, rn } from "@bbc/ui";
 
+import { RootTabBar } from "@/components/RootTabBar";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { env } from "@/lib/env";
 
@@ -13,12 +14,6 @@ export default function RequestLimitedScreen() {
   const minutes = Number(params.minutes);
   const shown = Number.isFinite(minutes) && minutes > 0 ? minutes : 1;
   const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
-  const openTab = (key: "explore" | "requests" | "profile") => {
-    router.push(
-      (key === "requests" ? "/(tabs)/requests" : key === "profile" ? "/(tabs)/profile" : "/(tabs)/explore") as Href,
-    );
-  };
-
   return (
     <View style={styles.root} testID="request.rateLimited">
       <View style={[styles.body, { paddingTop: insets.top + tokens.space.md }]}>
@@ -35,7 +30,9 @@ export default function RequestLimitedScreen() {
             label="Call your specialist"
             variant="primary"
             shape="pill"
-            onPress={() => void Linking.openURL(call)}
+            onPress={() => {
+              Linking.openURL(call).catch(() => undefined);
+            }}
           />
         ) : null}
         <Button
@@ -47,7 +44,7 @@ export default function RequestLimitedScreen() {
         />
       </View>
       <View style={{ paddingBottom: insets.bottom }}>
-        <TabBar testID="tabs.bar" active="requests" unread={0} onPress={openTab} />
+        <RootTabBar active="requests" />
       </View>
     </View>
   );

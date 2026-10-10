@@ -1,16 +1,32 @@
-import { useRouter, type Href } from "expo-router";
+import { useIsFocused, useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
-import { EmptyState, Icon, ListRow, RequestRow, tokens, rn } from "@bbc/ui";
+import { Button, EmptyState, Icon, ListRow, PhotoCredit, ProfileHero, RequestCard, tokens, rn } from "@bbc/ui";
 
+import { Club } from "@/constants/club";
+import { bandPicture } from "@/features/places/place-photo-logic";
+import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { telHref } from "@/features/requests/confirmation-logic";
-import { badgeStatus, requestMeta } from "@/features/requests/status";
+import { requestCard } from "@/features/requests/request-card";
+import { recentRequests } from "@/features/requests/request-view-logic";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
+import { displayPhone } from "@/lib/phone";
 import { clientSince } from "@/features/profile/profile-logic";
-import { monogram } from "@/lib/monogram";
+
+/** Figma 436:1221's band height (ProfileHero draws it); the satellite view is asked for at this size. */
+const PROFILE_BAND = 304;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -21,23 +37,37 @@ export default function ProfileScreen() {
   const [recent, setRecent] = useState<RequestVM[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const focused = useIsFocused();
+  const { width } = useWindowDimensions();
+  // ADR-IMPL-043: the home airport's city, as Figma 436:1221 draws it.
+  const photoFor = usePlacePhotos([profile?.homeAirport]);
 
+  // Each time Profile comes into view: a new request, a state the specialist changed, a phone edited in Settings show
+  // at once. The spinner is for the first load only; later loads keep what is on screen.
   useEffect(() => {
+    if (!focused) return;
+    let cancelled = false;
     void (async () => {
       const [profileResult, requestsResult] = await Promise.all([fetchProfile(), fetchRequests()]);
+      if (cancelled) return;
+      setLoading(false);
       if (!profileResult.ok) {
         setError(profileResult.message);
-        setLoading(false);
         return;
       }
+      setError(null);
       setProfile(profileResult.data);
-      if (requestsResult.ok) setRecent(requestsResult.data.items.slice(0, 3));
-      setLoading(false);
+      if (requestsResult.ok) setRecent(recentRequests(requestsResult.data.items));
     })().catch(() => {
-      setError("Something went wrong.");
-      setLoading(false);
+      if (!cancelled) {
+        setError("Something went wrong.");
+        setLoading(false);
+      }
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [focused]);
 
   if (loading) {
     return (
@@ -48,10 +78,17 @@ export default function ProfileScreen() {
   }
 
   const displayName = profile?.displayName?.trim() || "Member";
-  const initials = monogram(profile?.displayName);
   const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
   const home = profile?.homeAirport;
   const since = clientSince(profile?.memberSince);
+  // A satellite view is drawn at the band's size: the column (capped on large phones) less its gutters, by 304 pt.
+  const band = bandPicture(null, photoFor(home), {
+    headers: PICTURE_HEADERS,
+    mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
+    size: { width: Math.min(width, Club.layout.phoneMaxWidth) - 2 * tokens.space.lg, height: PROFILE_BAND },
+  });
+  const credit = band.credit;
+  const creditLink = credit?.link ?? null;
 
   return (
     <ScrollView
@@ -64,7 +101,9 @@ export default function ProfileScreen() {
       }}
     >
       <View style={styles.top}>
-        <Text style={styles.kicker}>Your profile.</Text>
+        <Text style={styles.kicker} accessibilityRole="header">
+          Your profile.
+        </Text>
         <Pressable
           testID="profile.settings"
           accessibilityRole="button"
@@ -76,32 +115,63 @@ export default function ProfileScreen() {
         </Pressable>
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <View style={styles.card}>
-        <View style={styles.monogram}>
-          <Text style={styles.monogramText}>{initials || "·"}</Text>
-        </View>
-        <Text style={styles.name}>{displayName}</Text>
-        {home ? <Text style={styles.flies}>{`Flies from ${home}`}</Text> : null}
-        <Pressable
-          testID="profile.edit"
-          accessibilityRole="button"
-          onPress={() => router.push("/edit-profile" as Href)}
-          style={({ pressed }) => pressed && styles.pressed}
-        >
-          <Text style={styles.edit}>Edit</Text>
-        </Pressable>
-      </View>
-      {call ? (
-        <Pressable
-          testID="profile.call"
-          accessibilityRole="button"
-          onPress={() => void Linking.openURL(call)}
-          style={({ pressed }) => [styles.call, pressed && styles.pressed]}
-        >
-          <Text style={styles.callText}>Call us</Text>
-        </Pressable>
+      {/* Figma 436:1221: the member's name on their home city's photograph (ADR-IMPL-043). */}
+      <ProfileHero
+        testID="profile.hero"
+        name={displayName}
+        home={home ? `Flies from ${home}` : null}
+        image={band.source}
+        fallback={CLUB_PICTURE}
+        cachePolicy={band.cache}
+      />
+      {credit ? (
+        // The credit the photo owes, under it (ADR-IMPL-043).
+        <PhotoCredit
+          testID="profile.photoCredit"
+          label={credit.label}
+          accessibilityLabel={credit.spoken}
+          onPress={
+            creditLink
+              ? () => {
+                  Linking.openURL(creditLink).catch(() => undefined);
+                }
+              : undefined
+          }
+        />
       ) : null}
-      <Text style={styles.section}>Recent requests</Text>
+      {/* Figma 479:8388: Edit and Call us, two white pills 48 pt high, 12 pt apart. */}
+      <View style={[styles.actions, credit && styles.actionsAfterCredit]}>
+        <View style={styles.action}>
+          <Button
+            testID="profile.edit"
+            label="Edit"
+            variant="ghost"
+            shape="pill"
+            onPress={() => router.push("/edit-profile" as Href)}
+            style={styles.pill}
+          />
+        </View>
+        {call ? (
+          <View style={styles.action}>
+            <Button
+              testID="profile.call"
+              label="Call us"
+              variant="ghost"
+              shape="pill"
+              onPress={() => {
+                Linking.openURL(call).catch(() => undefined);
+              }}
+              style={styles.pill}
+            />
+          </View>
+        ) : null}
+      </View>
+      {/* Requests that did not load are left out, title included — the next visit tries again. */}
+      {recent === null ? null : (
+        <Text style={[styles.section, styles.afterCard]} accessibilityRole="header">
+          Recent requests
+        </Text>
+      )}
       {recent === null ? null : recent.length === 0 ? (
         // Figma 233:4550 (P5 / Profile · New client).
         <EmptyState
@@ -111,22 +181,37 @@ export default function ProfileScreen() {
           primary={{ label: "Explore", onPress: () => router.push("/(tabs)/explore" as Href) }}
         />
       ) : (
-        recent.map((item) => (
-          <RequestRow
-            key={item.id}
-            testID={`profile.request.${item.id}`}
-            route={item.route}
-            meta={requestMeta(item)}
-            badgeStatus={badgeStatus(item.status)}
-            onPress={() => router.push(`/request/${item.id}` as Href)}
-          />
-        ))
+        // Figma 233:4453: the compact request card, 12 pt apart.
+        <View style={styles.cards}>
+          {recent.map((item) => {
+            const card = requestCard(item);
+            return (
+              <RequestCard
+                key={item.id}
+                size="compact"
+                testID={`profile.request.${item.id}`}
+                title={card.title}
+                facts={card.facts}
+                when={card.when}
+                badgeStatus={card.badge}
+                accessibilityLabel={card.spoken}
+                onPress={() => router.push(`/request/${item.id}` as Href)}
+              />
+            );
+          })}
+        </View>
       )}
-      <Text style={styles.section}>Your account.</Text>
+      <Text
+        style={[styles.section, styles.accountTitle, recent === null && styles.afterCard]}
+        accessibilityRole="header"
+      >
+        Your account.
+      </Text>
       <ListRow
         testID="profile.account.phone"
         label="Phone"
-        value={profile?.phone ?? "Add phone"}
+        // Figma 233:4453: `+1 (212) 555-0148`, as the request's detail writes it; none (or blank) asks for one.
+        value={displayPhone(profile?.phone) ?? "Add phone"}
         onPress={() => router.push("/settings" as Href)}
       />
       {since ? <Text style={styles.since}>{since}</Text> : null}
@@ -145,35 +230,36 @@ const styles = StyleSheet.create({
     marginBottom: tokens.space.lg,
   },
   kicker: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger, marginBottom: tokens.space.sm },
-  card: {
-    backgroundColor: tokens.colors.surfaceCard,
-    borderRadius: tokens.radius.card,
-    padding: tokens.space.lg,
-    alignItems: "flex-start",
-    gap: tokens.space.xs,
+  // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
+  error: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
+  actions: {
+    flexDirection: "row",
+    gap: tokens.space.sm,
+    marginTop: tokens.space.lg,
     marginBottom: tokens.space.lg,
   },
-  monogram: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: tokens.colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
+  // Under the credit's 44 pt row (its line in the middle) the pair follows at once: 13 pt either side of the line.
+  actionsAfterCredit: { marginTop: 0 },
+  action: { flex: 1 },
+  // Figma 479:8388: a Secondary button, white on a hairline, 48 pt high.
+  pill: {
+    backgroundColor: tokens.colors.surfaceCard,
+    minHeight: 48,
+    paddingVertical: tokens.space.sm,
+    paddingHorizontal: tokens.space.md,
   },
-  monogramText: { ...rn(tokens.type.title), color: tokens.colors.textOnDark },
-  name: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  flies: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  edit: { ...rn(tokens.type.body), color: tokens.colors.primary },
-  call: { marginBottom: tokens.space.lg },
-  callText: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  // Figma 233:4453: `Recent requests` and `Your account.` are serif titles, 24 pt from what they introduce.
   section: {
-    ...rn(tokens.type.labelMono),
-    color: tokens.colors.textSecondary,
+    ...rn(tokens.type.title),
+    color: tokens.colors.textPrimary,
     marginTop: tokens.space.lg,
-    marginBottom: tokens.space.sm,
+    marginBottom: tokens.space.lg,
   },
+  // Edit and Call us above already leave 24 pt (Figma 233:4453: one 24 pt gap, not two) — under the recent requests'
+  // title, or under `Your account.` when the recent requests did not load.
+  afterCard: { marginTop: 0 },
+  accountTitle: { marginBottom: tokens.space.xs },
+  cards: { gap: tokens.space.sm },
   since: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginTop: tokens.space.sm },
   pressed: { opacity: 0.7 },
 });

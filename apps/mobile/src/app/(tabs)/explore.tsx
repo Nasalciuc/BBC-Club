@@ -138,6 +138,9 @@ export default function ExploreScreen() {
       toCode: state.to?.code,
       city: state.to?.city,
       search,
+      // The indicative fare is on screen only for an undated search with no published fare (536:10635): only then does
+      // the quote say the member saw it — the server recomputes the number (ADR-IMPL-042).
+      estimateShown: state.status === "empty" && state.estimate !== null,
     });
   }
 

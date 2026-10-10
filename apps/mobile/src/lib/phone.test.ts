@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { callingCodeLabel, defaultPhoneCountry, splitStoredPhone, validatePhone } from "./phone";
+import { callingCodeLabel, defaultPhoneCountry, displayPhone, splitStoredPhone, validatePhone } from "./phone";
 
 describe("validatePhone", () => {
   it("accepts E.164 and US national for the fixture number", () => {
@@ -74,5 +74,19 @@ describe("splitStoredPhone / callingCodeLabel", () => {
   it("labels calling codes", () => {
     expect(callingCodeLabel("US")).toBe("+1");
     expect(callingCodeLabel("MD")).toBe("+373");
+  });
+});
+
+describe("displayPhone — the number we will call, as a person reads it", () => {
+  it("North America after +1 in its national shape (Figma 233:4245)", () => {
+    expect(displayPhone("+12125550148")).toBe("+1 (212) 555-0148");
+  });
+  it("elsewhere in international form", () => {
+    expect(displayPhone("+37369123456")).toBe("+373 691 23 456");
+  });
+  it("nothing stored, nothing shown; a number that does not parse is shown as stored", () => {
+    expect(displayPhone(null)).toBeNull();
+    expect(displayPhone("  ")).toBeNull();
+    expect(displayPhone("12345")).toBe("12345");
   });
 });

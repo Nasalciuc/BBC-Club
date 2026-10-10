@@ -15,6 +15,7 @@ const BUDGET: Record<string, number> = {
   "POST /v1/requests": 40,
   "GET /v1/airports/popular": 10,
   "GET /v1/airports/home-suggestion": 10,
+  "GET /v1/places/photos": 10,
 };
 
 describe("query budget per route", () => {
@@ -49,6 +50,7 @@ describe("query budget per route", () => {
     const profileQ = await queriesFor("/v1/profile", cookie);
     const popularQ = await queriesFor("/v1/airports/popular?from=JFK", cookie);
     const homeSuggestionQ = await queriesFor("/v1/airports/home-suggestion?tz=America%2FNew_York", cookie);
+    const placesQ = await queriesFor("/v1/places/photos?codes=LHR,CDG", cookie);
     const postLog = await (async () => {
       log.length = 0;
       const res = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { idempotencyKey: crypto.randomUUID() });
@@ -66,11 +68,19 @@ describe("query budget per route", () => {
       ["POST /v1/requests", postLog],
       ["GET /v1/airports/popular", popularQ],
       ["GET /v1/airports/home-suggestion", homeSuggestionQ],
+      ["GET /v1/places/photos", placesQ],
     ];
     for (const [name, qs] of cases) {
       const cap = BUDGET[name]!;
       expect(qs.length, `${name} ran ${qs.length} queries (budget ${cap}):\n${qs.join("\n")}`).toBeLessThanOrEqual(cap);
     }
+
+    // ADR-IMPL-043: one read and at most one insert, however many cities the app asks about.
+    const morePlaces = await queriesFor("/v1/places/photos?codes=LHR,CDG,ZRH,NRT,JFK,MIA,DXB,SIN", cookie);
+    expect(
+      morePlaces.length,
+      `place photos grew from ${placesQ.length} to ${morePlaces.length} queries with six more cities:\n${morePlaces.join("\n")}`,
+    ).toBeLessThanOrEqual(placesQ.length);
 
     // ADR-IMPL-042: the list reads a page's timelines and cities in one batch each — more requests, not more queries.
     for (const to of ["CDG", "ZRH"]) {

@@ -4,11 +4,14 @@ import { useRouter, type Href } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
+import { RequestBody } from "@bbc/shared/api/v1/requests";
+import { requestRoute } from "@bbc/shared/requests/display";
 import { Button, Chip, CloseButton, StateMessage, short, tokens, rn, type Selection } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
 import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
-import { retryMinutes, type RequestSource } from "@/features/requests/confirmation-logic";
+import { bodyProblem, retryMinutes, type RequestSource } from "@/features/requests/confirmation-logic";
+import { detailFacts } from "@/features/requests/request-card";
 import {
   buildDraft,
   draftToBody,
@@ -23,7 +26,7 @@ import { submitRequest, type Profile } from "@/lib/api";
 import { stateCopy, submitFailureKind } from "@/lib/error-context";
 import { newId } from "@/lib/id";
 import { enqueueRequest } from "@/lib/queue";
-import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
+import { defaultPhoneCountry, displayPhone, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
 
 export type RequestSheetHandle = {
   present: (opts: {
@@ -36,6 +39,8 @@ export type RequestSheetHandle = {
     replacesFareId?: string;
     /** Home's dates, cabin and travelers for this search — prefilled, still editable here. */
     search?: SearchContext | null;
+    /** Home showed the indicative fare for this route and cabin (ADR-IMPL-042): the quote says so, never a number. */
+    estimateShown?: boolean;
   }) => void;
   dismiss: () => void;
 };
@@ -47,6 +52,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   const datesRef = useRef<DatesSheetHandle>(null);
   const sourceRef = useRef<RequestSource>("offer");
   const cityRef = useRef("");
+  // The destination's city by name only (never a code) — the title of the card while a request waits offline.
+  const cityNameRef = useRef<string | null>(null);
   const router = useRouter();
   const [idempotencyKey, setIdempotencyKey] = useState(() => newId());
   const [busy, setBusy] = useState(false);
@@ -55,6 +62,9 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   const [seed] = useState<RequestDraft>(() => buildDraft({}));
   const { state, dispatch } = useRequestDraft(seed);
   const keyRef = useRef(idempotencyKey);
+  // Set at the first line of a submit, before anything is awaited: a second tap while the first is still checking the
+  // network would otherwise send, or save, the request twice.
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     keyRef.current = idempotencyKey;
@@ -66,6 +76,9 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       const split = splitStoredPhone(next.contact.phone, defaultPhoneCountry());
       sourceRef.current = opts.fare ? "offer" : "search";
       cityRef.current = opts.fare?.to.city ?? opts.city ?? opts.toCode ?? "";
+      // An alternative to an expired fare passes the airport code as `city` (fare/[id].tsx): that is no name.
+      const named = opts.fare?.to.city ?? opts.city ?? null;
+      cityNameRef.current = named && named !== opts.toCode ? named : null;
       dispatch({
         type: "reset",
         draft: { ...next, contact: { ...next.contact, phone: split.national } },
@@ -73,6 +86,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       setPhoneCountry(split.country);
       setIdempotencyKey(newId());
       setBusy(false);
+      submittingRef.current = false;
       setNoteOpen(false);
       modalRef.current?.present();
     },
@@ -81,7 +95,9 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     },
   }));
 
-  function openConfirmation(input: { id: string; queued: boolean; route: string }) {
+  /** `facts` is the request's line as the server read it (Figma 135:856: `JFK → LHR · OCT 12–19 · ROUND TRIP · 1 ADULT`);
+   *  `phone`, the number this request will be called on — the one in the sheet, which may differ from the profile's. */
+  function openConfirmation(input: { id: string; queued: boolean; route: string; facts: string; phone: string }) {
     modalRef.current?.dismiss();
     const query = new URLSearchParams({
       id: input.id,
@@ -89,11 +105,33 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       queued: input.queued ? "1" : "0",
       city: cityRef.current,
       route: input.route,
+      facts: input.facts,
+      phone: input.phone,
     });
     router.push(`/request/confirmed?${query.toString()}` as Href);
   }
 
+  /** Save the request on the phone; it goes out when the phone is back online (Figma 135:855). */
+  function saveOnPhone(body: RequestBody) {
+    if (!enqueueRequest(body, keyRef.current, cityNameRef.current)) {
+      dispatch({ type: "setSubmitError", error: stateCopy("notSent").body });
+      return;
+    }
+    openConfirmation({ id: "", queued: true, route: requestRoute(body.legs, body.tripType), facts: "", phone: "" });
+  }
+
   async function onSubmit() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    try {
+      await submitOnce();
+    } finally {
+      submittingRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function submitOnce() {
     if (missingReturn(state.tripType, state.legs[1]?.date)) {
       dispatch({ type: "setReturnError", error: "Select a return date or choose One way." });
       return;
@@ -103,21 +141,29 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       dispatch({ type: "setPhoneError", error: phone.error });
       return;
     }
-    const body = draftToBody({
-      ...state,
-      contact: { ...state.contact, phone: phone.e164 },
-    });
+    // Checked before anything leaves the sheet: a request saved on the phone with details the server refuses could
+    // never be sent.
+    const valid = RequestBody.safeParse(
+      draftToBody({
+        ...state,
+        contact: { ...state.contact, phone: phone.e164 },
+      }),
+    );
+    if (!valid.success) {
+      dispatch({ type: "setSubmitError", error: bodyProblem(valid.error.issues) });
+      return;
+    }
+    const body = valid.data;
+    setBusy(true);
     const net = await NetInfo.fetch();
     const online = net.isConnected && net.isInternetReachable !== false;
 
     if (!online) {
-      enqueueRequest(body, keyRef.current);
-      const route = `${body.legs[0]!.from} → ${body.legs[body.legs.length - 1]!.to}`;
-      openConfirmation({ id: "", queued: true, route });
+      setBusy(false);
+      saveOnPhone(body);
       return;
     }
 
-    setBusy(true);
     const result = await submitRequest(body, keyRef.current);
     setBusy(false);
     if (!result.ok) {
@@ -128,15 +174,20 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
         return;
       }
       if (kind === "queued") {
-        enqueueRequest(body, keyRef.current);
-        const route = `${body.legs[0]!.from} → ${body.legs[body.legs.length - 1]!.to}`;
-        openConfirmation({ id: "", queued: true, route });
+        saveOnPhone(body);
         return;
       }
       dispatch({ type: "setSubmitError", error: result.message });
       return;
     }
-    openConfirmation({ id: result.data.id, queued: false, route: result.data.route });
+    openConfirmation({
+      id: result.data.id,
+      queued: false,
+      route: result.data.route,
+      facts: detailFacts(result.data),
+      // The number this request will be called on: the server's reading of it, else the one the member just sent.
+      phone: displayPhone(result.data.phone ?? body.contact.phone) ?? "",
+    });
   }
 
   const monoLine = `${state.legs[0]?.from ?? "JFK"} → ${state.legs[0]?.to ?? "LHR"} · ${state.cabin.toUpperCase()}${
@@ -251,6 +302,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
                 value={state.note}
                 onChangeText={(v) => dispatch({ type: "setNote", note: v })}
                 multiline
+                maxLength={NOTE_MAX}
               />
             ) : (
               <Pressable
@@ -323,6 +375,9 @@ function DateRow({
   );
 }
 
+/** `RequestBody.note` takes 500 characters; the field stops there instead of refusing the request. */
+const NOTE_MAX = 500;
+
 function Field({
   testID,
   label,
@@ -331,6 +386,7 @@ function Field({
   empty,
   keyboardType,
   multiline,
+  maxLength,
 }: {
   testID: string;
   label: string;
@@ -339,6 +395,7 @@ function Field({
   empty?: boolean;
   keyboardType?: "default" | "number-pad" | "phone-pad" | "email-address";
   multiline?: boolean;
+  maxLength?: number;
 }) {
   return (
     <View style={styles.fieldWrap}>
@@ -349,6 +406,7 @@ function Field({
         onChangeText={onChangeText}
         keyboardType={keyboardType}
         multiline={multiline}
+        maxLength={maxLength}
         style={[styles.field, empty && styles.fieldEmpty, multiline && styles.fieldMulti]}
         placeholderTextColor={tokens.colors.textTertiary}
       />

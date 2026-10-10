@@ -1,13 +1,37 @@
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
-import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, ErrorState, ListRow, PricePair, StateMessage, TabBar, tokens, rn } from "@bbc/ui";
+import {
+  BackButton,
+  Button,
+  ErrorState,
+  ListRow,
+  Photo,
+  PhotoCredit,
+  PricePair,
+  StateMessage,
+  tokens,
+  rn,
+} from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
+import { RootTabBar } from "@/components/RootTabBar";
+import { bandPicture } from "@/features/places/place-photo-logic";
+import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
 import { stateCopy } from "@/lib/error-context";
@@ -32,7 +56,7 @@ function clock(local: string | null, offset: number, code: string): string {
 function dialSupport() {
   const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
   if (!phone) return;
-  void Linking.openURL(`tel:${phone}`);
+  Linking.openURL(`tel:${phone}`).catch(() => undefined);
 }
 
 export default function FareDetailScreen() {
@@ -47,6 +71,9 @@ export default function FareDetailScreen() {
   const [gone, setGone] = useState<FareGoneContext | true | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [whyOpen, setWhyOpen] = useState(false);
+  const { width } = useWindowDimensions();
+  // ADR-IMPL-043: only an offer's page has a photo band, so only it asks for the city's photo.
+  const photoFor = usePlacePhotos(offer ? [fare?.to.code] : []);
 
   useEffect(() => {
     if (!id || typeof id !== "string") {
@@ -116,20 +143,7 @@ export default function FareDetailScreen() {
           <Text style={styles.caption}>A specialist will call you shortly.</Text>
         </View>
         <View style={{ paddingBottom: insets.bottom }}>
-          <TabBar
-            testID="tabs.bar"
-            active="explore"
-            unread={0}
-            onPress={(key) =>
-              router.push(
-                (key === "requests"
-                  ? "/(tabs)/requests"
-                  : key === "profile"
-                    ? "/(tabs)/profile"
-                    : "/(tabs)/explore") as Href,
-              )
-            }
-          />
+          <RootTabBar active="explore" />
         </View>
         <RequestSheet ref={sheetRef} />
       </View>
@@ -152,7 +166,17 @@ export default function FareDetailScreen() {
   }
 
   const savings = fare.price.published != null ? Math.round(fare.price.published - fare.price.offer) : null;
-  const media = offer?.mediaUrl ?? null;
+  // An offer's page has its photo band (Figma 135:846): the offer's picture, else its city's photo or satellite view
+  // with their credit, else the club's image (ADR-IMPL-043). A search fare's page has none (135:845).
+  const band = offer
+    ? bandPicture(offer.mediaUrl, photoFor(fare.to.code), {
+        headers: PICTURE_HEADERS,
+        mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
+        size: { width, height: HERO_BAND },
+      })
+    : null;
+  const credit = band?.credit ?? null;
+  const creditLink = credit?.link ?? null;
   const cabinWord = fare.product ?? (fare.cabin === "first" ? "First" : "Business");
   const carrierLine = `${fare.carrier.name} · ${cabinWord} · ${fare.nonstop ? "Nonstop" : "One stop"}`;
   const datePart = fare.departAt
@@ -162,21 +186,16 @@ export default function FareDetailScreen() {
     .filter(Boolean)
     .join(" · ");
   const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
-  const openTab = (key: "explore" | "requests" | "profile") => {
-    router.push(
-      (key === "requests" ? "/(tabs)/requests" : key === "profile" ? "/(tabs)/profile" : "/(tabs)/explore") as Href,
-    );
-  };
-
   return (
     <View testID="fare.root" style={styles.root}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        {media ? (
+        {band ? (
           <View style={styles.hero}>
-            <Image
-              source={{ uri: media }}
+            <Photo
+              source={band.source}
+              fallback={CLUB_PICTURE}
+              cachePolicy={band.cache}
               style={StyleSheet.absoluteFill}
-              accessibilityIgnoresInvertColors
               testID="fare.media"
             />
             <LinearGradient
@@ -201,7 +220,24 @@ export default function FareDetailScreen() {
           </View>
         )}
 
-        <View style={styles.details}>
+        {credit ? (
+          // The credit the photo owes, under it (ADR-IMPL-043).
+          <View style={styles.credit}>
+            <PhotoCredit
+              testID="fare.photoCredit"
+              label={credit.label}
+              accessibilityLabel={credit.spoken}
+              onPress={
+                creditLink
+                  ? () => {
+                      Linking.openURL(creditLink).catch(() => undefined);
+                    }
+                  : undefined
+              }
+            />
+          </View>
+        ) : null}
+        <View style={[styles.details, credit && styles.detailsAfterCredit]}>
           <Text style={styles.carrier}>{carrierLine}</Text>
           <View style={styles.timeBlock}>
             <View style={styles.timeCol}>
@@ -214,7 +250,7 @@ export default function FareDetailScreen() {
             </View>
           </View>
           {factsLine ? <Text style={styles.factsMono}>{factsLine}</Text> : null}
-          {media ? null : <Text style={styles.editorial}>{"Your next journey,\nthoughtfully arranged."}</Text>}
+          {band ? null : <Text style={styles.editorial}>{"Your next journey,\nthoughtfully arranged."}</Text>}
           <PricePair price={fare.price} layout="editorial" />
           {savings != null && savings > 0 ? (
             <ListRow
@@ -235,7 +271,7 @@ export default function FareDetailScreen() {
           onPress={() => sheetRef.current?.present({ fare, profile })}
         />
         <Text style={styles.caption}>
-          {media ? "A specialist arranges everything by phone." : "No payment is taken in the app."}
+          {band ? "A specialist arranges everything by phone." : "No payment is taken in the app."}
         </Text>
         {supportPhone ? (
           <Pressable
@@ -250,7 +286,7 @@ export default function FareDetailScreen() {
         ) : null}
       </View>
       <View style={{ paddingBottom: insets.bottom }}>
-        <TabBar testID="tabs.bar" active="explore" unread={0} onPress={openTab} />
+        <RootTabBar active="explore" />
       </View>
 
       <Modal visible={whyOpen} transparent animationType="fade" onRequestClose={() => setWhyOpen(false)}>
@@ -298,6 +334,9 @@ const styles = StyleSheet.create({
   displayOnDark: { ...rn(tokens.type.display), color: tokens.colors.textOnDark },
   factsOnDark: { ...rn(tokens.type.factsMono), color: tokens.colors.textOnDark, marginTop: tokens.space.xs },
   details: { paddingHorizontal: tokens.space.lg, paddingTop: tokens.space.lg, gap: tokens.space.lg },
+  credit: { paddingHorizontal: tokens.space.lg },
+  // Under the credit's 44 pt row (its line in the middle) the details start at once: 13 pt either side of the line.
+  detailsAfterCredit: { paddingTop: 0 },
   carrier: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   timeBlock: { flexDirection: "row", gap: tokens.space.lg },
   timeCol: { flex: 1, gap: tokens.space.xxs },

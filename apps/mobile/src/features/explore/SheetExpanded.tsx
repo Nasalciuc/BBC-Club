@@ -3,6 +3,8 @@ import type { HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import { CarouselRow, OfferCard, SectionLabel } from "@bbc/ui";
 
+import { cardPicture } from "@/features/places/place-photo-logic";
+import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { formatPrice } from "@/lib/format";
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
 
 export function SheetExpanded({ sections, onOpenOffer }: Props) {
   const expanded = sections.filter((s) => s.key !== "inspire");
+  const photoFor = usePlacePhotos(expanded.flatMap((s) => s.items.map((item) => item.route.to)));
 
   return (
     <>
@@ -25,7 +28,8 @@ export function SheetExpanded({ sections, onOpenOffer }: Props) {
                 testID={`explore.offer.${section.key}.${item.id}`}
                 title={item.title}
                 fromPrice={formatPrice(item.price.offer, item.price.currency)}
-                imageUrl={item.mediaUrl ?? null}
+                image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
+                fallback={CLUB_PICTURE}
                 onPress={() => onOpenOffer(item)}
               />
             ))}

@@ -46,6 +46,8 @@ export function Button({
     <Pressable
       testID={testID}
       accessibilityRole="button"
+      // The label stays the button's name while busy, when only a spinner shows.
+      accessibilityLabel={label}
       accessibilityState={{ disabled: blocked, busy }}
       disabled={blocked}
       onPress={onPress}
