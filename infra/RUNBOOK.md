@@ -159,6 +159,55 @@ The note in a request's e-mail is the member's own text, quoted (`> `) under `No
 the member's, not ours. A status note sent with the internal status webhook (`POST /v1/internal/requests/:id/status`,
 `note`) is shown to the member under the current step of the request's timeline: write it for the member.
 
+## Place photos (ADR-IMPL-043)
+
+The app asks for the photo of each city it shows (`GET /v1/places/photos?codes=`). A city asked about for the first
+time gets a row in `catalog.place_photos`, and `resolve-place-photos` (worker, every minute, ten cities a run, new ones
+first) looks it up: Wikimedia Commons through Wikidata; then Pexels, only when `PEXELS_API_KEY` is set (three
+questions a run at most — Pexels allows 200 an hour, 20,000 a month); else the satellite view, which the app draws
+from Mapbox with its `pk.` token. Until a city is looked up, and whenever a photo does not load, the app shows its own
+image. Every city is looked at again after 30–33 days. Only addresses and credits are stored — never an image.
+
+The worker reaches `query.wikidata.org`, `commons.wikimedia.org` and `api.pexels.com` over 443; members' phones load
+the photos from `upload.wikimedia.org` (or Wikimedia's newer thumbnail host) and `images.pexels.com`, and satellite
+views from `api.mapbox.com`.
+
+What a city shows, and what is waiting:
+
+```sql
+SELECT code, status, source, author, license, link, attempts, resolved_at, expires_at
+FROM catalog.place_photos WHERE code = 'LHR';
+SELECT status, count(*) FROM catalog.place_photos GROUP BY status;
+```
+
+A wrong or poor photo: give the city the club's own — two https addresses (a card about 500 px wide, a full-width one
+about 1280 px), and a credit only if the photo needs one. It never expires and the job never touches it; `DELETE`
+hands the city back to the job. Through the worker, so the secret is read from its environment and never typed:
+
+```bash
+docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
+  bun -e "fetch('http://localhost:8001/v1/internal/places/LHR/photo',{method:'PUT',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET,'Content-Type':'application/json'},body:JSON.stringify({card:'https://…/lhr-500.jpg',hero:'https://…/lhr-1280.jpg',credit:{author:'…',license:'CC BY 2.0',link:'https://…'}})}).then(async r=>console.log(r.status,await r.text()))"
+# back to the job (the same command with method:'DELETE' and no body) — 204, or 404 when the city has no photo of ours
+```
+
+After setting `PEXELS_API_KEY` (restart the worker), let the satellite cities be looked at again now rather than within
+a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`.
+
+Off: the flag row `catalog.place_photos` (seeded on by `scripts/seed-flags.ts`) — `{"enabled":false}` and within ~35 s
+the route answers no photos (the app shows its own image everywhere) and the job asks nothing outside:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.place_photos','{"enabled":false}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+```
+
+Metrics: `bbc_place_photos_resolved{status,source}` (photos and satellite views written), `bbc_place_photos_failed{stage}`
+(`wikidata`, `commons`, `pexels`: the source failed and the city is tried again after as many hours as it has tried,
+a day at most; `write`: the database refused a row), `bbc_place_photos_requested` (cities asked about for the first
+time). The log line `place photos: a source failed` carries the stage and the error — never the Pexels key. An error
+`place photos: Pexels refused PEXELS_API_KEY` (401) means the key is wrong or revoked: until it is replaced, a city
+that shows a photo keeps it, and one Commons has no photo for gets its satellite view, looked at again each day.
+
 ## The queue is stuck (oldest pending > 5 min)
 
 1. `curl -s localhost:8000/metrics | grep queue_` — depth, age, dead.

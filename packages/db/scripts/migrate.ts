@@ -393,6 +393,22 @@ try {
     }
   }
 
+  // After 0006 (catalog schema): place photos, a table with a foreign key to catalog.airports. ADR-IMPL-043.
+  const placePhotos = join(migrationsDir, "0026_catalog_place_photos.sql");
+  if (existsSync(placePhotos)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0026_catalog_place_photos.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(placePhotos, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0026_catalog_place_photos.sql')`);
+      });
+      console.log("catalog place photos applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);

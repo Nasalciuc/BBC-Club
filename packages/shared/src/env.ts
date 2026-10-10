@@ -53,6 +53,8 @@ export const ServerEnv = z.object({
   REDIS_URL: z.union([z.string().url(), z.literal("")]).optional(),
   /** Optional comma-separated host:port list. Unset: the Kafka relay is not registered (ADR-IMPL-030). */
   KAFKA_BROKERS: z.string().optional(),
+  /** Optional. Place photos from Pexels where Commons has none (ADR-IMPL-043). Unset: Commons, then satellite. */
+  PEXELS_API_KEY: z.string().min(20).optional(),
 });
 export type ServerEnv = z.infer<typeof ServerEnv>;
 

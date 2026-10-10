@@ -20,6 +20,11 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
     { enabled: false },
     "ADR-IMPL-037: formula estimates stay off until an operator turns them on (production: after the company's written approval)",
   ],
+  [
+    "catalog.place_photos",
+    { enabled: true },
+    "ADR-IMPL-043: city photos from Commons and Pexels, satellite views; off = the app's own image everywhere, no lookups",
+  ],
 ];
 
 try {
