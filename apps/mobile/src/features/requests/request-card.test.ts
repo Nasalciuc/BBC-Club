@@ -45,8 +45,8 @@ describe("cardLines — Figma 233:4069", () => {
   it("first class says so", () => {
     expect(cardLines({ ...london, cabin: "first" }).facts).toBe("JFK → LHR · FIRST");
   });
-  it("not sent: the details are saved (240:5199)", () => {
-    expect(cardLines(london, { notSent: true }).when).toBe(NOT_SENT_LINE);
+  it("waiting on the phone: the details are saved (240:5199)", () => {
+    expect(cardLines(london, { waiting: true }).when).toBe(NOT_SENT_LINE);
   });
   it("closed: when it closed", () => {
     expect(cardLines(london, { closedLine: "Closed · Oct 3" }).when).toBe("CLOSED · OCT 3");
@@ -167,8 +167,20 @@ describe("requestCard — the same card on Requests and Profile", () => {
   it("closed with no closing event: Closed, never the day it was made", () => {
     expect(requestCard({ ...base, status: "closed" }).when).toBe("CLOSED");
   });
-  it("not sent: the details are saved", () => {
-    expect(requestCard({ ...base, status: "not_sent" })).toMatchObject({ when: NOT_SENT_LINE, badge: "not_sent" });
+  it("waiting on the phone: the details are saved", () => {
+    const waiting = requestCard({ ...base, status: "not_sent" }, undefined, "queued");
+    expect(waiting).toMatchObject({ when: NOT_SENT_LINE, badge: "not_sent" });
+    expect(waiting.spoken).toBe("London, not sent, JFK to LHR, business, your travel details are saved");
+  });
+  it("one that will not go out by itself — refused for good, or given up by the server — keeps its dates", () => {
+    // Its detail says "We couldn’t pass this on": the card never says it is saved and on its way.
+    for (const card of [
+      requestCard({ ...base, status: "not_sent" }, undefined, "rejected"),
+      requestCard({ ...base, status: "not_sent" }),
+    ]) {
+      expect(card).toMatchObject({ when: "OCT 12–19 · 1 ADULT", badge: "not_sent" });
+      expect(card.spoken).toBe("London, not sent, JFK to LHR, business, October 12 to 19, 1 adult");
+    }
   });
 });
 
@@ -181,13 +193,13 @@ describe("spokenCard — words, not the mono signs", () => {
     expect(spoken).toBe("London, quote ready, JFK to LHR, business, October 30 to November 6, 2 adults, 1 child");
     expect(spoken).not.toMatch(/[→·–]/);
   });
-  it("a request not sent yet says its details are saved", () => {
-    expect(spokenCard(london, { badge: "not_sent", notSent: true })).toBe(
+  it("a request waiting on the phone says its details are saved", () => {
+    expect(spokenCard(london, { badge: "not_sent", waiting: true })).toBe(
       "London, not sent, JFK to LHR, business, your travel details are saved",
     );
   });
   it("a title that fell back to the route is read as words too", () => {
-    expect(spokenCard({ ...london, city: null }, { badge: "not_sent", notSent: true })).toBe(
+    expect(spokenCard({ ...london, city: null }, { badge: "not_sent", waiting: true })).toBe(
       "JFK to LHR, not sent, JFK to LHR, business, your travel details are saved",
     );
   });

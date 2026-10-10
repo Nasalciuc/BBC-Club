@@ -54,6 +54,29 @@ describe("linkFromNotification — a tapped push opens its request", () => {
     expect(linkFromNotification(local, "default")).toBeNull();
   });
 
+  it("an empty or unknown link in content.data never hides a good one further on", () => {
+    const link = `bbcclub://requests/${id}`;
+    const push = (data: unknown, trigger: unknown) => ({
+      actionIdentifier: "default",
+      notification: { request: { content: { data }, trigger } },
+    });
+    expect(linkFromNotification(push({ deepLink: "" }, { type: "push", payload: { deepLink: link } }), "default")).toBe(
+      link,
+    );
+    expect(
+      linkFromNotification(
+        push({ deepLink: "bbcclub://elsewhere" }, { type: "push", remoteMessage: { data: { deepLink: link } } }),
+        "default",
+      ),
+    ).toBe(link);
+    expect(
+      linkFromNotification(
+        push({ deepLink: "bbcclub://elsewhere" }, { type: "push", payload: { deepLink: "" } }),
+        "default",
+      ),
+    ).toBeNull();
+  });
+
   it("no tap, an action button, no link or a link this app does not route: nothing", () => {
     expect(linkFromNotification(null, "default")).toBeNull();
     expect(linkFromNotification(tap({ deepLink: `bbcclub://requests/${id}` }, "dismiss"), "default")).toBeNull();

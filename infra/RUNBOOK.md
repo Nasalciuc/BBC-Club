@@ -203,10 +203,12 @@ ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
 
 Metrics: `bbc_place_photos_resolved{status,source}` (photos and satellite views written), `bbc_place_photos_failed{stage}`
 (`wikidata`, `commons`, `pexels`: the source failed and the city is tried again after as many hours as it has tried,
-a day at most; `write`: the database refused a row), `bbc_place_photos_requested` (cities asked about for the first
-time). The log line `place photos: a source failed` carries the stage and the error — never the Pexels key. An error
-`place photos: Pexels refused PEXELS_API_KEY` (401) means the key is wrong or revoked: until it is replaced, a city
-that shows a photo keeps it, and one Commons has no photo for gets its satellite view, looked at again each day.
+a day at most; `write`: the database refused a row; `airport`: a claimed city the airports query cannot match — a code
+not in upper case — tried again the same way, log line `place photos: no airport for a claimed city`),
+`bbc_place_photos_requested` (cities asked about for the first time). The log line `place photos: a source failed`
+carries the stage and the error — never the Pexels key. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
+means the key is wrong or revoked: until it is replaced, a city that shows a photo keeps it, and one Commons has no
+photo for gets its satellite view, looked at again each day.
 
 ## The queue is stuck (oldest pending > 5 min)
 

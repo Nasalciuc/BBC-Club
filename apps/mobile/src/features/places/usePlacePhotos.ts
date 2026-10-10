@@ -30,7 +30,8 @@ export function usePlacePhotos(
   codes: readonly (string | null | undefined)[],
 ): (code: string | null | undefined) => PlacePhotoVM | undefined {
   const key = [...new Set(codes.filter((c): c is string => !!c).map((c) => c.toUpperCase()))].sort().join(",");
-  const photos = useSyncExternalStore(store.subscribe, store.snapshot);
+  // The third argument is the snapshot for a static web render (app.json: web output `static`): the same one.
+  const photos = useSyncExternalStore(store.subscribe, store.snapshot, store.snapshot);
 
   useEffect(() => {
     if (!key) return;

@@ -228,6 +228,19 @@ describe("place photos", () => {
     await down.iso.drop();
   });
 
+  it("a claimed city whose airport does not come back waits like a failed source", async () => {
+    const t = await setup("place-photos-no-airport", {});
+    // A code the job cannot match: it asks for airports by upper-case code, so `ab1` (`AB1`, no airport) never comes back.
+    await t.iso.db.execute(sql`
+      INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng)
+      VALUES ('ab1', 'Nowhere', 'Nowhere', 'Nowhere', 'NW', 'Europe', 1, 2)`);
+    await t.iso.db.execute(sql`INSERT INTO catalog.place_photos (code) VALUES ('ab1')`);
+    expect(await t.run()).toEqual({ claimed: 1, photos: 0, satellites: 0, retries: 1, deferred: 0 });
+    expect(await t.row("ab1")).toMatchObject({ status: "pending", attempts: 1, hours: 1 });
+    expect(t.sources.calls).toHaveLength(0);
+    await t.iso.drop();
+  });
+
   it("a key Pexels refuses: a city that shows a photo keeps it, one without gets its satellite view for a day", async () => {
     const t = await setup("place-photos-refused", { wikidata: [paris], pexels: { Paris: 401 } }, undefined, {
       PEXELS_API_KEY: "test".repeat(10), // a stand-in, not a key

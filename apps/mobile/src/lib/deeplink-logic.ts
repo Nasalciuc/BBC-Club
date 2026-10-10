@@ -44,17 +44,20 @@ export function routeFromDeepLinkUrl(url: string): DeepLinkRoute | null {
   return routeFromSegments(segmentsFromDeepLinkUrl(url));
 }
 
+/** `value.deepLink` when it is a link this app routes: an empty or unknown one counts as none, so the next place a push
+ *  keeps its keys is read. */
 function deepLinkIn(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
   const link = (value as { deepLink?: unknown }).deepLink;
-  return typeof link === "string" ? link : null;
+  return typeof link === "string" && routeFromDeepLinkUrl(link) ? link : null;
 }
 
 /**
  * The link a tapped push carries (`deepLink`, set by the server for the quote-ready push: `bbcclub://requests/<id>`) —
  * only for a tap on the notification itself, not on an action button, and only a link this app routes. Android hands
  * the push's data in `content.data`; iOS keeps a remote push's own keys in the trigger's `payload` (the server sends
- * APNs `{ aps, …data }`, and expo-notifications fills `content.data` only from a `body` key).
+ * APNs `{ aps, …data }`, and expo-notifications fills `content.data` only from a `body` key). The first routable link
+ * wins: one in `content.data` that this app does not route never hides a good one further on.
  */
 export function linkFromNotification(
   response:
@@ -70,9 +73,7 @@ export function linkFromNotification(
   const request = response.notification.request;
   const trigger = request.trigger as { type?: unknown; payload?: unknown; remoteMessage?: { data?: unknown } } | null;
   const pushed = trigger && typeof trigger === "object" && trigger.type === "push" ? trigger : null;
-  const link =
-    deepLinkIn(request.content.data) ?? deepLinkIn(pushed?.payload) ?? deepLinkIn(pushed?.remoteMessage?.data);
-  return link && routeFromDeepLinkUrl(link) ? link : null;
+  return deepLinkIn(request.content.data) ?? deepLinkIn(pushed?.payload) ?? deepLinkIn(pushed?.remoteMessage?.data);
 }
 
 /** Screens where a link waits: before the member is in (entry, sign-in), and while the gate still decides where to go

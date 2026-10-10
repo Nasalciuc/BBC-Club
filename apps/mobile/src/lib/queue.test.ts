@@ -5,11 +5,24 @@ import type { RequestBody } from "@bbc/shared/api/v1/requests";
 import { parseQueue, type QueuedRequest } from "./queue-logic";
 
 const store = new Map<string, string>();
+/** How many more writes the storage takes before the app stops (a test sets it; never, otherwise). */
+let writesLeft = Infinity;
+const STOPPED = "the app stopped here";
+function write(): void {
+  if (writesLeft <= 0) throw new Error(STOPPED);
+  writesLeft -= 1;
+}
 mock.module("react-native-mmkv", () => ({
   createMMKV: () => ({
     getString: (key: string) => store.get(key),
-    set: (key: string, value: string) => void store.set(key, value),
-    remove: (key: string) => void store.delete(key),
+    set: (key: string, value: string) => {
+      write();
+      store.set(key, value);
+    },
+    remove: (key: string) => {
+      write();
+      store.delete(key);
+    },
   }),
 }));
 let ids = 0;
@@ -46,6 +59,7 @@ function stored(): QueuedRequest[] {
 }
 
 beforeEach(() => {
+  writesLeft = Infinity;
   queue.clearQueue();
   store.clear();
 });
@@ -269,5 +283,40 @@ describe("whose requests they are", () => {
     // Both stay with A — the one in flight may have reached the server; its Idempotency-Key makes a resend harmless.
     queue.adoptQueue("member-a");
     expect(queue.listQueued()).toHaveLength(2);
+  });
+
+  it("an app stopped at any write of a sign-in never leaves one member's requests under another's name", () => {
+    // A saves a request; A's session expires and B saves one; B's expires and A signs in again — and the app stops
+    // before that sign-in's write number `writes + 1`. It starts again with `next` signed in, then the other member,
+    // then `next` again: each sees its own request, and only that.
+    function stoppedAt(writes: number, next: "member-a" | "member-b"): boolean {
+      writesLeft = Infinity;
+      queue.clearQueue();
+      store.clear();
+      const own: Record<string, string> = {};
+      queue.adoptQueue("member-a");
+      own["member-a"] = queue.enqueueRequest(body, "key-a")!.id;
+      queue.adoptQueue("member-b");
+      own["member-b"] = queue.enqueueRequest(body, "key-b")!.id;
+      writesLeft = writes;
+      let stopped = false;
+      try {
+        queue.adoptQueue("member-a");
+      } catch (error) {
+        if (!(error instanceof Error) || error.message !== STOPPED) throw error;
+        stopped = true;
+      }
+      writesLeft = Infinity;
+      const other = next === "member-a" ? "member-b" : "member-a";
+      for (const member of [next, other, next]) {
+        queue.adoptQueue(member);
+        expect(queue.listQueued().map((q) => q.id)).toEqual([own[member]]);
+      }
+      return stopped;
+    }
+    let writes = 0;
+    while (stoppedAt(writes, "member-a") && stoppedAt(writes, "member-b")) writes += 1;
+    // Five writes in that sign-in: B's set aside, the queue emptied, the owner, A's back, A's set-aside gone.
+    expect(writes).toBe(5);
   });
 });

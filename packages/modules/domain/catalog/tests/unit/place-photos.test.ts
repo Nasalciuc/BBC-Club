@@ -18,6 +18,8 @@ import {
   decidePlaces,
   parseCodes,
   toPlacePhotoVM,
+  withoutOutcome,
+  type Outcome,
   type Place,
 } from "../../src/application/place-photos";
 import { binding, commonsThumb, fakeSources, pexelsPhoto } from "./place-photos.fixture";
@@ -486,5 +488,18 @@ describe("decidePlaces", () => {
     });
     const out = await decidePlaces([LONDON], { sources: sources(f.fetch), pexelsKey: undefined, logger: quiet });
     expect(out.get("LHR")).toMatchObject({ kind: "photo", source: "wikimedia" });
+  });
+});
+
+describe("withoutOutcome — a claimed city is never left without an answer", () => {
+  it("a claimed code whose airport did not come back is tried again later; codes compare trimmed, once each", () => {
+    const outcomes = new Map<string, Outcome>([
+      ["LHR", { kind: "satellite", centre: { lat: 51.47, lng: -0.46 } }],
+      ["CDG", { kind: "deferred" }],
+    ]);
+    expect(withoutOutcome([{ code: "LHR" }, { code: "CDG " }, { code: "XYZ" }, { code: "XYZ " }], outcomes)).toEqual([
+      "XYZ",
+    ]);
+    expect(withoutOutcome([{ code: "LHR" }], outcomes)).toEqual([]);
   });
 });

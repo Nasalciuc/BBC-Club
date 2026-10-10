@@ -8,7 +8,7 @@ type Props = {
   title: string;
   /** `JFK → LHR · BUSINESS` */
   facts: string;
-  /** `OCT 12–19 · 1 ADULT`, or `Your travel details are saved` for a request not sent yet (Figma 240:5199). */
+  /** `OCT 12–19 · 1 ADULT`, or `Your travel details are saved` for a request waiting on the phone (Figma 240:5199). */
   when: string;
   /** The badge, already mapped (quote_ready, not_sent, …). Null hides it (closed). */
   badgeStatus: BadgeStatus | null;

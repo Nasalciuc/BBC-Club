@@ -108,8 +108,10 @@ says the member saw one (ADR-IMPL-042). A review of about 560 hypotheses on this
 - **`RequestCard`** replaces `RequestRow` (Figma `Proposal / RequestCard`, 436:1169): the city as the title, the badge
   beside it, `JFK → LHR · BUSINESS` and `OCT 12–19 · 1 ADULT` in mono; Full on Requests, Compact on Profile, built by
   one helper (`requestCard`) so a request reads the same in both; 12 pt apart. No button and no chevron — calling and
-  sending happen in the request. A request not sent yet reads `Your travel details are saved`; a closed one, when it
-  closed (its latest `closed` event, in the phone's zone; `Closed` when there is none), without a badge. A long city
+  sending happen in the request. A request waiting on the phone reads `Your travel details are saved`; one that will
+  not go out by itself (refused for good, or given up by the server) keeps its dates and its `Not sent` badge, and
+  its detail offers the call; a closed one, when it closed (its latest `closed` event, in the phone's zone; `Closed`
+  when there is none), without a badge. A long city
   widens its column and the badge moves to the next line. The title is the route when an older server names no city —
   never a route that comes back where it started (an older server read every round trip `JFK → JFK`): then
   `Your request`. A screen reader hears words: `London, quote ready, JFK to LHR, business, October 12 to 19, 1 adult`.
@@ -144,10 +146,11 @@ on. Call us and we’ll take it from here.` with `Call us`, the screen's one fil
   own try. After a sign-out a flush under way sends nothing more and writes nothing back. The requests on the phone are
   the signed-in member's: at sign-in, those another member left there (a session that expired, so nothing cleared
   them) are set aside for that member — never sent under this account nor shown to it — and come back when that member
-  signs in again (`adoptQueue`). `Send now` goes even if the
-  request was waiting, checks the network first, one tap at a time, and says when it did not go
-  (`You’re still offline…`, `It didn’t go through…`) — to a screen reader too (iOS: an announcement queued behind
-  VoiceOver; Android: a live region). Once the member has left the request, an answer arriving late does nothing.
+  signs in again (`adoptQueue`). The new owner is written before any of their own requests come back, so an app stopped
+  half-way through never leaves one member's requests under another's name: the next time a member is signed in finishes
+  the move. `Send now` goes even if the request was waiting, checks the network first, one tap at a time, and says when
+  it did not go (`You’re still offline…`, `It didn’t go through…`) — to a screen reader too (iOS: an announcement queued
+  behind VoiceOver; Android: a live region). Once the member has left the request, an answer arriving late does nothing.
 - **Lists that follow the server**: Requests and Profile reload each time they come into view (they stay mounted under
   the tabs) and Requests when the phone comes back online; the spinner is for the first load only. A first load that
   fails is an error with `Try again`, never `No requests yet.`; with requests waiting on the phone, those stay on
@@ -159,11 +162,14 @@ on. Call us and we’ll take it from here.` with `Call us`, the screen's one fil
   list (a state it does not know reads `received`, ADR-IMPL-042): counted, and logged in development only.
 - **Navigation**: a screen pushed over the tabs (a request, a fare, a confirmation, the rate limit) has one tab bar,
   `RootTabBar`: a tab goes back down to the tabs beneath (`dismissTo`) instead of stacking another set, and the
-  Requests dot is the real count of quotes ready on every bar (`useUnreadQuotes`). After `Send now` the detail returns
+  Requests dot is the real count of quotes ready on every bar (`useUnreadQuotes`). Each question for that count takes
+  a ticket when it is asked and the newest one wins, whichever answer arrives first; it starts over at 0 for each
+  member — a sign-in, a sign-out, a deleted account (`unread-quotes-store.ts`). After `Send now` the detail returns
   to the Requests beneath. Back with nothing beneath (a link at cold start) lands on Requests.
 - **Links**: a tapped push opens its request (`deepLink`, the quote-ready push) — on Android from `content.data`, on
   iOS from the remote push's own keys (`trigger.payload`: expo-notifications fills `content.data` only from a `body`
-  key) — once, even when a cold start hands the same tap over twice. The launch URL is taken once per process, and
+  key) — once, even when a cold start hands the same tap over twice. The first link the app routes wins: an empty or
+  unknown one in `content.data` never hides a good one further on. The launch URL is taken once per process, and
   every link waits until the member is signed in and past the gate (`linkCanOpen`). `+native-intent.tsx` keeps Expo
   Router from routing the club's links itself (`requests/<id>` matches no screen file: "Unmatched Route").
 - **The quote says whether the estimate was on screen** (`estimateShown`, ADR-IMPL-042): only when Home showed the
@@ -211,7 +217,8 @@ the phone's zone),
 the dot, the three newest), `queue-logic.test.ts` (never discarded, back-off, refusals kept, results applied by id,
 item-by-item parsing, when the next try is due), `queue.test.ts` (the queue with its storage in memory: what is saved
 and set aside, one flush at a time, `Send now` during a flush and answered only by a final outcome, a sign-out
-mid-flush, whose requests they are), `flush-timer.test.ts` (the open-app retry: its waits, offline, a sign-out, a re-entrant read),
+mid-flush, whose requests they are, a sign-in stopped at any write), `flush-timer.test.ts` (the open-app retry: its
+waits, offline, a sign-out, a re-entrant read),
 `build-draft.test.ts` (`estimateShown`), `deeplink-logic.test.ts` (a tapped push on iOS and Android, native intent,
 where a link waits), `error-context.test.ts` (reading copy, offline and refresh), `status-copy.test.ts`
 (`packages/ui`), `phone.test.ts`.

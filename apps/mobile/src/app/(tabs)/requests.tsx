@@ -10,7 +10,7 @@ import { isOffline } from "@/features/explore/offline-logic";
 import { queuedView, requestCard } from "@/features/requests/request-card";
 import { listHints } from "@/features/requests/request-view-logic";
 import { isOpen } from "@/features/requests/status";
-import { noteUnreadQuotes } from "@/features/requests/useUnreadQuotes";
+import { askUnreadQuotes, noteUnreadQuotes } from "@/features/requests/unread-quotes-store";
 import { fetchRequests, submitRequest } from "@/lib/api";
 import { readFailureCopy, refreshFailedLine } from "@/lib/error-context";
 import { flushQueue, listQueued, subscribeQueue, type QueuedRequest } from "@/lib/queue";
@@ -44,6 +44,9 @@ export default function RequestsScreen() {
     if (reloadToken === 0) return;
     let cancelled = false;
     void (async () => {
+      // The dot's ticket is taken before asking: an older question than the number shown, or one asked before a change
+      // of member, never sets it (unread-quotes-store.ts).
+      const ticket = askUnreadQuotes();
       const result = await fetchRequests();
       if (cancelled) return;
       setLoading(false);
@@ -54,7 +57,7 @@ export default function RequestsScreen() {
       setItems(result.data.items);
       setHasMore(result.data.hasMore);
       setFailure(null);
-      noteUnreadQuotes(result.data.items);
+      noteUnreadQuotes(result.data.items, ticket);
     })().catch(() => {
       if (!cancelled) {
         setLoading(false);
@@ -133,8 +136,8 @@ export default function RequestsScreen() {
     );
   }
 
-  const card = (r: RequestVM, testID: string) => {
-    const c = requestCard(r);
+  const card = (r: RequestVM, testID: string, onPhone?: "queued" | "rejected") => {
+    const c = requestCard(r, undefined, onPhone);
     return (
       <RequestCard
         key={r.id}
@@ -195,9 +198,11 @@ export default function RequestsScreen() {
                   <View style={styles.cards}>
                     {open.map((row) => {
                       const r = row.kind === "queued" ? row.view : row.request;
-                      // Figma 240:5199: a request that has not reached us says its details are saved; opening it
-                      // offers `Send now`. Calls and retries live in the request, never on the card.
-                      return card(r, `requests.row.${r.id}`);
+                      // Figma 240:5199: a request waiting on the phone says its details are saved; opening it offers
+                      // `Send now`. One that will not go out by itself keeps its dates and its badge; opening it
+                      // offers the call. Calls and retries live in the request, never on the card.
+                      const onPhone = row.kind === "queued" ? (row.rejected ? "rejected" : "queued") : undefined;
+                      return card(r, `requests.row.${r.id}`, onPhone);
                     })}
                   </View>
                   {hints.map((line, i) => (

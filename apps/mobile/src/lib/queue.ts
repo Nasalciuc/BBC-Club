@@ -124,29 +124,34 @@ function joined(current: string, restored: string, now = Date.now()): string {
 }
 
 /**
- * The requests on the phone are the signed-in member's. Called at every sign-in. When they were saved by another
- * member — whose session ended without a sign-out (it expired), so nothing cleared them — they are set aside for that
- * member: never sent under this account, never shown to it, and back when that member signs in again. This member's
- * own, set aside before, come back now. Requests saved by an older app, with no owner, are this member's.
+ * The requests on the phone are the signed-in member's. Called whenever a member is signed in (each sign-in, each start
+ * of the app). When they were saved by another member — whose session ended without a sign-out (it expired), so
+ * nothing cleared them — they are set aside for that member: never sent under this account, never shown to it, and
+ * back when that member signs in again. This member's own, set aside before, come back now. Requests saved by an older
+ * app, with no owner, are this member's. The owner is written before any of this member's requests come back, so an
+ * app stopped half-way never leaves one member's requests under another's name: the next call finishes the move.
  */
 export function adoptQueue(member: string): void {
   const owner = storage.getString(OWNER);
-  if (owner === member) return;
-  // A flush under way sends from the queue as it was: it sends nothing more and writes nothing back.
-  generation += 1;
-  if (owner) {
-    const theirs = storage.getString(KEY);
-    const before = storage.getString(setAside(owner));
-    if (theirs) storage.set(setAside(owner), before ? joined(before, theirs) : theirs);
-    storage.remove(KEY);
-  }
   const mine = storage.getString(setAside(member));
+  if (owner === member && !mine) return;
+  if (owner !== member) {
+    // A flush under way sends from the queue as it was: it sends nothing more and writes nothing back.
+    generation += 1;
+    if (owner) {
+      const theirs = storage.getString(KEY);
+      const before = storage.getString(setAside(owner));
+      if (theirs) storage.set(setAside(owner), before ? joined(before, theirs) : theirs);
+      storage.remove(KEY);
+    }
+    storage.set(OWNER, member);
+  }
   if (mine) {
+    // Each request once (by its Idempotency-Key), even if a move cut short left a copy on both sides.
     const current = storage.getString(KEY);
     storage.set(KEY, current ? joined(current, mine) : mine);
     storage.remove(setAside(member));
   }
-  storage.set(OWNER, member);
   for (const listener of listeners) listener();
 }
 

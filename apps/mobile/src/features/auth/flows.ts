@@ -1,5 +1,6 @@
 import { authClient, waitForSessionCookie } from "./client";
 import { authMessage, CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
+import { resetUnreadQuotes } from "@/features/requests/unread-quotes-store";
 import { fetchPasswordStatus, postAccountPassword } from "@/lib/api";
 import { unregisterPushDevice } from "@/lib/push";
 import { clearQueue } from "@/lib/queue";
@@ -7,10 +8,11 @@ import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-k
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
 
-/** Unregister push, drop pending queue, clear onboarded — then auth ends. */
+/** Unregister push, drop pending queue and the Requests dot's number, clear onboarded — then auth ends. */
 async function clearLocalSession(): Promise<void> {
   await unregisterPushDevice().catch(() => undefined);
   clearQueue();
+  resetUnreadQuotes();
   appStorage.remove(ONBOARDED_KEY);
   appStorage.remove(PENDING_PASSWORD_KEY);
 }
@@ -50,6 +52,8 @@ export async function signIn(email: string, password: string): Promise<Result> {
   try {
     const { error } = await withAuthTimeout(authClient.signIn.email({ email, password }));
     if (error) return fail(error);
+    // A member signed in: the Requests dot starts from nothing — an answer for the member before is dropped.
+    resetUnreadQuotes();
     const ready = (await requireSessionCookie()) ?? { ok: true as const };
     if (ready.ok) appStorage.remove(PENDING_PASSWORD_KEY);
     return ready;
@@ -72,6 +76,7 @@ export async function verifyJoin(email: string, otp: string): Promise<Result> {
   try {
     const { error } = await withAuthTimeout(authClient.signIn.emailOtp({ email, otp }));
     if (error) return fail(error);
+    resetUnreadQuotes();
     // Without a SecureStore cookie, set-password's POST /v1/account/password is 401 "Please sign in."
     const ready = await requireSessionCookie();
     if (ready) return ready;
@@ -109,6 +114,7 @@ export async function resetPassword(email: string, otp: string, password: string
     if (error) return fail(error);
     const signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
     if (signedIn.error) return fail(signedIn.error);
+    resetUnreadQuotes();
     const ready = (await requireSessionCookie()) ?? { ok: true as const };
     if (ready.ok) appStorage.remove(PENDING_PASSWORD_KEY);
     return ready;

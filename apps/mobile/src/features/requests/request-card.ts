@@ -14,7 +14,7 @@ type Leg = { from: string; to: string; date: string };
 type TripType = "round" | "oneway" | "multi";
 type Passengers = { adult: number; child: number; infant: number };
 
-/** Figma 240:5199: the second line of a card whose request has not reached us yet. */
+/** Figma 240:5199: the second line of a card whose request waits on the phone to go out. */
 export const NOT_SENT_LINE = "Your travel details are saved";
 
 function count(n: number, one: string, many: string): string | null {
@@ -50,14 +50,14 @@ export function cardFacts(r: Pick<RequestVM, "route" | "cabin">): string {
 }
 
 /**
- * Figma 233:4069: `London` · `JFK → LHR · BUSINESS` · `OCT 12–19 · 1 ADULT`. A request not sent yet says so on its second
- * line (240:5199); a closed one says when it closed.
+ * Figma 233:4069: `London` · `JFK → LHR · BUSINESS` · `OCT 12–19 · 1 ADULT`. A request waiting on the phone says so on
+ * its second line (240:5199); a closed one says when it closed.
  */
 export function cardLines(
   r: CardSource,
-  state: { notSent?: boolean; closedLine?: string | null } = {},
+  state: { waiting?: boolean; closedLine?: string | null } = {},
 ): { title: string; facts: string; when: string } {
-  const when = state.notSent
+  const when = state.waiting
     ? NOT_SENT_LINE
     : state.closedLine
       ? state.closedLine.toUpperCase()
@@ -98,9 +98,9 @@ function midSentence(line: string): string {
  */
 export function spokenCard(
   r: CardSource,
-  state: { badge: RequestBadge | null; notSent?: boolean; closedLine?: string | null },
+  state: { badge: RequestBadge | null; waiting?: boolean; closedLine?: string | null },
 ): string {
-  const when = state.notSent
+  const when = state.waiting
     ? NOT_SENT_LINE.toLowerCase()
     : state.closedLine
       ? midSentence(spokenDates(state.closedLine).replace(" · ", ", "))
@@ -122,11 +122,15 @@ export function spokenCard(
 /**
  * Everything a card shows for a request, wherever it is listed (Requests, Profile): its lines, its badge and what a
  * screen reader says — a closed request says when it closed (in the phone's zone; `timeZone` is for tests) and has no
- * badge; one not sent yet says its details are saved.
+ * badge. A request still on the phone passes `onPhone`, as its detail reads it: only one waiting to go (`queued`) says
+ * its details are saved (240:5199). One that will not go out by itself — refused for good (`rejected`), or held by a
+ * server that gave up passing it on (`not_sent`) — keeps its dates and its `Not sent` badge: its detail says "We
+ * couldn’t pass this on" and offers the call.
  */
 export function requestCard(
   r: CardSource & Pick<RequestVM, "status" | "createdAt" | "timeline">,
   timeZone?: string,
+  onPhone?: "queued" | "rejected",
 ): {
   title: string;
   facts: string;
@@ -134,8 +138,9 @@ export function requestCard(
   badge: RequestBadge | null;
   spoken: string;
 } {
-  const view = requestView(r.status, closedAt(r), timeZone);
-  const state = { notSent: r.status === "not_sent", closedLine: view.closedLine };
+  const status = onPhone ?? r.status;
+  const view = requestView(status, closedAt(r), timeZone);
+  const state = { waiting: status === "queued", closedLine: view.closedLine };
   return {
     ...cardLines(r, state),
     badge: view.badge,

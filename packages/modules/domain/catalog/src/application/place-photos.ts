@@ -217,6 +217,13 @@ export async function decidePlaces(
   return out;
 }
 
+/** Claimed codes `decidePlaces` gave no outcome: their airport did not come back — a code the airports query cannot
+ *  match (it asks in upper case), or one removed meanwhile (its row goes with it, so the retry finds nothing). Each is
+ *  tried again later like a failed source — never claimed again every ten minutes. */
+export function withoutOutcome(claimed: readonly { code: string }[], outcomes: ReadonlyMap<string, Outcome>): string[] {
+  return [...new Set(claimed.map((c) => c.code.trim()))].filter((code) => !outcomes.has(code));
+}
+
 /** The resolve-place-photos job: claim what is due, decide it, write it. Every number lands in platform.job_runs. */
 export async function resolvePlacePhotos(deps: {
   db: Executor;
@@ -243,6 +250,11 @@ export async function resolvePlacePhotos(deps: {
   const counts = { claimed: claimed.length, photos: 0, satellites: 0, retries: 0, deferred: 0 };
   const retry: string[] = [];
   const deferred: string[] = [];
+  for (const code of withoutOutcome(claimed, outcomes)) {
+    deps.logger.warn({ code }, "place photos: no airport for a claimed city");
+    deps.metrics.inc("place_photos_failed", { stage: "airport" });
+    retry.push(code);
+  }
   for (const [code, outcome] of outcomes) {
     if (outcome.kind === "retry") {
       retry.push(code);
