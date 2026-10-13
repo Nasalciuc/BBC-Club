@@ -16,29 +16,30 @@ ssh -L 5432:localhost:5432 -L 3001:localhost:3001 root@<host>   # then connect t
 
 ```bash
 cd /opt/bbc
-docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env ps
-curl -s localhost:8000/ready | jq        # db, queue, staleJobs — one replica (Caddy @ops)
-curl -s localhost:8000/metrics | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
-curl -sS --resolve <API_DOMAIN>:443:127.0.0.1 https://<API_DOMAIN>/worker-metrics | grep -E 'db_|pgbouncer_'
-docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
-  bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
+DC="docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env"
+$DC ps
+$DC exec -T api bun -e "fetch('http://localhost:8000/status').then(r=>r.text()).then(t=>console.log(t))" | jq   # db, queue, staleJobs (503 when unwell)
+$DC exec -T api bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
+$DC exec -T worker bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
 ```
 
-Request counters on `/metrics` are **per Bun process**. Caddy's `@ops` route (`/metrics` `/ready`) reaches one API replica on port 8000. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`. Caddy serves them only on `/worker-metrics` (same localhost gate, upstream `worker:8001`). Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
+Request counters on `/metrics` are **per Bun process**; `exec` asks the first API replica. Caddy answers 404 for `/metrics`, `/ready`, `/status` and `/worker-metrics` to every address but its own: closed from the internet, and to a `curl` on the box too, which reaches Caddy from Docker's bridge address. The commands above ask each process directly. `/ready` is that one process — not draining, its database answers — and is what deploys wait on; `/status` is the system — the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job on time — and is what Uptime Kuma watches. A dead letter turns `/status` red and leaves `/ready` green, so the deploy that fixes it still rolls. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`, so they are on the worker's `/metrics` (port 8001), the third command. Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
 
 GlitchTip uses **its own Postgres** (`glitchtip-postgres`). It is not in the pgBackRest stanza.
 
 ## Deploy
 
 ```bash
-bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: deploy.sh staging <image>
+flock /var/lock/bbc-deploy.lock bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: deploy.sh staging <image>
 ```
 
 `LOADTEST=1` in production.env is refused. Image tags must be a commit SHA (`:latest` is rejected).
 
+The `api-deploy` workflow holds `/var/lock/bbc-deploy.lock` from its `git checkout` to the end of the deploy, so two dispatches never swap the shared checkout under each other; its SSH step has an hour in all, up to 25 minutes of it waiting for the lock. By hand, `flock` (above) waits its turn the same way. A staging dispatch whose `infra/caddy` differs from `origin/main`'s stops before its checkout: production's Caddy reads that directory from this checkout (§ Staging on the same box).
+
 Before step 1, nothing changes unless `staging.env` sets no key that production's services read (§ Staging on the same box), the origin certificate passes `origin_tls_check` (§ Certificates), and N, the number of API replicas, is 1–9: `API_REPLICAS` (`API_REPLICAS_STAGING` on staging), default 2, read the way Compose reads it — the shell, then `staging.env`, then `production.env`.
 
-Sequence: (1) `pg_dump` (2) pull API+worker images, then `scripts/check-env.ts` in the new image, as the API and as the worker: the server's own boot rules on this env file. A failed pull or a refusal (which names the setting) puts the previous image tag back and stops; nothing else has changed (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d --no-deps` the pooler — never Postgres, which takes new settings only when recreated on purpose (§ Memory and replicas) — then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to the replicas there were plus N (2N, unless `API_REPLICAS` just changed; a stopped container counts, as Compose counts it), wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) staging only: the demo data (8) Caddy, where the box has one, takes this commit's Caddyfile — a one-off `caddy validate` first (certificates included), then `up -d --no-deps caddy`, which makes a new container only when one of its four settings changed, then a graceful `caddy reload`. Caddy serves production too, so a staging deploy applies `infra/caddy` only when it is exactly `origin/main`'s; a branch's is validated and left for review. Then old images are pruned. A Caddy failure leaves the API deployed and Caddy on its previous config, and the deploy reports it red. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
+Sequence: (1) `pg_dump` (2) pull API+worker images, then `scripts/check-env.ts` in the new image, as the API and as the worker: the server's own boot rules on this env file. A failed pull or a refusal (which names the setting) puts the previous image tag back and stops; nothing else has changed (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d --no-deps` the pooler — never Postgres, which takes new settings only when recreated on purpose (§ Memory and replicas) — then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to the replicas there were plus N (2N, unless `API_REPLICAS` just changed; a stopped container counts, as Compose counts it), wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) staging only: the demo data (8) Caddy, where the box has one, takes this commit's Caddyfile — a one-off `caddy validate` first (certificates included), then `up -d --no-deps caddy`, which makes a new container only when one of its four settings changed, then a graceful `caddy reload`. Caddy serves production too, so a staging deploy applies `infra/caddy` only when it is exactly `origin/main`'s; a branch's is validated and left for review. Then old API images are removed, except this one, the one it replaced, the other environment's and the five newest. A Caddy failure leaves the API deployed and Caddy on its previous config, and the deploy reports it red. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
 
 Compose healthcheck is `/health`; the deploy gate is `/ready`. Caddy `api_site` resolves replicas with `dynamic a` (refresh 5 s), `least_conn`, passive health on 5xx.
 
@@ -55,12 +56,18 @@ After `shared_preload_libraries=pg_stat_statements` changes, Postgres must resta
 - Caddy is recreated once (new mounts, and its four settings instead of all of `production.env`): a few seconds without traffic, at the first production deploy or the first staging deploy of `main`.
 - MinIO keeps the credentials it started with — staging's, from the old `staging.env` — until it is recreated once with production's: `docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env up -d --no-deps minio`. Nothing in the app uses it yet; before R1b at the latest.
 - Postgres keeps its old container settings until it is recreated on purpose (§ Memory and replicas); `oom_score_adj` -500 and the 60 s stop grace period start then. On staging, step 4 recreates `pgbouncer-staging` once (its new memory limit): a moment of errors on staging only.
+- Uptime Kuma monitors made before R1 watch `/ready`, which now answers for one process: point the system monitor at `http://api:8000/status`, red on a dead letter, a stuck queue, or a scheduled job gone late (a stopped worker shows there).
+- Until Caddy takes R1's Caddyfile, the old one sends `/status` to the API like any path, so it answers from outside: the queue's counts and the names of late jobs, nothing about members.
 
 ## Roll back right now
 
 ```bash
-bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<previous-sha>
+flock /var/lock/bbc-deploy.lock bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<previous-sha>
 ```
+
+`flock` waits for a deploy that is still running; one whose canary fails rolls itself back first. Roll back from the box, as above: this checkout's `deploy.sh` with an older image. Never by dispatching `api-deploy` on an older commit, which checks that commit out — its `deploy.sh`, compose files and Caddyfile.
+
+**An image from before R1** refuses `PUSH_ADAPTER=live` without the APNs keys, and its `/ready` is red while a dead letter or a late job exists: its canary fails and the deploy returns to the R1 image. Set `PUSH_ADAPTER=recording` and clear the dead letters first. It has no `scripts/check-env.ts`, so step 2 only warns.
 
 Schema is expand-only, so a later image always runs against the current database. If `apps/api/src/worker.ts` is missing from the previous image, `rollback_and_exit` does not start the worker. It brings the API up through `compose.pre-worker.yml` (direct Postgres, `DB_POOLER=none`) and points cron at `http://api:8000` (`compose.pre-worker.staging.yml` on staging). An image that contains the worker entrypoint rolls back with the current compose. Either path reports the rollback only after `/ready` on the restored API; the worker is checked on 8001 only when that image has `worker.ts`.
 
@@ -78,6 +85,8 @@ Gauges (worker job `db-observe`, every minute, on `/worker-metrics` and the work
 
 There is no Prometheus or Alertmanager in this stack. Thresholds are evaluated by the worker and posted to `OPS_WEBHOOK`.
 
+Postgres ends a session that sits **idle in a transaction for 60 s** (role setting, migration 0027): its locks go and vacuum can move again. Nothing in the app waits that long inside a transaction (an event handler's ceiling is 30 s). In `psql`, a `BEGIN` you will keep open longer while you think needs `SET idle_in_transaction_session_timeout = 0;` first in that session.
+
 **Weekly report** (job `db-report`, Mondays 09:00 UTC) and live `GET /v1/internal/db-report` (`ops:read`, operator JWT):
 
 ```bash
@@ -85,8 +94,8 @@ There is no Prometheus or Alertmanager in this stack. Thresholds are evaluated b
 docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
   bun -e "fetch('http://localhost:8001/v1/internal/db-report',{headers:{Authorization:'Bearer <operator-jwt>'}}).then(r=>r.text()).then(console.log)"
 
-# through Caddy, which only serves api_site for the real host
-curl -sS --resolve <API_DOMAIN>:443:127.0.0.1 -H "Authorization: Bearer <operator-jwt>" https://<API_DOMAIN>/v1/internal/db-report | jq
+# or from anywhere, through Cloudflare: the operator JWT is the lock
+curl -sS -H "Authorization: Bearer <operator-jwt>" https://<API_DOMAIN>/v1/internal/db-report | jq
 ```
 
 The JSON has `statsAgeDays` and `statementsReset` from `pg_stat_statements_info` (that is the statement-report age; `pg_stat_statements_reset()` moves it). `statsReset` stays `pg_stat_database.stats_reset`, the database-wide reset time. It also has the 20 slowest statements by mean and by total time (`pg_stat_statements`), unused non-unique indexes, and dead-tuple ratios. **A laptop or CI database is not production.** Do not commit those dumps. The report is meaningful after **≥ 7 days** of traffic (`meaningfulAfterDays`). On a fresh cluster every index shows `idx_scan = 0`. `idx_scan = 0` is not proof an index is unused until you know when that index was created or last reset: `pg_stat_reset_single_table_counters` can zero one index without moving `statsReset`.
@@ -378,7 +387,7 @@ FROM notifications.campaigns ORDER BY created_at DESC LIMIT 10;
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pending`    | Recorded by the delivery; no page written yet.                                                                                                                                                                                       |
 | `running`    | At least one page claimed. `last_member_id` is the last member of the last **committed** page — the next run starts after it. A run that crashed or hit its 55 s timeout stays here.                                                 |
-| `done`       | The audience was exhausted; `finished_at` is set (a CHECK keeps the two in step).                                                                                                                                                    |
+| `done`       | The audience was exhausted; `finished_at` is set (a CHECK keeps the two in step) and `last_member_id` is cleared, so a finished campaign holds no member id.                                                                         |
 | `done` early | The offer was withdrawn or expired: `offer.withdrawn` / `offer.expired` close its open campaign, and a running fan-out stops at its next page (each page locks the campaign and re-reads it). Rows already written are `suppressed`. |
 
 **Resume a stuck campaign.** Nothing to reset: a `running` campaign is picked up again by the next run, after `last_member_id`. To push it now instead of waiting a minute:
@@ -412,7 +421,7 @@ docker image prune -f; docker builder prune -af
 docker compose ... exec -T postgres psql -U bbc -d bbc -c "SELECT platform.drop_old_event_partitions(24);"
 ```
 
-Log rotation is configured (10 MB × 5 per service); if a service escapes it, that is the bug.
+Every deploy removes old API images itself (step 8): it keeps the image it deployed, the one it replaced, the other environment's and the five newest, so a rollback always finds its image. Log rotation is configured (10 MB × 5 per service); if a service escapes it, that is the bug.
 
 ## Certificates
 
@@ -552,10 +561,11 @@ without Cloudflare’s client cert must fail the TLS handshake.
    sudo bash /tmp/bootstrap.sh production
    ```
 2. Fill `infra/env/<mode>.env`, re-run the script (bootstrap runs migrations once Postgres is ready)
-3. Point DNS at the host; wait for Caddy to get a certificate
+3. Point DNS at the host (Cloudflare, proxied). With `ORIGIN_TLS=on` the certificate is already in place
+   (§ Certificates); otherwise wait for Caddy to get one
 4. Production only: `bash infra/pgbackrest-init.sh`
 5. `bash infra/restore-test.sh` — **before any real data exists**
-6. Add the Uptime Kuma monitors: `/health` (1 min), `/ready` (5 min), and an external ping from a free service
+6. Add the Uptime Kuma monitors: `/health` (1 min), `/status` (5 min), and an external ping from a free service
 7. Store every secret in the password manager
 
 ## Staging on the same box
@@ -563,6 +573,8 @@ without Cloudflare’s client cert must fail the TLS handshake.
 `bash infra/deploy.sh staging <image>` — separate database, separate secrets (`infra/env/staging.env`), same Caddy (second domain). Move it to its own machine at the first real offer (ADR-IMPL-010 §7).
 
 Every deploy passes both env files to Compose, `staging.env` last, so for any `${KEY}` in `docker-compose.yml` staging's value would replace production's. `staging.env` therefore holds staging's own settings only, under names production never reads (`INTERNAL_API_SECRET_STAGING`, `POSTGRES_PASSWORD_STAGING`, `API_IMAGE_STAGING`); deploy.sh refuses anything else by name before step 1, and bootstrap.sh with its other env checks, before it starts anything. A setting both environments need, like the domains or `ORIGIN_TLS`, lives in `production.env`.
+
+The box has one checkout, and production's long-running containers read files from it: Caddy its Caddyfile and `/.well-known` files (`infra/caddy`, the files at once, the config at its next reload or restart), cron its crontab at its next start (`infra/cron`). So the `api-deploy` workflow refuses a staging dispatch whose `infra/caddy` is not `origin/main`'s: such a branch reaches staging after its merge. A branch's `infra/cron` reaches production's cron only if cron restarts while the checkout is on that branch; the next production deploy recreates cron from its own commit.
 
 ## Staging demo data (ADR-IMPL-040)
 

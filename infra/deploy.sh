@@ -277,4 +277,14 @@ elif ! { $DC up -d --no-deps caddy && $DC exec -T caddy caddy reload --config /e
   exit 1
 fi
 docker image prune -f >/dev/null
+# Old API images are tagged, so prune never takes them, and each is a few hundred MB. Kept: this image and the one it
+# replaced (the rollback), the other environment's image, and the five newest. An image a container uses refuses to go.
+keep="$(printf '%s\n' "$IMAGE" "$PREVIOUS" "$(env_value "$PROD_ENV" API_IMAGE)" "$(env_value "$PROD_ENV" API_IMAGE_STAGING)" \
+  "$(env_value "$STG_ENV" API_IMAGE_STAGING)")"
+removed=0
+while read -r ref; do
+  if grep -qxF "$ref" <<<"$keep"; then continue; fi
+  if docker image rm "$ref" >/dev/null 2>&1; then removed=$((removed + 1)); fi
+done < <(docker image ls "${IMAGE%:*}" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$' | tail -n +6)
+echo "old API images removed: $removed"
 notify "✅ deploy $MODE ok — $IMAGE in $(( $(date +%s) - started ))s"

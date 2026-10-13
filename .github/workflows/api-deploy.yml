@@ -63,11 +63,20 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
+          # The action's default is 10 minutes, then it ends the session and deploy.sh with it: a production deploy
+          # waits 10 minutes on its canary alone. An hour: up to 25 minutes for the lock, then the deploy.
+          command_timeout: 60m
           script: |
             set -euo pipefail
             APP_DIR="${APP_DIR:-/opt/bbc}"
             cd "$APP_DIR"
+            # One deploy at a time on the box, whichever ref or environment: the checkout below is shared.
+            exec 9>/var/lock/bbc-deploy.lock
+            flock -w 1500 9 || { echo "❌ another deploy has held the box for 25 minutes"; exit 1; }
             git fetch -q --all
+            # Production's Caddy reads infra/caddy from this checkout (its well-known files at once): staging takes main's.
+            git diff --quiet origin/main ${{ github.sha }} -- infra/caddy ||
+              { echo "❌ this commit's infra/caddy is not main's, and production's Caddy reads it from this checkout: deploy it to staging after the merge"; exit 1; }
             git checkout -q ${{ github.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" staging ${{ needs.build.outputs.image }}
 
@@ -84,10 +93,16 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
+          # The action's default is 10 minutes, then it ends the session and deploy.sh with it: a production deploy
+          # waits 10 minutes on its canary alone. An hour: up to 25 minutes for the lock, then the deploy.
+          command_timeout: 60m
           script: |
             set -euo pipefail
             APP_DIR="${APP_DIR:-/opt/bbc}"
             cd "$APP_DIR"
+            # One deploy at a time on the box, whichever ref or environment: the checkout below is shared.
+            exec 9>/var/lock/bbc-deploy.lock
+            flock -w 1500 9 || { echo "❌ another deploy has held the box for 25 minutes"; exit 1; }
             git fetch -q --all
             git checkout -q ${{ github.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" production ${{ needs.build.outputs.image }}

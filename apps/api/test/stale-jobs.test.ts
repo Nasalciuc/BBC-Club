@@ -11,7 +11,7 @@ describe("staleAfterMs", () => {
     }
   });
 
-  it("gives the weekly db-report ten and a half days, so /ready stays green between Mondays", () => {
+  it("gives the weekly db-report ten and a half days, so /status stays green between Mondays", () => {
     expect(cronIntervalMs("0 9 * * 1")).toBe(7 * 24 * H);
     expect(staleAfterMs("0 9 * * 1")).toBe(1.5 * 7 * 24 * H);
   });

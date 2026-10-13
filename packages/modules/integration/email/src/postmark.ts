@@ -19,8 +19,19 @@ export function lastDevOtp(to: string): string | null {
   return lastOtpByEmail.get(to.trim().toLowerCase()) ?? null;
 }
 
-export function postmarkSender(opts: { token: string; from: string; fetchImpl?: typeof fetch }): EmailFacade {
+/** Postmark answers in well under a second. Past this the call is abandoned and fails: the OTP send releases its
+ *  cooldown claim, so the member can ask again; a request to the specialists fails with this reason, under the CRM's own
+ *  5 s ceiling, and its job retries it. Without it a hung connection waited for as long as the socket lived. */
+const POSTMARK_TIMEOUT_MS = 4_000;
+
+export function postmarkSender(opts: {
+  token: string;
+  from: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+}): EmailFacade {
   const f = opts.fetchImpl ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? POSTMARK_TIMEOUT_MS;
   return {
     async sendOtp({ to, otp, purpose }) {
       const res = await f("https://api.postmarkapp.com/email", {
@@ -38,6 +49,7 @@ export function postmarkSender(opts: { token: string; from: string; fetchImpl?: 
           MessageStream: "outbound",
           Tag: purpose,
         }),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
@@ -60,6 +72,7 @@ export function postmarkSender(opts: { token: string; from: string; fetchImpl?: 
           MessageStream: "outbound",
           ...(replyTo ? { ReplyTo: replyTo } : {}),
         }),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => "");

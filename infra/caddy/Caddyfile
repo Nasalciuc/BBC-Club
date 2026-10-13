@@ -6,7 +6,7 @@
 		# every per-IP rule (Better Auth rate limits, logs) would see Cloudflare instead of the client.
 		import /etc/caddy/cloudflare_ranges.caddy
 		# Without this, Caddy parses X-Forwarded-For left-to-right, so a spoofed leading 127.0.0.1
-		# reaches the client_ip matcher and opens /metrics and /ready through Cloudflare.
+		# reaches the client_ip matcher and opens /metrics, /ready and /status through Cloudflare.
 		trusted_proxies_strict
 	}
 }
@@ -33,8 +33,8 @@
 (api_site) {
 	encode zstd gzip
 
-	# operator-only endpoints: reachable through an SSH tunnel to the box, never from the internet
-	@ops path /metrics /ready
+	# operator-only endpoints: 404 to every address but Caddy's own; on the box, ask the containers (RUNBOOK § Daily shape)
+	@ops path /metrics /ready /status
 	handle @ops {
 		@remote not client_ip 127.0.0.1/32 ::1/128
 		respond @remote 404

@@ -18,4 +18,12 @@ describe("postgres.js connection options", () => {
     const t = String(rows[0]?.t);
     expect(t === "15s" || t === "15000ms" || t === "15000").toBe(true);
   });
+
+  it("idle_in_transaction_session_timeout is a minute for the bbc role (0027), on every new session", async () => {
+    const rows = (await iso.db.execute(
+      sql`SELECT current_user AS who, current_setting('idle_in_transaction_session_timeout') AS t`,
+    )) as unknown as { who: string; t: string }[];
+    expect(rows[0]?.who).toBe("bbc");
+    expect(rows[0]?.t).toBe("1min");
+  });
 });

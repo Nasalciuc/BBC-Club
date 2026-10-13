@@ -135,13 +135,13 @@ export function createPlatform(
       tombstoneMember,
       registry,
     },
-    /** Called by /ready: the platform is healthy when the DB answers and the queue is not stuck. */
     async connect() {
       if (!redis) return;
       await redis
         .connect()
         .catch((err) => logger.warn({ err: String(err) }, "redis connect failed; callers fall back"));
     },
+    /** Called by /status: the platform is healthy when the DB answers and the queue is not stuck. */
     async health() {
       const s = await poller.stats();
       return { ok: s.oldestPendingSeconds < 300 && s.dead === 0, queue: s };

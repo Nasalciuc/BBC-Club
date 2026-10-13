@@ -1,7 +1,7 @@
 /** Applies pending migrations. Exit codes: 0 applied/nothing, 1 failure (never 0 on error).
  *  Runs as a separate job BEFORE the API restarts (expand/contract). Serialized by an advisory lock so two
- *  deploys cannot race. `NNNN_*extras.sql` files are applied via `platform.extras_applied` (one file, one
- *  marker); repair scripts that are not `*extras*` still run idempotently after. */
+ *  deploys cannot race. Every numbered file is applied once and recorded in `platform.extras_applied` (one file,
+ *  one marker): `NNNN_*extras.sql` by the loop below, every other file by a named block. */
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { sql } from "drizzle-orm";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
@@ -30,7 +30,7 @@ try {
 
   // A migration must never queue behind live traffic: every lock it takes waits at most 5 s, then fails (55P03) and
   // the deploy stops with the previous release serving. Session-wide for the statements outside a transaction
-  // (Drizzle's migrator, the 0003/0004 re-runs, CONCURRENTLY builds); each transactional block also sets it LOCAL.
+  // (Drizzle's migrator, CONCURRENTLY builds); each transactional block also sets it LOCAL.
   await db.execute(sql`SET lock_timeout = '5s'`);
 
   await migrate(db, { migrationsFolder: migrationsDir });
@@ -69,17 +69,39 @@ try {
     console.log(`extras applied: ${f}`);
   }
 
-  // Idempotent repair: restores domain_events_id_seq when an older 0001 CASCADE-dropped it.
+  // Repairs, once per database like every other file. Both used to run on every deploy, and each run took an ACCESS
+  // EXCLUSIVE lock — on the event journal (0003) and on Better Auth's rate limit table (0004) — for nothing.
+  // 0003 restores domain_events_id_seq when an older 0001 CASCADE-dropped it.
   const repair = join(migrationsDir, "0003_platform_repair_journal_sequence.sql");
   if (existsSync(repair)) {
-    await db.execute(sql.raw(readFileSync(repair, "utf8")));
-    console.log("journal sequence repair applied");
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0003_platform_repair_journal_sequence.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(repair, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0003_platform_repair_journal_sequence.sql')`,
+        );
+      });
+      console.log("journal sequence repair applied");
+    }
   }
 
   const rateLimitFix = join(migrationsDir, "0004_auth_rate_limit_bigint.sql");
   if (existsSync(rateLimitFix)) {
-    await db.execute(sql.raw(readFileSync(rateLimitFix, "utf8")));
-    console.log("auth.rate_limit.last_request → bigint");
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0004_auth_rate_limit_bigint.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(rateLimitFix, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0004_auth_rate_limit_bigint.sql')`);
+      });
+      console.log("auth.rate_limit.last_request → bigint");
+    }
   }
 
   const requestsSchema = join(migrationsDir, "0005_requests.sql");
@@ -406,6 +428,24 @@ try {
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0026_catalog_place_photos.sql')`);
       });
       console.log("catalog place photos applied");
+    }
+  }
+
+  // A role setting, like 0019: every new session of bbc gets it, through PgBouncer too. ADR-IMPL-044.
+  const idleInTransaction = join(migrationsDir, "0027_platform_idle_in_transaction_timeout.sql");
+  if (existsSync(idleInTransaction)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0027_platform_idle_in_transaction_timeout.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(idleInTransaction, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0027_platform_idle_in_transaction_timeout.sql')`,
+        );
+      });
+      console.log("role idle_in_transaction timeout applied");
     }
   }
 

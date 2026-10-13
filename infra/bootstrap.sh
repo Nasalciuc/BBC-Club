@@ -230,7 +230,7 @@ for i in {1..60}; do
     echo "next:"
     echo "  1. DNS: $(env_value "$ENV_FILE" API_DOMAIN) → $(curl -s ifconfig.me) (Cloudflare proxied, Full strict)"
     [[ "$MODE" == "production" ]] && echo "  2. backups: bash $INFRA_DIR/pgbackrest-init.sh   then   bash $INFRA_DIR/restore-test.sh"
-    echo "  3. Uptime Kuma via tunnel: ssh -L 3001:uptime-kuma:3001 root@$(hostname) — add /health (1m) + /ready (5m)"
+    echo "  3. Uptime Kuma via tunnel: ssh -L 3001:uptime-kuma:3001 root@$(hostname) — add http://api:8000/health (1m) + /status (5m)"
     echo "  4. put every secret in the company password manager"
     exit 0
   fi

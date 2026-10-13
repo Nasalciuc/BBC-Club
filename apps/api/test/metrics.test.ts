@@ -1,6 +1,7 @@
 /**
  * GET /metrics stays public at the app because Caddy `@ops` already 404s remote clients
- * (infra/caddy/Caddyfile L17–22); RUNBOOK curls localhost; Kuma scrapes /health and /ready, not /metrics.
+ * (infra/caddy/Caddyfile, api_site); RUNBOOK curls it through Caddy on the box; Kuma checks /health and /status, not
+ * /metrics.
  */
 import { describe, it, expect } from "bun:test";
 import { testApp } from "./helpers/test-app";

@@ -24,6 +24,7 @@ describe("rate limit inventory", () => {
     expect(rateRuleRegistry.get("POST /v1/devices")).toBe("devices.register");
     expect(rateRuleRegistry.get("GET /health")).toBeUndefined();
     expect(rateRuleRegistry.get("GET /ready")).toBeUndefined();
+    expect(rateRuleRegistry.get("GET /status")).toBeUndefined();
     expect(rateRuleRegistry.get("GET /metrics")).toBeUndefined();
     await t.close();
   });

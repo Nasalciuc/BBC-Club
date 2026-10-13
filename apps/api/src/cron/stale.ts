@@ -1,9 +1,9 @@
 /**
- * When a scheduled job counts as stale for /ready: one and a half of its own interval, never less than 36 h. A fixed
- * 36 h made the weekly db-report stale every Tuesday evening, so /ready turned red on every replica — new and old — and
- * blocked deploys until Monday. Intervals are read from the cron expression; anything unusual counts as daily. Only
- * jobs scheduled now count: a manual job, or one renamed or removed from the code, stays in the run history but must
- * never hold /ready red.
+ * When a scheduled job counts as stale for /status: one and a half of its own interval, never less than 36 h. A fixed
+ * 36 h made the weekly db-report stale every Tuesday evening, and /ready, which held this check then, turned red on every
+ * replica — new and old — and blocked deploys until Monday. Intervals are read from the cron expression; anything
+ * unusual counts as daily. Only jobs scheduled now count: a manual job, or one renamed or removed from the code, stays in
+ * the run history but must never hold /status red.
  */
 const MIN = 60_000;
 const HOUR = 60 * MIN;
