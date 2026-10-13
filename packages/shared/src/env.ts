@@ -101,11 +101,88 @@ export function withoutRejectedEmptyValues(source: NodeJS.ProcessEnv): NodeJS.Pr
   );
 }
 
+/**
+ * `KEY=   # hint` in an env file gives KEY the value "# hint": Compose keeps a comment that follows an empty value. Such a
+ * value is the example file's text, not a setting.
+ */
+export function isTemplateComment(value: string | undefined): boolean {
+  return value !== undefined && /^#\s/.test(value);
+}
+
+/** Keys that sign or unlock something: holding the example's comment, each would be text anyone can read in this repo. */
+const SECRETS = [
+  "BETTER_AUTH_SECRET",
+  "INTERNAL_API_SECRET",
+  "INTERNAL_API_SECRET_NEXT",
+  "OPS_LINK_SECRET",
+  "REVIEW_ACCOUNT_PASSWORD",
+] as const;
+
+/** True when `b64` decodes to text that passes `check`. The decoded text never leaves this function. */
+function decodesTo(b64: string, check: (text: string) => boolean): boolean {
+  try {
+    return check(Buffer.from(b64, "base64").toString("utf8"));
+  } catch {
+    return false;
+  }
+}
+
+function isServiceAccount(text: string): boolean {
+  const account = JSON.parse(text) as Record<string, unknown> | null;
+  const field = (name: string) => account?.[name];
+  return (
+    ["project_id", "client_email", "private_key"].every(
+      (name) => typeof field(name) === "string" && field(name) !== "",
+    ) && String(field("private_key")).includes("PRIVATE KEY")
+  );
+}
+
+/**
+ * PUSH_ADAPTER=live: Android through FCM always; iPhone through APNs once the Apple account exists (N1), with all of its
+ * keys or none. APNS_BUNDLE_ID alone does not count: the example env fills it in. Without APNs, an iPhone push is marked
+ * failed and the token stays for later (integration/push).
+ */
+function livePushProblems(env: ServerEnv): string[] {
+  const problems: string[] = [];
+  const fcm = env.FCM_SERVICE_ACCOUNT_BASE64;
+  if (!fcm) problems.push("requires FCM_SERVICE_ACCOUNT_BASE64 (Android)");
+  else if (!decodesTo(fcm, isServiceAccount)) {
+    problems.push(
+      "FCM_SERVICE_ACCOUNT_BASE64 is not base64 of a Firebase service-account JSON (project_id, client_email, private_key)",
+    );
+  }
+  const p8 = env.APNS_P8_BASE64;
+  const apns = { APNS_P8_BASE64: p8, APNS_KEY_ID: env.APNS_KEY_ID, APNS_TEAM_ID: env.APNS_TEAM_ID };
+  if (Object.values(apns).some(Boolean)) {
+    const missing = Object.entries({ ...apns, APNS_BUNDLE_ID: env.APNS_BUNDLE_ID })
+      .filter(([, value]) => !value)
+      .map(([name]) => name);
+    if (missing.length > 0) {
+      problems.push(
+        `iPhone push needs every APNs key, or none of APNS_P8_BASE64, APNS_KEY_ID, APNS_TEAM_ID: missing ${missing.join(", ")}`,
+      );
+    } else if (p8 && !decodesTo(p8, (text) => text.includes("PRIVATE KEY"))) {
+      problems.push("APNS_P8_BASE64 is not base64 of the .p8 key from Apple Developer → Keys");
+    }
+  }
+  return problems;
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
+  const comments = SECRETS.filter((key) => isTemplateComment(source[key]));
+  if (comments.length > 0) {
+    throw new Error(
+      `${comments.join(", ")}: the example file's comment, not a secret ("KEY=   # …" keeps the comment as the value) — write the secret on that line`,
+    );
+  }
   const parsed = ServerEnv.safeParse(withoutRejectedEmptyValues(source));
   if (!parsed.success) {
     const missing = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n  ");
     throw new Error(`Invalid environment:\n  ${missing}`);
+  }
+  if (parsed.data.CRM_ADAPTER === "http") {
+    // integration/crm refuses it as well; here, scripts/check-env.ts names it before a deploy starts anything.
+    throw new Error("CRM_ADAPTER=http is not built yet (stage 5): use email or mock");
   }
   if (parsed.data.CRM_ADAPTER === "email") {
     if (!parsed.data.OPERATORS_EMAIL) {
@@ -126,17 +203,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
     }
   }
   if (parsed.data.PUSH_ADAPTER === "live") {
-    const required = {
-      APNS_P8_BASE64: parsed.data.APNS_P8_BASE64,
-      APNS_KEY_ID: parsed.data.APNS_KEY_ID,
-      APNS_TEAM_ID: parsed.data.APNS_TEAM_ID,
-      APNS_BUNDLE_ID: parsed.data.APNS_BUNDLE_ID,
-      FCM_SERVICE_ACCOUNT_BASE64: parsed.data.FCM_SERVICE_ACCOUNT_BASE64,
-    };
-    const missing = Object.entries(required)
-      .filter(([, value]) => !value)
-      .map(([name]) => name);
-    if (missing.length > 0) throw new Error(`PUSH_ADAPTER=live requires ${missing.join(", ")}`);
+    const problems = livePushProblems(parsed.data);
+    if (problems.length > 0) throw new Error(`PUSH_ADAPTER=live: ${problems.join("; ")}`);
   }
   if (parsed.data.LOADTEST === "1" && parsed.data.NODE_ENV === "production") {
     throw new Error("LOADTEST=1 is refused in production");

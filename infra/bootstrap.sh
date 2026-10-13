@@ -144,11 +144,12 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 chmod 600 "$ENV_FILE"; chown root:root "$ENV_FILE"
 POSTGRES_PASSWORD="$(env_value "$ENV_FILE" POSTGRES_PASSWORD)"
-missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE GLITCHTIP_DB_PASSWORD; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done
+missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done
 if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
+if glitchtip_wanted "$ENV_FILE"; then for k in GLITCHTIP_DB_PASSWORD GLITCHTIP_SECRET ERRORS_DOMAIN; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 [[ ${#missing[@]} -eq 0 ]] || { echo "❌ not filled in, or unreadable, in $ENV_FILE: ${missing[*]}"; exit 2; }
 url_safe POSTGRES_PASSWORD "$POSTGRES_PASSWORD" "$ENV_FILE"
-url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"
+if glitchtip_wanted "$ENV_FILE"; then url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"; fi
 sha_tagged API_IMAGE "$(env_value "$ENV_FILE" API_IMAGE)" "$ENV_FILE"
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   STG="$INFRA_DIR/env/staging.env"
@@ -162,6 +163,10 @@ if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   url_safe POSTGRES_PASSWORD_STAGING "$POSTGRES_PASSWORD_STAGING" "$STG"
   sha_tagged API_IMAGE_STAGING "$(env_value "$STG" API_IMAGE_STAGING)" "$STG"
 fi
+# staging.env holds staging's own names only (env-value.sh): checked with the other settings, before anything starts.
+guard_staging "${STG:-}" "$INFRA_DIR/docker-compose.yml" "$INFRA_DIR/compose.prod.yml"
+# Caddy will not start with ORIGIN_TLS=on and no certificate: check it before anything starts.
+origin_tls_check "$ENV_FILE" "${STG:-}" || exit 2
 
 say "7/9 host cron (backups, restore drill, disk check)"
 APP_DIR_ESC=$(printf '%s' "$APP_DIR" | sed -e 's/[&|\\]/\\&/g')
@@ -174,14 +179,31 @@ DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.y
 stg_file=""
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   stg_file="$INFRA_DIR/env/staging.env"
-  guard_staging "$stg_file"
 fi
 if redis_kafka_wanted "$ENV_FILE" "$stg_file"; then
   DC="$DC --profile redis-kafka"
 fi
+if glitchtip_wanted "$ENV_FILE"; then
+  DC="$DC --profile glitchtip"
+fi
 export ENV_FILE
 $DC build -q postgres
 $DC pull -q --ignore-buildable
+# The image checks each env file with the server's own rules (scripts/check-env.ts), as the API and as the worker,
+# before anything starts: a missing key is named here, not five minutes later in a container that will not start.
+check_env_as=(api worker)
+[[ "$WITH_STAGING" == "--with-staging" ]] && check_env_as+=(api-staging worker-staging)
+for svc in "${check_env_as[@]}"; do
+  if ! $DC run --rm --no-deps --entrypoint test "$svc" -f scripts/check-env.ts; then
+    echo "⚠ the image of $svc has no scripts/check-env.ts (built before it existed): its env is checked at start instead"
+    continue
+  fi
+  $DC run --rm --no-deps "$svc" bun scripts/check-env.ts ||
+    { echo "❌ the env of $svc does not pass the API's checks (above)"; exit 2; }
+done
+# The same for the Caddyfile, certificates included: Caddy is the last thing to start and the only door.
+$DC run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile >/dev/null ||
+  { echo "❌ Caddy refuses its config (above)"; exit 2; }
 $DC up -d postgres
 for i in {1..30}; do $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
 $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres never became ready"; exit 1; }

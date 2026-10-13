@@ -60,6 +60,13 @@ export async function buildApp(opts: BuildOptions = {}) {
       "production is running with recording push; nothing is delivered until PUSH_ADAPTER=live",
     );
   }
+  // loadEnv lets APNs be all or nothing, so one key tells which: without it, push is live on Android only.
+  if (env.PUSH_ADAPTER === "live" && !env.APNS_P8_BASE64) {
+    platform.logger.warn(
+      { pushAdapter: env.PUSH_ADAPTER, apns: false },
+      "push is live on Android only; an iPhone notification is marked failed until the APNs keys are in env",
+    );
+  }
 
   // 1. events: the catalogue is the only source of types
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);

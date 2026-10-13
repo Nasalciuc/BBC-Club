@@ -20,6 +20,12 @@ APP_DIR="$(cd "$INFRA_DIR/.." && pwd)"
 cd "$APP_DIR"
 ENV_FILE="$INFRA_DIR/env/${MODE}.env"
 [[ -f "$ENV_FILE" ]] || { echo "no $ENV_FILE"; exit 1; }
+# staging.env never sets INTERNAL_API_SECRET (env-value.sh, guard_staging): staging's is INTERNAL_API_SECRET_STAGING, which
+# compose.staging.yml hands its services. Staging has no rotation window: a new value there, then a staging deploy.
+if [[ "$MODE" == "staging" && "$KEY" == "INTERNAL_API_SECRET" ]]; then
+  echo "❌ staging's secret is INTERNAL_API_SECRET_STAGING in staging.env: write a new one there (openssl rand -base64 48), then deploy staging"
+  exit 1
+fi
 # shellcheck disable=SC1091
 source "$INFRA_DIR/env-value.sh"
 if [[ "$ACTION" == "--promote" ]]; then
@@ -27,6 +33,8 @@ if [[ "$ACTION" == "--promote" ]]; then
   # parser cannot read, or characters that would break the sed below. The secret itself is never printed.
   NEXT="$(env_value "$ENV_FILE" "${KEY}_NEXT")"
   [[ "$NEXT" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo "❌ ${KEY}_NEXT is missing, unreadable, or not one this script generated — run: bash $0 $MODE $KEY"; exit 1; }
+  # Without a line to replace, the sed below would only delete ${KEY}_NEXT: the new secret gone, the old one kept.
+  grep -qE "^${KEY}=" "$ENV_FILE" || { echo "❌ $ENV_FILE has no ${KEY}= line to promote ${KEY}_NEXT into"; exit 1; }
   sed -i "s|^${KEY}=.*|${KEY}=${NEXT}|; /^${KEY}_NEXT=/d" "$ENV_FILE"
   echo "✅ ${KEY} promoted. Restart: docker compose ... up -d api"
 else

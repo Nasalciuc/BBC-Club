@@ -11,6 +11,25 @@
 	}
 }
 
+# The origin certificate (RUNBOOK § Certificates). ORIGIN_TLS=on in production.env: the Cloudflare Origin CA certificate
+# from ORIGIN_CERT_DIR (mounted at /srv/origin) and no ACME — behind Cloudflare on "Full (strict)", with 80/443 open to
+# Cloudflare only, ACME validation cannot reach this box. Unset or off: Caddy gets its own certificates, as before.
+# Either way a site has ONE tls block and origin-pulls.caddy goes inside it: a second tls block for the same names makes
+# Caddy refuse the whole config ("conflicting client auth configuration").
+(origin_tls_on) {
+	tls /srv/origin/cert.pem /srv/origin/key.pem {
+		import /etc/caddy/origin-pulls.caddy
+	}
+}
+
+# The ACME e-mail again, only so the block has an argument (an empty tls { } does not parse). With origin-pulls.caddy
+# empty, this adapts to the same config as no tls block at all.
+(origin_tls_off) {
+	tls {$ACME_EMAIL} {
+		import /etc/caddy/origin-pulls.caddy
+	}
+}
+
 (api_site) {
 	encode zstd gzip
 
@@ -90,11 +109,11 @@
 }
 
 {$API_DOMAIN} {
-	import /etc/caddy/origin-pulls.caddy
+	import origin_tls_{$ORIGIN_TLS:off}
 	import api_site api worker
 }
 
 {$API_DOMAIN_STAGING} {
-	import /etc/caddy/origin-pulls.caddy
+	import origin_tls_{$ORIGIN_TLS:off}
 	import api_site api-staging worker-staging
 }

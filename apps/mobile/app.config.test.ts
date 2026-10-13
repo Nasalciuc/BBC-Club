@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { assertProductionEnv, assertStagingEnv } from "./app.config";
+import type { ExpoConfig } from "expo/config";
+import { assertProductionEnv, assertStagingEnv, withFirebase } from "./app.config";
 
 const complete = {
   EXPO_PUBLIC_APP_ENV: "production",
@@ -115,5 +116,23 @@ describe("assertProductionEnv", () => {
     expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_TERMS_URL: "file:///terms" })).toThrow(
       /EXPO_PUBLIC_TERMS_URL/,
     );
+  });
+});
+
+describe("withFirebase", () => {
+  const app = { name: "BBC Club", slug: "bbc-club", android: { package: "com.buybusinessclass.club" } } as ExpoConfig;
+
+  it("leaves the build exactly app.json without the file variable", () => {
+    expect(withFirebase(app, {})).toBe(app);
+    expect(withFirebase(app, { GOOGLE_SERVICES_JSON: "" })).toBe(app);
+  });
+
+  it("points Android at the file EAS put on the build machine, and keeps the rest", () => {
+    const out = withFirebase(app, { GOOGLE_SERVICES_JSON: "/home/expo/workingdir/google-services.json" });
+    expect(out.android).toEqual({
+      package: "com.buybusinessclass.club",
+      googleServicesFile: "/home/expo/workingdir/google-services.json",
+    });
+    expect(app.android).toEqual({ package: "com.buybusinessclass.club" });
   });
 });

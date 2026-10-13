@@ -36,11 +36,25 @@ bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: 
 
 `LOADTEST=1` in production.env is refused. Image tags must be a commit SHA (`:latest` is rejected).
 
-Sequence: (1) `pg_dump` (2) pull API+worker images (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d` the pooler (with its dependencies), then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to 2N, wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) prune. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
+Before step 1, nothing changes unless `staging.env` sets no key that production's services read (§ Staging on the same box), the origin certificate passes `origin_tls_check` (§ Certificates), and N, the number of API replicas, is 1–9: `API_REPLICAS` (`API_REPLICAS_STAGING` on staging), default 2, read the way Compose reads it — the shell, then `staging.env`, then `production.env`.
+
+Sequence: (1) `pg_dump` (2) pull API+worker images, then `scripts/check-env.ts` in the new image, as the API and as the worker: the server's own boot rules on this env file. A failed pull or a refusal (which names the setting) puts the previous image tag back and stops; nothing else has changed (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d --no-deps` the pooler — never Postgres, which takes new settings only when recreated on purpose (§ Memory and replicas) — then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to the replicas there were plus N (2N, unless `API_REPLICAS` just changed; a stopped container counts, as Compose counts it), wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) staging only: the demo data (8) Caddy, where the box has one, takes this commit's Caddyfile — a one-off `caddy validate` first (certificates included), then `up -d --no-deps caddy`, which makes a new container only when one of its four settings changed, then a graceful `caddy reload`. Caddy serves production too, so a staging deploy applies `infra/caddy` only when it is exactly `origin/main`'s; a branch's is validated and left for review. Then old images are pruned. A Caddy failure leaves the API deployed and Caddy on its previous config, and the deploy reports it red. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
 
 Compose healthcheck is `/health`; the deploy gate is `/ready`. Caddy `api_site` resolves replicas with `dynamic a` (refresh 5 s), `least_conn`, passive health on 5xx.
 
 After `shared_preload_libraries=pg_stat_statements` changes, Postgres must restart once for the library to load; `CREATE EXTENSION` is migration `0020`.
+
+### The first deploy of R1 (once)
+
+- A `staging.env` made from the old example sets `INTERNAL_API_SECRET`, `MINIO_USER` and `MINIO_PASSWORD`. Production's cron and MinIO read those names too, and got staging's values. The deploy stops before step 1 and names them; remove them (staging's services now take `INTERNAL_API_SECRET_STAGING`):
+  ```bash
+  sed -i '/^\(INTERNAL_API_SECRET\|MINIO_USER\|MINIO_PASSWORD\)=/d' infra/env/staging.env
+  ```
+- A secret left as in the example, with only a comment after the `=` (`OPS_LINK_SECRET=   # min 32 characters…`), is that comment to Compose. The deploy stops at step 2 and names it: write the secret on that line. Any other setting left that way gets a ⚠ line in the deploy log.
+- Production runs 2 API replicas unless `production.env` sets `API_REPLICAS`; it used to be 4.
+- Caddy is recreated once (new mounts, and its four settings instead of all of `production.env`): a few seconds without traffic, at the first production deploy or the first staging deploy of `main`.
+- MinIO keeps the credentials it started with — staging's, from the old `staging.env` — until it is recreated once with production's: `docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env up -d --no-deps minio`. Nothing in the app uses it yet; before R1b at the latest.
+- Postgres keeps its old container settings until it is recreated on purpose (§ Memory and replicas); `oom_score_adj` -500 and the 60 s stop grace period start then. On staging, step 4 recreates `pgbouncer-staging` once (its new memory limit): a moment of errors on staging only.
 
 ## Roll back right now
 
@@ -299,6 +313,8 @@ bash infra/rotate-secret.sh production INTERNAL_API_SECRET --promote
 docker compose ... up -d api
 ```
 
+Staging has no rotation window: its secret is `INTERNAL_API_SECRET_STAGING` in `staging.env` (`compose.staging.yml` hands it to staging's API, worker and cron). Write a new one there (`openssl rand -base64 48`), then deploy staging; `rotate-secret.sh staging INTERNAL_API_SECRET` says so and stops.
+
 `BETTER_AUTH_SECRET` rotation invalidates every session — announce it; do it only after an incident.
 
 ## APNs key revoked / push failing
@@ -316,15 +332,15 @@ Day-to-day states, sandbox versus production, and how to replay one failed row a
 
 Keys live in env, base64-encoded. Nothing in the repo is a `.p8` or a Firebase service-account JSON.
 
-| Name                         | What it is                                                                                                                                                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PUSH_ADAPTER`               | `recording` (default) stores nothing with Apple or Google. `live` requires every APNs field and the FCM JSON. Production may boot on `recording`; it logs one warning and `push_live` is 0 until you switch. |
-| `APNS_P8_BASE64`             | Base64 of the `.p8` from Apple Developer → Keys.                                                                                                                                                             |
-| `APNS_KEY_ID`                | The key id of that `.p8`.                                                                                                                                                                                    |
-| `APNS_TEAM_ID`               | Apple team id.                                                                                                                                                                                               |
-| `APNS_BUNDLE_ID`             | `com.buybusinessclass.club`.                                                                                                                                                                                 |
-| `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too.      |
-| `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                                 |
+| Name                         | What it is                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUSH_ADAPTER`               | `recording` (default) stores nothing with Apple or Google. `live` requires the FCM JSON; the APNs keys come all together or not at all. Without them push is live on Android only: the API logs it at boot, and an iPhone notification is marked `failed` (`Fatal`) while its token stays. Production may boot on `recording`; it logs one warning and `push_live` is 0 until you switch. |
+| `APNS_P8_BASE64`             | Base64 of the `.p8` from Apple Developer → Keys.                                                                                                                                                                                                                                                                                                                                          |
+| `APNS_KEY_ID`                | The key id of that `.p8`.                                                                                                                                                                                                                                                                                                                                                                 |
+| `APNS_TEAM_ID`               | Apple team id.                                                                                                                                                                                                                                                                                                                                                                            |
+| `APNS_BUNDLE_ID`             | `com.buybusinessclass.club`.                                                                                                                                                                                                                                                                                                                                                              |
+| `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too.                                                                                                                                                                                   |
+| `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                                                                                                                                                                                                              |
 
 Rotate the APNs key the same way as the incident above: new `.p8`, new `APNS_P8_BASE64` and `APNS_KEY_ID`, restart the API. The old key stops working as soon as Apple revokes it, so put the new values in env before you revoke.
 
@@ -347,7 +363,7 @@ SET status = 'pending', claimed_at = NULL, scheduled_for = now(), last_error = N
 WHERE id = '<uuid>' AND status = 'failed';
 ```
 
-Staging boots with `PUSH_ADAPTER=recording`. Turn on email CRM first. The phone proof is later: set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. `live` without those keys refuses to boot.
+Staging boots with `PUSH_ADAPTER=recording`. Turn on email CRM first. The phone proof is later: set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. `live` without the FCM JSON, or with only some of the APNs keys, refuses to boot, and deploy.sh says so at step 2, before anything restarts. An Android phone gets a push token only from a build that carries Firebase's `google-services.json` (`GOOGLE_SERVICES_JSON`, docs/release.md).
 
 ## Campaigns
 
@@ -398,9 +414,45 @@ docker compose ... exec -T postgres psql -U bbc -d bbc -c "SELECT platform.drop_
 
 Log rotation is configured (10 MB × 5 per service); if a service escapes it, that is the bug.
 
-## Certificate problems
+## Certificates
 
-Caddy renews automatically. If a domain shows an expired certificate: `docker compose ... logs caddy --tail 50`, check DNS points at this host, check ports 80/443 reach the machine (Cloudflare orange cloud + "Full (strict)").
+Cloudflare sits in front on "Full (strict)" and 80/443 answer Cloudflare only, so a public CA cannot always reach this box to validate a certificate. With `ORIGIN_TLS=on`, Caddy serves a **Cloudflare Origin CA** certificate instead and asks no CA for one. Cloudflare trusts it; a browser going straight to the box would not, which is the point.
+
+**Install it once** (it lasts up to 15 years):
+
+1. Cloudflare → SSL/TLS → Origin Server → Create Certificate: ECC, the hostnames `api.buybusinessclass.com` and `api-staging.buybusinessclass.com` (or `*.buybusinessclass.com`), PEM.
+2. On the box, outside git (paste each block, then Ctrl-D):
+   ```bash
+   install -d -m 700 /etc/bbc/origin
+   install -m 644 /dev/stdin /etc/bbc/origin/cert.pem
+   install -m 600 /dev/stdin /etc/bbc/origin/key.pem
+   ```
+3. `ORIGIN_TLS=on` in `production.env`, any comment on its own line (`ORIGIN_CERT_DIR` only if the files live elsewhere).
+4. Check it, then give Caddy the new setting (a new container: a few seconds without traffic):
+   ```bash
+   source infra/env-value.sh && origin_tls_check infra/env/production.env infra/env/staging.env && echo ok
+   docker compose ... run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
+   docker compose ... up -d --no-deps caddy
+   ```
+
+bootstrap.sh and deploy.sh run the same check before they change anything: both files there, the key readable by its owner only and matching the certificate, not expired, both domains named. Under 30 days left is a ⚠ line, not a stop, so a rollback still runs. **Renew** from the same Cloudflare page, replace the two files, run the check, then `docker compose ... exec caddy caddy reload --config /etc/caddy/Caddyfile --force` (graceful; without `--force` an unchanged Caddyfile is not reloaded and the old certificate stays). Back to Caddy's own certificates: `ORIGIN_TLS=off`, nothing after it on that line, then the three commands of step 4.
+
+**With `ORIGIN_TLS=off`** Caddy renews its own certificates. If a domain shows an expired certificate: `docker compose ... logs caddy --tail 50`, check DNS points at this host, check ports 80/443 reach the machine (Cloudflare orange cloud + "Full (strict)").
+
+## Memory and replicas
+
+The memory limits in `docker-compose.yml` add up to 6.9 GB of the 8 GB box (the sum is at the top of that file): production 4 GB, staging 2.7 GB, Uptime Kuma 128 MB. A deploy adds N API replicas for a few minutes (1 GB at N = 2). GlitchTip (1.6 GB) and Redis + Kafka (1.3 GB) are off unless asked for. When the box runs short anyway, the kernel kills staging first (`oom_score_adj` 500) and Postgres last (-500).
+
+`API_REPLICAS` and `API_REPLICAS_STAGING` (default 2 each) set the number of API containers; `API_MEMORY`, `WORKER_MEMORY` and `POSTGRES_MEMORY` move a limit. A new value applies to a new container: the next deploy for the API and the worker. A deploy never recreates Postgres, so a new `POSTGRES_MEMORY`, or any change to the `postgres` service in `docker-compose.yml`, waits for `docker compose ... up -d --no-deps postgres` (and `postgres-staging` with the staging files), which restarts it — 10 to 60 seconds of errors, in a quiet minute.
+
+## GlitchTip (off until I2)
+
+Its four containers (1.6 GB) start only with `GLITCHTIP=on` in `production.env`; bootstrap.sh then also requires `GLITCHTIP_DB_PASSWORD`, `GLITCHTIP_SECRET` and `ERRORS_DOMAIN`. Nothing sends it errors yet. To stop the containers an earlier bootstrap started, keeping their data (`glitchtip_pg`):
+
+```bash
+docker compose ... --profile glitchtip stop redis glitchtip glitchtip-worker glitchtip-postgres
+docker compose ... --profile glitchtip rm -f redis glitchtip glitchtip-worker glitchtip-postgres
+```
 
 ## "Vladimir is unavailable"
 
@@ -473,8 +525,9 @@ Expect timeout / connection refused / TLS failure — never a 200. Through the o
 Order matters — reverse it and every request fails:
 
 1. Cloudflare dashboard → SSL/TLS → Origin Server → **Authenticated Origin Pulls** = ON for the zone.
-2. Open a **small PR** that copies the `tls { client_auth … }` block from
-   `infra/caddy/origin-pulls.caddy.example` into `infra/caddy/origin-pulls.caddy`, merge, deploy.
+2. Open a **small PR** that copies the `client_auth { … }` block from
+   `infra/caddy/origin-pulls.caddy.example` into `infra/caddy/origin-pulls.caddy`, merge, deploy. The Caddyfile reads
+   that file inside each site's one `tls` block, with `ORIGIN_TLS` on or off; CI validates both.
 
 Do **not** edit `origin-pulls.caddy` on the server. The live file is mounted from git; the next deploy would
 overwrite a hand edit (protection disappears silently) or fail on conflict. Keep the CA at
@@ -508,6 +561,8 @@ without Cloudflare’s client cert must fail the TLS handshake.
 ## Staging on the same box
 
 `bash infra/deploy.sh staging <image>` — separate database, separate secrets (`infra/env/staging.env`), same Caddy (second domain). Move it to its own machine at the first real offer (ADR-IMPL-010 §7).
+
+Every deploy passes both env files to Compose, `staging.env` last, so for any `${KEY}` in `docker-compose.yml` staging's value would replace production's. `staging.env` therefore holds staging's own settings only, under names production never reads (`INTERNAL_API_SECRET_STAGING`, `POSTGRES_PASSWORD_STAGING`, `API_IMAGE_STAGING`); deploy.sh refuses anything else by name before step 1, and bootstrap.sh with its other env checks, before it starts anything. A setting both environments need, like the domains or `ORIGIN_TLS`, lives in `production.env`.
 
 ## Staging demo data (ADR-IMPL-040)
 

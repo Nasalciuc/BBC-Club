@@ -14,4 +14,10 @@ Target: ~12–16 vCPU for API + Postgres on one host, or API and data on separat
 
 Formula: `replicas ≈ ceil((RPS × cpu_ms_per_request / 1000) / 0.70)`.
 
+## This box: 2 vCPU, 8 GB, staging alongside
+
+`API_REPLICAS=2`, the default in `docker-compose.yml`: one Bun process per core. A third or fourth replica on two cores
+adds 512 MB each and no throughput, since Postgres, the worker and staging need the same cores. The 1,000 RPS target
+above needs the larger host; what this one carries is measured by the staging k6 run.
+
 Replace this table with measured numbers after the first staging k6 run (`docs/perf/YYYY-MM-DD.md`). Do not commit `pg_stat_statements` dumps from a laptop or CI — they are not production.

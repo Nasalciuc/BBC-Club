@@ -12,11 +12,14 @@
 # shellcheck shell=bash
 
 ENV_VALUE_UNKNOWN="<unresolved: check this line by hand>"
+# What env_value prints, given as its third argument, when the file never assigns KEY (compose_value tells "absent" from
+# "assigned nothing" this way: Compose does too).
+ENV_VALUE_ABSENT="<absent>"
 
 env_value() {
   local file="$1" key="$2"
-  local line name gap rest val="" ml="" mlbuf="" inner i c esc
-  [[ -f "$file" ]] || return 0
+  local line name gap rest val="${3-}" ml="" mlbuf="" inner i c esc
+  [[ -f "$file" ]] || { printf '%s' "$val"; return 0; }
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
     if [[ -n "$ml" ]]; then # inside a multi-line single-quoted value
@@ -104,6 +107,24 @@ env_optional() {
   printf '%s' "$v"
 }
 
+# What Compose substitutes for ${KEY:-DEFAULT} when it runs with --env-file for each FILE, in that order: the shell's
+# value first, then the last file that assigns KEY (an empty assignment blanks an earlier one), then DEFAULT. deploy.sh
+# reads API_REPLICAS this way, so the count it scales to is the count the compose files ask for.
+compose_value() {
+  local key="$1" def="$2" file v="" w
+  shift 2
+  if [[ -n "${!key+x}" ]]; then
+    v="${!key}"
+  else
+    for file in "$@"; do
+      [[ -n "$file" ]] || continue
+      w="$(env_value "$file" "$key" "$ENV_VALUE_ABSENT")"
+      [[ "$w" == "$ENV_VALUE_ABSENT" ]] || v="$w"
+    done
+  fi
+  printf '%s' "${v:-$def}"
+}
+
 # Profile on when production, or an attached staging file, has a real URL or broker list.
 redis_kafka_wanted() {
   local prod="$1" stg="${2:-}" v
@@ -120,15 +141,65 @@ redis_kafka_wanted() {
   return 1
 }
 
-# Staging shares redis-app and kafka. A resolved value here is a hard stop.
+# GlitchTip (four containers, ~1,6 GB) runs only when production asks for it: GLITCHTIP=on.
+glitchtip_wanted() {
+  [[ "$(env_optional "$1" GLITCHTIP)" == "on" ]]
+}
+
+# ORIGIN_TLS=on: Caddy serves the Cloudflare Origin CA certificate from ORIGIN_CERT_DIR (RUNBOOK § Certificates) and will
+# not start without it, so this runs before anything restarts: both files there, the key readable by its owner only and
+# matching the certificate, not expired, and naming each domain Caddy serves; under 30 days left is a warning. Each
+# setting is read the way Compose hands it to Caddy (compose_value): the shell, then the env files. Caddy reads ORIGIN_TLS
+# exactly as written (a comment after an empty value is the value), so anything but on or off stops here.
+origin_tls_check() {
+  local env="$1" stg="${2:-}" on dir cert key mode d
+  dir="$(compose_value ORIGIN_CERT_DIR /etc/bbc/origin "$env" "$stg")"
+  [[ "$dir" == /* ]] || { echo "❌ ORIGIN_CERT_DIR must be an absolute path (got: $dir)" >&2; return 1; }
+  on="$(compose_value ORIGIN_TLS off "$env" "$stg")"
+  case "$on" in
+    off) return 0 ;;
+    on) ;;
+    *) echo "❌ ORIGIN_TLS must be on or off, with any comment on its own line (Caddy would read: $on)" >&2; return 1 ;;
+  esac
+  cert="$dir/cert.pem"
+  key="$dir/key.pem"
+  [[ -f "$cert" && -f "$key" ]] || { echo "❌ ORIGIN_TLS=on, but $cert or $key is missing (RUNBOOK § Certificates)" >&2; return 1; }
+  mode="$(stat -c %a "$key")"
+  (( (8#$mode & 8#077) == 0 )) || { echo "❌ $key must be readable by its owner only: chmod 600 $key" >&2; return 1; }
+  openssl x509 -in "$cert" -noout -checkend 0 >/dev/null 2>&1 ||
+    { echo "❌ $cert has expired, or does not read as a certificate" >&2; return 1; }
+  # A warning, not a stop: a deploy that rolls back must still run while a renewal is on its way.
+  openssl x509 -in "$cert" -noout -checkend 2592000 >/dev/null 2>&1 ||
+    echo "⚠ $cert expires within 30 days: renew it (RUNBOOK § Certificates)" >&2
+  [[ "$(openssl x509 -in "$cert" -noout -pubkey 2>/dev/null | sha256sum)" == "$(openssl pkey -in "$key" -pubout 2>/dev/null | sha256sum)" ]] ||
+    { echo "❌ $key is not the key of $cert" >&2; return 1; }
+  for d in "$(compose_value API_DOMAIN "" "$env" "$stg")" "$(compose_value API_DOMAIN_STAGING "" "$env" "$stg")"; do
+    [[ -z "$d" ]] && continue
+    openssl x509 -in "$cert" -noout -checkhost "$d" 2>/dev/null | grep -q " does match " ||
+      { echo "❌ $cert does not cover $d" >&2; return 1; }
+  done
+}
+
+# Staging shares redis-app and kafka. A resolved value here is a hard stop. So is any key that production's services read
+# from the env files, given as the compose files after the env file (each ${KEY} in them): every --env-file feeds one
+# namespace and staging.env comes last, so its value would replace production.env's — cron's INTERNAL_API_SECRET, MinIO's
+# password, Caddy's settings. Staging's own values have names of their own (…_STAGING), set in compose.staging.yml.
 guard_staging() {
-  local stg="$1" url brokers pass
+  local stg="$1" url brokers pass k shadow=()
+  shift
   [[ -n "$stg" && -f "$stg" ]] || return 0
   url="$(env_value "$stg" REDIS_URL)"
   brokers="$(env_value "$stg" KAFKA_BROKERS)"
   pass="$(env_value "$stg" REDIS_APP_PASSWORD)"
   if [[ -n "$url" || -n "$brokers" || -n "$pass" ]]; then
     echo "❌ staging shares redis-app and kafka with production and has no key or topic isolation — leave REDIS_URL, KAFKA_BROKERS and REDIS_APP_PASSWORD unset in staging.env (ADR-IMPL-029)." >&2
+    exit 1
+  fi
+  for k in $(grep -ho '\${[A-Za-z_][A-Za-z0-9_]*' "$@" 2>/dev/null | cut -c3- | sort -u); do
+    [[ "$(env_value "$stg" "$k" "$ENV_VALUE_ABSENT")" == "$ENV_VALUE_ABSENT" ]] || shadow+=("$k")
+  done
+  if (( ${#shadow[@]} > 0 )); then
+    echo "❌ $stg sets ${shadow[*]}: production's services read the same name, and staging.env, the last env file, would give them staging's value. Remove those lines from staging.env (RUNBOOK § Staging on the same box)." >&2
     exit 1
   fi
 }

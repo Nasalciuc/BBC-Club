@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Rolling deploy: dump → pull → migrate (direct Postgres) → one canary → roll API → recreate worker → staging demo → prune.
+# Rolling deploy: dump → pull and check env → migrate (direct Postgres) → one canary → roll API → recreate worker →
+# staging demo → Caddy → prune.
 #   bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:8f3c21a
 #   bash infra/deploy.sh staging    ghcr.io/nasalciuc/bbc-api:8f3c21a
 set -Eeuo pipefail
@@ -17,6 +18,7 @@ fi
 APP_DIR="$(cd "$INFRA_DIR/.." && pwd)"
 cd "$APP_DIR"
 PROD_ENV="$INFRA_DIR/env/production.env"; STG_ENV="$INFRA_DIR/env/staging.env"
+PROJECT=bbc # docker-compose.yml, name:
 export ENV_FILE="$PROD_ENV"
 if [[ "$MODE" == "staging" ]]; then
   [[ -f "$STG_ENV" ]] || { echo "❌ $STG_ENV missing"; exit 1; }
@@ -30,21 +32,29 @@ source "$INFRA_DIR/env-value.sh"
 stg_file=""
 if [[ "$MODE" == "staging" || -f "$STG_ENV" ]]; then
   stg_file="$STG_ENV"
-  guard_staging "$stg_file"
+  guard_staging "$stg_file" "$INFRA_DIR/docker-compose.yml" "$INFRA_DIR/compose.prod.yml"
 fi
 if redis_kafka_wanted "$PROD_ENV" "$stg_file"; then
   DC="$DC --profile redis-kafka"
 fi
+if glitchtip_wanted "$PROD_ENV"; then
+  DC="$DC --profile glitchtip"
+fi
+# Caddy reloads at step 8 and restarts with the box: a missing or wrong origin certificate stops the deploy here, while
+# nothing has changed yet.
+origin_tls_check "$PROD_ENV" "$stg_file" || exit 1
 
 if [[ "$MODE" == "production" ]]; then
-  SVC=api; WORKER=worker; PG=postgres; POOLER=pgbouncer; CRON=cron; VAR=API_IMAGE; ENVF="$PROD_ENV"
-  N="${API_REPLICAS:-4}"
+  SVC=api; WORKER=worker; PG=postgres; POOLER=pgbouncer; CRON=cron; VAR=API_IMAGE; ENVF="$PROD_ENV"; NKEY=API_REPLICAS
   CANARY_SECONDS="${CANARY_SECONDS:-600}"
 else
-  SVC=api-staging; WORKER=worker-staging; PG=postgres-staging; POOLER=pgbouncer-staging; CRON=cron-staging; VAR=API_IMAGE_STAGING; ENVF="$STG_ENV"
-  N="${API_REPLICAS_STAGING:-2}"
+  SVC=api-staging; WORKER=worker-staging; PG=postgres-staging; POOLER=pgbouncer-staging; CRON=cron-staging; VAR=API_IMAGE_STAGING; ENVF="$STG_ENV"; NKEY=API_REPLICAS_STAGING
   CANARY_SECONDS="${CANARY_SECONDS:-120}"
 fi
+# The replica count the compose files ask for (docker-compose.yml, compose.staging.yml), read the way Compose reads it.
+# The shell alone, as before, could scale to a count Compose never asked for; the next plain `up` would undo it.
+N="$(compose_value "$NKEY" 2 "$PROD_ENV" "$stg_file")"
+[[ "$N" =~ ^[1-9]$ ]] || { echo "❌ $NKEY must be a whole number from 1 to 9 (got: $N)"; exit 1; }
 # Read values the way Compose does (quotes, CRLF, trailing comments): the parser bootstrap.sh uses. The deployed file wins.
 for k in OPS_WEBHOOK SEC_WEBHOOK POSTGRES_PASSWORD POSTGRES_PASSWORD_STAGING LOADTEST; do
   v="$(env_value "$PROD_ENV" "$k")"
@@ -135,10 +145,29 @@ mkdir -p /var/backups/pre-deploy
 $DC exec -T "$PG" pg_dump -U bbc -Fc bbc > "/var/backups/pre-deploy/${MODE}-$(date +%Y%m%d-%H%M%S).dump"
 find /var/backups/pre-deploy -type f -mtime +7 -delete
 
-echo "▶ 2/8 pull $IMAGE"
+echo "▶ 2/8 pull $IMAGE and check $ENVF against it"
 if grep -qE "^${VAR}=" "$ENVF"; then sed -i "s|^${VAR}=.*|${VAR}=${IMAGE}|" "$ENVF"; else echo "${VAR}=${IMAGE}" >> "$ENVF"; fi
-$DC pull -q "$SVC"
-$DC pull -q "$WORKER"
+# Any stop before the canary puts the previous tag back: the env file never keeps naming an image that did not deploy.
+restore_tag() { if [[ -n "$PREVIOUS" ]]; then sed -i "s|^${VAR}=.*|${VAR}=${PREVIOUS}|" "$ENVF"; fi; }
+if ! { $DC pull -q "$SVC" && $DC pull -q "$WORKER"; }; then
+  restore_tag
+  notify "🚨 deploy $MODE stopped: $IMAGE did not pull. Old API still serving." "${SEC_WEBHOOK:-}"
+  exit 1
+fi
+# The new image checks the env with its own rules (scripts/check-env.ts), once as the API and once as the worker: a key
+# this release needs is named here, while the old API still serves, not by a replica that will not start. An image
+# built before the script existed (a rollback to it) deploys unchecked, as it always did.
+for svc in "$SVC" "$WORKER"; do
+  if ! docker run --rm --entrypoint test "$IMAGE" -f scripts/check-env.ts; then
+    echo "⚠ $IMAGE has no scripts/check-env.ts: its env is not checked before the canary"
+    break
+  fi
+  if ! $DC run --rm --no-deps "$svc" bun scripts/check-env.ts; then
+    restore_tag
+    notify "🚨 deploy $MODE stopped: $ENVF does not pass $IMAGE's checks as $svc (scripts/check-env.ts, in the deploy log). Old API still serving." "${SEC_WEBHOOK:-}"
+    exit 1
+  fi
+done
 
 echo "▶ 3/8 migrations (expand-only, direct Postgres — never the pooler)"
 if [[ "$MODE" == "production" ]]; then
@@ -147,20 +176,31 @@ else
   MIGRATE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc"
 fi
 if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$SVC" bun run --filter @bbc/db db:migrate; then
-  [[ -n "$PREVIOUS" ]] && sed -i "s|^${VAR}=.*|${VAR}=${PREVIOUS}|" "$ENVF"
+  restore_tag
   notify "🚨 deploy $MODE aborted at migration. Old API still serving." "${SEC_WEBHOOK:-}"; exit 1
 fi
 
 echo "▶ 4/8 canary one new $SVC replica for ${CANARY_SECONDS}s"
-$DC up -d "$POOLER" || rollback_and_exit "pooler did not start"
-OLD="$($DC ps -q "$SVC" || true)"
-$DC up -d --no-deps --no-recreate --scale "$SVC=$((N + 1))" "$SVC" || rollback_and_exit "canary scale-up failed"
-CANARY="$(comm -13 <(printf '%s\n' $OLD | sort) <($DC ps -q "$SVC" | sort) | head -n1 || true)"
+# The pooler alone. Without --no-deps Compose would also recreate Postgres whenever one of its settings changed, in the
+# middle of a deploy; Postgres takes new settings only when it is recreated on purpose (RUNBOOK § Memory and replicas).
+$DC up -d --no-deps "$POOLER" || rollback_and_exit "pooler did not start"
+# The containers Compose counts for --scale: the service's own, stopped ones too, never the one-off containers of
+# `compose run` (a job an operator runs beside the deploy). Counting only running ones, a stopped old container would be
+# started instead of a new one and judged as the canary; counting one-offs, step 5 would stop someone's job.
+svc_ids() {
+  docker ps -aq --no-trunc --filter "label=com.docker.compose.project=$PROJECT" \
+    --filter "label=com.docker.compose.service=$1" --filter label=com.docker.compose.oneoff=False
+}
+OLD="$(svc_ids "$SVC")"
+OLD_ONE="$($DC ps -q "$SVC" | head -n1 || true)"
+# Counted, not assumed to be N: after API_REPLICAS changes, N+1 could be no more containers than run now, and no canary.
+OLDN="$(printf '%s\n' $OLD | grep -c . || true)"
+$DC up -d --no-deps --no-recreate --scale "$SVC=$((OLDN + 1))" "$SVC" || rollback_and_exit "canary scale-up failed"
+CANARY="$(comm -13 <(printf '%s\n' $OLD | sort) <(svc_ids "$SVC" | sort) | head -n1 || true)"
 [[ -n "$CANARY" ]] || rollback_and_exit "no canary container after scale-up"
 drop_canary() { docker stop "$CANARY" >/dev/null 2>&1 || true; docker rm "$CANARY" >/dev/null 2>&1 || true; }
 wait_ready "$CANARY" 8000 || { drop_canary; rollback_and_exit "/ready red on canary $CANARY"; }
 sleep "$CANARY_SECONDS"
-OLD_ONE="$(printf '%s\n' $OLD | head -n1 || true)"
 if [[ -z "$OLD_ONE" ]]; then
   echo "no old replica; canary judged on /ready only"
 else
@@ -184,9 +224,9 @@ else
   cleanup_metrics
 fi
 
-echo "▶ 5/8 roll $SVC (scale $((N + 1)) → $((N * 2)) → $N)"
-$DC up -d --no-deps --no-recreate --scale "$SVC=$((N * 2))" "$SVC" || { drop_canary; rollback_and_exit "api scale-up failed"; }
-NEW="$(comm -13 <(printf '%s\n' $OLD | sort) <($DC ps -q "$SVC" | sort) || true)"
+echo "▶ 5/8 roll $SVC (scale $((OLDN + 1)) → $((OLDN + N)) → $N)"
+$DC up -d --no-deps --no-recreate --scale "$SVC=$((OLDN + N))" "$SVC" || { drop_canary; rollback_and_exit "api scale-up failed"; }
+NEW="$(comm -13 <(printf '%s\n' $OLD | sort) <(svc_ids "$SVC" | sort) || true)"
 if [[ -z "${NEW// }" ]]; then
   rollback_and_exit "no new $SVC containers after scale-up"
 fi
@@ -218,5 +258,23 @@ else
   echo "▶ 7/8 staging demo — production: skipped (the review account is created by hand, docs/release.md)"
 fi
 
-echo "▶ 8/8 cleanup"; docker image prune -f >/dev/null
+echo "▶ 8/8 Caddy, then cleanup"
+# Caddy takes this commit's Caddyfile. A one-off container checks it first (certificates included), so a bad file never
+# replaces a working one; then a new container only if one of its settings changed (docker-compose.yml, a few seconds
+# without traffic), and a graceful reload, which keeps connections open. One Caddy serves both environments, so a staging
+# deploy applies infra/caddy only as main has it: a branch's is checked, and waits for review. A box whose Caddy
+# bootstrap never made (staging behind a tunnel) is left as it is: a deploy keeps a Caddy current, it does not start one.
+if [[ -z "$($DC ps -a -q caddy 2>/dev/null)" ]]; then
+  echo "no Caddy container on this box: Caddy left as it is"
+elif ! CADDY_CHECK="$($DC run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile 2>&1)"; then
+  printf '%s\n' "$CADDY_CHECK" | tail -n 5
+  notify "🚨 deploy $MODE: $IMAGE is live, but this commit's Caddyfile does not validate (above); Caddy keeps its current config." "${SEC_WEBHOOK:-}"
+  exit 1
+elif [[ "$MODE" == "staging" ]] && ! git -C "$APP_DIR" diff --quiet origin/main -- "$INFRA_DIR/caddy" 2>/dev/null; then
+  echo "Caddyfile valid; Caddy keeps its config: infra/caddy here is not origin/main's, and Caddy serves production too"
+elif ! { $DC up -d --no-deps caddy && $DC exec -T caddy caddy reload --config /etc/caddy/Caddyfile; }; then
+  notify "🚨 deploy $MODE: $IMAGE is live, but Caddy did not take this commit's config — $DC logs caddy --tail 50" "${SEC_WEBHOOK:-}"
+  exit 1
+fi
+docker image prune -f >/dev/null
 notify "✅ deploy $MODE ok — $IMAGE in $(( $(date +%s) - started ))s"
