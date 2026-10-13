@@ -15,6 +15,7 @@ colors:
   globe-space: "#0B0B19"
   globe-atmosphere: "#BAD2EB"
   globe-atmosphere-high: "#245BDF"
+  globe-city-lights: "#FFE4B0"
   text-primary: "#1E293B"
   text-secondary: "#64748B"
   text-tertiary: "#94A3B8"
@@ -216,6 +217,9 @@ components:
   globe-page:
     backgroundColor: "{colors.surface-night}"
     textColor: "{colors.text-on-dark}"
+  globe-night:
+    backgroundColor: "{colors.globe-space}"
+    textColor: "{colors.globe-city-lights}"
   panel-subline:
     textColor: "{colors.text-on-dark-muted}"
     typography: "{typography.body-sm}"
@@ -261,6 +265,7 @@ Tokens and components in this file are canonical. Details live in `design/compon
 - `action-inverted` (#F8FAFC): the light pill button on dark surfaces.
 - `surface-page` (#F4F5F4) porcelain canvas inside; `surface-card` (#FFFFFF) cards, rows, fields, tab bar; `surface-panel` (#1E293B) entry sheet; `surface-muted` (#334155) photo placeholders.
 - `accent-warm` (#9A7B4F): bronze; selected globe pin, offer price on a fare row, Requests unread dot. Nowhere else.
+- The Mapbox globe only: `globe-space` (#0B0B19) space and the night side's dark; `globe-atmosphere` / `globe-atmosphere-high` the horizon and the sky; `globe-city-lights` (#FFE4B0) the cities' lights on the night side. Never on UI.
 - `text-primary` / `text-secondary` / `text-tertiary` on light; `text-on-dark` / `text-on-dark-muted` on navy. `text-tertiary` only for non-essential lines (validity, footers, struck prices).
 - `border-default` (#E2E8F0): the single 1px border color.
 - `status-danger` (#B42318): error border on the field at fault and the account-deletion confirmation. Never for headlines, messages or urgency. No success/warning/info colors exist.

@@ -16,37 +16,58 @@ ssh -L 5432:localhost:5432 -L 3001:localhost:3001 root@<host>   # then connect t
 
 ```bash
 cd /opt/bbc
-docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env ps
-curl -s localhost:8000/ready | jq        # db, queue, staleJobs — one replica (Caddy @ops)
-curl -s localhost:8000/metrics | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
-curl -sS --resolve <API_DOMAIN>:443:127.0.0.1 https://<API_DOMAIN>/worker-metrics | grep -E 'db_|pgbouncer_'
-docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
-  bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
+DC="docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env"
+$DC ps
+$DC exec -T api bun -e "fetch('http://localhost:8000/status').then(r=>r.text()).then(t=>console.log(t))" | jq   # db, queue, staleJobs (503 when unwell)
+$DC exec -T api bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
+$DC exec -T worker bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
 ```
 
-Request counters on `/metrics` are **per Bun process**. Caddy's `@ops` route (`/metrics` `/ready`) reaches one API replica on port 8000. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`. Caddy serves them only on `/worker-metrics` (same localhost gate, upstream `worker:8001`). Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
+Request counters on `/metrics` are **per Bun process**; `exec` asks the first API replica. Caddy answers 404 for `/metrics`, `/ready`, `/status` and `/worker-metrics` to every address but its own: closed from the internet, and to a `curl` on the box too, which reaches Caddy from Docker's bridge address. The commands above ask each process directly. `/ready` is that one process — not draining, its database answers — and is what deploys wait on; `/status` is the system — the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job on time — and is what Uptime Kuma watches. A dead letter turns `/status` red and leaves `/ready` green, so the deploy that fixes it still rolls. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`, so they are on the worker's `/metrics` (port 8001), the third command. Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
 
 GlitchTip uses **its own Postgres** (`glitchtip-postgres`). It is not in the pgBackRest stanza.
 
 ## Deploy
 
 ```bash
-bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: deploy.sh staging <image>
+flock /var/lock/bbc-deploy.lock bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<sha>      # staging: deploy.sh staging <image>
 ```
 
 `LOADTEST=1` in production.env is refused. Image tags must be a commit SHA (`:latest` is rejected).
 
-Sequence: (1) `pg_dump` (2) pull API+worker images (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d` the pooler (with its dependencies), then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to 2N, wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) prune. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
+The `api-deploy` workflow holds `/var/lock/bbc-deploy.lock` from its `git checkout` to the end of the deploy, so two dispatches never swap the shared checkout under each other; its SSH step has an hour in all, up to 25 minutes of it waiting for the lock. By hand, `flock` (above) waits its turn the same way. A staging dispatch whose `infra/caddy` differs from `origin/main`'s stops before its checkout: production's Caddy reads that directory from this checkout (§ Staging on the same box).
+
+Before step 1, nothing changes unless `staging.env` sets no key that production's services read (§ Staging on the same box), the origin certificate passes `origin_tls_check` (§ Certificates), and N, the number of API replicas, is 1–9: `API_REPLICAS` (`API_REPLICAS_STAGING` on staging), default 2, read the way Compose reads it — the shell, then `staging.env`, then `production.env`.
+
+Sequence: (1) `pg_dump` (2) pull API+worker images, then `scripts/check-env.ts` in the new image, as the API and as the worker: the server's own boot rules on this env file. A failed pull or a refusal (which names the setting) puts the previous image tag back and stops; nothing else has changed (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d --no-deps` the pooler — never Postgres, which takes new settings only when recreated on purpose (§ Memory and replicas) — then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to the replicas there were plus N (2N, unless `API_REPLICAS` just changed; a stopped container counts, as Compose counts it), wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) staging only: the demo data (8) Caddy, where the box has one, takes this commit's Caddyfile — a one-off `caddy validate` first (certificates included), then `up -d --no-deps caddy`, which makes a new container only when one of its four settings changed, then a graceful `caddy reload`. Caddy serves production too, so a staging deploy applies `infra/caddy` only when it is exactly `origin/main`'s; a branch's is validated and left for review. Then old API images are removed, except this one, the one it replaced, the other environment's and the five newest. A Caddy failure leaves the API deployed and Caddy on its previous config, and the deploy reports it red. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
 
 Compose healthcheck is `/health`; the deploy gate is `/ready`. Caddy `api_site` resolves replicas with `dynamic a` (refresh 5 s), `least_conn`, passive health on 5xx.
 
 After `shared_preload_libraries=pg_stat_statements` changes, Postgres must restart once for the library to load; `CREATE EXTENSION` is migration `0020`.
 
+### The first deploy of R1 (once)
+
+- A `staging.env` made from the old example sets `INTERNAL_API_SECRET`, `MINIO_USER` and `MINIO_PASSWORD`. Production's cron and MinIO read those names too, and got staging's values. The deploy stops before step 1 and names them; remove them (staging's services now take `INTERNAL_API_SECRET_STAGING`):
+  ```bash
+  sed -i '/^\(INTERNAL_API_SECRET\|MINIO_USER\|MINIO_PASSWORD\)=/d' infra/env/staging.env
+  ```
+- A secret left as in the example, with only a comment after the `=` (`OPS_LINK_SECRET=   # min 32 characters…`), is that comment to Compose. The deploy stops at step 2 and names it: write the secret on that line. Any other setting left that way gets a ⚠ line in the deploy log.
+- Production runs 2 API replicas unless `production.env` sets `API_REPLICAS`; it used to be 4.
+- Caddy is recreated once (new mounts, and its four settings instead of all of `production.env`): a few seconds without traffic, at the first production deploy or the first staging deploy of `main`.
+- MinIO keeps the credentials it started with — staging's, from the old `staging.env` — until it is recreated once with production's: `docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env up -d --no-deps minio`. Nothing in the app uses it yet; before R1b at the latest.
+- Postgres keeps its old container settings until it is recreated on purpose (§ Memory and replicas); `oom_score_adj` -500 and the 60 s stop grace period start then. On staging, step 4 recreates `pgbouncer-staging` once (its new memory limit): a moment of errors on staging only.
+- Uptime Kuma monitors made before R1 watch `/ready`, which now answers for one process: point the system monitor at `http://api:8000/status`, red on a dead letter, a stuck queue, or a scheduled job gone late (a stopped worker shows there).
+- Until Caddy takes R1's Caddyfile, the old one sends `/status` to the API like any path, so it answers from outside: the queue's counts and the names of late jobs, nothing about members.
+
 ## Roll back right now
 
 ```bash
-bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<previous-sha>
+flock /var/lock/bbc-deploy.lock bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:<previous-sha>
 ```
+
+`flock` waits for a deploy that is still running; one whose canary fails rolls itself back first. Roll back from the box, as above: this checkout's `deploy.sh` with an older image. Never by dispatching `api-deploy` on an older commit, which checks that commit out — its `deploy.sh`, compose files and Caddyfile.
+
+**An image from before R1** refuses `PUSH_ADAPTER=live` without the APNs keys, and its `/ready` is red while a dead letter or a late job exists: its canary fails and the deploy returns to the R1 image. Set `PUSH_ADAPTER=recording` and clear the dead letters first. It has no `scripts/check-env.ts`, so step 2 only warns.
 
 Schema is expand-only, so a later image always runs against the current database. If `apps/api/src/worker.ts` is missing from the previous image, `rollback_and_exit` does not start the worker. It brings the API up through `compose.pre-worker.yml` (direct Postgres, `DB_POOLER=none`) and points cron at `http://api:8000` (`compose.pre-worker.staging.yml` on staging). An image that contains the worker entrypoint rolls back with the current compose. Either path reports the rollback only after `/ready` on the restored API; the worker is checked on 8001 only when that image has `worker.ts`.
 
@@ -64,6 +85,8 @@ Gauges (worker job `db-observe`, every minute, on `/worker-metrics` and the work
 
 There is no Prometheus or Alertmanager in this stack. Thresholds are evaluated by the worker and posted to `OPS_WEBHOOK`.
 
+Postgres ends a session that sits **idle in a transaction for 60 s** (role setting, migration 0027): its locks go and vacuum can move again. Nothing in the app waits that long inside a transaction (an event handler's ceiling is 30 s). In `psql`, a `BEGIN` you will keep open longer while you think needs `SET idle_in_transaction_session_timeout = 0;` first in that session.
+
 **Weekly report** (job `db-report`, Mondays 09:00 UTC) and live `GET /v1/internal/db-report` (`ops:read`, operator JWT):
 
 ```bash
@@ -71,8 +94,8 @@ There is no Prometheus or Alertmanager in this stack. Thresholds are evaluated b
 docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
   bun -e "fetch('http://localhost:8001/v1/internal/db-report',{headers:{Authorization:'Bearer <operator-jwt>'}}).then(r=>r.text()).then(console.log)"
 
-# through Caddy, which only serves api_site for the real host
-curl -sS --resolve <API_DOMAIN>:443:127.0.0.1 -H "Authorization: Bearer <operator-jwt>" https://<API_DOMAIN>/v1/internal/db-report | jq
+# or from anywhere, through Cloudflare: the operator JWT is the lock
+curl -sS -H "Authorization: Bearer <operator-jwt>" https://<API_DOMAIN>/v1/internal/db-report | jq
 ```
 
 The JSON has `statsAgeDays` and `statementsReset` from `pg_stat_statements_info` (that is the statement-report age; `pg_stat_statements_reset()` moves it). `statsReset` stays `pg_stat_database.stats_reset`, the database-wide reset time. It also has the 20 slowest statements by mean and by total time (`pg_stat_statements`), unused non-unique indexes, and dead-tuple ratios. **A laptop or CI database is not production.** Do not commit those dumps. The report is meaningful after **≥ 7 days** of traffic (`meaningfulAfterDays`). On a fresh cluster every index shows `idx_scan = 0`. `idx_scan = 0` is not proof an index is unused until you know when that index was created or last reset: `pg_stat_reset_single_table_counters` can zero one index without moving `statsReset`.
@@ -130,7 +153,8 @@ round trip, business (formula)` (ADR-IMPL-042). `catalog.estimates` off stops es
 stops Explore but not the estimate a queued request may still ask for.
 
 Which rules are live: `SELECT value->>'fingerprint', value->>'loadedAt' FROM platform.flags WHERE key = 'catalog.pricing_rules';`.
-`bbc_search_estimates_unavailable{reason}` and `bbc_request_estimates_unavailable{reason}` rising while estimates are on:
+`bbc_search_estimates_unavailable{reason}`, `bbc_request_estimates_unavailable{reason}` and (with `catalog.site_pins` on,
+ADR-IMPL-045) `bbc_home_estimates_unavailable{reason}` rising while estimates are on:
 `missing` — load the rules; `invalid` — they were edited by hand, load them again; for requests also `error` (the catalog
 read failed: look for `request estimate unavailable` in the API log), `timeout` (it took over a second) — those quotes
 went through without the estimate. `bbc_request_estimates_stored{cabin}` counts the estimates that reached a request.
@@ -209,6 +233,78 @@ not in upper case — tried again the same way, log line `place photos: no airpo
 carries the stage and the error — never the Pexels key. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
 means the key is wrong or revoked: until it is replaced, a city that shows a photo keeps it, and one Commons has no
 photo for gets its satellite view, looked at again each day.
+
+## The site's destinations (ADR-IMPL-045)
+
+Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own
+API — `weba.buybusinessclass.com`: regions, their countries, their cities, about 240 pages, then a HEAD request for each
+city's photo, four requests at a time — and keeps a snapshot: `catalog.site_places` (each city, its main airport, every
+airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price from, and that
+price — kept, never shown). The site has no airport codes: a city is matched by name inside the country the site puts
+it in; the few names that need help are listed in `SITE_CITY_AIRPORTS` (catalog `application/site-places.ts`). Two
+flags, both seeded off; with both off the job asks the site nothing.
+
+- `catalog.site_photos`: each city's own photo on all its airports, stored as an operator's photo (it never expires, has
+  no credit line, and `resolve-place-photos` never touches it). An operator's own photo from anywhere else stays; one
+  put by hand with an address on the site counts as the site's — the job takes it back while the photos are off, or
+  its city is skipped. A city whose page shows another city's photo (Crete shows Santorini's) keeps Wikimedia's.
+  `{"enabled":true,"skip":[23]}` keeps the cities listed (the site's ids: 23 is London) on Wikimedia. Off: the next
+  run hands every site photo back to `resolve-place-photos`, which finds Wikimedia's again at ten airports a minute —
+  about twenty minutes for all of them, the club's image meanwhile; off and `skip` work even on a night the site does
+  not answer. An operator's `DELETE …/photo` on a site photo lasts until the next night: keep a city off with `skip`,
+  or give it the club's own photo (`PUT …/photo` with an address elsewhere), which the job never touches. Members'
+  phones load these photos from `weba.buybusinessclass.com`.
+- `catalog.site_pins`: after the fares' pins, up to twelve of the site's cities listed from the member's home airport
+  (the site's home page first, then the busiest), priced by the formula in the member's cabin (ADR-IMPL-037), so the
+  pin, its search's estimate row and the quote show one number. Nothing while `catalog.estimates` is off: no price, no
+  pin.
+
+All or nothing: a region or a country that does not answer, fewer than 80 % of last night's cities listed or placed on
+their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
+`platform.job_runs` says `failed` and why, and the worker's `/metrics` counts it in
+`bbc_job_failed{job="sync-site-destinations"}` (`/status` shows a job that stopped running, not one that fails). A
+single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no answer, a 5xx)
+keeps last night's verdict. The run's counts are in `platform.job_runs`; the log lines `site: no airport`,
+`site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`, `site: photo does not answer`,
+`site: photo not checked, kept`, `site: unknown US city` and `site: city page did not answer, kept` name the cities.
+Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is Osaka's. A city
+under `site: main airport by a tie` got the alphabetically first of its busiest airports: list it in
+`SITE_CITY_AIRPORTS` (a PR), main airport first.
+
+Before turning either on, see what the site holds today, with no database: `bun run scripts/site-destinations-report.ts`
+on any computer with the repository reads the site as the job does (about 400 requests, a minute or two), prints a
+summary and writes one HTML page in the temporary folder — every city with its photo, its airports, whether its photo
+answers and how heavy it is (the app shows the site's file as is), and the site's prices.
+
+Turn one on (or off) in that environment's database (staging:
+`docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`), wait a minute (a flag is read through a cache of about
+35 s), then, on the server, run the job instead of waiting for the night — through the worker, so the secret is read
+from its environment and never typed:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.site_photos','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+```
+
+```bash
+# production
+docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
+  bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET}}).then(async r=>console.log(r.status,await r.text()))"
+# staging
+docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
+  bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET}}).then(async r=>console.log(r.status,await r.text()))"
+```
+
+It answers `200` with the run: `"status":"succeeded"` and its counts under `metrics` (`read`, `cities`, `places`,
+`photosSet`, …); `"failed"` changed nothing, and its `error` says why; `"skipped"` — a run was already going: try again
+in two minutes.
+
+What the snapshot holds:
+
+```sql
+SELECT cms_id, name, country, airport, airports, promoted, image IS NOT NULL AS photo FROM catalog.site_places ORDER BY name;
+SELECT route_from, count(*) FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
+```
 
 ## The queue is stuck (oldest pending > 5 min)
 
@@ -299,6 +395,8 @@ bash infra/rotate-secret.sh production INTERNAL_API_SECRET --promote
 docker compose ... up -d api
 ```
 
+Staging has no rotation window: its secret is `INTERNAL_API_SECRET_STAGING` in `staging.env` (`compose.staging.yml` hands it to staging's API, worker and cron). Write a new one there (`openssl rand -base64 48`), then deploy staging; `rotate-secret.sh staging INTERNAL_API_SECRET` says so and stops.
+
 `BETTER_AUTH_SECRET` rotation invalidates every session — announce it; do it only after an incident.
 
 ## APNs key revoked / push failing
@@ -316,15 +414,15 @@ Day-to-day states, sandbox versus production, and how to replay one failed row a
 
 Keys live in env, base64-encoded. Nothing in the repo is a `.p8` or a Firebase service-account JSON.
 
-| Name                         | What it is                                                                                                                                                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PUSH_ADAPTER`               | `recording` (default) stores nothing with Apple or Google. `live` requires every APNs field and the FCM JSON. Production may boot on `recording`; it logs one warning and `push_live` is 0 until you switch. |
-| `APNS_P8_BASE64`             | Base64 of the `.p8` from Apple Developer → Keys.                                                                                                                                                             |
-| `APNS_KEY_ID`                | The key id of that `.p8`.                                                                                                                                                                                    |
-| `APNS_TEAM_ID`               | Apple team id.                                                                                                                                                                                               |
-| `APNS_BUNDLE_ID`             | `com.buybusinessclass.club`.                                                                                                                                                                                 |
-| `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too.      |
-| `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                                 |
+| Name                         | What it is                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUSH_ADAPTER`               | `recording` (default) stores nothing with Apple or Google. `live` requires the FCM JSON; the APNs keys come all together or not at all. Without them push is live on Android only: the API logs it at boot, and an iPhone notification is marked `failed` (`Fatal`) while its token stays. Production may boot on `recording`; it logs one warning and `push_live` is 0 until you switch. |
+| `APNS_P8_BASE64`             | Base64 of the `.p8` from Apple Developer → Keys.                                                                                                                                                                                                                                                                                                                                          |
+| `APNS_KEY_ID`                | The key id of that `.p8`.                                                                                                                                                                                                                                                                                                                                                                 |
+| `APNS_TEAM_ID`               | Apple team id.                                                                                                                                                                                                                                                                                                                                                                            |
+| `APNS_BUNDLE_ID`             | `com.buybusinessclass.club`.                                                                                                                                                                                                                                                                                                                                                              |
+| `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too.                                                                                                                                                                                   |
+| `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                                                                                                                                                                                                              |
 
 Rotate the APNs key the same way as the incident above: new `.p8`, new `APNS_P8_BASE64` and `APNS_KEY_ID`, restart the API. The old key stops working as soon as Apple revokes it, so put the new values in env before you revoke.
 
@@ -347,7 +445,7 @@ SET status = 'pending', claimed_at = NULL, scheduled_for = now(), last_error = N
 WHERE id = '<uuid>' AND status = 'failed';
 ```
 
-Staging boots with `PUSH_ADAPTER=recording`. Turn on email CRM first. The phone proof is later: set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. `live` without those keys refuses to boot.
+Staging boots with `PUSH_ADAPTER=recording`. Turn on email CRM first. The phone proof is later: set `PUSH_ADAPTER=live` and the keys above, then mark a request quoted. `live` without the FCM JSON, or with only some of the APNs keys, refuses to boot, and deploy.sh says so at step 2, before anything restarts. An Android phone gets a push token only from a build that carries Firebase's `google-services.json` (`GOOGLE_SERVICES_JSON`, docs/release.md).
 
 ## Campaigns
 
@@ -362,7 +460,7 @@ FROM notifications.campaigns ORDER BY created_at DESC LIMIT 10;
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `pending`    | Recorded by the delivery; no page written yet.                                                                                                                                                                                       |
 | `running`    | At least one page claimed. `last_member_id` is the last member of the last **committed** page — the next run starts after it. A run that crashed or hit its 55 s timeout stays here.                                                 |
-| `done`       | The audience was exhausted; `finished_at` is set (a CHECK keeps the two in step).                                                                                                                                                    |
+| `done`       | The audience was exhausted; `finished_at` is set (a CHECK keeps the two in step) and `last_member_id` is cleared, so a finished campaign holds no member id.                                                                         |
 | `done` early | The offer was withdrawn or expired: `offer.withdrawn` / `offer.expired` close its open campaign, and a running fan-out stops at its next page (each page locks the campaign and re-reads it). Rows already written are `suppressed`. |
 
 **Resume a stuck campaign.** Nothing to reset: a `running` campaign is picked up again by the next run, after `last_member_id`. To push it now instead of waiting a minute:
@@ -396,11 +494,47 @@ docker image prune -f; docker builder prune -af
 docker compose ... exec -T postgres psql -U bbc -d bbc -c "SELECT platform.drop_old_event_partitions(24);"
 ```
 
-Log rotation is configured (10 MB × 5 per service); if a service escapes it, that is the bug.
+Every deploy removes old API images itself (step 8): it keeps the image it deployed, the one it replaced, the other environment's and the five newest, so a rollback always finds its image. Log rotation is configured (10 MB × 5 per service); if a service escapes it, that is the bug.
 
-## Certificate problems
+## Certificates
 
-Caddy renews automatically. If a domain shows an expired certificate: `docker compose ... logs caddy --tail 50`, check DNS points at this host, check ports 80/443 reach the machine (Cloudflare orange cloud + "Full (strict)").
+Cloudflare sits in front on "Full (strict)" and 80/443 answer Cloudflare only, so a public CA cannot always reach this box to validate a certificate. With `ORIGIN_TLS=on`, Caddy serves a **Cloudflare Origin CA** certificate instead and asks no CA for one. Cloudflare trusts it; a browser going straight to the box would not, which is the point.
+
+**Install it once** (it lasts up to 15 years):
+
+1. Cloudflare → SSL/TLS → Origin Server → Create Certificate: ECC, the hostnames `api.buybusinessclass.com` and `api-staging.buybusinessclass.com` (or `*.buybusinessclass.com`), PEM.
+2. On the box, outside git (paste each block, then Ctrl-D):
+   ```bash
+   install -d -m 700 /etc/bbc/origin
+   install -m 644 /dev/stdin /etc/bbc/origin/cert.pem
+   install -m 600 /dev/stdin /etc/bbc/origin/key.pem
+   ```
+3. `ORIGIN_TLS=on` in `production.env`, any comment on its own line (`ORIGIN_CERT_DIR` only if the files live elsewhere).
+4. Check it, then give Caddy the new setting (a new container: a few seconds without traffic):
+   ```bash
+   source infra/env-value.sh && origin_tls_check infra/env/production.env infra/env/staging.env && echo ok
+   docker compose ... run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
+   docker compose ... up -d --no-deps caddy
+   ```
+
+bootstrap.sh and deploy.sh run the same check before they change anything: both files there, the key readable by its owner only and matching the certificate, not expired, both domains named. Under 30 days left is a ⚠ line, not a stop, so a rollback still runs. **Renew** from the same Cloudflare page, replace the two files, run the check, then `docker compose ... exec caddy caddy reload --config /etc/caddy/Caddyfile --force` (graceful; without `--force` an unchanged Caddyfile is not reloaded and the old certificate stays). Back to Caddy's own certificates: `ORIGIN_TLS=off`, nothing after it on that line, then the three commands of step 4.
+
+**With `ORIGIN_TLS=off`** Caddy renews its own certificates. If a domain shows an expired certificate: `docker compose ... logs caddy --tail 50`, check DNS points at this host, check ports 80/443 reach the machine (Cloudflare orange cloud + "Full (strict)").
+
+## Memory and replicas
+
+The memory limits in `docker-compose.yml` add up to 6.9 GB of the 8 GB box (the sum is at the top of that file): production 4 GB, staging 2.7 GB, Uptime Kuma 128 MB. A deploy adds N API replicas for a few minutes (1 GB at N = 2). GlitchTip (1.6 GB) and Redis + Kafka (1.3 GB) are off unless asked for. When the box runs short anyway, the kernel kills staging first (`oom_score_adj` 500) and Postgres last (-500).
+
+`API_REPLICAS` and `API_REPLICAS_STAGING` (default 2 each) set the number of API containers; `API_MEMORY`, `WORKER_MEMORY` and `POSTGRES_MEMORY` move a limit. A new value applies to a new container: the next deploy for the API and the worker. A deploy never recreates Postgres, so a new `POSTGRES_MEMORY`, or any change to the `postgres` service in `docker-compose.yml`, waits for `docker compose ... up -d --no-deps postgres` (and `postgres-staging` with the staging files), which restarts it — 10 to 60 seconds of errors, in a quiet minute.
+
+## GlitchTip (off until I2)
+
+Its four containers (1.6 GB) start only with `GLITCHTIP=on` in `production.env`; bootstrap.sh then also requires `GLITCHTIP_DB_PASSWORD`, `GLITCHTIP_SECRET` and `ERRORS_DOMAIN`. Nothing sends it errors yet. To stop the containers an earlier bootstrap started, keeping their data (`glitchtip_pg`):
+
+```bash
+docker compose ... --profile glitchtip stop redis glitchtip glitchtip-worker glitchtip-postgres
+docker compose ... --profile glitchtip rm -f redis glitchtip glitchtip-worker glitchtip-postgres
+```
 
 ## "Vladimir is unavailable"
 
@@ -473,8 +607,9 @@ Expect timeout / connection refused / TLS failure — never a 200. Through the o
 Order matters — reverse it and every request fails:
 
 1. Cloudflare dashboard → SSL/TLS → Origin Server → **Authenticated Origin Pulls** = ON for the zone.
-2. Open a **small PR** that copies the `tls { client_auth … }` block from
-   `infra/caddy/origin-pulls.caddy.example` into `infra/caddy/origin-pulls.caddy`, merge, deploy.
+2. Open a **small PR** that copies the `client_auth { … }` block from
+   `infra/caddy/origin-pulls.caddy.example` into `infra/caddy/origin-pulls.caddy`, merge, deploy. The Caddyfile reads
+   that file inside each site's one `tls` block, with `ORIGIN_TLS` on or off; CI validates both.
 
 Do **not** edit `origin-pulls.caddy` on the server. The live file is mounted from git; the next deploy would
 overwrite a hand edit (protection disappears silently) or fail on conflict. Keep the CA at
@@ -499,15 +634,25 @@ without Cloudflare’s client cert must fail the TLS handshake.
    sudo bash /tmp/bootstrap.sh production
    ```
 2. Fill `infra/env/<mode>.env`, re-run the script (bootstrap runs migrations once Postgres is ready)
-3. Point DNS at the host; wait for Caddy to get a certificate
+3. Point DNS at the host (Cloudflare, proxied). With `ORIGIN_TLS=on` the certificate is already in place
+   (§ Certificates); otherwise wait for Caddy to get one
 4. Production only: `bash infra/pgbackrest-init.sh`
 5. `bash infra/restore-test.sh` — **before any real data exists**
-6. Add the Uptime Kuma monitors: `/health` (1 min), `/ready` (5 min), and an external ping from a free service
+6. Add the Uptime Kuma monitors: `/health` (1 min), `/status` (5 min), and an external ping from a free service
 7. Store every secret in the password manager
 
 ## Staging on the same box
 
 `bash infra/deploy.sh staging <image>` — separate database, separate secrets (`infra/env/staging.env`), same Caddy (second domain). Move it to its own machine at the first real offer (ADR-IMPL-010 §7).
+
+Every deploy passes both env files to Compose, `staging.env` last, so for any `${KEY}` in `docker-compose.yml` staging's value would replace production's. `staging.env` therefore holds staging's own settings only, under names production never reads (`INTERNAL_API_SECRET_STAGING`, `POSTGRES_PASSWORD_STAGING`, `API_IMAGE_STAGING`); deploy.sh refuses anything else by name before step 1, and bootstrap.sh with its other env checks, before it starts anything. A setting both environments need, like the domains or `ORIGIN_TLS`, lives in `production.env`.
+
+The box has one checkout, and production's long-running containers read files from it: Caddy its Caddyfile and `/.well-known` files (`infra/caddy`, the files at once, the config at its next reload or restart), cron its crontab at its next start (`infra/cron`). So the `api-deploy` workflow refuses a staging dispatch whose `infra/caddy` is not `origin/main`'s: such a branch reaches staging after its merge. A branch's `infra/cron` reaches production's cron only if cron restarts while the checkout is on that branch; the next production deploy recreates cron from its own commit.
+
+## Load tests on staging
+
+`docs/perf/LOADTEST.md`: Grafana Cloud k6 against `api-staging`, with accounts made by `scripts/loadtest-staging.ts start`
+and removed by `stop`. A step test shares the box with production: a quiet hour.
 
 ## Staging demo data (ADR-IMPL-040)
 

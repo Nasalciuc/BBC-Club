@@ -2,7 +2,8 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 
 /** app.json stays the source of truth. Every build resolves to exactly app.json — production included —
  *  except the e2e APK (EXPO_PUBLIC_APP_ENV=e2e, built by .github/workflows/e2e-android.yml), which may speak
- *  cleartext to the emulator host and runs the bundle it was built with, never an OTA update. */
+ *  cleartext to the emulator host and runs the bundle it was built with, never an OTA update, and a build given
+ *  Firebase's file for Android push (withFirebase). */
 
 function isHttpsUrl(value: string | undefined): boolean {
   if (!value) return false;
@@ -36,10 +37,19 @@ export function assertProductionEnv(env: Record<string, string | undefined>): vo
   }
 }
 
+/** Android push needs Firebase's google-services.json inside the build: GOOGLE_SERVICES_JSON, an EAS file variable
+ *  (its value is the file's path on the build machine), never a file in git. Unset, the build is exactly app.json and
+ *  an Android phone registers no push token. Native: it reaches phones with a new build, never with an OTA update. */
+export function withFirebase(app: ExpoConfig, env: Record<string, string | undefined>): ExpoConfig {
+  const file = env.GOOGLE_SERVICES_JSON;
+  if (!file) return app;
+  return { ...app, android: { ...app.android, googleServicesFile: file } };
+}
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   assertStagingEnv(process.env);
   assertProductionEnv(process.env);
-  const app = config as ExpoConfig; // app.json: name and slug are present
+  const app = withFirebase(config as ExpoConfig, process.env); // app.json: name and slug are present
   if (process.env.EXPO_PUBLIC_APP_ENV !== "e2e") return app;
   return {
     ...app,

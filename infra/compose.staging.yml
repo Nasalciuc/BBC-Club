@@ -1,5 +1,6 @@
 # Adds staging as EXTRA services in the same project. Same Caddy, second domain, separate DB.
 # Disposable: no backups, no WAL archiving, no error tracking. Removed when staging gets its own machine.
+# Every service here has a memory limit and goes first when the box runs out (oom_score_adj 500, docker-compose.yml).
 services:
   pgbouncer-staging:
     image: edoburu/pgbouncer:v1.24.1-p0
@@ -20,6 +21,8 @@ services:
       IGNORE_STARTUP_PARAMETERS: extra_float_digits
     depends_on: { postgres-staging: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "pg_isready", "-h", "127.0.0.1"], interval: 5s, timeout: 3s, retries: 10 }
+    oom_score_adj: 500
+    deploy: { resources: { limits: { memory: 64m } } }
 
   api-staging:
     image: ${API_IMAGE_STAGING:?set API_IMAGE_STAGING to a SHA-tagged image (deploy.sh writes it)}
@@ -35,6 +38,8 @@ services:
       DB_POOLER: transaction
       LOG_LEVEL: debug
       DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@pgbouncer-staging:5432/bbc
+      # Staging's own name: an INTERNAL_API_SECRET in staging.env would also reach production's cron (env-value.sh).
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET_STAGING}
     depends_on:
       postgres-staging: { condition: service_healthy }
       pgbouncer-staging: { condition: service_healthy }
@@ -51,6 +56,7 @@ services:
       retries: 6
       start_period: 20s
     stop_grace_period: 20s
+    oom_score_adj: 500
     deploy:
       replicas: ${API_REPLICAS_STAGING:-2}
       resources: { limits: { cpus: "1.0", memory: 512m } }
@@ -69,6 +75,7 @@ services:
       DB_POOLER: none
       DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc
       PGBOUNCER_ADMIN_URL: postgres://bbc:${POSTGRES_PASSWORD_STAGING}@pgbouncer-staging:5432/pgbouncer
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET_STAGING}
     depends_on: { postgres-staging: { condition: service_healthy } }
     healthcheck:
       test:
@@ -83,6 +90,7 @@ services:
       retries: 6
       start_period: 20s
     stop_grace_period: 60s
+    oom_score_adj: 500
     deploy: { resources: { limits: { cpus: "1.0", memory: 512m } } }
 
   postgres-staging:
@@ -107,6 +115,7 @@ services:
       ]
     volumes: ["postgres_staging_data:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
+    oom_score_adj: 500
     deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
 
   cron-staging:
@@ -119,6 +128,8 @@ services:
       API_URL: "http://worker-staging:8001"
       INTERNAL_API_SECRET: "${INTERNAL_API_SECRET_STAGING}"
     depends_on: { worker-staging: { condition: service_healthy } }
+    oom_score_adj: 500
+    deploy: { resources: { limits: { memory: 64m } } }
 
 volumes:
   postgres_staging_data: {}

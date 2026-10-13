@@ -20,7 +20,7 @@ export { AirportRow } from "./fields/AirportRow";
 export { SearchField } from "./fields/SearchField";
 
 export { CarouselRow, OfferCard } from "./cards/OfferCard";
-export { FareRow } from "./cards/FareRow";
+export { FARE_ROW_HEIGHT, FareRow } from "./cards/FareRow";
 export { ESTIMATE_COPY, EstimateRow } from "./cards/EstimateRow";
 export { fareFacts } from "./cards/fare-facts";
 export { ProfileHero } from "./cards/ProfileHero";
@@ -34,7 +34,16 @@ export { GLOBE } from "./globe/constants";
 export { GLOBE_SPEC, haloOpacity } from "./globe/globe-logic";
 export { HOME_SHEET_SNAPS, homeSheetHeight } from "./layout/home-sheet-snaps";
 export { landFor } from "./globe/land";
-export { nightPolygon, solarAltitude, sunPosition } from "./globe/terminator";
+export {
+  TWILIGHT,
+  nightPolygon,
+  solarAltitude,
+  sunPosition,
+  twilightBands,
+  type SunPosition,
+  type TwilightProps,
+} from "./globe/terminator";
+export { CITY_LIGHTS, cityLightFeatures, type CityLightProps } from "./globe/city-lights";
 export {
   FIGMA_ZOOM,
   OPENING_CENTER,

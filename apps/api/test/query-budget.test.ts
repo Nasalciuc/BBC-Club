@@ -1,5 +1,6 @@
 /** Query count budgets measured on the test fixture, then enforced. Failures list every query. */
 import { describe, expect, it } from "bun:test";
+import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 import { storedPricingRules } from "../../../packages/modules/domain/catalog/src/pricing/rules";
 import { FIXTURE_RULES } from "../../../packages/modules/domain/catalog/tests/unit/pricing-rules.fixture";
@@ -157,6 +158,25 @@ describe("query budget per route", () => {
     expect(quoteLog.length, "the estimate costs at most two reads over a plain request").toBeLessThanOrEqual(
       postLog.length + 2,
     );
+
+    // ADR-IMPL-045: with the site's pins on, the home screen adds the site's cities from home — one read of the pins and
+    // one of the home airport, whatever their number (the formula prices them in memory), then cached for a minute.
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports, promoted) VALUES
+        (283, 'Tokyo', 'Japan', 'Asia', 'HND', ARRAY['HND'], true),
+        (512, 'Dubai', 'United Arab Emirates', 'Middle East', 'DXB', ARRAY['DXB'], false)`);
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price) VALUES ('JFK', 283, 1508, 1745), ('JFK', 512, 1, 1365)`);
+    await t.flags.set("catalog.site_pins", { enabled: true });
+    const siteHome = await queriesFor("/v1/home", cookie);
+    expect(
+      siteHome.length,
+      `home with the site's pins ran ${siteHome.length} queries (budget ${BUDGET["GET /v1/home"]}):\n${siteHome.join("\n")}`,
+    ).toBeLessThanOrEqual(BUDGET["GET /v1/home"]!);
+    expect(
+      siteHome.length,
+      "the site's pins cost at most four reads over the home screen without them",
+    ).toBeLessThanOrEqual(home.length + 4);
 
     await t.seedMoreJfkLhrFares();
     const largerSearch = await queriesFor("/v1/search?from=JFK&to=LHR&cabin=business", cookie);

@@ -16,8 +16,6 @@ const num = (f: string) => f.slice(0, 4);
 /** The one historical duplicate number: three parallel branches each wrote a 0007; only 0007_db_verify_fitness is
  *  applied, and it contains the other two verbatim (they were deleted). Every number from 0008 on is unique. */
 const GRANDFATHERED = new Set(["0007"]);
-/** Re-applied on every run by design (idempotent repairs), so they leave no ledger row. */
-const NO_LEDGER = new Set(["0003_platform_repair_journal_sequence.sql", "0004_auth_rate_limit_bigint.sql"]);
 /** Matched by the runner's extras loop (/^\d{4}_.*extras\.sql$/) rather than by name. */
 const byExtrasLoop = (f: string) => /^\d{4}_.*extras\.sql$/.test(f);
 
@@ -46,7 +44,7 @@ describe("migrations are registered", () => {
   it("after migrate, the ledger holds a row for every file", async () => {
     const rows = (await iso.db.execute(sql`SELECT name FROM platform.extras_applied`)) as unknown as { name: string }[];
     const applied = new Set(rows.map((r) => r.name));
-    const missing = FILES.filter((f) => !NO_LEDGER.has(f) && !applied.has(f));
+    const missing = FILES.filter((f) => !applied.has(f));
     expect(missing).toEqual([]);
   });
 });

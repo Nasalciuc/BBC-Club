@@ -43,7 +43,9 @@ describe("extras ledger", () => {
         'fares_home_destinations',
         'notif_sending_claimed',
         'place_photos_due',
-        'requests_member_list'
+        'requests_member_list',
+        'site_places_airport',
+        'site_routes_cms_id'
       )
       ORDER BY indexname`);
     expect(indexes.map((r) => r.indexname)).toEqual([
@@ -54,6 +56,8 @@ describe("extras ledger", () => {
       "notif_sending_claimed",
       "place_photos_due",
       "requests_member_list",
+      "site_places_airport",
+      "site_routes_cms_id",
     ]);
 
     const second = await runMigrate();
@@ -79,12 +83,17 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/role statement_timeout applied/);
     expect(second.out).not.toMatch(/pg_stat_statements applied/);
     expect(second.out).not.toMatch(/catalog place photos applied/);
+    expect(second.out).not.toMatch(/journal sequence repair applied/);
+    expect(second.out).not.toMatch(/auth.rate_limit.last_request → bigint/);
+    expect(second.out).not.toMatch(/role idle_in_transaction timeout applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
     const names: any[] = await db.execute(sql`SELECT name FROM platform.extras_applied ORDER BY name`);
     expect(names.map((r) => r.name)).toEqual([
       "0001_extras.sql",
+      "0003_platform_repair_journal_sequence.sql",
+      "0004_auth_rate_limit_bigint.sql",
       "0005_requests.sql",
       "0006_catalog.sql",
       "0007_db_verify_fitness.sql",
@@ -107,6 +116,8 @@ describe("extras ledger", () => {
       "0024_requests_shown_estimate.sql",
       "0025_requests_estimate_pair_and_list.sql",
       "0026_catalog_place_photos.sql",
+      "0027_platform_idle_in_transaction_timeout.sql",
+      "0028_catalog_site_destinations.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

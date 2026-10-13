@@ -1,5 +1,11 @@
 # ONE project, ONE compose file, overlays for prod/staging/test. Staging is extra services in this same
 # project (api-staging, postgres-staging) so a single Caddy can hold certificates for both domains.
+#
+# Memory on the 8 GB box (limits, MB): production 4 096 (Caddy 128, 2 × API 512, worker 512, PgBouncer 64, Postgres
+# 2 048, cron 64, MinIO 256) + staging 2 688 + Uptime Kuma 128 = 6 912, so the limits never add up past the RAM; a
+# deploy runs twice the API replicas for a few minutes (+1 024). Off unless asked for: GlitchTip 1 664 (GLITCHTIP=on)
+# and Redis + Kafka 1 344 (REDIS_URL or KAFKA_BROKERS). API_MEMORY, WORKER_MEMORY and POSTGRES_MEMORY move a limit
+# without editing this file. Under pressure the kernel kills staging first (oom_score_adj 500) and Postgres last (-500).
 name: bbc
 
 x-logging: &logging
@@ -19,16 +25,21 @@ services:
     ports: ["80:80", "443:443"]
     networks: [edge, data]
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./caddy/cloudflare_ranges.caddy:/etc/caddy/cloudflare_ranges.caddy:ro
-      - ./caddy/origin-pulls.caddy:/etc/caddy/origin-pulls.caddy:ro
-      - ./caddy/cloudflare-origin-pull-ca.pem:/etc/caddy/cloudflare-origin-pull-ca.pem:ro
+      # The directory, not single files: a file git replaces gets a new inode, which a single-file mount never sees,
+      # so `caddy reload` (deploy.sh step 8) would keep reading the old Caddyfile.
+      - ./caddy:/etc/caddy:ro
       - ./caddy/well-known:/srv/well-known:ro
+      # The Cloudflare Origin CA certificate, outside git (RUNBOOK § Certificates). Read only with ORIGIN_TLS=on.
+      - ${ORIGIN_CERT_DIR:-/etc/bbc/origin}:/srv/origin:ro
       - caddy_data:/data
       - caddy_config:/config
-    env_file:
-      - path: "${ENV_FILE:-./env/production.env}"
-        required: false
+    # Only what the Caddyfile reads ({$…}), not all of production.env: Caddy holds no secret, and its container changes
+    # only when one of these does (deploy.sh step 8 then recreates it; otherwise it reloads the Caddyfile).
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      API_DOMAIN: ${API_DOMAIN}
+      API_DOMAIN_STAGING: ${API_DOMAIN_STAGING:-}
+      ORIGIN_TLS: ${ORIGIN_TLS:-off}
     # deliberately NOT depends_on api: a dead upstream is a 502, not a dead Caddy (certs must keep renewing)
     deploy: { resources: { limits: { memory: 128m } } }
 
@@ -62,8 +73,9 @@ services:
       start_period: 20s
     stop_grace_period: 20s
     deploy:
-      replicas: ${API_REPLICAS:-4}
-      resources: { limits: { cpus: "1.0", memory: 512m } }
+      # Two on two cores, staging alongside (docs/perf/CAPACITY.md). deploy.sh reads the same setting.
+      replicas: ${API_REPLICAS:-2}
+      resources: { limits: { cpus: "1.0", memory: "${API_MEMORY:-512m}" } }
 
   pgbouncer:
     image: edoburu/pgbouncer:v1.24.1-p0
@@ -116,7 +128,7 @@ services:
       retries: 6
       start_period: 20s
     stop_grace_period: 60s
-    deploy: { resources: { limits: { cpus: "1.0", memory: 512m } } }
+    deploy: { resources: { limits: { cpus: "1.0", memory: "${WORKER_MEMORY:-512m}" } } }
 
   postgres:
     build: { context: ./postgres } # postgres:16 + pgbackrest in the SAME container (archive_command needs it)
@@ -168,7 +180,11 @@ services:
       - pgbackrest_spool:/var/spool/pgbackrest
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
-    deploy: { resources: { limits: { cpus: "2.0", memory: 2g } } }
+    # Time for the shutdown checkpoint and the last WAL push, rather than a SIGKILL and crash recovery after 10 s.
+    stop_grace_period: 60s
+    # The OOM killer takes everything else first: losing Postgres mid-write is the one failure that costs data.
+    oom_score_adj: -500
+    deploy: { resources: { limits: { cpus: "2.0", memory: "${POSTGRES_MEMORY:-2g}" } } }
 
   cron:
     image: alpine:3.20 # busybox crond + wget, verified present
@@ -258,8 +274,10 @@ services:
     volumes: ["./kafka:/init:ro"]
     deploy: { resources: { limits: { memory: 512m } } }
 
+  # ── GlitchTip: only with GLITCHTIP=on in production.env (bootstrap.sh and deploy.sh add the profile) ─────
   redis:
     image: redis:7-alpine
+    profiles: ["glitchtip"]
     <<: [*restart, *logging]
     networks: [data]
     # ONLY for GlitchTip. Our rate limiting stays in Postgres (fail-closed). Do not point the API here.
@@ -268,11 +286,12 @@ services:
 
   glitchtip-postgres:
     image: postgres:16-alpine
+    profiles: ["glitchtip"]
     <<: [*restart, *logging]
     networks: [data]
     environment:
       POSTGRES_USER: glitchtip
-      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD:-}
       POSTGRES_DB: glitchtip
     volumes: [glitchtip_pg:/var/lib/postgresql/data]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"], interval: 5s, timeout: 3s, retries: 10 }
@@ -280,13 +299,14 @@ services:
 
   glitchtip:
     image: glitchtip/glitchtip:latest
+    profiles: ["glitchtip"]
     <<: [*restart, *logging]
     networks: [data]
     environment:
-      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-postgres:5432/glitchtip
-      SECRET_KEY: ${GLITCHTIP_SECRET}
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:-}@glitchtip-postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET:-}
       REDIS_URL: redis://redis:6379/0
-      GLITCHTIP_DOMAIN: https://${ERRORS_DOMAIN}
+      GLITCHTIP_DOMAIN: https://${ERRORS_DOMAIN:-}
       GLITCHTIP_MAX_EVENT_LIFE_DAYS: "30"
       ENABLE_USER_REGISTRATION: "false"
     depends_on: { glitchtip-postgres: { condition: service_healthy } }
@@ -294,12 +314,13 @@ services:
 
   glitchtip-worker:
     image: glitchtip/glitchtip:latest
+    profiles: ["glitchtip"]
     <<: [*restart, *logging]
     networks: [data]
     command: ["./bin/run-celery-with-beat.sh"]
     environment:
-      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD}@glitchtip-postgres:5432/glitchtip
-      SECRET_KEY: ${GLITCHTIP_SECRET}
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:-}@glitchtip-postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET:-}
       REDIS_URL: redis://redis:6379/0
     depends_on: [glitchtip]
     deploy: { resources: { limits: { memory: 384m } } }

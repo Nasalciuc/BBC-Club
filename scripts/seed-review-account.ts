@@ -7,6 +7,7 @@
  * On staging, scripts/seed-staging-demo.ts calls it first and gives the account Figma's situations (ADR-IMPL-040).
  * Prints neither the e-mail nor the password: deploy output ends up in CI logs.
  */
+import { hashPassword } from "better-auth/crypto";
 import { eq, sql } from "drizzle-orm";
 import { createDb, type Executor } from "@bbc/db";
 import { profile } from "@bbc/db/schema/members";
@@ -76,6 +77,9 @@ export async function ensureReviewAccount(deps: {
   await deps.db.execute(sql`UPDATE auth."user" SET email_verified = true WHERE id = ${memberId}`);
 
   // The environment's password is the account's: a password changed in the app (Profile → Password) is put back.
+  // Hashed by Better Auth's own hasher, called directly: its breach-check plugin wraps ctx.password.hash and needs a
+  // request around it, so outside test mode the call threw "No auth context found" and the password was never put back
+  // on staging or production. The environment's password is the operator's own.
   const ctx = await deps.auth.$context;
   const credential = (await ctx.internalAdapter.findAccounts(memberId)).find((a) => a.providerId === "credential");
   let passwordRestored = false;
@@ -84,14 +88,14 @@ export async function ensureReviewAccount(deps: {
       userId: memberId,
       providerId: "credential",
       accountId: memberId,
-      password: await ctx.password.hash(deps.password),
+      password: await hashPassword(deps.password),
     });
     passwordRestored = !created;
   } else if (
     !credential.password ||
     !(await ctx.password.verify({ hash: credential.password, password: deps.password }))
   ) {
-    await ctx.internalAdapter.updatePassword(memberId, await ctx.password.hash(deps.password));
+    await ctx.internalAdapter.updatePassword(memberId, await hashPassword(deps.password));
     passwordRestored = true;
   }
 

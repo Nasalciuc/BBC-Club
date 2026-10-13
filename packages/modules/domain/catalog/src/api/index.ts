@@ -32,7 +32,16 @@ export type CatalogFacade = {
     q: { from: string; to: string; cabin: "business" | "first"; when?: Date },
   ): Promise<FareRow[]>;
   getFare(exec: Executor | undefined, id: string): Promise<FareRow | null>;
-  destinations(exec: Executor | undefined, home: string): Promise<DestinationPin[]>;
+  /**
+   * The home screen's pins: the cheapest published fare to each destination from `home`, then (ADR-IMPL-045, with
+   * `catalog.site_pins` and estimates on) up to twelve of the site's cities listed from there, priced by the formula in
+   * `cabin` — business unless the member's profile says first.
+   */
+  destinations(
+    exec: Executor | undefined,
+    home: string,
+    opts?: { cabin?: "business" | "first" },
+  ): Promise<DestinationPin[]>;
   searchAirports(exec: Executor | undefined, q: string): Promise<AirportRow[]>;
   getAirport(exec: Executor | undefined, code: string): Promise<AirportRow | null>;
   /** Batch lookup; order is not guaranteed. Replaces getAirport in loops. */

@@ -2,10 +2,10 @@
  * The Explore globe on Mapbox (ADR-IMPL-035). Loaded only by Globe.tsx, and only on a build that has the native module:
  * importing @rnmapbox/maps without it throws.
  *
- * Mapbox's satellite-streets style (the owner's choice, 7 Oct 2026): imagery with the names of countries and cities,
- * downloaded the first time a region is seen, then served from Mapbox's cache. Our pins and route sit above it.
- * Figma: P3.1 Home · Rest (89:386), P3.2 London selected (89:387), Globe · Map style (482:1115), page 06 · Motion,
- * 07 · Additions A6 (536:11212).
+ * Mapbox's satellite imagery without names (the owner's reference, 13 Oct 2026), downloaded the first time a region is
+ * seen, then served from Mapbox's cache; the night in twilight steps with the cities' lights on it. Our pins and route
+ * sit above. Figma: P3.1 Home · Rest (89:386), P3.2 London selected (89:387), Globe · Map style (482:1115),
+ * page 06 · Motion, 07 · Additions A6 (536:11212).
  */
 import Mapbox, {
   Atmosphere,
@@ -25,10 +25,10 @@ import {
   GLOBE_SPEC,
   OPENING_CENTER,
   ZOOM_RANGE,
+  cityLightFeatures,
   globePadding,
   haloOpacity,
   homeSheetHeight,
-  nightPolygon,
   pickPin,
   pinFeatures,
   routeCamera,
@@ -40,17 +40,21 @@ import {
 
 import { env } from "@/lib/env";
 
+import { NIGHT_STYLE, skyAt } from "./sky-style";
+
 void Mapbox.setAccessToken(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "");
 // No usage telemetry. Mapbox still counts one anonymous monthly active user for billing (docs/store/data-safety.md).
 Mapbox.setTelemetryEnabled(false);
 
 /**
- * The Earth as photographed, with the names of countries and cities, under an atmosphere and stars — Mapbox's globe
- * example (the owner's choice, 7 Oct 2026 — ADR-IMPL-035, amended). Our route and pins are added after the style, so
- * they sit above its labels. Imagery needs the network the first time; Mapbox caches what was seen. A map that cannot
- * load falls back to the drawn globe.
+ * The Earth as photographed, under an atmosphere and stars — Mapbox's globe example (the owner's choice, 7 Oct 2026 —
+ * ADR-IMPL-035, amended). No names since 13 Oct 2026: the owner's reference globe has none, and the country and city
+ * names ran under the header and the pins. Imagery needs the network the first time; Mapbox caches what was seen. A map
+ * that cannot load falls back to the drawn globe.
  */
-const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-streets-v12";
+const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-v9";
+/** The cities' lights, built once: the same object on every render, so the map gets the points a single time. */
+const CITY_LIGHTS = cityLightFeatures();
 /** Mapbox's satellite-globe atmosphere: a pale horizon, a deep-blue sky, near-black space with stars. */
 const ATMOSPHERE = {
   color: tokens.colors.globeAtmosphere,
@@ -72,7 +76,6 @@ const MOVE_MS = { frame: 900, flight: 950, arc: 600, zoom: 500 } as const;
 const ARC_TICK_MS = 30;
 /** A6 · DAY AND NIGHT: the dark side, shaded from the real time, updated every minute. */
 const NIGHT_TICK_MS = 60_000;
-const NIGHT_OPACITY = 0.35;
 
 export type MapboxGlobeProps = {
   pins: Pin[];
@@ -115,9 +118,9 @@ export default function MapboxGlobe({
   const styleLoaded = useRef(false);
   // How much of the route is drawn, 0..1 — Motion spec 4 reveals it in route order once the flight has landed.
   const [arc, setArc] = useState(1);
-  // The night side, recomputed on the minute while the globe is visible (one GeoJSON in state: the halo and arc ticks
-  // re-render without rebuilding it).
-  const [night, setNight] = useState(() => nightPolygon(new Date()));
+  // The night — its twilight bands and the lights' style — recomputed on the minute while the globe is visible (one
+  // state: the halo and arc ticks re-render without rebuilding either).
+  const [sky, setSky] = useState(() => skyAt(new Date()));
 
   const moving = appActive && !hidden && !reducedMotion;
 
@@ -159,8 +162,8 @@ export default function MapboxGlobe({
   // The night side follows the clock while the globe is on screen; a globe coming back from the background catches up.
   useEffect(() => {
     if (!appActive || hidden) return;
-    setNight(nightPolygon(new Date()));
-    const t = setInterval(() => setNight(nightPolygon(new Date())), NIGHT_TICK_MS);
+    setSky(skyAt(new Date()));
+    const t = setInterval(() => setSky(skyAt(new Date())), NIGHT_TICK_MS);
     return () => clearInterval(t);
   }, [appActive, hidden]);
 
@@ -328,12 +331,15 @@ export default function MapboxGlobe({
           minZoomLevel={selected === null ? FIGMA_ZOOM : ZOOM_RANGE.min}
           maxZoomLevel={ZOOM_RANGE.max}
         />
-        <ShapeSource id="night" shape={night}>
-          <FillLayer
-            id="night-shade"
-            style={{ fillColor: tokens.colors.surfaceNight, fillOpacity: NIGHT_OPACITY, fillAntialias: false }}
-          />
+        {/* The night in twilight bands (sky-style.ts), then the cities' lights on it; the route and pins above both.
+            tolerance 0: no simplifying, so two neighbouring bands keep the very same edge and no seam opens between. */}
+        <ShapeSource id="night" shape={sky.night} tolerance={0}>
+          <FillLayer id="night-shade" style={NIGHT_STYLE} />
         </ShapeSource>
+        {/* The lights' source has no child and props that never change, so it is serialised once; their layer beside it
+            takes the minute's new style without touching the 3,089 points. */}
+        <ShapeSource id="city-lights" shape={CITY_LIGHTS} />
+        <CircleLayer id="city-lights" sourceID="city-lights" style={sky.lights} />
         {line ? (
           // lineMetrics: line-trim-offset is measured along the line and needs the source to carry those metrics.
           <ShapeSource id="route" shape={line} lineMetrics>

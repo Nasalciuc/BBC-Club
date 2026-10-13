@@ -46,6 +46,9 @@ export function HomeSheet({ index, onChange, children, footer }: Props) {
         // globe read indices as HOME_SHEET_SNAPS: keep exactly these three.
         enableDynamicSizing={false}
         onChange={onChange}
+        // The index follows a snap as it starts, not only when it lands: a city chosen while a dragged sheet is still
+        // settling must find the index already down, or raising it again would change nothing.
+        onAnimate={(_from, to) => onChange(to)}
         enablePanDownToClose={false}
         animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
         handleIndicatorStyle={styles.handle}

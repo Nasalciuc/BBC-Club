@@ -19,7 +19,7 @@ async function stopOffer(tx: Executor, offerId: string, reason: string): Promise
   // and a page that committed first has its rows suppressed below (each statement sees what committed before it).
   await tx
     .update(campaigns)
-    .set({ status: "done", finishedAt: sql`now()` })
+    .set({ status: "done", finishedAt: sql`now()`, lastMemberId: null })
     .where(and(eq(campaigns.offerId, offerId), inArray(campaigns.status, ["pending", "running"])));
   await tx
     .update(notificationsTable)

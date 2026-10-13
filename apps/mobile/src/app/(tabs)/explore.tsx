@@ -86,17 +86,21 @@ export default function ExploreScreen() {
   const light = mode === "typing" || mode === "expanded" || selectedOnPage;
 
   // The sheet follows the state; a drag still moves it (Rest ↔ Expanded is a drag or `See all` / `Done`). One owner
-  // for the index on every state change — nothing else sets it while a route is chosen.
+  // for the index on every state change — nothing else sets it while a route is chosen. Every choice of a destination
+  // raises it again, the same city tapped twice included: a sheet the member dragged down would otherwise leave the
+  // fares under the docked `Request a quote` (89:387 shows them above it).
   const target = mode === "typing" || selectedOnPage ? SNAP.page : mode === "selected" ? SNAP.selected : null;
+  const [choices, setChoices] = useState(0);
   useEffect(() => {
     if (target !== null) setSheetIndex(target);
-  }, [target]);
+  }, [target, choices]);
 
   function selectDestination(airport: AirportVM) {
     Keyboard.dismiss();
     rememberAirport(airport);
     dispatch({ type: "selectDestination", airport });
     setPickingAirport(false);
+    setChoices((n) => n + 1);
   }
 
   function cancelTyping() {

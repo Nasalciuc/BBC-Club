@@ -138,9 +138,10 @@ export async function campaignFanout(deps: CampaignFanoutDeps): Promise<Metrics>
     }
     if (closed) continue;
     if (!finished) break;
+    // The cursor goes with the work: a finished campaign has no use for a member id.
     await deps.db
       .update(campaigns)
-      .set({ status: "done", finishedAt: sql`now()` })
+      .set({ status: "done", finishedAt: sql`now()`, lastMemberId: null })
       .where(and(eq(campaigns.id, c.id), eq(campaigns.status, "running")));
     m.campaigns += 1;
   }

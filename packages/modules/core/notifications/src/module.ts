@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
@@ -10,7 +10,7 @@ import type { Executor } from "@bbc/db";
 import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
 import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
-import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
+import { campaigns, notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
 import { devicesRepo } from "./infrastructure/devices.repo";
 import { markRead } from "./application/mark-read";
@@ -223,6 +223,12 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
             const evt = MemberDeletedV1.parse(raw);
             await ctx.tx.delete(deviceTokens).where(eq(deviceTokens.memberId, evt.memberId));
             await ctx.tx.delete(notificationsTable).where(eq(notificationsTable.memberId, evt.memberId));
+            // A finished campaign keeps no cursor (campaign-fanout); one finished before that rule may still hold
+            // this member's id. A running campaign needs its cursor and drops it when it finishes.
+            await (ctx.tx as unknown as Executor)
+              .update(campaigns)
+              .set({ lastMemberId: null })
+              .where(and(eq(campaigns.lastMemberId, evt.memberId), eq(campaigns.status, "done")));
           },
         },
       ],

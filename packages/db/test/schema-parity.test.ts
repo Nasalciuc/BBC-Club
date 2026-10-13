@@ -96,9 +96,14 @@ test("the Drizzle schema and the migrated database are the same", async () => {
       byName.delete(col.name);
       if ((r.is_nullable === "NO") !== col.notNull)
         drift.push(`NULLABILITY ${name}.${col.name}: code notNull=${col.notNull} · db nullable=${r.is_nullable}`);
-      const ct = norm(col.getSQLType()).replace(/^"?[a-z_]+"?\."?([a-z_]+)"?$/, "$1");
+      // An array column (catalog.site_places.airports) is its element's type with one [] per dimension; the database
+      // keeps no length for an array's elements, so char(3)[] is bpchar[] there.
+      const ct =
+        norm(col.getSQLType()).replace(/^"?[a-z_]+"?\."?([a-z_]+)"?$/, "$1") +
+        "[]".repeat((col as { dimensions?: number }).dimensions ?? 0);
       const dt = norm(dbType(r));
-      if (dt !== ct && !(ct === "serial" && dt === "integer") && !(ct === "bigserial" && dt === "bigint"))
+      const sameArray = ct.endsWith("[]") && ct.replace(/^char\(\d+\)/, "bpchar") === dt;
+      if (dt !== ct && !sameArray && !(ct === "serial" && dt === "integer") && !(ct === "bigserial" && dt === "bigint"))
         drift.push(`TYPE ${name}.${col.name}: code ${ct} · db ${dt}`);
       if (col.hasDefault !== (r.column_default != null) && !["serial", "bigserial"].includes(ct))
         drift.push(`DEFAULT ${name}.${col.name}: code ${col.hasDefault} · db ${r.column_default ?? "none"}`);

@@ -142,7 +142,7 @@ describe("campaign-fanout job", () => {
       sql`SELECT status, last_member_id, finished_at FROM notifications.campaigns`,
     )) as any[];
     expect(c.status).toBe("done");
-    expect(c.last_member_id).toBe(mid(1_050));
+    expect(c.last_member_id).toBeNull(); // the cursor goes with the work: no member id stays behind
     expect(c.finished_at).not.toBeNull();
 
     expect(await run({ pageSize: 100 })).toEqual({ campaigns: 0, pages: 0, inserted: 0, capped: 0 });
@@ -275,7 +275,7 @@ describe("a withdrawn or expired offer", () => {
       await count(sql`SELECT count(*)::int AS n FROM notifications.notifications
                       WHERE status = 'suppressed' AND last_error = 'offer_expired'`),
     ).toBe(200);
-    expect(await campaignOf(offerId)).toEqual({ status: "done", last_member_id: mid(200), finished: true });
+    expect(await campaignOf(offerId)).toEqual({ status: "done", last_member_id: null, finished: true });
   });
 
   it("a campaign closed right after its claim does not stop the next one", async () => {

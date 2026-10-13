@@ -35,6 +35,11 @@ export function travelersLabel(p: Passengers): string {
   return `${n} ${n === 1 ? "traveler" : "travelers"}`;
 }
 
+/** The label over the fares (Figma 89:387: `3 FARES · LOWEST FIRST`). One fare has no order to state: `1 FARE`. */
+export function faresLabel(count: number): string {
+  return count === 1 ? "1 fare" : `${count} fares · lowest first`;
+}
+
 /** The travelers sheets edit adults only: children and infants already in the party stay, never reset to 0. One adult
  *  at least (the request's minimum). */
 export function withAdults(party: Passengers | undefined, adult: number): Passengers {

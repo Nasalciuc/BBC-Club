@@ -11,6 +11,12 @@ describe("account deletion — zero rows everywhere", () => {
 
     await t.seedMemberData(memberId);
     const offerId = await t.seedBroadcastOffer();
+    // An offer made to this member alone names them in target_member_id; it goes with them.
+    await t.seedTargetedOffer(memberId);
+    // A campaign that finished before the cursor was cleared at the end still holds a member id.
+    await t.db.execute(sql`
+      INSERT INTO notifications.campaigns (offer_id, source_event_id, category, title, last_member_id, status, finished_at)
+      VALUES (${offerId}::uuid, 'delete-test-campaign', 'offers_broadcast', 'Autumn in Paris', ${memberId}, 'done', now())`);
     await t.db.execute(sql`
       INSERT INTO engagement.offer_responses (offer_id, member_id, response)
       VALUES (${offerId}::uuid, ${memberId}, 'interested')
@@ -53,6 +59,8 @@ describe("account deletion — zero rows everywhere", () => {
     expect(await count("engagement", "offer_responses", "member_id")).toBe(0);
     expect(await count("requests", "requests", "member_id")).toBe(0);
     expect(await count("proposals", "offer_targets", "member_id")).toBe(0);
+    expect(await count("proposals", "offers", "target_member_id")).toBe(0);
+    expect(await count("notifications", "campaigns", "last_member_id")).toBe(0);
     expect(await count("personalization", "member_features", "member_id")).toBe(0);
     expect(await count("personalization", "proposal_candidates", "member_id")).toBe(0);
 

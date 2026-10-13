@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
@@ -458,5 +458,348 @@ describe("optional settings", () => {
     const result = await optional("OTHER=1\n");
     expect(result.out).toBe("[]");
     expect(result.err).toBe("");
+  });
+});
+
+/** Sources the parser with production.env (and staging.env when given) in a throwaway dir: $P and $S, then `snippet`. */
+async function withFiles(prod: string, staging: string | null, snippet: string) {
+  const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+  writeFileSync(join(dir, "production.env"), prod);
+  if (staging !== null) writeFileSync(join(dir, "staging.env"), staging);
+  const s = staging === null ? '""' : shPath(join(dir, "staging.env"));
+  const result = await bash(`source ${lib}\nP=${shPath(join(dir, "production.env"))}\nS=${s}\n${snippet}`);
+  rmSync(dir, { recursive: true, force: true });
+  return result;
+}
+
+describe("an absent key", () => {
+  it("prints the third argument when the file never assigns the key, or is missing", async () => {
+    const result = await withEnv(
+      "OTHER=1\nEMPTY=\n",
+      `printf '[%s][%s][%s]' "$(env_value "$F" KEY "<none>")" "$(env_value "$F" EMPTY "<none>")" "$(env_value /no/such/file KEY "<none>")"`,
+    );
+    expect(result.code, result.err).toBe(0);
+    expect(result.out).toBe("[<none>][][<none>]");
+  });
+});
+
+describe("staging.env never sets what production's services read", () => {
+  const composeFiles = "infra/docker-compose.yml infra/compose.prod.yml";
+
+  it("refuses each such key, by name", async () => {
+    const staging =
+      "INTERNAL_API_SECRET=${INTERNAL_API_SECRET_STAGING}\nMINIO_PASSWORD=\nORIGIN_TLS=on\nAPI_REPLICAS_STAGING=1\n";
+    const result = await withFiles("OTHER=1\n", staging, `guard_staging "$S" ${composeFiles}`);
+    expect(result.code).not.toBe(0);
+    expect(result.err).toContain("sets INTERNAL_API_SECRET MINIO_PASSWORD ORIGIN_TLS: production's services read");
+  });
+
+  it("passes staging's own names, and the example this repository ships", async () => {
+    const own =
+      "INTERNAL_API_SECRET_STAGING=x\nPOSTGRES_PASSWORD_STAGING=x\nAPI_REPLICAS_STAGING=1\nCRM_ADAPTER=mock\n";
+    const result = await withFiles("OTHER=1\n", own, `guard_staging "$S" ${composeFiles}`);
+    expect(result.code, result.err).toBe(0);
+    const example = await bash(`source ${lib}\nguard_staging infra/env/staging.env.example ${composeFiles}`);
+    expect(example.code, example.err).toBe(0);
+  });
+});
+
+describe("compose_value, the way Compose substitutes ${KEY:-DEFAULT}", () => {
+  async function value(prod: string, staging: string | null, shell = "") {
+    const result = await withFiles(
+      prod,
+      staging,
+      `${shell}\nprintf '[%s]' "$(compose_value API_REPLICAS 2 "$P" "$S")"`,
+    );
+    expect(result.code, result.err).toBe(0);
+    return result.out;
+  }
+
+  it("falls back to the default", async () => {
+    expect(await value("OTHER=1\n", null)).toBe("[2]");
+  });
+
+  it("reads production.env", async () => {
+    expect(await value("API_REPLICAS=3\n", "OTHER=1\n")).toBe("[3]");
+  });
+
+  it("lets the later file win", async () => {
+    expect(await value("API_REPLICAS=3\n", "API_REPLICAS=1\n")).toBe("[1]");
+  });
+
+  it("lets a later empty assignment blank an earlier value, which then takes the default", async () => {
+    expect(await value("API_REPLICAS=3\n", "API_REPLICAS=\n")).toBe("[2]");
+  });
+
+  it("lets the shell win over both files, and an empty shell value take the default", async () => {
+    expect(await value("API_REPLICAS=3\n", "API_REPLICAS=1\n", "export API_REPLICAS=4")).toBe("[4]");
+    expect(await value("API_REPLICAS=3\n", null, "export API_REPLICAS=")).toBe("[2]");
+  });
+});
+
+describe("compose_value matches Compose", () => {
+  const image = "ghcr.io/example/bbc-api:abc1234";
+  const cases: { prod: string; staging: string }[] = [
+    { prod: "", staging: "" },
+    { prod: "API_REPLICAS=3\n", staging: "" },
+    { prod: "API_REPLICAS=3\n", staging: "API_REPLICAS=1\n" },
+    { prod: "API_REPLICAS=3\n", staging: "API_REPLICAS=\n" },
+    { prod: "API_REPLICAS_STAGING=1\n", staging: "" },
+    { prod: "API_REPLICAS_STAGING=3\n", staging: "API_REPLICAS_STAGING=1   # one is enough\n" },
+  ];
+
+  if (dockerReason) {
+    it("needs docker compose", () => {
+      console.log(`compose_value parity skipped: ${dockerReason}`);
+      if (process.env.CI) expect(dockerReason).toBeNull();
+    });
+  } else {
+    for (const [i, c] of cases.entries()) {
+      it(`case ${i + 1}: the replicas deploy.sh scales to are the replicas Compose sets`, async () => {
+        const dir = mkdtempSync(join(tmpdir(), "bbc-replicas-"));
+        const prod = join(dir, "production.env");
+        const stg = join(dir, "staging.env");
+        writeFileSync(prod, `API_IMAGE=${image}\nAPI_IMAGE_STAGING=${image}\nPOSTGRES_PASSWORD=x\n${c.prod}`);
+        writeFileSync(stg, `API_IMAGE_STAGING=${image}\n${c.staging}`);
+        const env = Object.fromEntries(
+          Object.entries(process.env).filter(([key]) => key !== "API_REPLICAS" && key !== "API_REPLICAS_STAGING"),
+        );
+        const files = [
+          "-f",
+          "infra/docker-compose.yml",
+          "-f",
+          "infra/compose.prod.yml",
+          "-f",
+          "infra/compose.staging.yml",
+        ];
+        const proc = spawnSync(
+          "docker",
+          ["compose", ...files, "--env-file", prod, "--env-file", stg, "config", "--format", "json"],
+          { cwd: root, encoding: "utf8", env },
+        );
+        const ours = spawnSync(
+          "bash",
+          [
+            "-c",
+            `source ${lib}; printf '%s %s' "$(compose_value API_REPLICAS 2 "$1" "$2")" "$(compose_value API_REPLICAS_STAGING 2 "$1" "$2")"`,
+            "bash",
+            prod,
+            stg,
+          ],
+          { cwd: root, encoding: "utf8", env },
+        );
+        rmSync(dir, { recursive: true, force: true });
+        expect(proc.status, proc.stderr).toBe(0);
+        expect(ours.status, ours.stderr).toBe(0);
+        const services = (JSON.parse(proc.stdout) as { services: Record<string, { deploy?: { replicas?: number } }> })
+          .services;
+        expect(ours.stdout).toBe(`${services.api?.deploy?.replicas} ${services["api-staging"]?.deploy?.replicas}`);
+      });
+    }
+  }
+});
+
+describe("rotate-secret.sh", () => {
+  /** Runs a copy of the script beside its own env files, in a throwaway infra/ directory; returns the files after. */
+  async function rotate(files: Record<string, string>, args: string) {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    mkdirSync(join(dir, "infra", "env"), { recursive: true });
+    for (const name of ["rotate-secret.sh", "env-value.sh", "docker-compose.yml"]) {
+      copyFileSync(join(root, "infra", name), join(dir, "infra", name));
+    }
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, "infra", "env", name), body);
+    const result = await bash(`bash ${shPath(join(dir, "infra", "rotate-secret.sh"))} ${args}`);
+    const after = Object.keys(files).map((name) => readFileSync(join(dir, "infra", "env", name), "utf8"));
+    rmSync(dir, { recursive: true, force: true });
+    return { ...result, after };
+  }
+
+  it("never promotes into a key the file does not set, and keeps the new secret", async () => {
+    const result = await rotate({ "production.env": "OTHER=1\nFOO_NEXT=abc123\n" }, "production FOO --promote");
+    expect(result.code).not.toBe(0);
+    expect(result.out).toContain("has no FOO= line to promote FOO_NEXT into");
+    expect(result.after[0]).toContain("FOO_NEXT=abc123");
+  });
+
+  it("sends staging's internal secret to INTERNAL_API_SECRET_STAGING", async () => {
+    const result = await rotate({ "staging.env": "INTERNAL_API_SECRET_STAGING=old\n" }, "staging INTERNAL_API_SECRET");
+    expect(result.code).not.toBe(0);
+    expect(result.out).toContain("staging's secret is INTERNAL_API_SECRET_STAGING in staging.env");
+  });
+});
+
+describe("each environment's internal secret, as Compose hands it out", () => {
+  if (dockerReason) {
+    it("needs docker compose", () => {
+      console.log(`internal secret parity skipped: ${dockerReason}`);
+      if (process.env.CI) expect(dockerReason).toBeNull();
+    });
+    return;
+  }
+
+  it("gives production's cron production's secret, and staging's services staging's", () => {
+    const image = "ghcr.io/example/bbc-api:abc1234";
+    const dir = mkdtempSync(join(tmpdir(), "bbc-secrets-"));
+    const prod = join(dir, "production.env");
+    const stg = join(dir, "staging.env");
+    writeFileSync(prod, `API_IMAGE=${image}\nPOSTGRES_PASSWORD=x\nINTERNAL_API_SECRET=production-secret\n`);
+    writeFileSync(stg, `API_IMAGE_STAGING=${image}\nINTERNAL_API_SECRET_STAGING=staging-secret\n`);
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(([key]) => !key.startsWith("INTERNAL_API_SECRET")),
+    );
+    const files = ["-f", "infra/docker-compose.yml", "-f", "infra/compose.prod.yml", "-f", "infra/compose.staging.yml"];
+    const proc = spawnSync(
+      "docker",
+      ["compose", ...files, "--env-file", prod, "--env-file", stg, "config", "--format", "json"],
+      { cwd: root, encoding: "utf8", env },
+    );
+    rmSync(dir, { recursive: true, force: true });
+    expect(proc.status, proc.stderr).toBe(0);
+    const services = (JSON.parse(proc.stdout) as { services: Record<string, { environment?: Record<string, string> }> })
+      .services;
+    const secret = (name: string) => services[name]?.environment?.INTERNAL_API_SECRET;
+    expect(secret("cron")).toBe("production-secret");
+    for (const name of ["api-staging", "worker-staging", "cron-staging"]) expect(secret(name)).toBe("staging-secret");
+  });
+});
+
+describe("GlitchTip profile", () => {
+  async function wanted(content: string) {
+    const result = await withEnv(content, `if glitchtip_wanted "$F"; then echo on; else echo off; fi`);
+    expect(result.code, result.err).toBe(0);
+    return result.out.trim();
+  }
+
+  it("is on only for GLITCHTIP=on", async () => {
+    expect(await wanted("GLITCHTIP=on\n")).toBe("on");
+    expect(await wanted("GLITCHTIP=on   # I2\r\n")).toBe("on");
+  });
+
+  it("stays off when absent, off, empty, or a comment Compose would keep", async () => {
+    for (const content of [
+      "OTHER=1\n",
+      "GLITCHTIP=off\n",
+      "GLITCHTIP=\n",
+      "GLITCHTIP=     # on|off\n",
+      "GLITCHTIP=ON\n",
+    ]) {
+      expect(await wanted(content)).toBe("off");
+    }
+  });
+});
+
+const opensslReason =
+  spawnSync("openssl", ["version"], { encoding: "utf8" }).status === 0 ? null : "openssl unavailable";
+// Git Bash on Windows has no real file modes (chmod 600 reads back as 644), so the certificate cases run on Linux and macOS.
+const certReason = process.platform === "win32" ? "file modes" : opensslReason;
+
+describe("origin certificate", () => {
+  async function check(prod: string, staging: string | null = null) {
+    return withFiles(prod, staging, `origin_tls_check "$P" "$S"`);
+  }
+
+  it("passes with ORIGIN_TLS absent or off, and no certificate anywhere", async () => {
+    for (const content of ["OTHER=1\n", "ORIGIN_TLS=off\n", "ORIGIN_TLS=\n", "ORIGIN_TLS=off   # on after R1b\n"]) {
+      const result = await check(content);
+      expect(result.code, `${content}: ${result.err}`).toBe(0);
+    }
+  });
+
+  it("refuses a value Caddy would read as something else", async () => {
+    for (const content of ["ORIGIN_TLS=     # on|off\n", "ORIGIN_TLS=yes\n", "ORIGIN_TLS=${MODE}\n"]) {
+      const result = await check(content);
+      expect(result.code).not.toBe(0);
+      expect(result.err).toContain("ORIGIN_TLS must be on or off");
+    }
+  });
+
+  it("reads ORIGIN_TLS as Compose hands it to Caddy: an exported value wins over the files", async () => {
+    const result = await withFiles(
+      "ORIGIN_TLS=off\n",
+      null,
+      `export ORIGIN_TLS=on ORIGIN_CERT_DIR=/no/such/origin\norigin_tls_check "$P" "$S"`,
+    );
+    expect(result.code).not.toBe(0);
+    expect(result.err).toContain("ORIGIN_TLS=on, but /no/such/origin/cert.pem or /no/such/origin/key.pem is missing");
+  });
+
+  it("refuses a relative ORIGIN_CERT_DIR, from either file", async () => {
+    expect((await check("ORIGIN_CERT_DIR=certs\n")).err).toContain("ORIGIN_CERT_DIR must be an absolute path");
+    expect((await check("OTHER=1\n", "ORIGIN_CERT_DIR=certs\n")).err).toContain("must be an absolute path");
+  });
+
+  it("names the missing files", async () => {
+    const result = await check("ORIGIN_TLS=on\nORIGIN_CERT_DIR=/no/such/origin\n");
+    expect(result.code).not.toBe(0);
+    expect(result.err).toContain("/no/such/origin/cert.pem or /no/such/origin/key.pem is missing");
+  });
+
+  describe("with a certificate", () => {
+    if (certReason) {
+      it("needs openssl and file modes", () => {
+        console.log(`origin certificate cases skipped: ${certReason}`);
+        if (process.env.CI) expect(certReason).toBeNull();
+      });
+      return;
+    }
+
+    const domains = "API_DOMAIN=api.example.com\nAPI_DOMAIN_STAGING=api-staging.example.com\n";
+    /** Makes cert.pem and key.pem in a fresh directory: `days` valid, naming `names`, then runs `after` there. */
+    async function withCert(days: number, names: string, after: string, extraEnv = "") {
+      const dir = mkdtempSync(join(tmpdir(), "bbc-origin-"));
+      const make = spawnSync(
+        "bash",
+        [
+          "-c",
+          `cd "$1" && openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days ${days} ` +
+            `-subj "/CN=origin" -addext "subjectAltName=${names}" -keyout key.pem -out cert.pem 2>/dev/null && ` +
+            `chmod 600 key.pem && ${after}`,
+          "bash",
+          dir,
+        ],
+        { encoding: "utf8", env: { ...process.env, MSYS_NO_PATHCONV: "1" } },
+      );
+      expect(make.status, make.stderr).toBe(0);
+      const result = await check(`ORIGIN_TLS=on\nORIGIN_CERT_DIR=${dir}\n${domains}${extraEnv}`);
+      rmSync(dir, { recursive: true, force: true });
+      return result;
+    }
+    const both = "DNS:api.example.com,DNS:api-staging.example.com";
+
+    it("passes a certificate that matches its key, lasts, and names both domains", async () => {
+      const result = await withCert(400, both, "true");
+      expect(result.code, result.err).toBe(0);
+      expect((await withCert(400, "DNS:*.example.com", "true")).code).toBe(0);
+    });
+
+    it("refuses a key others can read", async () => {
+      const result = await withCert(400, both, "chmod 640 key.pem");
+      expect(result.err).toContain("key.pem must be readable by its owner only");
+    });
+
+    it("refuses a key that is not the certificate's", async () => {
+      const other =
+        "openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out key.pem 2>/dev/null && chmod 600 key.pem";
+      expect((await withCert(400, both, other)).err).toContain("key.pem is not the key of");
+    });
+
+    // A warning, not a stop: "Roll back right now" must still run while a renewal is on its way.
+    it("passes a certificate that ends within 30 days, and says so", async () => {
+      const result = await withCert(10, both, "true");
+      expect(result.code, result.err).toBe(0);
+      expect(result.err).toContain("expires within 30 days");
+    });
+
+    it("refuses a certificate that has expired, or is not one", async () => {
+      expect((await withCert(400, both, "echo junk > cert.pem")).err).toContain(
+        "has expired, or does not read as a certificate",
+      );
+    });
+
+    it("refuses a certificate that does not name the staging domain", async () => {
+      expect((await withCert(400, "DNS:api.example.com", "true")).err).toContain(
+        "does not cover api-staging.example.com",
+      );
+    });
   });
 });

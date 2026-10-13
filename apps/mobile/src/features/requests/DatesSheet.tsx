@@ -1,6 +1,7 @@
 import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Button,
   Calendar,
@@ -28,6 +29,8 @@ type Props = {
 export const DatesSheet = forwardRef<DatesSheetHandle, Props>(function DatesSheet({ onUse, onFlexible }, ref) {
   const modal = useRef<BottomSheetModal>(null);
   const [sel, setSel] = useState<Selection | null>(null);
+  // The sheet runs to the screen's bottom edge, under Android's navigation bar: the footer keeps its last line above it.
+  const insets = useSafeAreaInsets();
   const today = todayLocal();
   useImperativeHandle(ref, () => ({
     present: (s) => {
@@ -80,7 +83,7 @@ export const DatesSheet = forwardRef<DatesSheetHandle, Props>(function DatesShee
             />
           ) : null}
         </BottomSheetScrollView>
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: tokens.space.lg + insets.bottom }]}>
           <Button
             testID="dates.use"
             label={cta.label}
@@ -164,7 +167,7 @@ const styles = StyleSheet.create({
   },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
   scroll: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg },
-  footer: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg, gap: tokens.space.xs },
+  footer: { paddingHorizontal: tokens.space.lg, gap: tokens.space.xs },
   note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   flexible: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   flexiblePressed: { opacity: 0.6 },

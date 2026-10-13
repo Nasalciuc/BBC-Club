@@ -169,3 +169,72 @@ export const placePhotos = catalog.table(
     check("place_photos_attempts", sql`${t.attempts} >= 0`),
   ],
 );
+
+/**
+ * The cities the company's site sells (ADR-IMPL-045), as the sync-site-destinations job read them last: each city's
+ * airports, its photo's address on the site, whether the site's home page shows it. A snapshot the job replaces whole,
+ * in one transaction. Created by 0028_catalog_site_destinations.sql (after 0006).
+ */
+export const sitePlaces = catalog.table(
+  "site_places",
+  {
+    /** The site's own id for the city: its page is /flight/city/<name>/<id>. */
+    cmsId: integer("cms_id").primaryKey(),
+    name: text("name").notNull(),
+    /** The site's country and region, as the site names them. */
+    country: text("country").notNull(),
+    region: text("region").notNull(),
+    /** The city's main airport: the one its pin stands on. */
+    airport: char("airport", { length: 3 })
+      .notNull()
+      .references(() => airports.code, { onDelete: "cascade" }),
+    /** Every airport the city's photo goes on, the main one included. */
+    airports: char("airports", { length: 3 }).array().notNull(),
+    /** On the site's home page. */
+    promoted: boolean("promoted").notNull().default(false),
+    /** `bestDeals/<id>/image/<file>` when the city's photo is its own and answers; null otherwise. */
+    image: text("image"),
+    syncedAt: tz("synced_at").notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("site_places_airport").on(t.airport),
+    check("site_places_cms_id", sql`${t.cmsId} > 0`),
+    check("site_places_main_airport", sql`${t.airport} = ANY (${t.airports})`),
+    check(
+      "site_places_image",
+      sql`${t.image} IS NULL OR ${t.image} ~* '^bestDeals/[0-9]+/image/[a-z0-9._-]+\\.(jpe?g|png|webp)$'`,
+    ),
+  ],
+);
+
+/**
+ * The US airports the site lists a price from for each of its cities (ADR-IMPL-045): New York's deal for London is
+ * three rows, JFK, EWR and LGA. The site's prices are kept, never shown — a pin is priced by the formula (ADR-IMPL-037).
+ * Created by 0028_catalog_site_destinations.sql.
+ */
+export const siteRoutes = catalog.table(
+  "site_routes",
+  {
+    routeFrom: char("route_from", { length: 3 })
+      .notNull()
+      .references(() => airports.code, { onDelete: "cascade" }),
+    cmsId: integer("cms_id")
+      .notNull()
+      .references(() => sitePlaces.cmsId, { onDelete: "cascade" }),
+    /** The site's own id for this price: one bestDeals entry of the city's page. */
+    deal: integer("deal").notNull(),
+    /** The site's "Price Today" and "Old Price", whole USD. */
+    price: integer("price").notNull(),
+    publishedPrice: integer("published_price"),
+    syncedAt: tz("synced_at").notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.routeFrom, t.cmsId] }),
+    index("site_routes_cms_id").on(t.cmsId),
+    check("site_routes_deal", sql`${t.deal} > 0`),
+    check("site_routes_price", sql`${t.price} > 0`),
+    check("site_routes_published_price", sql`${t.publishedPrice} IS NULL OR ${t.publishedPrice} > 0`),
+  ],
+);

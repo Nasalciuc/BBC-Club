@@ -2,12 +2,12 @@ import type { DestinationPin } from "../api";
 
 /** A fare that expires mid-minute can still appear on the home map for at most `ttlMs` (default 60s).
  *  Opening that fare still answers 410. Import and expire-fares call clear(). */
-export function createDestinationsCache(ttlMs = 60_000) {
-  const done = new Map<string, { at: number; value: DestinationPin[] }>();
-  const inflight = new Map<string, Promise<DestinationPin[]>>();
+export function createDestinationsCache<T = DestinationPin>(ttlMs = 60_000) {
+  const done = new Map<string, { at: number; value: T[] }>();
+  const inflight = new Map<string, Promise<T[]>>();
   let generation = 0;
   return {
-    async get(home: string, load: () => Promise<DestinationPin[]>): Promise<DestinationPin[]> {
+    async get(home: string, load: () => Promise<T[]>): Promise<T[]> {
       const k = home.toUpperCase();
       const hit = done.get(k);
       if (hit && Date.now() - hit.at < ttlMs) return hit.value;

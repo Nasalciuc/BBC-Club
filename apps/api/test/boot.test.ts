@@ -23,14 +23,28 @@ describe("host boot", () => {
     await t.close();
   });
 
-  it("/ready explains what is wrong; /health is always cheap", async () => {
+  it("/ready answers for this process alone; /status explains what is wrong; /health is always cheap", async () => {
     const t = await testApp({ suite: "boot" });
     const ready = await t.app.request("/ready");
-    const body = await ready.json();
+    expect(ready.status).toBe(200);
+    expect(await ready.json()).toEqual({ ok: true, db: true });
+    const body = await (await t.app.request("/status")).json();
     expect(body).toHaveProperty("db");
     expect(body).toHaveProperty("queue");
     expect(body).toHaveProperty("staleJobs");
     expect((await t.app.request("/health")).status).toBe(200);
+    await t.close();
+  });
+
+  it("a dead letter turns /status red and leaves /ready green, so the deploy that fixes it can still roll", async () => {
+    const t = await testApp({ suite: "boot" });
+    await t.db.execute(
+      sql`UPDATE platform.event_deliveries SET status = 'dead' WHERE id = (SELECT min(id) FROM platform.event_deliveries)`,
+    );
+    const status = await t.app.request("/status");
+    expect(status.status).toBe(503);
+    expect(((await status.json()) as { ok: boolean; queue: { dead: number } }).queue.dead).toBe(1);
+    expect((await t.app.request("/ready")).status).toBe(200);
     await t.close();
   });
 

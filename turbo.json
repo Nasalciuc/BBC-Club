@@ -9,7 +9,7 @@
     },
     "test:unit": {
       "dependsOn": ["^typecheck"],
-      "inputs": ["src/**", "tests/unit/**", "test/**/*.unit.test.ts"],
+      "inputs": ["src/**", "tests/unit/**", "tests/*.test.ts", "test/**/*.unit.test.ts"],
       "outputs": []
     },
     "test:db": {

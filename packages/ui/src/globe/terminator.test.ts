@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { nightPolygon, normalizeLng, solarAltitude, sunPosition } from "./terminator";
+import { TWILIGHT, nightPolygon, normalizeLng, solarAltitude, sunPosition, twilightBands } from "./terminator";
 
 /** Ray casting on the planar ring, as Mapbox fills it. */
 function inside(ring: number[][], lng: number, lat: number): boolean {
@@ -78,5 +78,93 @@ describe("nightPolygon", () => {
   it("is small enough to send to the map every minute", () => {
     const ring = nightPolygon(new Date("2026-10-08T15:00:00Z")).geometry.coordinates[0]!;
     expect(ring.length).toBeLessThan(200);
+  });
+});
+
+describe("twilightBands", () => {
+  const dates = [
+    "2026-10-13T11:52:00Z", // the owner's screenshot: dusk over India and China
+    "2026-10-13T19:30:00Z", // night over Europe, day over the Americas
+    "2026-06-21T03:00:00Z",
+    "2026-12-21T18:00:00Z",
+    "2026-03-20T12:00:00Z", // equinox at noon: every edge a circle, astride the antimeridian
+    "2026-02-10T06:10:00Z", // the deep bands are circles, the shallow ones round the North Pole: holes in a ring
+  ].map((s) => new Date(s));
+
+  /** Even–odd over every ring, holes included, as Mapbox fills a polygon. */
+  const insidePolygon = (rings: number[][][], lng: number, lat: number) =>
+    rings.reduce((hit, ring) => (inside(ring, lng, lat) ? !hit : hit), false);
+  /** The bands' longitudes run across a window centred opposite the sun: try the point in each world copy. */
+  const covers = (rings: number[][][], lng: number, lat: number) =>
+    [lng, lng - 360, lng + 360].some((x) => insidePolygon(rings, x, lat));
+
+  it("shades each point of the night once, in the band of its sun's altitude, and leaves the day alone", () => {
+    for (const date of dates) {
+      const bands = twilightBands(date).features;
+      let checked = 0;
+      for (let lat = -85; lat <= 85; lat += 10) {
+        for (let lng = -177.5; lng <= 177.5; lng += 10) {
+          const alt = solarAltitude(lng, lat, date);
+          // On an edge the sampled curve may fall either way.
+          const nearEdge = bands.some((b) => Math.abs(alt - b.properties.from) < 0.3);
+          if (nearEdge) continue;
+          const hits = bands.filter((b) => covers(b.geometry.coordinates, lng, lat));
+          if (alt > 0) expect(hits).toHaveLength(0);
+          else {
+            expect(hits).toHaveLength(1);
+            expect(alt).toBeLessThan(hits[0]!.properties.from);
+            expect(alt).toBeGreaterThanOrEqual(hits[0]!.properties.to);
+          }
+          checked++;
+        }
+      }
+      expect(checked).toBeGreaterThan(400);
+    }
+  });
+
+  it("winds every hole against its outer ring, as Mapbox needs to see a hole", () => {
+    const area = (ring: number[][]) =>
+      ring.slice(0, -1).reduce((sum, [x1 = 0, y1 = 0], i) => {
+        const [x2 = 0, y2 = 0] = ring[i + 1]!;
+        return sum + x1 * y2 - x2 * y1;
+      }, 0) / 2;
+    let holes = 0;
+    for (const date of dates) {
+      for (const band of twilightBands(date).features) {
+        const [outer, ...rest] = band.geometry.coordinates;
+        for (const hole of rest) {
+          expect(Math.sign(area(hole))).toBe(-Math.sign(area(outer!)));
+          holes++;
+        }
+        for (const ring of band.geometry.coordinates) expect(ring[0]).toEqual(ring.at(-1));
+      }
+    }
+    expect(holes).toBeGreaterThan(20);
+  });
+
+  it("darkens from the horizon to the deep night in steps too small to read as a line", () => {
+    const bands = twilightBands(dates[1]!).features;
+    expect(bands).toHaveLength(TWILIGHT.bands + 1);
+    expect(bands[0]!.properties.from).toBe(0);
+    expect(bands.at(-2)!.properties.to).toBe(-15);
+    expect(bands.at(-1)!.properties).toEqual({ from: -15, to: -90, opacity: TWILIGHT.depth });
+    const shades = bands.map((b) => b.properties.opacity);
+    for (let i = 1; i < shades.length; i++) {
+      expect(shades[i]!).toBeGreaterThanOrEqual(shades[i - 1]!);
+      expect(shades[i]! - shades[i - 1]!).toBeLessThan(0.05);
+    }
+    expect(shades[0]!).toBeLessThan(0.05);
+    // Steep after sunset, gentle in deep twilight.
+    expect(shades[1]! - shades[0]!).toBeGreaterThan(shades.at(-2)! - shades.at(-3)!);
+  });
+
+  it("is small enough to send to the map every minute", () => {
+    for (const date of dates) {
+      const points = twilightBands(date).features.reduce(
+        (n, b) => n + b.geometry.coordinates.reduce((m, ring) => m + ring.length, 0),
+        0,
+      );
+      expect(points).toBeLessThan(8000);
+    }
   });
 });

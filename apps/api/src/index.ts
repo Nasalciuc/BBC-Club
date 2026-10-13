@@ -60,6 +60,13 @@ export async function buildApp(opts: BuildOptions = {}) {
       "production is running with recording push; nothing is delivered until PUSH_ADAPTER=live",
     );
   }
+  // loadEnv lets APNs be all or nothing, so one key tells which: without it, push is live on Android only.
+  if (env.PUSH_ADAPTER === "live" && !env.APNS_P8_BASE64) {
+    platform.logger.warn(
+      { pushAdapter: env.PUSH_ADAPTER, apns: false },
+      "push is live on Android only; an iPhone notification is marked failed until the APNs keys are in env",
+    );
+  }
 
   // 1. events: the catalogue is the only source of types
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
@@ -122,12 +129,22 @@ export async function buildApp(opts: BuildOptions = {}) {
     }
   }
 
-  // 4. public — every role answers these (Caddy drain, cron, metrics)
+  // 4. public — every role answers these (Caddy drain, cron, metrics, monitoring)
   registerRoute("GET", "/health", "public");
   app.get("/health", (c) => c.json({ ok: true }));
+  // Can THIS process take traffic: not draining, and its database answers. deploy.sh and bootstrap.sh wait on it replica
+  // by replica, so the system's state (a dead letter, a stale job) must not be in it: it would hold back every deploy,
+  // the one that fixes it included.
   registerRoute("GET", "/ready", "public");
   app.get("/ready", async (c) => {
     if (draining) return c.json({ ok: false, draining: true }, 503);
+    const dbOk = await readyProbe();
+    return c.json({ ok: dbOk, db: dbOk }, dbOk ? 200 : 503);
+  });
+  // Is the system well: the database, the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job
+  // on time. 503 when not — for Uptime Kuma and for people, never as a deploy gate.
+  registerRoute("GET", "/status", "public");
+  app.get("/status", async (c) => {
     const checks: Record<string, unknown> = {};
     checks.db = await readyProbe();
     const h = await platform.health().catch(() => ({ ok: false, queue: null }));

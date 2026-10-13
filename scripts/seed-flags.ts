@@ -25,6 +25,16 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
     { enabled: true },
     "ADR-IMPL-043: city photos from Commons and Pexels, satellite views; off = the app's own image everywhere, no lookups",
   ],
+  [
+    "catalog.site_photos",
+    { enabled: false },
+    "ADR-IMPL-045: the site's city photos on their airports, synced nightly; on once the company confirms the rights; skip: [site ids]",
+  ],
+  [
+    "catalog.site_pins",
+    { enabled: false },
+    "ADR-IMPL-045: up to 12 of the site's cities as pins from the member's home, priced by the formula; needs catalog.estimates",
+  ],
 ];
 
 try {
