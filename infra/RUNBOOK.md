@@ -576,6 +576,11 @@ Every deploy passes both env files to Compose, `staging.env` last, so for any `$
 
 The box has one checkout, and production's long-running containers read files from it: Caddy its Caddyfile and `/.well-known` files (`infra/caddy`, the files at once, the config at its next reload or restart), cron its crontab at its next start (`infra/cron`). So the `api-deploy` workflow refuses a staging dispatch whose `infra/caddy` is not `origin/main`'s: such a branch reaches staging after its merge. A branch's `infra/cron` reaches production's cron only if cron restarts while the checkout is on that branch; the next production deploy recreates cron from its own commit.
 
+## Load tests on staging
+
+`docs/perf/LOADTEST.md`: Grafana Cloud k6 against `api-staging`, with accounts made by `scripts/loadtest-staging.ts start`
+and removed by `stop`. A step test shares the box with production: a quiet hour.
+
 ## Staging demo data (ADR-IMPL-040)
 
 On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, the pins with their fares, the three offers, a request in each state, the inbox. Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:

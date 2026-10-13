@@ -20,4 +20,9 @@ Formula: `replicas ≈ ceil((RPS × cpu_ms_per_request / 1000) / 0.70)`.
 adds 512 MB each and no throughput, since Postgres, the worker and staging need the same cores. The 1,000 RPS target
 above needs the larger host; what this one carries is measured by the staging k6 run.
 
-Replace this table with measured numbers after the first staging k6 run (`docs/perf/YYYY-MM-DD.md`). Do not commit `pg_stat_statements` dumps from a laptop or CI — they are not production.
+Until that run: the mix costs about 4.5 ms of CPU per request, API and Postgres together (measured in process,
+2026-10-10), so two cores at 60 % carry about 250 requests a second. The `step` profile of `LOADTEST.md` replaces this
+estimate with a measurement through Cloudflare; `load/bench` (nightly) tracks each route's CPU per request against
+`baseline.json`.
+
+Replace the model table with measured numbers after the first staging k6 run (`docs/perf/YYYY-MM-DD.md`, how: `LOADTEST.md`). Do not commit `pg_stat_statements` dumps from a laptop or CI — they are not production.

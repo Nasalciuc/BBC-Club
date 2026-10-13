@@ -22,6 +22,9 @@ end before the first real member showed what would hurt first:
 - Step 4 started the pooler with its dependencies, so a changed Postgres setting restarted Postgres mid-deploy.
 - Two dispatches of the deploy workflow could run on the box at once and swap its one checkout under each other, and
   the SSH step ended any deploy after 10 minutes, the length of production's canary.
+- Nothing measured what the box carries: the nightly bench has answered 429 since the read limits (#42), and k6 had no
+  way to sign in on staging.
+- The review account script could not put a changed password back anywhere but in tests.
 
 **Decision.**
 
@@ -79,6 +82,15 @@ end before the first real member showed what would hurt first:
   own reason.
 - **Old images go.** Step 8 removes old API images and keeps the one it deployed, the one it replaced, the other
   environment's and the five newest.
+- **Load is measured on staging, from outside.** Grafana Cloud k6 sends `loadtest/k6/mixed.js` from Frankfurt through
+  Cloudflare; the `step` profile climbs 100 requests a second every 2 minutes and stops at the first failed threshold
+  (docs/perf/LOADTEST.md). `scripts/loadtest-staging.ts` makes the accounts as a sign-up does and removes them as a
+  deletion does, through the whole app, so the worker writes and clears their rows like anyone's. The nightly bench
+  lifts the read limits for its own run and puts them back.
+- **Scripts hash with Better Auth's own hasher, directly** (`hashPassword` from `better-auth/crypto`, the function
+  Better Auth itself calls, so the format moves with its version). The breach-check plugin wraps `ctx.password.hash`
+  and needs a request around it; outside test mode the review account script threw there, and never put a changed
+  password back.
 
 **Consequences.**
 
