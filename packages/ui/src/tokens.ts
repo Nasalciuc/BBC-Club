@@ -12,6 +12,7 @@ export const tokens = {
   "globeSpace": "#0B0B19",
   "globeAtmosphere": "#BAD2EB",
   "globeAtmosphereHigh": "#245BDF",
+  "globeCityLights": "#FFE4B0",
   "textPrimary": "#1E293B",
   "textSecondary": "#64748B",
   "textTertiary": "#94A3B8",

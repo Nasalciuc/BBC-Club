@@ -5,6 +5,7 @@ import {
   sheetTitle,
   daysBetween,
   monthGrid,
+  monthWeeks,
   selectDay,
   todayLocal,
   type Selection,
@@ -46,6 +47,17 @@ test("month grid: October 2026 starts on Thursday, 6 weeks, Oct 1 in place", () 
   expect(g.length).toBe(6);
   expect(week?.[4]?.date).toBe("2026-10-01");
   expect(week?.[3]?.inMonth).toBe(false);
+});
+
+test("month weeks: only the weeks a month spans, so no blank row between two months", () => {
+  const weeks = (y: number, m0: number) => monthWeeks(y, m0, round, today);
+  // October 2026 starts on a Thursday and ends on a Saturday: five weeks, the grid's sixth (Nov 1–7) left out.
+  expect(weeks(2026, 9).length).toBe(5);
+  expect(weeks(2026, 9).at(-1)?.at(-1)?.date).toBe("2026-10-31");
+  // February 2026 starts on a Sunday: exactly four. August 2026 starts on a Saturday: all six.
+  expect(weeks(2026, 1).length).toBe(4);
+  expect(weeks(2026, 7).length).toBe(6);
+  expect(weeks(2026, 7).every((week) => week.some((c) => c.inMonth))).toBe(true);
 });
 
 test("range states for the band", () => {

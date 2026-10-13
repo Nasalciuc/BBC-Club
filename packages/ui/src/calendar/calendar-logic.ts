@@ -77,6 +77,12 @@ export function monthGrid(y: number, m0: number, sel: Selection, today: ISODate)
   return weeks;
 }
 
+/** The weeks a month actually spans — four to six. The grid's last week can hold only the next month's days; drawn, it
+ *  is a blank row between two months, so it is left out. */
+export function monthWeeks(y: number, m0: number, sel: Selection, today: ISODate): Cell[][] {
+  return monthGrid(y, m0, sel, today).filter((week) => week.some((c) => c.inMonth));
+}
+
 export function stateOf(date: ISODate, sel: Selection): DayState {
   const { depart, ret } = sel;
   if (sel.tripType === "oneway" || !ret) return depart === date ? "single" : "none";

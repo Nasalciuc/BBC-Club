@@ -222,3 +222,40 @@ waits, offline, a sign-out, a re-entrant read),
 `build-draft.test.ts` (`estimateShown`), `deeplink-logic.test.ts` (a tapped push on iOS and Android, native intent,
 where a link waits), `error-context.test.ts` (reading copy, offline and refresh), `status-copy.test.ts`
 (`packages/ui`), `phone.test.ts`.
+
+## Explore after the owner's test on 0.2.0 (13 Oct 2026)
+
+**Context.** The owner's screenshots of the 0.2.0 APK on staging: a chosen city's only fare hidden under
+`Request a quote`, `1 FARES`, a fare row with a struck price and `SABRE · 16 SEP` squeezed into it, offer cards reading
+`$4,650` where Figma reads `FROM $4,200`, and a calendar whose range was dark squares with gaps, dark digits on them and
+a blank row between two months, its last line under Android's navigation bar.
+
+**Decision.**
+
+- **The sheet rises for every new city.** Explore raised it when the state changed (Rest → a destination); a member who
+  dragged it down and then chose another city kept it down, the fares under the docked pill. The raise now runs on
+  every choice of a destination, the same city tapped twice included, and the sheet's index follows a snap as soon as
+  it starts (`HomeSheet` passes gorhom's `onAnimate` to `onChange`): a city chosen while a dragged sheet is still
+  settling finds the index down and raises it. A drag still moves the sheet between two choices.
+- **`1 fare`.** `faresLabel`: one fare is `1 FARE`, with no order to state; more stay `3 FARES · LOWEST FIRST`.
+- **The fare row as Figma's FareRow (32:2, 89:387).** 88 pt (a minimum: larger text grows it), 12 pt inside, 8 pt
+  between rows; the airline's monogram 32 pt on `surface-page` with badge corners and no border; the price alone at the
+  right, in `price`. The published fare and its source stay visible — FTC, as `docs/design/screens-v2.html` requires —
+  on the fare's page, where `PricePair` `editorial` sets them beside the club's fare, above `Why it's $X lower`. A
+  screen reader hears the row's price too. The loading placeholders take the rows' size and spacing.
+- **`FROM $4,200` on the offer cards** (89:386; an offer without a price still reads `EXPLORE`, 89:389). The colour
+  stays `text-on-dark-muted`: Figma's bronze (`accent-warm`) on the photo's scrim measures 3.7:1, under AA for 12 pt
+  text, and `DESIGN.md` gives bronze only to a fare row's offer price. ADR-PROD-002's light gold passes on navy and
+  brings it with the night-and-gold change.
+- **The calendar** (Figma has no calendar frame yet — the code is the reference until one is drawn). The seven days
+  share the row's width, so a range reads as one band: full across the days inside it, from the circle's centre
+  outwards on the departure and return days, whose filled circles (40 pt, `action-primary`, `text-on-dark`) sit on its
+  ends. The band is `border-default`, so the digits on it keep `text-primary` (it was `surface-muted` under dark digits).
+  A day is 48 pt tall (`DESIGN.md`: 48 dp on Android) and a seventh of the row wide, 49 pt on a 393 pt phone; the days
+  touch, so none has a hit slop. Each month shows only the weeks it spans (`monthWeeks`), so no blank row stands between
+  two months. The dates sheet keeps its footer's last line above Android's navigation bar (`DESIGN.md`: edge-to-edge
+  respects the safe-area insets).
+
+**Consequences.** JavaScript only: an OTA reaches the 0.2.0 APK. Tests: `travel-preferences.test.ts` (`faresLabel`),
+`calendar-logic.test.ts` (`monthWeeks`: five weeks for October 2026, four for February, six for August). The e2e flows
+keep their test IDs (`calendar.day.<date>`, `explore.fare.<id>`).

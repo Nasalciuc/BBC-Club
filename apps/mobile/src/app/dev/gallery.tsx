@@ -156,7 +156,7 @@ export default function GalleryScreen() {
         <OfferCard
           testID="gallery.offer.full"
           title="London"
-          fromPrice="FROM $4,200"
+          fromPrice="$4,200"
           image={null}
           fallback={CLUB_PICTURE}
           onPress={noop}
@@ -165,7 +165,7 @@ export default function GalleryScreen() {
         <OfferCard
           testID="gallery.offer.noimage"
           title="Tokyo"
-          fromPrice="FROM $4,650"
+          fromPrice="$4,650"
           image={null}
           fallback={null}
           onPress={noop}

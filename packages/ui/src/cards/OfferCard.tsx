@@ -7,6 +7,7 @@ import { tokens } from "../tokens";
 
 type Props = {
   title: string;
+  /** The starting fare, formatted (`$4,200`); the card reads it as `FROM $4,200`. */
   fromPrice?: string | null;
   /** The offer's own picture, else its city's photo (ADR-IMPL-043); null — the fallback. */
   image: PhotoSource | null;
@@ -22,7 +23,7 @@ export function OfferCard({ title, fromPrice, image, fallback, onPress, testID }
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={fromPrice ? `${title}, ${fromPrice}` : title}
+      accessibilityLabel={fromPrice ? `${title}, from ${fromPrice}` : title}
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
@@ -36,8 +37,8 @@ export function OfferCard({ title, fromPrice, image, fallback, onPress, testID }
         <Text style={styles.title} numberOfLines={2}>
           {title}
         </Text>
-        {/* Figma 89:389: an offer without a price reads EXPLORE in the price slot. */}
-        <Text style={styles.price}>{fromPrice ?? "EXPLORE"}</Text>
+        {/* Figma 89:386: the starting fare reads `FROM $4,200`; 89:389: an offer without a price reads EXPLORE. */}
+        <Text style={styles.price}>{fromPrice ? `FROM ${fromPrice}` : "EXPLORE"}</Text>
       </View>
     </Pressable>
   );

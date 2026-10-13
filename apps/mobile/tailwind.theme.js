@@ -12,6 +12,7 @@ module.exports = {
   "globe-space": "#0B0B19",
   "globe-atmosphere": "#BAD2EB",
   "globe-atmosphere-high": "#245BDF",
+  "globe-city-lights": "#FFE4B0",
   "text-primary": "#1E293B",
   "text-secondary": "#64748B",
   "text-tertiary": "#94A3B8",

@@ -1,13 +1,20 @@
 import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
-import { Chip, EmptyState, ErrorState, EstimateRow, FareRow, tokens, rn } from "@bbc/ui";
+import { Chip, EmptyState, ErrorState, EstimateRow, FARE_ROW_HEIGHT, FareRow, tokens, rn } from "@bbc/ui";
 
 import { fareHref } from "@/features/explore/open-offer";
 import type { SearchState } from "@/features/search/useSearch";
 import { formatPrice } from "@/lib/format";
 
 import { SectionLabelWithLocalTime } from "./LocalTime";
-import { cabinLabel, datesChipLabel, noFareCopy, preferencesLines, travelersLabel } from "./travel-preferences";
+import {
+  cabinLabel,
+  datesChipLabel,
+  faresLabel,
+  noFareCopy,
+  preferencesLines,
+  travelersLabel,
+} from "./travel-preferences";
 
 type Props = {
   state: SearchState;
@@ -75,7 +82,7 @@ export function SheetSelected({ state, offline, onRetry, onQuote, onEditDates, o
               Searching paused for a moment. Try again shortly.
             </Text>
           ) : (
-            <SectionLabelWithLocalTime label={`${state.results.length} fares · lowest first`} city={city} tz={tz} />
+            <SectionLabelWithLocalTime label={faresLabel(state.results.length)} city={city} tz={tz} />
           )}
           {state.results.map((fare) => (
             <FareRow
@@ -144,9 +151,10 @@ const styles = StyleSheet.create({
   },
   prefs: { marginTop: tokens.space.md, gap: tokens.space.xxs },
   prefsText: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
-  skeletons: { marginTop: tokens.space.md, gap: tokens.space.md },
+  // The placeholders take the rows' own size and spacing, so the fares land where the skeleton stood.
+  skeletons: { marginTop: tokens.space.md, gap: tokens.space.xs },
   skeletonRow: {
-    height: 80,
+    height: FARE_ROW_HEIGHT,
     borderRadius: tokens.radius.card,
     backgroundColor: tokens.colors.borderDefault,
   },

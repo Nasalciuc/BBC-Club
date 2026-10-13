@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
   cabinLabel,
   datesChipLabel,
+  faresLabel,
   noFareCopy,
   preferencesLines,
   searchWhen,
@@ -12,6 +13,14 @@ import {
 
 const OCT_8 = new Date(2026, 9, 8, 10, 0, 0);
 const FLEXIBLE = { depart: null, return: null, flexible: true };
+
+describe("faresLabel", () => {
+  it("counts the fares as Figma does, and one fare is one fare (never `1 fares`)", () => {
+    expect(faresLabel(3)).toBe("3 fares · lowest first");
+    expect(faresLabel(1)).toBe("1 fare");
+    expect(faresLabel(30)).toBe("30 fares · lowest first");
+  });
+});
 
 describe("datesChipLabel", () => {
   it("reads the current month and flexible while no date is chosen (Figma `Oct · flexible`)", () => {
