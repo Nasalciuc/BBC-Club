@@ -153,7 +153,8 @@ round trip, business (formula)` (ADR-IMPL-042). `catalog.estimates` off stops es
 stops Explore but not the estimate a queued request may still ask for.
 
 Which rules are live: `SELECT value->>'fingerprint', value->>'loadedAt' FROM platform.flags WHERE key = 'catalog.pricing_rules';`.
-`bbc_search_estimates_unavailable{reason}` and `bbc_request_estimates_unavailable{reason}` rising while estimates are on:
+`bbc_search_estimates_unavailable{reason}`, `bbc_request_estimates_unavailable{reason}` and (with `catalog.site_pins` on,
+ADR-IMPL-045) `bbc_home_estimates_unavailable{reason}` rising while estimates are on:
 `missing` — load the rules; `invalid` — they were edited by hand, load them again; for requests also `error` (the catalog
 read failed: look for `request estimate unavailable` in the API log), `timeout` (it took over a second) — those quotes
 went through without the estimate. `bbc_request_estimates_stored{cabin}` counts the estimates that reached a request.
@@ -232,6 +233,78 @@ not in upper case — tried again the same way, log line `place photos: no airpo
 carries the stage and the error — never the Pexels key. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
 means the key is wrong or revoked: until it is replaced, a city that shows a photo keeps it, and one Commons has no
 photo for gets its satellite view, looked at again each day.
+
+## The site's destinations (ADR-IMPL-045)
+
+Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own
+API — `weba.buybusinessclass.com`: regions, their countries, their cities, about 240 pages, then a HEAD request for each
+city's photo, four requests at a time — and keeps a snapshot: `catalog.site_places` (each city, its main airport, every
+airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price from, and that
+price — kept, never shown). The site has no airport codes: a city is matched by name inside the country the site puts
+it in; the few names that need help are listed in `SITE_CITY_AIRPORTS` (catalog `application/site-places.ts`). Two
+flags, both seeded off; with both off the job asks the site nothing.
+
+- `catalog.site_photos`: each city's own photo on all its airports, stored as an operator's photo (it never expires, has
+  no credit line, and `resolve-place-photos` never touches it). An operator's own photo from anywhere else stays; one
+  put by hand with an address on the site counts as the site's — the job takes it back while the photos are off, or
+  its city is skipped. A city whose page shows another city's photo (Crete shows Santorini's) keeps Wikimedia's.
+  `{"enabled":true,"skip":[23]}` keeps the cities listed (the site's ids: 23 is London) on Wikimedia. Off: the next
+  run hands every site photo back to `resolve-place-photos`, which finds Wikimedia's again at ten airports a minute —
+  about twenty minutes for all of them, the club's image meanwhile; off and `skip` work even on a night the site does
+  not answer. An operator's `DELETE …/photo` on a site photo lasts until the next night: keep a city off with `skip`,
+  or give it the club's own photo (`PUT …/photo` with an address elsewhere), which the job never touches. Members'
+  phones load these photos from `weba.buybusinessclass.com`.
+- `catalog.site_pins`: after the fares' pins, up to twelve of the site's cities listed from the member's home airport
+  (the site's home page first, then the busiest), priced by the formula in the member's cabin (ADR-IMPL-037), so the
+  pin, its search's estimate row and the quote show one number. Nothing while `catalog.estimates` is off: no price, no
+  pin.
+
+All or nothing: a region or a country that does not answer, fewer than 80 % of last night's cities listed or placed on
+their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
+`platform.job_runs` says `failed` and why, and the worker's `/metrics` counts it in
+`bbc_job_failed{job="sync-site-destinations"}` (`/status` shows a job that stopped running, not one that fails). A
+single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no answer, a 5xx)
+keeps last night's verdict. The run's counts are in `platform.job_runs`; the log lines `site: no airport`,
+`site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`, `site: photo does not answer`,
+`site: photo not checked, kept`, `site: unknown US city` and `site: city page did not answer, kept` name the cities.
+Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is Osaka's. A city
+under `site: main airport by a tie` got the alphabetically first of its busiest airports: list it in
+`SITE_CITY_AIRPORTS` (a PR), main airport first.
+
+Before turning either on, see what the site holds today, with no database: `bun run scripts/site-destinations-report.ts`
+on any computer with the repository reads the site as the job does (about 400 requests, a minute or two), prints a
+summary and writes one HTML page in the temporary folder — every city with its photo, its airports, whether its photo
+answers and how heavy it is (the app shows the site's file as is), and the site's prices.
+
+Turn one on (or off) in that environment's database (staging:
+`docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`), wait a minute (a flag is read through a cache of about
+35 s), then, on the server, run the job instead of waiting for the night — through the worker, so the secret is read
+from its environment and never typed:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.site_photos','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+```
+
+```bash
+# production
+docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env exec -T worker \
+  bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET}}).then(async r=>console.log(r.status,await r.text()))"
+# staging
+docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
+  bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET}}).then(async r=>console.log(r.status,await r.text()))"
+```
+
+It answers `200` with the run: `"status":"succeeded"` and its counts under `metrics` (`read`, `cities`, `places`,
+`photosSet`, …); `"failed"` changed nothing, and its `error` says why; `"skipped"` — a run was already going: try again
+in two minutes.
+
+What the snapshot holds:
+
+```sql
+SELECT cms_id, name, country, airport, airports, promoted, image IS NOT NULL AS photo FROM catalog.site_places ORDER BY name;
+SELECT route_from, count(*) FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
+```
 
 ## The queue is stuck (oldest pending > 5 min)
 

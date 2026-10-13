@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 import { FareVM, AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
 import { toFareVM, type CatalogFacade } from "@bbc/catalog";
@@ -268,6 +269,83 @@ describe("GET /v1/home", () => {
     expect(one).toBe(0);
     const body = HomeVM.parse(await r.json());
     expect(body.home?.code).toBe("JFK");
+    await t.close();
+  });
+});
+
+// ADR-IMPL-045: the site's cities as pins after the fares', priced by the formula in the member's cabin — so the pin,
+// the estimate row its search shows and the quote show one number — and a pin's price in the ETag.
+describe("GET /v1/home — the site's pins", () => {
+  it("after the fares' pins, priced as their searches are, in the member's cabin; the ETag follows the prices", async () => {
+    const t = await testApp({ suite: "catalog-home-site" });
+    await t.seedCatalogBasics();
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports, promoted, image) VALUES
+        (23, 'London', 'United Kingdom', 'Europe', 'LHR', ARRAY['LHR'], false, 'bestDeals/23/image/l.jpg'),
+        (8, 'Paris', 'France', 'Europe', 'CDG', ARRAY['CDG'], false, NULL),
+        (283, 'Tokyo', 'Japan', 'Asia', 'HND', ARRAY['HND'], true, NULL),
+        (512, 'Dubai', 'United Arab Emirates', 'Middle East', 'DXB', ARRAY['DXB'], false, NULL),
+        (92, 'Rome', 'Italy', 'Europe', 'FCO', ARRAY['FCO', 'CIA'], false, NULL),
+        (1201, 'Zurich', 'Switzerland', 'Europe', 'ZRH', ARRAY['ZRH'], false, NULL)`);
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price, published_price) VALUES
+        ('JFK', 23, 54, 788, 2288), ('JFK', 8, 168, 872, 2319), ('JFK', 283, 1508, 1745, 1865),
+        ('JFK', 512, 1, 1365, NULL), ('JFK', 92, 2, 950, NULL), ('JFK', 1201, 3, 990, NULL)`);
+    await t.flags.set("catalog.site_pins", { enabled: true });
+    await t.flags.set("catalog.estimates", { enabled: true });
+    await t.flags.set("catalog.pricing_rules", storedPricingRules(FIXTURE_RULES));
+
+    const home = async () => {
+      const r = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie } });
+      expect(r.status).toBe(200);
+      return { body: HomeVM.parse(await r.json()), etag: r.headers.get("ETag") };
+    };
+    const search = async (to: string, cabin: "business" | "first") => {
+      const r = await t.app.request(`/v1/search?from=JFK&to=${to}&cabin=${cabin}`, {
+        headers: { Cookie: t.memberA.cookie },
+      });
+      return ((await r.json()) as { estimate: { amount: number } | null }).estimate?.amount ?? null;
+    };
+
+    const business = await home();
+    // Paris and London have fares: their fare pins, no site pins. Tokyo (on the site's home page) first, then by
+    // traffic; each site pin's price is the estimate its search shows.
+    const codes = business.body.destinations.map((d) => d.code);
+    expect(codes.slice(0, 3)).toEqual(["CDG", "LHR", "HND"]);
+    expect(codes.slice(3).sort()).toEqual(["DXB", "FCO", "ZRH"]);
+    expect(business.body.destinations[1]).toMatchObject({ fromPrice: 4200 });
+    for (const d of business.body.destinations.slice(2)) {
+      expect(d.fromPrice).toBe((await search(d.code, "business"))!);
+      expect(d.hasOffer).toBe(false);
+    }
+
+    // The same pins, other prices (new rules): a new ETag.
+    const dearer: typeof FIXTURE_RULES = {
+      ...FIXTURE_RULES,
+      continents_pair: Object.fromEntries(
+        Object.entries(FIXTURE_RULES.continents_pair).map(([pair, v]) => [
+          pair,
+          { ...v, round_trip: { ...v.round_trip, business: v.round_trip.business + 100 } },
+        ]),
+      ) as typeof FIXTURE_RULES.continents_pair,
+    };
+    await t.flags.set("catalog.pricing_rules", storedPricingRules(dearer));
+    const repriced = await home();
+    expect(repriced.body.destinations.map((d) => d.code)).toEqual(codes);
+    expect(repriced.body.destinations[2]!.fromPrice).toBe(business.body.destinations[2]!.fromPrice + 100);
+    expect(repriced.etag).not.toBe(business.etag);
+
+    // First class (the member's Profile): Europe's pins at the formula's first-class price; Asia's has none, no pin.
+    const prefs = await t.app.request("/v1/profile/travel", {
+      method: "PUT",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ cabin: "first" }),
+    });
+    expect(prefs.status).toBeLessThan(300);
+    const first = await home();
+    const firstSite = first.body.destinations.slice(2);
+    expect(firstSite.map((d) => d.code).sort()).toEqual(["FCO", "ZRH"]);
+    for (const d of firstSite) expect(d.fromPrice).toBe((await search(d.code, "first"))!);
     await t.close();
   });
 });

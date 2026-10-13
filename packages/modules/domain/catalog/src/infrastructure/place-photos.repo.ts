@@ -1,5 +1,5 @@
 import type { Executor } from "@bbc/db";
-import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { airports, placePhotos } from "@bbc/db/schema/catalog";
 
 export type PlacePhotoRow = Pick<
@@ -183,5 +183,75 @@ export const placePhotosRepo = {
       .where(and(eq(placePhotos.code, code), eq(placePhotos.source, "override")))
       .returning({ code: placePhotos.code });
     return rows.length > 0;
+  },
+
+  /**
+   * The site's photo for an airport (ADR-IMPL-045): stored as an operator's photo — it never expires and the resolve job
+   * never touches it — but owned by the sync-site-destinations job, which knows it by its address on the site
+   * (`prefix`). An operator's own photo from anywhere else stays as it is. True only when the row changed.
+   */
+  async setSitePhoto(exec: Executor, code: string, url: string, prefix: string): Promise<boolean> {
+    const values = {
+      status: "photo" as const,
+      source: "override" as const,
+      cardUrl: url,
+      heroUrl: url,
+      author: null,
+      license: null,
+      link: null,
+      attempts: 0,
+      resolvedAt: sql`now()`,
+      expiresAt: sql`'infinity'::timestamptz`,
+    };
+    const rows = await exec
+      .insert(placePhotos)
+      .values({ code, ...values })
+      .onConflictDoUpdate({
+        target: placePhotos.code,
+        set: values,
+        setWhere: sql`${placePhotos.source} IS DISTINCT FROM 'override' OR (starts_with(${placePhotos.cardUrl}, ${prefix}) AND ${placePhotos.cardUrl} IS DISTINCT FROM ${url})`,
+      })
+      .returning({ code: placePhotos.code });
+    return rows.length > 0;
+  },
+
+  /**
+   * The site's photos back to the resolve job (pending, due at once): all of them, all but those on the airports in
+   * `keep`, or only the photos of the cities in `of` (the site's ids: their addresses are `bestDeals/<id>/…`). Only
+   * photos whose address is on the site (`prefix`); an operator's own photo from anywhere else stays. Returns the
+   * airports.
+   */
+  async clearSitePhotos(
+    exec: Executor,
+    prefix: string,
+    on: { keep?: readonly string[]; of?: readonly number[] } = {},
+  ): Promise<string[]> {
+    if (on.of && on.of.length === 0) return [];
+    const rows = await exec
+      .update(placePhotos)
+      .set({
+        status: "pending",
+        source: null,
+        cardUrl: null,
+        heroUrl: null,
+        author: null,
+        license: null,
+        link: null,
+        attempts: 0,
+        resolvedAt: null,
+        expiresAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(placePhotos.source, "override"),
+          sql`starts_with(${placePhotos.cardUrl}, ${prefix})`,
+          on.keep && on.keep.length > 0 ? notInArray(placePhotos.code, [...on.keep]) : undefined,
+          on.of
+            ? or(...on.of.map((id) => sql`starts_with(${placePhotos.cardUrl}, ${`${prefix}bestDeals/${id}/`})`))
+            : undefined,
+        ),
+      )
+      .returning({ code: placePhotos.code });
+    return rows.map((r) => r.code.trim());
   },
 };

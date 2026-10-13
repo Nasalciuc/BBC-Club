@@ -13,6 +13,7 @@ import { airportsRepo } from "./infrastructure/airports.repo";
 import { discoveryRepo } from "./infrastructure/discovery.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { placePhotosRepo } from "./infrastructure/place-photos.repo";
+import { siteRepo } from "./infrastructure/site.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
@@ -20,15 +21,19 @@ import { homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody } from "./application/import";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
+import { syncSite } from "./application/site-sync";
 import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
 import { readStoredRules } from "./pricing/rules";
-import type { CatalogFacade } from "./api";
+import type { CatalogFacade, DestinationPin } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
   return row.published && row.validFrom <= now && row.validUntil > now;
 }
 
-/** `fetch` is for tests: the place-photo sources (Wikidata, Commons, Pexels) answered by fixtures. */
+/** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
+export const SITE_PINS = 12;
+
+/** `fetch` is for tests: the place-photo sources (Wikidata, Commons, Pexels) and the site answered by fixtures. */
 export const catalogModule = (
   opts: { fetch?: Fetch } = {},
 ): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
@@ -39,15 +44,17 @@ export const catalogModule = (
     /** ADR-IMPL-043: place photos. On unless an operator turns the flag row off; then no photo is served or looked up. */
     const placePhotosOn = () => platform.flags.isEnabled("catalog.place_photos", true);
     const destinationsCache = createDestinationsCache();
+    const sitePinsCache = createDestinationsCache<DestinationPin & { airports: string[] }>();
     const invalidateMaps = async () => {
       destinationsCache.clear();
+      sitePinsCache.clear();
       await platform.cache.bump("catalog:dest:gen");
       await platform.cache.bump("catalog:airports:gen");
     };
     /** One rule for the search and for the quote request that follows it (ADR-IMPL-037, ADR-IMPL-042): the company's
      *  formula, when estimates are on and this environment holds valid rules. Both flag rows are cached (~35 s to reach
      *  every replica) and a failed read counts as off; without valid rules there is no estimate, never an error. */
-    async function estimateRules(metric: "search" | "request") {
+    async function estimateRules(metric: "search" | "request" | "home") {
       if (!(await platform.flags.isEnabled("catalog.estimates", false))) return null;
       const stored = readStoredRules(await platform.flags.read("catalog.pricing_rules"));
       if (!stored.ok) {
@@ -69,15 +76,81 @@ export const catalogModule = (
       return estimate;
     }
 
+    /**
+     * ADR-IMPL-045: the site's cities listed from `home`, as pins priced the way their search will be — the formula, in
+     * the member's cabin (ADR-IMPL-037), so a pin, its estimate row and the quote it leads to show one number. Nothing
+     * unless `catalog.site_pins` is on and estimates are (no price, no pin). Cached like the fares' pins: 60 s, and
+     * dropped when the sync or an import bumps the generation.
+     */
+    async function sitePins(
+      home: string,
+      cabin: "business" | "first",
+    ): Promise<(DestinationPin & { airports: string[] })[]> {
+      if (!(await platform.flags.isEnabled("catalog.site_pins", false))) return [];
+      const stored = await estimateRules("home");
+      if (!stored) return [];
+      const key = `${home.toUpperCase()}:${cabin}:${stored.fingerprint}`;
+      const load = async () => {
+        const [homeRow, rows] = await Promise.all([
+          airportsRepo.get(conn, home),
+          siteRepo.pinsFrom(conn, home, SITE_PINS * 3),
+        ]);
+        if (!homeRow) return [];
+        return rows.flatMap((r) => {
+          const estimate = toEstimateVM(stored.rules, homeRow, r.airport, cabin);
+          if (!estimate) return [];
+          return [
+            {
+              code: r.airport.code.trim(),
+              name: r.airport.name,
+              city: r.airport.city,
+              countryCode: r.airport.countryCode,
+              region: r.airport.region,
+              lat: Number(r.airport.lat),
+              lng: Number(r.airport.lng),
+              fromPrice: estimate.amount,
+              airports: r.airports,
+            },
+          ];
+        });
+      };
+      const gen = await platform.cache.generation("catalog:dest:gen");
+      if (gen == null) return sitePinsCache.get(key, load);
+      return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, 60, load);
+    }
+
+    /** ADR-IMPL-045: the site's photos, and the cities kept out of them (`skip`: the site's ids). Null: off. */
+    async function sitePhotos(): Promise<{ skip: ReadonlySet<number> } | null> {
+      const v = await platform.flags.read("catalog.site_photos");
+      if (v?.enabled !== true) return null;
+      const skip = Array.isArray(v.skip) ? v.skip.filter((x): x is number => Number.isInteger(x)) : [];
+      return { skip: new Set(skip) };
+    }
+
     const expose: CatalogFacade = {
       searchFares: (exec, q) => faresRepo.search(exec ?? conn, q),
       getFare: (exec, id) => faresRepo.getAny(exec ?? conn, id),
-      destinations: async (exec, home) => {
-        if (exec) return faresRepo.destinations(exec, home);
-        const gen = await platform.cache.generation("catalog:dest:gen");
-        if (gen == null) return destinationsCache.get(home, () => faresRepo.destinations(conn, home));
-        const code = home.toUpperCase();
-        return platform.cache.getOrLoad(`catalog:dest:${gen}:${code}`, 60, () => faresRepo.destinations(conn, home));
+      destinations: async (exec, home, opts) => {
+        const fares = await (async () => {
+          if (exec) return faresRepo.destinations(exec, home);
+          const gen = await platform.cache.generation("catalog:dest:gen");
+          if (gen == null) return destinationsCache.get(home, () => faresRepo.destinations(conn, home));
+          const code = home.toUpperCase();
+          return platform.cache.getOrLoad(`catalog:dest:${gen}:${code}`, 60, () => faresRepo.destinations(conn, home));
+        })();
+        // ADR-IMPL-045: after the fares' pins, the site's cities none of whose airports is pinned already — by a fare,
+        // or by a site city before it (two cities naming one airport give one pin).
+        const site = await sitePins(home, opts?.cabin ?? "business");
+        if (site.length === 0) return fares;
+        const pinned = new Set(fares.map((f) => f.code.trim()));
+        const added: DestinationPin[] = [];
+        for (const { airports, ...pin } of site) {
+          if (added.length === SITE_PINS) break;
+          if (pinned.has(pin.code) || airports.some((c) => pinned.has(c))) continue;
+          for (const c of airports) pinned.add(c);
+          added.push(pin);
+        }
+        return [...fares, ...added];
       },
       searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
@@ -473,6 +546,34 @@ export const catalogModule = (
             handler: async () => {
               if (!platform.redis) return { skipped: 1, rows: 0 };
               return { skipped: 0, ...(await rollupDemand(platform.redis, conn)) };
+            },
+          },
+        },
+        {
+          // ADR-IMPL-045: the site's destinations, once a night. With its photos and its pins off, nothing is asked
+          // and the site's photos go back to Wikimedia. Four requests at a time end well inside the worker's 120 s.
+          name: "sync-site-destinations",
+          spec: {
+            cron: "40 7 * * *",
+            singleton: true,
+            timeoutMs: 100_000,
+            handler: async (ctx) => {
+              const photos = await sitePhotos();
+              const pins = await platform.flags.isEnabled("catalog.site_pins", false);
+              const report = await syncSite(
+                {
+                  db: conn,
+                  site: {
+                    fetch: opts.fetch ?? fetch,
+                    userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; site destinations)`,
+                    signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                  },
+                  logger: platform.logger,
+                },
+                { read: photos !== null || pins, photos },
+              );
+              if (report.read) await invalidateMaps();
+              return report;
             },
           },
         },

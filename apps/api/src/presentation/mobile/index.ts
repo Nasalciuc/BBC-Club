@@ -73,7 +73,8 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const homeCode = (profile?.homeAirport ?? DEFAULT_HOME_AIRPORT).toUpperCase();
 
         const [destRows, offerRows] = await Promise.all([
-          ports.catalog.destinations(undefined, homeCode),
+          // ADR-IMPL-045: the site's pins are priced in the cabin the member's search starts in.
+          ports.catalog.destinations(undefined, homeCode, { cabin: profile?.preferences.cabin ?? "business" }),
           ports.proposals.feed(undefined, actor, null, 50),
         ]);
 
@@ -111,7 +112,15 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         };
 
         const etag = `"${createHash("sha1")
-          .update(JSON.stringify({ homeCode, destinations: destinations.map((d) => d.code), offerIds, states }))
+          .update(
+            JSON.stringify({
+              homeCode,
+              // A pin's price is in the tag: a new night's prices are new pins (ADR-IMPL-045).
+              destinations: destinations.map((d) => `${d.code}:${d.fromPrice}`),
+              offerIds,
+              states,
+            }),
+          )
           .digest("hex")
           .slice(0, 16)}"`;
         const ifNoneMatch = c.req.header("If-None-Match");

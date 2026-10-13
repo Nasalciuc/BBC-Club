@@ -43,7 +43,9 @@ describe("extras ledger", () => {
         'fares_home_destinations',
         'notif_sending_claimed',
         'place_photos_due',
-        'requests_member_list'
+        'requests_member_list',
+        'site_places_airport',
+        'site_routes_cms_id'
       )
       ORDER BY indexname`);
     expect(indexes.map((r) => r.indexname)).toEqual([
@@ -54,6 +56,8 @@ describe("extras ledger", () => {
       "notif_sending_claimed",
       "place_photos_due",
       "requests_member_list",
+      "site_places_airport",
+      "site_routes_cms_id",
     ]);
 
     const second = await runMigrate();
@@ -113,6 +117,7 @@ describe("extras ledger", () => {
       "0025_requests_estimate_pair_and_list.sql",
       "0026_catalog_place_photos.sql",
       "0027_platform_idle_in_transaction_timeout.sql",
+      "0028_catalog_site_destinations.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
