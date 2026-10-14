@@ -14,7 +14,7 @@ import {
 } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
-import { airportSearchState } from "@/lib/airport-search-state";
+import { airportSearchState, chosenAirportLabel, wantsAirportSearch } from "@/lib/airport-search-state";
 import { fetchAirports, patchProfile, type Profile } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
 import type { ProfileSheetHandle } from "./types";
@@ -58,19 +58,24 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   }));
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    if (!wantsAirportSearch(query, selected)) {
       setSearch(airportSearchState("idle"));
       return;
     }
     setSearch(airportSearchState("loading"));
+    // An answer still on its way when the member types on, or chooses, is dropped: it would reopen the list.
+    let cancelled = false;
     const t = setTimeout(() => {
       void (async () => {
         const result = await fetchAirports(query);
-        setSearch(airportSearchState(result));
+        if (!cancelled) setSearch(airportSearchState(result));
       })();
     }, 200);
-    return () => clearTimeout(t);
-  }, [query]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query, selected]);
 
   async function onSave() {
     const code = (selected?.code ?? query.trim().toUpperCase()).slice(0, 3);
@@ -156,7 +161,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
             },
           }}
         />
-      ) : search.airports.length > 0 ? (
+      ) : search.airports.length > 0 && !selected ? (
         <View style={styles.rows}>
           {search.airports.map((a) => (
             <AirportRow
@@ -169,7 +174,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
                 // The choice ends the typing: the keyboard goes, and the sheet shows its button again.
                 Keyboard.dismiss();
                 setSelected(a);
-                setQuery(`${a.city} · ${a.code}`);
+                setQuery(chosenAirportLabel(a));
                 setSearch(airportSearchState("idle"));
               }}
             />

@@ -140,13 +140,6 @@ export function SheetSelected({ state, offline, onRetry, onQuote, onEditDates, o
   );
 }
 
-/** Whether Explore docks the `Request a quote` footer: results or an estimate, never beside an EmptyState's own pill. */
-export function wantsQuoteFooter(state: SearchState, offline: boolean): boolean {
-  if (offline) return false;
-  if (state.status === "done" || state.status === "paused") return state.results !== null;
-  return state.status === "empty" && state.estimate !== null;
-}
-
 const styles = StyleSheet.create({
   chips: {
     flexDirection: "row",

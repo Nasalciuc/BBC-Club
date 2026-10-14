@@ -17,7 +17,7 @@ import {
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
 import { deviceTimeZone } from "@/features/explore/discovery-logic";
-import { airportSearchState } from "@/lib/airport-search-state";
+import { airportSearchState, chosenAirportLabel, wantsAirportSearch } from "@/lib/airport-search-state";
 import { fetchAirports, fetchHomeSuggestion, patchProfile, putTravelPreferences } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
 import { appStorage, ONBOARDED_KEY } from "@/lib/storage-keys";
@@ -55,19 +55,24 @@ export default function OnboardingScreen() {
   }, []);
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    if (!wantsAirportSearch(query, selected)) {
       setSearch(airportSearchState("idle"));
       return;
     }
     setSearch(airportSearchState("loading"));
+    // An answer still on its way when the member types on, or chooses, is dropped: it would reopen the list.
+    let cancelled = false;
     const t = setTimeout(() => {
       void (async () => {
         const result = await fetchAirports(query);
-        setSearch(airportSearchState(result));
+        if (!cancelled) setSearch(airportSearchState(result));
       })();
     }, 200);
-    return () => clearTimeout(t);
-  }, [query]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query, selected]);
 
   async function onContinue() {
     const code = (selected?.code ?? query.trim().toUpperCase()).slice(0, 3);
@@ -145,7 +150,7 @@ export default function OnboardingScreen() {
             airport={suggested.name}
             onPress={() => {
               setSelected(suggested);
-              setQuery(`${suggested.city} · ${suggested.code}`);
+              setQuery(chosenAirportLabel(suggested));
               setSearch(airportSearchState("idle"));
             }}
           />
@@ -183,7 +188,7 @@ export default function OnboardingScreen() {
               },
             }}
           />
-        ) : search.airports.length > 0 ? (
+        ) : search.airports.length > 0 && !selected ? (
           <View style={styles.rows}>
             {search.airports.map((a) => (
               <AirportRow
@@ -194,7 +199,7 @@ export default function OnboardingScreen() {
                 airport={a.name}
                 onPress={() => {
                   setSelected(a);
-                  setQuery(`${a.city} · ${a.code}`);
+                  setQuery(chosenAirportLabel(a));
                   setSearch(airportSearchState("idle"));
                 }}
               />

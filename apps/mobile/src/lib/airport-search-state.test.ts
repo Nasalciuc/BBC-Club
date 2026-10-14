@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { airportSearchState } from "./airport-search-state";
+import { airportSearchState, chosenAirportLabel, wantsAirportSearch } from "./airport-search-state";
 
 const jfk = { code: "JFK", city: "New York", name: "John F. Kennedy", countryCode: "US" };
 
@@ -28,5 +28,23 @@ describe("airportSearchState", () => {
     const next = airportSearchState(offline);
     expect(next).toEqual({ phase: "error", airports: [] });
     expect(next.airports).not.toBe(shown.airports);
+  });
+});
+
+describe("wantsAirportSearch", () => {
+  test("searches from two characters", () => {
+    expect(wantsAirportSearch("N", null)).toBe(false);
+    expect(wantsAirportSearch(" N ", null)).toBe(false);
+    expect(wantsAirportSearch("Ne", null)).toBe(true);
+  });
+
+  test("never searches the words of the airport just chosen — the list stays closed under the choice", () => {
+    expect(chosenAirportLabel(jfk)).toBe("New York · JFK");
+    expect(wantsAirportSearch("New York · JFK", jfk)).toBe(false);
+  });
+
+  test("searches again as soon as the member changes the words", () => {
+    expect(wantsAirportSearch("New York · JF", jfk)).toBe(true);
+    expect(wantsAirportSearch("New York · JFK", null)).toBe(true);
   });
 });
