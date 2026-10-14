@@ -57,8 +57,19 @@ export function ListRow({
   );
 
   if (!pressable) {
+    // A row that would act and cannot now (`disabled` with an `onPress`) stays one element to VoiceOver and TalkBack —
+    // a button, dimmed — so the 40% is not the only sign (DESIGN.md: nothing communicated by color alone). A row with a
+    // switch leaves the reading to its switch, which says the same.
+    const dimmedAction = onPress != null && toggle == null;
     return (
-      <View testID={testID} style={[styles.row, disabled && styles.disabled]} accessibilityLabel={a11yLabel}>
+      <View
+        testID={testID}
+        style={[styles.row, disabled && styles.disabled]}
+        accessible={dimmedAction}
+        accessibilityRole={dimmedAction ? "button" : undefined}
+        accessibilityState={dimmedAction ? { disabled: true } : undefined}
+        accessibilityLabel={a11yLabel}
+      >
         {body}
       </View>
     );
