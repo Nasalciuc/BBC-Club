@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildDraft, defaultDates, draftToBody } from "./useRequestDraft";
+import { buildDraft, defaultDates, draftToBody, legsForTripType, missingReturn } from "./useRequestDraft";
 
 const TODAY = "2026-10-08";
 
@@ -39,6 +39,42 @@ describe("buildDraft — dates", () => {
     expect(oneWay.tripType).toBe("oneway");
     expect(draftToBody(oneWay).legs).toHaveLength(1);
     expect(oneWay.legs[0]?.date).toBe("2026-11-03");
+    // No return was chosen: none is invented for a later switch to Round trip.
+    expect(oneWay.legs[1]?.date).toBe("");
+  });
+});
+
+describe("legsForTripType — One way and back", () => {
+  const out = { from: "JFK", to: "LHR", date: "2026-11-03" };
+  const back = { from: "LHR", to: "JFK", date: "2026-11-10" };
+
+  it("One way keeps the outbound only", () => {
+    expect(legsForTripType([out, back], "oneway")).toEqual([out]);
+  });
+
+  it("back to Round trip, the return has no date — the sheet asks for one (Figma 135:851)", () => {
+    const legs = legsForTripType(legsForTripType([out, back], "oneway"), "round");
+    expect(legs).toEqual([out, { from: "LHR", to: "JFK", date: "" }]);
+    expect(missingReturn("round", legs[1]?.date)).toBe(true);
+  });
+
+  it("a round trip that has its return keeps it", () => {
+    expect(legsForTripType([out, back], "round")).toEqual([out, back]);
+  });
+
+  it("a one-way search switched to Round trip asks for the return", () => {
+    const draft = buildDraft({
+      mode: "quote",
+      today: TODAY,
+      search: {
+        dates: { depart: "2026-11-03", return: null, flexible: false },
+        cabin: "business",
+        passengers: { adult: 1, child: 0, infant: 0 },
+      },
+    });
+    const legs = legsForTripType(draft.legs, "round");
+    expect(legs[1]?.date).toBe("");
+    expect(missingReturn("round", legs[1]?.date)).toBe(true);
   });
 });
 

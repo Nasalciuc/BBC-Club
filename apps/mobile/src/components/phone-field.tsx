@@ -54,7 +54,7 @@ export function PhoneField({
           onChangeText={onChangeText}
           keyboardType="phone-pad"
           style={styles.input}
-          placeholderTextColor={tokens.colors.textTertiary}
+          placeholderTextColor={tokens.colors.textSecondary}
         />
       </View>
 

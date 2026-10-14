@@ -10,30 +10,28 @@ type Props = {
   testID: string;
 };
 
-/** No illustrations — title, body, one button. Copy lives in the screen. */
+/**
+ * Figma EmptyState (48:18): left-aligned — the 28-pt editorial title, the explanation under it, 24 pt to one primary
+ * button across the width. No illustration; copy lives in the screen. The parent gives the 24-pt gutters.
+ */
 export function EmptyState({ title, body, primary, testID }: Props) {
   return (
     <View style={styles.wrap} testID={testID}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.body}>{body}</Text>
-      {/* Figma EmptyState: the pill is Tone Primary — the one filled button of a light screen. */}
-      <Button
-        testID={`${testID}.primary`}
-        label={primary.label}
-        onPress={primary.onPress}
-        variant="primary"
-        shape="pill"
-      />
+      <View style={styles.message}>
+        <Text style={styles.title} accessibilityRole="header">
+          {title}
+        </Text>
+        <Text style={styles.body}>{body}</Text>
+      </View>
+      <Button testID={`${testID}.primary`} label={primary.label} onPress={primary.onPress} variant="primary" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: tokens.space.lg,
-    alignItems: "stretch",
-    gap: tokens.space.sm,
-  },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, textAlign: "center" },
-  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary, textAlign: "center" },
+  // Left-aligned across the parent, even in a centring screen: the message never shrinks to its words.
+  wrap: { alignSelf: "stretch", alignItems: "stretch", gap: tokens.space.lg },
+  message: { gap: tokens.space.sm },
+  title: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },
+  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
 });

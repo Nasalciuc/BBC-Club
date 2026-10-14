@@ -55,22 +55,13 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
   switch (action.type) {
     case "reset":
       return action.draft;
-    case "setTripType": {
-      const legs =
-        action.tripType === "oneway"
-          ? state.legs.slice(0, 1)
-          : state.legs.length >= 2
-            ? state.legs
-            : [
-                state.legs[0]!,
-                {
-                  from: state.legs[0]!.to,
-                  to: state.legs[0]!.from,
-                  date: state.legs[0]!.date,
-                },
-              ];
-      return { ...state, tripType: action.tripType, legs, returnError: null };
-    }
+    case "setTripType":
+      return {
+        ...state,
+        tripType: action.tripType,
+        legs: legsForTripType(state.legs, action.tripType),
+        returnError: null,
+      };
     case "setDepart": {
       const legs = [...state.legs];
       if (legs[0]) legs[0] = { ...legs[0], date: action.date };
@@ -114,6 +105,17 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
   }
 }
 
+/**
+ * The legs a trip type keeps. One way keeps the outbound; back to Round trip, the return comes back without a date —
+ * the member picks one (Figma 135:851 · return missing), never a same-day return they did not choose.
+ */
+export function legsForTripType(legs: RequestLeg[], tripType: TripType): RequestLeg[] {
+  if (tripType === "oneway") return legs.slice(0, 1);
+  const out = legs[0];
+  if (!out || legs.length >= 2) return legs;
+  return [out, { from: out.to, to: out.from, date: "" }];
+}
+
 /** What Home already knows when it opens the sheet: the member's choices for this search (ADR-IMPL-041). */
 export type SearchContext = {
   dates: { depart: string | null; return: string | null; flexible: boolean };
@@ -153,12 +155,13 @@ export function buildDraft(opts: {
   const depart = opts.search?.dates.depart ?? suggested.depart;
   const ret = opts.search?.dates.depart ? opts.search.dates.return : suggested.ret;
   const tripType: TripType = opts.search?.dates.depart && !opts.search.dates.return ? "oneway" : "round";
+  // A one-way search chose no return: if the member turns it into a round trip, the return is theirs to pick.
   return {
     mode,
     tripType,
     legs: [
       { from, to, date: depart },
-      { from: to, to: from, date: ret ?? addDays(depart, DEFAULT_TRIP_NIGHTS) },
+      { from: to, to: from, date: tripType === "oneway" ? "" : (ret ?? addDays(depart, DEFAULT_TRIP_NIGHTS)) },
     ],
     passengers,
     cabin,

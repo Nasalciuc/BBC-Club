@@ -1,12 +1,23 @@
-import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
+import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import NetInfo from "@react-native-community/netinfo";
 import { useRouter, type Href } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
 import { requestRoute } from "@bbc/shared/requests/display";
-import { Button, Chip, CloseButton, StateMessage, short, tokens, rn, type Selection } from "@bbc/ui";
+import {
+  Button,
+  Chip,
+  ModalSheet,
+  type ModalSheetHandle,
+  StateMessage,
+  short,
+  tokens,
+  rn,
+  type Selection,
+} from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
 import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
@@ -45,10 +56,9 @@ export type RequestSheetHandle = {
   dismiss: () => void;
 };
 
-const REQUEST_SNAP_POINTS = ["90%"];
-
 export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet(_props, ref) {
-  const modalRef = useRef<BottomSheetModal>(null);
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
   const datesRef = useRef<DatesSheetHandle>(null);
   const sourceRef = useRef<RequestSource>("offer");
   const cityRef = useRef("");
@@ -65,10 +75,25 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   // Set at the first line of a submit, before anything is awaited: a second tap while the first is still checking the
   // network would otherwise send, or save, the request twice.
   const submittingRef = useRef(false);
+  // The actions are pinned over the content's end, the keyboard may be up: each new error scrolls into view — the
+  // return's and the phone's with the field at fault, the sending one with its Try again.
+  const returnBlock = useRef<View>(null);
+  const phoneBlock = useRef<View>(null);
+  const notSent = useRef<View>(null);
 
   useEffect(() => {
     keyRef.current = idempotencyKey;
   }, [idempotencyKey]);
+
+  useEffect(() => {
+    if (state.returnError) modalRef.current?.reveal(returnBlock.current);
+  }, [state.returnError]);
+  useEffect(() => {
+    if (state.phoneError) modalRef.current?.reveal(phoneBlock.current);
+  }, [state.phoneError]);
+  useEffect(() => {
+    if (state.submitError) modalRef.current?.reveal(notSent.current);
+  }, [state.submitError]);
 
   useImperativeHandle(ref, () => ({
     present(opts) {
@@ -195,6 +220,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   }`;
 
   function presentDates(editing: Selection["editing"]) {
+    // The calendar opens over the sheet: the keyboard of a field being typed in would cover its button.
+    Keyboard.dismiss();
     datesRef.current?.present({
       tripType: state.tripType,
       depart: state.legs[0]?.date || null,
@@ -205,138 +232,144 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
 
   return (
     <>
-      <BottomSheetModal
+      {/* Figma 135:849: the tall sheet; the content from 96 pt; the button and its promise pinned at the bottom. */}
+      <ModalSheet
         ref={modalRef}
-        snapPoints={REQUEST_SNAP_POINTS}
-        enablePanDownToClose={!busy}
-        keyboardBehavior="interactive"
-        backgroundStyle={styles.bg}
-        handleIndicatorStyle={styles.handle}
-      >
-        <BottomSheetScrollView contentContainerStyle={styles.content} testID="request.sheet">
-          <>
-            <View style={styles.header}>
-              <Text style={styles.title}>{sheetTitle(state.mode)}</Text>
-              <CloseButton testID="request.close" onPress={() => modalRef.current?.dismiss()} />
-            </View>
-            <Text style={styles.mono}>{monoLine}</Text>
-
-            <View style={styles.chips}>
-              <Chip
-                testID="request.tripType.round"
-                label="Round trip"
-                selected={state.tripType === "round"}
-                onPress={() => dispatch({ type: "setTripType", tripType: "round" })}
-              />
-              <Chip
-                testID="request.tripType.oneway"
-                label="One way"
-                selected={state.tripType === "oneway"}
-                onPress={() => dispatch({ type: "setTripType", tripType: "oneway" })}
-              />
-            </View>
-
-            <DateRow
-              testID="request.depart"
-              label="DEPART"
-              value={state.legs[0]?.date ? short(state.legs[0].date) : "Select date"}
-              onPress={() => presentDates("depart")}
-            />
-            {state.tripType === "round" ? (
-              <DateRow
-                testID="request.return"
-                label="RETURN"
-                value={state.legs[1]?.date ? short(state.legs[1].date) : "Select date"}
-                error={Boolean(state.returnError)}
-                onPress={() => presentDates("return")}
-              />
-            ) : null}
-            {state.returnError ? (
-              <Text testID="request.returnError" style={styles.error}>
-                {state.returnError}
-              </Text>
-            ) : null}
-            <Field
-              testID="request.travelers"
-              label="TRAVELERS"
-              value={String(state.passengers.adult)}
-              onChangeText={(v) => {
-                const n = Math.max(1, Math.min(9, Number(v) || 1));
-                dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult: n } });
-              }}
-              keyboardType="number-pad"
-            />
-            <Field
-              testID="request.name"
-              label="NAME"
-              value={state.contact.name}
-              onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
-              empty={!state.contact.name}
-            />
-            <PhoneField
-              testID="request.phone"
-              countryTestID="phone.country"
-              value={state.contact.phone}
-              country={phoneCountry}
-              empty={!state.contact.phone}
-              onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
-              onCountryChange={(c) => {
-                setPhoneCountry(c);
-                dispatch({ type: "setPhoneError", error: null });
-              }}
-            />
-            {state.phoneError ? <Text style={styles.error}>{state.phoneError}</Text> : null}
-            <Field
-              testID="request.email"
-              label="EMAIL"
-              value={state.contact.email}
-              onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
-              empty={!state.contact.email}
-              keyboardType="email-address"
-            />
-
-            {noteOpen ? (
-              <Field
-                testID="request.note"
-                label="NOTE"
-                value={state.note}
-                onChangeText={(v) => dispatch({ type: "setNote", note: v })}
-                multiline
-                maxLength={NOTE_MAX}
-              />
-            ) : (
-              <Pressable
-                testID="request.note"
-                accessibilityRole="button"
-                onPress={() => setNoteOpen(true)}
-                style={({ pressed }) => pressed && styles.pressed}
-              >
-                <Text style={styles.link}>+ Add a note</Text>
-              </Pressable>
-            )}
-
-            {state.submitError ? (
-              <StateMessage
-                testID="request.notSent"
-                variant="error"
-                title={stateCopy("notSent").title}
-                body={state.submitError || stateCopy("notSent").body}
-                primary={{ label: "Try again", onPress: () => void onSubmit() }}
-              />
-            ) : null}
-
+        title={sheetTitle(state.mode)}
+        closeTestID="request.close"
+        testID="request.sheet"
+        contentTop={96}
+        contentGap={tokens.space.sm}
+        footerBottom={50}
+        dismissible={!busy}
+        insets={insets}
+        footer={
+          <View style={styles.footer}>
             <Button
               testID="request.submit"
               label={busy ? "Sending…" : sheetTitle(state.mode)}
               variant="primary"
               busy={busy}
-              shape="pill"
               onPress={() => void onSubmit()}
             />
             <Text style={styles.caption}>A specialist will call you shortly.</Text>
-          </>
-        </BottomSheetScrollView>
-      </BottomSheetModal>
+          </View>
+        }
+      >
+        <Text style={styles.mono}>{monoLine}</Text>
+
+        <View style={styles.chips}>
+          <Chip
+            testID="request.tripType.round"
+            label="Round trip"
+            selected={state.tripType === "round"}
+            fill="equal"
+            onPress={() => dispatch({ type: "setTripType", tripType: "round" })}
+          />
+          <Chip
+            testID="request.tripType.oneway"
+            label="One way"
+            selected={state.tripType === "oneway"}
+            fill="equal"
+            onPress={() => dispatch({ type: "setTripType", tripType: "oneway" })}
+          />
+        </View>
+
+        <DateRow
+          testID="request.depart"
+          label="DEPART"
+          value={state.legs[0]?.date ? short(state.legs[0].date) : "Select date"}
+          onPress={() => presentDates("depart")}
+        />
+        {state.tripType === "round" ? (
+          <View ref={returnBlock} style={styles.block}>
+            <DateRow
+              testID="request.return"
+              label="RETURN"
+              value={state.legs[1]?.date ? short(state.legs[1].date) : "Select date"}
+              error={Boolean(state.returnError)}
+              onPress={() => presentDates("return")}
+            />
+            {state.returnError ? (
+              <Text testID="request.returnError" style={styles.error}>
+                {state.returnError}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        <Field
+          testID="request.travelers"
+          label="TRAVELERS"
+          value={String(state.passengers.adult)}
+          onChangeText={(v) => {
+            const n = Math.max(1, Math.min(9, Number(v) || 1));
+            dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult: n } });
+          }}
+          keyboardType="number-pad"
+        />
+        <Field
+          testID="request.name"
+          label="NAME"
+          value={state.contact.name}
+          onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
+          empty={!state.contact.name}
+        />
+        <View ref={phoneBlock} style={styles.block}>
+          <PhoneField
+            testID="request.phone"
+            countryTestID="phone.country"
+            value={state.contact.phone}
+            country={phoneCountry}
+            empty={!state.contact.phone}
+            onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
+            onCountryChange={(c) => {
+              setPhoneCountry(c);
+              dispatch({ type: "setPhoneError", error: null });
+            }}
+          />
+          {state.phoneError ? <Text style={styles.error}>{state.phoneError}</Text> : null}
+        </View>
+        <Field
+          testID="request.email"
+          label="EMAIL"
+          value={state.contact.email}
+          onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
+          empty={!state.contact.email}
+          keyboardType="email-address"
+        />
+
+        {noteOpen ? (
+          <Field
+            testID="request.note"
+            label="NOTE"
+            value={state.note}
+            onChangeText={(v) => dispatch({ type: "setNote", note: v })}
+            multiline
+            maxLength={NOTE_MAX}
+          />
+        ) : (
+          <Pressable
+            testID="request.note"
+            accessibilityRole="button"
+            onPress={() => setNoteOpen(true)}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Text style={styles.link}>+ Add a note</Text>
+          </Pressable>
+        )}
+
+        {state.submitError ? (
+          <View ref={notSent}>
+            <StateMessage
+              testID="request.notSent"
+              variant="error"
+              title={stateCopy("notSent").title}
+              body={state.submitError || stateCopy("notSent").body}
+              primary={{ label: "Try again", onPress: () => void onSubmit() }}
+            />
+          </View>
+        ) : null}
+      </ModalSheet>
       <DatesSheet
         ref={datesRef}
         onUse={(s) => {
@@ -408,22 +441,15 @@ function Field({
         multiline={multiline}
         maxLength={maxLength}
         style={[styles.field, empty && styles.fieldEmpty, multiline && styles.fieldMulti]}
-        placeholderTextColor={tokens.colors.textTertiary}
+        placeholderTextColor={tokens.colors.textSecondary}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.sm },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
+  footer: { gap: tokens.space.xs },
+  block: { gap: tokens.space.sm },
   mono: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
   chips: { flexDirection: "row", gap: tokens.space.xs },
   fieldWrap: { gap: tokens.space.xxs },

@@ -50,9 +50,14 @@ export function SheetSelected({ state, offline, onRetry, onQuote, onEditDates, o
         </View>
       ) : (
         <View style={styles.chips} testID="explore.chips">
-          <Chip testID="explore.chip.dates" label={datesChipLabel(state.dates)} onPress={onEditDates} />
-          <Chip testID="explore.chip.cabin" label={cabinLabel(state.cabin)} onPress={onEditCabin} />
-          <Chip testID="explore.chip.travelers" label={travelersLabel(state.passengers)} onPress={onEditTravelers} />
+          <Chip testID="explore.chip.dates" label={datesChipLabel(state.dates)} fill="content" onPress={onEditDates} />
+          <Chip testID="explore.chip.cabin" label={cabinLabel(state.cabin)} fill="content" onPress={onEditCabin} />
+          <Chip
+            testID="explore.chip.travelers"
+            label={travelersLabel(state.passengers)}
+            fill="content"
+            onPress={onEditTravelers}
+          />
         </View>
       )}
 
@@ -133,13 +138,6 @@ export function SheetSelected({ state, offline, onRetry, onQuote, onEditDates, o
       ) : null}
     </>
   );
-}
-
-/** Whether Explore docks the `Request a quote` footer: results or an estimate, never beside an EmptyState's own pill. */
-export function wantsQuoteFooter(state: SearchState, offline: boolean): boolean {
-  if (offline) return false;
-  if (state.status === "done" || state.status === "paused") return state.results !== null;
-  return state.status === "empty" && state.estimate !== null;
 }
 
 const styles = StyleSheet.create({

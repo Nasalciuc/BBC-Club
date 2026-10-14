@@ -1,10 +1,20 @@
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { AirportRow, Button, CloseButton, EmptyState, SearchField, StateMessage, tokens, rn } from "@bbc/ui";
+import { Keyboard, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  AirportRow,
+  Button,
+  EmptyState,
+  ModalSheet,
+  type ModalSheetHandle,
+  SearchField,
+  StateMessage,
+  tokens,
+  rn,
+} from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
-import { airportSearchState } from "@/lib/airport-search-state";
+import { airportSearchState, chosenAirportLabel, wantsAirportSearch } from "@/lib/airport-search-state";
 import { fetchAirports, patchProfile, type Profile } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
 import type { ProfileSheetHandle } from "./types";
@@ -16,18 +26,22 @@ type Props = {
   onSaved: (next: Profile) => void;
 };
 
-const SNAP = ["75%"] as const;
-
 export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function HomeAirportSheet(
   { profile, onSaved },
   ref,
 ) {
-  const modalRef = useRef<BottomSheetModal>(null);
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AirportVM | null>(null);
   const [search, setSearch] = useState(() => airportSearchState<AirportVM>("idle"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Under a long list of airports the error would sit behind the pinned button: each new one scrolls into view.
+  const errorRef = useRef<Text>(null);
+  useEffect(() => {
+    if (error) modalRef.current?.reveal(errorRef.current);
+  }, [error]);
 
   useImperativeHandle(ref, () => ({
     present() {
@@ -44,19 +58,24 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   }));
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    if (!wantsAirportSearch(query, selected)) {
       setSearch(airportSearchState("idle"));
       return;
     }
     setSearch(airportSearchState("loading"));
+    // An answer still on its way when the member types on, or chooses, is dropped: it would reopen the list.
+    let cancelled = false;
     const t = setTimeout(() => {
       void (async () => {
         const result = await fetchAirports(query);
-        setSearch(airportSearchState(result));
+        if (!cancelled) setSearch(airportSearchState(result));
       })();
     }, 200);
-    return () => clearTimeout(t);
-  }, [query]);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [query, selected]);
 
   async function onSave() {
     const code = (selected?.code ?? query.trim().toUpperCase()).slice(0, 3);
@@ -77,110 +96,103 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   }
 
   return (
-    <BottomSheetModal
+    <ModalSheet
       ref={modalRef}
-      snapPoints={[...SNAP]}
-      enablePanDownToClose={!busy}
-      keyboardBehavior="interactive"
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
+      title="Home airport"
+      closeTestID="profile.homeAirport.close"
+      testID="profile.homeAirport.sheet"
+      dismissible={!busy}
+      insets={insets}
+      footer={
+        <Button
+          testID="profile.homeAirport.save"
+          label={busy ? "Saving…" : "Save airport"}
+          variant="primary"
+          busy={busy}
+          onPress={() => void onSave()}
+        />
+      }
     >
-      <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.homeAirport.sheet">
-        <View style={styles.header}>
-          <Text style={styles.title}>Home airport</Text>
-          <CloseButton testID="profile.homeAirport.close" onPress={() => modalRef.current?.dismiss()} />
-        </View>
+      <SearchField
+        testID="profile.homeAirport.query"
+        placeholder="City or code"
+        editable
+        value={query ? { text: query } : null}
+        onChangeText={(text) => {
+          setQuery(text);
+          setSelected(null);
+          setError(null);
+        }}
+        onClear={() => {
+          setQuery("");
+          setSelected(null);
+        }}
+      />
 
-        <SearchField
-          testID="profile.homeAirport.query"
-          placeholder="City or code"
-          editable
-          value={query ? { text: query } : null}
-          onChangeText={(text) => {
-            setQuery(text);
-            setSelected(null);
-            setError(null);
-          }}
-          onClear={() => {
-            setQuery("");
-            setSelected(null);
+      {search.phase === "empty" && !selected ? (
+        <EmptyState
+          testID="profile.homeAirport.empty"
+          title="No airports found"
+          body="Try a city name or a three-letter airport code, such as JFK."
+          primary={{
+            label: "Clear search",
+            onPress: () => {
+              setQuery("");
+              setSelected(null);
+              setSearch(airportSearchState("idle"));
+            },
           }}
         />
-
-        {search.phase === "empty" && !selected ? (
-          <EmptyState
-            testID="profile.homeAirport.empty"
-            title="No airports found"
-            body="Try a city name or a three-letter airport code, such as JFK."
-            primary={{
-              label: "Clear search",
-              onPress: () => {
-                setQuery("");
-                setSelected(null);
-                setSearch(airportSearchState("idle"));
-              },
-            }}
-          />
-        ) : search.phase === "error" && !selected ? (
-          <StateMessage
-            testID="profile.homeAirport.error"
-            variant="error"
-            title={stateCopy("generic").title}
-            body={stateCopy("generic").body}
-            primary={{
-              label: "Try again",
-              onPress: () => {
-                const q = query;
-                setSearch(airportSearchState("loading"));
-                void (async () => {
-                  const result = await fetchAirports(q);
-                  setSearch(airportSearchState(result));
-                })();
-              },
-            }}
-          />
-        ) : (
-          search.airports.map((a) => (
+      ) : search.phase === "error" && !selected ? (
+        <StateMessage
+          testID="profile.homeAirport.error"
+          variant="error"
+          title={stateCopy("generic").title}
+          body={stateCopy("generic").body}
+          primary={{
+            label: "Try again",
+            onPress: () => {
+              const q = query;
+              setSearch(airportSearchState("loading"));
+              void (async () => {
+                const result = await fetchAirports(q);
+                setSearch(airportSearchState(result));
+              })();
+            },
+          }}
+        />
+      ) : search.airports.length > 0 && !selected ? (
+        <View style={styles.rows}>
+          {search.airports.map((a) => (
             <AirportRow
               key={a.code}
               testID={`profile.homeAirport.hit.${a.code}`}
               code={a.code}
               city={a.city}
               airport={a.name}
-              countryCode={a.countryCode}
               onPress={() => {
+                // The choice ends the typing: the keyboard goes, and the sheet shows its button again.
+                Keyboard.dismiss();
                 setSelected(a);
-                setQuery(`${a.city} · ${a.code}`);
+                setQuery(chosenAirportLabel(a));
                 setSearch(airportSearchState("idle"));
               }}
             />
-          ))
-        )}
+          ))}
+        </View>
+      ) : null}
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <Button
-          testID="profile.homeAirport.save"
-          label={busy ? "Saving…" : "Save airport"}
-          variant="primary"
-          busy={busy}
-          shape="pill"
-          onPress={() => void onSave()}
-        />
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+      {error ? (
+        <Text ref={errorRef} style={styles.error}>
+          {error}
+        </Text>
+      ) : null}
+    </ModalSheet>
   );
 });
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.sm },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
+  // Figma 238:4561: the airport rows stand 8 pt apart.
+  rows: { gap: tokens.space.xs },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });

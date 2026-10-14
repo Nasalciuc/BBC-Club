@@ -18,7 +18,8 @@ import {
 } from "@/features/explore/SearchPreferenceSheets";
 import { SheetExpanded } from "@/features/explore/SheetExpanded";
 import { SheetRest, useExploreHome } from "@/features/explore/SheetRest";
-import { SheetSelected, wantsQuoteFooter } from "@/features/explore/SheetSelected";
+import { wantsQuoteFooter } from "@/features/explore/quote-footer";
+import { SheetSelected } from "@/features/explore/SheetSelected";
 import { SheetTyping } from "@/features/explore/SheetTyping";
 import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
@@ -187,7 +188,7 @@ export default function ExploreScreen() {
 
   const footer =
     mode === "selected" && wantsQuoteFooter(state, showOffline) ? (
-      <Button testID="explore.quote" label="Request a quote" variant="primary" shape="pill" onPress={openQuote} />
+      <Button testID="explore.quote" label="Request a quote" variant="primary" onPress={openQuote} />
     ) : undefined;
 
   return (

@@ -1,12 +1,13 @@
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Button,
   Calendar,
-  CloseButton,
   ctaLabel,
+  ModalSheet,
+  type ModalSheetHandle,
   rn,
   selectDay,
   sheetTitle,
@@ -18,8 +19,6 @@ import {
 
 export type DatesSheetHandle = { present: (s: Selection) => void };
 
-const DATE_SNAP_POINTS = ["92%"] as const;
-
 type Props = {
   onUse: (s: Selection) => void;
   /** Home only: the way back to `Oct · flexible` — an undated search, the one that can carry an estimate. */
@@ -27,7 +26,7 @@ type Props = {
 };
 
 export const DatesSheet = forwardRef<DatesSheetHandle, Props>(function DatesSheet({ onUse, onFlexible }, ref) {
-  const modal = useRef<BottomSheetModal>(null);
+  const modal = useRef<ModalSheetHandle>(null);
   const [sel, setSel] = useState<Selection | null>(null);
   // The sheet runs to the screen's bottom edge, under Android's navigation bar: the footer keeps its last line above it.
   const insets = useSafeAreaInsets();
@@ -41,55 +40,25 @@ export const DatesSheet = forwardRef<DatesSheetHandle, Props>(function DatesShee
   const cta = sel ? ctaLabel(sel) : { label: "Use these dates", enabled: false };
   const title = sel ? sheetTitle(sel) : "Departure date";
   return (
-    <BottomSheetModal
+    // Figma 325:5878: the tall sheet; the chosen dates fixed under the title, the months scrolling under them, the
+    // button and its guidance pinned 102 pt above the bottom edge — less on a shorter phone, where the months keep
+    // their room.
+    <ModalSheet
       ref={modal}
-      snapPoints={[...DATE_SNAP_POINTS]}
+      title={title}
+      closeTestID="dates.close"
+      testID="dates.root"
+      scroll={false}
+      footerBottom={102}
+      insets={insets}
       stackBehavior="push"
-      enableDynamicSizing={false}
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
-    >
-      <View style={styles.sheet}>
-        <View style={styles.header} testID="dates.root">
-          <Text style={styles.title}>{title}</Text>
-          <CloseButton testID="dates.close" onPress={() => modal.current?.dismiss()} />
-        </View>
-        {sel ? (
-          <View style={styles.legs}>
-            <DatePill
-              testID="dates.depart"
-              label="DEPART"
-              value={sel.depart ? short(sel.depart) : "Select date"}
-              active={sel.editing === "depart"}
-              onPress={() => setSel({ ...sel, editing: "depart" })}
-            />
-            <DatePill
-              testID="dates.return"
-              label="RETURN"
-              value={sel.tripType === "oneway" ? "" : sel.ret ? short(sel.ret) : "Select date"}
-              active={sel.tripType === "round" && sel.editing === "return"}
-              disabled={sel.tripType === "oneway" || !sel.depart}
-              onPress={() => setSel({ ...sel, editing: "return" })}
-            />
-          </View>
-        ) : null}
-        <BottomSheetScrollView contentContainerStyle={styles.scroll}>
-          {sel ? (
-            <Calendar
-              testID="dates.calendar"
-              selection={sel}
-              today={today}
-              onSelect={(d) => setSel(selectDay(sel, d, today))}
-            />
-          ) : null}
-        </BottomSheetScrollView>
-        <View style={[styles.footer, { paddingBottom: tokens.space.lg + insets.bottom }]}>
+      footer={
+        <>
           <Button
             testID="dates.use"
             label={cta.label}
             disabled={!cta.enabled}
             variant="primary"
-            shape="pill"
             onPress={() => {
               if (sel) {
                 onUse(sel);
@@ -113,9 +82,39 @@ export const DatesSheet = forwardRef<DatesSheetHandle, Props>(function DatesShee
             </Pressable>
           ) : null}
           <Text style={styles.note}>Preferred dates. Your specialist confirms availability.</Text>
+        </>
+      }
+    >
+      {sel ? (
+        <View style={styles.legs}>
+          <DatePill
+            testID="dates.depart"
+            label="DEPART"
+            value={sel.depart ? short(sel.depart) : "Select date"}
+            active={sel.editing === "depart"}
+            onPress={() => setSel({ ...sel, editing: "depart" })}
+          />
+          <DatePill
+            testID="dates.return"
+            label="RETURN"
+            value={sel.tripType === "oneway" ? "" : sel.ret ? short(sel.ret) : "Select date"}
+            active={sel.tripType === "round" && sel.editing === "return"}
+            disabled={sel.tripType === "oneway" || !sel.depart}
+            onPress={() => setSel({ ...sel, editing: "return" })}
+          />
         </View>
-      </View>
-    </BottomSheetModal>
+      ) : null}
+      <BottomSheetScrollView contentContainerStyle={styles.scroll}>
+        {sel ? (
+          <Calendar
+            testID="dates.calendar"
+            selection={sel}
+            today={today}
+            onSelect={(d) => setSel(selectDay(sel, d, today))}
+          />
+        ) : null}
+      </BottomSheetScrollView>
+    </ModalSheet>
   );
 });
 
@@ -151,23 +150,7 @@ function DatePill({
 }
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  sheet: { flex: 1 },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: tokens.space.lg,
-    marginBottom: tokens.space.md,
-  },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
   scroll: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg },
-  footer: { paddingHorizontal: tokens.space.lg, gap: tokens.space.xs },
   note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   flexible: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   flexiblePressed: { opacity: 0.6 },

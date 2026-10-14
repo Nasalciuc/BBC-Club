@@ -1,13 +1,16 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import { Icon } from "../icons";
+import { icons } from "../icons";
 import { tokens } from "../tokens";
+
+/** Figma's × spans 14 pt of the 32-pt circle (299:200): lucide's `x` drawn on a 28-pt box, its 1.5 stroke to scale. */
+const Cross = icons.clear;
 
 type Props = {
   onPress: () => void;
   testID: string;
 };
 
-/** 44 × 44 hit; 32 circle, × 16. Label is the symbol — never the word Close. */
+/** Figma CloseButton (299:200): 44 × 44 target; a 32-pt circle filled `border-default`, the ×. Never the word Close. */
 export function CloseButton({ onPress, testID }: Props) {
   return (
     <Pressable
@@ -19,7 +22,7 @@ export function CloseButton({ onPress, testID }: Props) {
       style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
     >
       <View style={styles.circle}>
-        <Icon name="clear" size={16} color={tokens.colors.textPrimary} />
+        <Cross size={28} color={tokens.colors.textPrimary} strokeWidth={1.5} />
       </View>
     </Pressable>
   );
@@ -31,8 +34,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
+    backgroundColor: tokens.colors.borderDefault,
     alignItems: "center",
     justifyContent: "center",
   },

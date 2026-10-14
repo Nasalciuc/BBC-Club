@@ -27,6 +27,8 @@ export { ProfileHero } from "./cards/ProfileHero";
 export { RequestCard } from "./cards/RequestCard";
 
 export { HomeSheet } from "./layout/HomeSheet";
+export { ModalSheet, type ModalSheetHandle } from "./layout/ModalSheet";
+export { MODAL_SHEET_TOP, modalSheetHeight, type ModalSheetSize } from "./layout/modal-sheet-sizes";
 export { TabBar } from "./layout/TabBar";
 
 export { GlobeFallback, type Pin } from "./globe/GlobeFallback";

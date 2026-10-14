@@ -20,3 +20,17 @@ export function airportSearchState<T>(input: AirportSearchInput<T>): AirportSear
   }
   return { phase: "results", airports: input.data };
 }
+
+/** The field's words once an airport is chosen: `New York · JFK`. */
+export function chosenAirportLabel(airport: { city: string; code: string }): string {
+  return `${airport.city} · ${airport.code}`;
+}
+
+/**
+ * Whether the field's words ask for a search: two characters or more, and not the airport just chosen — those words
+ * are the choice itself, and searching them would bring the list back over it.
+ */
+export function wantsAirportSearch(query: string, chosen: { city: string; code: string } | null): boolean {
+  if (query.trim().length < 2) return false;
+  return chosen == null || query !== chosenAirportLabel(chosen);
+}

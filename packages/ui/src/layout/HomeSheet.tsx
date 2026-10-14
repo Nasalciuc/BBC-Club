@@ -64,7 +64,8 @@ export function HomeSheet({ index, onChange, children, footer }: Props) {
 }
 
 const styles = StyleSheet.create({
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
+  // Figma HomeSheet (52:25): the handle is 32 × 4.
+  handle: { width: 32, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
   background: {
     backgroundColor: tokens.colors.surfacePage,
     borderTopLeftRadius: tokens.radius.panel,

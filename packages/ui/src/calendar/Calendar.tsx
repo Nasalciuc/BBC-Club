@@ -66,21 +66,23 @@ function Month({
           </Text>
         ))}
       </View>
-      {weeks.map((w, i) => (
-        <View key={i} style={styles.row}>
-          {w.map((c) => (
-            <Day key={c.date} cell={c} onSelect={onSelect} />
-          ))}
-        </View>
-      ))}
+      <View>
+        {weeks.map((w, i) => (
+          <View key={i} style={styles.row}>
+            {w.map((c) => (
+              <Day key={c.date} cell={c} onSelect={onSelect} />
+            ))}
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
 
 /**
- * One day. The seven days share the row's width (no gaps), so the range reads as one continuous band: full across the
- * days inside it, from the circle's centre outwards on the departure and return days, whose filled circles sit on its
- * ends. The band is light (`border-default`) so the numbers on it keep `text-primary`; only the two ends are filled.
+ * One day (Figma _Calendar / Day, 322:212): a 48-pt square. The range is one light band, 32 pt high, through the days
+ * inside it and from the circle's centre outwards on the departure and return days, whose 48-pt navy circles sit on its
+ * ends. The band is `border-default`, so the numbers on it keep `text-primary`; only the two ends are filled.
  */
 function Day({ cell, onSelect }: { cell: Cell; onSelect: (d: ISODate) => void }) {
   if (!cell.inMonth) return <View style={styles.cell} />;
@@ -115,29 +117,28 @@ function Day({ cell, onSelect }: { cell: Cell; onSelect: (d: ISODate) => void })
   );
 }
 
-/** A day is 48 pt tall (DESIGN.md: 44 pt on iOS, 48 dp on Android) and a seventh of the row wide — 49 pt on a 393 pt
- *  phone; the circle and the band are 40 pt, centred in it. */
+/** Figma Calendar (322:1446): seven 48-pt days, a 336-pt grid centred in the sheet; months 24 pt apart. */
 const DAY = 48;
-const DOT = 40;
+const BAND = 32;
 const styles = StyleSheet.create({
-  month: { marginBottom: tokens.space.lg },
-  title: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary, marginBottom: tokens.space.sm },
+  month: { width: DAY * 7, alignSelf: "center", gap: tokens.space.sm, marginBottom: tokens.space.lg },
+  title: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
   row: { flexDirection: "row" },
-  dow: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary, flex: 1, textAlign: "center" },
-  cell: { flex: 1, height: DAY, alignItems: "center", justifyContent: "center" },
+  dow: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, width: DAY, textAlign: "center" },
+  cell: { width: DAY, height: DAY, alignItems: "center", justifyContent: "center" },
   band: {
     position: "absolute",
-    top: (DAY - DOT) / 2,
-    bottom: (DAY - DOT) / 2,
+    top: (DAY - BAND) / 2,
+    height: BAND,
     left: 0,
     right: 0,
     backgroundColor: tokens.colors.borderDefault,
   },
-  bandFromCentre: { left: "50%" },
-  bandToCentre: { right: "50%" },
-  dot: { width: DOT, height: DOT, borderRadius: DOT / 2, alignItems: "center", justifyContent: "center" },
+  bandFromCentre: { left: DAY / 2 },
+  bandToCentre: { right: DAY / 2 },
+  dot: { width: DAY, height: DAY, borderRadius: DAY / 2, alignItems: "center", justifyContent: "center" },
   dotFilled: { backgroundColor: tokens.colors.actionPrimary },
-  dayText: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  dayText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
   dayDisabled: { color: tokens.colors.textTertiary },
   dayFilled: { color: tokens.colors.textOnDark },
 });

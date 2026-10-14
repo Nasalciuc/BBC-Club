@@ -53,12 +53,13 @@ function extractSourceGlobs(src: string): string[] {
     if (g.length > 0) globs.add(g);
   };
 
-  // testID="…" | testID='…'
-  for (const m of src.matchAll(/testID\s*=\s*(["'])([^"'\\]*(?:\\.[^"'\\]*)*)\1/g)) {
+  // testID="…" | testID='…' — and a control's own id handed to the component that draws it: closeTestID="…" (the ×
+  // of a ModalSheet), countryTestID="…", toggleTestID="…".
+  for (const m of src.matchAll(/\b(?:testID|[a-z]\w*TestID)\s*=\s*(["'])([^"'\\]*(?:\\.[^"'\\]*)*)\1/g)) {
     add(m[2]!);
   }
-  // testID={`…`} | testID={"…"} | testID={'…'}
-  for (const m of src.matchAll(/testID\s*=\s*\{\s*(["'`])([\s\S]*?)\1\s*\}/g)) {
+  // testID={`…`} | testID={"…"} | testID={'…'} (and closeTestID={…} likewise)
+  for (const m of src.matchAll(/\b(?:testID|[a-z]\w*TestID)\s*=\s*\{\s*(["'`])([\s\S]*?)\1\s*\}/g)) {
     add(m[2]!);
   }
   // DEFAULT_TEST_IDS / TEST_IDS = { explore: "tab.explore", … }

@@ -138,6 +138,12 @@ components:
     typography: "{typography.button}"
     rounded: "{rounded.pill}"
     height: 56px
+  button-secondary:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.button}"
+    rounded: "{rounded.pill}"
+    height: 56px
   text-link:
     textColor: "{colors.text-secondary}"
     typography: "{typography.body-sm}"
@@ -151,6 +157,31 @@ components:
   field-label:
     textColor: "{colors.text-secondary}"
     typography: "{typography.label-mono}"
+  chip:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.field}"
+    height: 48px
+  chip-selected:
+    backgroundColor: "{colors.action-primary}"
+    textColor: "{colors.text-on-dark}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.field}"
+    height: 48px
+  airport-row:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body}"
+    height: 72px
+    padding: "{spacing.md}"
+  stepper:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body}"
+    rounded: "{rounded.card}"
+    height: 80px
+    padding: "{spacing.md}"
   code-box:
     backgroundColor: "{colors.surface-card}"
     textColor: "{colors.text-primary}"
@@ -232,6 +263,16 @@ components:
     typography: "{typography.button}"
     rounded: "{rounded.pill}"
     height: 56px
+  modal-sheet:
+    backgroundColor: "{colors.surface-page}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.title}"
+    rounded: "{rounded.panel}"
+    padding: "{spacing.lg}"
+  close-button:
+    backgroundColor: "{colors.border-default}"
+    textColor: "{colors.text-primary}"
+    size: 32px
 
 motion:
   entrance: 900
@@ -301,17 +342,18 @@ Tokens and components in this file are canonical. Details live in `design/compon
 
 Documented in `design/components.md`. Summary of the rules an agent most often gets wrong:
 
-- One filled button per screen; label centered with the arrow directly after it; secondary actions are `text-link`, never buttons.
+- One filled button per screen; its label centered and alone — no arrow, no icon (Figma Button 7:12). A second action is `button-secondary` (white on a hairline) or a `text-link`. The entry screens stay as they are (the owner, 14 Oct): their pill keeps the arrow directly after the label, and Sign in's Create account is `button-outlined`.
 - `field` is white on both worlds with `field-label` above; focus strengthens the border to `text-secondary`; error = `status-danger` border on the field at fault only.
 - Password fields show text by default with an eye toggle; there is no confirm-password field.
 - `proposal-card` and `proposal-row` have no buttons and no chevrons — the whole surface is the tap target; prices appear as `price` beside `price-published` struck through, never as percentage chips.
-- `tab-bar` shows EXPLORE / REQUESTS / PROFILE; inactive labels in `text-secondary` (AA contrast), active in `primary`; unread = 6px `accent-warm` dot.
+- `tab-bar` shows EXPLORE / REQUESTS / PROFILE; inactive labels in `text-secondary` (AA contrast), active in `primary`; unread = 6px `accent-warm` dot. White with no rule above; it runs under the home indicator or navigation bar to the screen's edge.
+- `modal-sheet` — the page under a 35% `surface-night` backdrop; the sheet in `surface-page`, 24px top corners, a 48×4 handle; its title and the filled `close-button`; the actions pinned at the bottom. Figma's four heights, never a percentage (`design/components.md`).
 - `button-destructive` appears only inside the account-deletion confirmation sheet, labeled with the action ("Delete my account").
 - Logo: white version directly on photographs and navy, dark version on `surface-page`; never inside a plate; never recolored.
 
 ## Interaction and States
 
-- Pressed: scale 0.98, arrow drifts 4px right, settles; no color flash. Focus: border strengthening only.
+- Pressed: scale 0.98, settles; no color flash. Focus: border strengthening only.
 - Error, empty, offline, responded and keyboard-open states are separate frames — never stacked on one screen.
 - Unread and selected states use weight plus a marker, never color alone.
 
@@ -329,7 +371,7 @@ Documented in `design/components.md`. Summary of the rules an agent most often g
 
 ## Iconography
 
-- Thin line icons, 1.5px stroke, 20px default (18px in the tab bar), from one set (SF Symbols on iOS, Material Symbols outlined on Android, or Tabler for parity). Never filled and outlined mixed; never an icon without a label for an unfamiliar action; no airplane clip-art, no emoji.
+- Thin line icons, 1.5px stroke, 20px default (24px in the tab bar), from one set (SF Symbols on iOS, Material Symbols outlined on Android, or Tabler for parity). Never filled and outlined mixed; never an icon without a label for an unfamiliar action; no airplane clip-art, no emoji.
 
 ## Product Content
 
@@ -347,4 +389,4 @@ Documented in `design/components.md`. Summary of the rules an agent most often g
 
 - Validate on every change: `npx @google/design.md lint DESIGN.md`; compare versions with `npx @google/design.md diff`. CI fails on errors and orphaned tokens.
 - Remove anything that no longer matches `src/constants/club.ts` and `src/components`. Every rule here is reusable; screen-specific decisions live in the playbook, not in this file.
-- Known gaps: onboarding components (`destination-card`, `stepper`) not yet tokenized; motion durations to be confirmed on device.
+- Known gaps: the onboarding's `destination-card` not yet tokenized; motion durations to be confirmed on device.

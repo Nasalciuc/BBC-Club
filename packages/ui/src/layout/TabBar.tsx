@@ -16,19 +16,28 @@ const DEFAULT_TEST_IDS: Record<TabKey, string> = {
   profile: "tab.profile",
 };
 
+/** Figma TabBar (41:39) draws the home indicator's 32 pt under the targets; a phone with a taller inset gets its own. */
+const HOME_INDICATOR = 32;
+
 type Props = {
   active: TabKey;
   unread: number;
   onPress: (key: TabKey) => void;
+  /** The screen's bottom safe-area inset: the bar's white runs under the home indicator / navigation bar to the edge. */
+  bottomInset?: number;
   testID?: string;
   /** Override per-tab testIDs. Defaults are `tab.explore` / `tab.requests` / `tab.profile`. */
   testIDs?: Partial<Record<TabKey, string>>;
 };
 
-/** Dot lights only for quote_ready count — caller passes that, not unread inbox. */
-export function TabBar({ active, unread, onPress, testID, testIDs }: Props) {
+/**
+ * Figma TabBar (41:39): white, no rule above — 4 pt, the three 48-pt targets sharing the width, then the bottom inset.
+ * Labels in `tab-mono` (DESIGN.md keeps 11 pt). The dot lights only for quote_ready count — the caller passes that, not
+ * unread inbox.
+ */
+export function TabBar({ active, unread, onPress, bottomInset = 0, testID, testIDs }: Props) {
   return (
-    <View style={styles.bar} testID={testID}>
+    <View style={[styles.bar, { paddingBottom: Math.max(bottomInset, HOME_INDICATOR) }]} testID={testID}>
       {TABS.map((tab) => {
         const on = tab.key === active;
         const color = on ? tokens.colors.textPrimary : tokens.colors.textSecondary;
@@ -59,15 +68,11 @@ export function TabBar({ active, unread, onPress, testID, testIDs }: Props) {
 
 const styles = StyleSheet.create({
   bar: {
-    height: 84,
     flexDirection: "row",
-    justifyContent: "space-around",
-    paddingTop: tokens.space.sm,
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopWidth: 1,
-    borderTopColor: tokens.colors.borderDefault,
+    paddingTop: tokens.space.xxs,
+    backgroundColor: tokens.colors.surfaceCard,
   },
-  tab: { width: 88, alignItems: "center", gap: tokens.space.xxs + 2 },
+  tab: { flex: 1, height: 48, alignItems: "center", justifyContent: "center", gap: tokens.space.xxs },
   label: { ...rn(tokens.type.tabMono) },
   dot: {
     position: "absolute",

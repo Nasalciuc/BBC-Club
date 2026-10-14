@@ -78,35 +78,44 @@ export function SheetTyping({ onSelect, from, suggestions = [] }: Props) {
         onClear={() => setAirportQuery("")}
       />
       {airports.length > 0 ? <SectionLabel label={label} /> : null}
-      {airports.map((a) => (
-        <AirportRow
-          key={a.code}
-          testID={`explore.airport.${a.code}`}
-          code={a.code}
-          city={a.city}
-          airport={a.name}
-          countryCode={a.countryCode}
-          onPress={() => onSelect(a)}
-        />
-      ))}
-      {emptyQuery && recent.length > 0 ? <SectionLabel label="Recent" /> : null}
-      {emptyQuery
-        ? recent.map((a) => (
+      {airports.length > 0 ? (
+        <View style={styles.rows}>
+          {airports.map((a) => (
             <AirportRow
-              key={`recent.${a.code}`}
-              testID={`explore.airport.recent.${a.code}`}
+              key={a.code}
+              testID={`explore.airport.${a.code}`}
               code={a.code}
               city={a.city}
               airport={a.name}
-              countryCode={a.countryCode}
               onPress={() => onSelect(a)}
             />
-          ))
-        : null}
+          ))}
+        </View>
+      ) : null}
+      {emptyQuery && recent.length > 0 ? (
+        <>
+          <SectionLabel label="Recent" />
+          <View style={styles.rows}>
+            {recent.map((a) => (
+              <AirportRow
+                key={`recent.${a.code}`}
+                testID={`explore.airport.recent.${a.code}`}
+                code={a.code}
+                city={a.city}
+                airport={a.name}
+                state="recent"
+                onPress={() => onSelect(a)}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   airportPicker: { marginTop: tokens.space.sm },
+  // Figma 52:35: the rows stand 12 pt apart; a recent airport carries the clock.
+  rows: { gap: tokens.space.sm },
 });

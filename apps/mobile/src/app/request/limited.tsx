@@ -29,23 +29,14 @@ export default function RequestLimitedScreen() {
             testID="request.rateLimited.call"
             label="Call your specialist"
             variant="primary"
-            shape="pill"
             onPress={() => {
               Linking.openURL(call).catch(() => undefined);
             }}
           />
         ) : null}
-        <Button
-          testID="request.rateLimited.done"
-          label="Done"
-          variant="ghost"
-          shape="pill"
-          onPress={() => router.back()}
-        />
+        <Button testID="request.rateLimited.done" label="Done" variant="secondary" onPress={() => router.back()} />
       </View>
-      <View style={{ paddingBottom: insets.bottom }}>
-        <RootTabBar active="requests" />
-      </View>
+      <RootTabBar active="requests" />
     </View>
   );
 }

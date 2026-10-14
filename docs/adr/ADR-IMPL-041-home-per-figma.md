@@ -245,9 +245,9 @@ a blank row between two months, its last line under Android's navigation bar.
   screen reader hears the row's price too. The loading placeholders take the rows' size and spacing.
 - **`FROM $4,200` on the offer cards** (89:386; an offer without a price still reads `EXPLORE`, 89:389). The colour
   stays `text-on-dark-muted`: Figma's bronze (`accent-warm`) on the photo's scrim measures 3.7:1, under AA for 12 pt
-  text, and `DESIGN.md` gives bronze only to a fare row's offer price. ADR-PROD-002's light gold passes on navy and
-  brings it with the night-and-gold change.
-- **The calendar** (Figma has no calendar frame yet — the code is the reference until one is drawn). The seven days
+  text, and `DESIGN.md` gives bronze only to a fare row's offer price.
+- **The calendar** (corrected by ADR-IMPL-046: Figma does draw the calendar — `Calendar` 322:1446 and the frames
+  325:5878, 325:6505, 325:7161 — and the calendar now follows it; what follows was the code before). The seven days
   share the row's width, so a range reads as one band: full across the days inside it, from the circle's centre
   outwards on the departure and return days, whose filled circles (40 pt, `action-primary`, `text-on-dark`) sit on its
   ends. The band is `border-default`, so the digits on it keep `text-primary` (it was `surface-muted` under dark digits).

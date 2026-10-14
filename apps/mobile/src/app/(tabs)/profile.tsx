@@ -145,8 +145,7 @@ export default function ProfileScreen() {
           <Button
             testID="profile.edit"
             label="Edit"
-            variant="ghost"
-            shape="pill"
+            variant="secondary"
             onPress={() => router.push("/edit-profile" as Href)}
             style={styles.pill}
           />
@@ -156,8 +155,7 @@ export default function ProfileScreen() {
             <Button
               testID="profile.call"
               label="Call us"
-              variant="ghost"
-              shape="pill"
+              variant="secondary"
               onPress={() => {
                 Linking.openURL(call).catch(() => undefined);
               }}
