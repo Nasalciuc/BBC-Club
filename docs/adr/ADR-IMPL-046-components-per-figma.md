@@ -1,6 +1,6 @@
 # ADR-IMPL-046 — The shared components as Figma draws them
 
-Status: accepted · Date: 2026-10-13
+Status: accepted · Date: 2026-10-13 · Amended 2026-10-14 by the screens' sections at its end (F2 onward).
 
 **Context.** On 13 October every frame of the Figma file (`nYP9gogb6hnpKxfpKiCc4g`: 04 · Screens and 07 · Additions,
 99 frames) was set beside the app rendered at the same size, 393 × 852 pt, and measured. Almost no screen matched:
@@ -99,3 +99,25 @@ headers, content tops, the actions' distance and how it gives way on a shorter p
 (`wantsQuoteFooter`). The e2e flows keep their test IDs; `scripts/check-maestro-ids.ts` also reads an id a screen hands
 to the component that draws the control (`closeTestID` for a sheet's ×; `countryTestID` and `toggleTestID` with it).
 The gallery (`/dev/gallery`) shows each component's Figma states.
+
+## F2 — Onboarding as Figma draws it (14 Oct 2026)
+
+**Context.** The onboarding was one form with the airport search inside it. Figma draws two steps on one screen: the
+form (63:7) — the home airport, the cabin, who usually travels — and, from its airport field, the search (72:222). The
+owner, 14 October: as Figma draws it, keeping what was built with it (the time zone's suggestion, A5).
+
+**Decision.**
+
+- **The form** (63:7): the 2-pt progress line 14 pt under the status bar, the content 16 pt under it;
+  `Where do you usually fly from?` in `headline` and its line in `body-sm`; three groups 24 pt apart, each label in
+  `caption` 8 pt over its control — `Home airport` (the field shows the chosen airport, `New York · JFK`; a tap opens
+  the search), `Cabin` (two chips sharing the row, 16 pt apart), `Who usually travels` (the stepper, adults 1–9, and the
+  line about children). `Continue` and the text button `Skip` pinned 8 pt apart, 40 pt above the frame's bottom (the
+  home indicator's 34 and 6 more; never closer than 16 to the edge).
+- **The search step** (72:222): `Where do you fly from?`, the field focused, the time zone's airport offered under it
+  while nothing is typed (A5, 536:11191), the matches as airport rows 8 pt apart, `No airports found` with
+  `Clear search` (75:269); `Cancel` pinned 48 pt above the bottom. Choosing an airport puts the keyboard away and goes
+  back to the form; nothing is chosen for the member.
+- `Continue` without an airport says so under the field, the field's border in `status-danger`; nothing is saved.
+
+**Consequences.** JavaScript only. The registration flow keeps `onboarding.root` and `onboarding.skip`.
