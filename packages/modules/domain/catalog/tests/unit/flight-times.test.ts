@@ -48,7 +48,6 @@ describe("flight local times", () => {
       departLocal: "18:55",
       arriveLocal: "07:00",
       arriveDayOffset: 1,
-      facts: "18:55 — 07:00 +1 · 7H 05",
     });
   });
 

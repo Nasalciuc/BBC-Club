@@ -1,4 +1,3 @@
-import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import NetInfo from "@react-native-community/netinfo";
 import { useRouter, type Href } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
@@ -12,17 +11,20 @@ import {
   Chip,
   ModalSheet,
   type ModalSheetHandle,
+  SectionLabel,
   StateMessage,
+  Stepper,
+  TextField,
   short,
   tokens,
   rn,
   type Selection,
 } from "@bbc/ui";
 
-import { PhoneField } from "@/components/phone-field";
 import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
 import { bodyProblem, retryMinutes, type RequestSource } from "@/features/requests/confirmation-logic";
 import { detailFacts } from "@/features/requests/request-card";
+import { requestSummary, type RequestSummary } from "@/features/requests/request-summary";
 import {
   buildDraft,
   draftToBody,
@@ -37,7 +39,7 @@ import { submitRequest, type Profile } from "@/lib/api";
 import { stateCopy, submitFailureKind } from "@/lib/error-context";
 import { newId } from "@/lib/id";
 import { enqueueRequest } from "@/lib/queue";
-import { defaultPhoneCountry, displayPhone, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
+import { defaultPhoneCountry, displayPhone, validatePhone } from "@/lib/phone";
 
 export type RequestSheetHandle = {
   present: (opts: {
@@ -45,6 +47,8 @@ export type RequestSheetHandle = {
     profile?: Profile | null;
     fromCode?: string;
     toCode?: string;
+    /** The origin's city by name, for the title (`New York to London`); a fare carries its own. */
+    fromCity?: string;
     city?: string;
     mode?: RequestMode;
     replacesFareId?: string;
@@ -52,10 +56,24 @@ export type RequestSheetHandle = {
     search?: SearchContext | null;
     /** Home showed the indicative fare for this route and cabin (ADR-IMPL-042): the quote says so, never a number. */
     estimateShown?: boolean;
+    /**
+     * Which confirmation follows (135:856 or 476:8871): an offer's — its photograph — or a search's — the globe. By
+     * default an offer's when the fare carries one.
+     */
+    confirmation?: RequestSource;
+    /** The offer's own picture, for its confirmation; else the city's photograph (ADR-IMPL-043). */
+    photo?: string | null;
   }) => void;
   dismiss: () => void;
 };
 
+const NO_SUMMARY: RequestSummary = { title: "", facts: "", price: null };
+
+/**
+ * Figma 135:849–135:854: the tall sheet over the page. The fare summary (the route, its airline and cabin, the price per
+ * traveler), the trip type, the dates side by side, the travelers, `WE WILL CONTACT YOU` with the name, the phone in
+ * one field and the e-mail, then `Add a note`; the blocks 24 pt apart; the button and its promise pinned at the bottom.
+ */
 export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet(_props, ref) {
   const modalRef = useRef<ModalSheetHandle>(null);
   const insets = useSafeAreaInsets();
@@ -64,11 +82,15 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   const cityRef = useRef("");
   // The destination's city by name only (never a code) — the title of the card while a request waits offline.
   const cityNameRef = useRef<string | null>(null);
+  // The offer's own picture, for its confirmation.
+  const photoRef = useRef<string | null>(null);
   const router = useRouter();
   const [idempotencyKey, setIdempotencyKey] = useState(() => newId());
   const [busy, setBusy] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
-  const [phoneCountry, setPhoneCountry] = useState<CountryCode>(() => defaultPhoneCountry());
+  const [summary, setSummary] = useState<RequestSummary>(NO_SUMMARY);
+  // The profile's number as a person reads it: `Use saved phone number` puts it back (Figma 135:852).
+  const [savedPhone, setSavedPhone] = useState<string | null>(null);
   const [seed] = useState<RequestDraft>(() => buildDraft({}));
   const { state, dispatch } = useRequestDraft(seed);
   const keyRef = useRef(idempotencyKey);
@@ -98,17 +120,28 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   useImperativeHandle(ref, () => ({
     present(opts) {
       const next = buildDraft(opts);
-      const split = splitStoredPhone(next.contact.phone, defaultPhoneCountry());
-      sourceRef.current = opts.fare ? "offer" : "search";
+      // A fare found in search confirms as a search does (476:8871); only an offer has its photograph (135:856).
+      sourceRef.current = opts.confirmation ?? (opts.fare?.offerId ? "offer" : "search");
+      photoRef.current = opts.photo ?? null;
       cityRef.current = opts.fare?.to.city ?? opts.city ?? opts.toCode ?? "";
       // An alternative to an expired fare passes the airport code as `city` (fare/[id].tsx): that is no name.
       const named = opts.fare?.to.city ?? opts.city ?? null;
       cityNameRef.current = named && named !== opts.toCode ? named : null;
-      dispatch({
-        type: "reset",
-        draft: { ...next, contact: { ...next.contact, phone: split.national } },
-      });
-      setPhoneCountry(split.country);
+      const outbound = next.legs[0];
+      setSummary(
+        requestSummary({
+          fare: opts.fare,
+          from: outbound?.from ?? "",
+          to: outbound?.to ?? "",
+          fromCity: opts.fare?.from.city ?? opts.fromCity ?? null,
+          toCity: cityNameRef.current,
+          cabin: next.cabin,
+        }),
+      );
+      // Figma 135:849: one field, the saved number as a person reads it (`+1 (212) 555-0148`).
+      const saved = displayPhone(next.contact.phone);
+      setSavedPhone(saved);
+      dispatch({ type: "reset", draft: { ...next, contact: { ...next.contact, phone: saved ?? "" } } });
       setIdempotencyKey(newId());
       setBusy(false);
       submittingRef.current = false;
@@ -124,6 +157,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
    *  `phone`, the number this request will be called on — the one in the sheet, which may differ from the profile's. */
   function openConfirmation(input: { id: string; queued: boolean; route: string; facts: string; phone: string }) {
     modalRef.current?.dismiss();
+    const outbound = state.legs[0];
     const query = new URLSearchParams({
       id: input.id,
       source: sourceRef.current,
@@ -132,6 +166,11 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       route: input.route,
       facts: input.facts,
       phone: input.phone,
+      // The globe of a search's confirmation draws this route; an offer's shows its photograph (476:8871, 135:856).
+      from: outbound?.from ?? "",
+      to: outbound?.to ?? "",
+      title: summary.title,
+      media: photoRef.current ?? "",
     });
     router.push(`/request/confirmed?${query.toString()}` as Href);
   }
@@ -161,7 +200,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       dispatch({ type: "setReturnError", error: "Select a return date or choose One way." });
       return;
     }
-    const phone = validatePhone(state.contact.phone, phoneCountry);
+    // One field: a number that starts with + carries its country; any other is read in the phone's own country.
+    const phone = validatePhone(state.contact.phone, defaultPhoneCountry());
     if (!phone.valid) {
       dispatch({ type: "setPhoneError", error: phone.error });
       return;
@@ -215,10 +255,6 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     });
   }
 
-  const monoLine = `${state.legs[0]?.from ?? "JFK"} → ${state.legs[0]?.to ?? "LHR"} · ${state.cabin.toUpperCase()}${
-    state.priceAtRequest != null ? ` · FROM $${state.priceAtRequest.toLocaleString("en-US")}` : ""
-  }`;
-
   function presentDates(editing: Selection["editing"]) {
     // The calendar opens over the sheet: the keyboard of a field being typed in would cover its button.
     Keyboard.dismiss();
@@ -230,18 +266,21 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     });
   }
 
+  const round = state.tripType === "round";
+  const canUseSaved = Boolean(state.phoneError && savedPhone && savedPhone !== state.contact.phone);
+
   return (
     <>
-      {/* Figma 135:849: the tall sheet; the content from 96 pt; the button and its promise pinned at the bottom. */}
+      {/* Figma 135:849: the tall sheet; the content from 96 pt, its blocks 24 apart; the button and its promise pinned. */}
       <ModalSheet
         ref={modalRef}
         title={sheetTitle(state.mode)}
         closeTestID="request.close"
         testID="request.sheet"
         contentTop={96}
-        contentGap={tokens.space.sm}
         footerBottom={50}
         dismissible={!busy}
+        closable={!busy}
         insets={insets}
         footer={
           <View style={styles.footer}>
@@ -252,111 +291,125 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
               busy={busy}
               onPress={() => void onSubmit()}
             />
-            <Text style={styles.caption}>A specialist will call you shortly.</Text>
+            <Text style={styles.promise}>A specialist will call you shortly.</Text>
           </View>
         }
       >
-        <Text style={styles.mono}>{monoLine}</Text>
+        <View style={styles.summary} testID="request.summary">
+          <Text style={styles.summaryTitle}>{summary.title}</Text>
+          <Text style={styles.summaryFacts}>{summary.facts}</Text>
+          {summary.price ? <Text style={styles.summaryPrice}>{summary.price}</Text> : null}
+        </View>
 
         <View style={styles.chips}>
           <Chip
             testID="request.tripType.round"
             label="Round trip"
-            selected={state.tripType === "round"}
+            selected={round}
             fill="equal"
             onPress={() => dispatch({ type: "setTripType", tripType: "round" })}
           />
           <Chip
             testID="request.tripType.oneway"
             label="One way"
-            selected={state.tripType === "oneway"}
+            selected={!round}
             fill="equal"
             onPress={() => dispatch({ type: "setTripType", tripType: "oneway" })}
           />
         </View>
 
-        <DateRow
-          testID="request.depart"
-          label="DEPART"
-          value={state.legs[0]?.date ? short(state.legs[0].date) : "Select date"}
-          onPress={() => presentDates("depart")}
-        />
-        {state.tripType === "round" ? (
-          <View ref={returnBlock} style={styles.block}>
-            <DateRow
-              testID="request.return"
-              label="RETURN"
-              value={state.legs[1]?.date ? short(state.legs[1].date) : "Select date"}
-              error={Boolean(state.returnError)}
-              onPress={() => presentDates("return")}
+        <View ref={returnBlock} style={styles.block}>
+          <View style={styles.dates}>
+            <DateField
+              testID="request.depart"
+              label="Depart"
+              value={state.legs[0]?.date ? short(state.legs[0].date) : null}
+              onPress={() => presentDates("depart")}
             />
-            {state.returnError ? (
-              <Text testID="request.returnError" style={styles.error}>
-                {state.returnError}
+            {round ? (
+              <DateField
+                testID="request.return"
+                label="Return"
+                value={state.legs[1]?.date ? short(state.legs[1].date) : null}
+                error={Boolean(state.returnError)}
+                onPress={() => presentDates("return")}
+              />
+            ) : null}
+          </View>
+          {state.returnError ? (
+            <Text testID="request.returnError" style={styles.help}>
+              {state.returnError}
+            </Text>
+          ) : null}
+        </View>
+
+        <Stepper
+          testID="request.travelers"
+          label="Travelers"
+          value={state.passengers.adult}
+          min={1}
+          max={9}
+          onChange={(adult) => dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult } })}
+        />
+
+        <View style={styles.contact}>
+          <SectionLabel box label="We will contact you" />
+          <TextField
+            testID="request.name"
+            label="Name"
+            value={state.contact.name}
+            onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
+            autoCapitalize="words"
+            autoComplete="name"
+          />
+          <View ref={phoneBlock} style={styles.contact}>
+            <TextField
+              testID="request.phone"
+              label="Phone"
+              value={state.contact.phone}
+              onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
+              error={Boolean(state.phoneError)}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+            />
+            {state.phoneError ? (
+              <Text testID="request.phoneError" style={styles.help}>
+                {state.phoneError}
               </Text>
             ) : null}
           </View>
-        ) : null}
-        <Field
-          testID="request.travelers"
-          label="TRAVELERS"
-          value={String(state.passengers.adult)}
-          onChangeText={(v) => {
-            const n = Math.max(1, Math.min(9, Number(v) || 1));
-            dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult: n } });
-          }}
-          keyboardType="number-pad"
-        />
-        <Field
-          testID="request.name"
-          label="NAME"
-          value={state.contact.name}
-          onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
-          empty={!state.contact.name}
-        />
-        <View ref={phoneBlock} style={styles.block}>
-          <PhoneField
-            testID="request.phone"
-            countryTestID="phone.country"
-            value={state.contact.phone}
-            country={phoneCountry}
-            empty={!state.contact.phone}
-            onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
-            onCountryChange={(c) => {
-              setPhoneCountry(c);
-              dispatch({ type: "setPhoneError", error: null });
-            }}
+          <TextField
+            testID="request.email"
+            label="Email"
+            value={state.contact.email}
+            onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
           />
-          {state.phoneError ? <Text style={styles.error}>{state.phoneError}</Text> : null}
         </View>
-        <Field
-          testID="request.email"
-          label="EMAIL"
-          value={state.contact.email}
-          onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
-          empty={!state.contact.email}
-          keyboardType="email-address"
-        />
 
         {noteOpen ? (
-          <Field
+          <TextField
             testID="request.note"
-            label="NOTE"
+            label="Note · optional"
             value={state.note}
             onChangeText={(v) => dispatch({ type: "setNote", note: v })}
             multiline
             maxLength={NOTE_MAX}
+            autoFocus
           />
         ) : (
-          <Pressable
-            testID="request.note"
-            accessibilityRole="button"
-            onPress={() => setNoteOpen(true)}
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            <Text style={styles.link}>+ Add a note</Text>
-          </Pressable>
+          <TextAction testID="request.note" label="Add a note" onPress={() => setNoteOpen(true)} />
         )}
+
+        {canUseSaved && savedPhone ? (
+          <TextAction
+            testID="request.useSavedPhone"
+            label="Use saved phone number"
+            onPress={() => dispatch({ type: "setContact", field: "phone", value: savedPhone })}
+          />
+        ) : null}
 
         {state.submitError ? (
           <View ref={notSent}>
@@ -381,29 +434,49 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   );
 });
 
-function DateRow({
+/** Figma 135:849 `Depart input`: the label 8 pt over a white 56-pt field holding the day; a tap opens the calendar. */
+function DateField({
   testID,
   label,
   value,
-  error,
+  error = false,
   onPress,
 }: {
   testID: string;
   label: string;
-  value: string;
+  value: string | null;
   error?: boolean;
   onPress: () => void;
 }) {
+  return (
+    <View style={styles.dateField}>
+      <Text style={styles.dateLabel}>{label.toUpperCase()}</Text>
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={value ? `${label}, ${value}` : `${label}, select date`}
+        onPress={onPress}
+        style={({ pressed }) => [styles.dateBox, error && styles.dateBoxError, pressed && styles.pressed]}
+      >
+        <Text style={value ? styles.dateValue : styles.datePlaceholder} numberOfLines={1}>
+          {value ?? "Select date"}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** Figma's text button in a form (`Add a note`, `Use saved phone number`): 48 pt, the button's words, at the left. */
+function TextAction({ testID, label, onPress }: { testID: string; label: string; onPress: () => void }) {
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={({ pressed }) => [styles.fieldWrap, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.textAction, pressed && styles.pressed]}
     >
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <Text style={[styles.field, styles.dateValue, error && styles.fieldError]}>{value}</Text>
+      <Text style={styles.textActionLabel}>{label}</Text>
     </Pressable>
   );
 }
@@ -411,79 +484,44 @@ function DateRow({
 /** `RequestBody.note` takes 500 characters; the field stops there instead of refusing the request. */
 const NOTE_MAX = 500;
 
-function Field({
-  testID,
-  label,
-  value,
-  onChangeText,
-  empty,
-  keyboardType,
-  multiline,
-  maxLength,
-}: {
-  testID: string;
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  empty?: boolean;
-  keyboardType?: "default" | "number-pad" | "phone-pad" | "email-address";
-  multiline?: boolean;
-  maxLength?: number;
-}) {
-  return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <BottomSheetTextInput
-        testID={testID}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        multiline={multiline}
-        maxLength={maxLength}
-        style={[styles.field, empty && styles.fieldEmpty, multiline && styles.fieldMulti]}
-        placeholderTextColor={tokens.colors.textSecondary}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   footer: { gap: tokens.space.xs },
-  block: { gap: tokens.space.sm },
-  mono: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  // Figma 138:1096: the promise under the button, left-aligned, in `text-secondary`.
+  promise: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
+  summary: { gap: tokens.space.xs },
+  summaryTitle: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
+  summaryFacts: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  summaryPrice: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   chips: { flexDirection: "row", gap: tokens.space.xs },
-  fieldWrap: { gap: tokens.space.xxs },
-  fieldLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
-  dateValue: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  field: {
+  block: { gap: tokens.space.lg },
+  // 138:1046: Depart and Return side by side, 16 pt apart.
+  dates: { flexDirection: "row", gap: tokens.space.md },
+  dateField: { flex: 1, gap: tokens.space.xs },
+  dateLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
+  dateBox: {
     minHeight: 56,
+    justifyContent: "center",
+    paddingHorizontal: tokens.space.md,
     borderRadius: tokens.radius.field,
     borderWidth: 1,
     borderColor: tokens.colors.borderDefault,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.sm,
-    ...rn(tokens.type.body),
-    color: tokens.colors.textPrimary,
     backgroundColor: tokens.colors.surfaceCard,
   },
-  fieldEmpty: { borderColor: tokens.colors.primary },
-  fieldError: { borderColor: tokens.colors.statusDanger },
-  fieldMulti: { minHeight: 88, textAlignVertical: "top" },
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
-  link: { ...rn(tokens.type.bodySm), color: tokens.colors.primary },
-  caption: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, textAlign: "center" },
-  pressed: { opacity: 0.7 },
-  checkWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 1.5,
-    borderColor: tokens.colors.textPrimary,
+  dateBoxError: { borderColor: tokens.colors.statusDanger },
+  dateValue: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  datePlaceholder: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  // 138:1069: the label's box and the fields 16 pt apart; a field's explanation under it in the same rhythm.
+  contact: { gap: tokens.space.md },
+  // 138:1341 / 138:1232: what a field at fault needs, in `body-sm`, under the field.
+  help: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  textAction: {
+    alignSelf: "flex-start",
+    minHeight: 48,
+    minWidth: 144,
+    paddingHorizontal: tokens.space.md,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
-    marginTop: tokens.space.md,
   },
-  display: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, textAlign: "center" },
-  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary, textAlign: "center" },
+  textActionLabel: { ...rn(tokens.type.button), color: tokens.colors.textPrimary },
+  pressed: { opacity: 0.7 },
 });

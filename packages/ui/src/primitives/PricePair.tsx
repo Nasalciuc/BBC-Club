@@ -94,9 +94,11 @@ const styles = StyleSheet.create({
   // Figma 26:30: the fare's column is 144 pt, so a published fare starts where the frame draws it; a minimum, not a
   // width, so the pair still wraps at larger text (DESIGN.md: it wraps before it shrinks).
   detailOffer: { minWidth: 144 },
-  editorial: { flexDirection: "row", alignItems: "flex-end", gap: tokens.space.lg },
-  editorialOffer: { flex: 1, gap: tokens.space.xxs },
-  editorialPublished: { flex: 1, gap: tokens.space.xxs },
+  // Figma 436:1106: the fare's column 144 pt, 24 to the published fare (at 192 on the frame), both on the bottom line;
+  // at larger text the published fare wraps under the fare rather than shrinking it.
+  editorial: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", gap: tokens.space.lg },
+  editorialOffer: { minWidth: 144, gap: tokens.space.xxs },
+  editorialPublished: { flexShrink: 1, gap: tokens.space.xxs },
   yourFare: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   displayPrice: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
 });

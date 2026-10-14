@@ -60,6 +60,12 @@ type Props = {
   insets?: { top: number; bottom: number };
   /** False while a request or a save is in flight: no drag down, no tap on the backdrop. The × still closes. */
   dismissible?: boolean;
+  /**
+   * False hides the × too — Figma 135:854: while a request is sending, the sheet has no way out until the answer. A
+   * title's header is then its line alone, 24 pt, so the title rises 10 pt; the content stays where it was. A
+   * headline keeps the ×'s place.
+   */
+  closable?: boolean;
   stackBehavior?: "push" | "replace" | "switch";
   onDismiss?: () => void;
 };
@@ -89,6 +95,7 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     scroll = true,
     insets = NO_INSETS,
     dismissible = true,
+    closable = true,
     stackBehavior,
     onDismiss,
   },
@@ -116,7 +123,8 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
   }));
 
   const headline = modalSheetHeadline(size);
-  const headerBottom = HANDLE_AREA + (headline ? HEADER_HEADLINE : HEADER_TITLE);
+  const titleAlone = !closable && !headline;
+  const headerBottom = HANDLE_AREA + (headline ? HEADER_HEADLINE : titleAlone ? TITLE_LINE : HEADER_TITLE);
   const contentOffset = Math.max(0, (contentTop ?? modalSheetContentTop(size)) - headerBottom);
 
   return (
@@ -134,11 +142,20 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     >
       <InModalSheet.Provider value>
         <View style={styles.sheet}>
-          <View style={[styles.header, headline ? styles.headerHeadline : styles.headerTitle]}>
+          <View
+            style={[
+              styles.header,
+              headline ? styles.headerHeadline : titleAlone ? styles.headerTitleAlone : styles.headerTitle,
+            ]}
+          >
             <Text style={headline ? styles.headline : styles.title} accessibilityRole="header">
               {title}
             </Text>
-            <CloseButton testID={closeTestID} onPress={() => modal.current?.dismiss()} />
+            {closable ? (
+              <CloseButton testID={closeTestID} onPress={() => modal.current?.dismiss()} />
+            ) : headline ? (
+              <View style={styles.closePlace} />
+            ) : null}
           </View>
           <View
             ref={viewportRef}
@@ -177,6 +194,8 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
 const HANDLE_AREA = 24;
 const HEADER_TITLE = 44;
 const HEADER_HEADLINE = 64;
+/** A title's line (`title`, 20/24): its header while the × is hidden (Figma 135:854). */
+const TITLE_LINE = 24;
 const NO_INSETS = { top: 0, bottom: 0 };
 
 /** The actions, pinned: Figma's distance above the sheet's edge — or, with the keyboard up, 12 pt over its keys. */
@@ -248,9 +267,13 @@ const styles = StyleSheet.create({
   sheet: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", gap: tokens.space.xs, paddingLeft: tokens.space.lg },
   headerTitle: { minHeight: HEADER_TITLE, paddingRight: tokens.space.lg + 36 },
+  // The title keeps its 257-pt box without the ×: it wraps where it did.
+  headerTitleAlone: { minHeight: TITLE_LINE, paddingRight: tokens.space.lg + 36 + tokens.space.xs + 44 },
   headerHeadline: { minHeight: HEADER_HEADLINE, paddingRight: tokens.space.lg + 12 },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, flex: 1 },
   headline: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, flex: 1 },
+  // The ×'s 44-pt target, kept beside a headline while it is hidden.
+  closePlace: { width: 44, height: 44 },
   body: { flex: 1 },
   content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg },
   footer: { paddingHorizontal: tokens.space.lg, paddingTop: tokens.space.md, gap: tokens.space.sm },

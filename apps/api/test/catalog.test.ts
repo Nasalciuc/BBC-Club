@@ -33,6 +33,14 @@ describe("catalog routes", () => {
     expect(body.error?.context).toBeDefined();
     expect(typeof body.error?.context?.price).toBe("number");
     expect(typeof body.error?.context?.from).toBe("string");
+    // Figma 135:848 names what closed: the cities, the airline and cabin; a fare without times has no day.
+    expect(body.error?.context).toMatchObject({
+      fromCity: "New York",
+      toCity: "London",
+      carrier: "Delta",
+      cabin: "business",
+      departDate: null,
+    });
     await t.close();
   });
 
@@ -269,6 +277,37 @@ describe("GET /v1/home", () => {
     expect(one).toBe(0);
     const body = HomeVM.parse(await r.json());
     expect(body.home?.code).toBe("JFK");
+    await t.close();
+  });
+
+  it("titles the regions as Figma 89:389 does: To Europe … To North America, which leaves Brazil out", async () => {
+    const t = await testApp({ suite: "catalog-home-regions" });
+    await t.seedCatalogBasics();
+    await t.db.execute(sql`
+      INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng, popularity) VALUES
+        ('YVR', 'Vancouver International', 'Vancouver', 'Canada', 'CA', 'americas', 49.1967, -123.1815, 80),
+        ('GRU', 'Guarulhos', 'São Paulo', 'Brazil', 'BR', 'americas', -23.4356, -46.4731, 70)
+      ON CONFLICT (code) DO NOTHING`);
+    for (const [routeTo, title] of [
+      ["LHR", "London"],
+      ["HND", "Tokyo"],
+      ["DXB", "Dubai"],
+      ["YVR", "Vancouver"],
+      ["GRU", "São Paulo"],
+    ]) {
+      await t.seedBroadcastOffer({ routeTo, title });
+    }
+    const r = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(200);
+    const body = HomeVM.parse(await r.json());
+    expect(body.sections.map((s) => [s.key, s.title])).toEqual([
+      ["inspire", "Inspiration"],
+      ["europe", "To Europe"],
+      ["asia", "To Asia"],
+      ["middle_east", "To the Middle East"],
+      ["north_america", "To North America"],
+    ]);
+    expect(body.sections.find((s) => s.key === "north_america")?.items.map((i) => i.route.to)).toEqual(["YVR"]);
     await t.close();
   });
 });

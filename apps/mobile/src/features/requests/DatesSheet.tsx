@@ -86,22 +86,25 @@ export const DatesSheet = forwardRef<DatesSheetHandle, Props>(function DatesShee
       }
     >
       {sel ? (
+        // Figma 325:6505: the chosen dates as words, DEPART and RETURN side by side; one way shows DEPART alone (325:7161).
         <View style={styles.legs}>
-          <DatePill
+          <DateValue
             testID="dates.depart"
             label="DEPART"
             value={sel.depart ? short(sel.depart) : "Select date"}
             active={sel.editing === "depart"}
             onPress={() => setSel({ ...sel, editing: "depart" })}
           />
-          <DatePill
-            testID="dates.return"
-            label="RETURN"
-            value={sel.tripType === "oneway" ? "" : sel.ret ? short(sel.ret) : "Select date"}
-            active={sel.tripType === "round" && sel.editing === "return"}
-            disabled={sel.tripType === "oneway" || !sel.depart}
-            onPress={() => setSel({ ...sel, editing: "return" })}
-          />
+          {sel.tripType === "round" ? (
+            <DateValue
+              testID="dates.return"
+              label="RETURN"
+              value={sel.ret ? short(sel.ret) : "Select date"}
+              active={sel.editing === "return"}
+              disabled={!sel.depart}
+              onPress={() => setSel({ ...sel, editing: "return" })}
+            />
+          ) : null}
         </View>
       ) : null}
       <BottomSheetScrollView contentContainerStyle={styles.scroll}>
@@ -118,7 +121,8 @@ export const DatesSheet = forwardRef<DatesSheetHandle, Props>(function DatesShee
   );
 });
 
-function DatePill({
+/** A chosen date as Figma writes it: the mono label, the day 8 pt under it. A tap picks which date the calendar sets. */
+function DateValue({
   testID,
   label,
   value,
@@ -137,14 +141,14 @@ function DatePill({
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={`${label}, ${value}`}
       accessibilityState={{ selected: active, disabled: Boolean(disabled) }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.pill, active && styles.pillActive]}
+      style={({ pressed }) => [styles.date, pressed && styles.datePressed]}
     >
-      <Text style={styles.pillLabel}>{label}</Text>
-      <Text style={styles.pillValue}>{value}</Text>
+      <Text style={styles.dateLabel}>{label}</Text>
+      <Text style={styles.dateValue}>{value}</Text>
     </Pressable>
   );
 }
@@ -155,22 +159,15 @@ const styles = StyleSheet.create({
   flexible: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   flexiblePressed: { opacity: 0.6 },
   flexibleLabel: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  // 325:6515: the two dates 16 pt apart; the months start 33 pt under them (168 on the sheet).
   legs: {
     flexDirection: "row",
-    gap: tokens.space.sm,
+    gap: tokens.space.md,
     paddingHorizontal: tokens.space.lg,
-    marginBottom: tokens.space.md,
+    marginBottom: 33,
   },
-  pill: {
-    flex: 1,
-    gap: tokens.space.xxs,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.field,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.sm,
-  },
-  pillActive: { borderColor: tokens.colors.actionPrimary },
-  pillLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
-  pillValue: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  date: { flex: 1, gap: tokens.space.xs },
+  datePressed: { opacity: 0.6 },
+  dateLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
+  dateValue: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
 });

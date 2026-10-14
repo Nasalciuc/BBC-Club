@@ -45,6 +45,7 @@ import { env } from "@/lib/env";
 import { appPlatform, appVersion } from "@/lib/app-meta";
 import { emitSessionRevoked } from "@/lib/session-events";
 import { API_TIMEOUT_MS, NetworkError, networkFail, timeoutSignal } from "@/lib/timeout";
+import { parseFareGoneContext, type FareGoneContext } from "@/lib/fare-gone";
 
 /** Better Auth routes — wrong password/OTP must not trigger global sign-out bounce. */
 function isAuthApiPath(path: string): boolean {
@@ -68,35 +69,7 @@ export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; message: string; code?: string; status: number; gone?: FareGoneContext; retryAfterS?: number };
 
-/** Closed-fare facts from a 410 body — only when the server sent `error.context`. */
-export type FareGoneContext = {
-  price: number;
-  currency: string;
-  validUntil: string;
-  from: string;
-  to: string;
-};
-
-function parseFareGoneContext(raw: unknown): FareGoneContext | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const o = raw as Record<string, unknown>;
-  if (
-    typeof o.price !== "number" ||
-    typeof o.currency !== "string" ||
-    typeof o.validUntil !== "string" ||
-    typeof o.from !== "string" ||
-    typeof o.to !== "string"
-  ) {
-    return undefined;
-  }
-  return {
-    price: o.price,
-    currency: o.currency,
-    validUntil: o.validUntil,
-    from: o.from,
-    to: o.to,
-  };
-}
+export type { FareGoneContext };
 
 async function parseJson(res: Response): Promise<unknown> {
   return res.json().catch(() => null);

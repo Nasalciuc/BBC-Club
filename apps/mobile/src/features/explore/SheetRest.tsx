@@ -118,17 +118,19 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
   const photoFor = usePlacePhotos(inspire.map((item) => item.route.to));
 
   if (homeLoading) {
+    // The cards' places while Home loads: under the label's 32-pt box, two cards in the carousel's row.
     return (
-      <View style={styles.skeletons}>
-        <View style={[styles.skeletonCard, { width: 180 }]} />
-        <View style={[styles.skeletonCard, { width: 180 }]} />
+      <View style={[styles.content, styles.skeletons]}>
+        <View style={styles.skeletonCard} />
+        <View style={styles.skeletonCard} />
       </View>
     );
   }
 
   return (
-    <>
+    <View style={styles.content}>
       <SectionLabel
+        box
         label="Offers to inspire"
         action={{ label: "See all", onPress: onSeeAll, testID: "explore.seeAll" }}
       />
@@ -145,16 +147,18 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
           />
         ))}
       </CarouselRow>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  skeletons: { marginTop: tokens.space.md, gap: tokens.space.md },
+  // Figma 89:386: 12 pt under the field, the label's 32-pt box, 12 pt, the 120-pt carousel.
+  content: { marginTop: tokens.space.sm, gap: tokens.space.sm },
+  skeletons: { flexDirection: "row", overflow: "hidden", paddingTop: 32 + tokens.space.sm },
   skeletonCard: {
+    width: 180,
     height: 120,
     borderRadius: tokens.radius.card,
     backgroundColor: tokens.colors.borderDefault,
-    marginRight: tokens.space.sm,
   },
 });

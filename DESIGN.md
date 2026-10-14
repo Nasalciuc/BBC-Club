@@ -309,7 +309,7 @@ Tokens and components in this file are canonical. Details live in `design/compon
 - The Mapbox globe only: `globe-space` (#0B0B19) space and the night side's dark; `globe-atmosphere` / `globe-atmosphere-high` the horizon and the sky; `globe-city-lights` (#FFE4B0) the cities' lights on the night side. Never on UI.
 - `text-primary` / `text-secondary` / `text-tertiary` on light; `text-on-dark` / `text-on-dark-muted` on navy. `text-tertiary` only for non-essential lines (validity, footers, struck prices).
 - `border-default` (#E2E8F0): the single 1px border color.
-- `status-danger` (#B42318): error border on the field at fault and the account-deletion confirmation. Never for headlines, messages or urgency. No success/warning/info colors exist.
+- `status-danger` (#B42318): error border on the field at fault (on Profile's sheets also the words Figma sets under it, 325:8525) and the account-deletion confirmation. Never for headlines, messages or urgency. No success/warning/info colors exist.
 - Photographic scrim: gradient from transparent to rgba(30,41,59,0.92) over the bottom 45% of any photo carrying text — the only gradient, never on UI.
 
 ## Typography
@@ -343,7 +343,7 @@ Tokens and components in this file are canonical. Details live in `design/compon
 Documented in `design/components.md`. Summary of the rules an agent most often gets wrong:
 
 - One filled button per screen; its label centered and alone — no arrow, no icon (Figma Button 7:12). A second action is `button-secondary` (white on a hairline) or a `text-link`. The entry screens stay as they are (the owner, 14 Oct): their pill keeps the arrow directly after the label, and Sign in's Create account is `button-outlined`.
-- `field` is white on both worlds with `field-label` above; focus strengthens the border to `text-secondary`; error = `status-danger` border on the field at fault only.
+- `field` is white on both worlds with its label above — `field-label` in the request sheet, sentence case in Profile's sheets; the magnifier only where the field searches; focus strengthens the border to `text-secondary`; error = `status-danger` border on the field at fault only.
 - Password fields show text by default with an eye toggle; there is no confirm-password field.
 - `proposal-card` and `proposal-row` have no buttons and no chevrons — the whole surface is the tap target; prices appear as `price` beside `price-published` struck through, never as percentage chips.
 - `tab-bar` shows EXPLORE / REQUESTS / PROFILE; inactive labels in `text-secondary` (AA contrast), active in `primary`; unread = 6px `accent-warm` dot. White with no rule above; it runs under the home indicator or navigation bar to the screen's edge.

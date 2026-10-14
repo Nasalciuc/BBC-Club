@@ -1,5 +1,4 @@
 import { fixture } from "@bbc/shared/fixture";
-import { fareFacts } from "../../../../../ui/src/cards/fare-facts";
 import { toFareVM } from "../../src/application/to-fare-vm";
 
 const vm = toFareVM(
@@ -64,6 +63,5 @@ process.stdout.write(
     departLocal: vm.departLocal,
     arriveLocal: vm.arriveLocal,
     arriveDayOffset: vm.arriveDayOffset,
-    facts: fareFacts(vm),
   }),
 );

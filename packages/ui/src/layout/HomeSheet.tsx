@@ -9,7 +9,7 @@ import { tokens } from "../tokens";
 import { HOME_SHEET_SNAPS } from "./home-sheet-snaps";
 
 /** Figma's 300 / 544 / 656 pt sheets on a 768 pt container (home-sheet-snaps). Module const — no useMemo. */
-const SNAP_POINTS = HOME_SHEET_SNAPS.map((f) => `${Math.round(f * 100)}%`);
+const SNAP_POINTS = HOME_SHEET_SNAPS.map((f) => `${f * 100}%`);
 
 /** Figma HomeSheet · London selected: the pill sits 12 pt above the sheet's bottom edge, inside the 24 pt gutter. */
 const FOOTER_HEIGHT = 56 + tokens.space.sm;
@@ -20,6 +20,11 @@ type Props = {
   children: ReactNode;
   /** Docked at the sheet's bottom edge, above the scrolling content (Figma: `Request a quote` on 89:387). */
   footer?: ReactNode;
+  /**
+   * Figma 89:390, 89:391 and 536:11155 draw a route's empty, offline and on-request states as a page, not a sheet: no
+   * handle, the field 40 pt under the header. The sheet then holds still at its top stop and shows no handle.
+   */
+  page?: boolean;
 };
 
 // gorhom mounts `footerComponent` as a component type: a function created per render would remount the footer on every
@@ -36,7 +41,7 @@ function DockedFooter(props: BottomSheetFooterProps) {
 }
 
 /** BottomSheetScrollView, never ScrollView — content gesture must not fight the sheet. */
-export function HomeSheet({ index, onChange, children, footer }: Props) {
+export function HomeSheet({ index, onChange, children, footer, page = false }: Props) {
   return (
     <FooterContext.Provider value={footer ?? null}>
       <BottomSheet
@@ -50,8 +55,11 @@ export function HomeSheet({ index, onChange, children, footer }: Props) {
         // settling must find the index already down, or raising it again would change nothing.
         onAnimate={(_from, to) => onChange(to)}
         enablePanDownToClose={false}
+        enableHandlePanningGesture={!page}
+        enableContentPanningGesture={!page}
         animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
-        handleIndicatorStyle={styles.handle}
+        handleStyle={[styles.handleArea, page && styles.handleAreaPage]}
+        handleIndicatorStyle={[styles.handle, page && styles.handleHidden]}
         backgroundStyle={styles.background}
         footerComponent={footer ? DockedFooter : undefined}
       >
@@ -64,8 +72,12 @@ export function HomeSheet({ index, onChange, children, footer }: Props) {
 }
 
 const styles = StyleSheet.create({
-  // Figma HomeSheet (52:25): the handle is 32 × 4.
+  // Figma HomeSheet (52:24): 12 pt above the 32 × 4 handle and 12 under it, to the search field.
+  handleArea: { paddingTop: tokens.space.sm, paddingBottom: tokens.space.sm },
   handle: { width: 32, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
+  // 89:390: no handle, and the field 4 pt lower than on the sheet (144 on the frame, 40 under the header).
+  handleAreaPage: { paddingBottom: tokens.space.md },
+  handleHidden: { opacity: 0 },
   background: {
     backgroundColor: tokens.colors.surfacePage,
     borderTopLeftRadius: tokens.radius.panel,

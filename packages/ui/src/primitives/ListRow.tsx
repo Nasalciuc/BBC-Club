@@ -17,6 +17,8 @@ type Props = {
   disabled?: boolean;
   /** Figma Type=Switch on / off: a 48 × 28 switch in a 48 × 44 target, no chevron. */
   toggle?: { value: boolean; onChange: (next: boolean) => void; testID?: string };
+  /** `sm` is 56 pt — the fare page's `Why it's $X lower` (135:845). Otherwise 64. */
+  size?: "md" | "sm";
   testID?: string;
 };
 
@@ -34,9 +36,11 @@ export function ListRow({
   danger = false,
   disabled = false,
   toggle,
+  size = "md",
   testID,
 }: Props) {
   const pressable = onPress != null && !disabled;
+  const frame = [styles.row, size === "sm" && styles.sm];
   const showChevron = toggle == null && (trailing != null ? trailing === "chevron" : onPress != null && chevron);
   const a11yLabel = value ? `${label}, ${value}` : label;
 
@@ -64,7 +68,7 @@ export function ListRow({
     return (
       <View
         testID={testID}
-        style={[styles.row, disabled && styles.disabled]}
+        style={[...frame, disabled && styles.disabled]}
         accessible={dimmedAction}
         accessibilityRole={dimmedAction ? "button" : undefined}
         accessibilityState={dimmedAction ? { disabled: true } : undefined}
@@ -81,7 +85,7 @@ export function ListRow({
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [...frame, pressed && styles.pressed]}
     >
       {body}
     </Pressable>
@@ -129,6 +133,7 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radius.card,
     backgroundColor: tokens.colors.surfaceCard,
   },
+  sm: { minHeight: 56 },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.4 },
   label: { ...rn(tokens.type.body), color: tokens.colors.textPrimary, flex: 1 },

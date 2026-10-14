@@ -12,11 +12,10 @@ type Props = { fare: Fare; onPress: () => void; testID: string };
 /**
  * Figma FareRow (32:2) as 89:387 draws it: the airline's monogram, name, facts and cabin; the price alone at the right, in
  * `price`. The published fare and its source (FTC) are on the fare's page, where there is room for both and for "Why it's
- * $X lower" — never a struck price squeezed into the row. Two renders on departLocal. No chevron — the price is the
- * affordance.
+ * $X lower" — never a struck price squeezed into the row. The facts are the stops and the time in the air; the clocks are
+ * the fare page's. No chevron — the price is the affordance.
  */
 export function FareRow({ fare, onPress, testID }: Props) {
-  const timed = fare.departLocal != null && fare.arriveLocal != null;
   const facts = fareFacts(fare);
   const price = new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -24,7 +23,7 @@ export function FareRow({ fare, onPress, testID }: Props) {
     maximumFractionDigits: 0,
   }).format(fare.price.offer);
   // The row is one element for a screen reader: what is drawn, the price included.
-  const label = [fare.carrier.name, timed ? facts : "times on request", fare.product, price].filter(Boolean).join(", ");
+  const label = [fare.carrier.name, facts, fare.product, price].filter(Boolean).join(", ");
 
   return (
     <Pressable

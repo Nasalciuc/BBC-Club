@@ -121,3 +121,67 @@ owner, 14 October: as Figma draws it, keeping what was built with it (the time z
 - `Continue` without an airport says so under the field, the field's border in `status-danger`; nothing is saved.
 
 **Consequences.** JavaScript only. The registration flow keeps `onboarding.root` and `onboarding.skip`.
+
+## F3 — Explore, the fare and the request as Figma draws them (14 Oct 2026)
+
+**Context.** The frames of Explore (89:386–89:391, 104:838, 481:9097, 536:10635–536:11191), the fare (135:845–135:848,
+135:859), the request sheet and the calendar (135:849–135:855, 167:2298, 325:5878–325:7161), the notifications question
+(320:5704), the confirmations (135:856, 476:8871, 135:855) and the rate limit (481:9061), against the app on F1's
+components. The skeletons matched; the measures, the words and several blocks did not.
+
+**Decision.**
+
+- **Explore.** The sheet rests at Figma's points exactly — 300 / 544 / 656 of the 768-pt container (`HOME_SHEET_SNAPS`
+  as fractions of 768, no rounding); 12 pt above and under the 32 × 4 handle. A route's empty, offline and on-request
+  states (89:390, 89:391, 536:11155) are a page, not a sheet: no handle, no drag, the field 4 pt lower. Labels sit in
+  Figma's 32-pt box (`SectionLabel box`), `See all` an 80 × 48 text button; the fare count's box holds the paused
+  search's message (481:9097). Rest: the label 12 pt under the field, the 120-pt carousel 12 under it, the cards 12
+  apart inside the gutters, the second cut at the gutter. Expanded (89:389): `OFFERS TO INSPIRE` heads the page, then
+  one carousel per region in the server's words — `To Europe`, `To Asia`, `To the Middle East`, `To North America` (the
+  americas' US, CA and MX; Brazil has no section) — 32 pt apart. Typing (89:388): the labels' boxes and the 72-pt rows
+  12 apart, `RECENT` under the matches without repeating one. The header's `Cancel` and `Done` are 80 × 48 with the word
+  centred; the field's `Clear` is a 60 × 48 text button — the button's 17-pt while typing, the 15-pt on a chosen route.
+  The estimate row has the fare row's 88 pt and its 32-pt tile carrying `≈`.
+- **The fare row's facts** are the stops and the time in the air (`NONSTOP · 7H 05`, 89:387); the clocks are the fare
+  page's (ADR-IMPL-019 is amended in part).
+- **The fare** (135:845 / 135:846): a search fare's page opens on its route in `display`; an offer's has its 340-pt
+  photo band. The airline, the two clocks under their airports and `OCT 12 · ONE WAY · 7H 05M` — the departure's day at
+  the origin airport, never the phone's (ADR-IMPL-019). `Your fare` and the published fare side by side (the pair wraps
+  rather than shrinking); `Why it's $X lower` is a 56-pt row that opens **About this fare** (135:847, the `explain`
+  sheet): the two fares, the sum written out (`$7,850 published − $4,200 your fare = $3,650 difference.`), when the
+  published fare was recorded, the specialist's promise, `Got it`. `Request this fare` and its line pinned 6 pt over the
+  tab bar. `Call a specialist` is no longer on the fare's page — Figma has it on the request's and the system's.
+- **A fare that closed** (135:848): `Flight details` beside the back button; what closed — its day, its route by its
+  cities, its airline and cabin; the message; `Request an alternative` pinned 30 pt over the tab bar. **The server**
+  sends what it needs: `GET /v1/fares/:id`'s 410 `error.context` adds `fromCity`, `toCity`, `carrier`, `cabin` and
+  `departDate` (the origin airport's day) to the price, the validity and the route it sent; the app reads them only when
+  present, so an older server still gives the route's codes.
+- **The request sheet** (135:849–135:854): the fare's summary — `New York to London` (the codes when a city's name is
+  not known), `JFK → LHR · British Airways · Business`, `$4,200 per traveler` — then the trip type, Depart and Return
+  side by side (16 pt apart), the travelers' stepper, `WE WILL CONTACT YOU` with the name, **the phone in one field**
+  (`+1 (212) 555-0148` as a person reads it; the country picker is gone — a number that starts with `+` carries its
+  country, any other is read in the phone's), the e-mail, and `Add a note`; the blocks 24 pt apart; the button and its
+  promise pinned. A number that does not parse says so under the field and offers `Use saved phone number` (135:852).
+  While it sends (135:854, 491:8357) the sheet has no ×: the title rises 10 pt (`ModalSheet closable={false}`). A return
+  that is missing (135:851) and a request saved offline (135:855) as Figma draws them. The labels are the field's
+  (`TextField`: the label 8 pt over the white 56-pt field, no magnifier — that is the search field's).
+- **The calendar** (325:5878, 325:6505, 325:7161): the chosen dates as words under the title, DEPART and RETURN side by
+  side (one way: DEPART alone), the months scrolling under them, the button and its guidance pinned. `Use these dates`
+  waits for a return on a round trip (167:2298 shows it enabled before one is chosen). Explore's
+  `Keep the dates flexible` stays (the owner, 14 October).
+- **The notifications question** (320:5704): the medium sheet under its headline; `Turn on notifications` and `Not now`
+  (the 48-pt secondary button) 12 pt apart.
+- **The confirmations**: an offer's over its city's photograph (135:856), a search's under the globe with its route
+  (476:8871), the one saved on the phone (135:855); the facts on two lines; the promise names the number the request
+  will be called on. The rate limit (481:9061) as Figma lays it out.
+- **Inputs inside a sheet** go through `SheetTextInput`: gorhom's input on a phone, React Native's on the web, where
+  gorhom's calls a `TextInput` API the web lacks. `TextField` and the search field use it.
+
+**Where the app stays apart from Figma, with the owner's agreement:** `Clear` stays in the route's empty, offline and
+request states, where Figma draws none — the way back to the search; Round trip and One way share the row; a field the
+screen focuses shows the focus border; a request's day is its origin airport's.
+
+**Consequences.** The app and two server changes, both read only when present: Home's sections (the mobile BFF) and the
+closed fare's context (the catalog). No migration. Tests: `fare-page-logic.test.ts`, `request-summary.test.ts`,
+`fare-gone.test.ts`, `confirmation-logic.test.ts` (`factsLines`), `home-sheet-snaps.test.ts`, `fare-facts.test.ts`, and
+the API's catalog suite (the regions' titles; the 410's context).

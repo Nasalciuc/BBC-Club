@@ -1,6 +1,6 @@
 # ADR-IMPL-019 — Flight clocks are local to the airport, not the phone
 
-Status: accepted · Date: 2026-09-25 · Amends nothing. ADR-IMPL-011 still describes `departAt` as optional UTC. `packages/shared` is ADR-gated (`FareVM`).
+Status: accepted · Date: 2026-09-25 · Amends nothing. ADR-IMPL-011 still describes `departAt` as optional UTC. `packages/shared` is ADR-gated (`FareVM`). Amended in part by ADR-IMPL-046, 2026-10-14: the fare row shows the stops and the time in the air, as Figma 89:387 draws it (`NONSTOP · 7H 05`); the clocks stay on the fare page.
 
 **Context.** `FareVM.departAt` / `arriveAt` are UTC instants. The row and the fare screen formatted them with `toLocaleTimeString`, so a member in Chișinău and a member in Los Angeles saw different clocks for the same JFK–LHR departure. Airports had no IANA zone, so the mapper could not emit a local wall clock.
 
