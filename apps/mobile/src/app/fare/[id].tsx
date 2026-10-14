@@ -142,9 +142,7 @@ export default function FareDetailScreen() {
           />
           <Text style={styles.caption}>A specialist will call you shortly.</Text>
         </View>
-        <View style={{ paddingBottom: insets.bottom }}>
-          <RootTabBar active="explore" />
-        </View>
+        <RootTabBar active="explore" />
         <RequestSheet ref={sheetRef} />
       </View>
     );
@@ -267,7 +265,6 @@ export default function FareDetailScreen() {
           testID="fare.request"
           label="Request this fare"
           variant="primary"
-          shape="pill"
           onPress={() => sheetRef.current?.present({ fare, profile })}
         />
         <Text style={styles.caption}>
@@ -285,9 +282,7 @@ export default function FareDetailScreen() {
           </Pressable>
         ) : null}
       </View>
-      <View style={{ paddingBottom: insets.bottom }}>
-        <RootTabBar active="explore" />
-      </View>
+      <RootTabBar active="explore" />
 
       <Modal visible={whyOpen} transparent animationType="fade" onRequestClose={() => setWhyOpen(false)}>
         <Pressable testID="fare.whyScrim" style={styles.modalScrim} onPress={() => setWhyOpen(false)}>
@@ -312,12 +307,15 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
   goneNav: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.md },
-  goneBody: { flex: 1, justifyContent: "center", gap: tokens.space.sm },
+  goneBody: { flex: 1, justifyContent: "center", gap: tokens.space.sm, paddingHorizontal: tokens.space.lg },
   scroll: { paddingBottom: tokens.space.lg },
   back: { marginBottom: tokens.space.xl },
+  // The chevron centred in its white plate (the bare BackButton keeps it 6 pt from its edge, as Figma draws it).
   backPlate: {
     backgroundColor: tokens.colors.surfaceCard,
     borderRadius: tokens.radius.pill,
+    alignItems: "center",
+    paddingLeft: 0,
   },
   hero: {
     height: HERO_BAND,

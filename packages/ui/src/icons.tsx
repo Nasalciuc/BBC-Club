@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Circle,
   CircleCheck,
+  Clock,
   Eye,
   EyeOff,
   Globe,
@@ -56,6 +57,8 @@ export const icons = {
   /** Timeline step done (Figma 46:114). */
   "circle-check": CircleCheck,
   proposals: Plane,
+  /** AirportRow · Recent (Figma 28:58). */
+  clock: Clock,
 } as const;
 
 export type IconName = keyof typeof icons;

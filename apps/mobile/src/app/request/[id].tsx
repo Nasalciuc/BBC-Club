@@ -266,8 +266,7 @@ export default function RequestDetailScreen() {
               <Button
                 testID="request.call"
                 label="Call your specialist"
-                shape="pill"
-                variant="ghost"
+                variant="secondary"
                 onPress={dial}
                 style={styles.call}
               />
@@ -277,15 +276,14 @@ export default function RequestDetailScreen() {
 
         {view.call === "us" && call ? (
           // A request we could not pass on: the call is the one thing left, the screen's one filled button.
-          <Button testID="request.callUs" label="Call us" shape="pill" variant="primary" onPress={dial} />
+          <Button testID="request.callUs" label="Call us" variant="primary" onPress={dial} />
         ) : null}
 
         {view.sendNow ? (
           <View>
             <Button
               testID="request.send"
-              label="Send now"
-              shape="pill"
+              label={sending ? "Sending…" : "Send now"}
               variant="primary"
               busy={sending}
               onPress={() => {
@@ -305,9 +303,7 @@ export default function RequestDetailScreen() {
           </View>
         ) : null}
       </ScrollView>
-      <View style={{ paddingBottom: insets.bottom }}>
-        <RootTabBar active="requests" />
-      </View>
+      <RootTabBar active="requests" />
     </View>
   );
 }

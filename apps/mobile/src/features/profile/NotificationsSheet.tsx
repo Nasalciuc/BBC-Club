@@ -1,8 +1,8 @@
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import * as Notifications from "expo-notifications";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Linking, Platform, StyleSheet, Switch, Text, View } from "react-native";
-import { Button, CloseButton, tokens, rn } from "@bbc/ui";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
 
 import { putNotificationPreferences } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
@@ -14,13 +14,12 @@ type Props = {
   onSaved: (offers: boolean) => void;
 };
 
-const NOTIFICATIONS_SNAP_POINTS = ["50%"] as const;
-
 export const NotificationsSheet = forwardRef<ProfileSheetHandle, Props>(function NotificationsSheet(
   { savedOffers, onSaved },
   ref,
 ) {
-  const modalRef = useRef<BottomSheetModal>(null);
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
   const [offersOn, setOffersOn] = useState<boolean | null>(null);
   useEffect(() => {
     setOffersOn(savedOffers);
@@ -69,82 +68,66 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle, Props>(function
   }
 
   return (
-    <BottomSheetModal
+    <ModalSheet
       ref={modalRef}
-      snapPoints={[...NOTIFICATIONS_SNAP_POINTS]}
-      enablePanDownToClose={!busy}
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
+      title="Notifications"
+      closeTestID="notifications.close"
+      testID="notifications.root"
+      dismissible={!busy}
+      insets={insets}
     >
-      <BottomSheetScrollView contentContainerStyle={styles.content} testID="notifications.root">
-        <View style={styles.header}>
-          <Text style={styles.title}>Notifications</Text>
-          <CloseButton testID="notifications.close" onPress={() => modalRef.current?.dismiss()} />
-        </View>
-
-        {denied ? (
-          <View style={styles.denied}>
-            <Text testID="notifications.denied" style={styles.caption}>
-              {Platform.OS === "ios"
-                ? "Notifications are off for BuyBusinessClass in iOS Settings."
-                : "Notifications are off for BuyBusinessClass in device settings."}
-            </Text>
-            <Button
-              testID="notifications.openSettings"
-              label="Open Settings"
-              variant="ghost"
-              shape="pill"
-              onPress={() => {
-                void Linking.openSettings();
-              }}
-            />
-          </View>
-        ) : null}
-
-        <View style={styles.row}>
-          <View style={styles.copy}>
-            <Text style={styles.label}>Request updates</Text>
-            <Text style={styles.caption}>When your quote is ready or your request changes. Always on.</Text>
-          </View>
-          <Switch
-            testID="notifications.requestUpdates"
-            value
-            disabled
-            trackColor={{ true: tokens.colors.primary, false: tokens.colors.borderDefault }}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={styles.copy}>
-            <Text style={styles.label}>Offers to inspire</Text>
-          </View>
-          <Switch
-            testID="notifications.offers"
-            value={offersOn ?? false}
-            disabled={offersOn === null || denied || busy}
-            onValueChange={(v) => {
-              void onOffers(v);
+      {denied ? (
+        <View style={styles.denied}>
+          <Text testID="notifications.denied" style={styles.caption}>
+            {Platform.OS === "ios"
+              ? "Notifications are off for BuyBusinessClass in iOS Settings."
+              : "Notifications are off for BuyBusinessClass in device settings."}
+          </Text>
+          <Button
+            testID="notifications.openSettings"
+            label="Open Settings"
+            variant="secondary"
+            onPress={() => {
+              void Linking.openSettings();
             }}
-            trackColor={{ true: tokens.colors.primary, false: tokens.colors.borderDefault }}
           />
         </View>
+      ) : null}
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+      <View style={styles.row}>
+        <View style={styles.copy}>
+          <Text style={styles.label}>Request updates</Text>
+          <Text style={styles.caption}>When your quote is ready or your request changes. Always on.</Text>
+        </View>
+        <Switch
+          testID="notifications.requestUpdates"
+          value
+          disabled
+          trackColor={{ true: tokens.colors.primary, false: tokens.colors.borderDefault }}
+        />
+      </View>
+
+      <View style={styles.row}>
+        <View style={styles.copy}>
+          <Text style={styles.label}>Offers to inspire</Text>
+        </View>
+        <Switch
+          testID="notifications.offers"
+          value={offersOn ?? false}
+          disabled={offersOn === null || denied || busy}
+          onValueChange={(v) => {
+            void onOffers(v);
+          }}
+          trackColor={{ true: tokens.colors.primary, false: tokens.colors.borderDefault }}
+        />
+      </View>
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </ModalSheet>
   );
 });
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.md },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
   row: {
     flexDirection: "row",
     alignItems: "center",

@@ -96,33 +96,43 @@ export default function SettingsScreen() {
         <Text style={styles.title}>Settings</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <SectionLabel label="Account" />
-        <ListRow
-          testID="settings.phone"
-          label="Phone"
-          value={profile?.phone ?? "Add phone"}
-          onPress={() => phoneRef.current?.present()}
-        />
-        <ListRow
-          testID="settings.password"
-          label="Password"
-          value="Change"
-          onPress={() => passwordRef.current?.present()}
-        />
-        <ListRow
-          testID="settings.notifications"
-          label="Notifications"
-          value="Preferences"
-          onPress={() => notificationsRef.current?.present()}
-        />
+        <View style={styles.rows}>
+          <ListRow
+            testID="settings.phone"
+            label="Phone"
+            value={profile?.phone ?? "Add phone"}
+            onPress={() => phoneRef.current?.present()}
+          />
+          <ListRow
+            testID="settings.password"
+            label="Password"
+            value="Change"
+            onPress={() => passwordRef.current?.present()}
+          />
+          <ListRow
+            testID="settings.notifications"
+            label="Notifications"
+            value="Preferences"
+            onPress={() => notificationsRef.current?.present()}
+          />
+        </View>
         <Text style={styles.hint}>Request updates are always on.</Text>
         <SectionLabel label="Legal & support" />
-        {privacyUrl ? (
-          <ListRow testID="settings.privacy" label="Privacy policy" onPress={() => void Linking.openURL(privacyUrl)} />
-        ) : null}
-        {termsUrl ? (
-          <ListRow testID="settings.terms" label="Terms of use" onPress={() => void Linking.openURL(termsUrl)} />
-        ) : null}
-        {helpUrl ? <ListRow testID="settings.help" label="Help" onPress={() => void Linking.openURL(helpUrl)} /> : null}
+        <View style={styles.rows}>
+          {privacyUrl ? (
+            <ListRow
+              testID="settings.privacy"
+              label="Privacy policy"
+              onPress={() => void Linking.openURL(privacyUrl)}
+            />
+          ) : null}
+          {termsUrl ? (
+            <ListRow testID="settings.terms" label="Terms of use" onPress={() => void Linking.openURL(termsUrl)} />
+          ) : null}
+          {helpUrl ? (
+            <ListRow testID="settings.help" label="Help" onPress={() => void Linking.openURL(helpUrl)} />
+          ) : null}
+        </View>
         {deleteFailed ? (
           <StateMessage
             testID="settings.deleteFailed"
@@ -141,9 +151,9 @@ export default function SettingsScreen() {
         />
         <Button
           testID="settings.signOut"
-          label="Sign out"
-          variant="ghost"
-          shape="card"
+          // The delete dialog shares `busy`: only a sign-out in flight reads as one.
+          label={busy && !confirmDelete ? "Signing out…" : "Sign out"}
+          variant="secondary"
           busy={busy}
           onPress={() => void onSignOut()}
           style={{ marginTop: tokens.space.lg }}
@@ -175,17 +185,15 @@ export default function SettingsScreen() {
             ) : null}
             <Button
               testID="profile.deleteConfirm.confirm"
-              label="Delete account"
+              label={busy ? "Deleting…" : "Delete account"}
               variant="destructive"
-              shape="pill"
               busy={busy}
               onPress={() => void onDeleteConfirmed()}
             />
             <Button
               testID="profile.deleteConfirm.cancel"
               label="Cancel"
-              variant="ghost"
-              shape="pill"
+              variant="secondary"
               onPress={() => setConfirmDelete(false)}
             />
           </View>
@@ -219,6 +227,8 @@ const styles = StyleSheet.create({
   title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, marginBottom: tokens.space.lg },
   error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger, marginBottom: tokens.space.sm },
   hint: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginBottom: tokens.space.sm },
+  // Figma ListRow (37:72): white cards 8 pt apart.
+  rows: { gap: tokens.space.xs },
   delete: { marginTop: tokens.space.xl },
   deleteText: { ...rn(tokens.type.body), color: tokens.colors.statusDanger },
   scrim: {

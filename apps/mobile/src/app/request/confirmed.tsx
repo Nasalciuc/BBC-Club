@@ -104,21 +104,18 @@ export default function RequestConfirmedScreen() {
           </Text>
         ) : null}
         {kind === "saved" ? (
-          <Button testID="confirmation.done" label="Done" shape="pill" onPress={() => router.back()} />
+          <Button testID="confirmation.done" label="Done" onPress={() => router.back()} />
         ) : (
           <Button
             testID="confirmation.viewRequest"
             label="View request"
-            shape="pill"
             onPress={() => {
               if (id) router.push(`/request/${id}` as Href);
             }}
           />
         )}
       </View>
-      <View style={{ paddingBottom: insets.bottom }}>
-        <RootTabBar active="explore" />
-      </View>
+      <RootTabBar active="explore" />
       <NotificationsAskSheet ref={askRef} />
     </View>
   );

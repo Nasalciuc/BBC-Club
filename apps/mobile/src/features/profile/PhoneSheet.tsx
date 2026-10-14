@@ -1,7 +1,7 @@
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Button, CloseButton, tokens, rn } from "@bbc/ui";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { StyleSheet, Text } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
 
 import { PhoneField } from "@/components/phone-field";
 import { patchProfile, type Profile } from "@/lib/api";
@@ -13,14 +13,18 @@ type Props = {
   onSaved: (next: Profile) => void;
 };
 
-const SNAP = ["50%"] as const;
-
 export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSheet({ profile, onSaved }, ref) {
-  const modalRef = useRef<BottomSheetModal>(null);
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
   const [phone, setPhone] = useState("");
   const [country, setCountry] = useState<CountryCode>(() => defaultPhoneCountry());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // With the keyboard up a new error scrolls into view above the keys.
+  const errorRef = useRef<Text>(null);
+  useEffect(() => {
+    if (error) modalRef.current?.reveal(errorRef.current);
+  }, [error]);
 
   useImperativeHandle(ref, () => ({
     present() {
@@ -55,59 +59,49 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
   }
 
   return (
-    <BottomSheetModal
+    // Figma 320:5969: one field — the short sheet under a 28-pt headline.
+    <ModalSheet
       ref={modalRef}
-      snapPoints={[...SNAP]}
-      enablePanDownToClose={!busy}
-      keyboardBehavior="interactive"
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
-    >
-      <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.phone.sheet">
-        <View style={styles.header}>
-          <Text style={styles.title}>Phone</Text>
-          <CloseButton testID="profile.phone.close" onPress={() => modalRef.current?.dismiss()} />
-        </View>
-
-        <PhoneField
-          testID="profile.phone.input"
-          countryTestID="phone.country"
-          value={phone}
-          country={country}
-          onChangeText={(v) => {
-            setPhone(v);
-            setError(null);
-          }}
-          onCountryChange={(c) => {
-            setCountry(c);
-            setError(null);
-          }}
-        />
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
+      title="Phone"
+      size="short"
+      closeTestID="profile.phone.close"
+      testID="profile.phone.sheet"
+      dismissible={!busy}
+      insets={insets}
+      footer={
         <Button
           testID="profile.phone.save"
           label={busy ? "Saving…" : "Save phone"}
           variant="primary"
           busy={busy}
-          shape="pill"
           onPress={() => void onSave()}
         />
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+      }
+    >
+      <PhoneField
+        testID="profile.phone.input"
+        countryTestID="phone.country"
+        value={phone}
+        country={country}
+        onChangeText={(v) => {
+          setPhone(v);
+          setError(null);
+        }}
+        onCountryChange={(c) => {
+          setCountry(c);
+          setError(null);
+        }}
+      />
+
+      {error ? (
+        <Text ref={errorRef} style={styles.error}>
+          {error}
+        </Text>
+      ) : null}
+    </ModalSheet>
   );
 });
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.sm },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });

@@ -39,6 +39,7 @@ export default function GalleryScreen() {
 
   const insets = useSafeAreaInsets();
   const [chipOn, setChipOn] = useState(false);
+  const [switchOn, setSwitchOn] = useState(true);
   const [tab, setTab] = useState<"explore" | "requests" | "profile">("explore");
   const [pin, setPin] = useState<string | null>("LHR");
   const [stepperAdult, setStepperAdult] = useState(1);
@@ -68,13 +69,26 @@ export default function GalleryScreen() {
     >
       <Text style={styles.h1}>UI gallery</Text>
 
+      {/* Figma 26:8: Default, Selected, Disabled; the request's trip type (equal shares), Explore's preferences (filling
+          the row), Profile's cabins (56 pt, across the width). */}
       <SectionLabel label="Chip" />
       <View style={styles.row}>
         <Chip testID="gallery.chip.default" label="Dates" onPress={noop} />
         <Chip testID="gallery.chip.selected" label="Business" selected={chipOn} onPress={() => setChipOn(!chipOn)} />
-        <Chip testID="gallery.chip.icon" label="Travelers" icon="passengers" onPress={noop} />
+        <Chip testID="gallery.chip.disabled" label="First" disabled onPress={noop} />
         <Chip testID="gallery.chip.long" label="Very long cabin filter label" onPress={noop} />
       </View>
+      <View style={styles.chipRow}>
+        <Chip testID="gallery.chip.round" label="Round trip" selected fill="equal" onPress={noop} />
+        <Chip testID="gallery.chip.oneway" label="One way" fill="equal" onPress={noop} />
+      </View>
+      <View style={styles.chipRow}>
+        <Chip testID="gallery.chip.dates" label="Oct · flexible" fill="content" onPress={noop} />
+        <Chip testID="gallery.chip.cabin" label="Business" fill="content" onPress={noop} />
+        <Chip testID="gallery.chip.travelers" label="1 traveler" fill="content" onPress={noop} />
+      </View>
+      <Chip testID="gallery.chip.business" label="Business" size="lg" selected onPress={noop} />
+      <Chip testID="gallery.chip.first" label="First" size="lg" onPress={noop} />
 
       <SectionLabel label="SearchField" />
       <SearchField testID="gallery.search.rest" placeholder="Where to?" onPress={noop} />
@@ -85,6 +99,14 @@ export default function GalleryScreen() {
         value={{ prefix: "JFK → ", text: "London · LHR" }}
         onPress={noop}
         onClear={noop}
+      />
+      <View style={styles.gap} />
+      <SearchField
+        testID="gallery.search.error"
+        placeholder="Where to?"
+        value={{ text: "London" }}
+        error
+        onPress={noop}
       />
       <View style={styles.gap} />
       <SearchField
@@ -129,16 +151,18 @@ export default function GalleryScreen() {
         max={4}
         onChange={setStepperInfant}
       />
+      <Stepper testID="gallery.stepper.disabled" label="Adults" value={2} disabled onChange={noop} />
 
+      {/* Figma 28:65: Default, Selected (border and check), Recent (clock). */}
       <SectionLabel label="AirportRow" />
-      {fixture.airports.slice(0, 3).map((a) => (
+      {fixture.airports.slice(0, 3).map((a, i) => (
         <AirportRow
           key={a.code}
           testID={`gallery.airport.${a.code}`}
           code={a.code}
           city={a.city}
           airport={a.name}
-          countryCode={a.countryCode}
+          state={i === 1 ? "selected" : i === 2 ? "recent" : "default"}
           onPress={noop}
         />
       ))}
@@ -285,9 +309,11 @@ export default function GalleryScreen() {
       <View style={styles.gap} />
       <Button testID="gallery.btn.primary" label="Primary" variant="primary" onPress={noop} />
       <View style={styles.gap} />
-      <Button testID="gallery.btn.ghost" label="Ghost" variant="ghost" shape="card" onPress={noop} />
+      <Button testID="gallery.btn.secondary" label="Secondary" variant="secondary" onPress={noop} />
       <View style={styles.gap} />
-      <Button testID="gallery.btn.busy" label="Busy" busy onPress={noop} />
+      <Button testID="gallery.btn.busy" label="Sending…" variant="primary" busy onPress={noop} />
+      <View style={styles.gap} />
+      <Button testID="gallery.btn.disabledPrimary" label="Disabled" variant="primary" disabled onPress={noop} />
       <View style={styles.gap} />
       <Button testID="gallery.btn.disabled" label="Disabled" disabled onPress={noop} />
       <View style={styles.gap} />
@@ -300,10 +326,23 @@ export default function GalleryScreen() {
       <ListRow testID="gallery.list.danger" label="Delete account" danger chevron={false} onPress={noop} />
       <ListRow testID="gallery.list.static" label="Email" value="member@example.com" />
       <ListRow testID="gallery.list.comingSoon" label="Privacy policy" value="Coming soon" />
+      <ListRow testID="gallery.list.disabled" label="Home airport" value="JFK" disabled onPress={noop} />
+      <ListRow
+        testID="gallery.list.switchOn"
+        label="Request updates"
+        toggle={{ value: switchOn, onChange: setSwitchOn, testID: "gallery.list.switchOn.toggle" }}
+      />
+      <ListRow
+        testID="gallery.list.switchOff"
+        label="Offers to inspire"
+        toggle={{ value: !switchOn, onChange: (v) => setSwitchOn(!v), testID: "gallery.list.switchOff.toggle" }}
+      />
 
       <SectionLabel label="TabBar" />
       <TabBar testID="gallery.tabbar" active={tab} unread={0} onPress={setTab} />
       <TabBar testID="gallery.tabbar.dot" active="requests" unread={2} onPress={noop} />
+      {/* A phone whose home indicator / navigation bar is taller than Figma's 32 pt: the white runs to the edge. */}
+      <TabBar testID="gallery.tabbar.inset" active="profile" unread={0} bottomInset={48} onPress={noop} />
 
       <SectionLabel label="GlobeFallback" />
       <GlobeFallback
@@ -397,7 +436,7 @@ export default function GalleryScreen() {
         title="Something went wrong."
         body="We couldn't load fares just now."
         primary={{ label: "Try again", onPress: noop }}
-        secondary={{ label: "Call", onPress: noop }}
+        secondary={{ label: "Call a specialist", onPress: noop }}
         reference="9F3C21A0"
       />
       <View style={styles.gap} />
@@ -440,6 +479,7 @@ const styles = StyleSheet.create({
   h1: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, marginBottom: tokens.space.md },
   note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
   row: { flexDirection: "row", flexWrap: "wrap", gap: tokens.space.xs, alignItems: "center" },
+  chipRow: { flexDirection: "row", gap: tokens.space.xs },
   gap: { height: tokens.space.sm },
   cardStack: { gap: tokens.space.sm },
   closedLine: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },

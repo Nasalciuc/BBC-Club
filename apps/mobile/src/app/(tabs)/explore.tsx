@@ -187,7 +187,7 @@ export default function ExploreScreen() {
 
   const footer =
     mode === "selected" && wantsQuoteFooter(state, showOffline) ? (
-      <Button testID="explore.quote" label="Request a quote" variant="primary" shape="pill" onPress={openQuote} />
+      <Button testID="explore.quote" label="Request a quote" variant="primary" onPress={openQuote} />
     ) : undefined;
 
   return (

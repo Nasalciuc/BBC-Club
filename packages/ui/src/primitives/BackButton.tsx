@@ -8,7 +8,7 @@ type Props = {
   style?: ViewStyle;
 };
 
-/** 44 × 44 hit; left chevron 24. Label is the symbol — never the word Back. */
+/** Figma BackButton (299:197): 44 × 44 target, the 24-pt chevron 6 pt in from its left edge. Never the word Back. */
 export function BackButton({ onPress, testID, style }: Props) {
   return (
     <Pressable
@@ -25,6 +25,6 @@ export function BackButton({ onPress, testID, style }: Props) {
 }
 
 const styles = StyleSheet.create({
-  hit: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  hit: { width: 44, height: 44, justifyContent: "center", paddingLeft: 6 },
   pressed: { opacity: 0.7 },
 });

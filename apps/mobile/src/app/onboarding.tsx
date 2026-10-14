@@ -143,7 +143,6 @@ export default function OnboardingScreen() {
             code={suggested.code}
             city={suggested.city}
             airport={suggested.name}
-            countryCode={suggested.countryCode}
             onPress={() => {
               setSelected(suggested);
               setQuery(`${suggested.city} · ${suggested.code}`);
@@ -184,23 +183,24 @@ export default function OnboardingScreen() {
               },
             }}
           />
-        ) : (
-          search.airports.map((a) => (
-            <AirportRow
-              key={a.code}
-              testID={`onboarding.airport.hit.${a.code}`}
-              code={a.code}
-              city={a.city}
-              airport={a.name}
-              countryCode={a.countryCode}
-              onPress={() => {
-                setSelected(a);
-                setQuery(`${a.city} · ${a.code}`);
-                setSearch(airportSearchState("idle"));
-              }}
-            />
-          ))
-        )}
+        ) : search.airports.length > 0 ? (
+          <View style={styles.rows}>
+            {search.airports.map((a) => (
+              <AirportRow
+                key={a.code}
+                testID={`onboarding.airport.hit.${a.code}`}
+                code={a.code}
+                city={a.city}
+                airport={a.name}
+                onPress={() => {
+                  setSelected(a);
+                  setQuery(`${a.city} · ${a.code}`);
+                  setSearch(airportSearchState("idle"));
+                }}
+              />
+            ))}
+          </View>
+        ) : null}
 
         <Text style={styles.section}>Cabin</Text>
         <View style={styles.chips}>
@@ -208,12 +208,14 @@ export default function OnboardingScreen() {
             testID="onboarding.cabin.business"
             label="Business"
             selected={cabin === "business"}
+            fill="equal"
             onPress={() => setCabin("business")}
           />
           <Chip
             testID="onboarding.cabin.first"
             label="First"
             selected={cabin === "first"}
+            fill="equal"
             onPress={() => setCabin("first")}
           />
         </View>
@@ -232,7 +234,6 @@ export default function OnboardingScreen() {
           testID="onboarding.continue"
           label={busy ? "Saving…" : "Continue"}
           busy={busy}
-          shape="pill"
           variant="primary"
           onPress={() => void onContinue()}
         />
@@ -280,6 +281,10 @@ const styles = StyleSheet.create({
   },
   chips: {
     flexDirection: "row",
+    gap: tokens.space.xs,
+  },
+  // Figma 72:222: the airport rows stand 8 pt apart.
+  rows: {
     gap: tokens.space.xs,
   },
   caption: {

@@ -1,5 +1,4 @@
 import { Tabs, usePathname, useRouter } from "expo-router";
-import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TabBar } from "@bbc/ui";
 
@@ -20,18 +19,24 @@ export default function TabsLayout() {
   // The same dot as on a screen pushed over the tabs (RootTabBar): requests whose quote is ready.
   const unread = useUnreadQuotes();
 
+  // Figma TabBar (41:39) draws the home indicator inside the bar: the bar takes the bottom inset itself, so its white
+  // runs to the screen's edge — padding the screen instead left the Stack's black showing under it.
   return (
-    <View style={{ flex: 1, paddingBottom: insets.bottom }}>
-      <Tabs
-        tabBar={() => (
-          <TabBar testID="tabs.bar" active={active} unread={unread} onPress={(key) => router.push(TAB_ROUTES[key])} />
-        )}
-        screenOptions={{ headerShown: false }}
-      >
-        <Tabs.Screen name="explore" options={{ title: "Explore" }} />
-        <Tabs.Screen name="requests" options={{ title: "Requests" }} />
-        <Tabs.Screen name="profile" options={{ title: "Profile" }} />
-      </Tabs>
-    </View>
+    <Tabs
+      tabBar={() => (
+        <TabBar
+          testID="tabs.bar"
+          active={active}
+          unread={unread}
+          bottomInset={insets.bottom}
+          onPress={(key) => router.push(TAB_ROUTES[key])}
+        />
+      )}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tabs.Screen name="explore" options={{ title: "Explore" }} />
+      <Tabs.Screen name="requests" options={{ title: "Requests" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+    </Tabs>
   );
 }

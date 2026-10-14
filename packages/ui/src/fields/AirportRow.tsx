@@ -1,5 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { flagSource } from "../assets/flags";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
@@ -8,25 +7,27 @@ type Props = {
   code: string;
   city: string;
   airport: string;
-  countryCode: string;
+  /** Figma 28:65: `selected` is the chosen airport (border and check); `recent` one the member searched before (clock). */
+  state?: "default" | "selected" | "recent";
   onPress: () => void;
   testID: string;
 };
 
-/** Flag is an Image, never an emoji — emoji flags blank on several Android builds. */
-export function AirportRow({ code, city, airport, countryCode, onPress, testID }: Props) {
+/**
+ * Figma AirportRow (28:65): a white row, 72 pt — the city leads, the airport's name under it, the IATA code aligned at
+ * the right in mono. Rows stand 8 pt apart; the parent spaces them.
+ */
+export function AirportRow({ code, city, airport, state = "default", onPress, testID }: Props) {
+  const selected = state === "selected";
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={`${city}, ${airport}, ${code}`}
+      accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.row, selected && styles.selected, pressed && styles.pressed]}
     >
-      <View style={styles.pill}>
-        <Icon name="plane" size={14} />
-        <Text style={styles.code}>{code}</Text>
-      </View>
       <View style={styles.text}>
         <Text style={styles.city} numberOfLines={1}>
           {city}
@@ -35,34 +36,27 @@ export function AirportRow({ code, city, airport, countryCode, onPress, testID }
           {airport}
         </Text>
       </View>
-      <Image source={flagSource(countryCode)} style={styles.flag} accessibilityIgnoresInvertColors />
+      <Text style={styles.code}>{code}</Text>
+      {selected ? <Icon name="check" size={20} color={tokens.colors.textPrimary} /> : null}
+      {state === "recent" ? <Icon name="clock" size={20} color={tokens.colors.textSecondary} /> : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    height: 64,
+    minHeight: 72,
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: tokens.colors.borderDefault,
+    paddingHorizontal: tokens.space.md,
+    paddingVertical: tokens.space.sm,
+    backgroundColor: tokens.colors.surfaceCard,
   },
+  selected: { backgroundColor: tokens.colors.surfacePage, borderWidth: 1, borderColor: tokens.colors.primary },
   pressed: { opacity: 0.85 },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.space.xxs,
-    borderWidth: 1,
-    borderColor: tokens.colors.textTertiary,
-    borderRadius: tokens.radius.badge,
-    paddingHorizontal: tokens.space.xs,
-    paddingVertical: tokens.space.xxs,
-  },
-  code: { ...rn(tokens.type.factsMono), color: tokens.colors.textPrimary },
   text: { flex: 1, gap: tokens.space.xxs },
   city: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
   airport: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  flag: { width: 20, height: 14, borderRadius: 2 },
+  code: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
 });

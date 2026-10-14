@@ -1,7 +1,7 @@
-import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Button, Chip, CloseButton, Stepper, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, Chip, ModalSheet, type ModalSheetHandle, Stepper, tokens, rn } from "@bbc/ui";
 
 import { type Cabin, type Passengers, travelersLabel, withAdults } from "./travel-preferences";
 
@@ -14,7 +14,8 @@ export type CabinSheetHandle = { present: (current: Cabin) => void; dismiss: () 
 
 export const SearchCabinSheet = forwardRef<CabinSheetHandle, { onPick: (cabin: Cabin) => void }>(
   function SearchCabinSheet({ onPick }, ref) {
-    const modalRef = useRef<BottomSheetModal>(null);
+    const modalRef = useRef<ModalSheetHandle>(null);
+    const insets = useSafeAreaInsets();
     const [cabin, setCabin] = useState<Cabin>("business");
 
     useImperativeHandle(ref, () => ({
@@ -34,34 +35,31 @@ export const SearchCabinSheet = forwardRef<CabinSheetHandle, { onPick: (cabin: C
     }
 
     return (
-      <BottomSheetModal
+      // No Figma frame of its own: Profile's cabin sheet (238:4710) is the model — the tall sheet, the two cabins one
+      // under the other, 56 pt each, 24 apart.
+      <ModalSheet
         ref={modalRef}
-        enableDynamicSizing
-        backgroundStyle={styles.bg}
-        handleIndicatorStyle={styles.handle}
+        title="Cabin"
+        closeTestID="explore.cabin.close"
+        testID="explore.cabin.sheet"
+        insets={insets}
       >
-        <BottomSheetView style={styles.content} testID="explore.cabin.sheet">
-          <View style={styles.header}>
-            <Text style={styles.title}>Cabin</Text>
-            <CloseButton testID="explore.cabin.close" onPress={() => modalRef.current?.dismiss()} />
-          </View>
-          <Text style={styles.body}>For this search. Your usual cabin stays in your profile.</Text>
-          <View style={styles.chips}>
-            <Chip
-              testID="explore.cabin.business"
-              label="Business"
-              selected={cabin === "business"}
-              onPress={() => pick("business")}
-            />
-            <Chip
-              testID="explore.cabin.first"
-              label="First"
-              selected={cabin === "first"}
-              onPress={() => pick("first")}
-            />
-          </View>
-        </BottomSheetView>
-      </BottomSheetModal>
+        <Text style={styles.body}>For this search. Your usual cabin stays in your profile.</Text>
+        <Chip
+          testID="explore.cabin.business"
+          label="Business"
+          size="lg"
+          selected={cabin === "business"}
+          onPress={() => pick("business")}
+        />
+        <Chip
+          testID="explore.cabin.first"
+          label="First"
+          size="lg"
+          selected={cabin === "first"}
+          onPress={() => pick("first")}
+        />
+      </ModalSheet>
     );
   },
 );
@@ -70,7 +68,8 @@ export type TravelersSheetHandle = { present: (current: Passengers) => void; dis
 
 export const SearchTravelersSheet = forwardRef<TravelersSheetHandle, { onPick: (passengers: Passengers) => void }>(
   function SearchTravelersSheet({ onPick }, ref) {
-    const modalRef = useRef<BottomSheetModal>(null);
+    const modalRef = useRef<ModalSheetHandle>(null);
+    const insets = useSafeAreaInsets();
     // Adults only here: children and infants the search already carries (the profile's) stay in the party.
     const [party, setParty] = useState<Passengers>(() => withAdults(undefined, 1));
 
@@ -85,53 +84,40 @@ export const SearchTravelersSheet = forwardRef<TravelersSheetHandle, { onPick: (
     }));
 
     return (
-      <BottomSheetModal
+      // No Figma frame of its own: Profile's travelers sheet (238:4842) is the model.
+      <ModalSheet
         ref={modalRef}
-        enableDynamicSizing
-        backgroundStyle={styles.bg}
-        handleIndicatorStyle={styles.handle}
-      >
-        <BottomSheetView style={styles.content} testID="explore.travelers.sheet">
-          <View style={styles.header}>
-            <Text style={styles.title}>Travelers</Text>
-            <CloseButton testID="explore.travelers.close" onPress={() => modalRef.current?.dismiss()} />
-          </View>
-          <Stepper
-            testID="explore.travelers.adults"
-            label="Adults"
-            value={party.adult}
-            onChange={(adult) => setParty((p) => withAdults(p, adult))}
-            min={1}
-            max={9}
-          />
-          <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
+        title="Travelers"
+        closeTestID="explore.travelers.close"
+        testID="explore.travelers.sheet"
+        insets={insets}
+        footer={
           <Button
             testID="explore.travelers.use"
             label={`Use ${travelersLabel(party)}`}
             variant="primary"
-            shape="pill"
             onPress={() => {
               onPick(party);
               modalRef.current?.dismiss();
             }}
           />
-        </BottomSheetView>
-      </BottomSheetModal>
+        }
+      >
+        <Stepper
+          testID="explore.travelers.adults"
+          label="Adults"
+          value={party.adult}
+          onChange={(adult) => setParty((p) => withAdults(p, adult))}
+          min={1}
+          max={9}
+        />
+        <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
+      </ModalSheet>
     );
   },
 );
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.md },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
   body: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  chips: { flexDirection: "row", gap: tokens.space.xs },
 });

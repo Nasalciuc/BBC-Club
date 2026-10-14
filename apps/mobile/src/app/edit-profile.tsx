@@ -57,24 +57,26 @@ export default function EditProfileScreen() {
         <BackButton testID="editProfile.back" onPress={() => router.back()} />
         <Text style={styles.title}>Edit profile</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <ListRow
-          testID="editProfile.homeAirport"
-          label="Home airport"
-          value={profile?.homeAirport ?? "Not set"}
-          onPress={() => homeAirportRef.current?.present()}
-        />
-        <ListRow
-          testID="editProfile.cabin"
-          label="Cabin"
-          value={cabinLabel}
-          onPress={() => cabinRef.current?.present()}
-        />
-        <ListRow
-          testID="editProfile.travelers"
-          label="Travelers"
-          value={travelersLabel(profile?.preferences)}
-          onPress={() => travelersRef.current?.present()}
-        />
+        <View style={styles.rows}>
+          <ListRow
+            testID="editProfile.homeAirport"
+            label="Home airport"
+            value={profile?.homeAirport ?? "Not set"}
+            onPress={() => homeAirportRef.current?.present()}
+          />
+          <ListRow
+            testID="editProfile.cabin"
+            label="Cabin"
+            value={cabinLabel}
+            onPress={() => cabinRef.current?.present()}
+          />
+          <ListRow
+            testID="editProfile.travelers"
+            label="Travelers"
+            value={travelersLabel(profile?.preferences)}
+            onPress={() => travelersRef.current?.present()}
+          />
+        </View>
       </ScrollView>
       {profile ? (
         <>
@@ -91,4 +93,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, marginBottom: tokens.space.lg },
   error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger, marginBottom: tokens.space.sm },
+  // Figma ListRow (37:72): white cards 8 pt apart.
+  rows: { gap: tokens.space.xs },
 });

@@ -1,7 +1,7 @@
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Button, Chip, CloseButton, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, Chip, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
 
 import { putTravelPreferences, type Profile } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
@@ -11,10 +11,9 @@ type Props = {
   onSaved: (next: Profile) => void;
 };
 
-const SNAP = ["50%"] as const;
-
 export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSheet({ profile, onSaved }, ref) {
-  const modalRef = useRef<BottomSheetModal>(null);
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
   const [cabin, setCabin] = useState<"business" | "first">("business");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,59 +44,44 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
   }
 
   return (
-    <BottomSheetModal
+    // Figma 238:4710: the two cabins one under the other, 56 pt each across the sheet, 24 apart.
+    <ModalSheet
       ref={modalRef}
-      snapPoints={[...SNAP]}
-      enablePanDownToClose={!busy}
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
-    >
-      <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.cabin.sheet">
-        <View style={styles.header}>
-          <Text style={styles.title}>Cabin</Text>
-          <CloseButton testID="profile.cabin.close" onPress={() => modalRef.current?.dismiss()} />
-        </View>
-
-        <View style={styles.chips}>
-          <Chip
-            testID="profile.cabin.business"
-            label="Business"
-            selected={cabin === "business"}
-            onPress={() => setCabin("business")}
-          />
-          <Chip
-            testID="profile.cabin.first"
-            label="First"
-            selected={cabin === "first"}
-            onPress={() => setCabin("first")}
-          />
-        </View>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
+      title="Cabin"
+      closeTestID="profile.cabin.close"
+      testID="profile.cabin.sheet"
+      dismissible={!busy}
+      insets={insets}
+      footer={
         <Button
           testID="profile.cabin.save"
           label={busy ? "Saving…" : "Save cabin"}
           variant="primary"
           busy={busy}
-          shape="pill"
           onPress={() => void onSave()}
         />
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+      }
+    >
+      <Chip
+        testID="profile.cabin.business"
+        label="Business"
+        size="lg"
+        selected={cabin === "business"}
+        onPress={() => setCabin("business")}
+      />
+      <Chip
+        testID="profile.cabin.first"
+        label="First"
+        size="lg"
+        selected={cabin === "first"}
+        onPress={() => setCabin("first")}
+      />
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </ModalSheet>
   );
 });
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.md },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  chips: { flexDirection: "row", gap: tokens.space.xs },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });
