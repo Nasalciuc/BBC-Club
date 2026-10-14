@@ -44,14 +44,16 @@ export function OfferCard({ title, fromPrice, image, fallback, onPress, testID }
   );
 }
 
-/** Bleed past the gutter so the third card clips and the row reads as scrollable. */
+/**
+ * Figma's offers carousel (53:28, 89:386 and 89:389): 345 pt wide inside the 24-pt gutters, cards 12 pt apart; the
+ * second card is cut at the gutter, so the row reads as scrollable.
+ */
 export function CarouselRow({ children, testID }: { children: ReactNode; testID: string }) {
   return (
     <ScrollView
       testID={testID}
       horizontal
       showsHorizontalScrollIndicator={false}
-      style={styles.carousel}
       contentContainerStyle={styles.carouselContent}
     >
       {children}
@@ -71,6 +73,5 @@ const styles = StyleSheet.create({
   },
   title: { ...rn(tokens.type.titleSm), color: tokens.colors.textOnDark },
   price: { ...rn(tokens.type.factsMono), color: tokens.colors.textOnDarkMuted },
-  carousel: { marginHorizontal: -tokens.space.lg },
-  carouselContent: { paddingHorizontal: tokens.space.lg, gap: tokens.space.sm },
+  carouselContent: { gap: tokens.space.sm },
 });

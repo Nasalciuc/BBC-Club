@@ -94,6 +94,11 @@ describe("staging demo", () => {
       ["R-B003", "booked"],
     ]);
     expect(items.find((r) => r.reference === "R-B002")?.timeline.map((e) => e.status)).toEqual(["received", "quoted"]);
+    // The quote ready strikes its fare's published price, as the fare request recorded it (ADR-IMPL-046).
+    expect(items.find((r) => r.reference === "R-B002")?.publishedAtRequest).toEqual({
+      amount: 6900,
+      source: "Sabre · 16 Sep",
+    });
     expect(items.every((r) => r.dates.length > 0)).toBe(true);
 
     // Inbox: the quote and the personal offer unread, the two broadcasts read.

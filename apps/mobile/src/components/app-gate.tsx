@@ -1,124 +1,78 @@
 import Constants from "expo-constants";
-import { Linking } from "react-native";
 import { useEffect, useState, type ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { StateMessage, tokens, rn } from "@bbc/ui";
+import { Linking } from "react-native";
 
+import { SystemScreen } from "@/components/system-screen";
+import { telHref } from "@/features/requests/confirmation-logic";
 import { fetchAppConfig } from "@/lib/api";
+import { compareSemver, maintenanceBody } from "@/lib/app-gate-logic";
 import { env } from "@/lib/env";
 import { stateCopy } from "@/lib/error-context";
 
-function compareSemver(a: string, b: string): number {
-  const pa = a.split(".").map((n) => Number(n) || 0);
-  const pb = b.split(".").map((n) => Number(n) || 0);
-  for (let i = 0; i < 3; i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d !== 0) return d;
-  }
-  return 0;
-}
-
-function formatMaintenance(raw: string): string {
-  const iso = Date.parse(raw);
-  if (Number.isNaN(iso)) return raw;
-  return new Date(iso).toLocaleString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-  });
-}
+type Gate = { kind: "update" } | { kind: "maintenance"; value: string } | null;
 
 /**
- * Forced update / maintenance overlay. Children (Stack) stay mounted while config loads —
- * never return null / empty boot over the navigator (Expo Router: root must keep Stack).
+ * Forced update / maintenance (Figma 240:5129 / 240:5163). Children (Stack) stay mounted while config loads — never
+ * return null / empty boot over the navigator (Expo Router: root must keep Stack).
  */
 export function AppGate({ children }: { children: ReactNode }) {
-  const [blocked, setBlocked] = useState<"update" | "maintenance" | null>(null);
-  const [maintenanceCopy, setMaintenanceCopy] = useState<string | null>(null);
+  const [gate, setGate] = useState<Gate>(null);
+  const [ask, setAsk] = useState(0);
   const current = Constants.expoConfig?.version ?? "0.1.0";
-  const build = Constants.expoConfig?.ios?.buildNumber ?? "18";
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
       const result = await fetchAppConfig();
-      if (!result.ok) return;
+      if (cancelled || !result.ok) return;
       if (compareSemver(result.data.minSupportedVersion, current) > 0) {
-        setBlocked("update");
+        setGate({ kind: "update" });
       } else if (result.data.maintenance) {
-        setBlocked("maintenance");
-        setMaintenanceCopy(formatMaintenance(result.data.maintenance));
+        setGate({ kind: "maintenance", value: result.data.maintenance });
+      } else {
+        // `Try again` after the maintenance: the app opens where it was.
+        setGate(null);
       }
     })();
-  }, [current]);
+    return () => {
+      cancelled = true;
+    };
+  }, [current, ask]);
 
-  if (blocked === "update") {
+  // A call needs the club's verified number (EXPO_PUBLIC_SUPPORT_PHONE, in digits); without one, no button.
+  const tel = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
+  const call = (testID: string) =>
+    tel ? { testID, onPress: () => void Linking.openURL(tel).catch(() => undefined) } : null;
+
+  if (gate?.kind === "update") {
+    // Figma 240:5129: no way past it but the update.
     const copy = stateCopy("update");
-    const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
     return (
-      <View testID="appGate.update" style={styles.root}>
-        <Text style={styles.wordmark}>BUYBUSINESSCLASS</Text>
-        <StateMessage
-          testID="appGate.update.message"
-          variant="error"
-          title={copy.title}
-          body={copy.body}
-          primary={{
-            label: "Update",
-            testID: "appGate.update.cta",
-            onPress: () => void Linking.openURL("https://buybusinessclass.com"),
-          }}
-          secondary={
-            phone
-              ? {
-                  label: `Need a fare now? Call ${phone}`,
-                  testID: "appGate.update.call",
-                  onPress: () => void Linking.openURL(`tel:${phone}`),
-                }
-              : undefined
-          }
-        />
-        <Text style={styles.version}>{`VERSION ${current} (${build})`}</Text>
-      </View>
+      <SystemScreen
+        testID="appGate.update"
+        title={copy.title}
+        body={copy.body}
+        primary={{
+          label: "Update app",
+          testID: "appGate.update.cta",
+          onPress: () => void Linking.openURL("https://buybusinessclass.com").catch(() => undefined),
+        }}
+        call={call("appGate.update.call")}
+      />
     );
   }
 
-  if (blocked === "maintenance") {
-    const copy = stateCopy("maintenance");
-    const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  if (gate?.kind === "maintenance") {
     return (
-      <View testID="appGate.maintenance" style={styles.root}>
-        <Text style={styles.wordmark}>BUYBUSINESSCLASS</Text>
-        <StateMessage
-          testID="appGate.maintenance.message"
-          variant="error"
-          title={copy.title}
-          body={maintenanceCopy ? `Expected back at ${maintenanceCopy}` : copy.body}
-          primary={
-            phone
-              ? {
-                  label: `Call ${phone}`,
-                  testID: "appGate.maintenance.call",
-                  onPress: () => void Linking.openURL(`tel:${phone}`),
-                }
-              : undefined
-          }
-        />
-      </View>
+      <SystemScreen
+        testID="appGate.maintenance"
+        title={stateCopy("maintenance").title}
+        body={maintenanceBody(gate.value)}
+        primary={{ label: "Try again", testID: "appGate.maintenance.retry", onPress: () => setAsk((n) => n + 1) }}
+        call={call("appGate.maintenance.call")}
+      />
     );
   }
 
   return <>{children}</>;
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: tokens.colors.surfacePage,
-    padding: tokens.space.lg,
-    justifyContent: "center",
-    gap: tokens.space.md,
-  },
-  wordmark: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary, textAlign: "center" },
-  version: { ...rn(tokens.type.labelMono), color: tokens.colors.textTertiary, textAlign: "center" },
-});

@@ -20,7 +20,8 @@ export const ESTIMATE_COPY = {
 /**
  * The indicative price on a route without a published fare — FareRow's shape with `≈` where the carrier mark sits and
  * nothing in the price slot: an estimate is not a fare (no carrier, no validity, not bookable). The whole row asks
- * for a quote. Figma 536:10635 (A1 · Home · Lisbon selected).
+ * for a quote. Figma 536:10635 (A1 · Home · Lisbon selected): the fare row's 88 pt, 12 pt inside, and its 32-pt grey
+ * monogram tile carrying the `≈`.
  */
 export function EstimateRow({ amount, onPress, testID }: Props) {
   const title = ESTIMATE_COPY.title(amount);
@@ -46,7 +47,7 @@ export function EstimateRow({ amount, onPress, testID }: Props) {
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 80,
+    minHeight: 88,
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space.sm,
@@ -54,18 +55,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: tokens.colors.borderDefault,
     borderRadius: tokens.radius.card,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.sm,
-    marginBottom: tokens.space.md,
+    padding: tokens.space.sm,
+    marginBottom: tokens.space.xs,
   },
   pressed: { opacity: 0.9 },
   mark: {
-    width: 20,
-    height: 20,
+    width: 32,
+    height: 32,
     borderRadius: tokens.radius.badge,
-    backgroundColor: tokens.colors.surfaceCard,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
+    backgroundColor: tokens.colors.surfacePage,
     alignItems: "center",
     justifyContent: "center",
   },

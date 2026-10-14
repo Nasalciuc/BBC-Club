@@ -89,7 +89,8 @@ const styles = StyleSheet.create({
   pillDark: { backgroundColor: tokens.colors.surfaceMuted },
   pillLight: { backgroundColor: tokens.colors.borderDefault },
   initials: { ...rn(tokens.type.button) },
-  textButton: { minWidth: 80, height: 48, alignItems: "flex-end", justifyContent: "center" },
+  // Figma 99:524 / 102:753: `Cancel` and `Done` are 80 × 48 text buttons at the gutter, their word centred.
+  textButton: { minWidth: 80, height: 48, alignItems: "center", justifyContent: "center" },
   textButtonLabel: { ...rn(tokens.type.button) },
   pressed: { opacity: 0.7 },
 });

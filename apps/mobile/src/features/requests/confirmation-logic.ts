@@ -5,6 +5,16 @@ export function confirmationKind(source: RequestSource, queuedOffline: boolean):
   return queuedOffline ? "saved" : source;
 }
 
+/**
+ * The request's facts on two lines, as Figma 135:856 sets them: the route and the dates, then the trip and the
+ * travelers (`JFK → LHR · OCT 12–19` / `ROUND TRIP · 1 ADULT`). Facts of another shape stay on one line.
+ */
+export function factsLines(facts: string): string[] {
+  const parts = facts.split(" · ").filter(Boolean);
+  if (parts.length < 4) return facts ? [facts] : [];
+  return [parts.slice(0, 2).join(" · "), parts.slice(2).join(" · ")];
+}
+
 /** Minutes to show on the "too many requests" screen (frame 481:9061). Retry-After is seconds; never show 0 or a fraction. */
 export function retryMinutes(retryAfterS: number | undefined): number {
   if (retryAfterS === undefined || !Number.isFinite(retryAfterS) || retryAfterS <= 0) return 1;

@@ -1,4 +1,16 @@
-import { pgSchema, text, uuid, char, integer, jsonb, boolean, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import {
+  pgSchema,
+  text,
+  uuid,
+  char,
+  integer,
+  numeric,
+  jsonb,
+  boolean,
+  index,
+  uniqueIndex,
+  check,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { id, createdAt, updatedAt, tz } from "./_helpers";
 
@@ -39,6 +51,11 @@ export const requests = requestsSchema.table(
     legs: jsonb("legs").$type<RequestLeg[]>().notNull(),
     passengers: jsonb("passengers").$type<Passengers>().notNull(),
     priceAtRequest: text("price_at_request"),
+    /** The fare's published price and its source when the member asked, recorded by the server from the fare — never
+     *  from the app (ADR-IMPL-046); both or neither. The detail strikes it beside the fare once the quote is ready
+     *  (Figma 233:4204). Added by the named step 0029, not by a drizzle migration. */
+    publishedAtRequest: numeric("published_at_request", { precision: 10, scale: 2 }),
+    publishedSourceAtRequest: text("published_source_at_request"),
     contactName: text("contact_name").notNull(),
     contactPhone: text("contact_phone").notNull(),
     contactEmail: text("contact_email").notNull(),
@@ -94,6 +111,11 @@ export const requests = requestsSchema.table(
       "requests_shown_estimate",
       // Each side says IS NOT NULL: a CHECK passes on NULL, so the second side alone let half a pair in (0024 → 0025).
       sql`(${t.shownEstimateAmount} IS NULL AND ${t.shownEstimateCurrency} IS NULL) OR (${t.shownEstimateAmount} IS NOT NULL AND ${t.shownEstimateCurrency} IS NOT NULL AND ${t.shownEstimateAmount} > 0 AND ${t.shownEstimateCurrency} = 'USD')`,
+    ),
+    check(
+      "requests_published_at_request",
+      // A struck price always carries its source (FTC): both or neither, each side IS NOT NULL (0029).
+      sql`(${t.publishedAtRequest} IS NULL AND ${t.publishedSourceAtRequest} IS NULL) OR (${t.publishedAtRequest} IS NOT NULL AND ${t.publishedSourceAtRequest} IS NOT NULL AND ${t.publishedAtRequest} > 0 AND length(btrim(${t.publishedSourceAtRequest})) > 0)`,
     ),
     check(
       "requests_sync_consistent",

@@ -1,10 +1,18 @@
 import { test, expect } from "bun:test";
-import { bodyProblem, confirmationKind, retryMinutes, telHref } from "./confirmation-logic";
+import { bodyProblem, confirmationKind, factsLines, retryMinutes, telHref } from "./confirmation-logic";
 test("the confirmation follows the source; offline always wins", () => {
   expect(confirmationKind("offer", false)).toBe("offer");
   expect(confirmationKind("search", false)).toBe("search");
   expect(confirmationKind("search", true)).toBe("saved");
   expect(confirmationKind("offer", true)).toBe("saved");
+});
+test("the facts break after the dates, as Figma 135:856 sets them", () => {
+  expect(factsLines("JFK → LHR · OCT 12–19 · ROUND TRIP · 1 ADULT")).toEqual([
+    "JFK → LHR · OCT 12–19",
+    "ROUND TRIP · 1 ADULT",
+  ]);
+  expect(factsLines("JFK → LHR")).toEqual(["JFK → LHR"]);
+  expect(factsLines("")).toEqual([]);
 });
 test("retry minutes: whole minutes, at least one", () => {
   expect(retryMinutes(360)).toBe(6); // requests.submit: 1 h / 10 = 6 min

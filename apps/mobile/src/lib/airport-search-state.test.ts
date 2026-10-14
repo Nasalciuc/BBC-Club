@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { airportSearchState, chosenAirportLabel, wantsAirportSearch } from "./airport-search-state";
+import { airportSearchState, chosenAirportLabel, homeAirportLabel, wantsAirportSearch } from "./airport-search-state";
 
 const jfk = { code: "JFK", city: "New York", name: "John F. Kennedy", countryCode: "US" };
 
@@ -46,5 +46,16 @@ describe("wantsAirportSearch", () => {
   test("searches again as soon as the member changes the words", () => {
     expect(wantsAirportSearch("New York · JF", jfk)).toBe(true);
     expect(wantsAirportSearch("New York · JFK", null)).toBe(true);
+  });
+});
+
+describe("homeAirportLabel", () => {
+  test("names the city after the code, as Figma's Edit profile does", () => {
+    expect(homeAirportLabel("JFK", "New York")).toBe("JFK · New York");
+  });
+
+  test("keeps the code alone while the city is unknown", () => {
+    expect(homeAirportLabel("JFK", null)).toBe("JFK");
+    expect(homeAirportLabel("JFK", "")).toBe("JFK");
   });
 });

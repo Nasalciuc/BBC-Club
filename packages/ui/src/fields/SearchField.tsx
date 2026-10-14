@@ -1,10 +1,9 @@
-import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
-import { useContext, useState } from "react";
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "../icons";
-import { InModalSheet } from "../layout/in-modal-sheet";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
+import { SheetTextInput } from "./SheetTextInput";
 
 type Props = {
   placeholder: string;
@@ -44,9 +43,6 @@ export function SearchField({
   testID,
 }: Props) {
   const [focused, setFocused] = useState(false);
-  // Inside a modal sheet the field is gorhom's input: the sheet rises with the keyboard, its actions above the keys. Not
-  // on the web, which has no keyboard to rise above, and where gorhom's input calls a TextInput API it lacks.
-  const Input = useContext(InModalSheet) && Platform.OS !== "web" ? BottomSheetTextInput : TextInput;
   const filled = value != null && value.text.length > 0;
   const shownPlaceholder = disabled ? (disabledReason ?? placeholder) : placeholder;
   const frame = [styles.field, focused && !error && styles.focused, error && styles.error, disabled && styles.disabled];
@@ -55,7 +51,8 @@ export function SearchField({
     return (
       <View style={frame} accessibilityState={{ disabled }}>
         <Icon name="search" size={20} color={tokens.colors.textSecondary} />
-        <Input
+        {/* Inside a modal sheet, gorhom's input: the sheet rises with the keyboard, its actions above the keys. */}
+        <SheetTextInput
           testID={testID}
           editable={!disabled}
           value={value?.text ?? ""}
@@ -69,7 +66,7 @@ export function SearchField({
           autoCapitalize="none"
           autoFocus={autoFocus}
         />
-        {filled && onClear ? <ClearLink testID={testID} onPress={onClear} /> : null}
+        {filled && onClear ? <ClearLink testID={testID} onPress={onClear} typing /> : null}
       </View>
     );
   }
@@ -98,18 +95,21 @@ export function SearchField({
   );
 }
 
-/** Figma SearchField · Filled / Focused: `Clear` is a text link at the field's right edge (89:387, 89:388), not an ×. */
-function ClearLink({ testID, onPress }: { testID: string; onPress: () => void }) {
+/**
+ * Figma SearchField · Filled / Focused: `Clear` is a text button at the field's right edge (89:387, 89:388), not an ×:
+ * 60 × 48, its word centred, reaching into the field's right padding to the border. While typing (89:388) the word is
+ * the button's 17-pt medium; on a chosen route (89:387, 536:10635) the 15-pt regular.
+ */
+function ClearLink({ testID, onPress, typing = false }: { testID: string; onPress: () => void; typing?: boolean }) {
   return (
     <Pressable
       testID={`${testID}.clear`}
       accessibilityRole="button"
       accessibilityLabel="Clear"
-      hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
       onPress={onPress}
       style={({ pressed }) => [styles.clear, pressed && styles.clearPressed]}
     >
-      <Text style={styles.clearLabel}>Clear</Text>
+      <Text style={typing ? styles.clearLabelTyping : styles.clearLabel}>Clear</Text>
     </Pressable>
   );
 }
@@ -143,8 +143,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
     padding: 0,
     margin: 0,
+    // The field's own border is the focus (28:6): no second ring around the words (a browser draws one on the web).
+    outlineWidth: 0,
   },
-  clear: { minHeight: 44, justifyContent: "center", paddingLeft: tokens.space.xs },
+  clear: {
+    width: 60,
+    minHeight: 48,
+    marginRight: -tokens.space.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   clearPressed: { opacity: 0.6 },
   clearLabel: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  clearLabelTyping: { ...rn(tokens.type.button), color: tokens.colors.textPrimary },
 });

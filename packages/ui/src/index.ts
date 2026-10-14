@@ -18,6 +18,8 @@ export { Timeline } from "./primitives/Timeline";
 
 export { AirportRow } from "./fields/AirportRow";
 export { SearchField } from "./fields/SearchField";
+export { SheetTextInput } from "./fields/SheetTextInput";
+export { TextField } from "./fields/TextField";
 
 export { CarouselRow, OfferCard } from "./cards/OfferCard";
 export { FARE_ROW_HEIGHT, FareRow } from "./cards/FareRow";

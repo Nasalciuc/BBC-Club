@@ -17,9 +17,9 @@ import { BackButton, Button, ErrorState, PricePair, SectionLabel, StatusBadge, T
 
 import { RootTabBar } from "@/components/RootTabBar";
 import { isOffline } from "@/features/explore/offline-logic";
-import { telHref } from "@/features/requests/confirmation-logic";
+import { factsLines, telHref } from "@/features/requests/confirmation-logic";
 import { detailFacts, queuedView, requestTitle } from "@/features/requests/request-card";
-import { closedAt, requestView } from "@/features/requests/request-view-logic";
+import { closedAt, requestView, serverState } from "@/features/requests/request-view-logic";
 import { fetchRequest, submitRequest } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { env } from "@/lib/env";
@@ -179,9 +179,22 @@ export default function RequestDetailScreen() {
   }
 
   const vm = loaded.vm;
-  const state = loaded.kind === "queued" ? (loaded.rejected ? "rejected" : "queued") : vm.status;
+  const state = loaded.kind === "queued" ? (loaded.rejected ? "rejected" : "queued") : serverState(vm);
   const view = requestView(state, vm.status === "closed" ? closedAt(vm) : null);
-  const callback = view.callback ? displayPhone(vm.phone) : null;
+  const phone = view.callback || view.phoneLine ? displayPhone(vm.phone) : null;
+  // Figma 233:4204: the fare a quote is ready for, the published fare struck beside it with its source — only when the
+  // server recorded both when the member asked (ADR-IMPL-046).
+  const fare =
+    view.fare && vm.priceAtRequest != null
+      ? {
+          offer: vm.priceAtRequest,
+          ...(vm.publishedAtRequest
+            ? { published: vm.publishedAtRequest.amount, publishedSource: vm.publishedAtRequest.source }
+            : {}),
+          currency: "USD",
+        }
+      : null;
+  const reference = vm.reference.trim();
   // A call needs the club's verified number (EXPO_PUBLIC_SUPPORT_PHONE, in digits); without one, no button.
   const call = view.call ? telHref(env.EXPO_PUBLIC_SUPPORT_PHONE) : null;
   const dial = () => {
@@ -189,10 +202,10 @@ export default function RequestDetailScreen() {
   };
 
   return (
-    <View testID="request.root" style={styles.root}>
+    // Figma 233:4171: the page scrolls under the status bar's edge, its back button right at the safe area.
+    <View testID="request.root" style={[styles.root, { paddingTop: insets.top }]}>
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + tokens.space.md,
           paddingHorizontal: tokens.space.lg,
           paddingBottom: insets.bottom + tokens.space.xxl,
           // Figma 325:8295 (not sent): 16 pt between the groups; every other detail frame, 24.
@@ -205,8 +218,9 @@ export default function RequestDetailScreen() {
           <Text testID="request.title" accessibilityRole="header" style={styles.title} numberOfLines={2}>
             {requestTitle(vm)}
           </Text>
+          {/* Figma 233:4201: the route and the dates, then the trip and the travelers on a line of their own. */}
           <Text testID="request.facts" style={styles.facts}>
-            {detailFacts(vm)}
+            {factsLines(detailFacts(vm)).join("\n")}
           </Text>
           {view.badge ? <StatusBadge status={view.badge} size="sm" /> : null}
           {view.closedLine ? (
@@ -216,24 +230,30 @@ export default function RequestDetailScreen() {
           ) : null}
         </View>
 
-        {view.sentence || vm.priceAtRequest != null || vm.reference.trim().length > 0 ? (
+        {view.sentence || fare ? (
+          // Figma 233:4202: the next step, then — a quote ready only — the fare 12 pt under it.
           <View style={styles.group}>
             {view.sentence ? (
               <Text testID="request.sentence" style={styles.sentence}>
                 {view.sentence}
               </Text>
             ) : null}
-            {vm.priceAtRequest != null ? (
+            {fare ? (
               // Figma 233:4204 colours this fare bronze; DESIGN.md keeps `accent-warm` to the selected pin, a fare row's
-              // offer and the Requests dot. The canonical file wins until the owner says otherwise (ADR-IMPL-041, A2c).
-              <PricePair price={{ offer: vm.priceAtRequest, currency: "USD" }} layout="detail" />
-            ) : null}
-            {vm.reference.trim().length > 0 ? (
-              <Text testID="request.reference" style={styles.reference}>
-                REF {vm.reference}
-              </Text>
+              // offer and the Requests dot — the owner kept it navy (14 Oct). The frame gives the pair a 90-pt box: the
+              // request's progress starts 24 pt under it.
+              <View testID="request.fare" style={styles.fare}>
+                <PricePair price={fare} layout="detail" />
+              </View>
             ) : null}
           </View>
+        ) : null}
+
+        {view.phoneLine && phone ? (
+          // Figma 233:4671: just received — the number we call, alone, 24 pt under the sentence.
+          <Text testID="request.phoneLine" style={styles.phone}>
+            {phone}
+          </Text>
         ) : null}
 
         {view.showTimeline ? (
@@ -252,11 +272,11 @@ export default function RequestDetailScreen() {
         {view.callback ? (
           // Figma 233:4242: the section's name, the number we call, the booking note — 8 pt apart.
           <View testID="request.callback" style={styles.callback}>
-            {callback ? (
+            {phone ? (
               <>
                 <SectionLabel label="We will call" flush />
                 <Text testID="request.callback.phone" style={styles.phone}>
-                  {callback}
+                  {phone}
                 </Text>
               </>
             ) : null}
@@ -302,6 +322,14 @@ export default function RequestDetailScreen() {
             </View>
           </View>
         ) : null}
+
+        {reference ? (
+          // Not in Figma; the owner keeps it (14 Oct): the reference a member reads out on the phone. Last, so every
+          // frame's layout above it stays as Figma draws it.
+          <Text testID="request.reference" style={styles.reference}>
+            REF {reference}
+          </Text>
+        ) : null}
       </ScrollView>
       <RootTabBar active="requests" />
     </View>
@@ -316,6 +344,7 @@ const styles = StyleSheet.create({
   facts: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
   closed: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   group: { gap: tokens.space.sm },
+  fare: { minHeight: 90 },
   progress: { gap: tokens.space.lg },
   sentence: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
   reference: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },

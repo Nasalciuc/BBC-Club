@@ -97,6 +97,15 @@ export const RequestVM = z.object({
   cabin: z.enum(["business", "first"]),
   passengers: Passengers,
   priceAtRequest: z.number().nullable(),
+  /** The fare's published price and its source when the member asked, recorded by the server from the fare — never
+   *  from the app; the detail strikes it beside the fare once the quote is ready (Figma 233:4204: `$7,850 · BA
+   *  PUBLISHED · 16 SEP`). Null on a request made from an offer or as a quote, or without one. Optional both ways; a
+   *  value this app cannot read reads as none — a struck price never shows without its source (ADR-IMPL-046). */
+  publishedAtRequest: z
+    .object({ amount: z.number().positive(), source: z.string().trim().min(1) })
+    .nullable()
+    .optional()
+    .catch(null),
   /** A state a newer server adds reads as received in an older app — the request stays on the list instead of
    *  vanishing from it (the app parses rows one by one and drops those that fail). */
   status: z.enum(["received", "assigned", "quoted", "booked", "closed", "not_sent"]).catch("received"),

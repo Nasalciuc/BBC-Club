@@ -17,6 +17,7 @@ import { siteRepo } from "./infrastructure/site.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
+import { formatInZone } from "./application/flight-local";
 import { homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody } from "./application/import";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
@@ -246,6 +247,11 @@ export const catalogModule = (
         const id = c.req.param("id");
         const row = await faresRepo.getAny(conn, id);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
+
+        const [fromApt, toApt] = await Promise.all([
+          airportsRepo.get(conn, row.routeFrom),
+          airportsRepo.get(conn, row.routeTo),
+        ]);
         if (!isVisible(row)) {
           return c.json(
             apiError("GONE", {
@@ -256,16 +262,18 @@ export const catalogModule = (
                 validUntil: row.validUntil.toISOString(),
                 from: row.routeFrom,
                 to: row.routeTo,
+                // Figma 135:848 names what closed: the route by its cities, the airline and cabin, the day it left
+                // the origin — that airport's day, never the server's (ADR-IMPL-019).
+                fromCity: fromApt?.city ?? null,
+                toCity: toApt?.city ?? null,
+                carrier: row.carrierName,
+                cabin: row.cabin,
+                departDate: row.departAt && fromApt ? formatInZone(row.departAt.toISOString(), fromApt.tz).ymd : null,
               },
             }),
             410,
           );
         }
-
-        const [fromApt, toApt] = await Promise.all([
-          airportsRepo.get(conn, row.routeFrom),
-          airportsRepo.get(conn, row.routeTo),
-        ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND"), 404);
         return c.json(toFareVM(row, { from: fromApt, to: toApt }, false));
       },

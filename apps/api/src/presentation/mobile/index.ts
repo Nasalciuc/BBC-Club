@@ -20,11 +20,26 @@ type Ports = {
   catalog: CatalogFacade;
 };
 
-const SECTION_ORDER: Array<{ key: string; title: string; region: string | null }> = [
-  { key: "inspire", title: "Inspiration", region: null },
-  { key: "europe", title: "Europe", region: "europe" },
-  { key: "asia", title: "Asia", region: "asia" },
-  { key: "middle_east", title: "Middle East", region: "middle_east" },
+/** Where an offer flies to, as the catalog places the airport. */
+type Place = { region: string; countryCode: string };
+
+/** The americas region's countries that Figma's TO NORTH AMERICA holds (Vancouver, Honolulu); Brazil has no section. */
+const NORTH_AMERICA = new Set(["US", "CA", "MX"]);
+
+/**
+ * Home's sections in Figma 89:389's order and words: the offers to inspire, then one carousel per region, titled
+ * `To …`. `holds` is null for the inspiring offers, which are the first six of every region.
+ */
+const SECTION_ORDER: Array<{ key: string; title: string; holds: ((place: Place) => boolean) | null }> = [
+  { key: "inspire", title: "Inspiration", holds: null },
+  { key: "europe", title: "To Europe", holds: (p) => p.region === "europe" },
+  { key: "asia", title: "To Asia", holds: (p) => p.region === "asia" },
+  { key: "middle_east", title: "To the Middle East", holds: (p) => p.region === "middle_east" },
+  {
+    key: "north_america",
+    title: "To North America",
+    holds: (p) => p.region === "americas" && NORTH_AMERICA.has(p.countryCode.toUpperCase()),
+  },
 ];
 
 /** The mobile BFF. Composes proposals + engagement + catalog → view-models. /v1/app-config stays in the host. */
@@ -81,15 +96,17 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const offerRouteTos = new Set(offerRows.map((o) => String(o.routeTo).toUpperCase()));
         const destinations = destRows.map((d) => toDestinationPin(d, offerRouteTos.has(d.code.toUpperCase())));
 
-        const regionByCode = new Map(destRows.map((d) => [d.code.toUpperCase(), d.region]));
+        const placeByCode = new Map<string, Place>(
+          destRows.map((d) => [d.code.toUpperCase(), { region: d.region, countryCode: d.countryCode }]),
+        );
         const missing = [...new Set(offerRows.map((o) => String(o.routeTo).toUpperCase()))].filter(
-          (c) => !regionByCode.has(c),
+          (c) => !placeByCode.has(c),
         );
         const airportRows = await ports.catalog.getAirports(undefined, [homeCode, ...missing]);
         const byCode = new Map(airportRows.map((a) => [a.code.toUpperCase(), a]));
         for (const code of missing) {
-          const r = byCode.get(code)?.region;
-          if (r) regionByCode.set(code, r);
+          const a = byCode.get(code);
+          if (a?.region) placeByCode.set(code, { region: a.region, countryCode: a.countryCode });
         }
         const homeRow = byCode.get(homeCode) ?? null;
 
@@ -97,11 +114,14 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const states = offerIds.length > 0 ? await ports.engagement.responsesFor(undefined, actor, offerIds) : {};
         const cards = offerRows.map((r) => toCard(r, states[r.id]));
 
-        const sections = SECTION_ORDER.map(({ key, title, region }) => {
+        const sections = SECTION_ORDER.map(({ key, title, holds }) => {
           const items =
-            region == null
+            holds == null
               ? cards.slice(0, 6)
-              : cards.filter((card) => regionByCode.get(card.route.to.toUpperCase()) === region);
+              : cards.filter((card) => {
+                  const place = placeByCode.get(card.route.to.toUpperCase());
+                  return place != null && holds(place);
+                });
           return { key, title, items };
         }).filter((s) => s.items.length > 0 || s.key === "inspire");
 
@@ -119,6 +139,9 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
               destinations: destinations.map((d) => `${d.code}:${d.fromPrice}`),
               offerIds,
               states,
+              // A carousel's membership is in the tag too: an airport's region or country corrected moves an offer
+              // between the regions with the same offers in the same states.
+              sections: sections.map((s) => [s.key, s.items.map((i) => i.id)]),
             }),
           )
           .digest("hex")

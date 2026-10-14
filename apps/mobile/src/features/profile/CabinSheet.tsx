@@ -44,10 +44,10 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
   }
 
   return (
-    // Figma 238:4710: the two cabins one under the other, 56 pt each across the sheet, 24 apart.
+    // Figma 238:4710: what the choice means, then the two cabins one under the other, 56 pt each, 24 apart.
     <ModalSheet
       ref={modalRef}
-      title="Cabin"
+      title="Preferred cabin"
       closeTestID="profile.cabin.close"
       testID="profile.cabin.sheet"
       dismissible={!busy}
@@ -62,6 +62,7 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
         />
       }
     >
+      <Text style={styles.help}>Your starting preference. You can choose a different cabin for any request.</Text>
       <Chip
         testID="profile.cabin.business"
         label="Business"
@@ -83,5 +84,6 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
 });
 
 const styles = StyleSheet.create({
+  help: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });

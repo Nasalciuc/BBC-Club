@@ -1,11 +1,13 @@
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, SectionLabel, StateMessage, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, tokens, rn } from "@bbc/ui";
 
 import { ListRow } from "@/components/list-row";
-import { deleteAccount, signOut } from "@/features/auth/flows";
+import { RootTabBar } from "@/components/RootTabBar";
+import { signOut } from "@/features/auth/flows";
+import { DeleteAccountSheet } from "@/features/profile/DeleteAccountSheet";
 import {
   mergeSavedProfile,
   offersSwitchValue,
@@ -16,24 +18,23 @@ import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
+import { isOpen } from "@/features/requests/status";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
-import { deleteFailureKind, stateCopy } from "@/lib/error-context";
+import { stateCopy } from "@/lib/error-context";
+import { displayPhone } from "@/lib/phone";
 
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deletePassword, setDeletePassword] = useState("");
-  const [wrongPassword, setWrongPassword] = useState(false);
-  const [deleteFailed, setDeleteFailed] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [openRequests, setOpenRequests] = useState(0);
   const phoneRef = useRef<ProfileSheetHandle>(null);
   const passwordRef = useRef<ProfileSheetHandle>(null);
   const notificationsRef = useRef<ProfileSheetHandle>(null);
+  const deleteRef = useRef<ProfileSheetHandle>(null);
 
   useEffect(() => {
     void (async () => {
@@ -44,32 +45,21 @@ export default function SettingsScreen() {
       }
       setProfile(profileResult.data);
       if (requestsResult.ok) {
-        setOpenRequests(requestsResult.data.items.filter((r) => r.status !== "booked" && r.status !== "closed").length);
+        setOpenRequests(requestsResult.data.items.filter((r) => isOpen(r.status)).length);
       }
     })().catch(() => setError("Something went wrong."));
   }, []);
 
-  async function onDeleteConfirmed() {
-    setBusy(true);
-    setWrongPassword(false);
-    const result = await deleteAccount(deletePassword);
-    setBusy(false);
-    if (!result.ok) {
-      if (deleteFailureKind(result.code) === "wrongPassword") {
-        setWrongPassword(true);
-        return;
-      }
-      setConfirmDelete(false);
-      setDeleteFailed(true);
+  async function onSignOut() {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } catch {
+      // The local session could not be cleared: the button comes back, and the page says so.
+      setSigningOut(false);
+      setError(`${stateCopy("generic").title} ${stateCopy("generic").body}`);
       return;
     }
-    setConfirmDelete(false);
-    router.replace("/join");
-  }
-
-  async function onSignOut() {
-    setBusy(true);
-    await signOut();
     router.replace("/sign-in");
   }
 
@@ -78,29 +68,29 @@ export default function SettingsScreen() {
     setError(null);
   }
 
-  const privacyUrl = env.EXPO_PUBLIC_PRIVACY_URL;
-  const termsUrl = env.EXPO_PUBLIC_TERMS_URL;
-  const helpUrl = env.EXPO_PUBLIC_HELP_URL;
+  const legal = [
+    { key: "privacy", label: "Privacy policy", url: env.EXPO_PUBLIC_PRIVACY_URL },
+    { key: "terms", label: "Terms of use", url: env.EXPO_PUBLIC_TERMS_URL },
+    { key: "help", label: "Help", url: env.EXPO_PUBLIC_HELP_URL },
+  ].filter((row): row is { key: string; label: string; url: string } => Boolean(row.url));
 
   return (
-    <View style={styles.root}>
-      <ScrollView
-        testID="settings.root"
-        contentContainerStyle={{
-          paddingTop: insets.top + tokens.space.sm,
-          paddingHorizontal: tokens.space.lg,
-          paddingBottom: insets.bottom + tokens.space.xxl,
-        }}
-      >
+    // Figma 479:8226: the back button stays at the safe area; the page scrolls under it, 20 pt lower, and stops 16 pt
+    // above the tab bar.
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.top}>
         <BackButton testID="settings.back" onPress={() => router.back()} />
-        <Text style={styles.title}>Settings</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <SectionLabel label="Account" />
+      </View>
+      <ScrollView testID="settings.root" style={styles.scroll} contentContainerStyle={styles.content}>
+        <Text style={styles.title} accessibilityRole="header">
+          Settings.
+        </Text>
+        {error ? <Text style={styles.message}>{error}</Text> : null}
         <View style={styles.rows}>
           <ListRow
             testID="settings.phone"
             label="Phone"
-            value={profile?.phone ?? "Add phone"}
+            value={displayPhone(profile?.phone) ?? "Add phone"}
             onPress={() => phoneRef.current?.present()}
           />
           <ListRow
@@ -116,89 +106,31 @@ export default function SettingsScreen() {
             onPress={() => notificationsRef.current?.present()}
           />
         </View>
-        <Text style={styles.hint}>Request updates are always on.</Text>
-        <SectionLabel label="Legal & support" />
-        <View style={styles.rows}>
-          {privacyUrl ? (
-            <ListRow
-              testID="settings.privacy"
-              label="Privacy policy"
-              onPress={() => void Linking.openURL(privacyUrl)}
-            />
-          ) : null}
-          {termsUrl ? (
-            <ListRow testID="settings.terms" label="Terms of use" onPress={() => void Linking.openURL(termsUrl)} />
-          ) : null}
-          {helpUrl ? (
-            <ListRow testID="settings.help" label="Help" onPress={() => void Linking.openURL(helpUrl)} />
-          ) : null}
-        </View>
-        {deleteFailed ? (
-          <StateMessage
-            testID="settings.deleteFailed"
-            variant="error"
-            title={stateCopy("deleteFailed").title}
-            body={stateCopy("deleteFailed").body}
-            primary={{ label: "Try again", onPress: () => setDeleteFailed(false) }}
-          />
+        <Text style={styles.message}>Request updates are always on.</Text>
+        <ListRow testID="settings.delete" label="Delete account" danger onPress={() => deleteRef.current?.present()} />
+        {legal.length > 0 ? (
+          <View style={styles.rows}>
+            {legal.map((row) => (
+              <ListRow
+                key={row.key}
+                testID={`settings.${row.key}`}
+                label={row.label}
+                size="sm"
+                trailing="external"
+                onPress={() => void Linking.openURL(row.url)}
+              />
+            ))}
+          </View>
         ) : null}
-        <PressableDelete
-          onPress={() => {
-            setDeletePassword("");
-            setWrongPassword(false);
-            setConfirmDelete(true);
-          }}
-        />
         <Button
           testID="settings.signOut"
-          // The delete dialog shares `busy`: only a sign-out in flight reads as one.
-          label={busy && !confirmDelete ? "Signing out…" : "Sign out"}
+          label={signingOut ? "Signing out…" : "Sign out"}
           variant="secondary"
-          busy={busy}
+          busy={signingOut}
           onPress={() => void onSignOut()}
-          style={{ marginTop: tokens.space.lg }}
         />
       </ScrollView>
-      <Modal visible={confirmDelete} transparent animationType="fade" onRequestClose={() => setConfirmDelete(false)}>
-        <View style={styles.scrim}>
-          <View style={styles.modalCard} testID="profile.deleteConfirm">
-            <Text style={styles.modalTitle}>Delete your account?</Text>
-            <Text style={styles.modalBody}>
-              Your profile, preferences and request history are removed from the app. This can’t be undone.
-              {openRequests > 0 ? ` This closes ${openRequests} open request${openRequests === 1 ? "" : "s"}.` : ""}
-            </Text>
-            <Text style={styles.modalLabel}>Password</Text>
-            <TextInput
-              testID="profile.deleteConfirm.password"
-              value={deletePassword}
-              onChangeText={(v) => {
-                setDeletePassword(v);
-                setWrongPassword(false);
-              }}
-              secureTextEntry
-              style={[styles.password, wrongPassword && styles.passwordError]}
-            />
-            {wrongPassword ? (
-              <Text testID="profile.deleteConfirm.wrongPassword" style={styles.wrong}>
-                {stateCopy("wrongPassword").title}
-              </Text>
-            ) : null}
-            <Button
-              testID="profile.deleteConfirm.confirm"
-              label={busy ? "Deleting…" : "Delete account"}
-              variant="destructive"
-              busy={busy}
-              onPress={() => void onDeleteConfirmed()}
-            />
-            <Button
-              testID="profile.deleteConfirm.cancel"
-              label="Cancel"
-              variant="secondary"
-              onPress={() => setConfirmDelete(false)}
-            />
-          </View>
-        </View>
-      </Modal>
+      <RootTabBar active="profile" />
       {profile ? (
         <>
           <PasswordSheet ref={passwordRef} profile={profile} onSaved={onSheetSaved} />
@@ -210,51 +142,25 @@ export default function SettingsScreen() {
           />
         </>
       ) : null}
+      <DeleteAccountSheet ref={deleteRef} openRequests={openRequests} onDeleted={() => router.replace("/join")} />
     </View>
-  );
-}
-
-function PressableDelete({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable testID="settings.delete" accessibilityRole="button" onPress={onPress} style={styles.delete}>
-      <Text style={styles.deleteText}>Delete account</Text>
-    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, marginBottom: tokens.space.lg },
-  error: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDanger, marginBottom: tokens.space.sm },
-  hint: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginBottom: tokens.space.sm },
+  top: { paddingHorizontal: tokens.space.lg },
+  scroll: { flex: 1, marginTop: 20, marginBottom: tokens.space.md },
+  // Figma 479:8229: the title and each block 24 pt apart, 8 pt into the scroll.
+  content: {
+    paddingTop: tokens.space.xs,
+    paddingHorizontal: tokens.space.lg,
+    paddingBottom: tokens.space.lg,
+    gap: tokens.space.lg,
+  },
+  title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
+  // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
+  message: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   // Figma ListRow (37:72): white cards 8 pt apart.
   rows: { gap: tokens.space.xs },
-  delete: { marginTop: tokens.space.xl },
-  deleteText: { ...rn(tokens.type.body), color: tokens.colors.statusDanger },
-  scrim: {
-    flex: 1,
-    backgroundColor: tokens.colors.scrim,
-    justifyContent: "center",
-    padding: tokens.space.lg,
-  },
-  modalCard: {
-    backgroundColor: tokens.colors.surfaceCard,
-    borderRadius: tokens.radius.panel,
-    padding: tokens.space.lg,
-    gap: tokens.space.md,
-  },
-  modalTitle: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  modalBody: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  modalLabel: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary },
-  password: {
-    ...rn(tokens.type.body),
-    color: tokens.colors.textPrimary,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.field,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.sm,
-  },
-  passwordError: { borderColor: tokens.colors.statusDanger },
-  wrong: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });

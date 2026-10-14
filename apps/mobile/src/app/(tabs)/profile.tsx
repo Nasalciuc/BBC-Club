@@ -95,7 +95,8 @@ export default function ProfileScreen() {
       testID="profile.root"
       style={styles.root}
       contentContainerStyle={{
-        paddingTop: insets.top + tokens.space.md,
+        // Figma 479:8475: the header, 44 pt, 8 pt under the safe area.
+        paddingTop: insets.top + tokens.space.xs,
         paddingHorizontal: tokens.space.lg,
         paddingBottom: insets.bottom + tokens.space.xxl,
       }}
@@ -109,7 +110,7 @@ export default function ProfileScreen() {
           accessibilityRole="button"
           accessibilityLabel="Settings"
           onPress={() => router.push("/settings" as Href)}
-          style={({ pressed }) => pressed && styles.pressed}
+          style={({ pressed }) => [styles.settings, pressed && styles.pressed]}
         >
           <Icon name="settings" size={24} color={tokens.colors.textPrimary} />
         </Pressable>
@@ -212,8 +213,9 @@ export default function ProfileScreen() {
         value={displayPhone(profile?.phone) ?? "Add phone"}
         onPress={() => router.push("/settings" as Href)}
       />
+      {/* Figma 479:8401 / 479:8492: 8 pt under the row, `Client since 2019` — or, for a new client, the email. */}
       {since ? <Text style={styles.since}>{since}</Text> : null}
-      {!since && profile?.email ? <Text style={styles.since}>{profile.email}</Text> : null}
+      {!since && profile?.email ? <Text style={styles.email}>{profile.email}</Text> : null}
     </ScrollView>
   );
 }
@@ -222,11 +224,14 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center" },
   top: {
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: tokens.space.lg,
   },
+  // Figma 479:8477: the gear centred in its 44-pt target, the target flush with the gutter.
+  settings: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   kicker: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
   error: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
@@ -258,6 +263,7 @@ const styles = StyleSheet.create({
   afterCard: { marginTop: 0 },
   accountTitle: { marginBottom: tokens.space.xs },
   cards: { gap: tokens.space.sm },
-  since: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginTop: tokens.space.sm },
+  since: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, marginTop: tokens.space.xs },
+  email: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.xs },
   pressed: { opacity: 0.7 },
 });

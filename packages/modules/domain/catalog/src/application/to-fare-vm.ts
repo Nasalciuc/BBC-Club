@@ -94,9 +94,9 @@ function localClocks(
   arriveAt: string | null,
   originTz: string,
   destTz: string,
-): { departLocal: string | null; arriveLocal: string | null; arriveDayOffset: number } {
+): { departLocal: string | null; arriveLocal: string | null; arriveDayOffset: number; departDate: string | null } {
   if (!departAt || !arriveAt) {
-    return { departLocal: null, arriveLocal: null, arriveDayOffset: 0 };
+    return { departLocal: null, arriveLocal: null, arriveDayOffset: 0, departDate: null };
   }
   const dep = formatInZone(departAt, originTz);
   const arr = formatInZone(arriveAt, destTz);
@@ -104,6 +104,8 @@ function localClocks(
     departLocal: dep.hhmm,
     arriveLocal: arr.hhmm,
     arriveDayOffset: calendarDayOffset(dep.ymd, arr.ymd),
+    // The day at the origin, named here from its zone: the app prints it as it is (ADR-IMPL-019).
+    departDate: dep.ymd,
   };
 }
 

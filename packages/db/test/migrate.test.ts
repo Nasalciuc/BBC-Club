@@ -118,6 +118,7 @@ describe("extras ledger", () => {
       "0026_catalog_place_photos.sql",
       "0027_platform_idle_in_transaction_timeout.sql",
       "0028_catalog_site_destinations.sql",
+      "0029_requests_published_at_request.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -150,5 +151,37 @@ describe("extras ledger", () => {
     expect(await insert(2055, null)).toBe("23514");
     expect(await insert(0, "USD")).toBe("23514");
     expect(await insert(2055, "EUR")).toBe("23514");
+  });
+
+  // ADR-IMPL-046: a struck price always carries its source — both or neither, each half tried alone.
+  it("requests_published_at_request takes both or neither, a positive amount, a source that says something", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (amount: string | null, source: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`
+          INSERT INTO requests.requests (id, reference, idempotency_key, trip_type, cabin, legs, passengers,
+            contact_name, contact_phone, contact_email, source, published_at_request, published_source_at_request)
+          VALUES (gen_random_uuid(), ${`R-PUB${n}`}, ${`published-${n}`}, 'round', 'business',
+            '[{"from":"JFK","to":"LHR","date":"2027-10-12"}]'::jsonb, '{"adult":1,"child":0,"infant":0}'::jsonb,
+            'Alex Morgan', '+12125550148', 'alex@test.dev', 'ios', ${amount}::numeric, ${source})`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null, null)).toBe("ok");
+    expect(await insert("7850.00", "BA published · 16 Sep")).toBe("ok");
+    expect(await insert(null, "BA published · 16 Sep")).toBe("23514");
+    expect(await insert("7850.00", null)).toBe("23514");
+    expect(await insert("0", "BA published · 16 Sep")).toBe("23514");
+    expect(await insert("7850.00", "  ")).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_published_at_request'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
   });
 });

@@ -11,7 +11,8 @@ type Props = {
 
 /**
  * A section label that carries the destination's local time at its right edge (Figma 536:10864, `3 FARES · LOWEST
- * FIRST` … `LONDON · 8:42 PM`), re-rendered on the minute. Without a zone it is a plain SectionLabel.
+ * FIRST` … `LONDON · 8:42 PM`), re-rendered on the minute; in the sheet's 32-pt label box. Without a zone it is a plain
+ * label.
  */
 export function SectionLabelWithLocalTime({ label, city, tz }: Props) {
   const [now, setNow] = useState(() => new Date());
@@ -28,5 +29,5 @@ export function SectionLabelWithLocalTime({ label, city, tz }: Props) {
   }, [tz]);
 
   const time = localTimeLabel(city, tz, now);
-  return <SectionLabel label={label} trailing={time ? { label: time, testID: "explore.localTime" } : null} />;
+  return <SectionLabel box label={label} trailing={time ? { label: time, testID: "explore.localTime" } : null} />;
 }

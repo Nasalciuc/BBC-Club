@@ -18,7 +18,7 @@ type Props = {
 /**
  * Figma 89:388 (Typing), 104:838 (Search empty) and 536:11093 (Popular from New York): the same search field, now
  * editable with its `Clear`; while typing `AIRPORTS` over the matches; before typing `POPULAR FROM <city>` (the routes
- * members search, then the hubs — at most four), then `RECENT`. Cancel lives in the header.
+ * members search, then the hubs — at most four); `RECENT` under either. Cancel lives in the header.
  */
 export function SheetTyping({ onSelect, from, suggestions = [] }: Props) {
   const [airportQuery, setAirportQuery] = useState("");
@@ -65,9 +65,12 @@ export function SheetTyping({ onSelect, from, suggestions = [] }: Props) {
   const beforeTyping = popularList ?? suggestions.filter((a) => !recentCodes.has(a.code)).slice(0, 8);
   const label = emptyQuery ? (popularList && from ? popularLabel(from) : "Airports") : "Airports";
   const airports = emptyQuery ? beforeTyping : airportHits;
+  // 89:388: RECENT stays under the matches while typing; an airport already in the matches is not listed twice.
+  const shownCodes = new Set(airports.map((a) => a.code));
+  const recentRows = emptyQuery ? recent : recent.filter((a) => !shownCodes.has(a.code));
 
   return (
-    <View style={styles.airportPicker}>
+    <>
       <SearchField
         testID="explore.airportQuery"
         editable
@@ -77,9 +80,9 @@ export function SheetTyping({ onSelect, from, suggestions = [] }: Props) {
         onChangeText={setAirportQuery}
         onClear={() => setAirportQuery("")}
       />
-      {airports.length > 0 ? <SectionLabel label={label} /> : null}
-      {airports.length > 0 ? (
-        <View style={styles.rows}>
+      {airports.length > 0 || recentRows.length > 0 ? (
+        <View style={styles.content}>
+          {airports.length > 0 ? <SectionLabel box label={label} /> : null}
           {airports.map((a) => (
             <AirportRow
               key={a.code}
@@ -90,32 +93,26 @@ export function SheetTyping({ onSelect, from, suggestions = [] }: Props) {
               onPress={() => onSelect(a)}
             />
           ))}
+          {recentRows.length > 0 ? <SectionLabel box label="Recent" /> : null}
+          {recentRows.map((a) => (
+            <AirportRow
+              key={`recent.${a.code}`}
+              testID={`explore.airport.recent.${a.code}`}
+              code={a.code}
+              city={a.city}
+              airport={a.name}
+              state="recent"
+              onPress={() => onSelect(a)}
+            />
+          ))}
         </View>
       ) : null}
-      {emptyQuery && recent.length > 0 ? (
-        <>
-          <SectionLabel label="Recent" />
-          <View style={styles.rows}>
-            {recent.map((a) => (
-              <AirportRow
-                key={`recent.${a.code}`}
-                testID={`explore.airport.recent.${a.code}`}
-                code={a.code}
-                city={a.city}
-                airport={a.name}
-                state="recent"
-                onPress={() => onSelect(a)}
-              />
-            ))}
-          </View>
-        </>
-      ) : null}
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  airportPicker: { marginTop: tokens.space.sm },
-  // Figma 52:35: the rows stand 12 pt apart; a recent airport carries the clock.
-  rows: { gap: tokens.space.sm },
+  // Figma 89:388 / 104:838: 12 pt under the field, then the labels' 32-pt boxes and the 72-pt rows, all 12 pt apart; a
+  // recent airport carries the clock.
+  content: { marginTop: tokens.space.sm, gap: tokens.space.sm },
 });

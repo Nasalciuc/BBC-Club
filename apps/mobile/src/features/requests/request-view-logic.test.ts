@@ -7,10 +7,20 @@ import {
   listHints,
   recentRequests,
   requestView,
+  serverState,
   unreadQuotes,
 } from "./request-view-logic";
 
 describe("requestView — one frame per state", () => {
+  test("just received (233:4671): the shorter sentence, the number right under it, no section names", () => {
+    const v = requestView("just_received");
+    expect(v.badge).toBe("received");
+    expect(v.timelineStatus).toBe("received");
+    expect(v.sentence).toBe("We have your request. A specialist will call shortly.");
+    expect(v.caption).toBe("We have your travel details.");
+    expect([v.phoneLine, v.progressLabel, v.callback, v.fare, v.call]).toEqual([true, false, false, false, null]);
+  });
+
   test("received (233:4248): the section's name, the number we call, no call yet", () => {
     const v = requestView("received");
     expect(v.badge).toBe("received");
@@ -34,6 +44,20 @@ describe("requestView — one frame per state", () => {
     expect(v.sentence).toBe("Your quote is ready. A specialist will call shortly to confirm the details.");
     expect(v.caption).toBe("Review the quote with your specialist.");
     expect([v.progressLabel, v.callback, v.call]).toEqual([true, true, "specialist"]);
+  });
+
+  test("the fare shows on a quote ready only (233:4204) — no other frame draws one", () => {
+    const withFare = [
+      "received",
+      "just_received",
+      "assigned",
+      "quoted",
+      "booked",
+      "closed",
+      "queued",
+      "not_sent",
+    ].filter((s) => requestView(s).fare);
+    expect(withFare).toEqual(["quoted"]);
   });
 
   test("booked (233:4388): the section's name, no number, no call", () => {
@@ -69,6 +93,15 @@ describe("requestView — one frame per state", () => {
       expect([v.sendNow, v.call, v.compact]).toEqual([false, "us", true]);
     }
   });
+});
+
+test("a request the club has not passed on yet is just received; its reference comes with the passing on", () => {
+  expect(serverState({ status: "received", reference: "" })).toBe("just_received");
+  expect(serverState({ status: "received", reference: "  " })).toBe("just_received");
+  expect(serverState({ status: "received", reference: "R-B001" })).toBe("received");
+  // Any other state is the server's own, with or without a reference.
+  expect(serverState({ status: "not_sent", reference: "" })).toBe("not_sent");
+  expect(serverState({ status: "quoted", reference: "R-B002" })).toBe("quoted");
 });
 
 describe("closedAt and closedLine", () => {

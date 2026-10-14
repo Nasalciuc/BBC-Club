@@ -16,9 +16,10 @@ type Props = {
   testID: string;
 };
 
-/** Figma 436:1221: the band is 304 pt high, the home airport's pill 36. No token is either. */
+/** Figma 436:1221: the band is 304 pt high, the home airport's pill 36 by 144 — its words centred. No token is either. */
 const HEIGHT = 304;
 const PILL = 36;
+const PILL_WIDTH = 144;
 
 /**
  * Figma `Proposal / ProfileHero` (436:1221): identity anchored in the home airport's city, not a member portrait — the
@@ -58,7 +59,9 @@ const styles = StyleSheet.create({
   name: { ...rn(tokens.type.headline), color: tokens.colors.textOnDark },
   pill: {
     minHeight: PILL,
+    minWidth: PILL_WIDTH,
     justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: tokens.space.md,
     backgroundColor: tokens.colors.surfaceCard,
     borderWidth: 1,

@@ -4,6 +4,7 @@ import type { AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import { CarouselRow, OfferCard, SectionLabel, tokens } from "@bbc/ui";
 
+import { NoOffers } from "@/features/explore/SheetExpanded";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { fetchHome, fetchProfile } from "@/lib/api";
@@ -110,25 +111,37 @@ type Props = {
   onOpenOffer: (card: ProposalCardVM) => void;
   /** Figma 89:386: `See all` beside OFFERS TO INSPIRE expands the sheet to every section (89:389). */
   onSeeAll: () => void;
+  /** With no offer at all, the sheet offers the search instead of a heading over nothing (`NoOffers`). */
+  onSearch: () => void;
 };
 
-export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
+export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll, onSearch }: Props) {
   const inspire = home?.sections.find((s) => s.key === "inspire")?.items ?? [];
   // ADR-IMPL-043: an offer without its own picture shows its city's photo; the club's image until there is one.
   const photoFor = usePlacePhotos(inspire.map((item) => item.route.to));
 
   if (homeLoading) {
+    // The cards' places while Home loads: under the label's 32-pt box, two cards in the carousel's row.
     return (
-      <View style={styles.skeletons}>
-        <View style={[styles.skeletonCard, { width: 180 }]} />
-        <View style={[styles.skeletonCard, { width: 180 }]} />
+      <View style={[styles.content, styles.skeletons]}>
+        <View style={styles.skeletonCard} />
+        <View style={styles.skeletonCard} />
+      </View>
+    );
+  }
+
+  if (home && inspire.length === 0) {
+    return (
+      <View style={styles.content}>
+        <NoOffers onSearch={onSearch} />
       </View>
     );
   }
 
   return (
-    <>
+    <View style={styles.content}>
       <SectionLabel
+        box
         label="Offers to inspire"
         action={{ label: "See all", onPress: onSeeAll, testID: "explore.seeAll" }}
       />
@@ -145,16 +158,18 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
           />
         ))}
       </CarouselRow>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  skeletons: { marginTop: tokens.space.md, gap: tokens.space.md },
+  // Figma 89:386: 12 pt under the field, the label's 32-pt box, 12 pt, the 120-pt carousel.
+  content: { marginTop: tokens.space.sm, gap: tokens.space.sm },
+  skeletons: { flexDirection: "row", overflow: "hidden", paddingTop: 32 + tokens.space.sm },
   skeletonCard: {
+    width: 180,
     height: 120,
     borderRadius: tokens.radius.card,
     backgroundColor: tokens.colors.borderDefault,
-    marginRight: tokens.space.sm,
   },
 });

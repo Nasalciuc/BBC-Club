@@ -13,20 +13,21 @@ export function stateCopy(kind: MessageKind): { title: string; body: string } {
         title: "This request didn’t send.",
         body: "Try again in a moment. Your details are still here.",
       };
+    // Figma 240:5093 / 240:5129 / 240:5163: the page-wide messages.
     case "route":
       return {
-        title: "Something went wrong.",
-        body: "This screen could not be loaded.",
+        title: "Something didn’t load.",
+        body: "We couldn’t load this page. Please try again.",
       };
     case "update":
       return {
-        title: "We've improved the app.",
-        body: "Please update to keep requesting fares.",
+        title: "A new version is ready.",
+        body: "Update BuyBusinessClass to continue exploring and requesting fares.",
       };
     case "maintenance":
       return {
-        title: "Back in a moment.",
-        body: "We're making a quick improvement.",
+        title: "We’ll be back shortly.",
+        body: "We’re making a few improvements. Please check back soon.",
       };
     case "wrongPassword":
       return {

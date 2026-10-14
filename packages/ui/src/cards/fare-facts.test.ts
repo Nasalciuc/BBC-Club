@@ -21,21 +21,28 @@ async function factsUnder(tz: string): Promise<string> {
 }
 
 describe("fareFacts", () => {
-  it("includes times when departLocal and arriveLocal are set", () => {
-    expect(fareFacts(fixture.fares[0]!)).toBe("18:55 — 07:00 +1 · 7H 05");
+  it("reads the stops and the time in the air, as Figma 89:387 draws them", () => {
+    expect(fareFacts(fixture.fares[0]!)).toBe("NONSTOP · 7H 05");
   });
 
-  it("does not invent times when departLocal is null", () => {
-    const facts = fareFacts(fixture.fares[2]!);
-    expect(facts).not.toMatch(/\d{2}:\d{2}/);
-    expect(facts).toContain("NONSTOP");
+  it("leaves the clocks to the fare's page, even when the fare has them", () => {
+    expect(fixture.fares[0]!.departLocal).toBe("18:55");
+    expect(fareFacts(fixture.fares[0]!)).not.toMatch(/\d{2}:\d{2}/);
+  });
+
+  it("reads CONNECTING for a fare with stops — the catalog does not count them", () => {
+    expect(fareFacts(fixture.fares[5]!)).toBe("CONNECTING · 18H 20");
+  });
+
+  it("drops the time when the fare has no duration", () => {
+    expect(fareFacts({ nonstop: true, durationMinutes: null })).toBe("NONSTOP");
   });
 
   it("is identical in Chișinău and Los Angeles", async () => {
     const chisinau = await factsUnder("Europe/Chisinau");
     const la = await factsUnder("America/Los_Angeles");
     expect(chisinau).toBe(la);
-    expect(chisinau).toBe("18:55 — 07:00 +1 · 7H 05");
+    expect(chisinau).toBe("NONSTOP · 7H 05");
   });
 
   it("does not call toLocaleTimeString", () => {

@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
-import { EmptyState, ErrorState, RequestCard, tokens, rn } from "@bbc/ui";
+import { EmptyState, RequestCard, tokens, rn } from "@bbc/ui";
 
+import { SystemScreen } from "@/components/system-screen";
 import { isOffline } from "@/features/explore/offline-logic";
 import { queuedView, requestCard } from "@/features/requests/request-card";
 import { listHints } from "@/features/requests/request-view-logic";
@@ -121,18 +122,16 @@ export default function RequestsScreen() {
   }
 
   // Nothing to show and the server did not answer: say so, with a way to try again — a member with ten requests is
-  // never told they have none (DESIGN.md: error and empty are separate frames).
+  // never told they have none (DESIGN.md: error and empty are separate frames). Figma 240:5093: the page-wide message.
   if (items === null && queued.length === 0 && failure) {
     return (
-      <View testID="requests.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <ErrorState
-          testID="requests.error"
-          variant="error"
-          title={failure.title}
-          body={failure.body}
-          primary={{ label: "Try again", testID: "requests.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
-        />
-      </View>
+      <SystemScreen
+        testID="requests.root"
+        messageTestID="requests.error"
+        title={failure.title}
+        body={failure.body}
+        primary={{ label: "Try again", testID: "requests.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
+      />
     );
   }
 
@@ -152,8 +151,9 @@ export default function RequestsScreen() {
     );
   };
 
-  return (
-    <View testID="requests.root" style={[styles.root, { paddingTop: insets.top + tokens.space.md }]}>
+  // Figma 233:4069: the title and the intro scroll with the list, 8 pt under the safe area.
+  const header = (
+    <View>
       <Text style={styles.title} accessibilityRole="header">
         Your requests.
       </Text>
@@ -171,68 +171,79 @@ export default function RequestsScreen() {
           {refreshFailedLine(failure.code, items !== null)}
         </Text>
       ) : null}
+    </View>
+  );
 
-      {empty ? (
-        <EmptyState
-          testID="requests.empty"
-          title="No requests yet."
-          body="Explore destinations and request a fare. Your requests will appear here."
-          primary={{
-            label: "Explore",
-            onPress: () => router.push("/(tabs)/explore" as Href),
-          }}
-        />
-      ) : (
-        <FlatList
-          data={[{ key: "open" }, { key: "closed" }]}
-          keyExtractor={(i) => i.key}
-          contentContainerStyle={{ paddingBottom: tokens.space.xxl }}
-          renderItem={({ item }) => {
-            if (item.key === "open") {
-              if (open.length === 0) return null;
-              return (
-                <View>
-                  <Text style={styles.section} accessibilityRole="header">
-                    In progress
-                  </Text>
-                  <View style={styles.cards}>
-                    {open.map((row) => {
-                      const r = row.kind === "queued" ? row.view : row.request;
-                      // Figma 240:5199: a request waiting on the phone says its details are saved; opening it offers
-                      // `Send now`. One that will not go out by itself keeps its dates and its badge; opening it
-                      // offers the call. Calls and retries live in the request, never on the card.
-                      const onPhone = row.kind === "queued" ? (row.rejected ? "rejected" : "queued") : undefined;
-                      return card(r, `requests.row.${r.id}`, onPhone);
-                    })}
-                  </View>
-                  {hints.map((line, i) => (
-                    <Text key={line} testID={`requests.hint.${i}`} style={styles.listHint}>
-                      {line}
-                    </Text>
-                  ))}
-                </View>
-              );
-            }
-            if (closed.length === 0) return null;
+  return (
+    <View testID="requests.root" style={[styles.root, { paddingTop: insets.top }]}>
+      <FlatList
+        data={empty ? [] : [{ key: "open" }, { key: "closed" }]}
+        keyExtractor={(i) => i.key}
+        ListHeaderComponent={header}
+        ListEmptyComponent={
+          empty ? (
+            // Figma 233:4139: the empty state 24 pt under the intro.
+            <View style={styles.empty}>
+              <EmptyState
+                testID="requests.empty"
+                title="No requests yet."
+                body="Explore destinations and request a fare. Your requests will appear here."
+                primary={{
+                  label: "Explore",
+                  onPress: () => router.push("/(tabs)/explore" as Href),
+                }}
+              />
+            </View>
+          ) : null
+        }
+        contentContainerStyle={styles.list}
+        renderItem={({ item }) => {
+          if (item.key === "open") {
+            if (open.length === 0) return null;
             return (
               <View>
                 <Text style={styles.section} accessibilityRole="header">
-                  Completed
+                  In progress
                 </Text>
-                <View style={styles.cards}>{closed.map((r) => card(r, `requests.row.${r.id}`))}</View>
+                <View style={styles.cards}>
+                  {open.map((row) => {
+                    const r = row.kind === "queued" ? row.view : row.request;
+                    // Figma 240:5199: a request waiting on the phone says its details are saved; opening it offers
+                    // `Send now`. One that will not go out by itself keeps its dates and its badge; opening it
+                    // offers the call. Calls and retries live in the request, never on the card.
+                    const onPhone = row.kind === "queued" ? (row.rejected ? "rejected" : "queued") : undefined;
+                    return card(r, `requests.row.${r.id}`, onPhone);
+                  })}
+                </View>
+                {hints.map((line, i) => (
+                  <Text key={line} testID={`requests.hint.${i}`} style={styles.listHint}>
+                    {line}
+                  </Text>
+                ))}
               </View>
             );
-          }}
-        />
-      )}
+          }
+          if (closed.length === 0) return null;
+          return (
+            <View>
+              <Text style={styles.section} accessibilityRole="header">
+                Completed
+              </Text>
+              <View style={styles.cards}>{closed.map((r) => card(r, `requests.row.${r.id}`))}</View>
+            </View>
+          );
+        }}
+      />
       <View testID="requests.empty.search" style={{ height: 0, width: 0 }} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: tokens.colors.surfacePage, paddingHorizontal: tokens.space.lg },
-  centered: { alignItems: "center", justifyContent: "center" },
+  root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
+  list: { paddingTop: tokens.space.xs, paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl },
+  empty: { marginTop: tokens.space.lg },
+  centered: { alignItems: "center", justifyContent: "center", paddingHorizontal: tokens.space.lg },
   title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
   // Figma 233:4069: 24 pt between the title, the intro, a section's title and its cards; 12 pt between cards.
   intro: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.lg },

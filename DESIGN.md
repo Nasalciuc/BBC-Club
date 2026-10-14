@@ -309,8 +309,8 @@ Tokens and components in this file are canonical. Details live in `design/compon
 - The Mapbox globe only: `globe-space` (#0B0B19) space and the night side's dark; `globe-atmosphere` / `globe-atmosphere-high` the horizon and the sky; `globe-city-lights` (#FFE4B0) the cities' lights on the night side. Never on UI.
 - `text-primary` / `text-secondary` / `text-tertiary` on light; `text-on-dark` / `text-on-dark-muted` on navy. `text-tertiary` only for non-essential lines (validity, footers, struck prices).
 - `border-default` (#E2E8F0): the single 1px border color.
-- `status-danger` (#B42318): error border on the field at fault and the account-deletion confirmation. Never for headlines, messages or urgency. No success/warning/info colors exist.
-- Photographic scrim: gradient from transparent to rgba(30,41,59,0.92) over the bottom 45% of any photo carrying text — the only gradient, never on UI.
+- `status-danger` (#B42318): error border on the field at fault (on Profile's sheets also the words Figma sets under it, 325:8525) and the account-deletion confirmation. Never for headlines, messages or urgency. No success/warning/info colors exist.
+- Photographic scrim: the entry's gradient from transparent to rgba(30,41,59,0.92) over the bottom 45% of its cabin photograph — the only gradient, never on UI. Inside the club, a photograph carrying text — an offer's on the fare page (436:1220), the profile hero's (436:1221) — sits under a flat `surface-night` veil at 32%, as Figma draws it; its words are `text-on-dark`.
 
 ## Typography
 
@@ -343,12 +343,12 @@ Tokens and components in this file are canonical. Details live in `design/compon
 Documented in `design/components.md`. Summary of the rules an agent most often gets wrong:
 
 - One filled button per screen; its label centered and alone — no arrow, no icon (Figma Button 7:12). A second action is `button-secondary` (white on a hairline) or a `text-link`. The entry screens stay as they are (the owner, 14 Oct): their pill keeps the arrow directly after the label, and Sign in's Create account is `button-outlined`.
-- `field` is white on both worlds with `field-label` above; focus strengthens the border to `text-secondary`; error = `status-danger` border on the field at fault only.
-- Password fields show text by default with an eye toggle; there is no confirm-password field.
+- `field` is white on both worlds with its label above — `field-label` in the request sheet, sentence case in Profile's sheets; the magnifier only where the field searches; focus strengthens the border to `text-secondary`; error = `status-danger` border on the field at fault only.
+- Password fields start hidden, with the eye to show them (Figma 238:5125, 325:8392); only Change password asks to confirm the new one.
 - `proposal-card` and `proposal-row` have no buttons and no chevrons — the whole surface is the tap target; prices appear as `price` beside `price-published` struck through, never as percentage chips.
 - `tab-bar` shows EXPLORE / REQUESTS / PROFILE; inactive labels in `text-secondary` (AA contrast), active in `primary`; unread = 6px `accent-warm` dot. White with no rule above; it runs under the home indicator or navigation bar to the screen's edge.
 - `modal-sheet` — the page under a 35% `surface-night` backdrop; the sheet in `surface-page`, 24px top corners, a 48×4 handle; its title and the filled `close-button`; the actions pinned at the bottom. Figma's four heights, never a percentage (`design/components.md`).
-- `button-destructive` appears only inside the account-deletion confirmation sheet, labeled with the action ("Delete my account").
+- `button-destructive` appears only inside the account-deletion confirmation sheet, labeled with the action (`Delete account`, Figma 320:5810).
 - Logo: white version directly on photographs and navy, dark version on `surface-page`; never inside a plate; never recolored.
 
 ## Interaction and States
@@ -383,7 +383,7 @@ Documented in `design/components.md`. Summary of the rules an agent most often g
 ## Do's and Don'ts
 
 - Do keep exactly one strong action per screen · Do write titles as invitations · Do render states as separate frames · Do use the white logo on dark surfaces.
-- Don't add gold, blue, green or any hue outside the ramp · Don't add search, filters, ratings, hearts or countdowns · Don't put buttons in cards · Don't show password dots by default · Don't invent brands, prices, cabin classes or flight data — use the fixture set.
+- Don't add gold, blue, green or any hue outside the ramp · Don't add search, filters, ratings, hearts or countdowns · Don't put buttons in cards · Don't invent brands, prices, cabin classes or flight data — use the fixture set.
 
 ## Maintenance and Validation
 

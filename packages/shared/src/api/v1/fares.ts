@@ -30,6 +30,16 @@ export const FareVM = z.object({
     .regex(/^\d{2}:\d{2}$/)
     .nullable(),
   arriveDayOffset: z.number().int().min(0).max(2),
+  /**
+   * The departure's calendar day at the origin airport, `YYYY-MM-DD` — the day the fare page prints (`OCT 12`). The
+   * server names it from the airport's zone; the instant and the wall clock alone cannot (UTC+13 and UTC−11 share
+   * them). Absent from an older server's answer: the app then falls back to the clock.
+   */
+  departDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
   price: PricePair,
   validUntil: z.string().datetime(),
   /** A promotional offer exists on this route. */

@@ -137,9 +137,18 @@ const OFFERS: Record<string, { publishedDaysAgo: number; validDays: number }> = 
  *  fixture's fourth, "not sent", lives in the app's offline queue — the server never holds it. */
 const REQUESTS: Record<string, { createdDaysAgo: number; out: number; back: number; fareId?: string }> = {
   "R-B001": { createdDaysAgo: 1, out: 21, back: 28, fareId: FARE.ba },
-  "R-B002": { createdDaysAgo: 3, out: 26, back: 33 },
+  // Paris at Air France's $3,850: the quote ready (Figma 233:4171) strikes that fare's published price beside it.
+  "R-B002": { createdDaysAgo: 3, out: 26, back: 33, fareId: FARE.af },
   "R-B003": { createdDaysAgo: 20, out: 54, back: 65 },
 };
+
+/** What a fare request records of its fare's published price (ADR-IMPL-046), as the server would have when the member
+ *  asked: the fixture fare's published price and source, for the price the member saw. */
+function publishedAtRequest(fareId: string | undefined, priceAtRequest: number) {
+  const price = fixture.fares.find((f) => f.id === fareId)?.price;
+  if (!price || price.offer !== priceAtRequest || !("published" in price) || !price.publishedSource) return null;
+  return { amount: price.published, source: price.publishedSource };
+}
 
 export const DEMO = { offerKey: (key: string) => `staging-demo:${key}` } as const;
 
@@ -222,6 +231,7 @@ export function demoPlan(member: { id: string; email: string }, now: Date) {
       const [from = "", to = ""] = r.route.split(" → ");
       const createdAt = new Date(now.getTime() - plan.createdDaysAgo * DAY);
       const shift = createdAt.getTime() - new Date(r.createdAt).getTime();
+      const published = publishedAtRequest(plan.fareId, r.priceAtRequest);
       return {
         row: {
           id: r.id,
@@ -239,6 +249,8 @@ export function demoPlan(member: { id: string; email: string }, now: Date) {
           ],
           passengers: { ...r.passengers },
           priceAtRequest: String(r.priceAtRequest),
+          publishedAtRequest: published ? published.amount.toFixed(2) : null,
+          publishedSourceAtRequest: published ? published.source : null,
           contactName: fixture.member.name,
           contactPhone: fixture.member.phone,
           contactEmail: member.email,
