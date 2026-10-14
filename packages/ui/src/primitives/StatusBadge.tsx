@@ -3,6 +3,12 @@ import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { STATUS_COPY, badgeOf, type BadgeStatus } from "./status-copy";
 
+/**
+ * Figma's badges under a request's title are wider than their words — 88 pt (233:4275, 233:4415), 104 for Quote ready
+ * (233:4198) — while Not sent hugs its own (325:8301). A minimum, so larger text still fits.
+ */
+const SM_MIN_WIDTH: Partial<Record<BadgeStatus, number>> = { received: 88, booked: 88, quote_ready: 104 };
+
 export { statusCopy, type BadgeStatus } from "./status-copy";
 
 type Props = {
@@ -23,7 +29,13 @@ export function StatusBadge({ status, size = "md" }: Props) {
   const filled = badge === "quote_ready";
 
   return (
-    <View style={[styles.badge, size === "sm" ? styles.sm : styles.md, filled ? styles.filled : styles.framed]}>
+    <View
+      style={[
+        styles.badge,
+        size === "sm" ? [styles.sm, { minWidth: SM_MIN_WIDTH[badge] }] : styles.md,
+        filled ? styles.filled : styles.framed,
+      ]}
+    >
       <Text style={[styles.text, filled && styles.filledText]} numberOfLines={1}>
         {STATUS_COPY[badge]}
       </Text>

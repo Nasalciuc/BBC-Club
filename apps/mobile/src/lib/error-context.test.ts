@@ -31,12 +31,16 @@ test("submit errors map to the sheet, the queue, or the limited screen", () => {
 });
 
 describe("system screens", () => {
-  test("update required has no dismiss path in copy", () => {
-    expect(stateCopy("update").title).toBe("We've improved the app.");
-  });
-
-  test("maintenance is temporary", () => {
-    expect(stateCopy("maintenance").title).toBe("Back in a moment.");
+  test("Figma's page-wide messages, word for word", () => {
+    expect(stateCopy("route")).toEqual({
+      title: "Something didn’t load.",
+      body: "We couldn’t load this page. Please try again.",
+    });
+    expect(stateCopy("update")).toEqual({
+      title: "A new version is ready.",
+      body: "Update BuyBusinessClass to continue exploring and requesting fares.",
+    });
+    expect(stateCopy("maintenance").title).toBe("We’ll be back shortly.");
   });
 });
 

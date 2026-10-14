@@ -66,6 +66,8 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
         />
       }
     >
+      {/* Figma 238:4842: what the number is for, the stepper, the note for children or larger parties — 24 apart. */}
+      <Text style={styles.help}>Set the usual number of adults. You can change it for each request.</Text>
       <Stepper testID="profile.travelers.adult" label="Adults" value={adult} min={1} max={9} onChange={setAdult} />
       <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
 
@@ -75,6 +77,7 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
 });
 
 const styles = StyleSheet.create({
+  help: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
   caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
 });

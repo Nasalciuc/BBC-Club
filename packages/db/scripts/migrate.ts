@@ -213,6 +213,24 @@ try {
     }
   }
 
+  // After 0005 (requests schema): the fare's published price and its source when the member asked. ADR-IMPL-046.
+  const requestsPublishedAtRequest = join(migrationsDir, "0029_requests_published_at_request.sql");
+  if (existsSync(requestsPublishedAtRequest)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0029_requests_published_at_request.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(requestsPublishedAtRequest, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0029_requests_published_at_request.sql')`,
+        );
+      });
+      console.log("requests published at request applied");
+    }
+  }
+
   const notifRequestId = join(migrationsDir, "0009_notifications_request_id.sql");
   if (existsSync(notifRequestId)) {
     const done = (await db.execute(

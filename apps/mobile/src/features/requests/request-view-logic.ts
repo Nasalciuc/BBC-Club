@@ -5,8 +5,8 @@ import type { BadgeStatus } from "@bbc/ui/status-copy";
 export type RequestBadge = BadgeStatus;
 
 /**
- * What a request's detail shows, per Figma's frames (233:4248 received, 325:8136 specialist review, 233:4171 quote
- * ready, 233:4388 booked, 325:8229 closed, 325:8295 not sent).
+ * What a request's detail shows, per Figma's frames (233:4671 just received, 233:4248 received, 325:8136 specialist
+ * review, 233:4171 quote ready, 233:4388 booked, 325:8229 closed, 325:8295 not sent).
  */
 export type RequestView = {
   badge: RequestBadge | null;
@@ -22,6 +22,10 @@ export type RequestView = {
   progressLabel: boolean;
   /** `WE WILL CALL`, the member's number and the booking note: received and quote ready (233:4242). */
   callback: boolean;
+  /** The number we call alone, right under the sentence: a request just received (233:4671). */
+  phoneLine: boolean;
+  /** `YOUR FARE` and the published fare struck beside it: a quote ready only (233:4204) — no other frame shows a fare. */
+  fare: boolean;
   /** The call itself. `specialist` — `Call your specialist`, a white pill on a hairline (296:5916), once a quote is
    *  ready. `us` — a request we could not pass on: the member calls us, the screen's one filled button. */
   call: "specialist" | "us" | null;
@@ -52,18 +56,40 @@ const NONE = {
   closedLine: null,
   progressLabel: false,
   callback: false,
+  phoneLine: false,
+  fare: false,
   call: null,
   sendNow: false,
   compact: false,
 } as const;
 
 /**
- * The detail of a request in a given state. `queued` is a request waiting on the phone; `rejected` one the server
- * refused for good; `not_sent` one the server holds but gave up passing on. `timeZone` is for tests: the phone's own
- * zone otherwise.
+ * The detail's state for a request the server holds. A request received but not passed on to the specialists yet is
+ * just received (233:4671): its reference comes with the passing on, a minute or so after it was sent.
+ */
+export function serverState(r: { status: string; reference: string }): string {
+  return r.status === "received" && r.reference.trim() === "" ? "just_received" : r.status;
+}
+
+/**
+ * The detail of a request in a given state. `just_received` is a request the server holds but has not passed on yet
+ * (serverState); `queued` one waiting on the phone; `rejected` one the server refused for good; `not_sent` one the
+ * server holds but gave up passing on. `timeZone` is for tests: the phone's own zone otherwise.
  */
 export function requestView(status: string, at?: string | null, timeZone?: string): RequestView {
   switch (status) {
+    case "just_received":
+      // Figma 233:4671: the shorter sentence with the number we call right under it, the timeline without its section
+      // name; the booking note waits for the request to reach a specialist.
+      return {
+        ...NONE,
+        badge: "received",
+        showTimeline: true,
+        timelineStatus: "received",
+        sentence: "We have your request. A specialist will call shortly.",
+        caption: "We have your travel details.",
+        phoneLine: true,
+      };
     case "received":
       return {
         ...NONE,
@@ -95,6 +121,7 @@ export function requestView(status: string, at?: string | null, timeZone?: strin
         caption: "Review the quote with your specialist.",
         progressLabel: true,
         callback: true,
+        fare: true,
         call: "specialist",
       };
     case "booked":

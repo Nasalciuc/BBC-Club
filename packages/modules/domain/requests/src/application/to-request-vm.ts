@@ -46,6 +46,11 @@ export function toRequestVM(
     cabin: row.cabin,
     passengers: row.passengers,
     priceAtRequest: row.priceAtRequest != null ? parseFloat(row.priceAtRequest) : null,
+    // Both or neither, by the row's CHECK (0029); a half pair would never reach the member.
+    publishedAtRequest:
+      row.publishedAtRequest != null && row.publishedSourceAtRequest
+        ? { amount: parseFloat(row.publishedAtRequest), source: row.publishedSourceAtRequest }
+        : null,
     status,
     createdAt: row.createdAt.toISOString(),
     timeline: timeline.map((e) => ({

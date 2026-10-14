@@ -1,10 +1,10 @@
-import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
 
 import { postAccountPassword, type Profile } from "@/lib/api";
+import { PasswordField } from "./PasswordField";
 import type { ProfileSheetHandle } from "./types";
 
 type Props = {
@@ -104,27 +104,29 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
           <Text style={styles.body}>Keep it private. We will never ask for your password by phone.</Text>
         </>
       ) : (
+        // Figma 238:4974: three fields, their labels in sentence case, `Enter password` and the eye in each; the rule
+        // under them, 24 pt apart.
         <>
-          <Field
+          <PasswordField
             testID="profile.password.current"
-            label="CURRENT PASSWORD"
+            label="Current password"
+            labelTone="bodySm"
             value={currentPassword}
             onChangeText={setCurrentPassword}
-            secure
           />
-          <Field
+          <PasswordField
             testID="profile.password.new"
-            label="NEW PASSWORD"
+            label="New password"
+            labelTone="bodySm"
             value={newPassword}
             onChangeText={setNewPassword}
-            secure
           />
-          <Field
+          <PasswordField
             testID="profile.password.confirm"
-            label="CONFIRM NEW PASSWORD"
+            label="Confirm new password"
+            labelTone="bodySm"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
-            secure
           />
           <Text style={styles.rule}>At least 8 characters, with one number or symbol.</Text>
 
@@ -139,50 +141,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
   );
 });
 
-function Field({
-  testID,
-  label,
-  value,
-  onChangeText,
-  secure,
-}: {
-  testID: string;
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  secure?: boolean;
-}) {
-  return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <BottomSheetTextInput
-        testID={testID}
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={secure}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.field}
-        placeholderTextColor={tokens.colors.textSecondary}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  fieldWrap: { gap: tokens.space.xxs },
-  fieldLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
-  field: {
-    minHeight: 56,
-    borderRadius: tokens.radius.field,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.sm,
-    ...rn(tokens.type.body),
-    color: tokens.colors.textPrimary,
-    backgroundColor: tokens.colors.surfaceCard,
-  },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
   rule: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   headline: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },

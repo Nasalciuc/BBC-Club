@@ -14,8 +14,9 @@ import {
 } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
-import { airportSearchState, chosenAirportLabel, wantsAirportSearch } from "@/lib/airport-search-state";
-import { fetchAirports, patchProfile, type Profile } from "@/lib/api";
+import { deviceTimeZone } from "@/features/explore/discovery-logic";
+import { airportSearchState, homeAirportLabel, wantsAirportSearch } from "@/lib/airport-search-state";
+import { fetchAirports, fetchHomeSuggestion, patchProfile, type Profile } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
 import type { ProfileSheetHandle } from "./types";
 
@@ -23,17 +24,26 @@ export type { ProfileSheetHandle };
 
 type Props = {
   profile: Profile;
+  /** The city of the member's home airport, once known (`JFK · New York`). */
+  homeCity: string | null;
   onSaved: (next: Profile) => void;
 };
 
+/**
+ * Figma 238:4561: the airport the member flies from — what it is now under an empty search, and the airports to choose
+ * from under it. With nothing typed, the airport of the phone's time zone is offered (A5, ADR-IMPL-039) where Figma
+ * draws four.
+ */
 export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function HomeAirportSheet(
-  { profile, onSaved },
+  { profile, homeCity, onSaved },
   ref,
 ) {
   const modalRef = useRef<ModalSheetHandle>(null);
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<AirportVM | null>(null);
+  // The airport the sheet will save: the member's own until they choose another.
+  const [chosen, setChosen] = useState<{ code: string; city: string | null } | null>(null);
+  const [suggested, setSuggested] = useState<AirportVM | null>(null);
   const [search, setSearch] = useState(() => airportSearchState<AirportVM>("idle"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,20 +55,29 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
 
   useImperativeHandle(ref, () => ({
     present() {
-      setQuery(profile.homeAirport ?? "");
-      setSelected(null);
+      setQuery("");
+      setChosen(null);
       setSearch(airportSearchState("idle"));
       setBusy(false);
       setError(null);
       modalRef.current?.present();
+      void suggest();
     },
     dismiss() {
       modalRef.current?.dismiss();
     },
   }));
 
+  // ADR-IMPL-039: the busiest airport in the phone's time zone — offered, never chosen for the member.
+  async function suggest() {
+    const tz = deviceTimeZone();
+    if (!tz || suggested) return;
+    const result = await fetchHomeSuggestion(tz);
+    if (result.ok) setSuggested(result.data.airport);
+  }
+
   useEffect(() => {
-    if (!wantsAirportSearch(query, selected)) {
+    if (!wantsAirportSearch(query, null)) {
       setSearch(airportSearchState("idle"));
       return;
     }
@@ -75,11 +94,21 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query, selected]);
+  }, [query]);
+
+  function choose(airport: AirportVM) {
+    // The choice ends the typing: the keyboard goes, the field empties, and the line under it names the choice.
+    Keyboard.dismiss();
+    setChosen({ code: airport.code, city: airport.city });
+    setQuery("");
+    setSearch(airportSearchState("idle"));
+    setError(null);
+  }
 
   async function onSave() {
-    const code = (selected?.code ?? query.trim().toUpperCase()).slice(0, 3);
-    if (code.length !== 3) {
+    const typed = query.trim().toUpperCase();
+    const code = typed || (chosen?.code ?? profile.homeAirport ?? "");
+    if (!/^[A-Z]{3}$/.test(code)) {
       setError("Pick an airport or enter a 3-letter code.");
       return;
     }
@@ -94,6 +123,9 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
     onSaved(result.data);
     modalRef.current?.dismiss();
   }
+
+  const current = chosen ?? (profile.homeAirport ? { code: profile.homeAirport, city: homeCity } : null);
+  const typing = query.trim().length >= 2;
 
   return (
     <ModalSheet
@@ -113,37 +145,44 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
         />
       }
     >
+      <Text style={styles.help}>The airport you usually fly from.</Text>
+
       <SearchField
         testID="profile.homeAirport.query"
-        placeholder="City or code"
+        placeholder="City or airport"
         editable
         value={query ? { text: query } : null}
         onChangeText={(text) => {
           setQuery(text);
-          setSelected(null);
           setError(null);
         }}
-        onClear={() => {
-          setQuery("");
-          setSelected(null);
-        }}
+        onClear={() => setQuery("")}
       />
 
-      {search.phase === "empty" && !selected ? (
+      {current ? (
+        <Text testID="profile.homeAirport.current" style={styles.current}>
+          {homeAirportLabel(current.code, current.city)}
+        </Text>
+      ) : null}
+
+      {!typing ? (
+        suggested ? (
+          <AirportRow
+            testID={`profile.homeAirport.suggested.${suggested.code}`}
+            code={suggested.code}
+            city={suggested.city}
+            airport={suggested.name}
+            onPress={() => choose(suggested)}
+          />
+        ) : null
+      ) : search.phase === "empty" ? (
         <EmptyState
           testID="profile.homeAirport.empty"
           title="No airports found"
           body="Try a city name or a three-letter airport code, such as JFK."
-          primary={{
-            label: "Clear search",
-            onPress: () => {
-              setQuery("");
-              setSelected(null);
-              setSearch(airportSearchState("idle"));
-            },
-          }}
+          primary={{ label: "Clear search", onPress: () => setQuery("") }}
         />
-      ) : search.phase === "error" && !selected ? (
+      ) : search.phase === "error" ? (
         <StateMessage
           testID="profile.homeAirport.error"
           variant="error"
@@ -161,7 +200,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
             },
           }}
         />
-      ) : search.airports.length > 0 && !selected ? (
+      ) : search.airports.length > 0 ? (
         <View style={styles.rows}>
           {search.airports.map((a) => (
             <AirportRow
@@ -170,13 +209,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
               code={a.code}
               city={a.city}
               airport={a.name}
-              onPress={() => {
-                // The choice ends the typing: the keyboard goes, and the sheet shows its button again.
-                Keyboard.dismiss();
-                setSelected(a);
-                setQuery(chosenAirportLabel(a));
-                setSearch(airportSearchState("idle"));
-              }}
+              onPress={() => choose(a)}
             />
           ))}
         </View>
@@ -192,7 +225,10 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
 });
 
 const styles = StyleSheet.create({
-  // Figma 238:4561: the airport rows stand 8 pt apart.
+  help: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  current: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  // Figma 238:4682: the airport rows stand 8 pt apart.
   rows: { gap: tokens.space.xs },
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
+  error: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
 });

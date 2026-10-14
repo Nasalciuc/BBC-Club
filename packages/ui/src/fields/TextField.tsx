@@ -8,9 +8,10 @@ type Props = Omit<TextInputProps, "style" | "placeholderTextColor"> & {
   label: string;
   /**
    * `mono`: the request sheet's `NAME`, `PHONE`, `EMAIL` (Figma 135:849), uppercased here; `caption`: the short sheets'
-   * sentence-case labels as given (320:5969 `Phone number`, 320:5810 `Password`).
+   * sentence-case labels as given (320:5969 `Phone number`, 320:5810 `Password`); `bodySm`: the password sheet's
+   * (238:4974 `Current password`).
    */
-  labelTone?: "mono" | "caption";
+  labelTone?: "mono" | "caption" | "bodySm";
   /** Figma State=Error (28:14): the danger border. The words that explain it sit under the field, in the screen. */
   error?: boolean;
   /** Inside the field at its right edge — the password's eye (238:4974). */
@@ -73,6 +74,7 @@ const styles = StyleSheet.create({
   wrap: { gap: tokens.space.xs },
   labelMono: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
   labelCaption: { ...rn(tokens.type.caption), color: tokens.colors.textPrimary },
+  labelBodySm: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
   field: {
     minHeight: 56,
     flexDirection: "row",
@@ -102,4 +104,4 @@ const styles = StyleSheet.create({
   },
 });
 
-const LABEL = { mono: styles.labelMono, caption: styles.labelCaption } as const;
+const LABEL = { mono: styles.labelMono, caption: styles.labelCaption, bodySm: styles.labelBodySm } as const;

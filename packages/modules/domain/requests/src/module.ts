@@ -15,6 +15,7 @@ import { actionLabel, escapeHtml, routeLabel, verifyAction } from "./application
 import { toRequestVM } from "./application/to-request-vm";
 import { destinationCities, routeEnds } from "./application/route";
 import { askEstimate } from "./application/estimate";
+import { askPublished } from "./application/published";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
@@ -74,6 +75,18 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           );
         },
       });
+    // What a fare request records of its fare's published price (ADR-IMPL-046): one read by key, never fatal — an error
+    // or an answer slower than a second is counted and logged, and the request goes through without it.
+    const published = (fareId: string, priceAtRequest: number) =>
+      askPublished(() => ports.catalog.getFare(undefined, fareId), priceAtRequest, {
+        unavailable: (reason, err) => {
+          platform.metrics.inc("request_published_unavailable", { reason });
+          platform.logger.warn(
+            { reason, err: err instanceof Error ? err.message : err === undefined ? undefined : String(err) },
+            "request published fare unavailable",
+          );
+        },
+      });
     // One line to the ops channel (OPS_WEBHOOK, as the worker's DB alerts); a failed post is logged, never thrown.
     const notifyOps = async (text: string) => {
       const hook = env.OPS_WEBHOOK;
@@ -120,7 +133,12 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         const body = await c.req.json().catch(() => ({}));
         let result;
         try {
-          result = await submit(conn, body, actor, key, { publish, rateLimit: platform.rateLimit, indicative });
+          result = await submit(conn, body, actor, key, {
+            publish,
+            rateLimit: platform.rateLimit,
+            indicative,
+            published,
+          });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
           if (details) return c.json(apiError("VALIDATION", { details }), 400);

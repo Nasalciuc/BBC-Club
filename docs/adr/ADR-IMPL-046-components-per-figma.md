@@ -185,3 +185,75 @@ screen focuses shows the focus border; a request's day is its origin airport's.
 closed fare's context (the catalog). No migration. Tests: `fare-page-logic.test.ts`, `request-summary.test.ts`,
 `fare-gone.test.ts`, `confirmation-logic.test.ts` (`factsLines`), `home-sheet-snaps.test.ts`, `fare-facts.test.ts`, and
 the API's catalog suite (the regions' titles; the 410's context).
+
+## F4 — Requests, Profile and the system screens as Figma draws them (14 Oct 2026)
+
+**Context.** The frames of Requests (233:4069, 233:4139, 233:4639, 240:5199), a request's detail (233:4171, 233:4248,
+233:4671, 233:4388, 325:8136, 325:8229, 325:8295), Profile (233:4453, 233:4550), Settings and Edit profile (479:8226,
+479:8296), Profile's sheets (238:4561–238:5260, 320:5810, 320:5969, 325:8392, 325:8525, 325:8648) and the system screens
+(240:5093, 240:5129, 240:5163). The owner, 14 October: a request shows its fare only when the quote is ready, the
+published fare struck beside it with its source, as Figma draws it; the fare stays navy; the app follows 325:8136 for a
+specialist's review; the four things the app has and Figma does not stay (below).
+
+**Decision.**
+
+- **Requests** (233:4069): the title and its line scroll with the list, 8 pt under the safe area; `No requests yet.` 24
+  pt under the line (233:4139). A request the server holds but has not referenced yet reads **Just received** (233:4639
+  / 233:4671): `We have your request. A specialist will call shortly.`, the number it will be called on.
+- **A request's detail**: the fare only at **Quote ready** (233:4171) — `YOUR FARE` over the price and, when the server
+  recorded them as the member asked, the published fare struck beside it with its source (FTC: a struck price always
+  carries its source) — in navy, as the rest of the page. The badge under the title keeps Figma's widths (88 pt, 104 for
+  Quote ready; Not sent hugs its words). The facts on two lines. `REF` closes the page, under everything.
+- **The published fare on a request (server).** `requests.requests` gains `published_at_request` and
+  `published_source_at_request` (migration 0029: both or neither, the amount above 0, the source not blank — expand
+  only). When a fare request is made, the server reads the fare's published price and source from the catalog **once**,
+  within a second, and records them only if the fare is still the price the member saw (cents equal) and in USD;
+  anything else — a quote, a missing fare, a timeout, an error — records nothing, counts
+  `bbc_request_published_unavailable{reason}` and never refuses the request (as ADR-IMPL-042's estimate). A later change
+  to the fare never changes a request. `RequestVM.publishedAtRequest` is `{ amount, source } | null` (absent and
+  unreadable read as null). What the app sends is never trusted for it. The staging demo links R-B002 (Paris) to Air
+  France's fare, so the quote ready shows its pair.
+- **Profile** (233:4453): the header 44 pt, 8 pt under the safe area, the gear centred in its 44-pt target at the
+  gutter; the home airport's pill 144 × 36, its words centred; under the phone, `Client since 2019` in `caption` — a new
+  client's e-mail in `body-sm` (233:4550) — both `text-secondary`, 8 pt under the row.
+- **Settings** (479:8226) and **Edit profile** (479:8296): the back button stays at the safe area, the page scrolls 20
+  pt under it and stops 16 pt above the tab bar, which both now show (Profile active). `Settings.` with its full stop;
+  no section labels. Phone, Password and Notifications in 64-pt cards 8 apart, the phone as a person reads it;
+  `Request updates are always on.`; `Delete account` as a red row with its chevron; Privacy policy, Terms of use and
+  Help as 56-pt rows with `↗` (`ListRow trailing="external"`, a link to a screen reader) — each only when its address is
+  set; `Sign out`; every block 24 pt apart. Edit profile: three 56-pt rows 24 apart, `JFK · New York` (the city from the
+  airport search).
+- **Profile's sheets.** Home airport (238:4561): `The airport you usually fly from.`, the field empty
+  (`City or airport`), the airport now (`JFK · New York`) under it, and under that the airport of the phone's time zone
+  to choose (A5) where Figma draws four fixed ones; choosing one empties the field and names it. Preferred cabin
+  (238:4710) and Travelers (238:4842) say what they set. Change password (238:4974): `Current password`, `New password`,
+  `Confirm new password` in `body-sm`, `Enter password` and the eye in each field (`PasswordField`), hidden until the
+  eye shows it. Notifications (238:5384): `Choose what reaches you…`, `Request updates` locked on (its label and switch
+  at 40 % on the white card — `ListRow toggle.locked`), `Offers to inspire` with its note, the phone's note, `Done`.
+  When the phone has turned the app's notifications off (325:8648):
+  `Notifications are off for BuyBusinessClass in iOS Settings.` (device settings on Android), `Open Settings`, both rows
+  off and dimmed; back from the phone's settings the sheet reads the permission again. **Delete account** is a sheet now
+  (320:5810, `medium`): `Delete your account?`, the consequences, `Password` with the eye, `Delete account` and the
+  48-pt `Cancel`; a wrong password marks the field and says so 8 pt under it (325:8392); any other failure says so in
+  the sheet, which stays open.
+- **The system screens** (`SystemScreen`): the wordmark at the safe area, the message 48 pt under it,
+  `Call a specialist` — a secondary button — 12 pt under the message's action when the club's number is set.
+  `Something didn't load.` (240:5093; Requests' first load that fails), `A new version is ready.` with `Update app` and
+  no way past it (240:5129), `We'll be back shortly.` with `Try again` (240:5163). The maintenance message is the
+  server's string — a moment (`2026-10-14T06:00:00Z`) becomes `Please check back at 2:00 AM your time.` in the member's
+  own time (the day too when it is not today); other words show as written; anything but a non-blank string is no
+  maintenance at all. No version line.
+
+**Where the app stays apart from Figma, with the owner's agreement:** `This closes N open requests.` in the deletion's
+words, a request's `REF`, the not-sent request's own words and Explore's `Keep the dates flexible` (all four kept, 14
+October); the unread dot on Requests; one airport offered by the time zone instead of Figma's four; the maintenance
+page's `Call a specialist` 12 pt under `Try again` (Figma leaves an empty 48-pt place between them); no magnifier in a
+field that does not search (Figma's password fields carry one).
+
+**Consequences.** The app (an OTA) and the server: migration 0029 runs before the new API starts (expand only — the old
+API ignores the columns). Tests: `migrate.test.ts` (0029's constraint), `published.test.ts` (when a published fare is
+recorded), the API's `requests-published.test.ts` (recorded once, from the server; the app's never trusted; a quote, a
+missing price and a different price record nothing; a later fare change leaves the request as it was),
+`staging-demo.test.ts`, `request-view-logic.test.ts` (Just received; the fare only at Quote ready),
+`airport-search-state.test.ts` (`homeAirportLabel`), `app-gate-logic.test.ts` (the maintenance), `error-context.test.ts`
+(Figma's words).

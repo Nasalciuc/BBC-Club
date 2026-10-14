@@ -26,6 +26,11 @@ export function chosenAirportLabel(airport: { city: string; code: string }): str
   return `${airport.city} · ${airport.code}`;
 }
 
+/** Figma 479:8296 / 238:4561: the home airport as `JFK · New York` — the code alone while its city is unknown. */
+export function homeAirportLabel(code: string, city: string | null | undefined): string {
+  return city ? `${code} · ${city}` : code;
+}
+
 /**
  * Whether the field's words ask for a search: two characters or more, and not the airport just chosen — those words
  * are the choice itself, and searching them would bring the list back over it.

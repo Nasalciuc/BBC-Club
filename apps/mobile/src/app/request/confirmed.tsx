@@ -14,7 +14,8 @@ import {
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { confirmationKind, factsLines, type RequestSource } from "@/features/requests/confirmation-logic";
-import { fetchAirports, fetchProfile } from "@/lib/api";
+import { airportByCode } from "@/lib/airport-by-code";
+import { fetchProfile } from "@/lib/api";
 import { env } from "@/lib/env";
 import { displayPhone } from "@/lib/phone";
 import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
@@ -25,13 +26,6 @@ const GLOBE_BAND = 408;
 const GLOBE_SIZE = 520;
 
 const noop = () => undefined;
-
-/** An airport's place on the globe, by its code: the first answer that is that airport. */
-async function airportByCode(code: string): Promise<AirportVM | null> {
-  if (!/^[A-Z]{3}$/.test(code)) return null;
-  const result = await fetchAirports(code);
-  return result.ok ? (result.data.find((a) => a.code === code) ?? null) : null;
-}
 
 /**
  * The request's confirmation, one of three (Figma): an offer's over its city's photograph (135:856), a search's under

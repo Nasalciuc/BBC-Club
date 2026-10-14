@@ -42,6 +42,7 @@ import {
 
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
+import { maintenanceValue } from "@/lib/app-gate-logic";
 import { appPlatform, appVersion } from "@/lib/app-meta";
 import { emitSessionRevoked } from "@/lib/session-events";
 import { API_TIMEOUT_MS, NetworkError, networkFail, timeoutSignal } from "@/lib/timeout";
@@ -589,12 +590,13 @@ export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
     if (!res.ok) {
       return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
     }
-    const raw = (await parseJson(res)) as AppConfig;
+    const raw = (await parseJson(res)) as { minSupportedVersion?: unknown; maintenance?: unknown } | null;
     return {
       ok: true,
       data: {
-        minSupportedVersion: raw.minSupportedVersion ?? "0.1.0",
-        maintenance: raw.maintenance ?? null,
+        minSupportedVersion: typeof raw?.minSupportedVersion === "string" ? raw.minSupportedVersion : "0.1.0",
+        // Only a non-blank string is maintenance: anything else never reaches the screen as `[object Object]`.
+        maintenance: maintenanceValue(raw?.maintenance),
       },
     };
   });
