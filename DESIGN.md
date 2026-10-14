@@ -310,7 +310,7 @@ Tokens and components in this file are canonical. Details live in `design/compon
 - `text-primary` / `text-secondary` / `text-tertiary` on light; `text-on-dark` / `text-on-dark-muted` on navy. `text-tertiary` only for non-essential lines (validity, footers, struck prices).
 - `border-default` (#E2E8F0): the single 1px border color.
 - `status-danger` (#B42318): error border on the field at fault (on Profile's sheets also the words Figma sets under it, 325:8525) and the account-deletion confirmation. Never for headlines, messages or urgency. No success/warning/info colors exist.
-- Photographic scrim: gradient from transparent to rgba(30,41,59,0.92) over the bottom 45% of any photo carrying text — the only gradient, never on UI.
+- Photographic scrim: the entry's gradient from transparent to rgba(30,41,59,0.92) over the bottom 45% of its cabin photograph — the only gradient, never on UI. Inside the club, a photograph carrying text — an offer's on the fare page (436:1220), the profile hero's (436:1221) — sits under a flat `surface-night` veil at 32%, as Figma draws it; its words are `text-on-dark`.
 
 ## Typography
 

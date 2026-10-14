@@ -63,5 +63,6 @@ process.stdout.write(
     departLocal: vm.departLocal,
     arriveLocal: vm.arriveLocal,
     arriveDayOffset: vm.arriveDayOffset,
+    departDate: vm.departDate,
   }),
 );

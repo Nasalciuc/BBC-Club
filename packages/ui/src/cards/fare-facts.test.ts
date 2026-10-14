@@ -30,8 +30,8 @@ describe("fareFacts", () => {
     expect(fareFacts(fixture.fares[0]!)).not.toMatch(/\d{2}:\d{2}/);
   });
 
-  it("reads 1 STOP for a fare with a stop", () => {
-    expect(fareFacts(fixture.fares[5]!)).toBe("1 STOP · 18H 20");
+  it("reads CONNECTING for a fare with stops — the catalog does not count them", () => {
+    expect(fareFacts(fixture.fares[5]!)).toBe("CONNECTING · 18H 20");
   });
 
   it("drops the time when the fare has no duration", () => {

@@ -220,9 +220,16 @@ try {
       sql`SELECT 1 FROM platform.extras_applied WHERE name = '0029_requests_published_at_request.sql'`,
     )) as unknown[];
     if (!done.length) {
+      // Two transactions: the columns and the CHECK as NOT VALID take the table's lock for a moment, with no scan
+      // under it; the scan that validates the rows runs next, under a lock writes do not wait for. The file is
+      // idempotent, so a run stopped between the two picks up from the start.
       await db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
         await tx.execute(sql.raw(readFileSync(requestsPublishedAtRequest, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE requests.requests VALIDATE CONSTRAINT requests_published_at_request`);
         await tx.execute(
           sql`INSERT INTO platform.extras_applied (name) VALUES ('0029_requests_published_at_request.sql')`,
         );

@@ -12,7 +12,9 @@ type Props = {
   /**
    * Figma SectionLabel (26:40) as Explore's sheet draws it: a 32-pt box with the label centred in it and no margins of
    * its own — the parent's gaps space it (89:386–89:389, 536:10635). Its action is Figma's 80 × 48 text button
-   * (`See all`, 97:433), its words centred, standing over the box without making it taller.
+   * (`See all`, 97:433), its words centred, standing over the box without making it taller: the row itself grows to
+   * the 48 and gives the 8 pt back above and below, so the whole target is inside its parent — a touch never reaches
+   * a child outside its parent's bounds — and the box keeps its 32 in the rhythm.
    */
   box?: boolean;
 };
@@ -20,7 +22,7 @@ type Props = {
 /** The 24-above / 12-below rhythm, or Explore's 32-pt box. Callers pass the label; the component uppercases. */
 export function SectionLabel({ label, action, trailing, flush = false, box = false }: Props) {
   return (
-    <View style={[styles.row, flush && styles.flush, box && styles.box]}>
+    <View style={[styles.row, flush && styles.flush, box && styles.box, box && action && styles.boxWithAction]}>
       <Text style={styles.label} accessibilityRole="header">
         {label.toUpperCase()}
       </Text>
@@ -63,11 +65,12 @@ const styles = StyleSheet.create({
   box: { minHeight: 32, alignItems: "center", alignContent: "center", marginTop: 0, marginBottom: 0 },
   label: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary, flexShrink: 1 },
   action: { ...rn(tokens.type.bodySm), color: tokens.colors.primary },
-  // 48 pt tall, 8 above and below the 32-pt box: the target is full size and the box keeps its height.
+  // The row is the target's parent: 48 pt tall, 8 of them given back above and below, so its place in the rhythm
+  // stays the 32-pt box while the 80 × 48 action lies wholly inside it.
+  boxWithAction: { minHeight: 48, marginVertical: -tokens.space.xs },
   boxAction: {
     width: 80,
     minHeight: 48,
-    marginVertical: -tokens.space.xs,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -21,6 +21,7 @@ import type { ProfileSheetHandle } from "@/features/profile/types";
 import { isOpen } from "@/features/requests/status";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
+import { stateCopy } from "@/lib/error-context";
 import { displayPhone } from "@/lib/phone";
 
 export default function SettingsScreen() {
@@ -51,7 +52,14 @@ export default function SettingsScreen() {
 
   async function onSignOut() {
     setSigningOut(true);
-    await signOut();
+    try {
+      await signOut();
+    } catch {
+      // The local session could not be cleared: the button comes back, and the page says so.
+      setSigningOut(false);
+      setError(`${stateCopy("generic").title} ${stateCopy("generic").body}`);
+      return;
+    }
     router.replace("/sign-in");
   }
 

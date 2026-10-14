@@ -12,6 +12,8 @@ ALTER TABLE requests.requests
 
 -- Both or neither, a positive amount, a source that says something: a struck price always carries its source (FTC,
 -- PricePair). Each side says IS NOT NULL — a CHECK passes when its expression is NULL (0025).
+-- NOT VALID: the constraint holds every new write from this moment, without scanning the rows there are under the
+-- table's lock; migrate.ts validates them next, in its own transaction, under a lock that writes do not wait for.
 ALTER TABLE requests.requests DROP CONSTRAINT IF EXISTS requests_published_at_request;
 ALTER TABLE requests.requests
   ADD CONSTRAINT requests_published_at_request CHECK (
@@ -20,4 +22,4 @@ ALTER TABLE requests.requests
       published_at_request IS NOT NULL AND published_source_at_request IS NOT NULL
       AND published_at_request > 0 AND length(btrim(published_source_at_request)) > 0
     )
-  );
+  ) NOT VALID;

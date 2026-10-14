@@ -4,6 +4,7 @@ import type { AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import { CarouselRow, OfferCard, SectionLabel, tokens } from "@bbc/ui";
 
+import { NoOffers } from "@/features/explore/SheetExpanded";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { fetchHome, fetchProfile } from "@/lib/api";
@@ -110,9 +111,11 @@ type Props = {
   onOpenOffer: (card: ProposalCardVM) => void;
   /** Figma 89:386: `See all` beside OFFERS TO INSPIRE expands the sheet to every section (89:389). */
   onSeeAll: () => void;
+  /** With no offer at all, the sheet offers the search instead of a heading over nothing (`NoOffers`). */
+  onSearch: () => void;
 };
 
-export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
+export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll, onSearch }: Props) {
   const inspire = home?.sections.find((s) => s.key === "inspire")?.items ?? [];
   // ADR-IMPL-043: an offer without its own picture shows its city's photo; the club's image until there is one.
   const photoFor = usePlacePhotos(inspire.map((item) => item.route.to));
@@ -123,6 +126,14 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll }: Props) {
       <View style={[styles.content, styles.skeletons]}>
         <View style={styles.skeletonCard} />
         <View style={styles.skeletonCard} />
+      </View>
+    );
+  }
+
+  if (home && inspire.length === 0) {
+    return (
+      <View style={styles.content}>
+        <NoOffers onSearch={onSearch} />
       </View>
     );
   }

@@ -39,6 +39,9 @@ export default function OnboardingScreen() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AirportVM | null>(null);
   const [search, setSearch] = useState(() => airportSearchState<AirportVM>("idle"));
+  // `Try again` runs the search effect once more: its answer is dropped like any other if the member has typed on,
+  // chosen or cancelled by the time it comes.
+  const [attempt, setAttempt] = useState(0);
   const [cabin, setCabin] = useState<"business" | "first">("business");
   const [adult, setAdult] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -77,11 +80,12 @@ export default function OnboardingScreen() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query, selected]);
+  }, [query, selected, attempt]);
 
   async function onContinue() {
     if (!selected) {
-      setError("Pick an airport or enter a 3-letter code.");
+      // The field only opens the search: there is nothing to type here.
+      setError("Choose your home airport to continue.");
       return;
     }
 
@@ -180,17 +184,7 @@ export default function OnboardingScreen() {
               variant="error"
               title={stateCopy("generic").title}
               body={stateCopy("generic").body}
-              primary={{
-                label: "Try again",
-                onPress: () => {
-                  const q = query;
-                  setSearch(airportSearchState("loading"));
-                  void (async () => {
-                    const result = await fetchAirports(q);
-                    setSearch(airportSearchState(result));
-                  })();
-                },
-              }}
+              primary={{ label: "Try again", onPress: () => setAttempt((n) => n + 1) }}
             />
           ) : search.airports.length > 0 ? (
             <View style={styles.rows}>

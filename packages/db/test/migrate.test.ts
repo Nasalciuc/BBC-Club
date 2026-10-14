@@ -178,5 +178,10 @@ describe("extras ledger", () => {
     expect(await insert("7850.00", null)).toBe("23514");
     expect(await insert("0", "BA published · 16 Sep")).toBe("23514");
     expect(await insert("7850.00", "  ")).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_published_at_request'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
   });
 });

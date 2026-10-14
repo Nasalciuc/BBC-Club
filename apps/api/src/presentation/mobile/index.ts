@@ -139,6 +139,9 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
               destinations: destinations.map((d) => `${d.code}:${d.fromPrice}`),
               offerIds,
               states,
+              // A carousel's membership is in the tag too: an airport's region or country corrected moves an offer
+              // between the regions with the same offers in the same states.
+              sections: sections.map((s) => [s.key, s.items.map((i) => i.id)]),
             }),
           )
           .digest("hex")

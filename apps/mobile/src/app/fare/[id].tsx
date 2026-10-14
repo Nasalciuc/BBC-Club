@@ -28,6 +28,7 @@ import {
   closedFareLines,
   comparisonLine,
   factsLine,
+  savings as savingsOf,
 } from "@/features/fares/fare-page-logic";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
@@ -165,7 +166,7 @@ export default function FareDetailScreen() {
     );
   }
 
-  const savings = fare.price.published != null ? Math.round(fare.price.published - fare.price.offer) : null;
+  const savings = savingsOf(fare.price);
   // An offer's page has its photo band (Figma 135:846): the offer's picture, else its city's photo or satellite view
   // with their credit, else the club's image (ADR-IMPL-043). A search fare's page has none (135:845).
   const band = offer

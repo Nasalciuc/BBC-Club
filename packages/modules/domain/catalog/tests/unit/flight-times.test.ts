@@ -32,11 +32,13 @@ describe("flight local times", () => {
     }
   });
 
-  it("maps fa01 to 18:55, 07:00, +1", () => {
+  it("maps fa01 to 18:55, 07:00, +1, on 12 October at JFK", () => {
     const vm = mapFa01();
     expect(vm.departLocal).toBe("18:55");
     expect(vm.arriveLocal).toBe("07:00");
     expect(vm.arriveDayOffset).toBe(1);
+    // 22:55 UTC is still the 12th in New York: the day is the origin's, named here, never read back from the clock.
+    expect(vm.departDate).toBe("2026-10-12");
     expect(fareFactsLine(vm)).toBe("18:55 — 07:00 +1 · 7H 05");
   });
 
@@ -48,6 +50,7 @@ describe("flight local times", () => {
       departLocal: "18:55",
       arriveLocal: "07:00",
       arriveDayOffset: 1,
+      departDate: "2026-10-12",
     });
   });
 

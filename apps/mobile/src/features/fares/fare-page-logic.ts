@@ -2,7 +2,10 @@ import type { FareVM } from "@bbc/shared/api/v1/fares";
 
 import { formatPrice } from "../../lib/format";
 
-type Fare = Pick<FareVM, "carrier" | "cabin" | "nonstop" | "durationMinutes" | "departAt" | "departLocal" | "price">;
+type Fare = Pick<
+  FareVM,
+  "carrier" | "cabin" | "nonstop" | "durationMinutes" | "departAt" | "departLocal" | "departDate" | "price"
+>;
 
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
 const MONTH_NAMES = [
@@ -22,9 +25,12 @@ const MONTH_NAMES = [
 
 const cabinWord = (cabin: "business" | "first") => (cabin === "first" ? "First" : "Business");
 
-/** Figma 135:845: `British Airways · Business · Nonstop` — the airline, the cabin (not the product), the stops. */
+/**
+ * Figma 135:845: `British Airways · Business · Nonstop` — the airline, the cabin (not the product), the stops. The
+ * catalog knows nonstop or not, never how many stops: a connecting fare says so without counting them.
+ */
 export function carrierLine(fare: Pick<Fare, "carrier" | "cabin" | "nonstop">): string {
-  return `${fare.carrier.name} · ${cabinWord(fare.cabin)} · ${fare.nonstop ? "Nonstop" : "One stop"}`;
+  return `${fare.carrier.name} · ${cabinWord(fare.cabin)} · ${fare.nonstop ? "Nonstop" : "Connecting"}`;
 }
 
 /** `7H 05M`. */
@@ -33,11 +39,18 @@ export function durationLabel(minutes: number): string {
 }
 
 /**
- * The departure's day at the origin airport (`OCT 12`), from the instant and the airport's wall clock — never the
- * phone's zone, which would move a JFK evening departure to the next day in Europe (ADR-IMPL-019). The airport's offset
- * is what turns the instant into its clock: −12 to +14 hours.
+ * The departure's day at the origin airport (`OCT 12`) — never the phone's zone, which would move a JFK evening
+ * departure to the next day in Europe (ADR-IMPL-019). The server names the day from the airport's zone
+ * (`departDate`); an older server's answer leaves it to the instant and the airport's wall clock, where the offset
+ * that turns the one into the other is taken from −12 to +14 hours — the band a UTC+13 origin shares with UTC−11.
  */
-export function departDayLabel(departAt: string | null, departLocal: string | null): string | null {
+export function departDayLabel(
+  departAt: string | null,
+  departLocal: string | null,
+  departDate?: string | null,
+): string | null {
+  const named = departDate ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(departDate) : null;
+  if (named) return `${MONTHS[Number(named[2]) - 1]} ${Number(named[3])}`;
   if (!departAt) return null;
   const instant = new Date(departAt);
   if (Number.isNaN(instant.getTime())) return null;
@@ -55,17 +68,27 @@ export function departDayLabel(departAt: string | null, departLocal: string | nu
 }
 
 /** Figma 135:845: `OCT 12 · ONE WAY · 7H 05M` — a fare is one flight; what is not known is left out. */
-export function factsLine(fare: Pick<Fare, "departAt" | "departLocal" | "durationMinutes">): string {
-  const day = departDayLabel(fare.departAt, fare.departLocal);
+export function factsLine(fare: Pick<Fare, "departAt" | "departLocal" | "departDate" | "durationMinutes">): string {
+  const day = departDayLabel(fare.departAt, fare.departLocal, fare.departDate);
   const duration = fare.durationMinutes != null ? durationLabel(fare.durationMinutes) : null;
   return [day, "ONE WAY", duration].filter(Boolean).join(" · ");
 }
 
+/**
+ * What the club's fare saves, in whole units — the difference of the two prices as the page prints them (each rounded
+ * to the unit, as `formatPrice` prints it), so `$5,000 − $1,001` never reads `= $4,000`.
+ */
+export function savings(price: FareVM["price"]): number | null {
+  if (price.published == null) return null;
+  return Math.round(price.published) - Math.round(price.offer);
+}
+
 /** Figma 135:847: `$7,850 published − $4,200 your fare = $3,650 difference.` */
 export function comparisonLine(price: FareVM["price"]): string | null {
-  if (price.published == null) return null;
+  const saved = savings(price);
+  if (price.published == null || saved == null) return null;
   const money = (n: number) => formatPrice(n, price.currency);
-  return `${money(price.published)} published − ${money(price.offer)} your fare = ${money(price.published - price.offer)} difference.`;
+  return `${money(price.published)} published − ${money(price.offer)} your fare = ${money(saved)} difference.`;
 }
 
 /**

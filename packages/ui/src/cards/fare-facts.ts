@@ -11,5 +11,6 @@ const dur = (m: number | null) => (m == null ? null : `${Math.floor(m / 60)}H ${
  */
 export function fareFacts(fare: Pick<Fare, "durationMinutes" | "nonstop">): string {
   const d = dur(fare.durationMinutes);
-  return `${fare.nonstop ? "NONSTOP" : "1 STOP"}${d ? ` · ${d}` : ""}`;
+  // The catalog knows nonstop or not, never how many stops: a connecting fare says so without counting them.
+  return `${fare.nonstop ? "NONSTOP" : "CONNECTING"}${d ? ` · ${d}` : ""}`;
 }

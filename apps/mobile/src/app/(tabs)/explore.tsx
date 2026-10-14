@@ -135,6 +135,12 @@ export default function ExploreScreen() {
 
   const search: SearchContext = { dates: state.dates, cabin: state.cabin, passengers: state.passengers };
 
+  /** The field's tap, and `Search a destination` where there is no offer: the sheet up, the airports to type. */
+  function openSearch() {
+    setPickingAirport(true);
+    setSheetIndex(SNAP.page);
+  }
+
   function openQuote() {
     requestRef.current?.present({
       fare: null,
@@ -228,10 +234,7 @@ export default function ExploreScreen() {
                 testID="explore.search"
                 placeholder="Where would you like to go?"
                 value={searchValue}
-                onPress={() => {
-                  setPickingAirport(true);
-                  setSheetIndex(SNAP.page);
-                }}
+                onPress={openSearch}
                 onClear={() => {
                   dispatch({ type: "clearDestination" });
                   setSheetIndex(SNAP.rest);
@@ -262,10 +265,15 @@ export default function ExploreScreen() {
                 homeLoading={homeLoading}
                 onOpenOffer={(card) => void openOffer(card)}
                 onSeeAll={() => setSheetIndex(SNAP.page)}
+                onSearch={openSearch}
               />
             ) : null}
             {mode === "expanded" ? (
-              <SheetExpanded sections={home?.sections ?? []} onOpenOffer={(card) => void openOffer(card)} />
+              <SheetExpanded
+                sections={home?.sections ?? []}
+                onOpenOffer={(card) => void openOffer(card)}
+                onSearch={openSearch}
+              />
             ) : null}
             {homeLoading && !home ? (
               <ActivityIndicator color={tokens.colors.primary} style={{ marginTop: tokens.space.lg }} />

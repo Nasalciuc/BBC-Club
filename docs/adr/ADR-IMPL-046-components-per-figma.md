@@ -1,6 +1,6 @@
 # ADR-IMPL-046 — The shared components as Figma draws them
 
-Status: accepted · Date: 2026-10-13 · Amended 2026-10-14 by the screens' sections at its end (F2 onward).
+Status: accepted · Date: 2026-10-13 · Amended 2026-10-14 by the screens' sections at its end (F2 onward, then the review's fixes).
 
 **Context.** On 13 October every frame of the Figma file (`nYP9gogb6hnpKxfpKiCc4g`: 04 · Screens and 07 · Additions,
 99 frames) was set beside the app rendered at the same size, 393 × 852 pt, and measured. Almost no screen matched:
@@ -257,3 +257,46 @@ missing price and a different price record nothing; a later fare change leaves t
 `staging-demo.test.ts`, `request-view-logic.test.ts` (Just received; the fare only at Quote ready),
 `airport-search-state.test.ts` (`homeAirportLabel`), `app-gate-logic.test.ts` (the maintenance), `error-context.test.ts`
 (Figma's words).
+
+## The screens' review (14 Oct 2026)
+
+**Context.** CodeRabbit's review of the screens' PR left thirteen comments. Eleven are taken; two are where the app
+follows Figma against `DESIGN.md`'s older sentence, and `DESIGN.md` now says what Figma draws.
+
+**Decisions.**
+
+- **The departure's day comes from the server.** `FareVM` grows `departDate` (`YYYY-MM-DD`, nullable, optional for an
+  older server's answer): the catalog names the day in the origin airport's zone, where it already names the clocks
+  (amends ADR-IMPL-019's point 2). The app prints it as it is; only without it does it read the day back from the
+  instant and the wall clock, which cannot tell UTC+13 from UTC−11 (Auckland's summer: 01:30 on the 13th is 12:30 UTC on
+  the 12th).
+- **A connecting fare counts no stops.** The catalog knows `nonstop` or not, never how many stops: `CONNECTING · 18H 20`
+  on the row, `British Airways · First · Connecting` on the page — not `1 STOP`, which asserted a count nobody has.
+- **The comparison's sum is true to the prices as printed.** `savings` is the difference of the two prices each rounded
+  to the unit, as `formatPrice` prints them: `$5,000 − $1,001 = $3,999`, never `= $4,000`. The sheet's title and the
+  written sum share it.
+- **Migration 0029's CHECK is added `NOT VALID` and validated in its own transaction**: the table's lock is held for a
+  moment with no scan under it; the scan that validates the rows runs next, under a lock writes do not wait for. The
+  end state is the same (`convalidated`, tested).
+- **Home's ETag holds each carousel's membership**: an airport's region or country corrected moves an offer between
+  the regions with the same offers in the same states, and the app is not left on its 304.
+- **No offers at all is a state, not a heading over nothing**: `No offers yet.` with `Search a destination`, on the
+  sheet at rest and expanded (Figma draws neither page without cards; `explore.offers.empty`).
+- **`See all`'s 48-pt target lies inside its row**: the row grows to the 48 and gives the 8 pt back above and below —
+  a touch never reaches a child outside its parent's bounds, so the negative margins on the button alone left a 32-pt
+  target. The box keeps its 32 pt in the rhythm.
+- **`Try again` on an airport search runs the search effect once more** (onboarding, the home airport sheet): its
+  answer is dropped like any other when the member has typed on, chosen or cancelled by the time it comes.
+- **Onboarding's `Continue` without an airport says `Choose your home airport to continue.`** — the field only opens
+  the search; the old words asked for a code nobody can type there.
+- **The home airport sheet saves the airport chosen, else the member's own.** Words still in the field were never
+  chosen: a whole code the catalog knows (typed `LHR`, no row tapped) is taken as the choice; a city or a fragment asks
+  to `Choose an airport from the list.` and never saves over the chosen airport unseen.
+- **Signing out that fails brings the button back** and says so on the page, instead of `Signing out…` for good.
+
+**Kept as Figma draws them.** The offer's photograph on the fare page sits under a flat `surface-night` veil at 32%
+(436:1220, as the profile hero's 436:1221), not `DESIGN.md`'s bottom gradient, which is the entry's cabin photograph's;
+`DESIGN.md` now says so. The paused search's line in the fare count's box is `caption` (481:9097).
+
+**Consequences.** `FareVM` changes (expand only: a field the app reads when present); the catalog's clocks test prints
+the day; `migrate.test.ts` checks the constraint is validated; `catalog.test.ts` checks the ETag moves with a region.

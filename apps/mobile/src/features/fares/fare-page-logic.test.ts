@@ -8,27 +8,36 @@ import {
   comparisonLine,
   departDayLabel,
   factsLine,
+  savings,
 } from "./fare-page-logic";
 
 const ba = fixture.fares[0]!;
 
 describe("the fare page's lines (Figma 135:845)", () => {
-  it("names the cabin, not the product, beside the airline", () => {
+  it("names the cabin, not the product, beside the airline — a connecting fare counts no stops", () => {
     expect(carrierLine(ba)).toBe("British Airways · Business · Nonstop");
-    expect(carrierLine({ ...ba, nonstop: false, cabin: "first" })).toBe("British Airways · First · One stop");
+    expect(carrierLine({ ...ba, nonstop: false, cabin: "first" })).toBe("British Airways · First · Connecting");
   });
 
   it("reads the day, ONE WAY and the time in the air", () => {
     expect(factsLine(ba)).toBe("OCT 12 · ONE WAY · 7H 05M");
+    expect(factsLine({ ...ba, departDate: "2026-10-12" })).toBe("OCT 12 · ONE WAY · 7H 05M");
     expect(factsLine({ departAt: null, departLocal: null, durationMinutes: null })).toBe("ONE WAY");
   });
 
-  it("takes the departure's day at the airport, whatever the phone's zone", () => {
+  it("prints the day the server named at the origin airport, whatever the phone's zone", () => {
+    // Auckland in its summer is UTC+13: 01:30 on 13 October is 12:30 UTC on the 12th — a clock UTC−11 shares.
+    expect(departDayLabel("2026-10-12T12:30:00.000Z", "01:30", "2026-10-13")).toBe("OCT 13");
+    expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2026-10-12")).toBe("OCT 12");
+  });
+
+  it("without the server's day, reads it from the instant and the airport's clock", () => {
     // JFK 20:10 on 12 October is 00:10 UTC on the 13th: the day is the airport's.
     expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10")).toBe("OCT 12");
     // Tokyo 01:30 on 3 November is 16:30 UTC on the 2nd.
     expect(departDayLabel("2026-11-02T16:30:00.000Z", "01:30")).toBe("NOV 3");
     expect(departDayLabel(null, null)).toBeNull();
+    expect(departDayLabel(null, null, null)).toBeNull();
   });
 });
 
@@ -36,6 +45,13 @@ describe("About this fare (Figma 135:847)", () => {
   it("writes the comparison as Figma does", () => {
     expect(comparisonLine(ba.price)).toBe("$7,850 published − $4,200 your fare = $3,650 difference.");
     expect(comparisonLine({ offer: 4200, currency: "USD" })).toBeNull();
+  });
+
+  it("keeps the sum true to the prices as printed, cents and all", () => {
+    const price = { offer: 1000.5, published: 5000.49, currency: "USD" };
+    expect(savings(price)).toBe(3999);
+    expect(comparisonLine(price)).toBe("$5,000 published − $1,001 your fare = $3,999 difference.");
+    expect(savings({ offer: 4200, currency: "USD" })).toBeNull();
   });
 
   it("says when the published fare was recorded, read from its source", () => {

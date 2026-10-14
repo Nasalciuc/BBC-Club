@@ -15,6 +15,7 @@ import {
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
 import { deviceTimeZone } from "@/features/explore/discovery-logic";
+import { airportByCode } from "@/lib/airport-by-code";
 import { airportSearchState, homeAirportLabel, wantsAirportSearch } from "@/lib/airport-search-state";
 import { fetchAirports, fetchHomeSuggestion, patchProfile, type Profile } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
@@ -45,6 +46,9 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   const [chosen, setChosen] = useState<{ code: string; city: string | null } | null>(null);
   const [suggested, setSuggested] = useState<AirportVM | null>(null);
   const [search, setSearch] = useState(() => airportSearchState<AirportVM>("idle"));
+  // `Try again` runs the search effect once more: its answer is dropped like any other if the member has typed on or
+  // chosen by the time it comes.
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Under a long list of airports the error would sit behind the pinned button: each new one scrolls into view.
@@ -94,7 +98,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query]);
+  }, [query, attempt]);
 
   function choose(airport: AirportVM) {
     // The choice ends the typing: the keyboard goes, the field empties, and the line under it names the choice.
@@ -106,10 +110,23 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   }
 
   async function onSave() {
+    // The airport chosen from the list, else the member's own. Words still in the field were never chosen: a whole
+    // code the catalog knows is taken as the choice (typed `LHR`, no row tapped); a city or a fragment is not an
+    // airport, and the one chosen under it is not saved over it unseen.
     const typed = query.trim().toUpperCase();
-    const code = typed || (chosen?.code ?? profile.homeAirport ?? "");
-    if (!/^[A-Z]{3}$/.test(code)) {
-      setError("Pick an airport or enter a 3-letter code.");
+    let code = chosen?.code ?? profile.homeAirport ?? null;
+    if (typed) {
+      setBusy(true);
+      const airport = await airportByCode(typed);
+      setBusy(false);
+      if (!airport) {
+        setError("Choose an airport from the list.");
+        return;
+      }
+      code = airport.code;
+    }
+    if (!code) {
+      setError("Choose your home airport.");
       return;
     }
     setBusy(true);
@@ -188,17 +205,7 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
           variant="error"
           title={stateCopy("generic").title}
           body={stateCopy("generic").body}
-          primary={{
-            label: "Try again",
-            onPress: () => {
-              const q = query;
-              setSearch(airportSearchState("loading"));
-              void (async () => {
-                const result = await fetchAirports(q);
-                setSearch(airportSearchState(result));
-              })();
-            },
-          }}
+          primary={{ label: "Try again", onPress: () => setAttempt((n) => n + 1) }}
         />
       ) : search.airports.length > 0 ? (
         <View style={styles.rows}>

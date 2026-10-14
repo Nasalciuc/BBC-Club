@@ -308,6 +308,22 @@ describe("GET /v1/home", () => {
       ["north_america", "To North America"],
     ]);
     expect(body.sections.find((s) => s.key === "north_america")?.items.map((i) => i.route.to)).toEqual(["YVR"]);
+
+    // The carousels are in the ETag: Brazil corrected into North America moves São Paulo's offer in, with the same
+    // offers in the same states — the tag changes and the app is not left on its 304.
+    const etag = r.headers.get("ETag")!;
+    expect(
+      (await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie, "If-None-Match": etag } })).status,
+    ).toBe(304);
+    await t.db.execute(sql`UPDATE catalog.airports SET country_code = 'MX' WHERE code = 'GRU'`);
+    const moved = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie, "If-None-Match": etag } });
+    expect(moved.status).toBe(200);
+    expect(
+      HomeVM.parse(await moved.json())
+        .sections.find((s) => s.key === "north_america")
+        ?.items.map((i) => i.route.to)
+        .sort(),
+    ).toEqual(["GRU", "YVR"]);
     await t.close();
   });
 });
@@ -455,5 +471,6 @@ describe("fare parity", () => {
     expect(vm.departLocal).toBe("18:55");
     expect(vm.arriveLocal).toBe("07:00");
     expect(vm.arriveDayOffset).toBe(1);
+    expect(vm.departDate).toBe("2026-10-12");
   });
 });
