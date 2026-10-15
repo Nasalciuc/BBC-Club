@@ -1,4 +1,4 @@
-import type { FareVM } from "@bbc/shared/api/v1/fares";
+import { type FareVM, isCalendarDay } from "@bbc/shared/api/v1/fares";
 
 import { formatPrice } from "../../lib/format";
 
@@ -25,6 +25,12 @@ const MONTH_NAMES = [
 
 const cabinWord = (cabin: "business" | "first") => (cabin === "first" ? "First" : "Business");
 
+/** `OCT 12` for a day the calendar has (`isCalendarDay`); null for anything else — `2026-02-30`, `2026-13-01`, `12 Oct`. */
+function namedDay(ymd: string | null | undefined): string | null {
+  if (!ymd || !isCalendarDay(ymd)) return null;
+  return `${MONTHS[Number(ymd.slice(5, 7)) - 1]} ${Number(ymd.slice(8, 10))}`;
+}
+
 /**
  * Figma 135:845: `British Airways · Business · Nonstop` — the airline, the cabin (not the product), the stops. The
  * catalog knows nonstop or not, never how many stops: a connecting fare says so without counting them.
@@ -49,11 +55,9 @@ export function departDayLabel(
   departLocal: string | null,
   departDate?: string | null,
 ): string | null {
-  const named = departDate ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(departDate) : null;
-  const month = named ? MONTHS[Number(named[2]) - 1] : undefined;
-  const day = named ? Number(named[3]) : 0;
   // A day the calendar has; anything else falls through to the instant and the clock.
-  if (month && day >= 1 && day <= 31) return `${month} ${day}`;
+  const named = namedDay(departDate);
+  if (named) return named;
   if (!departAt) return null;
   const instant = new Date(departAt);
   if (Number.isNaN(instant.getTime())) return null;
@@ -119,9 +123,8 @@ export type ClosedFare = {
 };
 
 export function closedFareLines(fare: ClosedFare): { day: string; route: string; carrier: string | null } {
-  const ymd = fare.departDate ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(fare.departDate) : null;
-  const month = ymd ? MONTHS[Number(ymd[2]) - 1] : undefined;
-  const day = ymd && month ? `${month} ${Number(ymd[3])} · ONE WAY` : "ONE WAY";
+  const named = namedDay(fare.departDate);
+  const day = named ? `${named} · ONE WAY` : "ONE WAY";
   const route = fare.fromCity && fare.toCity ? `${fare.fromCity} to ${fare.toCity}` : `${fare.from} → ${fare.to}`;
   const carrier = fare.carrier
     ? [fare.carrier, fare.cabin ? cabinWord(fare.cabin) : null].filter(Boolean).join(" · ")

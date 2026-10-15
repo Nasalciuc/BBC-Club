@@ -306,3 +306,9 @@ built (`2026-13-01` falls through to the instant and the clock; the schema's pat
 day). A fare with a departure and no arrival keeps the departure's clock and day (`localClocks` returned nothing for
 it). While the home airport sheet saves — its lookup of a typed code, then the request — the list and the field take no
 change: what the sheet saves is what it showed when `Save airport` was tapped.
+
+**Its review (15 Oct 2026), one more, taken.** A month's own length: `2026-02-30`, `2026-04-31` and `2027-02-29` passed
+the pattern and would print `FEB 30`. `isCalendarDay` (`packages/shared/src/api/v1/fares.ts`) now decides — a month
+1–12 and a day within that month, February's 29th only in a leap year. The contract refuses every other `departDate`,
+and the app asks the same function before it prints a day: the fare's facts line, a closed fare's line and the closed
+fare's context, which fall back as for a missing day.

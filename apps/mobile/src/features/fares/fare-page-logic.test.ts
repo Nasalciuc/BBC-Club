@@ -39,6 +39,15 @@ describe("the fare page's lines (Figma 135:845)", () => {
     expect(departDayLabel(null, null, "2026-13-01")).toBeNull();
   });
 
+  it("a month's own length decides, February's 29th only in a leap year", () => {
+    expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2026-02-30")).toBe("OCT 12");
+    expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2026-04-31")).toBe("OCT 12");
+    expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2027-02-29")).toBe("OCT 12");
+    expect(departDayLabel(null, null, "2026-02-30")).toBeNull();
+    expect(departDayLabel(null, null, "2028-02-29")).toBe("FEB 29");
+    expect(departDayLabel(null, null, "2026-12-31")).toBe("DEC 31");
+  });
+
   it("without the server's day, reads it from the instant and the airport's clock", () => {
     // JFK 20:10 on 12 October is 00:10 UTC on the 13th: the day is the airport's.
     expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10")).toBe("OCT 12");
@@ -89,5 +98,10 @@ describe("a closed fare (Figma 135:848)", () => {
 
   it("falls back to the codes when the server knows less", () => {
     expect(closedFareLines({ from: "JFK", to: "LHR" })).toEqual({ day: "ONE WAY", route: "JFK → LHR", carrier: null });
+  });
+
+  it("names no day the calendar does not have", () => {
+    expect(closedFareLines({ from: "JFK", to: "LHR", departDate: "2026-02-30" }).day).toBe("ONE WAY");
+    expect(closedFareLines({ from: "JFK", to: "LHR", departDate: "2028-02-29" }).day).toBe("FEB 29 · ONE WAY");
   });
 });

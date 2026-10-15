@@ -1,3 +1,5 @@
+import { isCalendarDay } from "@bbc/shared/api/v1/fares";
+
 /**
  * Closed-fare facts from a 410 body — only when the server sent `error.context`. The cities, the airline, the cabin
  * and the day (Figma 135:848) come from servers that send them; an older one sends only the route's codes.
@@ -12,7 +14,7 @@ export type FareGoneContext = {
   toCity: string | null;
   carrier: string | null;
   cabin: "business" | "first" | null;
-  /** The departure's day at the origin, `YYYY-MM-DD`. */
+  /** The departure's day at the origin, `YYYY-MM-DD` — a day the calendar has (`isCalendarDay`), or null. */
   departDate: string | null;
 };
 
@@ -40,6 +42,6 @@ export function parseFareGoneContext(raw: unknown): FareGoneContext | undefined 
     toCity: textOrNull(o.toCity),
     carrier: textOrNull(o.carrier),
     cabin: o.cabin === "business" || o.cabin === "first" ? o.cabin : null,
-    departDate: typeof o.departDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.departDate) ? o.departDate : null,
+    departDate: typeof o.departDate === "string" && isCalendarDay(o.departDate) ? o.departDate : null,
   };
 }
