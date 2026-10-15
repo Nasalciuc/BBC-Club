@@ -300,3 +300,9 @@ follows Figma against `DESIGN.md`'s older sentence, and `DESIGN.md` now says wha
 
 **Consequences.** `FareVM` changes (expand only: a field the app reads when present); the catalog's clocks test prints
 the day; `migrate.test.ts` checks the constraint is validated; `catalog.test.ts` checks the ETag moves with a region.
+
+**The second review (14 Oct 2026), three more, all taken.** The day's month and day are checked before the label is
+built (`2026-13-01` falls through to the instant and the clock; the schema's pattern allows only a calendar's month and
+day). A fare with a departure and no arrival keeps the departure's clock and day (`localClocks` returned nothing for
+it). While the home airport sheet saves — its lookup of a typed code, then the request — the list and the field take no
+change: what the sheet saves is what it showed when `Save airport` was tapped.

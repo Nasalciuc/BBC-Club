@@ -37,7 +37,7 @@ export const FareVM = z.object({
    */
   departDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/)
     .nullable()
     .optional(),
   price: PricePair,

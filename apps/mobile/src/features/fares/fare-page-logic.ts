@@ -50,7 +50,10 @@ export function departDayLabel(
   departDate?: string | null,
 ): string | null {
   const named = departDate ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(departDate) : null;
-  if (named) return `${MONTHS[Number(named[2]) - 1]} ${Number(named[3])}`;
+  const month = named ? MONTHS[Number(named[2]) - 1] : undefined;
+  const day = named ? Number(named[3]) : 0;
+  // A day the calendar has; anything else falls through to the instant and the clock.
+  if (month && day >= 1 && day <= 31) return `${month} ${day}`;
   if (!departAt) return null;
   const instant = new Date(departAt);
   if (Number.isNaN(instant.getTime())) return null;

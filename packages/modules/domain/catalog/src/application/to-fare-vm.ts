@@ -95,16 +95,20 @@ function localClocks(
   originTz: string,
   destTz: string,
 ): { departLocal: string | null; arriveLocal: string | null; arriveDayOffset: number; departDate: string | null } {
-  if (!departAt || !arriveAt) {
+  if (!departAt) {
     return { departLocal: null, arriveLocal: null, arriveDayOffset: 0, departDate: null };
   }
+  // The departure's clock and its day at the origin, named here from its zone: the app prints them as they are
+  // (ADR-IMPL-019) — a fare with a departure and no arrival keeps both.
   const dep = formatInZone(departAt, originTz);
+  if (!arriveAt) {
+    return { departLocal: dep.hhmm, arriveLocal: null, arriveDayOffset: 0, departDate: dep.ymd };
+  }
   const arr = formatInZone(arriveAt, destTz);
   return {
     departLocal: dep.hhmm,
     arriveLocal: arr.hhmm,
     arriveDayOffset: calendarDayOffset(dep.ymd, arr.ymd),
-    // The day at the origin, named here from its zone: the app prints it as it is (ADR-IMPL-019).
     departDate: dep.ymd,
   };
 }

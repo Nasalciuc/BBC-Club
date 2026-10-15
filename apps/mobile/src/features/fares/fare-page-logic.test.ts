@@ -31,6 +31,14 @@ describe("the fare page's lines (Figma 135:845)", () => {
     expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2026-10-12")).toBe("OCT 12");
   });
 
+  it("a day the calendar does not have falls through to the instant and the clock", () => {
+    expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2026-13-01")).toBe("OCT 12");
+    expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2026-00-01")).toBe("OCT 12");
+    expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2026-10-00")).toBe("OCT 12");
+    expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10", "2026-10-32")).toBe("OCT 12");
+    expect(departDayLabel(null, null, "2026-13-01")).toBeNull();
+  });
+
   it("without the server's day, reads it from the instant and the airport's clock", () => {
     // JFK 20:10 on 12 October is 00:10 UTC on the 13th: the day is the airport's.
     expect(departDayLabel("2026-10-13T00:10:00.000Z", "20:10")).toBe("OCT 12");

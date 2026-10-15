@@ -42,6 +42,17 @@ describe("flight local times", () => {
     expect(fareFactsLine(vm)).toBe("18:55 — 07:00 +1 · 7H 05");
   });
 
+  it("a fare with a departure and no arrival keeps the departure's clock and day", () => {
+    const vm = mapFa01({ arriveAt: null });
+    expect([vm.departLocal, vm.departDate, vm.arriveLocal, vm.arriveDayOffset]).toEqual([
+      "18:55",
+      "2026-10-12",
+      null,
+      0,
+    ]);
+    expect(mapFa01({ departAt: null, arriveAt: null }).departDate).toBeNull();
+  });
+
   it("same fa01 clocks in Chișinău and Los Angeles", async () => {
     const chisinau = await clocksUnder("Europe/Chisinau");
     const la = await clocksUnder("America/Los_Angeles");

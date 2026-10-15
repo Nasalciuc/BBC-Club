@@ -4,8 +4,9 @@ import { toFareVM } from "../../src/application/to-fare-vm";
 
 const now = new Date("2026-09-01T00:00:00.000Z");
 
-export function mapFa01(): FareVM {
-  const f = fixture.fares[0]!;
+/** fa01 through the mapper — `times` sets its instants aside, for a fare with a departure and no arrival, or none. */
+export function mapFa01(times: { departAt?: string | null; arriveAt?: string | null } = {}): FareVM {
+  const f = { ...fixture.fares[0]!, ...times };
   return toFareVM(
     {
       id: f.id,

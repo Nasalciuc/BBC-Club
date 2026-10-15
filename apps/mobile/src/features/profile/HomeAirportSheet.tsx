@@ -101,6 +101,9 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
   }, [query, attempt]);
 
   function choose(airport: AirportVM) {
+    // While a save runs (its lookup of a typed code, then the request), the choice stands still: what the sheet
+    // saves is what it shows when `Save airport` was tapped.
+    if (busy) return;
     // The choice ends the typing: the keyboard goes, the field empties, and the line under it names the choice.
     Keyboard.dismiss();
     setChosen({ code: airport.code, city: airport.city });
@@ -170,10 +173,13 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
         editable
         value={query ? { text: query } : null}
         onChangeText={(text) => {
+          if (busy) return;
           setQuery(text);
           setError(null);
         }}
-        onClear={() => setQuery("")}
+        onClear={() => {
+          if (!busy) setQuery("");
+        }}
       />
 
       {current ? (
