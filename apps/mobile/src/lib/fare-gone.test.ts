@@ -39,5 +39,6 @@ describe("parseFareGoneContext", () => {
   it("refuses a context without the route, and a day it cannot read", () => {
     expect(parseFareGoneContext({ ...base, from: undefined })).toBeUndefined();
     expect(parseFareGoneContext({ ...base, departDate: "12 Oct" })?.departDate).toBeNull();
+    expect(parseFareGoneContext({ ...base, departDate: "2026-02-30" })?.departDate).toBeNull();
   });
 });

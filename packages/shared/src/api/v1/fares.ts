@@ -4,6 +4,22 @@ import { PricePair, ProposalCardVM } from "./proposals";
 // Prices are numeric(10,2) in Postgres → string from Drizzle → parseFloat in the mapper.
 // No .int() on prices: fares have cents. PricePair lives in proposals.ts — never a second price shape.
 
+/**
+ * Whether `ymd` (`YYYY-MM-DD`) names a day the calendar has: a month 1–12 and a day within that month's own length,
+ * February's 29th only in a leap year — `2026-02-30`, `2026-04-31`, `2027-02-29` and `2026-13-01` are not days. The
+ * contract refuses every other `departDate`, and the app asks the same before it prints a day.
+ */
+export function isCalendarDay(ymd: string): boolean {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!parts) return false;
+  const year = Number(parts[1]);
+  const month = Number(parts[2]);
+  const day = Number(parts[3]);
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return days !== undefined && day >= 1 && day <= days;
+}
+
 export const FareVM = z.object({
   id: z.string().uuid(),
   carrier: z.object({
@@ -33,11 +49,13 @@ export const FareVM = z.object({
   /**
    * The departure's calendar day at the origin airport, `YYYY-MM-DD` — the day the fare page prints (`OCT 12`). The
    * server names it from the airport's zone; the instant and the wall clock alone cannot (UTC+13 and UTC−11 share
-   * them). Absent from an older server's answer: the app then falls back to the clock.
+   * them). Absent from an older server's answer: the app then falls back to the clock. Only a day the calendar has
+   * (`isCalendarDay`).
    */
   departDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine(isCalendarDay, "Not a day the calendar has")
     .nullable()
     .optional(),
   price: PricePair,
