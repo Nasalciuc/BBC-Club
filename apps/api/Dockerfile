@@ -12,6 +12,10 @@ WORKDIR /repo
 COPY --from=deps /repo /repo
 COPY apps/api ./apps/api
 COPY scripts ./scripts
+# The scripts run from this image (the staging demo at deploy step 7; by hand, the review account and the load test's
+# accounts) resolve their imports through the root tsconfig.json's paths, as in the repository. Without it Bun falls
+# back to @bbc/shared's exports (`./src/*.ts`), which name no folder — and `@bbc/shared/events` is one (ADR-IMPL-040).
+COPY tsconfig.json ./
 RUN bun run --filter @bbc/api typecheck
 
 FROM oven/bun:1.3-alpine AS runtime
