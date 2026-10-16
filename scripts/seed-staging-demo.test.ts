@@ -1,4 +1,6 @@
 /** The staging demo's guard and plan (ADR-IMPL-040) — no database. */
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
 
 import { fixture } from "@bbc/shared/fixture";
@@ -116,5 +118,19 @@ describe("demoPlan — Figma's situations, dated from today", () => {
     expect(demoPlan(member, now)).toEqual(plan);
     const later = demoPlan(member, new Date("2027-03-01T00:00:00Z"));
     expect(later.offers.find((o) => o.key === "london")!.row.title).toBe("Your March in London");
+  });
+});
+
+describe("the API image runs this script (deploy step 7)", () => {
+  const root = join(import.meta.dir, "..");
+
+  it("carries the root tsconfig.json, whose paths reach @bbc/shared's folders — `@bbc/shared/events` is one", () => {
+    const dockerfile = readFileSync(join(root, "apps/api/Dockerfile"), "utf8");
+    const copied = dockerfile.search(/^COPY tsconfig\.json \.\/\r?$/m); // \r: a Windows checkout
+    expect(copied).toBeGreaterThan(-1);
+    expect(copied).toBeLessThan(dockerfile.indexOf(" AS runtime"));
+    // Why @bbc/shared's exports cannot stand in for the paths: `./*` is `./src/*.ts`, and events is a folder.
+    expect(existsSync(join(root, "packages/shared/src/events.ts"))).toBe(false);
+    expect(existsSync(join(root, "packages/shared/src/events/index.ts"))).toBe(true);
   });
 });

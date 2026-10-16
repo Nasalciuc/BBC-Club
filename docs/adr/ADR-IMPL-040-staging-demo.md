@@ -57,3 +57,13 @@ to hold, for an account the stores already require.
 
 **Follow-up.** When the company's catalogue import feeds staging (`POST /v1/internal/catalog/import`), the fixture's
 fares are no longer needed there; the script then keeps only the account, the offers, the requests and the inbox.
+
+**Amendment — 16 Oct 2026: the image runs the script.** No staging deploy refreshed the demo: step 7 warned (`the demo
+data did not refresh`) with `Cannot find module '@bbc/shared/events' from '/repo/scripts/seed-review-account.ts'`. In
+the repository `scripts/` takes its imports' paths from the root `tsconfig.json`; the API image copied only
+`tsconfig.base.json`, so Bun fell back to `@bbc/shared`'s exports (`./*` → `./src/*.ts`), which name no folder — and
+`@bbc/shared/events` is one (`events/index.ts`). The image now carries the root `tsconfig.json` (`apps/api/Dockerfile`,
+its build stage), and `seed-staging-demo.test.ts` checks that it does. Reproduced in the image's layout: without the
+file, that same error; with it, `staging demo ready`, twice. The same fall-back stopped `seed-review-account.ts` and
+`loadtest-staging.ts` when run by hand in the image (RUNBOOK, `docs/perf/LOADTEST.md`); they resolve now too. The API
+itself was never affected: `apps/api` and every package have a `tsconfig.json` of their own.
