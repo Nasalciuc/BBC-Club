@@ -27,6 +27,9 @@ async function hasStoredPassword(exec: Executor, userId: string): Promise<boolea
 }
 
 const WRONG_PASSWORD = "That password isn't right.";
+/** The change stands, the other sessions did not end: what happened, and the way that ends them all (ADR-IMPL-047). */
+const OTHERS_STILL_SIGNED_IN =
+  "Your new password is set, but your other devices are still signed in. Sign out, then use Forgot password? to sign them all out.";
 
 type Ports = { email: EmailFacade };
 
@@ -102,6 +105,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
           return c.json(apiError("CONFLICT", { message: "This account already has a password." }), 409);
         }
 
+        let othersEnded = true;
         try {
           if (hasPassword && currentPassword) {
             await auth.api.changePassword({
@@ -113,11 +117,12 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
             });
             // Every other session ends; this one stays. changePassword's own revokeOtherSessions deletes this session too
             // and puts its replacement in a cookie this route does not forward: the phone that changed the password was
-            // signed out once its cookie cache ran out (ADR-IMPL-047). The password has changed by now, so a failure here
-            // is logged, not answered as a failed change: the member's new password works, and the event still goes out.
+            // signed out once its cookie cache ran out (ADR-IMPL-047). The password has changed by now: a failure here
+            // still publishes the change, and the answer says the other devices are signed in and how to end them.
             try {
               await auth.api.revokeOtherSessions({ headers: c.req.raw.headers });
             } catch (err: unknown) {
+              othersEnded = false;
               platform.logger.error(
                 { err, memberId: actor },
                 "password changed, but the member's other sessions could not be ended",
@@ -168,6 +173,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
             publishedBy: "identity",
           }),
         );
+        if (!othersEnded) return c.json(apiError("INTERNAL", { message: OTHERS_STILL_SIGNED_IN }), 500);
         return c.json({ ok: true });
       },
     );

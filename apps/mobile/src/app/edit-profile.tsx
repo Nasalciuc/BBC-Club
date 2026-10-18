@@ -90,7 +90,11 @@ export default function EditProfileScreen() {
             primary={{
               label: "Try again",
               testID: "editProfile.error.retry",
-              onPress: () => setReloadToken((n) => n + 1),
+              // The rows come back, dimmed, while it loads again: never the old failure on screen.
+              onPress: () => {
+                setLoadFailure(null);
+                setReloadToken((n) => n + 1);
+              },
             }}
           />
         ) : (

@@ -123,7 +123,16 @@ export default function ProfileScreen() {
           variant="error"
           title={error.title}
           body={error.body}
-          primary={{ label: "Try again", testID: "profile.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
+          primary={{
+            label: "Try again",
+            testID: "profile.error.retry",
+            // The message leaves at once: the page waits for the new answer, never with the old failure on it.
+            onPress: () => {
+              setError(null);
+              setLoading(true);
+              setReloadToken((n) => n + 1);
+            },
+          }}
         />
       </View>
     );

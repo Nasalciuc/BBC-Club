@@ -103,7 +103,11 @@ export default function SettingsScreen() {
             primary={{
               label: "Try again",
               testID: "settings.error.retry",
-              onPress: () => setReloadToken((n) => n + 1),
+              // The rows come back, dimmed, while it loads again: never the old failure on screen.
+              onPress: () => {
+                setLoadFailure(null);
+                setReloadToken((n) => n + 1);
+              },
             }}
           />
         ) : (

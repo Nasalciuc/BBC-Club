@@ -1,6 +1,7 @@
 /** POST /v1/account/password: set (Path A) or change (credential) a password. */
 import { describe, it, expect } from "bun:test";
 import { sql } from "drizzle-orm";
+import type { IdentityFacade } from "@bbc/identity";
 import { testApp } from "./helpers/test-app";
 
 describe("POST /v1/account/password", () => {
@@ -94,6 +95,39 @@ describe("POST /v1/account/password", () => {
     const still = await t.app.request("/v1/profile", { headers: { Cookie: cookieNow } });
     expect(still.status).toBe(200);
     await t.close();
+  });
+
+  it("a change whose other sessions do not end is published and answered as such, never as ok (ADR-IMPL-047)", async () => {
+    const t = await testApp({ suite: "pw-revoke-fails" });
+    // The route calls the facade's own Better Auth object: its revokeOtherSessions fails once the password changed.
+    const api = t.registry.facade<IdentityFacade>("identity").auth.api as unknown as { revokeOtherSessions: unknown };
+    const revoke = api.revokeOtherSessions;
+    api.revokeOtherSessions = async () => {
+      throw new Error("injected: sessions store unavailable");
+    };
+    try {
+      const elsewhere = await t.auth.cookieFor(t.memberA.email, t.memberA.password);
+      const r = await t.app.request("/v1/account/password", {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: "newClubPass2026!", currentPassword: t.memberA.password }),
+      });
+      expect(r.status).toBe(500);
+      const body = (await r.json()) as { ok?: boolean; error?: { message?: string } };
+      expect(body.ok).toBeUndefined();
+      expect(body.error?.message).toContain("other devices are still signed in");
+      // The change stands: the new password signs in, the other session is still there, the event went out.
+      expect(await t.auth.cookieFor(t.memberA.email, "newClubPass2026!")).toBeTruthy();
+      expect((await t.app.request("/v1/profile", { headers: { Cookie: elsewhere } })).status).toBe(200);
+      await t.drainAll();
+      const evts = await t.journal.forMember(t.memberA.id);
+      expect(
+        evts.filter((e: { payload?: { type?: string } }) => e.payload?.type === "member.password_changed").length,
+      ).toBeGreaterThanOrEqual(1);
+    } finally {
+      api.revokeOtherSessions = revoke;
+      await t.close();
+    }
   });
 
   it("rejects a password that is too short", async () => {

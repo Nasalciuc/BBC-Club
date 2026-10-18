@@ -55,7 +55,8 @@ come first because each would otherwise be carried into 3.0, or stop it.
   - Explore no longer hides its search when Home did not load, and no longer draws a spinner under its own skeletons;
     its full sheet, which has none, keeps the spinner while Home loads — never "No offers yet." before Home answered.
   - Settings, Edit profile and Profile no longer show values made up while they load ("Add phone", "Business",
-    "1 adult", "Member"): the rows wait, dimmed; a profile that did not load is a message with `Try again`. Profile's
+    "1 adult", "Member"): the rows wait, dimmed; a profile that did not load is a message with `Try again`, which
+    takes the message away at once while it loads again. Profile's
     gear stays above that message — Settings is the only way to Sign out and Delete account — and Delete account
     waits for the load too: its confirmation counts the open requests it closes, or, when they did not load, says that
     any open requests are closed.
@@ -81,8 +82,9 @@ come first because each would otherwise be carried into 3.0, or stop it.
     change now ends every other session and keeps this one (`revokeOtherSessions` after it; ADR-IMPL-020's point 3
     called `changePassword` with `revokeOtherSessions: true`). This session keeps its token — another device is the
     case a change answers; a copy of this phone's own cookie would need the reset by email code, which ends every
-    session. Should ending the others fail after the password changed, the route logs it and still answers the change
-    and publishes `member.password_changed`. Better Auth's own routes,
+    session. Should ending the others fail after the password changed, the change stands and `member.password_changed`
+    is published, but the answer is never `ok`: a 500 that says the other devices are still signed in, and the way that
+    ends them all (sign out, then the reset by email code). Better Auth's own routes,
     which the app never calls, checked it as well: `/api/auth/change-password` let a session try three passwords every
     ten seconds from each address, `/api/auth/verify-password` sixty a minute. Neither is served any more
     (`disabledPaths`); the club's route reaches `changePassword` from inside the server. `/api/auth/delete-user` stays —
