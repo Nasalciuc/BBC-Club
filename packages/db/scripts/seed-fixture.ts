@@ -11,6 +11,7 @@ import { profile } from "../src/schema/members";
 import { offers } from "../src/schema/proposals";
 import { mirror } from "../src/schema/crm";
 import { airports, fares } from "../src/schema/catalog";
+import { liveValidUntil } from "./fixture-dates";
 
 assertNotProduction("seed-fixture");
 const db = createDb(process.env.DATABASE_URL!, { max: 1, applicationName: "bbc-seed" });
@@ -84,6 +85,9 @@ try {
       })
       .onConflictDoNothing({ target: profile.memberId });
 
+    // A new database's offers stay live whatever the day the seed runs: a validity that has passed moves on by whole
+    // years. A database seeded before keeps the offers it has, dates included (onConflictDoNothing).
+    const today = new Date();
     for (const o of fixture.offers) {
       await tx
         .insert(offers)
@@ -101,7 +105,7 @@ try {
           title: o.title,
           contextLine: "contextLine" in o ? o.contextLine : null, // only some fixture offers carry one
           flightFacts: o.facts,
-          validUntil: new Date(o.validUntil),
+          validUntil: liveValidUntil(o.validUntil, today),
           status: "active",
         })
         .onConflictDoNothing({ target: offers.idempotencyKey });
