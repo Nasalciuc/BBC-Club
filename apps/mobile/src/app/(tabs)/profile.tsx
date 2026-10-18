@@ -94,10 +94,30 @@ export default function ProfileScreen() {
     );
   }
 
+  const header = (
+    <View style={styles.top}>
+      <Text style={styles.kicker} accessibilityRole="header">
+        Your profile.
+      </Text>
+      <Pressable
+        testID="profile.settings"
+        accessibilityRole="button"
+        accessibilityLabel="Settings"
+        onPress={() => router.push("/settings" as Href)}
+        style={({ pressed }) => [styles.settings, pressed && styles.pressed]}
+      >
+        <Icon name="settings" size={24} color={tokens.colors.textPrimary} />
+      </Pressable>
+    </View>
+  );
+
   if (!profile && error) {
+    // The gear stays: Settings is the only way to Sign out and Delete account, and a profile that keeps failing must
+    // not take them away (ADR-IMPL-047).
     return (
-      <View testID="profile.root" style={[styles.root, styles.failed, { paddingTop: insets.top + tokens.space.xxl }]}>
+      <View testID="profile.root" style={[styles.root, styles.failed, { paddingTop: insets.top + tokens.space.xs }]}>
         <ScreenStatusBar on="light" />
+        {header}
         <StateMessage
           testID="profile.error"
           variant="error"
@@ -134,20 +154,7 @@ export default function ProfileScreen() {
       }}
     >
       <ScreenStatusBar on="light" />
-      <View style={styles.top}>
-        <Text style={styles.kicker} accessibilityRole="header">
-          Your profile.
-        </Text>
-        <Pressable
-          testID="profile.settings"
-          accessibilityRole="button"
-          accessibilityLabel="Settings"
-          onPress={() => router.push("/settings" as Href)}
-          style={({ pressed }) => [styles.settings, pressed && styles.pressed]}
-        >
-          <Icon name="settings" size={24} color={tokens.colors.textPrimary} />
-        </Pressable>
-      </View>
+      {header}
       {/* Figma 436:1221: the member's name on their home city's photograph (ADR-IMPL-043). */}
       <ProfileHero
         testID="profile.hero"
@@ -255,7 +262,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center" },
-  // A profile that did not load: the message in the gutters, 48 pt under the safe area (Figma 240:5093's measure).
+  // A profile that did not load: the header with its gear, then the message, in the gutters (Figma 240:5093's measure).
   failed: { paddingHorizontal: tokens.space.lg },
   top: {
     minHeight: 44,

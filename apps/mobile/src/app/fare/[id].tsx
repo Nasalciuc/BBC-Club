@@ -61,7 +61,8 @@ export default function FareDetailScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [gone, setGone] = useState<FareGoneContext | true | null>(null);
-  const [error, setError] = useState<{ title: string; body: string } | null>(null);
+  // `retry: false` — a fare that does not exist: asking again cannot bring it, so the page offers no `Try again`.
+  const [error, setError] = useState<{ title: string; body: string; retry?: false } | null>(null);
   // `Try again` loads the fare again, here — it never leaves the page (ADR-IMPL-047).
   const [reloadToken, setReloadToken] = useState(0);
   // An offer's photo band carries the status bar until the page scrolls it away; the porcelain under it then needs
@@ -73,7 +74,7 @@ export default function FareDetailScreen() {
 
   useEffect(() => {
     if (!id || typeof id !== "string") {
-      setError({ title: stateCopy("route").title, body: "This fare is unavailable." });
+      setError({ title: stateCopy("route").title, body: "This fare is unavailable.", retry: false });
       setLoading(false);
       return;
     }
@@ -85,6 +86,9 @@ export default function FareDetailScreen() {
       if (!fareResult.ok) {
         if (fareResult.status === 410) {
           setGone(fareResult.gone ?? true);
+        } else if (fareResult.status === 404) {
+          // An unknown id (a link): the same words as no id at all, and no `Try again` (ADR-IMPL-047).
+          setError({ title: stateCopy("route").title, body: "This fare is unavailable.", retry: false });
         } else {
           setError(readFailureCopy(fareResult.code, "fare"));
         }
@@ -182,7 +186,11 @@ export default function FareDetailScreen() {
             variant="error"
             title={copy.title}
             body={copy.body}
-            primary={{ label: "Try again", testID: "fare.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
+            primary={
+              error?.retry === false
+                ? undefined
+                : { label: "Try again", testID: "fare.error.retry", onPress: () => setReloadToken((n) => n + 1) }
+            }
           />
         </View>
         <RootTabBar active="explore" />

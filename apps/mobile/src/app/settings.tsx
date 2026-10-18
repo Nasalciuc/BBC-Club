@@ -35,7 +35,8 @@ export default function SettingsScreen() {
   const [loadFailure, setLoadFailure] = useState<{ title: string; body: string } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
-  const [openRequests, setOpenRequests] = useState(0);
+  // null until the requests load: a count that did not load is never shown as none.
+  const [openRequests, setOpenRequests] = useState<number | null>(null);
   const phoneRef = useRef<ProfileSheetHandle>(null);
   const passwordRef = useRef<ProfileSheetHandle>(null);
   const notificationsRef = useRef<ProfileSheetHandle>(null);
@@ -133,7 +134,15 @@ export default function SettingsScreen() {
             <Text style={styles.message}>Request updates are always on.</Text>
           </>
         )}
-        <ListRow testID="settings.delete" label="Delete account" danger onPress={() => deleteRef.current?.present()} />
+        {/* It waits for the load like the rows above; a load that failed leaves it to tap, and a count that did not load
+            is said without a number (ADR-IMPL-047). */}
+        <ListRow
+          testID="settings.delete"
+          label="Delete account"
+          danger
+          disabled={!profile && !loadFailure}
+          onPress={() => deleteRef.current?.present()}
+        />
         {legal.length > 0 ? (
           <View style={styles.rows}>
             {legal.map((row) => (

@@ -28,17 +28,25 @@ come first because each would otherwise be carried into 3.0, or stop it.
   (PR 43 follow-up #1; met on the owner's phone). `padding` on both platforms. While the keys are up, the photograph
   gives way to the fields — only the back button and the logo stay above the panel — and the footer no longer adds the
   navigation bar the padding already counts: the button stands above the keys and the field being typed in stays in
-  view. `sign-in.yaml` no longer closes the keyboard before `signIn.submit`: CI's emulator checks it.
-- **The entry's errors.** The entry stays as it is, but its error line was `#B42318` on the navy panel, 2.23:1. Only
-  that line's colour changes — `#F97066`, 5.25:1, still red — in `constants/club.ts`, where the entry's colours,
-  spacing and radii are written by hand, so a token change of 3.0 does not reach them (its type roles and its buttons
-  do read the generated tokens).
+  view. `DESIGN.md` puts the panel at 25% with the keyboard open; on Sign in that leaves its password field out of view
+  on a 411 × 914 pt phone (CI's Pixel 6) and on a 393 × 852 one, under a footer of two buttons, so the owner kept the
+  photograph's giving way (18 Oct) — a conflict with `DESIGN.md` for 3.0 to settle. `sign-in.yaml` no longer closes the
+  keyboard before `signIn.submit`: CI's emulator checks it.
+- **The entry's errors.** The entry stays as it is, but its error line was `#B42318` on the navy panel, 2.23:1, and
+  `DESIGN.md` keeps `status-danger` off messages (`design/components.md`: the message in the secondary text colour).
+  The line now takes the entry's muted text, `textOnDarkMuted` (`#94A3B8`, 5.71:1) — no colour outside the palette
+  (the owner's choice, 18 Oct, over a lighter red, `#F97066`). The entry's fields never drew the red border `DESIGN.md`
+  gives the field at fault; that stays for 3.0. `constants/club.ts` holds the entry's colours, spacing and radii by
+  hand, so a token change of 3.0 does not reach them (its type roles and its buttons do read the generated tokens).
 - **Android's Back.** It ignored the thirteen modal sheets (Back on the request sheet left the fare page, the draft with
   it), Explore's typing and expanded sheet, and onboarding's airport step. `ModalSheet` closes on Back as its × does,
   and does nothing while it has no way out (a request sending); Explore and onboarding answer as their Cancel and Done do.
+  Each sheet's listener is added once per opening and keeps its place (`closable` is read through a ref): a sheet under
+  another one whose send ends does not move above it.
 - **States.**
-  - The fare page's `Try again` went back; it now loads the fare again. The fare page and the request's page keep their
-    back button and the tab bar while they load and when they did not.
+  - The fare page's `Try again` went back; it now loads the fare again — unless the fare does not exist (404, a link):
+    "This fare is unavailable.", with no `Try again`. The fare page and the request's page keep their back button and
+    the tab bar while they load and when they did not.
   - The network layer's offline line promised "We'll send this when you're back." in some twenty places that send
     nothing. It now says "You’re offline. Try again when you’re back online."; only the request queue sends later, and
     its screen says so itself (Figma 135:855). A page that did not load says the same and waits for its `Try again`;
@@ -47,7 +55,10 @@ come first because each would otherwise be carried into 3.0, or stop it.
   - Explore no longer hides its search when Home did not load, and no longer draws a spinner under its own skeletons;
     its full sheet, which has none, keeps the spinner while Home loads — never "No offers yet." before Home answered.
   - Settings, Edit profile and Profile no longer show values made up while they load ("Add phone", "Business",
-    "1 adult", "Member"): the rows wait, dimmed; a profile that did not load is a message with `Try again`.
+    "1 adult", "Member"): the rows wait, dimmed; a profile that did not load is a message with `Try again`. Profile's
+    gear stays above that message — Settings is the only way to Sign out and Delete account — and Delete account
+    waits for the load too: its confirmation counts the open requests it closes, or, when they did not load, says that
+    any open requests are closed.
 - **Release builds.** The dev gallery opened as a blank page with no way back (a link, or Expo's sitemap, reached it): it
   now sends a release build to the app's start. An unknown link opened Expo's "Unmatched Route" with its sitemap:
   `+not-found` is now the page-wide message.

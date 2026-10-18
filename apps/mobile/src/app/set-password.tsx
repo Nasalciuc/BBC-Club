@@ -167,7 +167,8 @@ const styles = StyleSheet.create({
   },
   error: {
     ...Club.type.bodySm,
-    color: Club.colors.statusDangerOnDark,
+    // The words of an error stay quiet on the navy panel (DESIGN.md: never red for messages): 5.71:1 (ADR-IMPL-047).
+    color: Club.colors.textOnDarkMuted,
     marginTop: Club.space.md,
   },
 });

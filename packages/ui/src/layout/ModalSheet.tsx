@@ -138,15 +138,20 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
 
   // Android's Back closes the sheet in front, as its × does, before it can leave the screen under it — and does
   // nothing while the sheet has no way out (a request sending, Figma 135:854) (ADR-IMPL-047). The listener added last
-  // answers first, so a sheet opened over another one closes first.
+  // answers first, so a sheet opened over another one closes first. `closable` is read through a ref: the listener is
+  // added once per opening and keeps its place, so a sheet under another one whose send ends does not move above it.
+  const closableRef = useRef(closable);
+  useEffect(() => {
+    closableRef.current = closable;
+  }, [closable]);
   useEffect(() => {
     if (Platform.OS !== "android" || !open) return;
     const back = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (closable) modal.current?.dismiss();
+      if (closableRef.current) modal.current?.dismiss();
       return true;
     });
     return () => back.remove();
-  }, [open, closable]);
+  }, [open]);
 
   const headline = modalSheetHeadline(size);
   const titleAlone = !closable && !headline;

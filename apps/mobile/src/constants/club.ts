@@ -21,9 +21,6 @@ export const Club = {
     textOnDarkMuted: "#94A3B8",
     actionInverted: "#F8FAFC",
     statusDanger: "#B42318",
-    // The words of an error on the navy panel: #B42318 there reads 2.23:1; this one 5.25:1 and is still red
-    // (UI/UX audit, 16 Oct 2026; ADR-IMPL-047).
-    statusDangerOnDark: "#F97066",
     borderDefault: "#E2E8F0",
     borderOnDark: "rgba(248,250,252,0.35)",
     heroDim: "rgba(30,41,59,0.4)",
