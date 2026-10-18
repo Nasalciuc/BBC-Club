@@ -1,6 +1,6 @@
 ---
-description: Rules for the backend reference packages
-globs: isolated/**/*.ts,packages/**/*.ts,apps/api/**/*.ts
+description: Rules for the API and its modules
+globs: packages/**/*.ts,apps/api/**/*.ts
 alwaysApply: false
 ---
 

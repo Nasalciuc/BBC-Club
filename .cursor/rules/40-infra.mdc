@@ -1,6 +1,6 @@
 ---
 description: Rules for compose files, Caddy, shell scripts and GitHub workflows
-globs: infra/**,isolated/infra-production-v2/**,.github/workflows/**,**/Dockerfile,**/*.sh
+globs: infra/**,.github/workflows/**,**/Dockerfile,**/*.sh
 alwaysApply: false
 ---
 
@@ -14,8 +14,7 @@ This project has already shipped a compose file and a workflow that could not be
 parsed as syntax. **Always quote interpolated values, or use block style.**
 
 **Scripts must not assume a layout.** Derive paths from the script's own location
-(`SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`), never hard-code `/opt/bbc/infra`. The infra
-tree moves to the repository root during the monorepo assembly.
+(`SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`), never hard-code `/opt/bbc/infra`.
 
 **Failures are loud.** `set -Eeuo pipefail`; no `|| true` on a step whose failure matters (a failed
 `git checkout` must stop bootstrap, not start the old revision and report success). A readiness loop must
@@ -26,7 +25,9 @@ tags are rejected. Migrations run as a separate job before the API starts, expan
 red for 60 s, roll back automatically.
 
 **Exposure:** only Caddy (80/443) and SSH (22) listen on the internet. Postgres, MinIO, Redis, GlitchTip and
-Uptime Kuma stay on an internal Docker network and are reached through an SSH tunnel. Behind Cloudflare,
+Uptime Kuma stay on an internal Docker network and are reached through an SSH tunnel — and no Caddy route
+proxies to them (a `/media/*` route once sent all of MinIO, its admin API included, to the internet;
+ADR-IMPL-047). Validate the Caddyfile with `caddy validate`, as CI does. Behind Cloudflare,
 `trusted_proxies` **and** `trusted_proxies_strict` are both required — without strict parsing a spoofed
 `X-Forwarded-For` reaches the `client_ip` matcher.
 
