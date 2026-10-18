@@ -117,4 +117,40 @@ describe("POST /v1/account/password", () => {
     expect(r.status).toBe(401);
     await t.close();
   });
+
+  it("the current password cannot be guessed without end: past the burst, 429 (ADR-IMPL-047)", async () => {
+    const t = await testApp({ suite: "pw-guess" });
+    const guess = () =>
+      t.app.request("/v1/account/password", {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: "newClubPass2026!", currentPassword: "notTheOne2026!" }),
+      });
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) statuses.push((await guess()).status);
+    // profile.write: a burst of 10, then one every two minutes — the wrong guesses are 400 until the limit says 429.
+    expect(statuses.slice(0, 10).every((s) => s === 400)).toBe(true);
+    expect(statuses.slice(10)).toEqual([429, 429]);
+    await t.close();
+  });
+
+  it("nor around it: Better Auth's own change-password and verify-password are not served (ADR-IMPL-047)", async () => {
+    const t = await testApp({ suite: "pw-auth-route" });
+    const post = (path: string, body: Record<string, string>) =>
+      t.app.request(`/api/auth${path}`, {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json", Origin: t.appOrigin },
+        body: JSON.stringify(body),
+      });
+    // The right password on both: served, either would answer 200.
+    const change = await post("/change-password", {
+      newPassword: "newClubPass2026!",
+      currentPassword: t.memberA.password,
+    });
+    expect(change.status).toBe(404);
+    expect((await post("/verify-password", { password: t.memberA.password })).status).toBe(404);
+    // Nothing changed: the password the member had still signs in.
+    expect(await t.auth.cookieFor(t.memberA.email, t.memberA.password)).toBeTruthy();
+    await t.close();
+  });
 });

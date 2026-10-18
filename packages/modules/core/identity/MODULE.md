@@ -7,7 +7,7 @@
 **Ports:** `EmailSender` (satisfied by integration/email), `EventPublisher` (platform).
 **Facade (`src/api/index.ts`):** `handler` (Better Auth at /api/auth/*), `getSession(headers)`, `requireMember`, `requireRole`, `deleteAccount(headers)`, `auth` (for tests only).
 **Out of scope:** 2FA, social login, admin dashboard, avatars, passkeys (v2).
-**Invariants tested:** recipient = user.email & awaited · no dead session guard + route inventory · register→verify→exactly one event + lockout at 5 OTP attempts · delete = zero rows + journal tombstone · HIBP refusal · per-route rate limits (429 + Retry-After).
+**Invariants tested:** recipient = user.email & awaited · no dead session guard + route inventory · register→verify→exactly one event + lockout at 5 OTP attempts · delete = zero rows + journal tombstone · HIBP refusal · per-route rate limits (429 + Retry-After) · `POST /v1/account/password` limited per member as `profile.write`, after `authorize` (ADR-IMPL-047), and the only route where a signed-in member changes it: Better Auth's `/api/auth/change-password` and `/api/auth/verify-password` are not served (`disabledPaths`) · a reset by email code signs out every session (`revokeSessionsOnPasswordReset`).
 
 ## Verified against installed versions
 

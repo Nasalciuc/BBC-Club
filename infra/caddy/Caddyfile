@@ -67,12 +67,11 @@
 		file_server
 	}
 
-	# offer photography: public read-only bucket, cached by Cloudflare
-	handle_path /media/* {
-		reverse_proxy minio:9000 {
-			header_up Host {upstream_hostport}
-		}
-		header Cache-Control "public, max-age=86400, immutable"
+	# offer photography is not served from this box yet (R1b): until then nothing under /media reaches MinIO. This path
+	# sent the whole of MinIO — its S3 API and its admin API — to the internet (ADR-IMPL-047). MinIO stays on the
+	# internal network, reached through an SSH tunnel (RUNBOOK); R1b brings a read-only route for its public bucket.
+	handle /media/* {
+		respond 404
 	}
 
 	handle {

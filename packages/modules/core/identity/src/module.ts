@@ -69,7 +69,10 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
       },
     );
 
-    registerRoute("POST", "/v1/account/password", "profile:update-self");
+    // Limited as the profile's other writes are, per member: the current password cannot be guessed here without end
+    // (ADR-IMPL-047). Better Auth's own limits never see this call — it reaches auth.api from inside the server. The
+    // member is known first, so an anonymous call is refused before it counts against anyone.
+    registerRoute("POST", "/v1/account/password", "profile:update-self", "profile.write");
     routes.post(
       "/account/password",
       authorize("profile:update-self", {
@@ -77,6 +80,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
         flags: platform.flags,
         log: platform.logger.warn.bind(platform.logger),
       }),
+      rateLimit(platform.rateLimit, "profile.write"),
       async (c) => {
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
