@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   },
   error: {
     ...Club.type.bodySm,
-    color: Club.colors.statusDanger,
+    color: Club.colors.statusDangerOnDark,
     marginTop: Club.space.sm,
   },
 });

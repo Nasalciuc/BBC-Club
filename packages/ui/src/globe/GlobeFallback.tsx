@@ -15,6 +15,8 @@ type Props = {
   selected: string | null;
   onSelect: (code: string) => void;
   size?: number;
+  /** Its screen is not in view (another tab, a screen pushed over it): drawn as it was, nothing runs. */
+  paused?: boolean;
 };
 
 /** e2e builds hold the opening position: Maestro taps globe.pin.LHR, and parity compares the reduced-motion stills. */
@@ -26,7 +28,7 @@ const HOLD_STILL = process.env.EXPO_PUBLIC_APP_ENV === "e2e";
  * props and state, so React Compiler can compile it and nothing depends on manual memoization.
  * The name stays GlobeFallback until #48 merges, so this PR shares no file with it; the rename to Globe follows then.
  */
-export function GlobeFallback({ pins, home, selected, onSelect, size = 520 }: Props) {
+export function GlobeFallback({ pins, home, selected, onSelect, size = 520, paused = false }: Props) {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
   // One engine per mount: it builds the gesture once, so a re-render never hands GestureDetector a new gesture mid-drag.
@@ -38,7 +40,7 @@ export function GlobeFallback({ pins, home, selected, onSelect, size = 520 }: Pr
   useEffect(() => {
     engine.update({ size, selected, reducedMotion });
   }, [engine, size, selected, reducedMotion]);
-  useEffect(() => (appActive ? engine.run() : undefined), [engine, appActive]);
+  useEffect(() => (appActive && !paused ? engine.run() : undefined), [engine, appActive, paused]);
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
     const motion = AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);

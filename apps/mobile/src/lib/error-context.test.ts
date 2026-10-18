@@ -49,9 +49,24 @@ test("a screen that reads requests offline says when it will load — never the 
     title: "You’re offline.",
     body: "Your requests load when you’re back online.",
   });
-  expect(readFailureCopy("TIMEOUT", "request").body).toBe("This request loads when you’re back online.");
+  // A timeout is not offline: the phone is online, and no reconnect will reload the list (ADR-IMPL-047).
+  expect(readFailureCopy("TIMEOUT", "requests")).toEqual(stateCopy("route"));
   expect(readFailureCopy("NOT_FOUND", "request")).toEqual(stateCopy("route"));
   expect(readFailureCopy(undefined, "requests").body).not.toContain("send");
+});
+
+test("a page that does not reload by itself promises nothing: offline, Try again; a timeout, the page's message", () => {
+  for (const what of ["request", "explore", "profile", "fare"] as const) {
+    expect(readFailureCopy("OFFLINE", what)).toEqual({
+      title: "You’re offline.",
+      body: "Try again when you’re back online.",
+    });
+    expect(readFailureCopy("TIMEOUT", what)).toEqual(stateCopy("route"));
+    expect(readFailureCopy("INTERNAL", what)).toEqual(stateCopy("route"));
+  }
+  for (const what of ["request", "requests", "explore", "profile", "fare"] as const) {
+    expect(readFailureCopy("OFFLINE", what).body).not.toContain("send");
+  }
 });
 
 test("over a list already on screen, a failed reload never says the screen could not be loaded", () => {
@@ -59,6 +74,7 @@ test("over a list already on screen, a failed reload never says the screen could
   expect(refreshFailedLine("INTERNAL")).toBe("We couldn’t refresh your requests just now.");
   // Nothing loaded yet, only what waits on the phone on screen: there was nothing to refresh.
   expect(refreshFailedLine("INTERNAL", false)).toBe("We couldn’t load your other requests just now.");
-  expect(refreshFailedLine("TIMEOUT", false)).toBe("You’re offline. Your requests load when you’re back online.");
+  expect(refreshFailedLine("TIMEOUT", false)).toBe("We couldn’t load your other requests just now.");
+  expect(refreshFailedLine("TIMEOUT")).toBe("We couldn’t refresh your requests just now.");
   expect(refreshFailedLine(undefined)).not.toContain("could not be loaded");
 });

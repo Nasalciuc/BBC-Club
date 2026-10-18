@@ -7,6 +7,7 @@ import type { AirportVM } from "@bbc/shared/api/v1/fares";
 import { BackButton, Button, GlobeFallback, Photo, PhotoCredit, tokens, rn } from "@bbc/ui";
 
 import { RootTabBar } from "@/components/RootTabBar";
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import {
   NotificationsAskSheet,
   type NotificationsAskSheetHandle,
@@ -123,6 +124,7 @@ export default function RequestConfirmedScreen() {
   if (kind === "saved") {
     return (
       <View style={styles.root} testID="confirmation.root">
+        <ScreenStatusBar on="light" />
         <View style={[styles.savedTop, { paddingTop: insets.top }]}>
           <BackButton testID="confirmation.back" onPress={() => router.back()} />
         </View>
@@ -153,6 +155,7 @@ export default function RequestConfirmedScreen() {
     const creditLink = credit?.link ?? null;
     return (
       <View style={styles.root} testID="confirmation.root">
+        <ScreenStatusBar on="dark" />
         <View style={styles.photo}>
           <Photo source={picture.source} fallback={CLUB_PICTURE} cachePolicy={picture.cache} style={styles.fill} />
           {/* 436:1220: the photograph under a flat night veil, so the words on it keep their contrast. */}
@@ -199,6 +202,7 @@ export default function RequestConfirmedScreen() {
   const title = text(params.title);
   return (
     <View style={styles.root} testID="confirmation.root">
+      <ScreenStatusBar on="dark" />
       <View style={styles.globeBand} testID="confirmation.globe">
         <View style={styles.globe} pointerEvents="none">
           <GlobeFallback

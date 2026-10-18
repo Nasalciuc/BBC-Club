@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useState, type ReactNode } from "react";
 import { Linking } from "react-native";
 
@@ -47,30 +48,37 @@ export function AppGate({ children }: { children: ReactNode }) {
   if (gate?.kind === "update") {
     // Figma 240:5129: no way past it but the update.
     const copy = stateCopy("update");
+    // The page replaces the navigator, the root's light bar with it: its porcelain takes the dark glyphs.
     return (
-      <SystemScreen
-        testID="appGate.update"
-        title={copy.title}
-        body={copy.body}
-        primary={{
-          label: "Update app",
-          testID: "appGate.update.cta",
-          onPress: () => void Linking.openURL("https://buybusinessclass.com").catch(() => undefined),
-        }}
-        call={call("appGate.update.call")}
-      />
+      <>
+        <StatusBar style="dark" />
+        <SystemScreen
+          testID="appGate.update"
+          title={copy.title}
+          body={copy.body}
+          primary={{
+            label: "Update app",
+            testID: "appGate.update.cta",
+            onPress: () => void Linking.openURL("https://buybusinessclass.com").catch(() => undefined),
+          }}
+          call={call("appGate.update.call")}
+        />
+      </>
     );
   }
 
   if (gate?.kind === "maintenance") {
     return (
-      <SystemScreen
-        testID="appGate.maintenance"
-        title={stateCopy("maintenance").title}
-        body={maintenanceBody(gate.value)}
-        primary={{ label: "Try again", testID: "appGate.maintenance.retry", onPress: () => setAsk((n) => n + 1) }}
-        call={call("appGate.maintenance.call")}
-      />
+      <>
+        <StatusBar style="dark" />
+        <SystemScreen
+          testID="appGate.maintenance"
+          title={stateCopy("maintenance").title}
+          body={maintenanceBody(gate.value)}
+          primary={{ label: "Try again", testID: "appGate.maintenance.retry", onPress: () => setAsk((n) => n + 1) }}
+          call={call("appGate.maintenance.call")}
+        />
+      </>
     );
   }
 

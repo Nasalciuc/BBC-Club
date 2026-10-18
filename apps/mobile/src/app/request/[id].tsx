@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BackButton, Button, ErrorState, PricePair, SectionLabel, StatusBadge, Timeline, tokens, rn } from "@bbc/ui";
 
 import { RootTabBar } from "@/components/RootTabBar";
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { isOffline } from "@/features/explore/offline-logic";
 import { factsLines, telHref } from "@/features/requests/confirmation-logic";
 import { detailFacts, queuedView, requestTitle } from "@/features/requests/request-card";
@@ -154,10 +155,18 @@ export default function RequestDetailScreen() {
     }
   }
 
+  // While it loads, the page keeps its way back and the tab bar (ADR-IMPL-047); so does a request that did not load.
   if (loading) {
     return (
-      <View style={[styles.root, styles.centered]}>
-        <ActivityIndicator color={tokens.colors.primary} />
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <ScreenStatusBar on="light" />
+        <View style={styles.waitingTop}>
+          <BackButton testID="request.back" onPress={goBack} />
+        </View>
+        <View style={[styles.waiting, styles.centered]}>
+          <ActivityIndicator color={tokens.colors.primary} />
+        </View>
+        <RootTabBar active="requests" />
       </View>
     );
   }
@@ -165,15 +174,19 @@ export default function RequestDetailScreen() {
   if (error || !loaded) {
     const copy = error ?? stateCopy("route");
     return (
-      <View testID="request.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <ErrorState
-          testID="request.error"
-          variant="error"
-          title={copy.title}
-          body={copy.body}
-          primary={{ label: "Try again", testID: "request.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
-          secondary={{ label: "Back", testID: "request.error.back", onPress: goBack }}
-        />
+      <View testID="request.root" style={[styles.root, { paddingTop: insets.top }]}>
+        <ScreenStatusBar on="light" />
+        <View style={[styles.waiting, styles.centered]}>
+          <ErrorState
+            testID="request.error"
+            variant="error"
+            title={copy.title}
+            body={copy.body}
+            primary={{ label: "Try again", testID: "request.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
+            secondary={{ label: "Back", testID: "request.error.back", onPress: goBack }}
+          />
+        </View>
+        <RootTabBar active="requests" />
       </View>
     );
   }
@@ -204,6 +217,7 @@ export default function RequestDetailScreen() {
   return (
     // Figma 233:4171: the page scrolls under the status bar's edge, its back button right at the safe area.
     <View testID="request.root" style={[styles.root, { paddingTop: insets.top }]}>
+      <ScreenStatusBar on="light" />
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: tokens.space.lg,
@@ -339,6 +353,9 @@ export default function RequestDetailScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
+  // Loading and the error: the back button in the gutter, then the space above the tab bar.
+  waitingTop: { paddingHorizontal: tokens.space.lg },
+  waiting: { flex: 1 },
   heading: { gap: tokens.space.sm, alignItems: "flex-start" },
   title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, alignSelf: "stretch" },
   facts: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },

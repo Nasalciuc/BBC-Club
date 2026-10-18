@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 import { EmptyState, RequestCard, tokens, rn } from "@bbc/ui";
 
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { SystemScreen } from "@/components/system-screen";
 import { isOffline } from "@/features/explore/offline-logic";
 import { queuedView, requestCard } from "@/features/requests/request-card";
@@ -116,6 +117,7 @@ export default function RequestsScreen() {
   if (loading && items === null && queued.length === 0) {
     return (
       <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
+        <ScreenStatusBar on="light" />
         <ActivityIndicator color={tokens.colors.primary} />
       </View>
     );
@@ -125,13 +127,16 @@ export default function RequestsScreen() {
   // never told they have none (DESIGN.md: error and empty are separate frames). Figma 240:5093: the page-wide message.
   if (items === null && queued.length === 0 && failure) {
     return (
-      <SystemScreen
-        testID="requests.root"
-        messageTestID="requests.error"
-        title={failure.title}
-        body={failure.body}
-        primary={{ label: "Try again", testID: "requests.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
-      />
+      <>
+        <ScreenStatusBar on="light" />
+        <SystemScreen
+          testID="requests.root"
+          messageTestID="requests.error"
+          title={failure.title}
+          body={failure.body}
+          primary={{ label: "Try again", testID: "requests.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
+        />
+      </>
     );
   }
 
@@ -176,6 +181,7 @@ export default function RequestsScreen() {
 
   return (
     <View testID="requests.root" style={[styles.root, { paddingTop: insets.top }]}>
+      <ScreenStatusBar on="light" />
       <FlatList
         data={empty ? [] : [{ key: "open" }, { key: "closed" }]}
         keyExtractor={(i) => i.key}

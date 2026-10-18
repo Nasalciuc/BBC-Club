@@ -87,6 +87,11 @@ export type MapboxGlobeProps = {
   sheetIndex: number;
   /** The sheet covers the globe (searching, expanded): keep the map mounted, stop the motion. */
   hidden: boolean;
+  /**
+   * Explore is not on screen — another tab, or a fare or a request pushed over it: the globe stays drawn (a screen
+   * sliding over it still shows it) but nothing ticks, so it no longer re-renders five times a second unseen.
+   */
+  paused?: boolean;
   /** The map could not load (a bad token, a style error): Globe draws the fallback instead of a blank screen. */
   onFailed: () => void;
   /** The map has loaded and drawn: Globe fades it in over the drawn globe (A6 · INSTANT GLOBE). */
@@ -101,6 +106,7 @@ export default function MapboxGlobe({
   state,
   sheetIndex,
   hidden,
+  paused = false,
   onFailed,
   onReady,
 }: MapboxGlobeProps) {
@@ -122,7 +128,7 @@ export default function MapboxGlobe({
   // state: the halo and arc ticks re-render without rebuilding either).
   const [sky, setSky] = useState(() => skyAt(new Date()));
 
-  const moving = appActive && !hidden && !reducedMotion;
+  const moving = appActive && !hidden && !paused && !reducedMotion;
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -161,11 +167,11 @@ export default function MapboxGlobe({
 
   // The night side follows the clock while the globe is on screen; a globe coming back from the background catches up.
   useEffect(() => {
-    if (!appActive || hidden) return;
+    if (!appActive || hidden || paused) return;
     setSky(skyAt(new Date()));
     const t = setInterval(() => setSky(skyAt(new Date())), NIGHT_TICK_MS);
     return () => clearInterval(t);
-  }, [appActive, hidden]);
+  }, [appActive, hidden, paused]);
 
   // A chosen destination flies the camera along the great circle and frames the route above the sheet; clearing it
   // eases the globe back to the rest position.

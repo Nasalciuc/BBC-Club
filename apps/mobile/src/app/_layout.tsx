@@ -13,6 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import { AppState, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { tokens } from "@bbc/ui";
 
 import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
@@ -251,6 +252,8 @@ export default function RootLayout() {
         <ThemeProvider value={clubDark}>
           <BottomSheetModalProvider>
             <AppGate>
+              {/* The entry's and Welcome's bar; a screen on another surface mounts its own while it is in view
+                  (components/screen-status-bar.tsx, ADR-IMPL-047). */}
               <StatusBar style="light" />
               <Stack
                 screenOptions={{
@@ -267,56 +270,56 @@ export default function RootLayout() {
                 <Stack.Screen name="reset-password" />
                 <Stack.Screen
                   name="onboarding"
-                  options={{ contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+                  options={{ contentStyle: { backgroundColor: tokens.colors.surfacePage } }}
                 />
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen
                   name="fare/[id]"
                   options={{
                     animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
                 <Stack.Screen
                   name="request/[id]"
                   options={{
                     animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
                 <Stack.Screen
                   name="request/confirmed"
                   options={{
                     animation: "fade",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
                 <Stack.Screen
                   name="request/limited"
                   options={{
                     animation: "fade",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
                 <Stack.Screen
                   name="settings"
                   options={{
                     animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
                 <Stack.Screen
                   name="edit-profile"
                   options={{
                     animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
                 <Stack.Screen
                   name="dev/gallery"
                   options={{
                     animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
               </Stack>

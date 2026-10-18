@@ -47,7 +47,7 @@ class DrawnGlobeOnError extends Component<{ onFail: () => void; children: ReactN
 }
 
 export function Globe(props: Props) {
-  const { pins, home, selected, onSelect, state, hidden } = props;
+  const { pins, home, selected, onSelect, state, hidden, paused = false } = props;
   // Mapbox reports a map that cannot load (bad token, style error) without throwing: switch to the drawn globe.
   const [mapFailed, setMapFailed] = useState(false);
   // Mapbox has loaded and drawn: fade it in over the drawn globe, then let the drawn one go.
@@ -70,7 +70,7 @@ export function Globe(props: Props) {
   const drawn =
     hidden || !drawnActive ? null : (
       <View style={[styles.drawn, { top: FALLBACK_TOP[state] }]} pointerEvents="box-none">
-        <GlobeFallback pins={pins} home={home} selected={selected} onSelect={onSelect} />
+        <GlobeFallback pins={pins} home={home} selected={selected} onSelect={onSelect} paused={paused} />
       </View>
     );
   if (!MAPBOX_READY || mapFailed) return drawn;

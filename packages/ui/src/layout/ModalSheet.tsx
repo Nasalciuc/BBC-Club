@@ -7,7 +7,16 @@ import {
   type BottomSheetScrollViewMethods,
 } from "@gorhom/bottom-sheet";
 import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Keyboard, Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  BackHandler,
+  Keyboard,
+  type KeyboardEventName,
+  Platform,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { CloseButton } from "../primitives/CloseButton";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
@@ -107,8 +116,13 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
   // The content's scroll, as the scroll view reports it: `reveal` moves from there.
   const offset = useRef(0);
   const { height: windowHeight } = useWindowDimensions();
+  // From `present` until the sheet has gone: while it is open, Android's Back belongs to it.
+  const [open, setOpen] = useState(false);
   useImperativeHandle(ref, () => ({
-    present: () => modal.current?.present(),
+    present: () => {
+      setOpen(true);
+      modal.current?.present();
+    },
     dismiss: () => modal.current?.dismiss(),
     reveal: (target) => {
       const viewport = viewportRef.current;
@@ -121,6 +135,18 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
       });
     },
   }));
+
+  // Android's Back closes the sheet in front, as its × does, before it can leave the screen under it — and does
+  // nothing while the sheet has no way out (a request sending, Figma 135:854) (ADR-IMPL-047). The listener added last
+  // answers first, so a sheet opened over another one closes first.
+  useEffect(() => {
+    if (Platform.OS !== "android" || !open) return;
+    const back = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (closable) modal.current?.dismiss();
+      return true;
+    });
+    return () => back.remove();
+  }, [open, closable]);
 
   const headline = modalSheetHeadline(size);
   const titleAlone = !closable && !headline;
@@ -135,7 +161,10 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
       enablePanDownToClose={dismissible}
       topInset={insets.top}
       stackBehavior={stackBehavior}
-      onDismiss={onDismiss}
+      onDismiss={() => {
+        setOpen(false);
+        onDismiss?.();
+      }}
       backdropComponent={dismissible ? ClosingBackdrop : StillBackdrop}
       handleComponent={Handle}
       backgroundStyle={styles.background}
@@ -206,18 +235,30 @@ function SheetFooter({ bottom, children }: { bottom: number; children: ReactNode
   );
 }
 
-// The events gorhom's sheets follow: iOS tells when the keyboard starts to move, Android once it has.
-const KEYBOARD_SHOW = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-const KEYBOARD_HIDE = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+// The events gorhom's sheets follow: iOS tells when the keyboard starts to move, Android once it has. On iOS the `Did`
+// events count too: the first state comes from `Keyboard.isVisible()`, which they set, so a sheet or a screen that
+// mounts while the keys are still moving learns where they stopped (ADR-IMPL-047).
+const KEYBOARD_EVENTS: readonly (readonly [KeyboardEventName, boolean])[] =
+  Platform.OS === "ios"
+    ? [
+        ["keyboardWillShow", true],
+        ["keyboardWillHide", false],
+        ["keyboardDidShow", true],
+        ["keyboardDidHide", false],
+      ]
+    : [
+        ["keyboardDidShow", true],
+        ["keyboardDidHide", false],
+      ];
 
-function useKeyboardShown(): boolean {
+/** Whether the keyboard is up: a footer on the keys drops the home indicator's inset, which the keys already cover —
+ *  the sheets' footer, and the entry's (`AuthShell`, ADR-IMPL-047). */
+export function useKeyboardShown(): boolean {
   const [shown, setShown] = useState(() => Keyboard.isVisible());
   useEffect(() => {
-    const show = Keyboard.addListener(KEYBOARD_SHOW, () => setShown(true));
-    const hide = Keyboard.addListener(KEYBOARD_HIDE, () => setShown(false));
+    const subscriptions = KEYBOARD_EVENTS.map(([event, up]) => Keyboard.addListener(event, () => setShown(up)));
     return () => {
-      show.remove();
-      hide.remove();
+      for (const subscription of subscriptions) subscription.remove();
     };
   }, []);
   return shown;

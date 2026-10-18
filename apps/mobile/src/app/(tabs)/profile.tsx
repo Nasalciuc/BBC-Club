@@ -12,8 +12,20 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
-import { Button, EmptyState, Icon, ListRow, PhotoCredit, ProfileHero, RequestCard, tokens, rn } from "@bbc/ui";
+import {
+  Button,
+  EmptyState,
+  Icon,
+  ListRow,
+  PhotoCredit,
+  ProfileHero,
+  RequestCard,
+  StateMessage,
+  tokens,
+  rn,
+} from "@bbc/ui";
 
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { Club } from "@/constants/club";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
@@ -22,6 +34,7 @@ import { requestCard } from "@/features/requests/request-card";
 import { recentRequests } from "@/features/requests/request-view-logic";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
+import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { displayPhone } from "@/lib/phone";
 import { clientSince } from "@/features/profile/profile-logic";
 
@@ -36,7 +49,10 @@ export default function ProfileScreen() {
   // client, not for an error).
   const [recent, setRecent] = useState<RequestVM[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // A profile that never loaded is said as such, with `Try again` — never an error line over a made-up "Member" page
+  // (ADR-IMPL-047). A later load that fails keeps the page on screen: Profile asks again each time it comes into view.
+  const [error, setError] = useState<{ title: string; body: string } | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const focused = useIsFocused();
   const { width } = useWindowDimensions();
   // ADR-IMPL-043: the home airport's city, as Figma 436:1221 draws it.
@@ -52,7 +68,7 @@ export default function ProfileScreen() {
       if (cancelled) return;
       setLoading(false);
       if (!profileResult.ok) {
-        setError(profileResult.message);
+        setError(readFailureCopy(profileResult.code, "profile"));
         return;
       }
       setError(null);
@@ -60,19 +76,35 @@ export default function ProfileScreen() {
       if (requestsResult.ok) setRecent(recentRequests(requestsResult.data.items));
     })().catch(() => {
       if (!cancelled) {
-        setError("Something went wrong.");
+        setError(stateCopy("route"));
         setLoading(false);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [focused]);
+  }, [focused, reloadToken]);
 
   if (loading) {
     return (
       <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
+        <ScreenStatusBar on="light" />
         <ActivityIndicator color={tokens.colors.primary} />
+      </View>
+    );
+  }
+
+  if (!profile && error) {
+    return (
+      <View testID="profile.root" style={[styles.root, styles.failed, { paddingTop: insets.top + tokens.space.xxl }]}>
+        <ScreenStatusBar on="light" />
+        <StateMessage
+          testID="profile.error"
+          variant="error"
+          title={error.title}
+          body={error.body}
+          primary={{ label: "Try again", testID: "profile.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
+        />
       </View>
     );
   }
@@ -101,6 +133,7 @@ export default function ProfileScreen() {
         paddingBottom: insets.bottom + tokens.space.xxl,
       }}
     >
+      <ScreenStatusBar on="light" />
       <View style={styles.top}>
         <Text style={styles.kicker} accessibilityRole="header">
           Your profile.
@@ -115,7 +148,6 @@ export default function ProfileScreen() {
           <Icon name="settings" size={24} color={tokens.colors.textPrimary} />
         </Pressable>
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
       {/* Figma 436:1221: the member's name on their home city's photograph (ADR-IMPL-043). */}
       <ProfileHero
         testID="profile.hero"
@@ -223,6 +255,8 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center" },
+  // A profile that did not load: the message in the gutters, 48 pt under the safe area (Figma 240:5093's measure).
+  failed: { paddingHorizontal: tokens.space.lg },
   top: {
     minHeight: 44,
     flexDirection: "row",
@@ -233,8 +267,6 @@ const styles = StyleSheet.create({
   // Figma 479:8477: the gear centred in its 44-pt target, the target flush with the gutter.
   settings: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   kicker: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
-  error: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
   actions: {
     flexDirection: "row",
     gap: tokens.space.sm,
