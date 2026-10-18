@@ -1,6 +1,7 @@
 # ADR-IMPL-047 — Before 3.0: what members and testers hit, test data that outlives November, two holes on the server
 
-Status: accepted · Date: 2026-10-18 · Scope: P1 (app, API, infra, the agents' files)
+Status: accepted · Date: 2026-10-18 · Scope: P1 (app, API, infra, the agents' files) · Amends ADR-IMPL-020 (point 3:
+how a change ends the other sessions).
 
 **Context.** Two audits of `main` at `108592d` (16 Oct 2026; the project and the UI/UX, each finding checked by
 independent sceptics) and a walk on the owner's phone found defects that a member, a tester or CI meets before 3.0
@@ -62,12 +63,21 @@ come first because each would otherwise be carried into 3.0, or stop it.
   - Caddy's `/media/*` sent the whole of MinIO, its S3 API and its admin API, to the internet on both domains. Nothing
     uses it before R1b: the route answers 404, and MinIO is reached through the SSH tunnel only, as the RUNBOOK says.
   - `POST /v1/account/password` had no limit at any layer — the current password could be guessed there without end. It
-    now counts as `profile.write`, as the profile's other writes do. Better Auth's own routes, which the app never
-    calls, checked it as well: `/api/auth/change-password` let a session try three passwords every ten seconds from
-    each address, `/api/auth/verify-password` sixty a minute. Neither is served any more (`disabledPaths`); the club's
-    route reaches `changePassword` from inside the server. `/api/auth/delete-user` stays — the app deletes an account
-    there — at three tries an hour from each address. A reset by email code left every other session alive for 30 days:
-    `revokeSessionsOnPasswordReset` signs them out, and the app signs in again with the new password.
+    now counts as `profile.write`, with the numbers of the profile's other writes but a bucket of its own (`pw:` before
+    the member), so ten wrong guesses do not stop the member's profile edits, nor do the edits the guesses. A change
+    used to end every session, the one that made it too: Better Auth put that session's replacement in a cookie the
+    route does not forward, and the phone was signed out once its cookie cache ran out (60 s in production). The
+    change now ends every other session and keeps this one (`revokeOtherSessions` after it; ADR-IMPL-020's point 3
+    called `changePassword` with `revokeOtherSessions: true`). This session keeps its token — another device is the
+    case a change answers; a copy of this phone's own cookie would need the reset by email code, which ends every
+    session. Should ending the others fail after the password changed, the route logs it and still answers the change
+    and publishes `member.password_changed`. Better Auth's own routes,
+    which the app never calls, checked it as well: `/api/auth/change-password` let a session try three passwords every
+    ten seconds from each address, `/api/auth/verify-password` sixty a minute. Neither is served any more
+    (`disabledPaths`); the club's route reaches `changePassword` from inside the server. `/api/auth/delete-user` stays —
+    the app deletes an account there — at three tries an hour from each address. A reset by email code left every
+    other session alive for 30 days: `revokeSessionsOnPasswordReset` signs them out, and the app signs in again with the
+    new password.
 - **The agents' files** pointed to documents that never existed (`docs/ARCHITECTURE_MASTER.md`, `REBUILD_PLAYBOOK.md`,
   `docs/FLOWS_DEEP_DIVE.md`), to retired fonts, a product "with no search" and a token file that is not the source, and
   none said that Figma wins (ADR-IMPL-046). `AGENTS.md`, `CLAUDE.md`, `.cursor/rules` and `README.md` now say what is so.

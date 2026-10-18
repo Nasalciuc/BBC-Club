@@ -1,5 +1,5 @@
 /** Password change + revokeOtherSessions, and a reset by email code: the other device is 401 after the cookie-cache
- *  TTL. */
+ *  TTL; the device that changed the password stays signed in (ADR-IMPL-047). */
 import { describe, expect, it } from "bun:test";
 import { testApp } from "./helpers/test-app";
 
@@ -19,6 +19,8 @@ describe("session revocation (cookie cache)", () => {
     expect((await t.app.request("/v1/profile", { headers: { Cookie: cookieB } })).status).toBe(200);
     await Bun.sleep(11_000);
     expect((await t.app.request("/v1/profile", { headers: { Cookie: cookieA } })).status).toBe(401);
+    // The phone that changed it is still signed in past the cache (ADR-IMPL-047).
+    expect((await t.app.request("/v1/profile", { headers: { Cookie: cookieB } })).status).toBe(200);
     const cookieFresh = await t.auth.cookieFor(t.memberA.email, "newClubPass2026!");
     expect((await t.app.request("/v1/profile", { headers: { Cookie: cookieFresh } })).status).toBe(200);
     await t.close();

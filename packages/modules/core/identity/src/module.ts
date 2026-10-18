@@ -12,7 +12,7 @@ import type { IdentityFacade } from "./api";
 import type { EmailFacade } from "@bbc/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
-import { rateLimit } from "@bbc/platform/ratelimit";
+import { rateLimit, subjectOf } from "@bbc/platform/ratelimit";
 import { account } from "./infrastructure/schema";
 
 /** better-auth's own rule (setPassword, changePassword, deleteUser): a credential account *with* a stored password.
@@ -80,7 +80,9 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
         flags: platform.flags,
         log: platform.logger.warn.bind(platform.logger),
       }),
-      rateLimit(platform.rateLimit, "profile.write"),
+      // profile.write's numbers in a bucket of its own: wrong guesses of the current password do not use up the member's
+      // profile edits, nor do the edits the guesses (ADR-IMPL-047).
+      rateLimit(platform.rateLimit, "profile.write", (c) => `pw:${subjectOf(c)}`),
       async (c) => {
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
@@ -107,9 +109,20 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
               body: {
                 newPassword: parsed.data.newPassword,
                 currentPassword,
-                revokeOtherSessions: true,
               },
             });
+            // Every other session ends; this one stays. changePassword's own revokeOtherSessions deletes this session too
+            // and puts its replacement in a cookie this route does not forward: the phone that changed the password was
+            // signed out once its cookie cache ran out (ADR-IMPL-047). The password has changed by now, so a failure here
+            // is logged, not answered as a failed change: the member's new password works, and the event still goes out.
+            try {
+              await auth.api.revokeOtherSessions({ headers: c.req.raw.headers });
+            } catch (err: unknown) {
+              platform.logger.error(
+                { err, memberId: actor },
+                "password changed, but the member's other sessions could not be ended",
+              );
+            }
           } else {
             await auth.api.setPassword({
               headers: c.req.raw.headers,

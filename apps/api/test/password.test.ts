@@ -131,6 +131,13 @@ describe("POST /v1/account/password", () => {
     // profile.write: a burst of 10, then one every two minutes — the wrong guesses are 400 until the limit says 429.
     expect(statuses.slice(0, 10).every((s) => s === 400)).toBe(true);
     expect(statuses.slice(10)).toEqual([429, 429]);
+    // A bucket of its own: the guesses leave the member's profile edits as they were.
+    const edit = await t.app.request("/v1/profile", {
+      method: "PATCH",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: "Alex Still Here" }),
+    });
+    expect(edit.status).toBe(200);
     await t.close();
   });
 
