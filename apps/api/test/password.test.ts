@@ -113,9 +113,14 @@ describe("POST /v1/account/password", () => {
         body: JSON.stringify({ newPassword: "newClubPass2026!", currentPassword: t.memberA.password }),
       });
       expect(r.status).toBe(500);
-      const body = (await r.json()) as { ok?: boolean; error?: { message?: string } };
+      const body = (await r.json()) as {
+        ok?: boolean;
+        error?: { message?: string; context?: { passwordChanged?: boolean } };
+      };
       expect(body.ok).toBeUndefined();
       expect(body.error?.message).toContain("other devices are still signed in");
+      // The app reads this flag: the change was made, so the sheet does not offer the form (and the old password) again.
+      expect(body.error?.context?.passwordChanged).toBe(true);
       // The change stands: the new password signs in, the other session is still there, the event went out.
       expect(await t.auth.cookieFor(t.memberA.email, "newClubPass2026!")).toBeTruthy();
       expect((await t.app.request("/v1/profile", { headers: { Cookie: elsewhere } })).status).toBe(200);

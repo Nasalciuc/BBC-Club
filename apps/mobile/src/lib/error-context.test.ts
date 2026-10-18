@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { deleteFailureKind, readFailureCopy, refreshFailedLine, stateCopy, submitFailureKind } from "./error-context";
+import {
+  deleteFailureKind,
+  passwordChangedNotice,
+  readFailureCopy,
+  refreshFailedLine,
+  stateCopy,
+  submitFailureKind,
+} from "./error-context";
 
 test("a gone fare uses the expired-fare copy", () => {
   expect(stateCopy("gone")).toEqual({
@@ -77,4 +84,17 @@ test("over a list already on screen, a failed reload never says the screen could
   expect(refreshFailedLine("TIMEOUT", false)).toBe("We couldn’t load your other requests just now.");
   expect(refreshFailedLine("TIMEOUT")).toBe("We couldn’t refresh your requests just now.");
   expect(refreshFailedLine(undefined)).not.toContain("could not be loaded");
+});
+
+test("a password change made with the other sessions still alive is a notice; any other failure is not (ADR-IMPL-047)", () => {
+  const made = {
+    error: { code: "INTERNAL", message: "Your new password is set, but…", context: { passwordChanged: true } },
+  };
+  expect(passwordChangedNotice(made)).toBe("Your new password is set, but…");
+  expect(passwordChangedNotice({ error: { code: "INTERNAL", context: { passwordChanged: true } } })).toBe(
+    "Your new password is set, but your other devices are still signed in.",
+  );
+  expect(passwordChangedNotice({ error: { code: "INTERNAL", message: "Something didn't go as planned." } })).toBeNull();
+  expect(passwordChangedNotice({ error: { code: "VALIDATION", context: { passwordChanged: "yes" } } })).toBeNull();
+  expect(passwordChangedNotice(null)).toBeNull();
 });

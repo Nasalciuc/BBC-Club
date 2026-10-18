@@ -123,8 +123,14 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
               await auth.api.revokeOtherSessions({ headers: c.req.raw.headers });
             } catch (err: unknown) {
               othersEnded = false;
+              // Never the error itself: a failed query carries its parameters, the other sessions' tokens among them.
+              const cause = err instanceof Error ? (err.cause as { code?: unknown } | undefined) : undefined;
               platform.logger.error(
-                { err, memberId: actor },
+                {
+                  memberId: actor,
+                  error: err instanceof Error ? err.name : typeof err,
+                  sqlstate: typeof cause?.code === "string" ? cause.code : undefined,
+                },
                 "password changed, but the member's other sessions could not be ended",
               );
             }
@@ -173,7 +179,14 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
             publishedBy: "identity",
           }),
         );
-        if (!othersEnded) return c.json(apiError("INTERNAL", { message: OTHERS_STILL_SIGNED_IN }), 500);
+        if (!othersEnded) {
+          // `passwordChanged`: the app shows the change as made, with these words, not the form again — the old current
+          // password would now be refused as wrong.
+          return c.json(
+            apiError("INTERNAL", { message: OTHERS_STILL_SIGNED_IN, context: { passwordChanged: true } }),
+            500,
+          );
+        }
         return c.json({ ok: true });
       },
     );

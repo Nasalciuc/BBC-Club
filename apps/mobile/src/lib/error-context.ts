@@ -83,3 +83,16 @@ export function refreshFailedLine(code: string | undefined, loaded = true): stri
   if (code === "OFFLINE") return "You’re offline. Your requests load when you’re back online.";
   return loaded ? "We couldn’t refresh your requests just now." : "We couldn’t load your other requests just now.";
 }
+
+/**
+ * A password change the server made but could not finish: the new password is set, the other devices are still signed
+ * in (`context.passwordChanged`, ADR-IMPL-047). Its words for the saved frame, or null for any other failure — the
+ * change did not happen and the form stays.
+ */
+export function passwordChangedNotice(body: unknown): string | null {
+  const error = (body as { error?: { message?: unknown; context?: { passwordChanged?: unknown } } } | null)?.error;
+  if (error?.context?.passwordChanged !== true) return null;
+  return typeof error.message === "string" && error.message.length > 0
+    ? error.message
+    : "Your new password is set, but your other devices are still signed in.";
+}

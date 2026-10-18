@@ -22,6 +22,8 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
   const [error, setError] = useState<string | null>(null);
   // Figma 238:5260 · Password saved: the sheet stays, says so, and closes on Done.
   const [saved, setSaved] = useState(false);
+  // The change made, the other devices still signed in: the saved frame says so and how to end them (ADR-IMPL-047).
+  const [notice, setNotice] = useState<string | null>(null);
   // With the keyboard up the error would sit under the keys or the pinned button: each new one scrolls into view.
   const errorRef = useRef<Text>(null);
   useEffect(() => {
@@ -36,6 +38,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       setBusy(false);
       setError(null);
       setSaved(false);
+      setNotice(null);
       modalRef.current?.present();
     },
     dismiss() {
@@ -65,6 +68,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       setError(result.message);
       return;
     }
+    setNotice(result.data.notice ?? null);
     onSaved(profile);
     setSaved(true);
   }
@@ -101,7 +105,9 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
           <Text style={styles.headline} testID="profile.password.saved">
             Your new password is ready for your next sign-in.
           </Text>
-          <Text style={styles.body}>Keep it private. We will never ask for your password by phone.</Text>
+          <Text style={styles.body} testID={notice ? "profile.password.notice" : undefined}>
+            {notice ?? "Keep it private. We will never ask for your password by phone."}
+          </Text>
         </>
       ) : (
         // Figma 238:4974: three fields, their labels in sentence case, `Enter password` and the eye in each; the rule
