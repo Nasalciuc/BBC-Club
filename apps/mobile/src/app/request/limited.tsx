@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BackButton, Button, tokens, rn } from "@bbc/ui";
 
 import { RootTabBar } from "@/components/RootTabBar";
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { env } from "@/lib/env";
 
@@ -16,6 +17,7 @@ export default function RequestLimitedScreen() {
   const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
   return (
     <View style={styles.root} testID="request.rateLimited">
+      <ScreenStatusBar on="light" />
       <View style={[styles.body, { paddingTop: insets.top }]}>
         <BackButton testID="request.rateLimited.back" onPress={() => router.back()} />
         <View style={styles.message}>

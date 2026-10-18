@@ -43,6 +43,7 @@ import {
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
 import { maintenanceValue } from "@/lib/app-gate-logic";
+import { passwordChangedNotice } from "@/lib/error-context";
 import { appPlatform, appVersion } from "@/lib/app-meta";
 import { emitSessionRevoked } from "@/lib/session-events";
 import { API_TIMEOUT_MS, NetworkError, networkFail, timeoutSignal } from "@/lib/timeout";
@@ -245,7 +246,7 @@ export async function fetchPasswordStatus(): Promise<ApiResult<{ hasPassword: bo
 export async function postAccountPassword(
   newPassword: string,
   currentPassword?: string,
-): Promise<ApiResult<{ ok: true }>> {
+): Promise<ApiResult<{ ok: true; notice?: string }>> {
   const parsed = PasswordBody.safeParse({
     newPassword,
     ...(currentPassword ? { currentPassword } : {}),
@@ -258,7 +259,7 @@ export async function postAccountPassword(
       status: 400,
     };
   }
-  return asResult(async () => {
+  return asResult<{ ok: true; notice?: string }>(async () => {
     const res = await apiFetch("/v1/account/password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -266,6 +267,9 @@ export async function postAccountPassword(
     });
     if (!res.ok) {
       const body = (await parseJson(res)) as { error?: { code?: string; message?: string } } | null;
+      // The password changed, the other sessions did not end: a change made, with words for the member (ADR-IMPL-047).
+      const notice = passwordChangedNotice(body);
+      if (notice) return { ok: true, data: { ok: true, notice } };
       const code = body?.error?.code;
       return {
         ok: false,

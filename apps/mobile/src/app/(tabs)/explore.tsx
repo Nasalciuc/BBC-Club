@@ -1,12 +1,13 @@
-import { type Href, useRouter } from "expo-router";
+import { type Href, useIsFocused, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Keyboard, StyleSheet, View } from "react-native";
+import { ActivityIndicator, BackHandler, Keyboard, Platform, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import { Button, ErrorState, HomeSheet, SearchField, tokens } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { ExploreHeader, type HeaderAction } from "@/features/explore/ExploreHeader";
 import { cheapestFareOnRoute, fareHref } from "@/features/explore/open-offer";
 import { rememberAirport } from "@/features/explore/recent-airports";
@@ -38,6 +39,8 @@ type Mode = "rest" | "expanded" | "typing" | "selected";
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  // Another tab, or a fare or a request pushed over the tabs: the globe stays drawn but stops moving (ADR-IMPL-047).
+  const focused = useIsFocused();
   const requestRef = useRef<RequestSheetHandle>(null);
   const datesRef = useRef<DatesSheetHandle>(null);
   const cabinRef = useRef<CabinSheetHandle>(null);
@@ -110,6 +113,18 @@ export default function ExploreScreen() {
     // Back to the state before typing: a chosen route keeps its sheet (the effect above owns it); none → Rest.
     if (!state.to) setSheetIndex(SNAP.rest);
   }
+
+  // Android's Back undoes the sheet before it leaves Explore: typing ends as Cancel ends it, and an expanded sheet comes
+  // back to rest as Done brings it (ADR-IMPL-047). A modal sheet over Explore registers later and answers first.
+  useEffect(() => {
+    if (Platform.OS !== "android" || !focused || (mode !== "typing" && mode !== "expanded")) return;
+    const back = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (mode === "typing") cancelTyping();
+      else setSheetIndex(SNAP.rest);
+      return true;
+    });
+    return () => back.remove();
+  }, [focused, mode]);
 
   const suggestions = (home?.destinations ?? []).map((d) => ({
     code: d.code,
@@ -205,6 +220,7 @@ export default function ExploreScreen() {
 
   return (
     <View testID="explore.root" style={[styles.root, light ? styles.page : styles.night]}>
+      <ScreenStatusBar on={light ? "light" : "dark"} />
       {/* The globe first: Mapbox draws an opaque map, so the header must sit above it. */}
       <Globe
         pins={pins}
@@ -214,72 +230,70 @@ export default function ExploreScreen() {
         state={state.to ? "selected" : "rest"}
         sheetIndex={sheetIndex}
         hidden={light}
+        paused={!focused}
       />
       <ExploreHeader tone={light ? "light" : "dark"} action={headerAction} topInset={insets.top} />
       <HomeSheet index={sheetIndex} onChange={setSheetIndex} footer={footer} page={selectedOnPage}>
-        {homeError ? (
+        {pickingAirport ? (
+          <SheetTyping from={state.from} suggestions={suggestions} onSelect={selectDestination} />
+        ) : (
+          <SearchField
+            testID="explore.search"
+            placeholder="Where would you like to go?"
+            value={searchValue}
+            onPress={openSearch}
+            onClear={() => {
+              dispatch({ type: "clearDestination" });
+              setSheetIndex(SNAP.rest);
+            }}
+          />
+        )}
+        {mode === "selected" ? (
+          <SheetSelected
+            state={state}
+            offline={showOffline}
+            onRetry={retrySearch}
+            onQuote={openQuote}
+            onEditDates={() =>
+              datesRef.current?.present({
+                tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
+                depart: state.dates.depart,
+                ret: state.dates.return,
+                editing: "depart",
+              })
+            }
+            onEditCabin={() => cabinRef.current?.present(state.cabin)}
+            onEditTravelers={() => travelersRef.current?.present(state.passengers)}
+          />
+        ) : null}
+        {/* A Home that did not load takes the place of what it would have shown — the search stays above it, and a
+            route can still be searched and asked for (ADR-IMPL-047). While it loads, SheetRest draws its own cards; the
+            full sheet, which has none, a spinner — never "No offers yet." before Home has answered. */}
+        {homeError && !home && (mode === "rest" || mode === "expanded") ? (
           <ErrorState
             variant="error"
-            title="Something went wrong."
-            body={homeError}
+            title={homeError.title}
+            body={homeError.body}
             primary={{ label: "Try again", onPress: retryHome }}
             testID="explore.error"
           />
-        ) : (
-          <>
-            {pickingAirport ? (
-              <SheetTyping from={state.from} suggestions={suggestions} onSelect={selectDestination} />
-            ) : (
-              <SearchField
-                testID="explore.search"
-                placeholder="Where would you like to go?"
-                value={searchValue}
-                onPress={openSearch}
-                onClear={() => {
-                  dispatch({ type: "clearDestination" });
-                  setSheetIndex(SNAP.rest);
-                }}
-              />
-            )}
-            {mode === "selected" ? (
-              <SheetSelected
-                state={state}
-                offline={showOffline}
-                onRetry={retrySearch}
-                onQuote={openQuote}
-                onEditDates={() =>
-                  datesRef.current?.present({
-                    tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
-                    depart: state.dates.depart,
-                    ret: state.dates.return,
-                    editing: "depart",
-                  })
-                }
-                onEditCabin={() => cabinRef.current?.present(state.cabin)}
-                onEditTravelers={() => travelersRef.current?.present(state.passengers)}
-              />
-            ) : null}
-            {mode === "rest" ? (
-              <SheetRest
-                home={home}
-                homeLoading={homeLoading}
-                onOpenOffer={(card) => void openOffer(card)}
-                onSeeAll={() => setSheetIndex(SNAP.page)}
-                onSearch={openSearch}
-              />
-            ) : null}
-            {mode === "expanded" ? (
-              <SheetExpanded
-                sections={home?.sections ?? []}
-                onOpenOffer={(card) => void openOffer(card)}
-                onSearch={openSearch}
-              />
-            ) : null}
-            {homeLoading && !home ? (
-              <ActivityIndicator color={tokens.colors.primary} style={{ marginTop: tokens.space.lg }} />
-            ) : null}
-          </>
-        )}
+        ) : mode === "rest" ? (
+          <SheetRest
+            home={home}
+            homeLoading={homeLoading}
+            onOpenOffer={(card) => void openOffer(card)}
+            onSeeAll={() => setSheetIndex(SNAP.page)}
+            onSearch={openSearch}
+          />
+        ) : mode === "expanded" && homeLoading && !home ? (
+          <ActivityIndicator color={tokens.colors.primary} style={{ marginTop: tokens.space.lg }} />
+        ) : mode === "expanded" ? (
+          <SheetExpanded
+            sections={home?.sections ?? []}
+            onOpenOffer={(card) => void openOffer(card)}
+            onSearch={openSearch}
+          />
+        ) : null}
       </HomeSheet>
       <RequestSheet ref={requestRef} />
       <DatesSheet

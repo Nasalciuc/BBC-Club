@@ -1,11 +1,17 @@
 import { rn, tokens } from "@bbc/ui";
 
+/**
+ * The entry's own colours, spacing and radii — Welcome, Sign in, Join, Verify, Set password, Reset — which the owner
+ * keeps as they were (ADR-IMPL-046, ADR-IMPL-047): written here on purpose, so a change to the club's tokens does not
+ * reach them by accident. The entry's type roles (`type` below) and its buttons (`ClubButton`) do read the generated
+ * tokens, as everything inside the club does (`@bbc/ui`, from DESIGN.md); from here the club takes only the root's dark
+ * chrome (the black behind the entry, the navigator's theme) and the column's width.
+ */
 export const Club = {
   colors: {
     black: "#000000",
     primary: "#1E293B",
     surfacePanel: "#1E293B",
-    surfacePage: "#F8FAFC",
     surfaceCard: "#FFFFFF",
     surfaceMuted: "#334155",
     textPrimary: "#1E293B",

@@ -12,7 +12,7 @@ import type { IdentityFacade } from "./api";
 import type { EmailFacade } from "@bbc/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
-import { rateLimit } from "@bbc/platform/ratelimit";
+import { rateLimit, subjectOf } from "@bbc/platform/ratelimit";
 import { account } from "./infrastructure/schema";
 
 /** better-auth's own rule (setPassword, changePassword, deleteUser): a credential account *with* a stored password.
@@ -27,6 +27,9 @@ async function hasStoredPassword(exec: Executor, userId: string): Promise<boolea
 }
 
 const WRONG_PASSWORD = "That password isn't right.";
+/** The change stands, the other sessions did not end: what happened, and the way that ends them all (ADR-IMPL-047). */
+const OTHERS_STILL_SIGNED_IN =
+  "Your new password is set, but your other devices are still signed in. Sign out, then use Forgot password? to sign them all out.";
 
 type Ports = { email: EmailFacade };
 
@@ -69,7 +72,10 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
       },
     );
 
-    registerRoute("POST", "/v1/account/password", "profile:update-self");
+    // Limited as the profile's other writes are, per member: the current password cannot be guessed here without end
+    // (ADR-IMPL-047). Better Auth's own limits never see this call — it reaches auth.api from inside the server. The
+    // member is known first, so an anonymous call is refused before it counts against anyone.
+    registerRoute("POST", "/v1/account/password", "profile:update-self", "profile.write");
     routes.post(
       "/account/password",
       authorize("profile:update-self", {
@@ -77,6 +83,9 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
         flags: platform.flags,
         log: platform.logger.warn.bind(platform.logger),
       }),
+      // profile.write's numbers in a bucket of its own: wrong guesses of the current password do not use up the member's
+      // profile edits, nor do the edits the guesses (ADR-IMPL-047).
+      rateLimit(platform.rateLimit, "profile.write", (c) => `pw:${subjectOf(c)}`),
       async (c) => {
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
@@ -96,6 +105,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
           return c.json(apiError("CONFLICT", { message: "This account already has a password." }), 409);
         }
 
+        let othersEnded = true;
         try {
           if (hasPassword && currentPassword) {
             await auth.api.changePassword({
@@ -103,9 +113,27 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
               body: {
                 newPassword: parsed.data.newPassword,
                 currentPassword,
-                revokeOtherSessions: true,
               },
             });
+            // Every other session ends; this one stays. changePassword's own revokeOtherSessions deletes this session too
+            // and puts its replacement in a cookie this route does not forward: the phone that changed the password was
+            // signed out once its cookie cache ran out (ADR-IMPL-047). The password has changed by now: a failure here
+            // still publishes the change, and the answer says the other devices are signed in and how to end them.
+            try {
+              await auth.api.revokeOtherSessions({ headers: c.req.raw.headers });
+            } catch (err: unknown) {
+              othersEnded = false;
+              // Never the error itself: a failed query carries its parameters, the other sessions' tokens among them.
+              const cause = err instanceof Error ? (err.cause as { code?: unknown } | undefined) : undefined;
+              platform.logger.error(
+                {
+                  memberId: actor,
+                  error: err instanceof Error ? err.name : typeof err,
+                  sqlstate: typeof cause?.code === "string" ? cause.code : undefined,
+                },
+                "password changed, but the member's other sessions could not be ended",
+              );
+            }
           } else {
             await auth.api.setPassword({
               headers: c.req.raw.headers,
@@ -151,6 +179,14 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
             publishedBy: "identity",
           }),
         );
+        if (!othersEnded) {
+          // `passwordChanged`: the app shows the change as made, with these words, not the form again — the old current
+          // password would now be refused as wrong.
+          return c.json(
+            apiError("INTERNAL", { message: OTHERS_STILL_SIGNED_IN, context: { passwordChanged: true } }),
+            500,
+          );
+        }
         return c.json({ ok: true });
       },
     );

@@ -42,6 +42,10 @@ export async function withAuthTimeout<T>(p: Promise<T>, ms: number = API_TIMEOUT
   }
 }
 
+/** What every call that did not reach the server says (ADR-IMPL-047). It promises nothing: only a request is kept
+ *  and sent later, and its sheet says so itself (the saved confirmation, Figma 135:855). */
+export const OFFLINE_MESSAGE = "You’re offline. Try again when you’re back online.";
+
 export function networkFail(e: unknown): { ok: false; message: string; code: "TIMEOUT" | "OFFLINE"; status: number } {
   const code =
     e instanceof NetworkError ? e.code : e instanceof Error && e.name === "AbortError" ? "TIMEOUT" : "OFFLINE";
@@ -50,8 +54,6 @@ export function networkFail(e: unknown): { ok: false; message: string; code: "TI
     ok: false,
     status: 0,
     code,
-    message: timeout
-      ? "Taking longer than usual — check your connection"
-      : "You're offline. We'll send this when you're back.",
+    message: timeout ? "Taking longer than usual — check your connection" : OFFLINE_MESSAGE,
   };
 }

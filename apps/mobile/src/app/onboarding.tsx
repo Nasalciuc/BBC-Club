@@ -1,6 +1,6 @@
 import { useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AirportRow,
@@ -16,6 +16,7 @@ import {
 } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { deviceTimeZone } from "@/features/explore/discovery-logic";
 import { airportSearchState, chosenAirportLabel, wantsAirportSearch } from "@/lib/airport-search-state";
 import { fetchAirports, fetchHomeSuggestion, patchProfile, putTravelPreferences } from "@/lib/api";
@@ -82,6 +83,18 @@ export default function OnboardingScreen() {
     };
   }, [query, selected, attempt]);
 
+  // Android's Back on the airport search goes back to the form, as Cancel does (ADR-IMPL-047); on the form it leaves
+  // as it always did.
+  useEffect(() => {
+    if (Platform.OS !== "android" || step !== "airport") return;
+    const back = BackHandler.addEventListener("hardwareBackPress", () => {
+      Keyboard.dismiss();
+      setStep("form");
+      return true;
+    });
+    return () => back.remove();
+  }, [step]);
+
   async function onContinue() {
     if (!selected) {
       // The field only opens the search: there is nothing to type here.
@@ -143,6 +156,7 @@ export default function OnboardingScreen() {
     const typing = query.trim().length >= 2;
     return (
       <View style={[styles.root, { paddingTop: insets.top + TOP }]} testID="onboarding.root">
+        <ScreenStatusBar on="light" />
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <Text style={styles.title} accessibilityRole="header">
@@ -218,6 +232,7 @@ export default function OnboardingScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + LINE_TOP }]} testID="onboarding.root">
+      <ScreenStatusBar on="light" />
       <ProgressLine fraction={1} />
       <ScrollView contentContainerStyle={[styles.content, styles.formContent]} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>

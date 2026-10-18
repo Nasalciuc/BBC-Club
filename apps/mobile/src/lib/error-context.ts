@@ -57,30 +57,42 @@ export function submitFailureKind(code?: string): "notSent" | "queued" | "rateLi
   return "notSent";
 }
 
+/** What a screen could not read (readFailureCopy). */
+export type ReadSubject = "request" | "requests" | "explore" | "profile" | "fare";
+
 /**
- * A screen that reads requests and could not: offline (or a timeout) says so and when it will work — never the
- * sending copy ("We'll send this…"), there is nothing to send here. Anything else is the screen's own failure.
+ * A screen that reads and could not. Offline says so — never the sending copy ("We'll send this…"), there is nothing to
+ * send here — and promises a reload only where one comes (ADR-IMPL-047): the requests list loads again by itself once
+ * the phone is back online (it listens for it), so offline it says it will; every other page waits for its Try again. A
+ * timeout is not offline — the phone is online and nothing reloads by itself — so it is the page's own message, as
+ * anything else is.
  */
-export function readFailureCopy(
-  code: string | undefined,
-  what: "request" | "requests",
-): { title: string; body: string } {
-  if (code === "OFFLINE" || code === "TIMEOUT") {
-    return {
-      title: "You’re offline.",
-      body:
-        what === "request"
-          ? "This request loads when you’re back online."
-          : "Your requests load when you’re back online.",
-    };
-  }
-  return stateCopy("route");
+export function readFailureCopy(code: string | undefined, what: ReadSubject): { title: string; body: string } {
+  if (code !== "OFFLINE") return stateCopy("route");
+  return {
+    title: "You’re offline.",
+    body: what === "requests" ? "Your requests load when you’re back online." : "Try again when you’re back online.",
+  };
 }
 
 /** Over a list already on screen, when a reload did not answer: what is shown may be out of date — never "This screen
  *  could not be loaded", which the list on screen contradicts. `loaded` false: the server has not answered once yet,
- *  and only the requests waiting on the phone are shown — nothing was there to refresh. */
+ *  and only the requests waiting on the phone are shown — nothing was there to refresh. Offline, the list loads again
+ *  by itself once the phone is back online; a timeout is not offline (ADR-IMPL-047). */
 export function refreshFailedLine(code: string | undefined, loaded = true): string {
-  if (code === "OFFLINE" || code === "TIMEOUT") return "You’re offline. Your requests load when you’re back online.";
+  if (code === "OFFLINE") return "You’re offline. Your requests load when you’re back online.";
   return loaded ? "We couldn’t refresh your requests just now." : "We couldn’t load your other requests just now.";
+}
+
+/**
+ * A password change the server made but could not finish: the new password is set, the other devices are still signed
+ * in (`context.passwordChanged`, ADR-IMPL-047). Its words for the saved frame, or null for any other failure — the
+ * change did not happen and the form stays.
+ */
+export function passwordChangedNotice(body: unknown): string | null {
+  const error = (body as { error?: { message?: unknown; context?: { passwordChanged?: unknown } } } | null)?.error;
+  if (error?.context?.passwordChanged !== true) return null;
+  return typeof error.message === "string" && error.message.length > 0
+    ? error.message
+    : "Your new password is set, but your other devices are still signed in.";
 }

@@ -8,6 +8,7 @@ import { NoOffers } from "@/features/explore/SheetExpanded";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { fetchHome, fetchProfile } from "@/lib/api";
+import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { formatPrice } from "@/lib/format";
 
 const JFK: AirportVM = {
@@ -23,7 +24,8 @@ export function useExploreHome() {
   const [home, setHome] = useState<HomeVM | null>(null);
   const [homeEtag, setHomeEtag] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(true);
-  const [homeError, setHomeError] = useState<string | null>(null);
+  // The words of a failed load, never the network layer's own line (ADR-IMPL-047): offline says when it will load.
+  const [homeError, setHomeError] = useState<{ title: string; body: string } | null>(null);
   const [defaultFrom, setDefaultFrom] = useState<AirportVM | null>(null);
 
   async function loadHome() {
@@ -32,7 +34,7 @@ export function useExploreHome() {
     const result = await fetchHome(homeEtag);
     setHomeLoading(false);
     if (!result.ok) {
-      setHomeError(result.message);
+      setHomeError(readFailureCopy(result.code, "explore"));
       return;
     }
     if (!result.data.notModified) {
@@ -42,9 +44,9 @@ export function useExploreHome() {
   }
 
   function retryHome() {
-    void loadHome().catch((e) => {
+    void loadHome().catch(() => {
       setHomeLoading(false);
-      setHomeError(e instanceof Error ? e.message : "Something went wrong.");
+      setHomeError(stateCopy("route"));
     });
   }
 

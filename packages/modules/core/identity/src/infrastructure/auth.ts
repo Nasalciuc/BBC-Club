@@ -44,6 +44,13 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
     // Mobile scheme + APP_ORIGIN + CORS_ORIGINS extras — same list as host CORS.
     trustedOrigins: authOrigins(env),
 
+    // A signed-in member changes the password through POST /v1/account/password only, limited per member (ADR-IMPL-047).
+    // Better Auth's own routes that check it, which the app never calls, would let a session guess it: /change-password
+    // three times every ten seconds from each address, /verify-password sixty a minute. Only the HTTP router reads this
+    // list: the club's route still calls auth.api.changePassword in-process. /delete-user stays (the app deletes there;
+    // customRules).
+    disabledPaths: ["/change-password", "/verify-password"],
+
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8, // number/symbol rule is enforced by the shared Zod schema; breach check below
@@ -51,6 +58,10 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       requireEmailVerification: true, // no session until the code is verified
       autoSignIn: false,
       // Reset is code-based via the emailOTP plugin (no link-based sendResetPassword).
+      // A reset signs out every session the account had (the plugin's reset reads this flag too): a password reset
+      // because another phone knew the old one must not leave that phone signed in for 30 days (ADR-IMPL-047). The app
+      // signs in again with the new password right after (features/auth/flows.ts, resetPassword).
+      revokeSessionsOnPasswordReset: true,
     },
     emailVerification: { autoSignInAfterVerification: true }, // code verified → straight into the club
 

@@ -22,6 +22,7 @@ import {
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { RootTabBar } from "@/components/RootTabBar";
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import {
   aboutFareNote,
   carrierLine,
@@ -34,7 +35,7 @@ import { bandPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
-import { stateCopy } from "@/lib/error-context";
+import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { formatPrice } from "@/lib/format";
 
 /** Figma 135:846: the offer's photo band, 340 pt, square at the bottom. No space token equals 340. */
@@ -60,25 +61,36 @@ export default function FareDetailScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [gone, setGone] = useState<FareGoneContext | true | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // `retry: false` — a fare that does not exist: asking again cannot bring it, so the page offers no `Try again`.
+  const [error, setError] = useState<{ title: string; body: string; retry?: false } | null>(null);
+  // `Try again` loads the fare again, here — it never leaves the page (ADR-IMPL-047).
+  const [reloadToken, setReloadToken] = useState(0);
+  // An offer's photo band carries the status bar until the page scrolls it away; the porcelain under it then needs
+  // the dark glyphs.
+  const [pastBand, setPastBand] = useState(false);
   const { width } = useWindowDimensions();
   // ADR-IMPL-043: only an offer's page has a photo band, so only it asks for the city's photo.
   const photoFor = usePlacePhotos(offer ? [fare?.to.code] : []);
 
   useEffect(() => {
     if (!id || typeof id !== "string") {
-      setError("This fare is unavailable.");
+      setError({ title: stateCopy("route").title, body: "This fare is unavailable.", retry: false });
       setLoading(false);
       return;
     }
+    setLoading(true);
+    setError(null);
     void (async () => {
       const [fareResult, profileResult] = await Promise.all([fetchFare(id), fetchProfile()]);
       if (profileResult.ok) setProfile(profileResult.data);
       if (!fareResult.ok) {
         if (fareResult.status === 410) {
           setGone(fareResult.gone ?? true);
+        } else if (fareResult.status === 404) {
+          // An unknown id (a link): the same words as no id at all, and no `Try again` (ADR-IMPL-047).
+          setError({ title: stateCopy("route").title, body: "This fare is unavailable.", retry: false });
         } else {
-          setError(fareResult.message);
+          setError(readFailureCopy(fareResult.code, "fare"));
         }
         setLoading(false);
         return;
@@ -92,12 +104,20 @@ export default function FareDetailScreen() {
       }
       setLoading(false);
     })();
-  }, [id, offerIdParam]);
+  }, [id, offerIdParam, reloadToken]);
 
+  // While it loads, and when it did not, the page keeps its way back and the tab bar (ADR-IMPL-047).
   if (loading) {
     return (
-      <View style={[styles.root, styles.centered]}>
-        <ActivityIndicator color={tokens.colors.primary} />
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <ScreenStatusBar on="light" />
+        <View style={styles.goneNav}>
+          <BackButton testID="fare.back" onPress={() => router.back()} />
+        </View>
+        <View style={[styles.waiting, styles.centered]}>
+          <ActivityIndicator color={tokens.colors.primary} />
+        </View>
+        <RootTabBar active="explore" />
       </View>
     );
   }
@@ -110,6 +130,7 @@ export default function FareDetailScreen() {
     const copy = stateCopy("gone");
     return (
       <View testID="fare.root" style={[styles.root, { paddingTop: insets.top }]}>
+        <ScreenStatusBar on="light" />
         <View style={styles.goneNav}>
           <BackButton testID="fare.back" onPress={() => router.back()} />
           <Text style={styles.goneNavTitle} accessibilityRole="header">
@@ -152,16 +173,27 @@ export default function FareDetailScreen() {
   }
 
   if (error || !fare) {
-    const copy = stateCopy("route");
+    const copy = error ?? stateCopy("route");
     return (
-      <View testID="fare.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <ErrorState
-          testID="fare.error"
-          variant="error"
-          title={copy.title}
-          body={error ?? copy.body}
-          primary={{ label: "Try again", onPress: () => router.back() }}
-        />
+      <View testID="fare.root" style={[styles.root, { paddingTop: insets.top }]}>
+        <ScreenStatusBar on="light" />
+        <View style={styles.goneNav}>
+          <BackButton testID="fare.back" onPress={() => router.back()} />
+        </View>
+        <View style={[styles.waiting, styles.centered]}>
+          <ErrorState
+            testID="fare.error"
+            variant="error"
+            title={copy.title}
+            body={copy.body}
+            primary={
+              error?.retry === false
+                ? undefined
+                : { label: "Try again", testID: "fare.error.retry", onPress: () => setReloadToken((n) => n + 1) }
+            }
+          />
+        </View>
+        <RootTabBar active="explore" />
       </View>
     );
   }
@@ -182,7 +214,19 @@ export default function FareDetailScreen() {
 
   return (
     <View testID="fare.root" style={styles.root}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScreenStatusBar on={band && !pastBand ? "dark" : "light"} />
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        scrollEventThrottle={16}
+        onScroll={
+          band
+            ? (e) => {
+                const past = e.nativeEvent.contentOffset.y > HERO_BAND - insets.top;
+                if (past !== pastBand) setPastBand(past);
+              }
+            : undefined
+        }
+      >
         {band ? (
           <View style={styles.hero}>
             <Photo
@@ -326,6 +370,8 @@ const AboutFareSheet = forwardRef<ModalSheetHandle, { fare: FareVM; savings: num
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
+  // Loading and the error: the space between the back button and the tab bar.
+  waiting: { flex: 1 },
   scroll: { paddingBottom: tokens.space.lg },
   // 135:845: the back button at the top, the route 36 pt under it (128 on the frame).
   back: { marginBottom: 36 },

@@ -2,10 +2,11 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, tokens, rn } from "@bbc/ui";
+import { BackButton, Button, StateMessage, tokens, rn } from "@bbc/ui";
 
 import { ListRow } from "@/components/list-row";
 import { RootTabBar } from "@/components/RootTabBar";
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { signOut } from "@/features/auth/flows";
 import { DeleteAccountSheet } from "@/features/profile/DeleteAccountSheet";
 import {
@@ -21,7 +22,7 @@ import type { ProfileSheetHandle } from "@/features/profile/types";
 import { isOpen } from "@/features/requests/status";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
-import { stateCopy } from "@/lib/error-context";
+import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { displayPhone } from "@/lib/phone";
 
 export default function SettingsScreen() {
@@ -29,8 +30,13 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The profile's rows wait for the profile (ADR-IMPL-047): no number made up while it loads, no row that does nothing.
+  // A profile that did not load takes their place, with `Try again`.
+  const [loadFailure, setLoadFailure] = useState<{ title: string; body: string } | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
-  const [openRequests, setOpenRequests] = useState(0);
+  // null until the requests load: a count that did not load is never shown as none.
+  const [openRequests, setOpenRequests] = useState<number | null>(null);
   const phoneRef = useRef<ProfileSheetHandle>(null);
   const passwordRef = useRef<ProfileSheetHandle>(null);
   const notificationsRef = useRef<ProfileSheetHandle>(null);
@@ -40,15 +46,16 @@ export default function SettingsScreen() {
     void (async () => {
       const [profileResult, requestsResult] = await Promise.all([fetchProfile(), fetchRequests()]);
       if (!profileResult.ok) {
-        setError(profileResult.message);
+        setLoadFailure(readFailureCopy(profileResult.code, "profile"));
         return;
       }
+      setLoadFailure(null);
       setProfile(profileResult.data);
       if (requestsResult.ok) {
         setOpenRequests(requestsResult.data.items.filter((r) => isOpen(r.status)).length);
       }
-    })().catch(() => setError("Something went wrong."));
-  }, []);
+    })().catch(() => setLoadFailure(stateCopy("route")));
+  }, [reloadToken]);
 
   async function onSignOut() {
     setSigningOut(true);
@@ -78,6 +85,7 @@ export default function SettingsScreen() {
     // Figma 479:8226: the back button stays at the safe area; the page scrolls under it, 20 pt lower, and stops 16 pt
     // above the tab bar.
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      <ScreenStatusBar on="light" />
       <View style={styles.top}>
         <BackButton testID="settings.back" onPress={() => router.back()} />
       </View>
@@ -86,28 +94,59 @@ export default function SettingsScreen() {
           Settings.
         </Text>
         {error ? <Text style={styles.message}>{error}</Text> : null}
-        <View style={styles.rows}>
-          <ListRow
-            testID="settings.phone"
-            label="Phone"
-            value={displayPhone(profile?.phone) ?? "Add phone"}
-            onPress={() => phoneRef.current?.present()}
+        {!profile && loadFailure ? (
+          <StateMessage
+            testID="settings.error"
+            variant="error"
+            title={loadFailure.title}
+            body={loadFailure.body}
+            primary={{
+              label: "Try again",
+              testID: "settings.error.retry",
+              // The rows come back, dimmed, while it loads again: never the old failure on screen.
+              onPress: () => {
+                setLoadFailure(null);
+                setReloadToken((n) => n + 1);
+              },
+            }}
           />
-          <ListRow
-            testID="settings.password"
-            label="Password"
-            value="Change"
-            onPress={() => passwordRef.current?.present()}
-          />
-          <ListRow
-            testID="settings.notifications"
-            label="Notifications"
-            value="Preferences"
-            onPress={() => notificationsRef.current?.present()}
-          />
-        </View>
-        <Text style={styles.message}>Request updates are always on.</Text>
-        <ListRow testID="settings.delete" label="Delete account" danger onPress={() => deleteRef.current?.present()} />
+        ) : (
+          <>
+            <View style={styles.rows}>
+              <ListRow
+                testID="settings.phone"
+                label="Phone"
+                value={profile ? (displayPhone(profile.phone) ?? "Add phone") : undefined}
+                disabled={!profile}
+                onPress={() => phoneRef.current?.present()}
+              />
+              <ListRow
+                testID="settings.password"
+                label="Password"
+                value="Change"
+                disabled={!profile}
+                onPress={() => passwordRef.current?.present()}
+              />
+              <ListRow
+                testID="settings.notifications"
+                label="Notifications"
+                value="Preferences"
+                disabled={!profile}
+                onPress={() => notificationsRef.current?.present()}
+              />
+            </View>
+            <Text style={styles.message}>Request updates are always on.</Text>
+          </>
+        )}
+        {/* It waits for the load like the rows above; a load that failed leaves it to tap, and a count that did not load
+            is said without a number (ADR-IMPL-047). */}
+        <ListRow
+          testID="settings.delete"
+          label="Delete account"
+          danger
+          disabled={!profile && !loadFailure}
+          onPress={() => deleteRef.current?.present()}
+        />
         {legal.length > 0 ? (
           <View style={styles.rows}>
             {legal.map((row) => (

@@ -1,3 +1,4 @@
+import { Redirect } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -33,10 +34,16 @@ import {
   type Selection,
 } from "@bbc/ui";
 
-/** Storybook substitute. A component without a state here does not exist. */
-export default function GalleryScreen() {
-  if (!__DEV__) return null;
+/**
+ * The route: the gallery in a development build only. A release build that reaches it — a link, Expo's sitemap — goes
+ * to the app's start instead of a blank page with no way back (ADR-IMPL-047).
+ */
+export default function GalleryRoute() {
+  return __DEV__ ? <GalleryScreen /> : <Redirect href="/" />;
+}
 
+/** Storybook substitute. A component without a state here does not exist. */
+function GalleryScreen() {
   const insets = useSafeAreaInsets();
   const [chipOn, setChipOn] = useState(false);
   const [switchOn, setSwitchOn] = useState(true);

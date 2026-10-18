@@ -10,7 +10,8 @@ import type { ProfileSheetHandle } from "./types";
 
 type Props = {
   /** The member's requests still in progress: deleting the account closes them, and the sheet says so. */
-  openRequests: number;
+  /** null: the count did not load — the sheet says open requests are closed, without a number. */
+  openRequests: number | null;
   /** The account is gone and the session with it. */
   onDeleted: () => void;
 };
@@ -96,7 +97,11 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
     >
       <Text style={styles.body}>
         Your profile, preferences and request history are removed from the app. This can’t be undone.
-        {openRequests > 0 ? ` This closes ${openRequests} open request${openRequests === 1 ? "" : "s"}.` : ""}
+        {openRequests === null
+          ? " Any open requests are closed."
+          : openRequests > 0
+            ? ` This closes ${openRequests} open request${openRequests === 1 ? "" : "s"}.`
+            : ""}
       </Text>
       {/* 325:8427: the label, the field and what is wrong with it, 8 pt apart. */}
       <View style={styles.password}>
