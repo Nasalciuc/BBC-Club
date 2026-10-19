@@ -53,8 +53,8 @@ const BAND_TOP = { rest: 76, route: 8 } as const;
  * right — their tops 3.7 above the status bar's foot; the chevron 24 at 1.6, the bookmark 16.5 at 2.2.
  */
 const ROUND = { top: -3.7, back: { size: 36, left: 14.7 }, save: { size: 35.5, right: 15.2 } } as const;
-/** 13: `Request a quote`'s words 0.95 lower than centred in their pill. */
-const QUOTE_WORDS_DROP = 0.95;
+/** 13: `Request a quote`'s words 0.83 lower than centred in their pill. */
+const QUOTE_WORDS_DROP = 0.83;
 
 /**
  * Explore (02, 13, 16, 17, 19): the greeting over the globe on the pale sky, the search bar on the globe's foot and the

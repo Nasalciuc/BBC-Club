@@ -50,12 +50,18 @@ colors:
   sky-light: "#E6F2FD"
   scrim: "rgba(12,15,22,0.61)"
   photo-veil: "rgba(5,12,28,0.55)"
+  photo-veil-clear: "rgba(5,12,28,0)"
   shadow: "#0F172A"
   art-sun: "#FDB20F"
   surface-neutral: "#F8F8F8"
   map-ocean: "#AFD8F7"
   map-land: "#EEF2F6"
   rule-line: "#DCDFE6"
+  day-band: "rgba(65,135,205,0.1)"
+  toggle-off: "#D6DBE1"
+  dates-mark: "#EBF3F9"
+  pill-disabled: "#EEF4F9"
+  text-pill-disabled: "#7B89A0"
   globe-ocean: "#1B5E9E"
   globe-ocean-deep: "#0B3F73"
   globe-land: "#8FA77A"
@@ -1420,6 +1426,80 @@ typography:
     fontWeight: 400
     lineHeight: 1.3
     letterSpacing: 0.42px
+  wordmark-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.8px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.22px
+  wordmark-dates-club:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.88px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.28px
+  dates-eyebrow:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 7.84px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 2px
+  dates-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20.85px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.27px
+  dates-sub:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.5px
+    fontWeight: 400
+    lineHeight: 1.381
+    letterSpacing: 0.31px
+  month-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.3px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.3px
+  weekday:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.85px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: 0.38px
+  day:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.5px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: -0.35px
+    fontFeature: "'tnum'"
+  day-chosen:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.55px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.5px
+    fontFeature: "'tnum'"
+  dates-row-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.52px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.2px
+  dates-row-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.05px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.56px
+  button-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.95px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.22px
 
 rounded:
   xxs: 6px
@@ -1463,6 +1543,11 @@ elevation:
     blur: 8px
     color: "{colors.shadow}"
     opacity: 0.04
+  knob:
+    offsetY: 1.5px
+    blur: 3px
+    color: "{colors.shadow}"
+    opacity: 0.3
 
 components:
   screen-page:

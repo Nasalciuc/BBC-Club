@@ -285,6 +285,45 @@ function BarsOutline({ size = 20, color = tokens.colors.textPrimary }: GlyphProp
   );
 }
 
+/**
+ * 07's three marks, fitted to the screen's own pixels (`screens/07-travel-dates.png`) as stroked geometry — rendered at
+ * 8x with a round pen and matched to the crop's ink — in a 14-pt box centred on the ink, 1 unit to the point:
+ * the profile button's person (a ring over a half-ellipse, not Lucide's `user`, whose shoulders are a rounded
+ * rectangle), `Preferred dates`' calendar (a rectangle wider than tall, its rings standing above it) and the pill's
+ * arrow (its head a third of its shaft; Lucide's is half).
+ */
+function ProfileUser({ size = 14, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <SvgCircle cx={7} cy={3.81} r={2.93} stroke={color} strokeWidth={1.11} />
+      <Path d="M1.45 13.12A5.55 4.34 0 0 1 12.55 13.12" stroke={color} strokeWidth={1.11} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function CalendarRings({ size = 14, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <Rect x={1.25} y={2.4} width={11.5} height={10.42} rx={1.39} stroke={color} strokeWidth={1.09} />
+      <Path d="M1.25 5.86H12.75M4.16 1.18V3.43M9.7 1.18V3.43" stroke={color} strokeWidth={1.09} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function ArrowLong({ size = 14, color = tokens.colors.textOnPhoto }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <Path
+        d="M1.34 7H12.66M8.69 3.09 12.66 7 8.69 10.91"
+        stroke={color}
+        strokeWidth={0.97}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** 05: the fare saved — Lucide's `heart` filled, its outline kept so it stands as large as the line one. */
 function HeartFill({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
   return (
@@ -361,6 +400,9 @@ export const icons = {
   "sun-cloud": CloudSun,
   "bar-chart": BarsOutline,
   document: DocumentLines,
+  "profile-user": ProfileUser,
+  "calendar-rings": CalendarRings,
+  "arrow-long": ArrowLong,
   "file-text": FileText,
   message: MessageSquareText,
   mail: Mail,

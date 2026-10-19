@@ -47,12 +47,18 @@ module.exports = {
   "sky-light": "#E6F2FD",
   "scrim": "rgba(12,15,22,0.61)",
   "photo-veil": "rgba(5,12,28,0.55)",
+  "photo-veil-clear": "rgba(5,12,28,0)",
   "shadow": "#0F172A",
   "art-sun": "#FDB20F",
   "surface-neutral": "#F8F8F8",
   "map-ocean": "#AFD8F7",
   "map-land": "#EEF2F6",
   "rule-line": "#DCDFE6",
+  "day-band": "rgba(65,135,205,0.1)",
+  "toggle-off": "#D6DBE1",
+  "dates-mark": "#EBF3F9",
+  "pill-disabled": "#EEF4F9",
+  "text-pill-disabled": "#7B89A0",
   "globe-ocean": "#1B5E9E",
   "globe-ocean-deep": "#0B3F73",
   "globe-land": "#8FA77A",
@@ -1863,6 +1869,102 @@ module.exports = {
       "lineHeight": "10px",
       "letterSpacing": "0.42px",
       "fontWeight": "400"
+    }
+  ],
+  "wordmark-dates": [
+    "13.8px",
+    {
+      "lineHeight": "17px",
+      "letterSpacing": "-0.22px",
+      "fontWeight": "700"
+    }
+  ],
+  "wordmark-dates-club": [
+    "13.88px",
+    {
+      "lineHeight": "17px",
+      "letterSpacing": "0.28px",
+      "fontWeight": "400"
+    }
+  ],
+  "dates-eyebrow": [
+    "7.84px",
+    {
+      "lineHeight": "10px",
+      "letterSpacing": "2px",
+      "fontWeight": "600"
+    }
+  ],
+  "dates-title": [
+    "20.85px",
+    {
+      "lineHeight": "26px",
+      "letterSpacing": "-0.27px",
+      "fontWeight": "700"
+    }
+  ],
+  "dates-sub": [
+    "10.5px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "0.31px",
+      "fontWeight": "400"
+    }
+  ],
+  "month-title": [
+    "16.3px",
+    {
+      "lineHeight": "20px",
+      "letterSpacing": "-0.3px",
+      "fontWeight": "700"
+    }
+  ],
+  "weekday": [
+    "8.85px",
+    {
+      "lineHeight": "11px",
+      "letterSpacing": "0.38px",
+      "fontWeight": "400"
+    }
+  ],
+  "day": [
+    "11.5px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "-0.35px",
+      "fontWeight": "400"
+    }
+  ],
+  "day-chosen": [
+    "11.55px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "-0.5px",
+      "fontWeight": "600"
+    }
+  ],
+  "dates-row-title": [
+    "11.52px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "600"
+    }
+  ],
+  "dates-row-body": [
+    "9.05px",
+    {
+      "lineHeight": "12px",
+      "letterSpacing": "0.56px",
+      "fontWeight": "400"
+    }
+  ],
+  "button-dates": [
+    "10.95px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.22px",
+      "fontWeight": "600"
     }
   ]
 },

@@ -47,12 +47,18 @@ export const tokens = {
   "skyLight": "#E6F2FD",
   "scrim": "rgba(12,15,22,0.61)",
   "photoVeil": "rgba(5,12,28,0.55)",
+  "photoVeilClear": "rgba(5,12,28,0)",
   "shadow": "#0F172A",
   "artSun": "#FDB20F",
   "surfaceNeutral": "#F8F8F8",
   "mapOcean": "#AFD8F7",
   "mapLand": "#EEF2F6",
   "ruleLine": "#DCDFE6",
+  "dayBand": "rgba(65,135,205,0.1)",
+  "toggleOff": "#D6DBE1",
+  "datesMark": "#EBF3F9",
+  "pillDisabled": "#EEF4F9",
+  "textPillDisabled": "#7B89A0",
   "globeOcean": "#1B5E9E",
   "globeOceanDeep": "#0B3F73",
   "globeLand": "#8FA77A",
@@ -1655,6 +1661,96 @@ export const tokens = {
     "fontWeight": "400",
     "lineHeight": 10,
     "letterSpacing": 0.42
+  },
+  "wordmarkDates": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.8,
+    "fontWeight": "700",
+    "lineHeight": 17,
+    "letterSpacing": -0.22
+  },
+  "wordmarkDatesClub": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.88,
+    "fontWeight": "400",
+    "lineHeight": 17,
+    "letterSpacing": 0.28
+  },
+  "datesEyebrow": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 7.84,
+    "fontWeight": "600",
+    "lineHeight": 10,
+    "letterSpacing": 2
+  },
+  "datesTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 20.85,
+    "fontWeight": "700",
+    "lineHeight": 26,
+    "letterSpacing": -0.27
+  },
+  "datesSub": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 10.5,
+    "fontWeight": "400",
+    "lineHeight": 15,
+    "letterSpacing": 0.31
+  },
+  "monthTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 16.3,
+    "fontWeight": "700",
+    "lineHeight": 20,
+    "letterSpacing": -0.3
+  },
+  "weekday": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 8.85,
+    "fontWeight": "400",
+    "lineHeight": 11,
+    "letterSpacing": 0.38
+  },
+  "day": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 11.5,
+    "fontWeight": "400",
+    "lineHeight": 14,
+    "letterSpacing": -0.35,
+    "fontVariant": [
+      "tabular-nums"
+    ]
+  },
+  "dayChosen": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 11.55,
+    "fontWeight": "600",
+    "lineHeight": 14,
+    "letterSpacing": -0.5,
+    "fontVariant": [
+      "tabular-nums"
+    ]
+  },
+  "datesRowTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 11.52,
+    "fontWeight": "600",
+    "lineHeight": 14,
+    "letterSpacing": 0.2
+  },
+  "datesRowBody": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 9.05,
+    "fontWeight": "400",
+    "lineHeight": 12,
+    "letterSpacing": 0.56
+  },
+  "buttonDates": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 10.95,
+    "fontWeight": "600",
+    "lineHeight": 14,
+    "letterSpacing": 0.22
   }
 },
   radius: {
@@ -1698,6 +1794,9 @@ export const tokens = {
   },
   "soft": {
     "boxShadow": "0px 2px 8px 0px rgba(15, 23, 42, 0.04)"
+  },
+  "knob": {
+    "boxShadow": "0px 1.5px 3px 0px rgba(15, 23, 42, 0.3)"
   }
 },
 } as const;

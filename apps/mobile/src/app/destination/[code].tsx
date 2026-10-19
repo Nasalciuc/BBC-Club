@@ -37,8 +37,8 @@ import { env } from "@/lib/env";
 const PAGE = {
   sheetTop: 217.9 - 47,
   corner: 20,
-  // Its foot 59.8 over the tab bar's top (59.3 over its hairline); its words 1.1 lower than centred.
-  pill: { height: 36.6, left: 12.9, right: 13.5, aboveTabs: 59.3, wordsDrop: 1.1 },
+  // Its foot 59.8 over the tab bar's top (59.3 over its hairline); its words 0.14 higher than centred.
+  pill: { height: 36.6, left: 12.9, right: 13.5, aboveTabs: 59.3, wordsLift: 0.14 },
 };
 
 /**
@@ -197,7 +197,7 @@ export default function DestinationScreen() {
           variant="primary"
           height={PAGE.pill.height}
           text="buttonBold"
-          style={{ paddingTop: 2 * PAGE.pill.wordsDrop }}
+          style={{ paddingBottom: 2 * PAGE.pill.wordsLift }}
           onPress={() =>
             requestRef.current?.present({
               fare: null,

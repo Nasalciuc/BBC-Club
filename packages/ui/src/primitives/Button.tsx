@@ -46,6 +46,17 @@ type Props = {
   fill?: boolean;
   /** The words centred in the pill and the trailing glyph after them, outside the centring (13 `Request a quote ›`). */
   centreWords?: boolean;
+  /** A primary pill's disabled colours as its screen draws them (24: a pale blue, its words and arrow a blue grey);
+   *  the light tint and slate by default. */
+  disabledColors?: { background: string; label: string };
+  /** The trailing glyph (`arrow-long`, 07's arrow) in place of the one `trailing` names. */
+  trailingIcon?: IconName;
+  /** With `trailingAtEdge`: the glyph's box from the pill's right edge (07: 15.15); 24 by default. */
+  trailingInset?: number;
+  /** The words and the trailing glyph moved from where the pill centres them, as the screen draws them (pt; > 0 right
+   *  and down) — a translation, so the pill's size and its target do not change. */
+  labelOffset?: { x: number; y: number };
+  trailingOffset?: { x: number; y: number };
   style?: ViewStyle;
   testID?: string;
   accessibilityLabel?: string;
@@ -71,6 +82,11 @@ export function Button({
   trailingGap,
   fill = true,
   centreWords = false,
+  disabledColors,
+  trailingIcon,
+  trailingInset,
+  labelOffset,
+  trailingOffset,
   style,
   testID,
   accessibilityLabel,
@@ -78,7 +94,16 @@ export function Button({
   const tone = TONE[variant];
   const blocked = disabled || busy;
   const dimmed = disabled && !busy;
-  const word = dimmed ? (variant === "primary" ? tokens.colors.textSecondary : tone.label.color) : tone.label.color;
+  const word = dimmed
+    ? variant === "primary"
+      ? (disabledColors?.label ?? tokens.colors.textSecondary)
+      : tone.label.color
+    : tone.label.color;
+  const trailingName: IconName = trailingIcon ?? (trailing === "arrow" ? "arrow-right" : "chevron");
+  const moveLabel = labelOffset ? { transform: [{ translateX: labelOffset.x }, { translateY: labelOffset.y }] } : null;
+  const moveTrailing = trailingOffset
+    ? { transform: [{ translateX: trailingOffset.x }, { translateY: trailingOffset.y }] }
+    : null;
   const glyph = String(word);
 
   return (
@@ -96,7 +121,12 @@ export function Button({
         iconGap != null && { gap: iconGap },
         radius != null && { borderRadius: radius },
         tone.frame,
-        dimmed && (variant === "primary" ? styles.primaryDisabled : styles.dimmed),
+        dimmed &&
+          (variant === "primary"
+            ? disabledColors
+              ? { backgroundColor: disabledColors.background }
+              : styles.primaryDisabled
+            : styles.dimmed),
         pressed && !blocked && tone.pressed,
         style,
       ]}
@@ -109,16 +139,14 @@ export function Button({
             {label}
           </Text>
           <View style={[styles.afterWords, { marginLeft: trailingGap ?? tokens.space.xxs }]}>
-            <Icon
-              name={trailing === "arrow" ? "arrow-right" : "chevron"}
-              size={trailingSize}
-              color={glyph}
-              strokeWidth={trailingStroke}
-            />
+            <Icon name={trailingName} size={trailingSize} color={glyph} strokeWidth={trailingStroke} />
           </View>
         </View>
       ) : (
-        <Text style={[styles.label, rn(tokens.type[text]), tone.label, dimmed && { color: word }]} numberOfLines={1}>
+        <Text
+          style={[styles.label, rn(tokens.type[text]), tone.label, dimmed && { color: word }, moveLabel]}
+          numberOfLines={1}
+        >
           {label}
         </Text>
       )}
@@ -126,18 +154,13 @@ export function Button({
         <View
           style={
             trailingAtEdge
-              ? styles.edge
+              ? [styles.edge, trailingInset != null && { right: trailingInset }, moveTrailing]
               : trailingGap != null
                 ? { marginLeft: trailingGap - (iconGap ?? GAP) }
                 : styles.trailing
           }
         >
-          <Icon
-            name={trailing === "arrow" ? "arrow-right" : "chevron"}
-            size={trailingSize}
-            color={glyph}
-            strokeWidth={trailingStroke}
-          />
+          <Icon name={trailingName} size={trailingSize} color={glyph} strokeWidth={trailingStroke} />
         </View>
       ) : null}
     </Pressable>

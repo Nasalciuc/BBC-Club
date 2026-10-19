@@ -1,4 +1,5 @@
-import type { TextStyle } from "react-native";
+import { Platform, type TextStyle } from "react-native";
+import { lineBaseline } from "./rn-type-baseline";
 import type { tokens } from "./tokens";
 
 type TokenType = (typeof tokens)["type"][keyof (typeof tokens)["type"]];
@@ -30,18 +31,16 @@ export function rn(t: TokenType): TextStyle {
   return style;
 }
 
-/** Inter Tight's ascent and descent (hhea 1984 and 494 of 2048 units). */
-const ASCENT = 0.969;
-const DESCENT = 0.241;
-
 /**
- * How far below the top of its box a line of this style sets its baseline: the line's extra height is split evenly
- * above and below the glyphs (iOS, Android and the web all centre text in its line height). The screens are measured
- * by their baselines (ADR-IMPL-056); a margin of `baseline − baselineOffset(style)` puts a text exactly where the
- * image draws it.
+ * How far below the top of its box a line of this style sets its baseline. The screens are measured by their
+ * baselines (ADR-IMPL-056); a margin of `baseline − baselineOffset(style)` puts a text exactly where the image draws
+ * it. Android and the web split the line's extra height evenly above and below the glyphs — a line shorter than the
+ * font's own takes the overlap evenly too. iOS centres the glyphs only in a line at least as tall as the font's own
+ * (React Native's `RCTApplyBaselineOffset`); in a shorter one CoreText keeps the descent at the line's foot, so the
+ * baseline stands the font's descent above the bottom.
  */
 export function baselineOffset(t: { fontSize: number; lineHeight: number }): number {
-  return (t.lineHeight - (ASCENT + DESCENT) * t.fontSize) / 2 + ASCENT * t.fontSize;
+  return lineBaseline(t, Platform.OS);
 }
 
 /** The distance from a box's baseline to its bottom edge (the line's own room under the baseline). */

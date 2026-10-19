@@ -22,8 +22,8 @@ const REQUEST = {
   height: 24.8,
   gap: 9.5,
   radius: 4.5,
-  // As the web harness renders them, the words under the segment's middle: the chosen 0.55, the other 1.
-  drop: { on: 0.55, off: 1 },
+  // 06: the words under the segment's middle — the chosen 0.07, the other 0.43.
+  drop: { on: 0.07, off: 0.43 },
   on: rn(tokens.type.segmentOn) as TextStyle,
   off: rn(tokens.type.segmentOff) as TextStyle,
 } as const;

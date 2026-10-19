@@ -321,7 +321,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
               trailingSize={SHEET.pill.arrow}
               trailingStroke={SHEET.pill.arrowStroke}
               trailingGap={SHEET.pill.arrowGap}
-              style={{ ...SHEET.pill.shadow, paddingTop: 2 * SHEET.pill.drop }}
+              style={{ ...SHEET.pill.shadow, paddingBottom: 2 * SHEET.pill.lift }}
               busy={busy}
               onPress={() => void onSubmit()}
             />
@@ -554,8 +554,8 @@ const SHEET = {
     arrow: 16.4,
     arrowStroke: 1.6,
     arrowGap: 5.2,
-    // As the web harness renders it, the words 1.77 under the pill's middle.
-    drop: 1.77,
+    // 06: the words 0.19 over the pill's middle.
+    lift: 0.19,
     shadow: { ...tokens.elevation.card },
   },
   promise: { below: 15.91, icon: 9.5, iconRise: 3.4 },

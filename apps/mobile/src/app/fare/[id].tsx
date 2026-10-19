@@ -61,7 +61,7 @@ const STATUS = 47;
  * 05 from the screen's top on a 47-pt status bar (pt), under the photographs (`FareHero`): the route's title on 288.5,
  * 15.5 in; the chips from 299.8, 15.2 in, 7.1 apart; the weather and the fare from 337.2, 14.8 and 13.8 from the edges;
  * `Flight overview` from 420.4, the rows from 517.2 (37.5 each), `The route` from 601.3 — 15 and 14.1 from the edges;
- * over the tab bar, the pill 39.3 tall 7.1 under what scrolls, 15.2 and 14.1 in, its words 0.95 under its middle, and
+ * over the tab bar, the pill 39.3 tall 7.1 under what scrolls, 15.2 and 14.1 in, its words 0.47 over its middle, and
  * `No payment is taken in the app.` 13.2 under it and 8.7 over the tab bar (as the web harness renders the margins
  * below: 14.16 and 7.74).
  */
@@ -72,11 +72,11 @@ const PAGE = {
   overview: { top: 420.4, left: 15, right: 14.1, height: 89.8 },
   rows: { top: 517.22, left: 15, right: 14.1, row: 37.5 },
   route: { top: 601.27, left: 15, right: 14.1 },
-  pill: { height: 39.3, left: 15.2, right: 14.1, above: 7.1, drop: 0.95, fineBelow: 14.16, fineAboveTabs: 7.74 },
+  pill: { height: 39.3, left: 15.2, right: 14.1, above: 7.1, lift: 0.47, fineBelow: 14.16, fineAboveTabs: 7.74 },
 } as const;
 
-/** 21: the message centred on 305.1, the pill 41.5 tall from 328.9, 15.3 and 14.6 in, its words 0.15 over its middle. */
-const GONE = { title: 305.1, pill: { top: 328.9, height: 41.5, left: 15.3, right: 14.6, lift: 0.15 } } as const;
+/** 21: the message centred on 305.1, the pill 41.5 tall from 328.9, 15.3 and 14.6 in, its words 0.44 over its middle. */
+const GONE = { title: 305.1, pill: { top: 328.9, height: 41.5, left: 15.3, right: 14.6, lift: 0.44 } } as const;
 
 type Role = TextStyle & { fontSize: number; lineHeight: number };
 const TITLE = rn(tokens.type.fareTitle) as Role;
@@ -477,7 +477,7 @@ export default function FareDetailScreen() {
           variant="primary"
           height={PAGE.pill.height}
           text="buttonFare"
-          style={{ paddingTop: 2 * PAGE.pill.drop }}
+          style={{ paddingBottom: 2 * PAGE.pill.lift }}
           onPress={() =>
             sheetRef.current?.present({
               fare,
@@ -530,7 +530,7 @@ function keepRangesTogether(text: string): string {
 }
 
 /** 20's `Got it`: 39.2 tall, its words 0.47 over its middle. */
-const GOT_IT = { height: 39.2, lift: 0.47 } as const;
+const GOT_IT = { height: 39.2, lift: 0.51 } as const;
 
 /**
  * `About this fare` (20): what the fare is — round trip or one way, for whom, the route by its cities and codes, the
