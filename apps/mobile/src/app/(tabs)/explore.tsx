@@ -27,7 +27,7 @@ import { useExploreHome } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
 import { useDestinations } from "@/features/globe/useDestinations";
-import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
+import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
 import { fetchProfile, type Profile } from "@/lib/api";
@@ -52,7 +52,7 @@ export default function ExploreScreen() {
   // Another tab, or a fare or a request pushed over the tabs: the globe stays drawn but stops moving (ADR-IMPL-047).
   const focused = useIsFocused();
   const requestRef = useRef<RequestSheetHandle>(null);
-  const datesRef = useRef<DatesSheetHandle>(null);
+  const datesRef = useRef<DatesPageHandle>(null);
   const cabinRef = useRef<CabinSheetHandle>(null);
   const travelersRef = useRef<TravelersSheetHandle>(null);
   const [size, setSize] = useState({ width: screen.width, height: screen.height });
@@ -240,12 +240,20 @@ export default function ExploreScreen() {
             onRetry={retrySearch}
             onOpenFare={(fare: FareVM) => router.push(fareHref(fare.id, fare.offerId))}
             onEditDates={() =>
-              datesRef.current?.present({
-                tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
-                depart: state.dates.depart,
-                ret: state.dates.return,
-                editing: "depart",
-              })
+              datesRef.current?.present(
+                {
+                  tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
+                  depart: state.dates.depart,
+                  ret: state.dates.return,
+                  editing: "depart",
+                },
+                {
+                  fromCity: state.from?.city,
+                  toCity: state.to?.city,
+                  toCode: state.to?.code,
+                  flexible: state.dates.flexible,
+                },
+              )
             }
             onEditCabin={() => cabinRef.current?.present(state.cabin)}
             onEditTravelers={() => travelersRef.current?.present(state.passengers)}
@@ -296,7 +304,7 @@ export default function ExploreScreen() {
         )}
       </HomeSheet>
       <RequestSheet ref={requestRef} />
-      <DatesSheet
+      <DatesPage
         ref={datesRef}
         onFlexible={() => dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } })}
         onUse={(sel) => {

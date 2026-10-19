@@ -131,3 +131,31 @@ export function closedFareLines(fare: ClosedFare): { day: string; route: string;
     : null;
   return { day, route, carrier };
 }
+
+/** `October 12, 2026` for a day the calendar has; null otherwise. */
+export function longDay(ymd: string | null | undefined): string | null {
+  if (!ymd || !isCalendarDay(ymd)) return null;
+  return `${MONTH_NAMES[Number(ymd.slice(5, 7)) - 1]} ${Number(ymd.slice(8, 10))}, ${ymd.slice(0, 4)}`;
+}
+
+type AboutFare = Pick<FareVM, "carrier" | "cabin" | "product" | "from" | "to"> & { day: string | null };
+
+/**
+ * `About this fare` (20), in what the club knows: the fare is one way, for one adult, the route by its cities and codes,
+ * its day; then the cabin, the airline and its seat, and what the specialist does. 20's `indicative round-trip fare`
+ * and `a spacious seat` are not this fare's facts (ADR-IMPL-055 §8).
+ */
+export function aboutFareLines(fare: AboutFare): [string, string] {
+  const day = longDay(fare.day);
+  const route = `from ${fare.from.city} (${fare.from.code}) to ${fare.to.city} (${fare.to.code})`;
+  const first = `This fare is one way, for one adult flying ${route}${day ? ` on ${day}` : ""}. Your specialist confirms availability and the final fare.`;
+  const product = fare.product?.trim();
+  const second = `Travel in ${cabinWord(fare.cabin)} with ${fare.carrier.name}${product ? ` (${product})` : ""}. Your specialist confirms the cabin details and arranges the booking by phone.`;
+  return [first, second];
+}
+
+/** What the phone's share sheet carries (05's share): the route, the cabin, the fare one way, and the fare's link. */
+export function shareFareText(fare: Pick<FareVM, "id" | "cabin" | "from" | "to" | "price">): string {
+  const price = formatPrice(fare.price.offer, fare.price.currency);
+  return `${fare.from.city} to ${fare.to.city} in ${cabinWord(fare.cabin)}, ${price} one way, with BuyBusinessClass Club: bbcclub://fare/${fare.id}`;
+}

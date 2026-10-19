@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
@@ -18,7 +18,8 @@ type Props = {
   fill?: "equal" | "content";
   /** 1.0 prop, kept while its screens move to 3.0: `lg` was 56 pt. */
   size?: "md" | "lg";
-  onPress: () => void;
+  /** None: a fact, not a choice — the fare's cabin, its one way, its day (05) — drawn the same, not pressable. */
+  onPress?: () => void;
   testID: string;
 };
 
@@ -36,6 +37,34 @@ export function Chip({
 }: Props) {
   const filter = variant === "filter";
   const color = selected ? tokens.colors.textOnPhoto : filter ? tokens.colors.textOnTint : tokens.colors.textPrimary;
+  const content = (
+    <>
+      {icon ? <Icon name={icon} size={18} color={color} strokeWidth={1.75} /> : null}
+      <Text
+        style={[filter ? styles.filterLabel : styles.label, { color }, selected && filter && styles.selectedLabel]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </>
+  );
+  if (!onPress) {
+    return (
+      <View
+        testID={testID}
+        accessible
+        accessibilityLabel={label}
+        style={[
+          styles.chip,
+          fill === "equal" && styles.equal,
+          fill === "content" && styles.content,
+          selected && styles.selected,
+        ]}
+      >
+        {content}
+      </View>
+    );
+  }
   return (
     <Pressable
       testID={testID}
@@ -58,13 +87,7 @@ export function Chip({
         pressed && !disabled && styles.pressed,
       ]}
     >
-      {icon ? <Icon name={icon} size={18} color={color} strokeWidth={1.75} /> : null}
-      <Text
-        style={[filter ? styles.filterLabel : styles.label, { color }, selected && filter && styles.selectedLabel]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
+      {content}
     </Pressable>
   );
 }

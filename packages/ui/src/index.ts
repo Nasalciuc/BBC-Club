@@ -37,6 +37,8 @@ export { FieldError, TextField } from "./fields/TextField";
 
 export { CarouselRow, OfferCard, OfferCardWide } from "./cards/OfferCard";
 export { FlightCard } from "./cards/FlightCard";
+export { FlightOverview, RouteCard, YourFareCard } from "./cards/FareCards";
+export { TripCard, TripSummaryCard } from "./cards/TripCards";
 export { ONE_WAY, arriveYmd, cabinText, dayText, departYmd, durationText, flightFacts } from "./cards/flight-facts";
 export { PopularCard } from "./cards/PopularCard";
 export { RecentRow } from "./cards/RecentRow";
@@ -45,12 +47,14 @@ export { RequestCard } from "./cards/RequestCard";
 
 export { HOME_SHEET_HANDLE, HomeSheet } from "./layout/HomeSheet";
 export { ModalSheet, type ModalSheetHandle, useKeyboardShown } from "./layout/ModalSheet";
+export { PageModal, type PageModalHandle } from "./layout/PageModal";
 export { MODAL_SHEET_TOP, modalSheetHeight, type ModalSheetSize } from "./layout/modal-sheet-sizes";
 export { TabBar } from "./layout/TabBar";
 export { TopBar } from "./layout/TopBar";
 
 export { GlobeFallback, type Pin } from "./globe/GlobeFallback";
 export { GlobePin, pinFrame } from "./globe/GlobePin";
+export { RouteMap } from "./globe/RouteMap";
 export { GLOBE_SPEC, OPENING_VIEW, routeView, type RouteFrame } from "./globe/globe-logic";
 export {
   MAX_LABEL_SCALE,
@@ -81,14 +85,20 @@ export { ErrorState, NoticeCard, StateMessage } from "./states/ErrorState";
 export { Calendar } from "./calendar/Calendar";
 export {
   addDays,
-  ctaLabel,
+  datesChosen,
   daysBetween,
   monthGrid,
+  monthTitle,
   selectDay,
   sheetTitle,
+  shiftMonth,
   short,
   todayLocal,
+  weekdayNames,
+  windowMoves,
+  windowStart,
   type Cell,
   type ISODate,
+  type Month,
   type Selection,
 } from "./calendar/calendar-logic";

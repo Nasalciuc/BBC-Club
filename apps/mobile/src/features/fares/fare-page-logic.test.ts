@@ -2,13 +2,16 @@ import { describe, expect, it } from "bun:test";
 import { fixture } from "@bbc/shared/fixture";
 
 import {
+  aboutFareLines,
   aboutFareNote,
   carrierLine,
   closedFareLines,
   comparisonLine,
   departDayLabel,
   factsLine,
+  longDay,
   savings,
+  shareFareText,
 } from "./fare-page-logic";
 
 const ba = fixture.fares[0]!;
@@ -103,5 +106,33 @@ describe("a closed fare (Figma 135:848)", () => {
   it("names no day the calendar does not have", () => {
     expect(closedFareLines({ from: "JFK", to: "LHR", departDate: "2026-02-30" }).day).toBe("ONE WAY");
     expect(closedFareLines({ from: "JFK", to: "LHR", departDate: "2028-02-29" }).day).toBe("FEB 29 · ONE WAY");
+  });
+});
+
+describe("About this fare, 3.0 (20)", () => {
+  it("says what the fare is: one way, one adult, the route by its cities and codes, its day", () => {
+    const [first, second] = aboutFareLines({ ...ba, day: "2026-10-12" });
+    expect(first).toBe(
+      "This fare is one way, for one adult flying from New York (JFK) to London (LHR) on October 12, 2026. Your specialist confirms availability and the final fare.",
+    );
+    expect(second).toBe(
+      "Travel in Business with British Airways (Lie-flat suite). Your specialist confirms the cabin details and arranges the booking by phone.",
+    );
+  });
+
+  it("leaves out a day the calendar does not have, and a seat the fare does not name", () => {
+    const [first, second] = aboutFareLines({ ...ba, product: null, day: "2026-02-30" });
+    expect(first).toContain("to London (LHR). Your specialist");
+    expect(second).toBe(
+      "Travel in Business with British Airways. Your specialist confirms the cabin details and arranges the booking by phone.",
+    );
+    expect(longDay("2028-02-29")).toBe("February 29, 2028");
+    expect(longDay(null)).toBeNull();
+  });
+
+  it("shares the route, the cabin, the fare one way and its link", () => {
+    expect(shareFareText(ba)).toBe(
+      "New York to London in Business, $4,200 one way, with BuyBusinessClass Club: bbcclub://fare/00000000-0000-4000-8000-00000000fa01",
+    );
   });
 });

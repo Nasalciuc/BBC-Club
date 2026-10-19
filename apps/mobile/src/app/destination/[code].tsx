@@ -22,7 +22,7 @@ import { useExploreHome } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
-import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
+import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
 import { fetchProfile, type Profile } from "@/lib/api";
@@ -44,7 +44,7 @@ export default function DestinationScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const requestRef = useRef<RequestSheetHandle>(null);
-  const datesRef = useRef<DatesSheetHandle>(null);
+  const datesRef = useRef<DatesPageHandle>(null);
   const cabinRef = useRef<CabinSheetHandle>(null);
   const travelersRef = useRef<TravelersSheetHandle>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -140,12 +140,20 @@ export default function DestinationScreen() {
             onRetry={retrySearch}
             onOpenFare={(fare: FareVM) => router.push(fareHref(fare.id, fare.offerId))}
             onEditDates={() =>
-              datesRef.current?.present({
-                tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
-                depart: state.dates.depart,
-                ret: state.dates.return,
-                editing: "depart",
-              })
+              datesRef.current?.present(
+                {
+                  tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
+                  depart: state.dates.depart,
+                  ret: state.dates.return,
+                  editing: "depart",
+                },
+                {
+                  fromCity: state.from?.city,
+                  toCity: chosen.airport.city,
+                  toCode: chosen.airport.code,
+                  flexible: state.dates.flexible,
+                },
+              )
             }
             onEditCabin={() => cabinRef.current?.present(state.cabin)}
             onEditTravelers={() => travelersRef.current?.present(state.passengers)}
@@ -189,7 +197,7 @@ export default function DestinationScreen() {
       </View>
       <RootTabBar active="explore" />
       <RequestSheet ref={requestRef} />
-      <DatesSheet
+      <DatesPage
         ref={datesRef}
         onFlexible={() => dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } })}
         onUse={(sel) => {

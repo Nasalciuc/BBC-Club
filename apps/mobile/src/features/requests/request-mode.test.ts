@@ -46,6 +46,11 @@ test("an alternative names the fare it replaces", () => {
   expect(body.fareId).toBeUndefined();
 });
 
+test("a fare and an offer ask for a quote as a route does (06)", () => {
+  expect(sheetTitle("fare")).toBe("Request a quote");
+  expect(sheetTitle("offer")).toBe("Request a quote");
+});
+
 test("a search fare sends the fare id and no intent", () => {
   const body = draftToBody(buildDraft({ fare: fare(null) }));
   expect(body.intent).toBeUndefined();

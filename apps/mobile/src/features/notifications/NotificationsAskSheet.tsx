@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
+import { Button, ModalSheet, type ModalSheetHandle, TextButton, tokens } from "@bbc/ui";
 
 import { registerPushDevice } from "@/lib/push";
 import { appStorage, PUSH_ASKED_AT_KEY } from "@/lib/storage-keys";
@@ -16,8 +16,8 @@ function markAsked() {
 }
 
 /**
- * Shown once, after the first request is received. Figma 320:5704: a question — the medium sheet under a 28-pt headline;
- * `Turn on notifications` (iOS then asks once, itself) and `Not now` 12 pt under it. Closing it any way is Not now.
+ * Shown once, after the first request is received (25): the bell over the question, `Turn on notifications` (iOS then
+ * asks once, itself) and `Not now` under it. Closing it any way is Not now.
  */
 export const NotificationsAskSheet = forwardRef<NotificationsAskSheetHandle>(
   function NotificationsAskSheet(_props, ref) {
@@ -37,7 +37,13 @@ export const NotificationsAskSheet = forwardRef<NotificationsAskSheetHandle>(
       <ModalSheet
         ref={modalRef}
         title="Know when your quote is ready."
-        size="medium"
+        size="short"
+        icon="bell"
+        titleAlign="centre"
+        showClose={false}
+        // 25: as tall as the question and its two answers — the bell, two lines of headline, the pill and `Not now`.
+        height={SHEET_HEIGHT + insets.bottom}
+        footerBottom={tokens.space.sm}
         closeTestID="push-ask.close"
         testID="push-ask.root"
         insets={insets}
@@ -61,27 +67,26 @@ export const NotificationsAskSheet = forwardRef<NotificationsAskSheetHandle>(
                 })();
               }}
             />
-            <Button
+            <TextButton
               testID="push-ask.not-now"
               label="Not now"
-              variant="secondary"
-              style={styles.notNow}
+              tone="secondary"
+              size="button"
               onPress={() => modalRef.current?.dismiss()}
             />
           </View>
         }
       >
-        <Text style={styles.body}>
-          We’ll notify you once when your specialist has a quote. Nothing else unless you choose it.
-        </Text>
+        {null}
       </ModalSheet>
     );
   },
 );
 
+/** The grabber 24, the bell 56, the question 70, then 16 to the pill (52), 8 and `Not now` (44), 12 under it. */
+const SHEET_HEIGHT = 24 + 56 + 70 + 16 + 52 + 8 + 44 + 12;
+
 const styles = StyleSheet.create({
-  // 320:5802: the two actions 12 pt apart; `Not now` is the 48-pt secondary button.
-  actions: { gap: tokens.space.sm },
-  notNow: { minHeight: 48, paddingVertical: tokens.space.sm },
-  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  // 25: `Not now` 8 pt under the pill.
+  actions: { gap: tokens.space.xs },
 });

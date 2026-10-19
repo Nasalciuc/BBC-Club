@@ -32,6 +32,11 @@ beside them. The entry's components (`ClubButton`, `ClubField`, `ClubIcon`) stay
 - **Stepper** — a white card on a hairline: the icon, the label over its caption (`Adults` / `Ages 18+`), the pill
   stepper `− 1 +` in light tint; a bound dims its button to 40%.
 - **Toggle** — 52 × 32; navy on with the white knob at the right, light navy off.
+- **Calendar** (07, 24) — two months at a time, each a white card: its name (`title-sm`) and the arrows that move both
+  cards by a month (from this month to the last that can be booked, 330 days out); `Mon … Sun`; the days 40 pt tall in
+  light tint squares, 4 apart; the departure and the return navy circles joined by a light navy band through the days
+  between, rounded where a week starts or ends; days that cannot be chosen keep their square with a slate number.
+  Weeks start on Monday as the images draw them (`WEEK_START`; 1.0 started on Sunday).
 - **Chip** — `trip`: light tint pill, 40 pt, an icon and navy words (`Nov 12 – 19, 2026`, `Business`, `1 adult`);
   `filter`: the status filters, slate words, navy with white bold words when chosen.
 - **CabinCard** — two side by side (01): the seat icon, the cabin in `body-strong`, its line in `caption` slate on two
@@ -55,6 +60,22 @@ beside them. The entry's components (`ClubButton`, `ClubField`, `ClubIcon`) stay
   of several (04): the airline at the left, the times over the codes and `Nonstop · 7h 10m`, the price at the right.
 - **AirportRow** — a white card with the map pin: the city over `Heathrow Airport · LHR` and a chevron (Search), or the
   city and its code in slate at the right (onboarding).
+- **YourFareCard** (05) — `Your fare` over the price in `price-display` and `one way`, `Save 48%` at the right; where
+  the published fare is on record, `Down from $7,550` and, under it in `caption`, where it was published (`Sabre · 16
+Sep`) — a reference price always carries its source. The weather beside it in 05 is left out (ADR-IMPL-055 §7).
+- **FlightOverview** (05; sheet 40 · 07) — `Flight overview` across the top; the airline (its logo over its name, or
+  the name) beside both airports, each its code (`title-sm`), its city, its clock (`+1` small) and its day, the plane
+  on the slate line between them.
+- **RouteCard** (05; sheet 40 · 08) — `The route` over the map: the land in white on the pale sky (the globe's land
+  data, no tiles), the great circle dashed in navy and bowing up, the plane at its middle, a navy dot at each airport
+  with its code over its city beside it.
+- **TripSummaryCard** (06; sheet 40 · 02) — the request sheet's trip: the city's photograph, the route by its cities
+  over the cabin (the airline after it when it has no logo; its logo at the right when it has one); under a rule, the
+  days as the sheet holds them and the flight's clocks, then a fare's price, `one way` and `Save 48%`. A quote shows
+  the route in its codes and no price.
+- **TripCard** (08) — the request just received: the photograph, `BUSINESS CLASS`, `JFK → LHR` in `title-sm`, the days
+  and `Round trip · 1 adult`, the airline at the right.
+- **OfferCard · compact** (08, `Other great fares`) — the photo over the city and `from` its price.
 - **ListRow / RowGroup** — rows of 56 pt in one white card (radius 16, the card shadow): the navy icon in a 24-pt
   column, the label, the value in slate, the chevron; a rule between rows from where the words start. `stacked`: the
   label small over the value. `danger`: the trash and the words in red.
@@ -84,6 +105,12 @@ online.`): title, words, the pill.
   at the left (`title` on a tall sheet, `headline` on the others) and the plain × at the right (in a light tint circle
   on `About this fare`); a question with its own answers hides the × (`showClose={false}`). Four heights (unchanged
   from 1.0): tall, explain, medium, short. Actions pinned at the foot.
+- **PageModal** (07) — a whole page over the screen and its sheets: it rises like a sheet, covers the screen to its
+  edges, has no grabber and no drag; its back button and Android's Back close it. The dates page is one: it opens over
+  the request sheet as over Explore. Its top bar is the back chevron with the wordmark centred; 07's profile button is
+  left out — leaving for Profile would strand the request under it.
+- **ModalSheet · question** (25) — a short question: its mark (the bell) centred over the centred title, no ×, the
+  pill and the slate `Not now` under it; the sheet as tall as that (`height`).
 - **HomeSheet** — Explore's sheet over the globe at three stops the screen sets (02, 13, 16). At rest it is no card: the
   search bar floats on the globe's foot and the offers sit on the page, the sky fading into it; raised, it is the white
   sheet with its grabber, 24-pt corners and the sheet shadow.

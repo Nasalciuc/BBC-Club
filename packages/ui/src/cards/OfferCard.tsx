@@ -19,13 +19,49 @@ type Props = {
   fallback: PhotoSource | null;
   onPress: () => void;
   testID: string;
+  /** `Other great fares` (08): a smaller card — the photo, the city and the price only. */
+  compact?: boolean;
 };
 
 /**
  * The offer card (02; sheet 40): a tall daylight photo, then the city in `title-sm`, the country in slate, `from` and the
  * price in `price`, and the `Save 54%` pill across the foot. White, radius 20, the card shadow. 124 pt wide.
  */
-export function OfferCard({ city, country, fromPrice, savePercent, image, fallback, onPress, testID }: Props) {
+export function OfferCard({
+  city,
+  country,
+  fromPrice,
+  savePercent,
+  image,
+  fallback,
+  onPress,
+  testID,
+  compact = false,
+}: Props) {
+  if (compact) {
+    return (
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={[city, fromPrice ? `from ${fromPrice}` : null].filter(Boolean).join(", ")}
+        onPress={onPress}
+        style={({ pressed }) => [styles.card, styles.compactCard, pressed && styles.pressed]}
+      >
+        <Photo source={image} fallback={fallback} style={styles.compactPhoto} />
+        <View style={styles.compactBody}>
+          <Text style={styles.compactCity} numberOfLines={1}>
+            {city}
+          </Text>
+          {fromPrice ? (
+            <Text style={styles.compactPrice} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              <Text style={styles.from}>{"from "}</Text>
+              {fromPrice}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       testID={testID}
@@ -173,6 +209,12 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.9 },
   photo: { height: 116, borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg },
+  // 08: three to the screen's width, the photo over the city and its price.
+  compactCard: { borderRadius: tokens.radius.md },
+  compactPhoto: { height: 80, borderTopLeftRadius: tokens.radius.md, borderTopRightRadius: tokens.radius.md },
+  compactBody: { paddingHorizontal: 10, paddingVertical: tokens.space.xs },
+  compactCity: { ...rn(tokens.type.labelStrong), color: tokens.colors.textPrimary },
+  compactPrice: { ...rn(tokens.type.priceSm), color: tokens.colors.textPrimary },
   body: { padding: 10, gap: 2 },
   city: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
   country: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },

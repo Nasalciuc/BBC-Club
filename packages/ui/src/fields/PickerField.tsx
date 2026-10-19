@@ -62,19 +62,20 @@ export function PickerField({
           {value ?? placeholder ?? " "}
         </Text>
       </View>
-      <Icon name="chevron-down" size={18} color={tone} strokeWidth={2} />
+      <Icon name="chevron-down" size={16} color={tone} strokeWidth={2} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  // Two to a row (06: Depart and Return): tight enough beside the icon and the chevron for `Nov 12, 2026`.
   field: {
     flex: 1,
     minHeight: 60,
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space.xs,
-    paddingHorizontal: tokens.space.sm,
+    paddingHorizontal: tokens.space.xs,
     paddingVertical: tokens.space.xs,
     borderRadius: tokens.radius.sm,
     borderWidth: 1,
@@ -82,9 +83,9 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
   },
   disabled: { backgroundColor: tokens.colors.surfaceTint },
-  error: { borderColor: tokens.colors.statusDanger, borderWidth: 1.5, paddingHorizontal: tokens.space.sm - 0.5 },
+  error: { borderColor: tokens.colors.statusDanger, borderWidth: 1.5, paddingHorizontal: tokens.space.xs - 0.5 },
   pressed: { backgroundColor: tokens.colors.surfaceTint },
-  iconCol: { width: 24, alignItems: "center" },
+  iconCol: { width: 22, alignItems: "center" },
   rule: {
     width: StyleSheet.hairlineWidth * 2,
     alignSelf: "stretch",

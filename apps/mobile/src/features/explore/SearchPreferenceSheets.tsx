@@ -7,7 +7,8 @@ import { type Cabin, type Passengers, travelersLabel, withAdults } from "./trave
 
 /**
  * The cabin and traveler pickers behind Home's preference chips (89:387). They change this search only — the
- * profile's defaults stay where the member set them (Profile → Edit profile). Dates open the shared DatesSheet.
+ * profile's defaults stay where the member set them (Profile → Edit profile). Dates open the shared DatesPage; the
+ * request sheet opens the same travelers sheet over itself (06).
  */
 
 export type CabinSheetHandle = { present: (current: Cabin) => void; dismiss: () => void };
@@ -66,56 +67,66 @@ export const SearchCabinSheet = forwardRef<CabinSheetHandle, { onPick: (cabin: C
 
 export type TravelersSheetHandle = { present: (current: Passengers) => void; dismiss: () => void };
 
-export const SearchTravelersSheet = forwardRef<TravelersSheetHandle, { onPick: (passengers: Passengers) => void }>(
-  function SearchTravelersSheet({ onPick }, ref) {
-    const modalRef = useRef<ModalSheetHandle>(null);
-    const insets = useSafeAreaInsets();
-    // Adults only here: children and infants the search already carries (the profile's) stay in the party.
-    const [party, setParty] = useState<Passengers>(() => withAdults(undefined, 1));
+type TravelersProps = {
+  onPick: (passengers: Passengers) => void;
+  /** `explore.travelers` for a search's chip; `request.travelers` over the request sheet (06). */
+  testIDPrefix?: string;
+  /** Over the request sheet, it stacks on it rather than replacing it. */
+  stackBehavior?: "push";
+};
 
-    useImperativeHandle(ref, () => ({
-      present(current) {
-        setParty(withAdults(current, current.adult));
-        modalRef.current?.present();
-      },
-      dismiss() {
-        modalRef.current?.dismiss();
-      },
-    }));
+export const SearchTravelersSheet = forwardRef<TravelersSheetHandle, TravelersProps>(function SearchTravelersSheet(
+  { onPick, testIDPrefix = "explore.travelers", stackBehavior },
+  ref,
+) {
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
+  // Adults only here: children and infants the search already carries (the profile's) stay in the party.
+  const [party, setParty] = useState<Passengers>(() => withAdults(undefined, 1));
 
-    return (
-      // No Figma frame of its own: Profile's travelers sheet (238:4842) is the model.
-      <ModalSheet
-        ref={modalRef}
-        title="Travelers"
-        closeTestID="explore.travelers.close"
-        testID="explore.travelers.sheet"
-        insets={insets}
-        footer={
-          <Button
-            testID="explore.travelers.use"
-            label={`Use ${travelersLabel(party)}`}
-            variant="primary"
-            onPress={() => {
-              onPick(party);
-              modalRef.current?.dismiss();
-            }}
-          />
-        }
-      >
-        <Stepper
-          testID="explore.travelers.adults"
-          label="Adults"
-          value={party.adult}
-          onChange={(adult) => setParty((p) => withAdults(p, adult))}
-          min={1}
-          max={9}
+  useImperativeHandle(ref, () => ({
+    present(current) {
+      setParty(withAdults(current, current.adult));
+      modalRef.current?.present();
+    },
+    dismiss() {
+      modalRef.current?.dismiss();
+    },
+  }));
+
+  return (
+    // No Figma frame of its own: Profile's travelers sheet (238:4842) is the model.
+    <ModalSheet
+      ref={modalRef}
+      title="Travelers"
+      closeTestID={`${testIDPrefix}.close`}
+      testID={`${testIDPrefix}.sheet`}
+      insets={insets}
+      stackBehavior={stackBehavior}
+      footer={
+        <Button
+          testID={`${testIDPrefix}.use`}
+          label={`Use ${travelersLabel(party)}`}
+          variant="primary"
+          onPress={() => {
+            onPick(party);
+            modalRef.current?.dismiss();
+          }}
         />
-        <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
-      </ModalSheet>
-    );
-  },
-);
+      }
+    >
+      <Stepper
+        testID={`${testIDPrefix}.adults`}
+        label="Adults"
+        value={party.adult}
+        onChange={(adult) => setParty((p) => withAdults(p, adult))}
+        min={1}
+        max={9}
+      />
+      <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
+    </ModalSheet>
+  );
+});
 
 const styles = StyleSheet.create({
   body: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },

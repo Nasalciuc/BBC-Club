@@ -37,8 +37,13 @@ import {
   TextField,
   FieldError,
   FlightCard,
+  FlightOverview,
   PopularCard,
   RecentRow,
+  RouteCard,
+  TripCard,
+  TripSummaryCard,
+  YourFareCard,
   Toggle,
   TopBar,
   Wordmark,
@@ -351,6 +356,35 @@ function GalleryScreen() {
       />
       <FlightCard testID="gallery.flight.detailed" fare={fixture.fares[0]!} layout="detailed" onPress={noop} />
       <FlightCard testID="gallery.flight.compact" fare={fixture.fares[1]!} layout="compact" onPress={noop} />
+      <YourFareCard testID="gallery.yourFare" price={fixture.fares[0]!.price} percent={46} />
+      <FlightOverview testID="gallery.flightOverview" fare={fixture.fares[0]!} />
+      <RouteCard
+        testID="gallery.route"
+        from={{ code: "JFK", city: "New York", lat: 40.6413, lng: -73.7781 }}
+        to={{ code: "LHR", city: "London", lat: 51.47, lng: -0.4543 }}
+      />
+      <TripSummaryCard
+        testID="gallery.tripSummary"
+        photo={null}
+        fallback={CLUB_PICTURE}
+        title="New York to London"
+        cabin="Business"
+        dates="Nov 12 – 19, 2026"
+        route="JFK 18:55 → LHR 07:00 +1"
+        carrier={{ name: "British Airways", logoUrl: null }}
+        price={{ amount: "$4,200", percent: 46 }}
+      />
+      <TripCard
+        testID="gallery.trip"
+        photo={null}
+        fallback={CLUB_PICTURE}
+        cabin="BUSINESS CLASS"
+        from="JFK"
+        to="LHR"
+        dates="Nov 12 – 19, 2026"
+        facts="Round trip · 1 adult"
+        carrier={{ name: "British Airways", logoUrl: null }}
+      />
 
       <SectionHeader title="Status and feedback" size="subtitle" />
       <View style={styles.row}>

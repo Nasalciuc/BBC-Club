@@ -40,6 +40,7 @@ export function OfferCards({
   onOpenOffer,
   testID,
   cardTestID,
+  compact = false,
 }: {
   items: readonly ProposalCardVM[];
   home: HomeVM | null;
@@ -47,6 +48,8 @@ export function OfferCards({
   testID: string;
   /** The cards' testID before each offer's id (`explore.offer`). */
   cardTestID: string;
+  /** `Other great fares` (08): the smaller cards. */
+  compact?: boolean;
 }) {
   // ADR-IMPL-043: an offer without its own picture shows its city's photo; the club's image until there is one.
   const photoFor = usePlacePhotos(items.map((item) => item.route.to));
@@ -65,6 +68,7 @@ export function OfferCards({
             image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
             fallback={CLUB_PICTURE}
             onPress={() => onOpenOffer(item)}
+            compact={compact}
           />
         );
       })}

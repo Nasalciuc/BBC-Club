@@ -1,5 +1,15 @@
 import { test, expect } from "bun:test";
-import { bodyProblem, confirmationKind, factsLines, retryMinutes, telHref } from "./confirmation-logic";
+import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
+
+import {
+  bodyProblem,
+  confirmationKind,
+  factsLines,
+  otherFares,
+  retryMinutes,
+  telHref,
+  tripFacts,
+} from "./confirmation-logic";
 test("the confirmation follows the source; offline always wins", () => {
   expect(confirmationKind("offer", false)).toBe("offer");
   expect(confirmationKind("search", false)).toBe("search");
@@ -41,4 +51,24 @@ test("a request whose details cannot go says what to fix, calmly — never zod's
   expect(bodyProblem(issue(["note"]))).toBe("Keep the note under 500 characters.");
   expect(bodyProblem(issue(["legs", 1, "date"]))).toBe("Check your dates and try again.");
   expect(bodyProblem([])).toBeNull();
+});
+
+test("the trip under the route (08): the trip and the travelers", () => {
+  expect(tripFacts("round", "1 adult")).toBe("Round trip · 1 adult");
+  expect(tripFacts("oneway", "2 adults")).toBe("One way · 2 adults");
+  expect(tripFacts("", "3 travelers")).toBe("3 travelers");
+  expect(tripFacts("", "")).toBeNull();
+});
+
+test("other great fares (08): Home's offers to other cities, one per city, six at most", () => {
+  const offer = (id: string, to: string) => ({ id, route: { from: "JFK", to } }) as unknown as ProposalCardVM;
+  const home = {
+    sections: [
+      { key: "inspire", title: "Offers to inspire", items: [offer("a", "LHR"), offer("b", "CDG"), offer("c", "HND")] },
+      { key: "europe", title: "To Europe", items: [offer("d", "CDG"), offer("e", "FCO")] },
+    ],
+  };
+  expect(otherFares(home, "LHR").map((o) => o.id)).toEqual(["b", "c", "e"]);
+  expect(otherFares(home, "LHR", 2).map((o) => o.id)).toEqual(["b", "c"]);
+  expect(otherFares(null, "LHR")).toEqual([]);
 });
