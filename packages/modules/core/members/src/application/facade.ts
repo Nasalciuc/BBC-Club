@@ -32,6 +32,7 @@ export function createMembersFacade(db: Executor): MembersFacade {
       status: row.status,
       displayName: row.displayName,
       homeAirport: row.homeAirport,
+      avatarUrl: row.avatarUrl,
       timezone: row.timezone,
       phone: row.phone,
       preferences: (row.preferences as ProfileRow["preferences"]) ?? {},

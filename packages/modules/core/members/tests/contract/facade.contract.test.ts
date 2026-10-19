@@ -112,6 +112,23 @@ describe("@bbc/members facade", () => {
     }
   });
 
+  // ADR-IMPL-056: the member's photo — stored and read; a profile patch does not write it.
+  it("getProfile reads the member's photo, none until one is stored; a profile update leaves it", async () => {
+    const memberId = randomId();
+    try {
+      await db.execute(sql`INSERT INTO members.profile (member_id, status) VALUES (${memberId}, 'active')`);
+      const facade = createMembersFacade(db);
+      expect((await facade.getProfile(undefined, memberId))?.avatarUrl).toBeNull();
+      const url = "https://cdn.example.com/members/daniel.webp";
+      await db.execute(sql`UPDATE members.profile SET avatar_url = ${url} WHERE member_id = ${memberId}`);
+      expect((await facade.getProfile(undefined, memberId))?.avatarUrl).toBe(url);
+      const updated = await facade.updateProfile(undefined, memberId, { displayName: "Daniel" });
+      expect([updated?.displayName, updated?.avatarUrl]).toEqual(["Daniel", url]);
+    } finally {
+      await cleanup([memberId]);
+    }
+  });
+
   it("getProfile returns null for unknown member", async () => {
     const facade = createMembersFacade(db);
     const p = await facade.getProfile(undefined, randomId());

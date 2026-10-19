@@ -89,6 +89,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/requests carrier at request applied/);
     expect(second.out).not.toMatch(/catalog fare trip and airport description applied/);
     expect(second.out).not.toMatch(/proposals offer rating applied/);
+    expect(second.out).not.toMatch(/members profile avatar url applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -125,6 +126,7 @@ describe("extras ledger", () => {
       "0030_requests_carrier_at_request.sql",
       "0031_catalog_fare_trip_and_airport_description.sql",
       "0032_proposals_offer_rating.sql",
+      "0033_members_profile_avatar_url.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -301,6 +303,34 @@ describe("extras ledger", () => {
     // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
     const [validated] = (await db.execute(
       sql`SELECT convalidated FROM pg_constraint WHERE conname = 'offers_rating'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-056: the member's photo is only ever an https address — on a table drizzle's own first migration creates.
+  it("profile_avatar_url takes an https address or none", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (url: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`INSERT INTO members.profile (member_id, avatar_url) VALUES (${`avatar-${n}`}, ${url})`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null)).toBe("ok");
+    expect(await insert("https://cdn.example.com/members/daniel.webp")).toBe("ok");
+    expect(await insert("http://cdn.example.com/members/daniel.webp")).toBe("23514");
+    expect(await insert("javascript:alert(1)")).toBe("23514");
+    expect(await insert("data:image/png;base64,iVBORw0KGgo=")).toBe("23514");
+    expect(await insert(" https://cdn.example.com/members/daniel.webp")).toBe("23514");
+    expect(await insert("")).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'profile_avatar_url'`,
     )) as unknown as { convalidated: boolean }[];
     expect(validated?.convalidated).toBe(true);
   });

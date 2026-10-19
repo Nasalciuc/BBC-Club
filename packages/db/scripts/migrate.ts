@@ -557,6 +557,29 @@ try {
     }
   }
 
+  // members.profile comes from drizzle's first migration, which ran above: the member's photo. ADR-IMPL-056.
+  const profileAvatarUrl = join(migrationsDir, "0033_members_profile_avatar_url.sql");
+  if (existsSync(profileAvatarUrl)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0033_members_profile_avatar_url.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the column and the CHECK as NOT VALID, then the scan that validates it.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(profileAvatarUrl, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE members.profile VALIDATE CONSTRAINT profile_avatar_url`);
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0033_members_profile_avatar_url.sql')`,
+        );
+      });
+      console.log("members profile avatar url applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);
