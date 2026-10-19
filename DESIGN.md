@@ -578,9 +578,10 @@ One sans-serif, Inter (the bundled `@expo-google-fonts/inter` 400, 500, 600, 700
 - `display` 36 Bold: screen titles (`Requests`, `London`, `New York to London`), the member's name in the greeting.
 - `headline` 30 Bold: the onboarding question, sheet titles, empty and confirmation titles (`No requests yet.`,
   `Request received.`).
-- `title` 24 Bold: section titles (`Offers to inspire`, `Flight options`, `My trips`, `Request progress`).
-- `title-sm` 20 Bold: card titles (the city on an offer or a request).
-- `subtitle` 17 Semibold: row and group titles (`Business`, `Adults`, `Your home airport`).
+- `title` 24 Bold: section titles (`Offers to inspire`, `To Europe`, `My trips`, `Request progress`).
+- `title-sm` 20 Bold: card titles (the city on a request), the smaller section titles (`Popular from New York`,
+  `Recent searches`, `Flight option`).
+- `subtitle` 17 Semibold: row and group titles (`Your home airport`, `Adults`), the city on an offer or a popular card.
 - `greeting` 26 Regular in slate: `Good morning,`.
 - `body-lg` 18: subtitles under a title, the search field's words. `body` 16 and `body-strong` 16 Semibold: text and
   the titles of info cards. `body-sm` 14: secondary lines; `label-strong` 14 Semibold: badges, the `Save 48%` pill,
