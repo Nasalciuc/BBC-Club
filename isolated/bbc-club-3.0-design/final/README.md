@@ -71,5 +71,10 @@ Generated raster edits and reconstructed photos are visual approximations, not c
 - `assets/new-york.png` — New York skyline; daylight landscape 3:2 photo without UI or text.
 - `assets/business-class-seat.png` — Business-class seat; daylight landscape 3:2 photo without UI or text.
 - `assets/airport-lounge.png` — Airport lounge; daylight landscape 3:2 photo without UI or text.
-- `assets/empty-state-illustration.png` — Empty-state illustration; square on white, without UI or text.
+- `assets/empty-state-illustration.png` — Empty-state illustration; square on white, with the complete JFK / NEW YORK to LHR / LONDON boarding pass, plane and barcode; no app UI or airline branding.
 - `README.md` — source, isolation rules, generation notes and one-line file inventory.
+
+
+## Complete illustration asset
+
+Use assets/empty-state-illustration.png directly as one complete image. Do not regenerate, redraw, rebuild or replace its boarding pass, text, objects or London view. The pass already contains JFK, NEW YORK, LHR, LONDON, the small plane and barcode. Keep the cream/navy seat, patterned upholstery, white headrest cloth and pillow, navy fringed throw, side console, London airplane-window view, globe, white background and shadows. Do not invent airline branding, passenger details, ticket numbers, dates or other text. This asset's embedded route labels are intentional and supersede the earlier no-text instruction for this asset only.
