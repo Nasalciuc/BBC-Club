@@ -195,6 +195,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       dates: datesChipLabel({ depart: outbound?.date || null, return: round ? state.legs[1]?.date || null : null }),
       travelers: travelersLabel(state.passengers),
       carrier: summary.carrier?.name ?? "",
+      airline: summary.carrier?.code ?? "",
       logo: summary.carrier?.logoUrl ?? "",
       media: photoRef.current ?? "",
     });

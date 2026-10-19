@@ -47,3 +47,15 @@ export const TEXT_REQUEST: FieldLook = {
   },
   chevron: { right: 15.7, drop: 0.2, size: 11, stroke: 2.04 },
 };
+
+/**
+ * 35's password, measured from the field's top-left (pt): white on a hairline, 45.6 tall, radius 7.5; the filled lock
+ * 21.5 pt, its box's middle 23.76 in and 0.83 under the field's; `Password` alone in the field — its placeholder, the
+ * typed dots in its place — 50.7 in on 27.94.
+ */
+export const TEXT_DELETE = {
+  height: 45.6,
+  radius: 7.5,
+  icon: { centre: 23.76, drop: 0.83, size: 21.5 },
+  value: { left: 50.7, baseline: 27.94, role: rn(tokens.type.deleteField) as Role },
+} as const;

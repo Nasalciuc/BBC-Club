@@ -18,7 +18,7 @@ import tokyoOffer from "@/assets/images/club/photos/tokyo-offer.webp";
 import tokyoRequest from "@/assets/images/club/photos/tokyo-request.webp";
 import tokyoSearch from "@/assets/images/club/photos/tokyo-search.webp";
 import tokyo from "@/assets/images/club/photos/tokyo.webp";
-import towerBridgeReceived from "@/assets/images/club/photos/tower-bridge-received.webp";
+import towerBridge from "@/assets/images/club/photos/tower-bridge.webp";
 
 import { clubCityOf, type ClubCity, type PhotoContext } from "./club-photo-logic";
 
@@ -32,7 +32,7 @@ type Bundled = number;
  * none here and takes the server's place photo (ADR-IMPL-043).
  */
 const PHOTOS: Record<ClubCity, Partial<Record<PhotoContext, Bundled>> & { any: Bundled }> = {
-  london: { any: london, search: londonSearch, request: londonRequest, received: towerBridgeReceived },
+  london: { any: london, search: londonSearch, request: londonRequest, received: towerBridge },
   paris: { any: paris, offer: parisOffer, search: parisSearch, request: parisRequest },
   tokyo: { any: tokyo, offer: tokyoOffer, search: tokyoSearch, request: tokyoRequest },
   dubai: { any: dubai, offer: dubaiOffer, request: dubaiRequest },
@@ -76,6 +76,23 @@ export function clubTripPhoto(code: string | null | undefined): { source: Bundle
   if (!city) return null;
   return { source: PHOTOS[city].any, left: TRIP_WINDOW[city] ?? "50%" };
 }
+
+/**
+ * 08's photograph behind `Request received.`: London's is Tower Bridge — the package's whole photo of it, since its cut
+ * of 08 (`photo-tower-bridge-clean`) stops under the wordmark and over the water the sheet starts on — drawn as 08 frames
+ * it, from 47 % of its width (cover fit). Another city the design draws: its photograph, centred.
+ */
+const RECEIVED_FRAME: Partial<Record<ClubCity, `${number}%`>> = { london: "47.1%" };
+
+export function clubReceivedPhoto(code: string | null | undefined): { source: Bundled; left: `${number}%` } | null {
+  const city = clubCityOf(code);
+  if (!city) return null;
+  const set = PHOTOS[city];
+  return { source: set.received ?? set.any, left: RECEIVED_FRAME[city] ?? "50%" };
+}
+
+/** 08's trip card: the request's photograph (09's, Westminster for London) from 35 % of its height (cover fit). */
+export const RECEIVED_TRIP_FRAME = { top: "35%" } as const;
 
 /** 01's home airport card: the city's photograph across the card, its top edge 50.5 % of the way down (cover fit). */
 const HOME_FRAME: Partial<Record<ClubCity, `${number}%`>> = { "new-york": "50.5%" };

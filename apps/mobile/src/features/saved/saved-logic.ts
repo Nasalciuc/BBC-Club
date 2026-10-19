@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /**
  * What the member saved (ADR-IMPL-056): a fare by its heart (05), a destination by its bookmark (13). Kept on the
  * phone — the club's server has no saved list yet — and counted on Profile (12, `8 Saved`). Pure, so it is tested
@@ -8,31 +10,25 @@ export type SavedItem = { kind: SavedKind; id: string; at: string };
 
 const MAX = 200;
 
-function isItem(v: unknown): v is SavedItem {
-  if (!v || typeof v !== "object") return false;
-  const o = v as Record<string, unknown>;
-  return (
-    (o.kind === "fare" || o.kind === "destination") &&
-    typeof o.id === "string" &&
-    o.id.length > 0 &&
-    typeof o.at === "string"
-  );
-}
+/** The stored blob: a list, each entry read on its own — one unreadable entry costs only itself. */
+const Stored = z.array(z.unknown());
+const Item = z.object({ kind: z.enum(["fare", "destination"]), id: z.string().min(1), at: z.string() });
 
 /** The stored list, newest first; anything unreadable reads as nothing saved, never as a crash. */
 export function parseSaved(raw: string | undefined | null): SavedItem[] {
   if (!raw) return [];
   try {
-    const list: unknown = JSON.parse(raw);
-    if (!Array.isArray(list)) return [];
+    const list = Stored.safeParse(JSON.parse(raw));
+    if (!list.success) return [];
     const seen = new Set<string>();
     const out: SavedItem[] = [];
-    for (const v of list) {
-      if (!isItem(v)) continue;
-      const key = `${v.kind}:${v.id}`;
+    for (const v of list.data) {
+      const item = Item.safeParse(v);
+      if (!item.success) continue;
+      const key = `${item.data.kind}:${item.data.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ kind: v.kind, id: v.id, at: v.at });
+      out.push({ kind: item.data.kind, id: item.data.id, at: item.data.at });
     }
     return out.slice(0, MAX);
   } catch {

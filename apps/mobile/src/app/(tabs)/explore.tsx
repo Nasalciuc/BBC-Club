@@ -1,4 +1,4 @@
-import { type Href, useIsFocused, useRouter } from "expo-router";
+import { type Href, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, type LayoutChangeEvent, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -73,7 +73,10 @@ export default function ExploreScreen() {
   const travelersRef = useRef<TravelersSheetHandle>(null);
   const [size, setSize] = useState({ width: screen.width, height: screen.height });
   const height = size.height;
-  const [sheetIndex, setSheetIndex] = useState<number>(STOP.rest);
+  // `See all ›` under 08's `Other great fares` comes back to Explore with every offer raised (16): a fresh Explore
+  // opens raised, one already open beneath raises its sheet.
+  const { offers: offersParam } = useLocalSearchParams<{ offers?: string }>();
+  const [sheetIndex, setSheetIndex] = useState<number>(() => (offersParam === "all" ? STOP.all : STOP.rest));
   const [profile, setProfile] = useState<Profile | null>(null);
   const { offline, refresh } = useOffline();
   const { home, homeLoading, homeError, defaultFrom, retryHome } = useExploreHome();
@@ -120,6 +123,13 @@ export default function ExploreScreen() {
     dispatch({ type: "clearDestination" });
     setSheetIndex(STOP.rest);
   }
+
+  useEffect(() => {
+    if (offersParam !== "all") return;
+    dispatch({ type: "clearDestination" });
+    setSheetIndex(STOP.all);
+    router.setParams({ offers: undefined });
+  }, [offersParam]);
 
   // Android's Back undoes Explore's own state before it leaves: a route goes back to rest, as the back button does, and
   // every offer comes down as Done brings it (ADR-IMPL-047). A modal sheet over Explore registers later and answers first.

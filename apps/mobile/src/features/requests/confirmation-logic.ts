@@ -37,11 +37,10 @@ export function bodyProblem(issues: readonly { path: readonly (string | number)[
   return first.message;
 }
 
-/** `Round trip · 1 adult` (08): the trip and the travelers the request asked for; none when neither is known. */
-export function tripFacts(trip: string, travelers: string): string | null {
+/** `Round trip`, `1 adult` (08, drawn with a dot between): the trip and the travelers the request asked for. */
+export function tripFacts(trip: string, travelers: string): string[] {
   const kind = trip === "round" ? "Round trip" : trip === "oneway" ? "One way" : null;
-  const parts = [kind, travelers.trim() || null].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
+  return [kind, travelers.trim() || null].filter((part): part is string => part !== null);
 }
 
 /**

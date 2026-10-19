@@ -25,9 +25,13 @@ import { offerCardModel } from "./offer-card-logic";
  * An offer's picture: the one its sender attached, else the design's photo of its city on an offer (02's Eiffel Tower,
  * Mount Fuji, Burj Khalifa — ADR-IMPL-056), else the city's place photo (ADR-IMPL-043); null — the club's image.
  */
-export function offerPicture(item: ProposalCardVM, photo: PlacePhotoVM | undefined): PhotoSource | null {
+export function offerPicture(
+  item: ProposalCardVM,
+  photo: PlacePhotoVM | undefined,
+  context: "offer" | "any" = "offer",
+): PhotoSource | null {
   if (item.mediaUrl) return cardPicture(item.mediaUrl, photo, PICTURE_HEADERS);
-  return clubPhoto(item.route.to, "offer") ?? cardPicture(undefined, photo, PICTURE_HEADERS);
+  return clubPhoto(item.route.to, context) ?? cardPicture(undefined, photo, PICTURE_HEADERS);
 }
 
 /**
@@ -81,6 +85,7 @@ export function OfferCards({
   cardTestID,
   compact = false,
   look = "rest",
+  row,
 }: {
   items: readonly ProposalCardVM[];
   home: HomeVM | null;
@@ -88,15 +93,22 @@ export function OfferCards({
   testID: string;
   /** The cards' testID before each offer's id (`explore.offer`). */
   cardTestID: string;
-  /** `Other great fares` (08): the smaller cards. */
+  /** `Other great fares` (08): the smaller cards, each with its city's whole photograph (08 draws a landscape). */
   compact?: boolean;
   /** `rest` (02) or the raised sheet's shorter cards (`sheet`, 16). */
   look?: "rest" | "sheet";
+  /** The row as its screen draws it: the page's side it runs under, the first card's inset, the space between. */
+  row?: { bleed: number; inset: number; gap: number };
 }) {
   // ADR-IMPL-043: an offer without its own picture shows its city's photo; the club's image until there is one.
   const photoFor = usePlacePhotos(items.map((item) => item.route.to));
   return (
-    <CarouselRow testID={testID} inset={compact ? tokens.space.sm : look === "sheet" ? 11.2 : REST.inset}>
+    <CarouselRow
+      testID={testID}
+      bleed={row?.bleed}
+      inset={row?.inset ?? (compact ? tokens.space.sm : look === "sheet" ? 11.2 : REST.inset)}
+      gap={row?.gap}
+    >
       {items.map((item) => {
         const model = offerCardModel(item, home?.destinations ?? []);
         return (
@@ -108,7 +120,7 @@ export function OfferCards({
             fromPrice={model.fromPrice}
             savePercent={model.savePercent}
             rating={model.rating}
-            image={offerPicture(item, photoFor(item.route.to))}
+            image={offerPicture(item, photoFor(item.route.to), compact ? "any" : "offer")}
             fallback={CLUB_PICTURE}
             onPress={() => onOpenOffer(item)}
             look={look}

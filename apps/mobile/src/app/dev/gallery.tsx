@@ -386,7 +386,7 @@ function GalleryScreen() {
         from="JFK"
         to="LHR"
         dates="Nov 12 – 19, 2026"
-        facts="Round trip · 1 adult"
+        facts={["Round trip", "1 adult"]}
         carrier={{ name: "British Airways", logoUrl: null }}
       />
       <RequestCard

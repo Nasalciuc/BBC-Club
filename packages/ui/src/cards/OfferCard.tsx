@@ -84,6 +84,21 @@ const LOOKS: Record<"rest" | "sheet", CardLook> = {
     pill: { top: 193.5, height: 22.1, left: 11.4, right: 8.4, role: r(tokens.type.offerSmSave) },
   },
 };
+/**
+ * 08's `Other great fares`, measured: 114.2 × 117.2, radius 8.1, on a hairline over a light shadow; the photo across
+ * the top, 77.6 tall; the words 11.55 in — the city's baseline 92, the price's 108.7, `from` before it in slate
+ * (DESIGN.md: a starting fare says so; 08 draws the price alone).
+ */
+const COMPACT = {
+  width: 114.2,
+  height: 117.2,
+  radius: 8.1,
+  photo: 77.6,
+  textLeft: 11.55,
+  city: { role: r(tokens.type.offerCitySm), baseline: 92.0 },
+  price: { role: r(tokens.type.offerPriceSm), baseline: 108.74 },
+  from: r(tokens.type.offerFromSm),
+} as const;
 
 /** What the city leaves at its right for `★ 4.8`. */
 const RATING_ROOM = 30;
@@ -140,26 +155,46 @@ export function OfferCard({
     .filter(Boolean)
     .join(", ");
   if (compact) {
+    const c = COMPACT;
     return (
       <Pressable
         testID={testID}
         accessibilityRole="button"
         accessibilityLabel={[city, fromPrice ? `from ${fromPrice}` : null].filter(Boolean).join(", ")}
         onPress={onPress}
-        style={({ pressed }) => [styles.compactCard, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.compactCard,
+          { width: c.width, minHeight: c.height, borderRadius: c.radius },
+          pressed && styles.pressed,
+        ]}
       >
-        <Photo source={image} fallback={fallback} style={styles.compactPhoto} />
-        <View style={styles.compactBody}>
-          <Text style={styles.compactCity} numberOfLines={1}>
+        <Photo
+          source={image}
+          fallback={fallback}
+          style={{ height: c.photo, borderTopLeftRadius: c.radius, borderTopRightRadius: c.radius }}
+        />
+        <View style={{ paddingLeft: c.textLeft, paddingRight: 8 }}>
+          <Text
+            style={[c.city.role, styles.navy, { marginTop: c.city.baseline - c.photo - baselineOffset(c.city.role) }]}
+            numberOfLines={1}
+          >
             {city}
           </Text>
           {fromPrice ? (
-            <Text style={styles.compactPrice} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-              <Text style={styles.compactFrom}>{"from "}</Text>
+            <Text
+              style={[
+                c.price.role,
+                styles.navy,
+                { marginTop: after(c.price.baseline - c.city.baseline, c.city.role, c.price.role) },
+              ]}
+              numberOfLines={1}
+            >
+              <Text style={[c.from, styles.slate]}>{"from "}</Text>
               {fromPrice}
             </Text>
           ) : null}
         </View>
+        <View pointerEvents="none" style={[styles.compactEdge, { borderRadius: c.radius }]} />
       </Pressable>
     );
   }
@@ -437,11 +472,14 @@ export function CarouselRow({
   testID,
   bleed = tokens.space.gutter,
   inset = tokens.space.sm,
+  gap,
 }: {
   children: ReactNode;
   testID: string;
   bleed?: number;
   inset?: number;
+  /** The space between the cards as the screen draws it (08: 8.55); 8 by default. */
+  gap?: number;
 }) {
   return (
     <ScrollView
@@ -449,7 +487,7 @@ export function CarouselRow({
       horizontal
       showsHorizontalScrollIndicator={false}
       style={{ marginHorizontal: -bleed }}
-      contentContainerStyle={[styles.carouselContent, { paddingHorizontal: inset }]}
+      contentContainerStyle={[styles.carouselContent, { paddingHorizontal: inset }, gap != null && { gap }]}
     >
       {children}
     </ScrollView>
@@ -474,18 +512,17 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceSaveSoft,
   },
   saveText: { color: tokens.colors.textPrimary },
-  // 08: three to the screen's width, the photo over the city and its price.
-  compactCard: {
-    width: 124,
-    borderRadius: tokens.radius.md,
-    backgroundColor: tokens.colors.surfaceCard,
-    ...tokens.elevation.card,
+  // 08: the white card on its hairline over a light shadow.
+  compactCard: { backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.lift },
+  compactEdge: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.colors.borderFaint,
   },
-  compactPhoto: { height: 80, borderTopLeftRadius: tokens.radius.md, borderTopRightRadius: tokens.radius.md },
-  compactBody: { paddingHorizontal: 10, paddingVertical: tokens.space.xs },
-  compactCity: { ...rn(tokens.type.labelStrong), color: tokens.colors.textPrimary },
-  compactPrice: { ...rn(tokens.type.priceSm), color: tokens.colors.textPrimary },
-  compactFrom: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   wide: {
     flexDirection: "row",
     borderRadius: 10,

@@ -1,17 +1,26 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, ModalSheet, type ModalSheetHandle, TextButton, tokens, rn } from "@bbc/ui";
+import {
+  belowBaseline,
+  Button,
+  DELETE_BODY,
+  DELETE_PARTS,
+  MODAL_SHEET_LOOKS,
+  ModalSheet,
+  type ModalSheetHandle,
+  rn,
+  TextButton,
+  tokens,
+} from "@bbc/ui";
 
 import { deleteAccount } from "@/features/auth/flows";
 import { deleteFailureKind, stateCopy } from "@/lib/error-context";
 import { PasswordField } from "./PasswordField";
 import type { ProfileSheetHandle } from "./types";
 
-/** The headline, three lines of words, the field and the two answers, over the home indicator. */
-const SHEET_HEIGHT = 420;
-/** 35: the words 24 pt under the headline, not the medium sheet's 120 from its top. */
-const CONTENT_TOP = 100;
+/** 35 is drawn over a 34-pt home indicator: a taller inset makes the sheet taller by the difference. */
+const IMAGE_INSET = 34;
 
 type Props = {
   /** The member's requests still in progress: deleting the account closes them, and the sheet says so. */
@@ -76,23 +85,22 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
   return (
     <ModalSheet
       ref={modalRef}
-      size="medium"
+      look="delete"
       title="Delete your account?"
       closeTestID="profile.deleteConfirm.close"
       testID="profile.deleteConfirm"
       dismissible={!busy}
       showClose={false}
-      // 35: as tall as the question, its field and its two answers — not the medium sheet's 628 pt.
-      height={SHEET_HEIGHT + insets.bottom}
-      contentTop={CONTENT_TOP}
+      height={MODAL_SHEET_LOOKS.delete.height + Math.max(0, insets.bottom - IMAGE_INSET)}
       insets={insets}
-      footerBottom={tokens.space.xs}
       footer={
-        <>
+        <View style={styles.answers}>
           <Button
             testID="profile.deleteConfirm.confirm"
             label={busy ? "Deleting…" : "Delete account"}
             variant="destructive-filled"
+            height={DELETE_PARTS.pill}
+            text="buttonDelete"
             busy={busy}
             onPress={() => void onDelete()}
           />
@@ -100,28 +108,29 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
             testID="profile.deleteConfirm.cancel"
             label="Cancel"
             tone="primary"
-            size="button"
+            text="buttonCancel"
             disabled={busy}
             onPress={() => modalRef.current?.dismiss()}
           />
-        </>
+        </View>
       }
     >
       <Text style={styles.body}>
         Your profile, preferences and request history are removed from the app. This can’t be undone.
+        {/* 35: what closes with the account on a line of its own. */}
         {openRequests === null
-          ? " Any open requests are closed."
+          ? "\nAny open requests are closed."
           : openRequests > 0
-            ? ` This closes ${openRequests} open request${openRequests === 1 ? "" : "s"}.`
+            ? `\nThis closes ${openRequests} open request${openRequests === 1 ? "" : "s"}.`
             : ""}
       </Text>
-      {/* 325:8427: the label, the field and what is wrong with it, 8 pt apart. */}
       <View style={styles.password}>
         <PasswordField
           testID="profile.deleteConfirm.password"
           label="Password"
           labelTone="caption"
-          icon="lock"
+          icon="lock-fill"
+          look="delete"
           value={password}
           onChangeText={(next) => {
             setPassword(next);
@@ -145,8 +154,10 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
 });
 
 const styles = StyleSheet.create({
-  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  password: { gap: tokens.space.xs },
+  // 35: the words in slate on their own pitch, the field 21.5 under their last baseline, the red pill and `Cancel`.
+  body: { ...DELETE_BODY, color: tokens.colors.textSecondary },
+  password: { gap: tokens.space.xs, marginTop: DELETE_PARTS.field - belowBaseline(DELETE_BODY) },
+  answers: { gap: DELETE_PARTS.gap, alignItems: "stretch" },
   // The field at fault: its explanation right under it (319:202).
   wrong: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).

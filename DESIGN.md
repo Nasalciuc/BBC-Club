@@ -62,6 +62,14 @@ colors:
   dates-mark: "#EBF3F9"
   pill-disabled: "#EEF4F9"
   text-pill-disabled: "#7B89A0"
+  text-subtle: "#3F4C65"
+  scrim-question: "rgba(12,15,22,0.685)"
+  grabber-question: "#E1E3E7"
+  surface-round: "#F3F3F3"
+  action-danger: "#F34649"
+  grabber-delete: "#BFC4CB"
+  scrim-delete: "rgba(10,13,15,0.74)"
+  text-field-label: "#243961"
   globe-ocean: "#1B5E9E"
   globe-ocean-deep: "#0B3F73"
   globe-land: "#8FA77A"
@@ -1500,6 +1508,192 @@ typography:
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: 0.22px
+  wordmark-received:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.65px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.51px
+  wordmark-received-club:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: -0.32px
+  received-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 27.81px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.05px
+  received-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.05px
+    fontWeight: 400
+    lineHeight: 1.388
+    letterSpacing: 0.42px
+  received-phone:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.97px
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: 0.06px
+  received-next:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 19.37px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.3px
+  received-trip-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 7.43px
+    fontWeight: 500
+    lineHeight: 1.25
+    letterSpacing: 1.47px
+  received-trip-codes:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.95px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.49px
+  received-trip-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.48px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.26px
+  received-trip-facts:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.28px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.5px
+  received-airline:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.53px
+    fontWeight: 500
+    lineHeight: 1.25
+    letterSpacing: -0.09px
+  button-received:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.9px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.02px
+  received-section:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.5px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.01px
+  received-see-all:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.9px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.13px
+  offer-city-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.24px
+  offer-price-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.63px
+  offer-from-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.24px
+  saved-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 27.7px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -0.42px
+  saved-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.86px
+    fontWeight: 400
+    lineHeight: 1.327
+    letterSpacing: 0.16px
+  button-saved:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.97px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  limited-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 29px
+    fontWeight: 700
+    lineHeight: 1.13
+    letterSpacing: -1px
+  limited-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.95px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: -0.1px
+  button-limited:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.3px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: -0.16px
+  delete-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 23.24px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.06px
+  delete-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.8px
+    fontWeight: 400
+    lineHeight: 1.34
+    letterSpacing: 0.2px
+  delete-field:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.68px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: -0.06px
+  button-delete:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.72px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.12px
+  button-cancel:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.8px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.04px
+  question-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20.63px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.47px
+  button-question:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.67px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.12px
+  button-not-now:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.53px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.3px
 
 rounded:
   xxs: 6px
@@ -1548,6 +1742,11 @@ elevation:
     blur: 3px
     color: "{colors.shadow}"
     opacity: 0.3
+  lift:
+    offsetY: 1px
+    blur: 4px
+    color: "{colors.shadow}"
+    opacity: 0.08
 
 components:
   screen-page:

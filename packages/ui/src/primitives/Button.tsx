@@ -183,8 +183,9 @@ const TONE: Record<Variant, { frame: ViewStyle; pressed: ViewStyle; label: TextS
     pressed: { backgroundColor: tokens.colors.statusDangerTint },
     label: { color: tokens.colors.statusDangerText },
   },
+  // 35's red, a little lighter than the words of `Sign out` and `Delete account` (`action-danger`).
   "destructive-filled": {
-    frame: { backgroundColor: tokens.colors.statusDangerText },
+    frame: { backgroundColor: tokens.colors.actionDanger },
     pressed: { opacity: 0.9 },
     label: { color: tokens.colors.textOnPhoto },
   },

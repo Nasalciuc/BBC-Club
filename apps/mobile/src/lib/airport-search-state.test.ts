@@ -71,7 +71,8 @@ describe("nearFirst", () => {
   const ny = (code: string) => ({ code, tz: "America/New_York" });
   const msy = { code: "MSY", tz: "America/Chicago" };
   const ncl = { code: "NCL", tz: "Europe/London" };
-  const old = { code: "OLD" };
+  // An airport the server knows no zone for.
+  const old: { code: string; tz?: string } = { code: "OLD" };
 
   test("the phone's zone first, each group in the server's order (14: New → JFK, EWR, LGA)", () => {
     const server = [ny("JFK"), ny("EWR"), msy, ncl, ny("LGA"), old];

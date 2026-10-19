@@ -6,6 +6,7 @@ import { Icon } from "../icons";
 import { Photo, type PhotoSource } from "../primitives/Photo";
 import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
+import type { AirlineRibbon } from "./FarePage";
 import type { AirlineMark } from "./FlightCard";
 
 type Carrier = { name: string; logoUrl: string | null };
@@ -306,6 +307,8 @@ const summary = StyleSheet.create({
 
 type TripProps = {
   photo: PhotoSource | null;
+  /** The part of the photograph the card shows (08: London's from 35 % of its height, cover fit). */
+  position?: ImageContentPosition;
   fallback: PhotoSource | null;
   /** `BUSINESS CLASS`. */
   cabin: string;
@@ -313,41 +316,282 @@ type TripProps = {
   to: string;
   /** `Nov 12 – 19, 2026`. */
   dates: string | null;
-  /** `Round trip · 1 adult`. */
-  facts: string | null;
+  /** `Round trip`, `1 adult`: drawn with a dot between them. */
+  facts: readonly string[];
   carrier?: Carrier | null;
+  /** The airline's ribbon alone (British Airways): drawn over its name in capitals, as 08 draws the lockup. */
+  ribbon?: AirlineRibbon | null;
+  /** The airline's whole mark where the design draws one (Virgin Atlantic, American). */
+  mark?: AirlineMark | null;
   testID?: string;
 };
 
 /**
- * The request just received (08, `London is next.`): the city's photograph, the cabin over the route in its codes, the
- * days and the trip under it, the airline at the right where the request came from a fare.
+ * 08, from the card's top-left (pt; 351 wide on the page's 21.2 gutters, 96.8 tall, radius 9, on a hairline): the
+ * photograph 5.1 in and 5.5 down, 123.3 × 86.8, radius 8.2; the words from 140.6 — `BUSINESS CLASS` on 17.86, the
+ * codes on 43 with the arrow (17.06 at 2.1) 12.5 after the first and 12.4 before the second, centred on their line;
+ * the days on 63.43, the trip and the travelers on 79.02 with a 2.3-pt dot 5.66 after the trip and 7.13 before the
+ * travelers, its middle 3.8 over the baseline. The airline at the right around x 317.4: the ribbon's window 1.1 its
+ * crop's size centred 20.37 down, the name in capitals under it, a word to a line, on 35.15 and 43.95.
  */
-export function TripCard({ photo, fallback, cabin, from, to, dates, facts, carrier, testID }: TripProps) {
-  const spoken = [cabin, `${from} to ${to}`, dates, facts, carrier?.name].filter(Boolean).join(", ");
+const RECEIVED = {
+  height: 96.8,
+  radius: 9,
+  photo: { left: 5.12, top: 5.5, width: 123.3, height: 86.8, radius: 8.2 },
+  text: 140.6,
+  cabin: { role: role(tokens.type.receivedTripLabel), baseline: 17.86 },
+  codes: { role: role(tokens.type.receivedTripCodes), baseline: 43.0 },
+  arrow: { size: 17.06, stroke: 2.1, before: 12.5, after: 12.42 },
+  dates: { role: role(tokens.type.receivedTripDates), baseline: 63.43 },
+  facts: { role: role(tokens.type.receivedTripFacts), baseline: 79.02 },
+  dot: { size: 2.3, rise: 3.79, before: 5.66, after: 7.13 },
+  airline: { centre: 317.4, width: 64, ribbon: { middle: 20.37, scale: 1.1 }, mark: { middle: 29.75 } },
+  name: { role: role(tokens.type.receivedAirline), first: 35.15, pitch: 8.8 },
+} as const;
+
+/**
+ * The request just received (08, `London is next.`): the city's photograph, the cabin over the route in its codes, the
+ * days and the trip under it, the airline at the right where the request came from a fare — the ribbon over its name,
+ * its mark, its logo or its name, never one made up for it.
+ */
+export function TripCard({
+  photo,
+  position,
+  fallback,
+  cabin,
+  from,
+  to,
+  dates,
+  facts,
+  carrier,
+  ribbon,
+  mark,
+  testID,
+}: TripProps) {
+  const g = RECEIVED;
+  const spoken = [cabin, `${from} to ${to}`, dates, ...facts, carrier?.name].filter(Boolean).join(", ");
+  const right = carrier || mark ? g.airline.width + 8 : 12;
   return (
-    <View style={styles.card} testID={testID} accessible accessibilityLabel={spoken}>
-      <Photo source={photo} fallback={fallback} style={styles.tripPhoto} />
-      <View style={styles.body}>
-        <View style={styles.top}>
-          <Text style={[styles.label, styles.grow]}>{cabin}</Text>
-          {carrier ? (
-            <View style={styles.carrierBox}>
-              <CarrierMark carrier={carrier} />
-            </View>
-          ) : null}
+    <View
+      style={[received.card, { minHeight: g.height, borderRadius: g.radius }]}
+      testID={testID}
+      accessible
+      accessibilityLabel={spoken}
+    >
+      <Photo
+        source={photo}
+        fallback={fallback}
+        position={position}
+        style={[
+          received.absolute,
+          {
+            left: g.photo.left,
+            top: g.photo.top,
+            width: g.photo.width,
+            height: g.photo.height,
+            borderRadius: g.photo.radius,
+          },
+        ]}
+      />
+      <View style={{ marginLeft: g.text, marginRight: right }}>
+        <Text
+          style={[g.cabin.role, received.label, { marginTop: topOf(g.cabin.baseline, g.cabin.role) }]}
+          numberOfLines={1}
+        >
+          {cabin}
+        </Text>
+        <View
+          style={[
+            received.row,
+            {
+              marginTop:
+                g.codes.baseline - g.cabin.baseline - belowBaseline(g.cabin.role) - baselineOffset(g.codes.role),
+            },
+          ]}
+        >
+          <Text style={[g.codes.role, received.navy]}>{from}</Text>
+          <View style={{ marginLeft: g.arrow.before, marginRight: g.arrow.after }}>
+            <Icon
+              name="arrow-right"
+              size={g.arrow.size}
+              color={tokens.colors.textPrimary}
+              strokeWidth={g.arrow.stroke}
+            />
+          </View>
+          <Text style={[g.codes.role, received.navy]}>{to}</Text>
         </View>
-        <View style={styles.route}>
-          <Text style={styles.codes}>{from}</Text>
-          <Icon name="arrow-right" size={20} color={tokens.colors.textPrimary} strokeWidth={2} />
-          <Text style={styles.codes}>{to}</Text>
-        </View>
-        {dates ? <Text style={styles.small}>{dates}</Text> : null}
-        {facts ? <Text style={styles.small}>{facts}</Text> : null}
+        {dates ? (
+          <Text
+            style={[
+              g.dates.role,
+              received.slate,
+              {
+                marginTop:
+                  g.dates.baseline - g.codes.baseline - belowBaseline(g.codes.role) - baselineOffset(g.dates.role),
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {dates}
+          </Text>
+        ) : null}
+        {facts.length > 0 ? (
+          <View
+            style={[
+              received.row,
+              received.start,
+              {
+                marginTop:
+                  g.facts.baseline -
+                  (dates ? g.dates.baseline : g.codes.baseline) -
+                  belowBaseline(dates ? g.dates.role : g.codes.role) -
+                  baselineOffset(g.facts.role),
+              },
+            ]}
+          >
+            {facts.map((fact, i) => (
+              <View key={fact} style={received.row}>
+                {i > 0 ? (
+                  <View
+                    style={[
+                      received.dot,
+                      {
+                        marginLeft: g.dot.before,
+                        marginRight: g.dot.after,
+                        marginTop: baselineOffset(g.facts.role) - g.dot.rise - g.dot.size / 2,
+                      },
+                    ]}
+                  />
+                ) : null}
+                <Text style={[g.facts.role, received.slate]}>{fact}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
+      <ReceivedAirline carrier={carrier ?? null} ribbon={ribbon ?? null} mark={mark ?? null} />
+      <View pointerEvents="none" style={[summary.edge, { borderRadius: g.radius }]} />
     </View>
   );
 }
+
+/** 08's airline at the card's right: the ribbon over the name, a word to a line; else the mark, the logo, the name. */
+function ReceivedAirline({
+  carrier,
+  ribbon,
+  mark,
+}: {
+  carrier: Carrier | null;
+  ribbon: AirlineRibbon | null;
+  mark: AirlineMark | null;
+}) {
+  const g = RECEIVED;
+  const column = { left: g.airline.centre - g.airline.width / 2, width: g.airline.width };
+  if (ribbon && carrier) {
+    const k = g.airline.ribbon.scale;
+    const w = ribbon.window.width * k;
+    const h = ribbon.window.height * k;
+    const top = g.airline.ribbon.middle - h / 2;
+    const words = carrier.name.toUpperCase().split(/\s+/).filter(Boolean);
+    return (
+      <View
+        style={[received.absolute, received.centre, column, { top: 0 }]}
+        importantForAccessibility="no-hide-descendants"
+      >
+        <View style={[received.window, { width: w, height: h, marginTop: top }]}>
+          <Image
+            source={ribbon.source}
+            style={[
+              received.absolute,
+              {
+                width: ribbon.width * k,
+                height: ribbon.height * k,
+                left: -ribbon.window.left * k,
+                top: -ribbon.window.top * k,
+              },
+            ]}
+            accessibilityIgnoresInvertColors
+          />
+        </View>
+        {words.map((word, i) => (
+          <Text
+            key={`${word}-${i}`}
+            style={[
+              g.name.role,
+              received.airline,
+              {
+                marginTop:
+                  i === 0
+                    ? g.name.first - (top + h) - baselineOffset(g.name.role)
+                    : g.name.pitch - belowBaseline(g.name.role) - baselineOffset(g.name.role),
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {word}
+          </Text>
+        ))}
+      </View>
+    );
+  }
+  if (mark) {
+    return (
+      <Image
+        source={mark.source}
+        style={[
+          received.absolute,
+          {
+            left: g.airline.centre - mark.width / 2,
+            top: g.airline.mark.middle - mark.height / 2,
+            width: mark.width,
+            height: mark.height,
+          },
+        ]}
+        accessibilityIgnoresInvertColors
+      />
+    );
+  }
+  if (!carrier) return null;
+  return (
+    <View
+      style={[
+        received.absolute,
+        received.centre,
+        column,
+        { top: g.airline.mark.middle - 12, height: 24, justifyContent: "center" },
+      ]}
+    >
+      {carrier.logoUrl ? (
+        <CarrierMark carrier={carrier} />
+      ) : (
+        <Text style={[g.name.role, received.airline, received.centreText]} numberOfLines={2}>
+          {carrier.name}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+const received = StyleSheet.create({
+  card: { backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.soft },
+  absolute: { position: "absolute" },
+  row: { flexDirection: "row", alignItems: "center" },
+  start: { alignItems: "flex-start" },
+  centre: { alignItems: "center" },
+  centreText: { textAlign: "center" },
+  navy: { color: tokens.colors.textPrimary },
+  slate: { color: tokens.colors.textSecondary },
+  label: { color: tokens.colors.textSecondary },
+  airline: { color: tokens.colors.textSubtle },
+  dot: {
+    width: RECEIVED.dot.size,
+    height: RECEIVED.dot.size,
+    borderRadius: RECEIVED.dot.size / 2,
+    backgroundColor: tokens.colors.textSecondary,
+    alignSelf: "flex-start",
+  },
+  window: { overflow: "hidden" },
+});
 
 type PhotoCardProps = {
   photo: PhotoSource | null;
@@ -424,15 +668,6 @@ export function TripPhotoCard({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    gap: tokens.space.sm,
-    padding: tokens.space.xs,
-    borderRadius: tokens.radius.md,
-    backgroundColor: tokens.colors.surfaceCard,
-    ...tokens.elevation.card,
-  },
   // 12: four to the screen's width. Larger text makes the cards taller, never cut: the city alone keeps one line.
   photoCard: {
     width: 89.4,
@@ -455,15 +690,6 @@ const styles = StyleSheet.create({
     color: tokens.colors.textOnPhoto,
     marginTop: 19.9 - 8.1 - belowBaseline(tokens.type.tripDates) - baselineOffset(tokens.type.tripRoute),
   },
-  tripPhoto: { width: 120, minHeight: 96, borderRadius: tokens.radius.sm },
-  body: { flex: 1, gap: tokens.space.xxs, paddingVertical: tokens.space.xxs, paddingRight: tokens.space.xxs },
-  top: { flexDirection: "row", alignItems: "flex-start", gap: tokens.space.xs },
-  grow: { flex: 1 },
-  title: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
-  small: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  // The airline at the right in two lines at most (08: `British Airways` over itself), the cabin keeping its line.
-  carrierBox: { maxWidth: 76, alignItems: "flex-end" },
   carrier: {
     ...rn(tokens.type.caption),
     color: tokens.colors.textPrimary,
@@ -471,18 +697,4 @@ const styles = StyleSheet.create({
   },
   right: { textAlign: "right" },
   logo: { height: 18, width: 80 },
-  rule: { height: StyleSheet.hairlineWidth * 2, backgroundColor: tokens.colors.borderDefault, marginVertical: 2 },
-  bottom: { flexDirection: "row", alignItems: "stretch", gap: tokens.space.xs },
-  dates: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
-  vrule: { width: StyleSheet.hairlineWidth * 2, backgroundColor: tokens.colors.borderDefault },
-  price: { alignItems: "flex-start" },
-  amount: { ...rn(tokens.type.priceSm), color: tokens.colors.textPrimary },
-  save: {
-    ...rn(tokens.type.caption),
-    color: tokens.colors.textPrimary,
-    fontFamily: rn(tokens.type.labelStrong).fontFamily,
-  },
-  label: { ...rn(tokens.type.label), color: tokens.colors.textSecondary },
-  route: { flexDirection: "row", alignItems: "center", gap: tokens.space.xs },
-  codes: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
 });

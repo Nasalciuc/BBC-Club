@@ -15,7 +15,6 @@ re-encoded as WebP. Nothing here was generated or retouched; to replace a file, 
 | `photos/tokyo-request.webp`         | `locked/photos/photo-tokyo-request.png`            | `3f5a547b2bd1e1ae…` | 283x275   | WebP q90      |
 | `photos/dubai-request.webp`         | `locked/photos/photo-dubai-request.png`            | `491c015976842158…` | 283x245   | WebP q90      |
 | `photos/paris-request.webp`         | `locked/photos/photo-paris-request.png`            | `3e57f061e1c691c1…` | 283x267   | WebP q90      |
-| `photos/tower-bridge-received.webp` | `locked/photos/photo-tower-bridge-clean.png`       | `527d664cd0c18a33…` | 851x420   | WebP q90      |
 | `photos/seat-thumb.webp`            | `locked/photos/photo-business-seat-thumbnail.png`  | `998bdf289abe0bc5…` | 239x110   | WebP q90      |
 | `photos/lounge-thumb.webp`          | `locked/photos/photo-airport-lounge-thumbnail.png` | `cb14cbb48bc73fc5…` | 237x110   | WebP q90      |
 | `photos/london.webp`                | `london.png`                                       | `2b3073364c1ea8f1…` | 1536x1024 | WebP q86      |

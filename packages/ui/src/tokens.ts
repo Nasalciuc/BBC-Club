@@ -59,6 +59,14 @@ export const tokens = {
   "datesMark": "#EBF3F9",
   "pillDisabled": "#EEF4F9",
   "textPillDisabled": "#7B89A0",
+  "textSubtle": "#3F4C65",
+  "scrimQuestion": "rgba(12,15,22,0.685)",
+  "grabberQuestion": "#E1E3E7",
+  "surfaceRound": "#F3F3F3",
+  "actionDanger": "#F34649",
+  "grabberDelete": "#BFC4CB",
+  "scrimDelete": "rgba(10,13,15,0.74)",
+  "textFieldLabel": "#243961",
   "globeOcean": "#1B5E9E",
   "globeOceanDeep": "#0B3F73",
   "globeLand": "#8FA77A",
@@ -1751,6 +1759,223 @@ export const tokens = {
     "fontWeight": "600",
     "lineHeight": 14,
     "letterSpacing": 0.22
+  },
+  "wordmarkReceived": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 16.65,
+    "fontWeight": "600",
+    "lineHeight": 21,
+    "letterSpacing": -0.51
+  },
+  "wordmarkReceivedClub": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 17,
+    "fontWeight": "400",
+    "lineHeight": 21,
+    "letterSpacing": -0.32
+  },
+  "receivedTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 27.81,
+    "fontWeight": "700",
+    "lineHeight": 35,
+    "letterSpacing": -0.05
+  },
+  "receivedBody": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 14.05,
+    "fontWeight": "400",
+    "lineHeight": 20,
+    "letterSpacing": 0.42
+  },
+  "receivedPhone": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.97,
+    "fontWeight": "600",
+    "lineHeight": 20,
+    "letterSpacing": 0.06
+  },
+  "receivedNext": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 19.37,
+    "fontWeight": "600",
+    "lineHeight": 24,
+    "letterSpacing": 0.3
+  },
+  "receivedTripLabel": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 7.43,
+    "fontWeight": "500",
+    "lineHeight": 9,
+    "letterSpacing": 1.47
+  },
+  "receivedTripCodes": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 17.95,
+    "fontWeight": "600",
+    "lineHeight": 22,
+    "letterSpacing": 0.49
+  },
+  "receivedTripDates": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 11.48,
+    "fontWeight": "400",
+    "lineHeight": 14,
+    "letterSpacing": 0.26
+  },
+  "receivedTripFacts": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 11.28,
+    "fontWeight": "400",
+    "lineHeight": 14,
+    "letterSpacing": 0.5
+  },
+  "receivedAirline": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 8.53,
+    "fontWeight": "500",
+    "lineHeight": 11,
+    "letterSpacing": -0.09
+  },
+  "buttonReceived": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 12.9,
+    "fontWeight": "600",
+    "lineHeight": 17,
+    "letterSpacing": 0.02
+  },
+  "receivedSection": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.5,
+    "fontWeight": "600",
+    "lineHeight": 17,
+    "letterSpacing": -0.01
+  },
+  "receivedSeeAll": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 9.9,
+    "fontWeight": "500",
+    "lineHeight": 13,
+    "letterSpacing": 0.13
+  },
+  "offerCitySm": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 10,
+    "fontWeight": "500",
+    "lineHeight": 13,
+    "letterSpacing": 0.24
+  },
+  "offerPriceSm": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13,
+    "fontWeight": "700",
+    "lineHeight": 16,
+    "letterSpacing": -0.63
+  },
+  "offerFromSm": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 10,
+    "fontWeight": "400",
+    "lineHeight": 13,
+    "letterSpacing": 0.24
+  },
+  "savedTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 27.7,
+    "fontWeight": "700",
+    "lineHeight": 30,
+    "letterSpacing": -0.42
+  },
+  "savedBody": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 15.86,
+    "fontWeight": "400",
+    "lineHeight": 21,
+    "letterSpacing": 0.16
+  },
+  "buttonSaved": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 15.97,
+    "fontWeight": "500",
+    "lineHeight": 21,
+    "letterSpacing": 0.2
+  },
+  "limitedTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 29,
+    "fontWeight": "700",
+    "lineHeight": 33,
+    "letterSpacing": -1
+  },
+  "limitedBody": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 17.95,
+    "fontWeight": "400",
+    "lineHeight": 22,
+    "letterSpacing": -0.1
+  },
+  "buttonLimited": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 16.3,
+    "fontWeight": "500",
+    "lineHeight": 21,
+    "letterSpacing": -0.16
+  },
+  "deleteTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 23.24,
+    "fontWeight": "700",
+    "lineHeight": 29,
+    "letterSpacing": -0.06
+  },
+  "deleteBody": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 14.8,
+    "fontWeight": "400",
+    "lineHeight": 20,
+    "letterSpacing": 0.2
+  },
+  "deleteField": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.68,
+    "fontWeight": "400",
+    "lineHeight": 18,
+    "letterSpacing": -0.06
+  },
+  "buttonDelete": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.72,
+    "fontWeight": "600",
+    "lineHeight": 18,
+    "letterSpacing": 0.12
+  },
+  "buttonCancel": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.8,
+    "fontWeight": "600",
+    "lineHeight": 18,
+    "letterSpacing": 0.04
+  },
+  "questionTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 20.63,
+    "fontWeight": "700",
+    "lineHeight": 26,
+    "letterSpacing": -0.47
+  },
+  "buttonQuestion": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 14.67,
+    "fontWeight": "600",
+    "lineHeight": 19,
+    "letterSpacing": 0.12
+  },
+  "buttonNotNow": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 14.53,
+    "fontWeight": "500",
+    "lineHeight": 19,
+    "letterSpacing": 0.3
   }
 },
   radius: {
@@ -1797,6 +2022,9 @@ export const tokens = {
   },
   "knob": {
     "boxShadow": "0px 1.5px 3px 0px rgba(15, 23, 42, 0.3)"
+  },
+  "lift": {
+    "boxShadow": "0px 1px 4px 0px rgba(15, 23, 42, 0.08)"
   }
 },
 } as const;

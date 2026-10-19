@@ -13,14 +13,34 @@ type Props = {
   autoFocus?: boolean;
   /** The field's icon in its column (35: the lock). */
   icon?: IconName;
+  /** `delete`: 35's — `Password` alone in the field, the filled lock before it, no eye (35 draws none). */
+  look?: "delete";
 };
 
 /**
  * Figma's password field (319:202, 238:4974): the text field with `Enter password` and, at its right edge, the eye in a
  * 44-pt target that shows or hides what was typed.
  */
-export function PasswordField({ testID, label, labelTone, value, onChangeText, error, autoFocus, icon }: Props) {
+export function PasswordField({ testID, label, labelTone, value, onChangeText, error, autoFocus, icon, look }: Props) {
   const [visible, setVisible] = useState(false);
+  if (look === "delete") {
+    return (
+      <TextField
+        testID={testID}
+        look="delete"
+        label={label}
+        icon={icon}
+        value={value}
+        onChangeText={onChangeText}
+        error={error}
+        autoFocus={autoFocus}
+        secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        textContentType="password"
+      />
+    );
+  }
   return (
     <TextField
       testID={testID}

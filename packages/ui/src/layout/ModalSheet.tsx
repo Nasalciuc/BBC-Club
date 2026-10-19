@@ -18,7 +18,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { Icon, type IconName } from "../icons";
+import { ArtGlyph, Icon, type IconName } from "../icons";
 import { CloseButton } from "../primitives/CloseButton";
 import { baselineOffset, rn } from "../rn-type";
 import { tokens } from "../tokens";
@@ -186,10 +186,11 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     HANDLE_AREA + (icon ? ICON_AREA : 0) + (headline ? HEADER_HEADLINE : titleAlone ? TITLE_LINE : HEADER_TITLE);
   const contentOffset = Math.max(0, (contentTop ?? modalSheetContentTop(size)) - headerBottom);
   const look = lookName ? MODAL_SHEET_LOOKS[lookName] : null;
-  const sheetHeight = Math.min(
-    modalSheetHeight(size, windowHeight),
-    height ?? look?.height ?? Number.POSITIVE_INFINITY,
-  );
+  // A centred title that wraps (larger text, a longer question) makes the sheet taller by its extra lines (25).
+  const [titleLines, setTitleLines] = useState(1);
+  const grow = look?.title.align === "centre" ? (titleLines - 1) * look.title.role.lineHeight : 0;
+  const sheetHeight =
+    Math.min(modalSheetHeight(size, windowHeight), height ?? look?.height ?? Number.POSITIVE_INFINITY) + grow;
 
   return (
     <BottomSheetModal
@@ -203,7 +204,7 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
         setOpen(false);
         onDismiss?.();
       }}
-      backdropComponent={dismissible ? ClosingBackdrop : StillBackdrop}
+      backdropComponent={BACKDROPS[look?.scrim ?? "night"][dismissible ? "closing" : "still"]}
       handleComponent={look ? null : Handle}
       backgroundStyle={[
         styles.background,
@@ -228,10 +229,21 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
               ]}
               pointerEvents="none"
             />
+            {look.mark ? (
+              // The question's own mark (25: the bell), centred over the title.
+              <View
+                style={[styles.lookMark, { top: look.mark.top }]}
+                pointerEvents="none"
+                importantForAccessibility="no-hide-descendants"
+              >
+                <ArtGlyph art={look.mark.art} height={look.mark.height} color={look.mark.color} />
+              </View>
+            ) : null}
             <Text
               style={[
                 look.title.role,
                 styles.lookTitle,
+                look.title.align === "centre" && styles.centred,
                 {
                   marginTop: look.title.baseline - baselineOffset(look.title.role),
                   marginLeft: look.title.left,
@@ -239,6 +251,11 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
                 },
               ]}
               accessibilityRole="header"
+              onTextLayout={
+                look.title.align === "centre"
+                  ? (e) => setTitleLines(Math.max(1, e.nativeEvent.lines.length))
+                  : undefined
+              }
             >
               {title}
             </Text>
@@ -410,18 +427,12 @@ export function useKeyboardShown(): boolean {
   return shown;
 }
 
-// gorhom mounts `backdropComponent` as a component type: one created per render would remount on every render. Two
-// module-level backdrops instead — a tap closes the sheet, or (while a request or a save is in flight) does nothing.
-function ClosingBackdrop(props: BottomSheetBackdropProps) {
-  return <NightBackdrop {...props} pressBehavior="close" />;
-}
-
-function StillBackdrop(props: BottomSheetBackdropProps) {
-  return <NightBackdrop {...props} pressBehavior="none" />;
-}
-
-/** The page dimmed under the sheet (`scrim`). */
-function NightBackdrop({ pressBehavior, ...props }: BottomSheetBackdropProps & { pressBehavior: "close" | "none" }) {
+/** The page dimmed under the sheet (`scrim`; 25's question and 35's deletion dim it darker). */
+function NightBackdrop({
+  pressBehavior,
+  color,
+  ...props
+}: BottomSheetBackdropProps & { pressBehavior: "close" | "none"; color: string }) {
   return (
     <BottomSheetBackdrop
       {...props}
@@ -429,10 +440,29 @@ function NightBackdrop({ pressBehavior, ...props }: BottomSheetBackdropProps & {
       disappearsOnIndex={-1}
       opacity={1}
       pressBehavior={pressBehavior}
-      style={[props.style, styles.backdrop]}
+      style={[props.style, { backgroundColor: color }]}
     />
   );
 }
+
+// gorhom mounts `backdropComponent` as a component type: one created per render would remount on every render. The
+// backdrops are made once, here — a tap closes the sheet, or (while a request or a save is in flight) does nothing.
+function backdrops(color: string) {
+  return {
+    closing: function ClosingBackdrop(props: BottomSheetBackdropProps) {
+      return <NightBackdrop {...props} pressBehavior="close" color={color} />;
+    },
+    still: function StillBackdrop(props: BottomSheetBackdropProps) {
+      return <NightBackdrop {...props} pressBehavior="none" color={color} />;
+    },
+  };
+}
+
+const BACKDROPS = {
+  night: backdrops(tokens.colors.scrim),
+  question: backdrops(tokens.colors.scrimQuestion),
+  delete: backdrops(tokens.colors.scrimDelete),
+} as const;
 
 function Handle(_props: BottomSheetHandleProps) {
   return (
@@ -443,7 +473,6 @@ function Handle(_props: BottomSheetHandleProps) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { backgroundColor: tokens.colors.scrim },
   background: {
     backgroundColor: tokens.colors.surfaceCard,
     borderTopLeftRadius: tokens.radius.xl,
@@ -470,6 +499,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.lg },
   footer: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.md, gap: tokens.space.sm },
   lookGrabber: { position: "absolute", left: "50%" },
+  lookMark: { position: "absolute", left: 0, right: 0, alignItems: "center" },
   lookTitle: { color: tokens.colors.textPrimary },
   lookClose: { position: "absolute" },
 });

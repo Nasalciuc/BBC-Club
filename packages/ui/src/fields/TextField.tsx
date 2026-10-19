@@ -3,7 +3,7 @@ import { StyleSheet, Text, type TextInputProps, type TextStyle, View } from "rea
 import { Icon, type IconName } from "../icons";
 import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
-import { TEXT_REQUEST } from "./field-looks";
+import { TEXT_DELETE, TEXT_REQUEST } from "./field-looks";
 import { SheetTextInput } from "./SheetTextInput";
 
 type Props = Omit<TextInputProps, "style" | "placeholderTextColor"> & {
@@ -16,8 +16,11 @@ type Props = Omit<TextInputProps, "style" | "placeholderTextColor"> & {
   error?: boolean;
   /** Inside the field at its right edge — the password's eye. */
   trailing?: ReactNode;
-  /** `request`: the request sheet's (06, 22, 23), as measured. Without one, sheet 39's. */
-  look?: "request";
+  /**
+   * `request`: the request sheet's (06, 22, 23), as measured. `delete`: 35's password — the label alone in the field as
+   * its placeholder, the filled lock before it. Without one, sheet 39's.
+   */
+  look?: "request" | "delete";
   testID: string;
 };
 
@@ -41,6 +44,65 @@ export function TextField({
   ...input
 }: Props) {
   const [focused, setFocused] = useState(false);
+  if (look === "delete") {
+    const l = TEXT_DELETE;
+    return (
+      <View style={[drawn.field, { minHeight: l.height, borderRadius: l.radius }]}>
+        {icon ? (
+          <View
+            style={[
+              drawn.icon,
+              { left: l.icon.centre - l.icon.size / 2, top: l.height / 2 + l.icon.drop - l.icon.size / 2 },
+            ]}
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Icon
+              name={icon}
+              size={l.icon.size}
+              color={error ? tokens.colors.statusDanger : tokens.colors.textPrimary}
+            />
+          </View>
+        ) : null}
+        <SheetTextInput
+          {...input}
+          testID={testID}
+          editable={editable}
+          accessibilityLabel={accessibilityLabel ?? label}
+          placeholder={label}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
+          placeholderTextColor={error ? tokens.colors.statusDangerText : tokens.colors.textFieldLabel}
+          style={[
+            l.value.role,
+            styles.inputReset,
+            {
+              color: tokens.colors.textPrimary,
+              marginLeft: l.value.left,
+              marginRight: tokens.space.sm,
+              marginTop: l.value.baseline - baselineOffset(l.value.role),
+              minHeight: l.value.role.lineHeight,
+            },
+          ]}
+        />
+        {trailing}
+        <View
+          pointerEvents="none"
+          style={[
+            drawn.edge,
+            { borderRadius: l.radius },
+            focused && !error && drawn.edgeFocus,
+            error && drawn.edgeError,
+          ]}
+        />
+      </View>
+    );
+  }
   if (look === "request") {
     const l = TEXT_REQUEST;
     const muted = !editable;

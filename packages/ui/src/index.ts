@@ -6,7 +6,7 @@ export { Avatar } from "./primitives/Avatar";
 export { BackButton } from "./primitives/BackButton";
 export { Button } from "./primitives/Button";
 export { CabinCard } from "./primitives/CabinCard";
-export { CheckCircle } from "./primitives/CheckCircle";
+export { CHECK_CIRCLE_SIZE, CheckCircle } from "./primitives/CheckCircle";
 export { CloseButton } from "./primitives/CloseButton";
 export { Divider } from "./primitives/Divider";
 export { InfoCard } from "./primitives/InfoCard";
@@ -73,7 +73,14 @@ export { HOME_SHEET_HANDLE, HOME_SHEET_PILL, HomeSheet } from "./layout/HomeShee
 export { ModalSheet, type ModalSheetHandle, useKeyboardShown } from "./layout/ModalSheet";
 export { PageModal, type PageModalHandle } from "./layout/PageModal";
 export { MODAL_SHEET_TOP, modalSheetHeight, type ModalSheetSize } from "./layout/modal-sheet-sizes";
-export { ABOUT_BODY, MODAL_SHEET_LOOKS, type ModalSheetLookName } from "./layout/modal-sheet-looks";
+export {
+  ABOUT_BODY,
+  DELETE_BODY,
+  DELETE_PARTS,
+  MODAL_SHEET_LOOKS,
+  QUESTION_ANSWERS,
+  type ModalSheetLookName,
+} from "./layout/modal-sheet-looks";
 export { TabBar } from "./layout/TabBar";
 export { TopBar } from "./layout/TopBar";
 

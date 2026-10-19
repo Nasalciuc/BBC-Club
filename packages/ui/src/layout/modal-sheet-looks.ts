@@ -1,11 +1,13 @@
 import type { TextStyle } from "react-native";
+import type { ArtPath } from "../art-paths";
+import { BELL_ASK } from "../art-paths";
 import { baselineOffset, rn } from "../rn-type";
 import { tokens } from "../tokens";
 
 type Role = TextStyle & { fontSize: number; lineHeight: number };
 
 /** The sheets drawn on a screen of their own, each as its image measures it (ADR-IMPL-056). */
-export type ModalSheetLookName = "about" | "request";
+export type ModalSheetLookName = "about" | "request" | "question" | "delete";
 
 export type ModalSheetLook = {
   /** The sheet's height on the image's 852-pt phone; a short phone shortens it as it does the sizes. */
@@ -23,8 +25,15 @@ export type ModalSheetLook = {
     glyph: { size: number; stroke: number };
     tone?: "tint" | "plain";
   };
-  /** The title's baseline from the sheet's top, its pen from the left, the room it leaves the × at the right. */
-  title: { role: Role; baseline: number; left: number; right: number };
+  /**
+   * The title's baseline from the sheet's top, its pen from the left, the room it leaves the × at the right; `centre`
+   * sets it in the middle between them (25), and a title that wraps there makes the sheet taller by its extra lines.
+   */
+  title: { role: Role; baseline: number; left: number; right: number; align?: "centre" };
+  /** The question's own mark over its title (25: the bell, traced): its box's top from the sheet's top, its height. */
+  mark?: { art: ArtPath; top: number; height: number; color: string };
+  /** The page dimmed under the sheet as the screen draws it (25, 35: darker than the others'); `scrim` by default. */
+  scrim?: "question" | "delete";
   /** The content's top from the sheet's top (its first line's box), its column, the space between its blocks. */
   content: { top: number; left: number; right: number; gap: number };
   /**
@@ -36,6 +45,9 @@ export type ModalSheetLook = {
 
 /** 20's body: Inter Tight 14 on an 18.55-pt pitch (the tokens round a line height to the point). */
 export const ABOUT_BODY: Role = { ...(rn(tokens.type.aboutBody) as Role), lineHeight: 18.55 };
+
+/** 35's words: Inter Tight 14.8 on a 19.83-pt pitch. */
+export const DELETE_BODY: Role = { ...(rn(tokens.type.deleteBody) as Role), lineHeight: 19.83 };
 
 /**
  * `about` (20), from the sheet's top edge on the 852-pt phone: 335 tall, its corners 17.5; the grabber 36.4 × 4.5 at 9.1
@@ -68,7 +80,51 @@ export const MODAL_SHEET_LOOKS: Record<ModalSheetLookName, ModalSheetLook> = {
     content: { top: 52.4, left: 0, right: 0, gap: 0 },
     footer: { left: 18.8, right: 17.9, bottom: 35.88, intoInset: -1.88 },
   },
+  /**
+   * `question` (25), from the sheet's top edge on the image's phone (its foot at the screen's, over a 34-pt home
+   * indicator): 228.1 tall, its corners 16.75; the grabber 37.3 × 3.7 at 7.1 in its own grey; no ×; the traced bell
+   * 34.9 tall, its top at 29.9, centred; the title centred on 92.1; the pill 44.25 tall, 21.7 and 21.5 in, from 110.6;
+   * `Not now`'s baseline on 182.6 — its line's foot 41.3 over the sheet's. The page under it dimmed darker than under
+   * the other sheets.
+   */
+  question: {
+    height: 228.08,
+    radius: 16.75,
+    grabber: { width: 37.32, height: 3.68, top: 7.11, color: tokens.colors.grabberQuestion },
+    close: { diameter: 44, top: 6, right: 4.44, glyph: { size: 19.4, stroke: 1.14 }, tone: "plain" },
+    title: { role: rn(tokens.type.questionTitle) as Role, baseline: 92.11, left: 16, right: 16, align: "centre" },
+    mark: { art: BELL_ASK, top: 29.92, height: 34.92, color: tokens.colors.textPrimary },
+    content: { top: 110.6, left: 0, right: 0, gap: 0 },
+    footer: { left: 21.7, right: 21.5, bottom: 41.27, intoInset: -7.27 },
+    scrim: "question",
+  },
+  /**
+   * `delete` (35), from the sheet's top edge on the image's phone (its foot at the screen's, over a 34-pt home
+   * indicator): 353.4 tall, its corners 19.75; the grabber 37.3 × 4.15 at 9.4 in its own grey; no ×; the title on 65.6,
+   * 22.4 in; the words' first baseline on 97.1, 22.8 in, 19.83 apart; the field 21.5 under their last baseline; the
+   * red pill 36.86 tall, 22.1 in on both sides; `Cancel`'s baseline on 291.75 — its line's foot 57.65 over the sheet's.
+   * The page under it dimmed darker still.
+   */
+  delete: {
+    height: 353.38,
+    radius: 19.75,
+    grabber: { width: 37.32, height: 4.15, top: 9.37, color: tokens.colors.grabberDelete },
+    close: { diameter: 44, top: 6, right: 4.44, glyph: { size: 19.4, stroke: 1.14 }, tone: "plain" },
+    title: { role: rn(tokens.type.deleteTitle) as Role, baseline: 65.6, left: 22.41, right: 22 },
+    content: { top: 97.11 - baselineOffset(DELETE_BODY), left: 22.8, right: 22, gap: 0 },
+    footer: { left: 22.11, right: 22.11, bottom: 57.65, intoInset: -23.65 },
+    scrim: "delete",
+  },
 };
+
+/**
+ * 25's pinned answers: the pill 44.25 tall, its words 1.14 lower than the pill centres them; `Not now`'s line 12.95
+ * under it (its baseline 182.6 from the sheet's top).
+ */
+export const QUESTION_ANSWERS = { pill: 44.25, words: { x: 0, y: 1.14 }, gap: 12.95 } as const;
+
+/** 35: the field 21.5 under the words' last baseline; the red pill 36.86 tall, `Cancel`'s line 20.18 under it. */
+export const DELETE_PARTS = { field: 21.5, pill: 36.86, gap: 20.18 } as const;
 
 /** The pinned action's foot over the sheet's: the image's, or as far into a taller bottom inset as the image's is. */
 export function sheetLookFooterBottom(look: ModalSheetLook, bottomInset: number): number {

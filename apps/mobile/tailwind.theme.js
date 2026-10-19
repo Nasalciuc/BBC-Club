@@ -59,6 +59,14 @@ module.exports = {
   "dates-mark": "#EBF3F9",
   "pill-disabled": "#EEF4F9",
   "text-pill-disabled": "#7B89A0",
+  "text-subtle": "#3F4C65",
+  "scrim-question": "rgba(12,15,22,0.685)",
+  "grabber-question": "#E1E3E7",
+  "surface-round": "#F3F3F3",
+  "action-danger": "#F34649",
+  "grabber-delete": "#BFC4CB",
+  "scrim-delete": "rgba(10,13,15,0.74)",
+  "text-field-label": "#243961",
   "globe-ocean": "#1B5E9E",
   "globe-ocean-deep": "#0B3F73",
   "globe-land": "#8FA77A",
@@ -1965,6 +1973,254 @@ module.exports = {
       "lineHeight": "14px",
       "letterSpacing": "0.22px",
       "fontWeight": "600"
+    }
+  ],
+  "wordmark-received": [
+    "16.65px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "-0.51px",
+      "fontWeight": "600"
+    }
+  ],
+  "wordmark-received-club": [
+    "17px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "-0.32px",
+      "fontWeight": "400"
+    }
+  ],
+  "received-title": [
+    "27.81px",
+    {
+      "lineHeight": "35px",
+      "letterSpacing": "-0.05px",
+      "fontWeight": "700"
+    }
+  ],
+  "received-body": [
+    "14.05px",
+    {
+      "lineHeight": "20px",
+      "letterSpacing": "0.42px",
+      "fontWeight": "400"
+    }
+  ],
+  "received-phone": [
+    "13.97px",
+    {
+      "lineHeight": "20px",
+      "letterSpacing": "0.06px",
+      "fontWeight": "600"
+    }
+  ],
+  "received-next": [
+    "19.37px",
+    {
+      "lineHeight": "24px",
+      "letterSpacing": "0.3px",
+      "fontWeight": "600"
+    }
+  ],
+  "received-trip-label": [
+    "7.43px",
+    {
+      "lineHeight": "9px",
+      "letterSpacing": "1.47px",
+      "fontWeight": "500"
+    }
+  ],
+  "received-trip-codes": [
+    "17.95px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "0.49px",
+      "fontWeight": "600"
+    }
+  ],
+  "received-trip-dates": [
+    "11.48px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.26px",
+      "fontWeight": "400"
+    }
+  ],
+  "received-trip-facts": [
+    "11.28px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.5px",
+      "fontWeight": "400"
+    }
+  ],
+  "received-airline": [
+    "8.53px",
+    {
+      "lineHeight": "11px",
+      "letterSpacing": "-0.09px",
+      "fontWeight": "500"
+    }
+  ],
+  "button-received": [
+    "12.9px",
+    {
+      "lineHeight": "17px",
+      "letterSpacing": "0.02px",
+      "fontWeight": "600"
+    }
+  ],
+  "received-section": [
+    "13.5px",
+    {
+      "lineHeight": "17px",
+      "letterSpacing": "-0.01px",
+      "fontWeight": "600"
+    }
+  ],
+  "received-see-all": [
+    "9.9px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.13px",
+      "fontWeight": "500"
+    }
+  ],
+  "offer-city-sm": [
+    "10px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.24px",
+      "fontWeight": "500"
+    }
+  ],
+  "offer-price-sm": [
+    "13px",
+    {
+      "lineHeight": "16px",
+      "letterSpacing": "-0.63px",
+      "fontWeight": "700"
+    }
+  ],
+  "offer-from-sm": [
+    "10px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.24px",
+      "fontWeight": "400"
+    }
+  ],
+  "saved-title": [
+    "27.7px",
+    {
+      "lineHeight": "30px",
+      "letterSpacing": "-0.42px",
+      "fontWeight": "700"
+    }
+  ],
+  "saved-body": [
+    "15.86px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "0.16px",
+      "fontWeight": "400"
+    }
+  ],
+  "button-saved": [
+    "15.97px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "500"
+    }
+  ],
+  "limited-title": [
+    "29px",
+    {
+      "lineHeight": "33px",
+      "letterSpacing": "-1px",
+      "fontWeight": "700"
+    }
+  ],
+  "limited-body": [
+    "17.95px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "-0.1px",
+      "fontWeight": "400"
+    }
+  ],
+  "button-limited": [
+    "16.3px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "-0.16px",
+      "fontWeight": "500"
+    }
+  ],
+  "delete-title": [
+    "23.24px",
+    {
+      "lineHeight": "29px",
+      "letterSpacing": "-0.06px",
+      "fontWeight": "700"
+    }
+  ],
+  "delete-body": [
+    "14.8px",
+    {
+      "lineHeight": "20px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "400"
+    }
+  ],
+  "delete-field": [
+    "13.68px",
+    {
+      "lineHeight": "18px",
+      "letterSpacing": "-0.06px",
+      "fontWeight": "400"
+    }
+  ],
+  "button-delete": [
+    "13.72px",
+    {
+      "lineHeight": "18px",
+      "letterSpacing": "0.12px",
+      "fontWeight": "600"
+    }
+  ],
+  "button-cancel": [
+    "13.8px",
+    {
+      "lineHeight": "18px",
+      "letterSpacing": "0.04px",
+      "fontWeight": "600"
+    }
+  ],
+  "question-title": [
+    "20.63px",
+    {
+      "lineHeight": "26px",
+      "letterSpacing": "-0.47px",
+      "fontWeight": "700"
+    }
+  ],
+  "button-question": [
+    "14.67px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.12px",
+      "fontWeight": "600"
+    }
+  ],
+  "button-not-now": [
+    "14.53px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.3px",
+      "fontWeight": "500"
     }
   ]
 },
