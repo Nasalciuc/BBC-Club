@@ -60,15 +60,18 @@ beside them. The entry's components (`ClubButton`, `ClubField`, `ClubIcon`) stay
   `subtitle` over `Heathrow Airport · LHR` in slate, `from` and the price (`price-sm`) at the right, a chevron.
 - **RecentRow** (03) — a recent search: a small photograph (48 × 44, radius 8), the city in `label-strong` over the
   dates searched (or the airport) in slate, a chevron; white rows 8 pt apart.
-- **FlightCard** (13, 04) — a flight option, white, radius 16, the card shadow; its price says `one way`.
-  `detailed` for a fare on its own (13): the airline (its logo where the fare has one, else its name) and the cabin,
-  then both airports with their times and days and the plane's line between, the price at the right. `compact` for one
-  of several (04): the airline at the left, the times over the codes and `Nonstop · 7h 10m`, the price at the right.
+- **FlightCard** (13, 04) — a flight option, white on a hairline with a soft shadow; its price says what it buys
+  (`round trip`, `one way`). `detailed` for a fare on its own (13): the airline and the cabin, then both airports with
+  their times and days and the plane's line between, the price at the right. `compact` for one of several (04): the
+  airline at the left, the times over the codes and `Nonstop · 7h 10m`, the price at the right. The airline is its
+  mark: British Airways, Virgin Atlantic and American as 04 draws them; fifty more from the package's logos (#76,
+  `airlines/logos`, in British Airways' box, their own colours); else the fare's logo; else its name.
 - **AirportRow** — a white card with the map pin: the city over `Heathrow Airport · LHR` and a chevron (Search), or the
   city and its code in slate at the right (onboarding).
 - **YourFareCard** (05) — `Your fare` over the price in `price-display` and `one way`, `Save 48%` at the right; where
   the published fare is on record, `Down from $7,550` and, under it in `caption`, where it was published (`Sabre · 16
-Sep`) — a reference price always carries its source. The weather beside it in 05 is left out (ADR-IMPL-055 §7).
+Sep`) — a reference price always carries its source. The weather beside it (05) shows where the weather service
+  answers for the trip (ADR-IMPL-056 §5).
 - **FlightOverview** (05; sheet 40 · 07) — `Flight overview` across the top; the airline (its logo over its name, or
   the name) beside both airports, each its code (`title-sm`), its city, its clock (`+1` small) and its day, the plane
   on the slate line between them.
