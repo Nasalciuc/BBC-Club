@@ -31,7 +31,8 @@ account` pill (sheet 37's #EF4444 gives white or red words 3.76:1, under the 4.5
 4. **Type.** Inter (400, 500, 600, 700 — `@expo-google-fonts/inter`, already a dependency) inside; no serif. Prices take
    tabular figures (`fontFeature: 'tnum'`, generated as `fontVariant`). `rn()` no longer passes a `fontWeight`: each
    weight is a family of its own, and a weight on top would make Android and the web embolden a font already bold. The
-   entry keeps its Fraunces, Geist and Geist Mono.
+   globe's labels have two 13-pt roles of their own (`pin`, `pin-detail`): a city and its price must fit beside a pin
+   (02). The entry keeps its Fraunces, Geist and Geist Mono.
 5. **Elevation.** Cards, sheets and the round buttons over photographs have soft shadows (sheet 37): the club's own
    `elevation` group in the front matter, generated as React Native `boxShadow` (New Architecture). `design:lint`
    reports the group as ignored by its exports — one accepted warning.

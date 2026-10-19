@@ -152,6 +152,18 @@ typography:
     fontWeight: 700
     lineHeight: 1.3
     letterSpacing: -0.4px
+  pin:
+    fontFamily: "Inter, system-ui, sans-serif"
+    fontSize: 13px
+    fontWeight: 700
+    lineHeight: 1.15
+    letterSpacing: -0.1px
+  pin-detail:
+    fontFamily: "Inter, system-ui, sans-serif"
+    fontSize: 13px
+    fontWeight: 400
+    lineHeight: 1.15
+    letterSpacing: 0px
 
 rounded:
   xs: 8px
@@ -483,8 +495,11 @@ components:
   globe-pin:
     backgroundColor: "{colors.surface-card}"
     textColor: "{colors.primary}"
-    typography: "{typography.body-strong}"
+    typography: "{typography.pin}"
     rounded: "{rounded.xs}"
+  globe-pin-detail:
+    textColor: "{colors.primary}"
+    typography: "{typography.pin-detail}"
   globe-ocean:
     backgroundColor: "{colors.globe-ocean}"
   globe-ocean-deep:
@@ -574,7 +589,10 @@ One sans-serif, Inter (the bundled `@expo-google-fonts/inter` 400, 500, 600, 700
 - `price-display` 36, `price` 24, `price-sm` 18: Bold with tabular figures.
 - `button` 17 Semibold. `tab` 12 Medium, `tab-active` 12 Bold.
 - `wordmark`: `BuyBusinessClass` in Bold and ` Club` in Regular, on one line, navy (white over photos).
-- Body never below 14; `caption` only for fine print. Titles wrap to two lines at most.
+- `pin` 13 Bold and `pin-detail` 13: the globe's labels — a city over its price, an airport's code at either end of a
+  route (02, 13).
+- Body never below 14; `caption` only for fine print, `pin` and `pin-detail` only on the globe. Titles wrap to two
+  lines at most.
 
 ## Layout and Responsiveness
 

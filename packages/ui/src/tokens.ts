@@ -174,6 +174,20 @@ export const tokens = {
     "fontWeight": "700",
     "lineHeight": 22,
     "letterSpacing": -0.4
+  },
+  "pin": {
+    "fontFamily": "Inter",
+    "fontSize": 13,
+    "fontWeight": "700",
+    "lineHeight": 15,
+    "letterSpacing": -0.1
+  },
+  "pinDetail": {
+    "fontFamily": "Inter",
+    "fontSize": 13,
+    "fontWeight": "400",
+    "lineHeight": 15,
+    "letterSpacing": 0
   }
 },
   radius: {

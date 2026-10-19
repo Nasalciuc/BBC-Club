@@ -190,6 +190,22 @@ module.exports = {
       "letterSpacing": "-0.4px",
       "fontWeight": "700"
     }
+  ],
+  "pin": [
+    "13px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "-0.1px",
+      "fontWeight": "700"
+    }
+  ],
+  "pin-detail": [
+    "13px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "0px",
+      "fontWeight": "400"
+    }
   ]
 },
   borderRadius: {
