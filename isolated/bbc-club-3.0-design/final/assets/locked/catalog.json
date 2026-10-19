@@ -1,0 +1,2225 @@
+[
+  {
+    "id": "avatar-daniel",
+    "file": "assets/locked/identity/avatar-daniel.png",
+    "source": "screens/12-profile.png",
+    "sourceRectPx": [
+      304,
+      143,
+      244,
+      245
+    ],
+    "widthPx": 244,
+    "heightPx": 245,
+    "kind": "identity",
+    "usage": "image",
+    "notes": "Contains original circular avatar, white rim and immediate background; use as complete visual, never regenerate face. Apply circular clipping around the existing white rim; outside-corner sky is source context, not a replacement background.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "d1d898f4e4a77eff5e7bf03727a7f65445fd8d5a0138f036b2fcee62feece595",
+    "sourceSha256": "b2fbf7e34105f38a2dfa0b176583e0cd5f77d1fdf37a60a54925c10591e54fb5"
+  },
+  {
+    "id": "wordmark",
+    "file": "assets/locked/branding/wordmark.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      36,
+      153,
+      365,
+      44
+    ],
+    "widthPx": 365,
+    "heightPx": 44,
+    "kind": "branding",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "2fb863ceeaa7bb1cf15c30570e8a07b8821d98ac4966fc6d6c8652981b45a0ae",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "wordmark-over-photo",
+    "file": "assets/locked/branding/wordmark-over-photo.png",
+    "source": "screens/08-request-received.png",
+    "sourceRectPx": [
+      49,
+      99,
+      378,
+      40
+    ],
+    "widthPx": 378,
+    "heightPx": 40,
+    "kind": "branding",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "566752b442b37b6ae73bce175d78106f8ba3544a673dbd325b92efb230006ee3",
+    "sourceSha256": "fc90417981904f5d2166e4a39f4c5f16e7bb51c2c5b06a239fa45c7f252c95f5"
+  },
+  {
+    "id": "globe-explore-complete",
+    "file": "assets/locked/globe/globe-explore-complete.png",
+    "source": "screens/02-explore.png",
+    "sourceRectPx": [
+      0,
+      229,
+      852,
+      588
+    ],
+    "widthPx": 852,
+    "heightPx": 588,
+    "kind": "globe",
+    "usage": "static-image",
+    "notes": "Includes original globe, sky, four destination price pins. Static art only; interactive pins must remain accessible native overlays.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "32069502d230892d9e52a8dc460aa035f96f02f844384e76fdc15114833d51c5",
+    "sourceSha256": "12b647772c22616b288b40c31b61b774415ee11b6b72faa1f7e966d0458afe71"
+  },
+  {
+    "id": "globe-route-complete",
+    "file": "assets/locked/globe/globe-route-complete.png",
+    "source": "screens/13-destination-globe.png",
+    "sourceRectPx": [
+      0,
+      178,
+      853,
+      531
+    ],
+    "widthPx": 853,
+    "heightPx": 531,
+    "kind": "globe",
+    "usage": "static-image",
+    "notes": "Original JFK to LHR arc/pins; excludes back/bookmark controls.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "db7d2731689752f4769083da92053446db0f39e5d39f26d087b6a7893fd90123",
+    "sourceSha256": "53259a2f93d45c61deb4ddbd200949317921d8d777b98e578d78fcd364c8574e"
+  },
+  {
+    "id": "photo-new-york-onboarding",
+    "file": "assets/locked/photos/photo-new-york-onboarding.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      42,
+      556,
+      772,
+      278
+    ],
+    "widthPx": 772,
+    "heightPx": 278,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "Clean original crop above embedded card label; lower part not reconstructed.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "f3dccf5440382e7e4907380e8b5dc36c828c7974de3da6b98adbf03e04585026",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "photo-london-search",
+    "file": "assets/locked/photos/photo-london-search.png",
+    "source": "screens/03-search.png",
+    "sourceRectPx": [
+      36,
+      284,
+      781,
+      250
+    ],
+    "widthPx": 781,
+    "heightPx": 250,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "a1239c9f7083e7b84ea177137b9d1b44f8a119f49b285daa419365a24b55d120",
+    "sourceSha256": "55b02666ddd0cd22797794398aaa72136a1d1886d9e63ba75dbedc27c002ca6c"
+  },
+  {
+    "id": "photo-paris-search",
+    "file": "assets/locked/photos/photo-paris-search.png",
+    "source": "screens/03-search.png",
+    "sourceRectPx": [
+      36,
+      662,
+      781,
+      249
+    ],
+    "widthPx": 781,
+    "heightPx": 249,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "84d762b164d5a3a6c06476a28d5b8316ff0d512fec8d98ba040a278d9786efd6",
+    "sourceSha256": "55b02666ddd0cd22797794398aaa72136a1d1886d9e63ba75dbedc27c002ca6c"
+  },
+  {
+    "id": "photo-tokyo-search",
+    "file": "assets/locked/photos/photo-tokyo-search.png",
+    "source": "screens/03-search.png",
+    "sourceRectPx": [
+      36,
+      1042,
+      781,
+      239
+    ],
+    "widthPx": 781,
+    "heightPx": 239,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "e80f7cf7616e2206bc75ac2b87c833affb79535c01862041fb2b2469fc88e2e1",
+    "sourceSha256": "55b02666ddd0cd22797794398aaa72136a1d1886d9e63ba75dbedc27c002ca6c"
+  },
+  {
+    "id": "photo-paris-offer",
+    "file": "assets/locked/photos/photo-paris-offer.png",
+    "source": "screens/02-explore.png",
+    "sourceRectPx": [
+      29,
+      1074,
+      254,
+      303
+    ],
+    "widthPx": 254,
+    "heightPx": 303,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "8fb5179c0b3d8aa73718a3d9824008e7cf9b387aef4a7e9dbf872ac990d0e56a",
+    "sourceSha256": "12b647772c22616b288b40c31b61b774415ee11b6b72faa1f7e966d0458afe71"
+  },
+  {
+    "id": "photo-tokyo-offer",
+    "file": "assets/locked/photos/photo-tokyo-offer.png",
+    "source": "screens/02-explore.png",
+    "sourceRectPx": [
+      309,
+      1074,
+      252,
+      303
+    ],
+    "widthPx": 252,
+    "heightPx": 303,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "904756a94934417b7ec46ab83924b60281f682afcb806f50c58ea2f0c4f53487",
+    "sourceSha256": "12b647772c22616b288b40c31b61b774415ee11b6b72faa1f7e966d0458afe71"
+  },
+  {
+    "id": "photo-dubai-offer",
+    "file": "assets/locked/photos/photo-dubai-offer.png",
+    "source": "screens/02-explore.png",
+    "sourceRectPx": [
+      589,
+      1074,
+      240,
+      303
+    ],
+    "widthPx": 240,
+    "heightPx": 303,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "da44725af23e81093f4df2680e53faa4465ce5ee74cc58b96876b49bd28c2690",
+    "sourceSha256": "12b647772c22616b288b40c31b61b774415ee11b6b72faa1f7e966d0458afe71"
+  },
+  {
+    "id": "photo-london-request",
+    "file": "assets/locked/photos/photo-london-request.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      44,
+      420,
+      283,
+      275
+    ],
+    "widthPx": 283,
+    "heightPx": 275,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "47c90dd71af7525ee093a2296f3ec236b1e4aa7944e1ce1f09be0437ac91cfc8",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "photo-tokyo-request",
+    "file": "assets/locked/photos/photo-tokyo-request.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      44,
+      744,
+      283,
+      275
+    ],
+    "widthPx": 283,
+    "heightPx": 275,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "Original approved request photo is dusk; do not silently swap for daylight offer photo.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "3f5a547b2bd1e1aebc353f0275aec8597e18c05f8331244795eb616c577f7309",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "photo-dubai-request",
+    "file": "assets/locked/photos/photo-dubai-request.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      44,
+      1104,
+      283,
+      245
+    ],
+    "widthPx": 283,
+    "heightPx": 245,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "491c015976842158e8ee662cd610d532999b59af1d0cabb318255be9ee011846",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "photo-paris-request",
+    "file": "assets/locked/photos/photo-paris-request.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      44,
+      1402,
+      283,
+      267
+    ],
+    "widthPx": 283,
+    "heightPx": 267,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "3e57f061e1c691c1b0ea9aa670ac7475446fcd7b8ce191a3c9ab679940957338",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "photo-london-fare-clean",
+    "file": "assets/locked/photos/photo-london-fare-clean.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      108,
+      162,
+      535,
+      211
+    ],
+    "widthPx": 535,
+    "heightPx": 211,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "Clean central source photo crop; does not invent pixels hidden by overlay buttons.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "3ce02c8e01d1a128427acf203afa4bacceaa0cd7da817aafbc9cedfab93a1cd2",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "photo-tower-bridge-clean",
+    "file": "assets/locked/photos/photo-tower-bridge-clean.png",
+    "source": "screens/08-request-received.png",
+    "sourceRectPx": [
+      0,
+      168,
+      851,
+      420
+    ],
+    "widthPx": 851,
+    "heightPx": 420,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "527d664cd0c18a33f2d2a320c6e26a45d16d887e731ee5e988e96e32d2a1d833",
+    "sourceSha256": "fc90417981904f5d2166e4a39f4c5f16e7bb51c2c5b06a239fa45c7f252c95f5"
+  },
+  {
+    "id": "photo-business-seat-thumbnail",
+    "file": "assets/locked/photos/photo-business-seat-thumbnail.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      296,
+      389,
+      239,
+      110
+    ],
+    "widthPx": 239,
+    "heightPx": 110,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "998bdf289abe0bc51a1f239c39ab448bf51e5d91099d46bc17821718b1fda1c8",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "photo-airport-lounge-thumbnail",
+    "file": "assets/locked/photos/photo-airport-lounge-thumbnail.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      556,
+      389,
+      237,
+      110
+    ],
+    "widthPx": 237,
+    "heightPx": 110,
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "cb14cbb48bc73fc528213fa4620c50dc256dd378a4579330610b77625bfc92a6",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "airline-british-airways",
+    "file": "assets/locked/airlines/airline-british-airways.png",
+    "source": "screens/04-destination.png",
+    "sourceRectPx": [
+      52,
+      1051,
+      177,
+      62
+    ],
+    "widthPx": 177,
+    "heightPx": 62,
+    "kind": "airlines",
+    "usage": "image",
+    "notes": "Exact reference mark on original white card background; no recolor or replacement.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "5ae5665d4bc502db76c811891774fd361f00b11a06bb08d1d25d5b6b393856cb",
+    "sourceSha256": "cc929b93a9dd8aa26a825d7520069a5fac9178cf93d5a61d87f8323ecaafbfe9"
+  },
+  {
+    "id": "airline-virgin-atlantic",
+    "file": "assets/locked/airlines/airline-virgin-atlantic.png",
+    "source": "screens/04-destination.png",
+    "sourceRectPx": [
+      64,
+      1183,
+      162,
+      100
+    ],
+    "widthPx": 162,
+    "heightPx": 100,
+    "kind": "airlines",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "77ce5ddbb6e56ec80472ed5e51c6eaad4e9d09896721989ffd5b08b347053072",
+    "sourceSha256": "cc929b93a9dd8aa26a825d7520069a5fac9178cf93d5a61d87f8323ecaafbfe9"
+  },
+  {
+    "id": "airline-american-airlines",
+    "file": "assets/locked/airlines/airline-american-airlines.png",
+    "source": "screens/04-destination.png",
+    "sourceRectPx": [
+      57,
+      1335,
+      172,
+      83
+    ],
+    "widthPx": 172,
+    "heightPx": 83,
+    "kind": "airlines",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "0f49cc0df779d4b27f992ff3d2fb630c8c1e181d1496fc80132714ff754aa6a2",
+    "sourceSha256": "cc929b93a9dd8aa26a825d7520069a5fac9178cf93d5a61d87f8323ecaafbfe9"
+  },
+  {
+    "id": "cabin-business",
+    "file": "assets/locked/details/cabin-business.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      65,
+      1056,
+      103,
+      105
+    ],
+    "widthPx": 103,
+    "heightPx": 105,
+    "kind": "details",
+    "usage": "image",
+    "notes": "Reference reclining-seat icon; do not substitute first-class armchair.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "dec9a807ba7af15ad200d3b44186ce74f2258f9016cc3ec697929213d0b4cce9",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "cabin-first",
+    "file": "assets/locked/details/cabin-first.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      459,
+      1056,
+      100,
+      105
+    ],
+    "widthPx": 100,
+    "heightPx": 105,
+    "kind": "details",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "9500bbe9c57693a1046dddaba781c12c661af00629c36a529d88c48283d99cdb",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "family-children",
+    "file": "assets/locked/details/family-children.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      68,
+      1472,
+      68,
+      75
+    ],
+    "widthPx": 68,
+    "heightPx": 75,
+    "kind": "details",
+    "usage": "image",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "5d9cce79c8e10e8c4c4b7b2037267aa3b5477f4f80c9c850419bb11f9ec9af8c",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "weather-london",
+    "file": "assets/locked/details/weather-london.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      46,
+      757,
+      98,
+      88
+    ],
+    "widthPx": 98,
+    "heightPx": 88,
+    "kind": "details",
+    "usage": "image",
+    "notes": "Preserve approved weather graphic; no additional colored UI accents.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "fff5d5c4a920b00f6a0e9760034bb90f59f1d755587ae237f4f5d696e73e17af",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "success-check",
+    "file": "assets/locked/details/success-check.png",
+    "source": "screens/08-request-received.png",
+    "sourceRectPx": [
+      350,
+      594,
+      149,
+      148
+    ],
+    "widthPx": 149,
+    "heightPx": 148,
+    "kind": "details",
+    "usage": "image",
+    "notes": "Complete source check circle including rim; circular clip removes outside source-photo corner context.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "48e599968b665b05870eae50797e6cd3571865c45d14812ccd8c6a3cec0a2e17",
+    "sourceSha256": "fc90417981904f5d2166e4a39f4c5f16e7bb51c2c5b06a239fa45c7f252c95f5"
+  },
+  {
+    "id": "notification-dot",
+    "file": "assets/locked/details/notification-dot.png",
+    "source": "screens/11-request-details.png",
+    "sourceRectPx": [
+      413,
+      1792,
+      24,
+      22
+    ],
+    "widthPx": 24,
+    "heightPx": 22,
+    "kind": "details",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "9bc0f7d450e88da88d5ef51d28a25bd78cd5276358d1b8e7730cbd72e5b0783d",
+    "sourceSha256": "a623d8d4b44f90b45d1163a64f8da1415c7f1abe6f6445ca7fe64a9e124f9784"
+  },
+  {
+    "id": "timeline-completed",
+    "file": "assets/locked/details/timeline-completed.png",
+    "source": "screens/11-request-details.png",
+    "sourceRectPx": [
+      73,
+      790,
+      58,
+      56
+    ],
+    "widthPx": 58,
+    "heightPx": 56,
+    "kind": "details",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "6bf80ade6ee4fff9304d0395f2600f327abc47041789577344c73afc602928fe",
+    "sourceSha256": "a623d8d4b44f90b45d1163a64f8da1415c7f1abe6f6445ca7fe64a9e124f9784"
+  },
+  {
+    "id": "timeline-current",
+    "file": "assets/locked/details/timeline-current.png",
+    "source": "screens/11-request-details.png",
+    "sourceRectPx": [
+      394,
+      781,
+      63,
+      66
+    ],
+    "widthPx": 63,
+    "heightPx": 66,
+    "kind": "details",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "0665ca0b311ca4f505e0b715fbabef0786a1510b627e84199a15dbfe06055820",
+    "sourceSha256": "a623d8d4b44f90b45d1163a64f8da1415c7f1abe6f6445ca7fe64a9e124f9784"
+  },
+  {
+    "id": "timeline-upcoming",
+    "file": "assets/locked/details/timeline-upcoming.png",
+    "source": "screens/11-request-details.png",
+    "sourceRectPx": [
+      720,
+      786,
+      65,
+      62
+    ],
+    "widthPx": 65,
+    "heightPx": 62,
+    "kind": "details",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "6b70f7d614f0253c7bbf435cfc23a79905e4afd42366a714cc645a938d44193e",
+    "sourceSha256": "a623d8d4b44f90b45d1163a64f8da1415c7f1abe6f6445ca7fe64a9e124f9784"
+  },
+  {
+    "id": "pill-save-48",
+    "file": "assets/locked/badges/pill-save-48.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      659,
+      781,
+      151,
+      56
+    ],
+    "widthPx": 151,
+    "heightPx": 56,
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "77f911cbee3889c64e980dc26715ed4504d4ca3acb45a9743cbddfe3c75d13d0",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "badge-quote-ready",
+    "file": "assets/locked/badges/badge-quote-ready.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      613,
+      440,
+      201,
+      59
+    ],
+    "widthPx": 201,
+    "heightPx": 59,
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "70a41aef8a83839776c87d657b0f0af3af8482a35375e9800912a44fd5fa7bfc",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "badge-received",
+    "file": "assets/locked/badges/badge-received.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      654,
+      766,
+      158,
+      61
+    ],
+    "widthPx": 158,
+    "heightPx": 61,
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "4db9628c5e44014aa813323bd99a0d64a177439db8e74695fb4434c5c57b7c80",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "badge-booked",
+    "file": "assets/locked/badges/badge-booked.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      630,
+      1122,
+      183,
+      65
+    ],
+    "widthPx": 183,
+    "heightPx": 65,
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "c2a1b8787de77c8500742b5f835b6dbb7d72561215cfdd92e343fe40f815132b",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "badge-closed",
+    "file": "assets/locked/badges/badge-closed.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      660,
+      1421,
+      151,
+      62
+    ],
+    "widthPx": 151,
+    "heightPx": 62,
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "49686db6e426f821ccabbccedf93c9985df706b5f1a78fe6462b16c6f736e46d",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "badge-not-sent",
+    "file": "assets/locked/badges/badge-not-sent.png",
+    "source": "states/32-request-not-sent.png",
+    "sourceRectPx": [
+      653,
+      529,
+      158,
+      63
+    ],
+    "widthPx": 158,
+    "heightPx": 63,
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "a088c6a4b95504ac524d9bef8f4de676e1f7c939a42af0ef5423422e03bfb205",
+    "sourceSha256": "d0765d4ae2ad7b55d2ff652a35576c7090b0c6d03ac3a86fe4749a17656e6eba"
+  },
+  {
+    "id": "onboarding-progress",
+    "file": "assets/locked/controls/onboarding-progress.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      31,
+      105,
+      791,
+      19
+    ],
+    "widthPx": 791,
+    "heightPx": 19,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "bf2785d98c94ad6550aed7116fd817b28b02973538fbce9710e34e1b44575f3c",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "cabin-business-selected",
+    "file": "assets/locked/controls/cabin-business-selected.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      38,
+      1017,
+      383,
+      163
+    ],
+    "widthPx": 383,
+    "heightPx": 163,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "4d0c226c10b36e94a61899aacb2a7a0264831cab3c69f818285422163e3b4b52",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "cabin-first-unselected",
+    "file": "assets/locked/controls/cabin-first-unselected.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      434,
+      1017,
+      384,
+      163
+    ],
+    "widthPx": 384,
+    "heightPx": 163,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "d47ec43fc53871a5dd740bfc15b606ba2a499b34eb6ef16ac5dad42eb17bda41",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "traveler-stepper",
+    "file": "assets/locked/controls/traveler-stepper.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      556,
+      1314,
+      239,
+      87
+    ],
+    "widthPx": 239,
+    "heightPx": 87,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "195bc1c90b779125dcc8bfd6152e16baa0824a949fa74e30b6dca42c93d454ef",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "family-info-card",
+    "file": "assets/locked/controls/family-info-card.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      38,
+      1438,
+      780,
+      140
+    ],
+    "widthPx": 780,
+    "heightPx": 140,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "b84448958d422e975d739804d3ea05b41ce6ea9e56a754a475486eb3874a7666",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "primary-continue",
+    "file": "assets/locked/controls/primary-continue.png",
+    "source": "screens/01-onboarding.png",
+    "sourceRectPx": [
+      38,
+      1599,
+      780,
+      101
+    ],
+    "widthPx": 780,
+    "heightPx": 101,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "dd6cbeb8287291393a8ab563692c1ee62de86fc5f83a93eb4826723de68cbb87",
+    "sourceSha256": "7f3a0b1308ec032397feaacf2d53fa0aa1884b4591eae2f786dfee6c8372b8d5"
+  },
+  {
+    "id": "search-field",
+    "file": "assets/locked/controls/search-field.png",
+    "source": "screens/03-search.png",
+    "sourceRectPx": [
+      33,
+      94,
+      670,
+      81
+    ],
+    "widthPx": 670,
+    "heightPx": 81,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "61af78de185883d03a8c8a866b1dc1f54b9295c813907949b99f34cc3d0f8ff1",
+    "sourceSha256": "55b02666ddd0cd22797794398aaa72136a1d1886d9e63ba75dbedc27c002ca6c"
+  },
+  {
+    "id": "trip-segment",
+    "file": "assets/locked/controls/trip-segment.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      40,
+      903,
+      774,
+      60
+    ],
+    "widthPx": 774,
+    "heightPx": 60,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "2bc7b1321dc7606f96fd819465a24f1ba672ca0186faaacfe61e98f75d83decb",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "trip-date-fields",
+    "file": "assets/locked/controls/trip-date-fields.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      40,
+      980,
+      774,
+      85
+    ],
+    "widthPx": 774,
+    "heightPx": 85,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "e8c514d7471c80a750d3ab0265abe4f090d5fbca1347772e01c6111c5d977dd2",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "trip-travelers-field",
+    "file": "assets/locked/controls/trip-travelers-field.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      40,
+      1078,
+      774,
+      87
+    ],
+    "widthPx": 774,
+    "heightPx": 87,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "49ca4885c31266ec246bf8fac590b62d2bd5b45f27fb4e42a8341604ec2d6402",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "contact-name",
+    "file": "assets/locked/controls/contact-name.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      40,
+      1276,
+      774,
+      83
+    ],
+    "widthPx": 774,
+    "heightPx": 83,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "e19097773f87a7c331c86bcdd755cafe580944fc23bec7303eebb3f07e6b1767",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "contact-phone",
+    "file": "assets/locked/controls/contact-phone.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      40,
+      1371,
+      774,
+      84
+    ],
+    "widthPx": 774,
+    "heightPx": 84,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "ec41031f4c1331e06ff9a63be77f13603b9f53a4e83da8573251bba60277ed41",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "contact-email",
+    "file": "assets/locked/controls/contact-email.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      40,
+      1466,
+      774,
+      87
+    ],
+    "widthPx": 774,
+    "heightPx": 87,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "0c7537025703d91f43ee84d94b6b46a4a5246195aab99135ef6a8fb32aa828ee",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "contact-note",
+    "file": "assets/locked/controls/contact-note.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      40,
+      1565,
+      774,
+      84
+    ],
+    "widthPx": 774,
+    "heightPx": 84,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "0745de61978d9fc5cbbc59a0ec11e2e766933d1680293bec300603904fd7ffcb",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "primary-request",
+    "file": "assets/locked/controls/primary-request.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      40,
+      1661,
+      774,
+      69
+    ],
+    "widthPx": 774,
+    "heightPx": 69,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "93363a9a9b687f74422a4380fde4b323feb86e23cb97deebeb6a5b6529cc240a",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "round-back",
+    "file": "assets/locked/controls/round-back.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      23,
+      80,
+      81,
+      84
+    ],
+    "widthPx": 81,
+    "heightPx": 84,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "45fc05c7e30f93867323c2abead0f1fc123186092d8826b60c718bed7662766e",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "round-share",
+    "file": "assets/locked/controls/round-share.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      661,
+      80,
+      80,
+      84
+    ],
+    "widthPx": 80,
+    "heightPx": 84,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "607f2e8305cc106b20b195a146dc27886f7199498bbb07f67bae301f8bf03138",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "round-heart",
+    "file": "assets/locked/controls/round-heart.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      749,
+      80,
+      80,
+      84
+    ],
+    "widthPx": 80,
+    "heightPx": 84,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "e06c7e154dfaa4485b421e1353a9ea1f39d583d1b1ba1499c0db268d00209fea",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "round-bookmark",
+    "file": "assets/locked/controls/round-bookmark.png",
+    "source": "screens/13-destination-globe.png",
+    "sourceRectPx": [
+      739,
+      91,
+      85,
+      89
+    ],
+    "widthPx": 85,
+    "heightPx": 89,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "06b5667892b7500b88baaf0fe18d44e70566909acf1f953506b0b8fbacc6bf52",
+    "sourceSha256": "53259a2f93d45c61deb4ddbd200949317921d8d777b98e578d78fcd364c8574e"
+  },
+  {
+    "id": "sheet-grabber",
+    "file": "assets/locked/controls/sheet-grabber.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      377,
+      580,
+      97,
+      25
+    ],
+    "widthPx": 97,
+    "heightPx": 25,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "fced77e319f28bb9e572dc2b30c6f09cb1088c368e2e774bbeed635a1f6e1369",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "toggle-off",
+    "file": "assets/locked/controls/toggle-off.png",
+    "source": "screens/07-travel-dates.png",
+    "sourceRectPx": [
+      714,
+      1544,
+      97,
+      66
+    ],
+    "widthPx": 97,
+    "heightPx": 66,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "b31eccee80717130c25784620adc2940d056ec240495e18a00243ecde472936a",
+    "sourceSha256": "a4450fc096ebdb0e702af5cde96e7cb88b3d226bc0d65a1110e8dbbf7c584bf7"
+  },
+  {
+    "id": "calendar-selected",
+    "file": "assets/locked/controls/calendar-selected.png",
+    "source": "screens/07-travel-dates.png",
+    "sourceRectPx": [
+      16,
+      471,
+      820,
+      554
+    ],
+    "widthPx": 820,
+    "heightPx": 554,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "00ec0debee9986afd7e8049ea64cab05abca88843c065c0fe8500e18bd05fd90",
+    "sourceSha256": "a4450fc096ebdb0e702af5cde96e7cb88b3d226bc0d65a1110e8dbbf7c584bf7"
+  },
+  {
+    "id": "filter-chips",
+    "file": "assets/locked/controls/filter-chips.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      26,
+      292,
+      807,
+      75
+    ],
+    "widthPx": 807,
+    "heightPx": 75,
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "a5afc02ad6cf8634a1f63772b6d4bbd7f2aaf3d7897143a72131e3e355e33bda",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "tabs-explore",
+    "file": "assets/locked/navigation/tabs-explore.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      0,
+      1715,
+      852,
+      99
+    ],
+    "widthPx": 852,
+    "heightPx": 99,
+    "kind": "navigation",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "916a19b897dbab44397f9bbebc5b71fd38b73b892e094373f6b4bb8cac110491",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "tabs-requests",
+    "file": "assets/locked/navigation/tabs-requests.png",
+    "source": "screens/11-request-details.png",
+    "sourceRectPx": [
+      0,
+      1707,
+      852,
+      105
+    ],
+    "widthPx": 852,
+    "heightPx": 105,
+    "kind": "navigation",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "9d811a3af3267e6b1b0713f6a891e23caa1de68db2c420c7ce5d6a575d8bdd93",
+    "sourceSha256": "a623d8d4b44f90b45d1163a64f8da1415c7f1abe6f6445ca7fe64a9e124f9784"
+  },
+  {
+    "id": "tabs-profile",
+    "file": "assets/locked/navigation/tabs-profile.png",
+    "source": "screens/12-profile.png",
+    "sourceRectPx": [
+      0,
+      1715,
+      852,
+      103
+    ],
+    "widthPx": 852,
+    "heightPx": 103,
+    "kind": "navigation",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "9a2af88860cd605bf32570833fffe7829373209d2b1f6608877d8f7017042a1d",
+    "sourceSha256": "b2fbf7e34105f38a2dfa0b176583e0cd5f77d1fdf37a60a54925c10591e54fb5"
+  },
+  {
+    "id": "timeline-quote-ready",
+    "file": "assets/locked/navigation/timeline-quote-ready.png",
+    "source": "screens/11-request-details.png",
+    "sourceRectPx": [
+      44,
+      746,
+      762,
+      165
+    ],
+    "widthPx": 762,
+    "heightPx": 165,
+    "kind": "navigation",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "b2a842aede6c2e0072526ff2e99cc8fd882618b62f1a18037c4456299c551781",
+    "sourceSha256": "a623d8d4b44f90b45d1163a64f8da1415c7f1abe6f6445ca7fe64a9e124f9784"
+  },
+  {
+    "id": "offer-paris-complete",
+    "file": "assets/locked/cards/offer-paris-complete.png",
+    "source": "screens/02-explore.png",
+    "sourceRectPx": [
+      22,
+      1068,
+      267,
+      576
+    ],
+    "widthPx": 267,
+    "heightPx": 576,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "15ab915f25a305f7656768f44535bf806df61945c4cebd5f9da4164b60ad62b7",
+    "sourceSha256": "12b647772c22616b288b40c31b61b774415ee11b6b72faa1f7e966d0458afe71"
+  },
+  {
+    "id": "popular-london-complete",
+    "file": "assets/locked/cards/popular-london-complete.png",
+    "source": "screens/03-search.png",
+    "sourceRectPx": [
+      33,
+      282,
+      788,
+      360
+    ],
+    "widthPx": 788,
+    "heightPx": 360,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "fa4db757141a00a7ab04f034dc0247d9c021982ddc1036495fac5811fc1fdaac",
+    "sourceSha256": "55b02666ddd0cd22797794398aaa72136a1d1886d9e63ba75dbedc27c002ca6c"
+  },
+  {
+    "id": "recent-search-row",
+    "file": "assets/locked/cards/recent-search-row.png",
+    "source": "screens/03-search.png",
+    "sourceRectPx": [
+      34,
+      1483,
+      788,
+      103
+    ],
+    "widthPx": 788,
+    "heightPx": 103,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "a2bfc60746e8e041efe80842ee9f2acf311da0c2c1b9c79b465a0054701f13dd",
+    "sourceSha256": "55b02666ddd0cd22797794398aaa72136a1d1886d9e63ba75dbedc27c002ca6c"
+  },
+  {
+    "id": "request-london-complete",
+    "file": "assets/locked/cards/request-london-complete.png",
+    "source": "screens/09-requests.png",
+    "sourceRectPx": [
+      23,
+      405,
+      807,
+      310
+    ],
+    "widthPx": 807,
+    "heightPx": 310,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "90ccb79ebd7b2e21563a503fa959cc6d48b03d4a4eb21e18fd7a3cd52ad16819",
+    "sourceSha256": "9b2bc31945f6d8053949319599f1c1362765c2d686985e618476fb22a9423c48"
+  },
+  {
+    "id": "trip-summary-complete",
+    "file": "assets/locked/cards/trip-summary-complete.png",
+    "source": "screens/06-request-quote.png",
+    "sourceRectPx": [
+      38,
+      690,
+      777,
+      195
+    ],
+    "widthPx": 777,
+    "heightPx": 195,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "3f854adaa37a8a6d5cbfeb79e81864aa2dab8bdec602f2c0cbc861267240ca3f",
+    "sourceSha256": "fcf36273ec260e8e70de63f9a73bfb6ff681d1ddea7ff9ea8f6fb4e39b480ca4"
+  },
+  {
+    "id": "fare-weather-complete",
+    "file": "assets/locked/cards/fare-weather-complete.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      32,
+      730,
+      789,
+      164
+    ],
+    "widthPx": 789,
+    "heightPx": 164,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "3b3562a647c38722528ce4513c381e53fbddcad2c9739e413bdab8be22d80087",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "flight-overview-complete",
+    "file": "assets/locked/cards/flight-overview-complete.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      32,
+      912,
+      789,
+      197
+    ],
+    "widthPx": 789,
+    "heightPx": 197,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "5a973189d67067688ad77000d68dc30e20f777aa2fe9b0068793cf2557ceb1d6",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "route-preview-complete",
+    "file": "assets/locked/cards/route-preview-complete.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      32,
+      1302,
+      789,
+      273
+    ],
+    "widthPx": 789,
+    "heightPx": 273,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "1b3f86d391dae368e75f80e96cbf4337f2be0819f97a2a109e684948bcd06f55",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "flight-option-complete",
+    "file": "assets/locked/cards/flight-option-complete.png",
+    "source": "screens/04-destination.png",
+    "sourceRectPx": [
+      23,
+      1024,
+      807,
+      140
+    ],
+    "widthPx": 807,
+    "heightPx": 140,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "ccbd915eda7ff82ac94e00e72c0c5236d9220a7bf1ac4947a7d1f530c9a0d176",
+    "sourceSha256": "cc929b93a9dd8aa26a825d7520069a5fac9178cf93d5a61d87f8323ecaafbfe9"
+  },
+  {
+    "id": "profile-trip-london",
+    "file": "assets/locked/cards/profile-trip-london.png",
+    "source": "screens/12-profile.png",
+    "sourceRectPx": [
+      27,
+      788,
+      203,
+      293
+    ],
+    "widthPx": 203,
+    "heightPx": 293,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "6f0d01ad2a56ae8d06dd4d7f780f894dae80f4397fc42a24ab34086a3b27d232",
+    "sourceSha256": "b2fbf7e34105f38a2dfa0b176583e0cd5f77d1fdf37a60a54925c10591e54fb5"
+  },
+  {
+    "id": "profile-trip-tokyo",
+    "file": "assets/locked/cards/profile-trip-tokyo.png",
+    "source": "screens/12-profile.png",
+    "sourceRectPx": [
+      242,
+      788,
+      185,
+      293
+    ],
+    "widthPx": 185,
+    "heightPx": 293,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "eafacbeb8efb0cb4409512194db5c7d74969b93f623c7ec54c8ad62e58511e5a",
+    "sourceSha256": "b2fbf7e34105f38a2dfa0b176583e0cd5f77d1fdf37a60a54925c10591e54fb5"
+  },
+  {
+    "id": "profile-trip-dubai",
+    "file": "assets/locked/cards/profile-trip-dubai.png",
+    "source": "screens/12-profile.png",
+    "sourceRectPx": [
+      439,
+      788,
+      192,
+      293
+    ],
+    "widthPx": 192,
+    "heightPx": 293,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "1ac8b4ff42cdc72abd108d04ef70409dc7e5903745e45a084930fb52d9961b43",
+    "sourceSha256": "b2fbf7e34105f38a2dfa0b176583e0cd5f77d1fdf37a60a54925c10591e54fb5"
+  },
+  {
+    "id": "profile-trip-paris",
+    "file": "assets/locked/cards/profile-trip-paris.png",
+    "source": "screens/12-profile.png",
+    "sourceRectPx": [
+      644,
+      788,
+      192,
+      293
+    ],
+    "widthPx": 192,
+    "heightPx": 293,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "413008cca3bba11999e3bdd34f87dda94c6cd4255bac44d84b80aa5e3f989630",
+    "sourceSha256": "b2fbf7e34105f38a2dfa0b176583e0cd5f77d1fdf37a60a54925c10591e54fb5"
+  },
+  {
+    "id": "profile-preferences-rows",
+    "file": "assets/locked/cards/profile-preferences-rows.png",
+    "source": "screens/12-profile.png",
+    "sourceRectPx": [
+      34,
+      1108,
+      784,
+      261
+    ],
+    "widthPx": 784,
+    "heightPx": 261,
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "bba2d28ea5aed85f34e030c676b5336ae29f15680ffdd13dfda70848e8d201de",
+    "sourceSha256": "b2fbf7e34105f38a2dfa0b176583e0cd5f77d1fdf37a60a54925c10591e54fb5"
+  },
+  {
+    "id": "loading-card",
+    "file": "assets/locked/feedback/loading-card.png",
+    "source": "states/29-requests-loading.png",
+    "sourceRectPx": [
+      22,
+      405,
+      809,
+      311
+    ],
+    "widthPx": 809,
+    "heightPx": 311,
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "a7c098dfd4b6fb92fb76a60bc53d83bbfab4f0c621166ea6753d361df5cfee83",
+    "sourceSha256": "c3d44ecf00ae58fc9e8c5cf902384de3d1b6e1fdaaf652e21d17175712ee7c07"
+  },
+  {
+    "id": "return-date-error",
+    "file": "assets/locked/feedback/return-date-error.png",
+    "source": "states/22-request-missing-return.png",
+    "sourceRectPx": [
+      436,
+      979,
+      379,
+      116
+    ],
+    "widthPx": 379,
+    "heightPx": 116,
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "2cfb558a6091e3ce72f8f2ab0c673f64f13ef38d2bdec83f53754abb724b624c",
+    "sourceSha256": "9fe4cd42c8ac1ad901a588d300eefec280e1cbe85f84bc79d63a09f23d608f3a"
+  },
+  {
+    "id": "button-sending",
+    "file": "assets/locked/feedback/button-sending.png",
+    "source": "states/23-request-sending.png",
+    "sourceRectPx": [
+      40,
+      1661,
+      774,
+      69
+    ],
+    "widthPx": 774,
+    "heightPx": 69,
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "a253a749c996812d7975cc98580194201aaac1ffe546115e6268dded820920be",
+    "sourceSha256": "83d6b78cab37ba94b4b856a8338267f9129912c13e9959085f326f1494d9bebd"
+  },
+  {
+    "id": "attention-card",
+    "file": "assets/locked/feedback/attention-card.png",
+    "source": "states/28-requests-attention.png",
+    "sourceRectPx": [
+      23,
+      397,
+      807,
+      133
+    ],
+    "widthPx": 807,
+    "heightPx": 133,
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "0536b3274cddfd3156de0edfb96a624984a103ba9e1fdb6d15982a5dc8424acb",
+    "sourceSha256": "a4bd0191b60e2243974505eef8628dac87d4eda31288d5703099dd3dc1022f55"
+  },
+  {
+    "id": "offline-fare-block",
+    "file": "assets/locked/feedback/offline-fare-block.png",
+    "source": "states/19-destination-offline.png",
+    "sourceRectPx": [
+      43,
+      1012,
+      766,
+      201
+    ],
+    "widthPx": 766,
+    "heightPx": 201,
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "d923c1bc99537fddc8bdc468a1334552c398622a0d820e45c6ca4dea53980b78",
+    "sourceSha256": "8a2261d6ba7010b55ec6c718dbd3d674c435907e1ccb95d81f1a81e657c357b1"
+  },
+  {
+    "id": "icon-search",
+    "file": "assets/locked/icons-reference/icon-search.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      56,
+      224,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "d9a865285cfd216b75de1dbe4273992e153444901d117aa13acdb66cdc4905d6",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-map-pin",
+    "file": "assets/locked/icons-reference/icon-map-pin.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      259,
+      224,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "4e97463f38d608a6338def31f4a3516368c83d71ca5ac40028c2f70d07ab7e41",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-plane",
+    "file": "assets/locked/icons-reference/icon-plane.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      455,
+      224,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "29e7afeaec8200315003aa5e1d5cec8eaf97a08b685f3b5a25ab440ef125530b",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-calendar",
+    "file": "assets/locked/icons-reference/icon-calendar.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      651,
+      224,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "38d7a0c5d269db0a550310ca495fca829109cb89101801e7b1b0ff1dd6e99e84",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-user",
+    "file": "assets/locked/icons-reference/icon-user.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      852,
+      224,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "8fad7583e1911ffd0e6833017a84281dc5437deb9c72e86f9c28070c4912739e",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-users",
+    "file": "assets/locked/icons-reference/icon-users.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      56,
+      440,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "22ebf222bac308d01416a342daa9a0a8848bd792fa8913a1a5315539815a1bfd",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-family",
+    "file": "assets/locked/icons-reference/icon-family.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      259,
+      440,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "e6cedf26b6c323fa647e57a3418b0059feefa51001a961983a3b6335b122b62e",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-armchair",
+    "file": "assets/locked/icons-reference/icon-armchair.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      455,
+      440,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "656102b531d4ec1bf366d8decbb1a9561658dfeaad375f3ea1f54c64ddc2bbd2",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-globe",
+    "file": "assets/locked/icons-reference/icon-globe.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      651,
+      440,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "6adddf94f74fb6c7b3a9712be8e6da502f34adc1e99b057f5ca74cf1a6e43307",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-compass",
+    "file": "assets/locked/icons-reference/icon-compass.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      852,
+      440,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "9a2b672ad01931bea31409b6695c12dbeeff2b4aaaf60658da92c198312fa092",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-clipboard-list",
+    "file": "assets/locked/icons-reference/icon-clipboard-list.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      56,
+      658,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "7989c8752ccc54cfa4a494cad87b8222ecfa3d91d156cf8b326012944198b787",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-chevron-right",
+    "file": "assets/locked/icons-reference/icon-chevron-right.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      259,
+      658,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "fa03736f55ba4bb2470398817a3a39d9561b67135070ac72ac9ac0f66ac9ab84",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-chevron-down",
+    "file": "assets/locked/icons-reference/icon-chevron-down.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      455,
+      658,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "4d85ec80598217ef16a5c243250e543043c1dc40b08a22a2974a84349bafaf41",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-arrow-left",
+    "file": "assets/locked/icons-reference/icon-arrow-left.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      651,
+      658,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "0ce88f4936803b93968795d1b84aa5e1edcf42cd86cffd1ded5e5f4fe9fc3431",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-arrow-right",
+    "file": "assets/locked/icons-reference/icon-arrow-right.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      852,
+      658,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "e146fc71df29640217ad508961b380dc375a4e67cc66ce70839b749fc23ed72d",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-x",
+    "file": "assets/locked/icons-reference/icon-x.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      56,
+      888,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "458541bab599307371d65d9f950f70acac87754d747990e3753d0859516ac694",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-share",
+    "file": "assets/locked/icons-reference/icon-share.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      259,
+      888,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "96315cd341b8fb5dd3a718cf29c485db8d1ff9e35b06b8fa29765e36b3732101",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-heart",
+    "file": "assets/locked/icons-reference/icon-heart.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      455,
+      888,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "db7a23b5bd8b7e647bf4c638e3b9000b9666ff8f100146bdf7d9ecf871eed5b1",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-bookmark",
+    "file": "assets/locked/icons-reference/icon-bookmark.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      651,
+      888,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "768776ae4036ea22f824af365a437db6385e8b524e15c31189e1015144182cdb",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-phone",
+    "file": "assets/locked/icons-reference/icon-phone.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      852,
+      888,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "d94749a63dc7683c2f15c05af9f6370b854ac77dc65176b518eff3ed56882f0e",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-bell",
+    "file": "assets/locked/icons-reference/icon-bell.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      56,
+      1104,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "8541426571e4053881c28ac44dd5ce9969f2adc09ec2dda1bebc65efa27363b5",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-lock",
+    "file": "assets/locked/icons-reference/icon-lock.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      259,
+      1104,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "d7b64579bb6a954e247655c87750e6c427897a8c6c3a5d55a45c5a6577e8cf46",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-trash",
+    "file": "assets/locked/icons-reference/icon-trash.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      455,
+      1104,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "cc8f74d363954681048e5632d02e3946cf51bed64cc881007d0179522cd8f073",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-user-pen",
+    "file": "assets/locked/icons-reference/icon-user-pen.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      651,
+      1104,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "d03b2df0db0dd7715500a247c78be84a3fa03466fd124b9b874aee8dd6f49314",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-check",
+    "file": "assets/locked/icons-reference/icon-check.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      852,
+      1104,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "90fd9497318fc4594577344321483cdd2eb4401b7d72feccb0fee36941fe3c35",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-info",
+    "file": "assets/locked/icons-reference/icon-info.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      56,
+      1320,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "27a91112d7633a9eb0860cfb9ed5caa422677e9db4258995acf37bf05d81502d",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-sun-cloud",
+    "file": "assets/locked/icons-reference/icon-sun-cloud.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      259,
+      1320,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "9294c63a609d0b8f44f2fecd1667a8ee6c9fc34634aa4791ac743487be7888da",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-bar-chart",
+    "file": "assets/locked/icons-reference/icon-bar-chart.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      455,
+      1320,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "ec32d20ef51b84032033ba34e34f90b098b43669075d0bc8e49cff7eb52459e1",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-file-text",
+    "file": "assets/locked/icons-reference/icon-file-text.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      651,
+      1320,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "e0d090a459beeec4d94bc1120edb8df8e2b04fe268343021a3689281373dae95",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "icon-message",
+    "file": "assets/locked/icons-reference/icon-message.png",
+    "source": "components/43-icons.png",
+    "sourceRectPx": [
+      852,
+      1320,
+      112,
+      112
+    ],
+    "widthPx": 112,
+    "heightPx": 112,
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "06f848fffc4dccff795413febf2fd8e65d8b2deb2586c212636451fd4a50cfbf",
+    "sourceSha256": "abdda0499dd55092916bb07d43f7f09587dc32e4f04dbea23f7c19e5a56c0287"
+  },
+  {
+    "id": "tab-compass-active",
+    "file": "assets/locked/navigation-icons/tab-compass-active.png",
+    "source": "screens/05-fare-details.png",
+    "sourceRectPx": [
+      116,
+      1721,
+      66,
+      51
+    ],
+    "widthPx": 66,
+    "heightPx": 51,
+    "kind": "navigation-icons",
+    "usage": "image",
+    "notes": "Exact filled compass active glyph and original surrounding white surface; preserve intrinsic aspect.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "10daabd388bf29a890120a79b5d614ee17b69f3d3bbbe19e76ecda451f56e8ce",
+    "sourceSha256": "ffe6eee44a4db89764c026bbfbb49234486507f1e3efc58912191a9f771a8f7b"
+  },
+  {
+    "id": "tab-requests-active",
+    "file": "assets/locked/navigation-icons/tab-requests-active.png",
+    "source": "screens/11-request-details.png",
+    "sourceRectPx": [
+      397,
+      1718,
+      60,
+      50
+    ],
+    "widthPx": 60,
+    "heightPx": 50,
+    "kind": "navigation-icons",
+    "usage": "image",
+    "notes": "Exact filled clipboard active glyph; do not substitute line clipboard.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "a0c33a8eff90bad9275efc1bf2d9652d5fa91903e233712f54efd16d77baf45f",
+    "sourceSha256": "a623d8d4b44f90b45d1163a64f8da1415c7f1abe6f6445ca7fe64a9e124f9784"
+  },
+  {
+    "id": "tab-profile-active",
+    "file": "assets/locked/navigation-icons/tab-profile-active.png",
+    "source": "screens/12-profile.png",
+    "sourceRectPx": [
+      688,
+      1718,
+      61,
+      51
+    ],
+    "widthPx": 61,
+    "heightPx": 51,
+    "kind": "navigation-icons",
+    "usage": "image",
+    "notes": "Exact filled person active glyph; do not substitute outline user.",
+    "method": "unscaled-source-pixel-copy",
+    "sha256": "d5eb1430fc7dbd4985b6d9697745bed67c4b7f2238b836ac8dec6a74703a0a3d",
+    "sourceSha256": "b2fbf7e34105f38a2dfa0b176583e0cd5f77d1fdf37a60a54925c10591e54fb5"
+  }
+]

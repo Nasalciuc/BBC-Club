@@ -1,0 +1,1640 @@
+[
+  {
+    "id": "avatar-daniel",
+    "source": "screens/12-profile.png",
+    "rect": [
+      304,
+      143,
+      244,
+      245
+    ],
+    "kind": "identity",
+    "usage": "image",
+    "notes": "Contains original circular avatar, white rim and immediate background; use as complete visual, never regenerate face. Apply circular clipping around the existing white rim; outside-corner sky is source context, not a replacement background.",
+    "file": "assets/locked/identity/avatar-daniel.png"
+  },
+  {
+    "id": "wordmark",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      36,
+      153,
+      365,
+      44
+    ],
+    "kind": "branding",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/branding/wordmark.png"
+  },
+  {
+    "id": "wordmark-over-photo",
+    "source": "screens/08-request-received.png",
+    "rect": [
+      49,
+      99,
+      378,
+      40
+    ],
+    "kind": "branding",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/branding/wordmark-over-photo.png"
+  },
+  {
+    "id": "globe-explore-complete",
+    "source": "screens/02-explore.png",
+    "rect": [
+      0,
+      229,
+      852,
+      588
+    ],
+    "kind": "globe",
+    "usage": "static-image",
+    "notes": "Includes original globe, sky, four destination price pins. Static art only; interactive pins must remain accessible native overlays.",
+    "file": "assets/locked/globe/globe-explore-complete.png"
+  },
+  {
+    "id": "globe-route-complete",
+    "source": "screens/13-destination-globe.png",
+    "rect": [
+      0,
+      178,
+      853,
+      531
+    ],
+    "kind": "globe",
+    "usage": "static-image",
+    "notes": "Original JFK to LHR arc/pins; excludes back/bookmark controls.",
+    "file": "assets/locked/globe/globe-route-complete.png"
+  },
+  {
+    "id": "photo-new-york-onboarding",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      42,
+      556,
+      772,
+      278
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "Clean original crop above embedded card label; lower part not reconstructed.",
+    "file": "assets/locked/photos/photo-new-york-onboarding.png"
+  },
+  {
+    "id": "photo-london-search",
+    "source": "screens/03-search.png",
+    "rect": [
+      36,
+      284,
+      781,
+      250
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-london-search.png"
+  },
+  {
+    "id": "photo-paris-search",
+    "source": "screens/03-search.png",
+    "rect": [
+      36,
+      662,
+      781,
+      249
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-paris-search.png"
+  },
+  {
+    "id": "photo-tokyo-search",
+    "source": "screens/03-search.png",
+    "rect": [
+      36,
+      1042,
+      781,
+      239
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-tokyo-search.png"
+  },
+  {
+    "id": "photo-paris-offer",
+    "source": "screens/02-explore.png",
+    "rect": [
+      29,
+      1074,
+      254,
+      303
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-paris-offer.png"
+  },
+  {
+    "id": "photo-tokyo-offer",
+    "source": "screens/02-explore.png",
+    "rect": [
+      309,
+      1074,
+      252,
+      303
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-tokyo-offer.png"
+  },
+  {
+    "id": "photo-dubai-offer",
+    "source": "screens/02-explore.png",
+    "rect": [
+      589,
+      1074,
+      240,
+      303
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-dubai-offer.png"
+  },
+  {
+    "id": "photo-london-request",
+    "source": "screens/09-requests.png",
+    "rect": [
+      44,
+      420,
+      283,
+      275
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-london-request.png"
+  },
+  {
+    "id": "photo-tokyo-request",
+    "source": "screens/09-requests.png",
+    "rect": [
+      44,
+      744,
+      283,
+      275
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "Original approved request photo is dusk; do not silently swap for daylight offer photo.",
+    "file": "assets/locked/photos/photo-tokyo-request.png"
+  },
+  {
+    "id": "photo-dubai-request",
+    "source": "screens/09-requests.png",
+    "rect": [
+      44,
+      1104,
+      283,
+      245
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-dubai-request.png"
+  },
+  {
+    "id": "photo-paris-request",
+    "source": "screens/09-requests.png",
+    "rect": [
+      44,
+      1402,
+      283,
+      267
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-paris-request.png"
+  },
+  {
+    "id": "photo-london-fare-clean",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      108,
+      162,
+      535,
+      211
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "Clean central source photo crop; does not invent pixels hidden by overlay buttons.",
+    "file": "assets/locked/photos/photo-london-fare-clean.png"
+  },
+  {
+    "id": "photo-tower-bridge-clean",
+    "source": "screens/08-request-received.png",
+    "rect": [
+      0,
+      168,
+      851,
+      420
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-tower-bridge-clean.png"
+  },
+  {
+    "id": "photo-business-seat-thumbnail",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      296,
+      389,
+      239,
+      110
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-business-seat-thumbnail.png"
+  },
+  {
+    "id": "photo-airport-lounge-thumbnail",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      556,
+      389,
+      237,
+      110
+    ],
+    "kind": "photos",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/photos/photo-airport-lounge-thumbnail.png"
+  },
+  {
+    "id": "airline-british-airways",
+    "source": "screens/04-destination.png",
+    "rect": [
+      52,
+      1051,
+      177,
+      62
+    ],
+    "kind": "airlines",
+    "usage": "image",
+    "notes": "Exact reference mark on original white card background; no recolor or replacement.",
+    "file": "assets/locked/airlines/airline-british-airways.png"
+  },
+  {
+    "id": "airline-virgin-atlantic",
+    "source": "screens/04-destination.png",
+    "rect": [
+      64,
+      1183,
+      162,
+      100
+    ],
+    "kind": "airlines",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/airlines/airline-virgin-atlantic.png"
+  },
+  {
+    "id": "airline-american-airlines",
+    "source": "screens/04-destination.png",
+    "rect": [
+      57,
+      1335,
+      172,
+      83
+    ],
+    "kind": "airlines",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/airlines/airline-american-airlines.png"
+  },
+  {
+    "id": "cabin-business",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      65,
+      1056,
+      103,
+      105
+    ],
+    "kind": "details",
+    "usage": "image",
+    "notes": "Reference reclining-seat icon; do not substitute first-class armchair.",
+    "file": "assets/locked/details/cabin-business.png"
+  },
+  {
+    "id": "cabin-first",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      459,
+      1056,
+      100,
+      105
+    ],
+    "kind": "details",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/details/cabin-first.png"
+  },
+  {
+    "id": "family-children",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      68,
+      1472,
+      68,
+      75
+    ],
+    "kind": "details",
+    "usage": "image",
+    "notes": "",
+    "file": "assets/locked/details/family-children.png"
+  },
+  {
+    "id": "weather-london",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      46,
+      757,
+      98,
+      88
+    ],
+    "kind": "details",
+    "usage": "image",
+    "notes": "Preserve approved weather graphic; no additional colored UI accents.",
+    "file": "assets/locked/details/weather-london.png"
+  },
+  {
+    "id": "success-check",
+    "source": "screens/08-request-received.png",
+    "rect": [
+      350,
+      594,
+      149,
+      148
+    ],
+    "kind": "details",
+    "usage": "image",
+    "notes": "Complete source check circle including rim; circular clip removes outside source-photo corner context.",
+    "file": "assets/locked/details/success-check.png"
+  },
+  {
+    "id": "notification-dot",
+    "source": "screens/11-request-details.png",
+    "rect": [
+      413,
+      1792,
+      24,
+      22
+    ],
+    "kind": "details",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/details/notification-dot.png"
+  },
+  {
+    "id": "timeline-completed",
+    "source": "screens/11-request-details.png",
+    "rect": [
+      73,
+      790,
+      58,
+      56
+    ],
+    "kind": "details",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/details/timeline-completed.png"
+  },
+  {
+    "id": "timeline-current",
+    "source": "screens/11-request-details.png",
+    "rect": [
+      394,
+      781,
+      63,
+      66
+    ],
+    "kind": "details",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/details/timeline-current.png"
+  },
+  {
+    "id": "timeline-upcoming",
+    "source": "screens/11-request-details.png",
+    "rect": [
+      720,
+      786,
+      65,
+      62
+    ],
+    "kind": "details",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/details/timeline-upcoming.png"
+  },
+  {
+    "id": "pill-save-48",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      659,
+      781,
+      151,
+      56
+    ],
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/badges/pill-save-48.png"
+  },
+  {
+    "id": "badge-quote-ready",
+    "source": "screens/09-requests.png",
+    "rect": [
+      613,
+      440,
+      201,
+      59
+    ],
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/badges/badge-quote-ready.png"
+  },
+  {
+    "id": "badge-received",
+    "source": "screens/09-requests.png",
+    "rect": [
+      654,
+      766,
+      158,
+      61
+    ],
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/badges/badge-received.png"
+  },
+  {
+    "id": "badge-booked",
+    "source": "screens/09-requests.png",
+    "rect": [
+      630,
+      1122,
+      183,
+      65
+    ],
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/badges/badge-booked.png"
+  },
+  {
+    "id": "badge-closed",
+    "source": "screens/09-requests.png",
+    "rect": [
+      660,
+      1421,
+      151,
+      62
+    ],
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/badges/badge-closed.png"
+  },
+  {
+    "id": "badge-not-sent",
+    "source": "states/32-request-not-sent.png",
+    "rect": [
+      653,
+      529,
+      158,
+      63
+    ],
+    "kind": "badges",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/badges/badge-not-sent.png"
+  },
+  {
+    "id": "onboarding-progress",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      31,
+      105,
+      791,
+      19
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/onboarding-progress.png"
+  },
+  {
+    "id": "cabin-business-selected",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      38,
+      1017,
+      383,
+      163
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/cabin-business-selected.png"
+  },
+  {
+    "id": "cabin-first-unselected",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      434,
+      1017,
+      384,
+      163
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/cabin-first-unselected.png"
+  },
+  {
+    "id": "traveler-stepper",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      556,
+      1314,
+      239,
+      87
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/traveler-stepper.png"
+  },
+  {
+    "id": "family-info-card",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      38,
+      1438,
+      780,
+      140
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/family-info-card.png"
+  },
+  {
+    "id": "primary-continue",
+    "source": "screens/01-onboarding.png",
+    "rect": [
+      38,
+      1599,
+      780,
+      101
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/primary-continue.png"
+  },
+  {
+    "id": "search-field",
+    "source": "screens/03-search.png",
+    "rect": [
+      33,
+      94,
+      670,
+      81
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/search-field.png"
+  },
+  {
+    "id": "trip-segment",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      40,
+      903,
+      774,
+      60
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/trip-segment.png"
+  },
+  {
+    "id": "trip-date-fields",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      40,
+      980,
+      774,
+      85
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/trip-date-fields.png"
+  },
+  {
+    "id": "trip-travelers-field",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      40,
+      1078,
+      774,
+      87
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/trip-travelers-field.png"
+  },
+  {
+    "id": "contact-name",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      40,
+      1276,
+      774,
+      83
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/contact-name.png"
+  },
+  {
+    "id": "contact-phone",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      40,
+      1371,
+      774,
+      84
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/contact-phone.png"
+  },
+  {
+    "id": "contact-email",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      40,
+      1466,
+      774,
+      87
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/contact-email.png"
+  },
+  {
+    "id": "contact-note",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      40,
+      1565,
+      774,
+      84
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/contact-note.png"
+  },
+  {
+    "id": "primary-request",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      40,
+      1661,
+      774,
+      69
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/primary-request.png"
+  },
+  {
+    "id": "round-back",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      23,
+      80,
+      81,
+      84
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/round-back.png"
+  },
+  {
+    "id": "round-share",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      661,
+      80,
+      80,
+      84
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/round-share.png"
+  },
+  {
+    "id": "round-heart",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      749,
+      80,
+      80,
+      84
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/round-heart.png"
+  },
+  {
+    "id": "round-bookmark",
+    "source": "screens/13-destination-globe.png",
+    "rect": [
+      739,
+      91,
+      85,
+      89
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/round-bookmark.png"
+  },
+  {
+    "id": "sheet-grabber",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      377,
+      580,
+      97,
+      25
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/sheet-grabber.png"
+  },
+  {
+    "id": "toggle-off",
+    "source": "screens/07-travel-dates.png",
+    "rect": [
+      714,
+      1544,
+      97,
+      66
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/toggle-off.png"
+  },
+  {
+    "id": "calendar-selected",
+    "source": "screens/07-travel-dates.png",
+    "rect": [
+      16,
+      471,
+      820,
+      554
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/calendar-selected.png"
+  },
+  {
+    "id": "filter-chips",
+    "source": "screens/09-requests.png",
+    "rect": [
+      26,
+      292,
+      807,
+      75
+    ],
+    "kind": "controls",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/controls/filter-chips.png"
+  },
+  {
+    "id": "tabs-explore",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      0,
+      1715,
+      852,
+      99
+    ],
+    "kind": "navigation",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/navigation/tabs-explore.png"
+  },
+  {
+    "id": "tabs-requests",
+    "source": "screens/11-request-details.png",
+    "rect": [
+      0,
+      1707,
+      852,
+      105
+    ],
+    "kind": "navigation",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/navigation/tabs-requests.png"
+  },
+  {
+    "id": "tabs-profile",
+    "source": "screens/12-profile.png",
+    "rect": [
+      0,
+      1715,
+      852,
+      103
+    ],
+    "kind": "navigation",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/navigation/tabs-profile.png"
+  },
+  {
+    "id": "timeline-quote-ready",
+    "source": "screens/11-request-details.png",
+    "rect": [
+      44,
+      746,
+      762,
+      165
+    ],
+    "kind": "navigation",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/navigation/timeline-quote-ready.png"
+  },
+  {
+    "id": "offer-paris-complete",
+    "source": "screens/02-explore.png",
+    "rect": [
+      22,
+      1068,
+      267,
+      576
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/offer-paris-complete.png"
+  },
+  {
+    "id": "popular-london-complete",
+    "source": "screens/03-search.png",
+    "rect": [
+      33,
+      282,
+      788,
+      360
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/popular-london-complete.png"
+  },
+  {
+    "id": "recent-search-row",
+    "source": "screens/03-search.png",
+    "rect": [
+      34,
+      1483,
+      788,
+      103
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/recent-search-row.png"
+  },
+  {
+    "id": "request-london-complete",
+    "source": "screens/09-requests.png",
+    "rect": [
+      23,
+      405,
+      807,
+      310
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/request-london-complete.png"
+  },
+  {
+    "id": "trip-summary-complete",
+    "source": "screens/06-request-quote.png",
+    "rect": [
+      38,
+      690,
+      777,
+      195
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/trip-summary-complete.png"
+  },
+  {
+    "id": "fare-weather-complete",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      32,
+      730,
+      789,
+      164
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/fare-weather-complete.png"
+  },
+  {
+    "id": "flight-overview-complete",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      32,
+      912,
+      789,
+      197
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/flight-overview-complete.png"
+  },
+  {
+    "id": "route-preview-complete",
+    "source": "screens/05-fare-details.png",
+    "rect": [
+      32,
+      1302,
+      789,
+      273
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/route-preview-complete.png"
+  },
+  {
+    "id": "flight-option-complete",
+    "source": "screens/04-destination.png",
+    "rect": [
+      23,
+      1024,
+      807,
+      140
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/flight-option-complete.png"
+  },
+  {
+    "id": "profile-trip-london",
+    "source": "screens/12-profile.png",
+    "rect": [
+      27,
+      788,
+      203,
+      293
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/profile-trip-london.png"
+  },
+  {
+    "id": "profile-trip-tokyo",
+    "source": "screens/12-profile.png",
+    "rect": [
+      242,
+      788,
+      185,
+      293
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/profile-trip-tokyo.png"
+  },
+  {
+    "id": "profile-trip-dubai",
+    "source": "screens/12-profile.png",
+    "rect": [
+      439,
+      788,
+      192,
+      293
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/profile-trip-dubai.png"
+  },
+  {
+    "id": "profile-trip-paris",
+    "source": "screens/12-profile.png",
+    "rect": [
+      644,
+      788,
+      192,
+      293
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/profile-trip-paris.png"
+  },
+  {
+    "id": "profile-preferences-rows",
+    "source": "screens/12-profile.png",
+    "rect": [
+      34,
+      1108,
+      784,
+      261
+    ],
+    "kind": "cards",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/cards/profile-preferences-rows.png"
+  },
+  {
+    "id": "loading-card",
+    "source": "states/29-requests-loading.png",
+    "rect": [
+      22,
+      405,
+      809,
+      311
+    ],
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/feedback/loading-card.png"
+  },
+  {
+    "id": "return-date-error",
+    "source": "states/22-request-missing-return.png",
+    "rect": [
+      436,
+      979,
+      379,
+      116
+    ],
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/feedback/return-date-error.png"
+  },
+  {
+    "id": "button-sending",
+    "source": "states/23-request-sending.png",
+    "rect": [
+      40,
+      1661,
+      774,
+      69
+    ],
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/feedback/button-sending.png"
+  },
+  {
+    "id": "attention-card",
+    "source": "states/28-requests-attention.png",
+    "rect": [
+      23,
+      397,
+      807,
+      133
+    ],
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/feedback/attention-card.png"
+  },
+  {
+    "id": "offline-fare-block",
+    "source": "states/19-destination-offline.png",
+    "rect": [
+      43,
+      1012,
+      766,
+      201
+    ],
+    "kind": "feedback",
+    "usage": "reference",
+    "notes": "",
+    "file": "assets/locked/feedback/offline-fare-block.png"
+  },
+  {
+    "id": "icon-search",
+    "source": "components/43-icons.png",
+    "rect": [
+      56,
+      224,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-search.png"
+  },
+  {
+    "id": "icon-map-pin",
+    "source": "components/43-icons.png",
+    "rect": [
+      259,
+      224,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-map-pin.png"
+  },
+  {
+    "id": "icon-plane",
+    "source": "components/43-icons.png",
+    "rect": [
+      455,
+      224,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-plane.png"
+  },
+  {
+    "id": "icon-calendar",
+    "source": "components/43-icons.png",
+    "rect": [
+      651,
+      224,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-calendar.png"
+  },
+  {
+    "id": "icon-user",
+    "source": "components/43-icons.png",
+    "rect": [
+      852,
+      224,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-user.png"
+  },
+  {
+    "id": "icon-users",
+    "source": "components/43-icons.png",
+    "rect": [
+      56,
+      440,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-users.png"
+  },
+  {
+    "id": "icon-family",
+    "source": "components/43-icons.png",
+    "rect": [
+      259,
+      440,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-family.png"
+  },
+  {
+    "id": "icon-armchair",
+    "source": "components/43-icons.png",
+    "rect": [
+      455,
+      440,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-armchair.png"
+  },
+  {
+    "id": "icon-globe",
+    "source": "components/43-icons.png",
+    "rect": [
+      651,
+      440,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-globe.png"
+  },
+  {
+    "id": "icon-compass",
+    "source": "components/43-icons.png",
+    "rect": [
+      852,
+      440,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-compass.png"
+  },
+  {
+    "id": "icon-clipboard-list",
+    "source": "components/43-icons.png",
+    "rect": [
+      56,
+      658,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-clipboard-list.png"
+  },
+  {
+    "id": "icon-chevron-right",
+    "source": "components/43-icons.png",
+    "rect": [
+      259,
+      658,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-chevron-right.png"
+  },
+  {
+    "id": "icon-chevron-down",
+    "source": "components/43-icons.png",
+    "rect": [
+      455,
+      658,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-chevron-down.png"
+  },
+  {
+    "id": "icon-arrow-left",
+    "source": "components/43-icons.png",
+    "rect": [
+      651,
+      658,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-arrow-left.png"
+  },
+  {
+    "id": "icon-arrow-right",
+    "source": "components/43-icons.png",
+    "rect": [
+      852,
+      658,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-arrow-right.png"
+  },
+  {
+    "id": "icon-x",
+    "source": "components/43-icons.png",
+    "rect": [
+      56,
+      888,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-x.png"
+  },
+  {
+    "id": "icon-share",
+    "source": "components/43-icons.png",
+    "rect": [
+      259,
+      888,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-share.png"
+  },
+  {
+    "id": "icon-heart",
+    "source": "components/43-icons.png",
+    "rect": [
+      455,
+      888,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-heart.png"
+  },
+  {
+    "id": "icon-bookmark",
+    "source": "components/43-icons.png",
+    "rect": [
+      651,
+      888,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-bookmark.png"
+  },
+  {
+    "id": "icon-phone",
+    "source": "components/43-icons.png",
+    "rect": [
+      852,
+      888,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-phone.png"
+  },
+  {
+    "id": "icon-bell",
+    "source": "components/43-icons.png",
+    "rect": [
+      56,
+      1104,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-bell.png"
+  },
+  {
+    "id": "icon-lock",
+    "source": "components/43-icons.png",
+    "rect": [
+      259,
+      1104,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-lock.png"
+  },
+  {
+    "id": "icon-trash",
+    "source": "components/43-icons.png",
+    "rect": [
+      455,
+      1104,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-trash.png"
+  },
+  {
+    "id": "icon-user-pen",
+    "source": "components/43-icons.png",
+    "rect": [
+      651,
+      1104,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-user-pen.png"
+  },
+  {
+    "id": "icon-check",
+    "source": "components/43-icons.png",
+    "rect": [
+      852,
+      1104,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-check.png"
+  },
+  {
+    "id": "icon-info",
+    "source": "components/43-icons.png",
+    "rect": [
+      56,
+      1320,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-info.png"
+  },
+  {
+    "id": "icon-sun-cloud",
+    "source": "components/43-icons.png",
+    "rect": [
+      259,
+      1320,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-sun-cloud.png"
+  },
+  {
+    "id": "icon-bar-chart",
+    "source": "components/43-icons.png",
+    "rect": [
+      455,
+      1320,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-bar-chart.png"
+  },
+  {
+    "id": "icon-file-text",
+    "source": "components/43-icons.png",
+    "rect": [
+      651,
+      1320,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-file-text.png"
+  },
+  {
+    "id": "icon-message",
+    "source": "components/43-icons.png",
+    "rect": [
+      852,
+      1320,
+      112,
+      112
+    ],
+    "kind": "icons-reference",
+    "usage": "reference",
+    "notes": "Exact raster from approved icon sheet. Retains source background; SVG counterpart is pinned Lucide geometry, not a pixel-identical trace.",
+    "file": "assets/locked/icons-reference/icon-message.png"
+  },
+  {
+    "rect": [
+      116,
+      1721,
+      66,
+      51
+    ],
+    "usage": "image",
+    "id": "tab-compass-active",
+    "file": "assets/locked/navigation-icons/tab-compass-active.png",
+    "kind": "navigation-icons",
+    "notes": "Exact filled compass active glyph and original surrounding white surface; preserve intrinsic aspect.",
+    "source": "screens/05-fare-details.png"
+  },
+  {
+    "rect": [
+      397,
+      1718,
+      60,
+      50
+    ],
+    "usage": "image",
+    "id": "tab-requests-active",
+    "file": "assets/locked/navigation-icons/tab-requests-active.png",
+    "kind": "navigation-icons",
+    "notes": "Exact filled clipboard active glyph; do not substitute line clipboard.",
+    "source": "screens/11-request-details.png"
+  },
+  {
+    "rect": [
+      688,
+      1718,
+      61,
+      51
+    ],
+    "usage": "image",
+    "id": "tab-profile-active",
+    "file": "assets/locked/navigation-icons/tab-profile-active.png",
+    "kind": "navigation-icons",
+    "notes": "Exact filled person active glyph; do not substitute outline user.",
+    "source": "screens/12-profile.png"
+  }
+]

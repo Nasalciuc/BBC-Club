@@ -1,0 +1,479 @@
+{
+  "schemaVersion": 1,
+  "scope": "BBC Club 3.0 isolated visual handoff; no application imports or implementation in this change",
+  "authority": [
+    "screens/01-onboarding.png through screens/13-destination-globe.png",
+    "REFERENCE-SPEC.md (exact copy, fixtures and state requirements)",
+    "assets/locked/catalog.json (source pixels and usage)",
+    "design-contract.json"
+  ],
+  "rules": {
+    "noRegeneration": true,
+    "noRandomStockPhotos": true,
+    "noPlaceholderSubstitution": true,
+    "noSilentAssetFallback": true,
+    "noInventedFixtures": true,
+    "noNewVisualStyle": true,
+    "missingAssetAction": "Report the missing asset id and stop that component; do not invent or substitute.",
+    "controls": "Implement accessible native controls with @bbc/ui, not screenshots.",
+    "values": "Use exact explicit fixtures below for reference previews; real runtime data comes from its existing contract.",
+    "photos": "Use the context-specific asset id; do not substitute seat/lounge imagery for cities.",
+    "font": "Use existing @bbc/ui font/token definitions; do not infer numeric font/shadow constants from generated sheets.",
+    "boundaries": "No imports of isolated/ anywhere; only explicitly selected assets may later be copied into app asset directory."
+  },
+  "palette": {
+    "white": "#FFFFFF",
+    "offWhite": "#FAFAF8",
+    "navy": "#1E293B",
+    "slate": "#64748B",
+    "lightTint": "#F1F5F9",
+    "lightNavy": "#E2E8F0",
+    "paleSky": "#BAD2EB",
+    "red": "#EF4444",
+    "navyOnlyAccent": true,
+    "redOnlyFor": [
+      "errors",
+      "Sign out",
+      "Delete account"
+    ],
+    "skyOnlyBehindGlobe": true
+  },
+  "states": {
+    "pressed": "slightly darker navy; resolve existing token, do not invent a hex",
+    "disabled": {
+      "background": "#F1F5F9",
+      "text": "#64748B"
+    },
+    "focused": {
+      "border": "#1E293B"
+    },
+    "error": {
+      "border": "#EF4444",
+      "text": "#EF4444"
+    }
+  },
+  "member": {
+    "name": "Daniel Reed",
+    "homeAirport": "New York (JFK)",
+    "cabin": "Business",
+    "adults": 1,
+    "phone": "+1 212 555 0142",
+    "email": "daniel@example.com",
+    "trips": 3,
+    "openRequests": 2,
+    "saved": 8,
+    "avatar": "assets/locked/identity/avatar-daniel.png"
+  },
+  "fares": [
+    {
+      "city": "London",
+      "airport": "Heathrow Airport",
+      "code": "LHR",
+      "fare": 3900,
+      "published": 7550,
+      "savePercent": 48,
+      "origin": "JFK",
+      "cabin": "Business",
+      "tripType": "round trip",
+      "rating": 4.8
+    },
+    {
+      "city": "Paris",
+      "airport": "Charles de Gaulle Airport",
+      "code": "CDG",
+      "fare": 3450,
+      "published": 7500,
+      "savePercent": 54,
+      "origin": "JFK",
+      "cabin": "Business",
+      "tripType": "round trip",
+      "rating": 4.8
+    },
+    {
+      "city": "Tokyo",
+      "airport": "Haneda Airport",
+      "code": "HND",
+      "fare": 4200,
+      "published": 7500,
+      "savePercent": 44,
+      "origin": "JFK",
+      "cabin": "Business",
+      "tripType": "round trip",
+      "rating": 4.8
+    },
+    {
+      "city": "Dubai",
+      "code": "DXB",
+      "fare": 4100,
+      "published": 7600,
+      "savePercent": 46,
+      "origin": "JFK",
+      "cabin": "Business",
+      "tripType": "round trip",
+      "rating": 4.8
+    }
+  ],
+  "searchPopular": [
+    "London",
+    "Paris",
+    "Tokyo"
+  ],
+  "recentSearches": [
+    {
+      "city": "London",
+      "dates": "Nov 12 – 19, 2026"
+    },
+    {
+      "city": "Paris",
+      "dates": "Oct 5 – 12, 2026"
+    },
+    {
+      "city": "Dubai",
+      "dates": "Mar 3 – 10, 2027"
+    }
+  ],
+  "flightOptions": [
+    {
+      "airline": "British Airways",
+      "departure": "18:55",
+      "arrival": "07:05 +1",
+      "duration": "7h 10m",
+      "fare": 3900,
+      "logo": "assets/locked/airlines/airline-british-airways.png",
+      "origin": "JFK",
+      "destination": "LHR",
+      "nonstop": true,
+      "tripType": "round trip"
+    },
+    {
+      "airline": "Virgin Atlantic",
+      "departure": "19:30",
+      "arrival": "07:25 +1",
+      "duration": "6h 55m",
+      "fare": 3950,
+      "logo": "assets/locked/airlines/airline-virgin-atlantic.png",
+      "origin": "JFK",
+      "destination": "LHR",
+      "nonstop": true,
+      "tripType": "round trip"
+    },
+    {
+      "airline": "American Airlines",
+      "departure": "21:25",
+      "arrival": "09:25 +1",
+      "duration": "7h 00m",
+      "fare": 4050,
+      "logo": "assets/locked/airlines/airline-american-airlines.png",
+      "origin": "JFK",
+      "destination": "LHR",
+      "nonstop": true,
+      "tripType": "round trip"
+    }
+  ],
+  "london": {
+    "time": "14:32",
+    "zoneLabel": "London (GMT)",
+    "weather": "Mostly sunny",
+    "temperature": "12°",
+    "departureDate": "Nov 12, 2026",
+    "arrivalDate": "Nov 13, 2026",
+    "returnDate": "Nov 19, 2026"
+  },
+  "requests": [
+    {
+      "city": "London",
+      "route": "JFK → LHR",
+      "dates": "Nov 12 – 19, 2026",
+      "status": "Quote ready",
+      "received": "Oct 16",
+      "quoteReady": "Oct 18"
+    },
+    {
+      "city": "Tokyo",
+      "route": "JFK → HND",
+      "dates": "Jan 14 – 21, 2027",
+      "status": "Received"
+    },
+    {
+      "city": "Dubai",
+      "route": "JFK → DXB",
+      "dates": "Mar 3 – 10, 2027",
+      "status": "Booked"
+    },
+    {
+      "city": "Paris",
+      "route": "JFK → CDG",
+      "dates": "Oct 5 – 12, 2026",
+      "status": "Closed",
+      "closed": "Oct 3"
+    },
+    {
+      "city": "Rome",
+      "route": "JFK → FCO",
+      "dates": "Dec 3 – 10, 2026",
+      "status": "Not sent",
+      "onlyInScreens": [
+        28,
+        32
+      ]
+    }
+  ],
+  "navigation": {
+    "Explore": {
+      "icon": "compass",
+      "activeReferences": [
+        "screens/02-explore.png",
+        "screens/05-fare-details.png"
+      ]
+    },
+    "Requests": {
+      "icon": "clipboard",
+      "activeReference": "screens/11-request-details.png",
+      "notificationDot": "small navy dot when London quote ready"
+    },
+    "Profile": {
+      "icon": "person",
+      "activeReference": "screens/12-profile.png"
+    }
+  },
+  "photos": [
+    {
+      "id": "photo-new-york-onboarding",
+      "file": "assets/locked/photos/photo-new-york-onboarding.png",
+      "source": "screens/01-onboarding.png",
+      "rect": [
+        42,
+        556,
+        772,
+        278
+      ]
+    },
+    {
+      "id": "photo-london-search",
+      "file": "assets/locked/photos/photo-london-search.png",
+      "source": "screens/03-search.png",
+      "rect": [
+        36,
+        284,
+        781,
+        250
+      ]
+    },
+    {
+      "id": "photo-paris-search",
+      "file": "assets/locked/photos/photo-paris-search.png",
+      "source": "screens/03-search.png",
+      "rect": [
+        36,
+        662,
+        781,
+        249
+      ]
+    },
+    {
+      "id": "photo-tokyo-search",
+      "file": "assets/locked/photos/photo-tokyo-search.png",
+      "source": "screens/03-search.png",
+      "rect": [
+        36,
+        1042,
+        781,
+        239
+      ]
+    },
+    {
+      "id": "photo-paris-offer",
+      "file": "assets/locked/photos/photo-paris-offer.png",
+      "source": "screens/02-explore.png",
+      "rect": [
+        29,
+        1074,
+        254,
+        303
+      ]
+    },
+    {
+      "id": "photo-tokyo-offer",
+      "file": "assets/locked/photos/photo-tokyo-offer.png",
+      "source": "screens/02-explore.png",
+      "rect": [
+        309,
+        1074,
+        252,
+        303
+      ]
+    },
+    {
+      "id": "photo-dubai-offer",
+      "file": "assets/locked/photos/photo-dubai-offer.png",
+      "source": "screens/02-explore.png",
+      "rect": [
+        589,
+        1074,
+        240,
+        303
+      ]
+    },
+    {
+      "id": "photo-london-request",
+      "file": "assets/locked/photos/photo-london-request.png",
+      "source": "screens/09-requests.png",
+      "rect": [
+        44,
+        420,
+        283,
+        275
+      ]
+    },
+    {
+      "id": "photo-tokyo-request",
+      "file": "assets/locked/photos/photo-tokyo-request.png",
+      "source": "screens/09-requests.png",
+      "rect": [
+        44,
+        744,
+        283,
+        275
+      ]
+    },
+    {
+      "id": "photo-dubai-request",
+      "file": "assets/locked/photos/photo-dubai-request.png",
+      "source": "screens/09-requests.png",
+      "rect": [
+        44,
+        1104,
+        283,
+        245
+      ]
+    },
+    {
+      "id": "photo-paris-request",
+      "file": "assets/locked/photos/photo-paris-request.png",
+      "source": "screens/09-requests.png",
+      "rect": [
+        44,
+        1402,
+        283,
+        267
+      ]
+    },
+    {
+      "id": "photo-london-fare-clean",
+      "file": "assets/locked/photos/photo-london-fare-clean.png",
+      "source": "screens/05-fare-details.png",
+      "rect": [
+        108,
+        162,
+        535,
+        211
+      ]
+    },
+    {
+      "id": "photo-tower-bridge-clean",
+      "file": "assets/locked/photos/photo-tower-bridge-clean.png",
+      "source": "screens/08-request-received.png",
+      "rect": [
+        0,
+        168,
+        851,
+        420
+      ]
+    },
+    {
+      "id": "photo-business-seat-thumbnail",
+      "file": "assets/locked/photos/photo-business-seat-thumbnail.png",
+      "source": "screens/05-fare-details.png",
+      "rect": [
+        296,
+        389,
+        239,
+        110
+      ]
+    },
+    {
+      "id": "photo-airport-lounge-thumbnail",
+      "file": "assets/locked/photos/photo-airport-lounge-thumbnail.png",
+      "source": "screens/05-fare-details.png",
+      "rect": [
+        556,
+        389,
+        237,
+        110
+      ]
+    }
+  ],
+  "screenAssignments": {
+    "10": {
+      "illustration": "assets/empty-state-illustration.png",
+      "useCompleteImage": true
+    },
+    "12": {
+      "avatar": "avatar-daniel",
+      "cards": [
+        "profile-trip-london",
+        "profile-trip-tokyo",
+        "profile-trip-dubai",
+        "profile-trip-paris"
+      ]
+    },
+    "01": {
+      "homeAirport": "photo-new-york-onboarding",
+      "cabinBusiness": "cabin-business",
+      "cabinFirst": "cabin-first",
+      "family": "family-children"
+    },
+    "02": {
+      "avatar": "avatar-daniel",
+      "globe": "globe-explore-complete",
+      "offers": [
+        "photo-paris-offer",
+        "photo-tokyo-offer",
+        "photo-dubai-offer"
+      ]
+    },
+    "03": {
+      "popular": [
+        "photo-london-search",
+        "photo-paris-search",
+        "photo-tokyo-search"
+      ],
+      "cities": [
+        "London",
+        "Paris",
+        "Tokyo"
+      ],
+      "prices": [
+        3900,
+        3450,
+        4200
+      ]
+    },
+    "05": {
+      "thumbnailSeat": "photo-business-seat-thumbnail",
+      "thumbnailLounge": "photo-airport-lounge-thumbnail",
+      "weather": "weather-london"
+    },
+    "09": {
+      "photos": [
+        "photo-london-request",
+        "photo-tokyo-request",
+        "photo-dubai-request",
+        "photo-paris-request"
+      ],
+      "statuses": [
+        "Quote ready",
+        "Received",
+        "Booked",
+        "Closed"
+      ]
+    }
+  },
+  "implementationNotes": {
+    "referencesOnly": true,
+    "logicalDimensions": "Source crop px are raster coordinates, not React Native dp. Preserve aspect ratio; measure against the complete screen reference.",
+    "transparency": "PNG crops retain baked source backgrounds. Do not run automatic background removal, recolor, stretch or upscale beyond source resolution.",
+    "vectors": "Pinned Lucide SVGs are existing library geometry, not pixel-identical traces. Original raster fragments remain authoritative. Family/reclining seat/active filled tabs must not be substituted by similar generic line SVGs.",
+    "conflicts": "Existing references contain different city photos by context and small icon differences. Context-specific source assignment wins; report unresolved visual conflicts rather than picking a new image."
+  }
+}
