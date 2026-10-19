@@ -16,6 +16,8 @@ import { id, createdAt, updatedAt, tz } from "./_helpers";
 export const catalog = pgSchema("catalog");
 export const fareCabin = catalog.enum("fare_cabin", ["business", "first"]);
 export const fareSource = catalog.enum("fare_source", ["manual", "import", "gds"]);
+/** The trip a fare's price is for (ADR-IMPL-056): one way unless the catalogue says the price is for the round trip. */
+export const fareTrip = catalog.enum("fare_trip", ["round_trip", "one_way"]);
 
 /** A published fare for a route. Distinct from proposals.offers (promotional). */
 export const fares = catalog.table(
@@ -36,6 +38,9 @@ export const fares = catalog.table(
     publishedPrice: numeric("published_price", { precision: 10, scale: 2 }),
     publishedSource: text("published_source"),
     currency: char("currency", { length: 3 }).notNull().default("USD"),
+    /** What the price is for: `round_trip` only when the catalogue says so (04 and 13 print `round trip` beside a
+     *  fare), else one way. Added by the named step 0031, not by a drizzle migration. */
+    trip: fareTrip("trip").notNull().default("one_way"),
     source: fareSource("source").notNull().default("import"),
     validFrom: tz("valid_from").notNull().defaultNow(),
     validUntil: tz("valid_until").notNull(),
@@ -108,9 +113,16 @@ export const airports = catalog.table(
     nameNorm: text("name_norm"),
     countryNorm: text("country_norm"),
     termsNorm: text("terms_norm"),
+    /** The destination's one line under its city (04: `Iconic sights, world-class culture and unforgettable
+     *  experiences.`), from the airports import; null until it has one (ADR-IMPL-056). Added by the named step 0031. */
+    description: text("description"),
     createdAt: createdAt(),
   },
-  (t) => [index("airports_city").on(t.city), index("airports_region").on(t.region)],
+  (t) => [
+    index("airports_city").on(t.city),
+    index("airports_region").on(t.region),
+    check("airports_description", sql`${t.description} IS NULL OR length(btrim(${t.description})) BETWEEN 1 AND 160`),
+  ],
 );
 
 /** What a place photo is now (ADR-IMPL-043): not looked at yet, a photo, or only coordinates to draw from above. */

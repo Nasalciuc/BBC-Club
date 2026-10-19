@@ -60,6 +60,8 @@ export function toDestinationPin(row: DestinationPin, hasOffer: boolean): Destin
     countryCode: row.countryCode,
     lat: row.lat,
     lng: row.lng,
+    // ADR-IMPL-056: the destination's one line (04), or none — a pin cached before 0031 has no such field.
+    description: row.description ?? null,
     fromPrice: row.fromPrice,
     hasOffer,
     region: row.region,

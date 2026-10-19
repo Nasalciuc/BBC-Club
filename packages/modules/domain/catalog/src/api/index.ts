@@ -21,6 +21,8 @@ export type DestinationPin = {
   region: string;
   lat: number;
   lng: number;
+  /** The destination's one line under its city (04), or null (ADR-IMPL-056). */
+  description: string | null;
   fromPrice: number;
 };
 

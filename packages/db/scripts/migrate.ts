@@ -513,6 +513,29 @@ try {
     }
   }
 
+  // After 0006 (catalog schema): the trip a fare's price is for, and a destination's one line. ADR-IMPL-056.
+  const fareTripAndAirportDescription = join(migrationsDir, "0031_catalog_fare_trip_and_airport_description.sql");
+  if (existsSync(fareTripAndAirportDescription)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0031_catalog_fare_trip_and_airport_description.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the type, the columns and the CHECK as NOT VALID, then the scan that validates it.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(fareTripAndAirportDescription, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE catalog.airports VALIDATE CONSTRAINT airports_description`);
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0031_catalog_fare_trip_and_airport_description.sql')`,
+        );
+      });
+      console.log("catalog fare trip and airport description applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);

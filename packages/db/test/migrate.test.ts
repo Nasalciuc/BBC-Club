@@ -87,6 +87,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/auth.rate_limit.last_request → bigint/);
     expect(second.out).not.toMatch(/role idle_in_transaction timeout applied/);
     expect(second.out).not.toMatch(/requests carrier at request applied/);
+    expect(second.out).not.toMatch(/catalog fare trip and airport description applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -121,6 +122,7 @@ describe("extras ledger", () => {
       "0028_catalog_site_destinations.sql",
       "0029_requests_published_at_request.sql",
       "0030_requests_carrier_at_request.sql",
+      "0031_catalog_fare_trip_and_airport_description.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -215,6 +217,53 @@ describe("extras ledger", () => {
     // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
     const [validated] = (await db.execute(
       sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_carrier_at_request'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-056: a fare is one way unless the catalogue says round trip; a destination's line says something, briefly.
+  it("catalog.fares.trip is one way by default and an enum; airports_description takes 1 to 160 characters", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    const code = async (q: ReturnType<typeof sql>) => {
+      try {
+        await db.execute(q);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    const fare = (carrier: string, trip: string | null) => sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, price, valid_until${trip === null ? sql`` : sql`, trip`})
+      VALUES ('JFK', 'LHR', 'business', ${carrier}, '4200.00', now() + interval '30 days'${
+        trip === null ? sql`` : sql`, ${trip}::catalog.fare_trip`
+      })`;
+    expect(await code(fare("BA", null))).toBe("ok");
+    expect(await code(fare("VS", "round_trip"))).toBe("ok");
+    expect(await code(fare("AA", "return"))).toBe("22P02"); // not a label of the enum
+    const trips = (await db.execute(
+      sql`SELECT carrier, trip FROM catalog.fares WHERE carrier IN ('BA', 'VS') ORDER BY carrier`,
+    )) as unknown as { carrier: string; trip: string }[];
+    expect(trips).toEqual([
+      { carrier: "BA", trip: "one_way" },
+      { carrier: "VS", trip: "round_trip" },
+    ]);
+
+    const line = (text: string | null) => sql`UPDATE catalog.airports SET description = ${text} WHERE code = 'LHR'`;
+    const [lhr] = (await db.execute(
+      sql`SELECT count(*)::int AS n FROM catalog.airports WHERE code = 'LHR'`,
+    )) as unknown as { n: number }[];
+    expect(lhr?.n).toBe(1); // the reference airports (migrate.ts) have it: each update below writes one row
+    expect(await code(line(null))).toBe("ok");
+    expect(await code(line("Iconic sights, world-class culture and unforgettable experiences."))).toBe("ok");
+    expect(await code(line("x".repeat(160)))).toBe("ok");
+    expect(await code(line(` ${"x".repeat(160)} `))).toBe("ok"); // counted once the spaces around it are left out
+    expect(await code(line("x".repeat(161)))).toBe("23514");
+    expect(await code(line(""))).toBe("23514");
+    expect(await code(line("   "))).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'airports_description'`,
     )) as unknown as { convalidated: boolean }[];
     expect(validated?.convalidated).toBe(true);
   });

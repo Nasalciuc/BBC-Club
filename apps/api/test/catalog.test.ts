@@ -426,6 +426,7 @@ describe("fare parity", () => {
         publishedPrice: f.price.published != null ? String(f.price.published) : null,
         publishedSource: f.price.publishedSource ?? null,
         currency: f.price.currency,
+        trip: "one_way",
         source: "manual",
         validFrom: now,
         validUntil: new Date(f.validUntil),
@@ -446,6 +447,7 @@ describe("fare parity", () => {
           popularity: 0,
           tz: "America/New_York",
           searchTerms: null,
+          description: null,
           createdAt: now,
         },
         to: {
@@ -460,6 +462,7 @@ describe("fare parity", () => {
           popularity: 0,
           tz: "Europe/London",
           searchTerms: null,
+          description: null,
           createdAt: now,
         },
       },

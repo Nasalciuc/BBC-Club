@@ -137,6 +137,8 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
               homeCode,
               // A pin's price is in the tag: a new night's prices are new pins (ADR-IMPL-045).
               destinations: destinations.map((d) => `${d.code}:${d.fromPrice}`),
+              // So are the destinations' lines (ADR-IMPL-056): an airports import that writes one is a new body.
+              descriptions: [body.home?.description ?? null, ...destinations.map((d) => d.description ?? null)],
               offerIds,
               states,
               // A carousel's membership is in the tag too: an airport's region or country corrected moves an offer

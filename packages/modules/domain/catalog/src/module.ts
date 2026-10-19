@@ -109,6 +109,7 @@ export const catalogModule = (
               region: r.airport.region,
               lat: Number(r.airport.lat),
               lng: Number(r.airport.lng),
+              description: r.airport.description,
               fromPrice: estimate.amount,
               airports: r.airports,
             },

@@ -54,6 +54,7 @@ export const faresRepo = {
         region: airports.region,
         lat: airports.lat,
         lng: airports.lng,
+        description: airports.description,
         fromPrice: fares.price,
       })
       .from(fares)
@@ -105,6 +106,8 @@ export const faresRepo = {
       publishedPrice: string | null;
       publishedSource: string | null;
       currency: string;
+      /** What the price is for (ADR-IMPL-056). A re-import restates it with the price: the row says it, or one way. */
+      trip: "round_trip" | "one_way";
       validFrom: Date;
       validUntil: Date;
     },
@@ -127,6 +130,7 @@ export const faresRepo = {
           publishedPrice: row.publishedPrice,
           publishedSource: row.publishedSource,
           currency: row.currency,
+          trip: row.trip,
           validUntil: row.validUntil,
           published: true,
           updatedAt: sql`now()`,

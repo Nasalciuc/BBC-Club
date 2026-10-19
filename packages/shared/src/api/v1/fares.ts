@@ -59,6 +59,10 @@ export const FareVM = z.object({
     .nullable()
     .optional(),
   price: PricePair,
+  /** What the price is for, as the catalogue says (ADR-IMPL-056): `round_trip` only where the catalogue says so — 04 and
+   *  13 print `round trip` beside such a fare — else `one_way`. Optional both ways: an older server sends none, and a
+   *  value this app does not know reads as none (the fare still lists; its trip is not printed). */
+  trip: z.enum(["round_trip", "one_way"]).optional().catch(undefined),
   validUntil: z.string().datetime(),
   /** A promotional offer exists on this route. */
   hasOffer: z.boolean(),
@@ -95,6 +99,10 @@ export const AirportVM = z.object({
    *  a zone this runtime cannot format in ("", "not/a_zone", a number) becomes undefined instead of failing the whole
    *  response, and the local time is simply not shown. */
   tz: z.string().refine(isFormattableZone).optional().catch(undefined),
+  /** The destination's one line under its city (04: `Iconic sights, world-class culture and unforgettable
+   *  experiences.`), from the catalogue (ADR-IMPL-056). Null until it has one — the line is left out, never made up.
+   *  Optional both ways; a value this app cannot read reads as none, and the airport still parses. */
+  description: z.string().trim().min(1).nullable().optional().catch(null),
 });
 export type AirportVM = z.infer<typeof AirportVM>;
 

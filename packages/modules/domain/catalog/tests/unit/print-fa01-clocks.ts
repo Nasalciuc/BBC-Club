@@ -18,6 +18,7 @@ const vm = toFareVM(
     publishedPrice: "7850.00",
     publishedSource: "Sabre · 16 Sep",
     currency: "USD",
+    trip: "one_way",
     source: "manual",
     validFrom: new Date("2026-09-01T00:00:00.000Z"),
     validUntil: new Date("2027-12-31T23:59:59.000Z"),
@@ -38,6 +39,7 @@ const vm = toFareVM(
       popularity: 100,
       tz: "America/New_York",
       searchTerms: null,
+      description: null,
       createdAt: new Date("2026-09-01T00:00:00.000Z"),
     },
     to: {
@@ -52,6 +54,7 @@ const vm = toFareVM(
       popularity: 98,
       tz: "Europe/London",
       searchTerms: null,
+      description: null,
       createdAt: new Date("2026-09-01T00:00:00.000Z"),
     },
   },

@@ -124,13 +124,17 @@ export const airportsRepo = {
       lng: string;
       popularity: number;
       tz: string;
+      /** The destination's one line (ADR-IMPL-056): a line, null to clear it, or undefined — the import had no such
+       *  column — to keep what the airport has. */
+      description?: string | null;
     }>,
   ) {
     let n = 0;
-    for (const row of rows) {
+    for (const { description, ...row } of rows) {
+      const line = description === undefined ? {} : { description };
       await exec
         .insert(airports)
-        .values(row)
+        .values({ ...row, ...line })
         .onConflictDoUpdate({
           target: airports.code,
           set: {
@@ -143,6 +147,7 @@ export const airportsRepo = {
             lng: row.lng,
             popularity: row.popularity,
             tz: row.tz,
+            ...line,
           },
         });
       n += 1;

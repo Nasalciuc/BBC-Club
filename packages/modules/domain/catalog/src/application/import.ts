@@ -23,6 +23,9 @@ const FareCsvRow = z.object({
   published_price: z.string().optional().nullable(),
   published_source: z.string().optional().nullable(),
   currency: z.string().length(3).default("USD"),
+  /** What the price is for (ADR-IMPL-056): `round_trip` or `one_way`; a file without the column, or an empty cell, says
+   *  one way — a fare says round trip only where the catalogue says so. Anything else refuses the import. */
+  trip: z.preprocess((v) => (v == null || v === "" ? "one_way" : v), z.enum(["round_trip", "one_way"])),
   valid_from: z.string().datetime(),
   valid_until: z.string().datetime(),
 });
@@ -41,6 +44,13 @@ const AirportCsvRow = z.object({
     .optional()
     .transform((v) => (v && v.length ? Number(v) : 0)),
   tz: z.string().min(1),
+  /** The destination's one line under its city (ADR-IMPL-056), at most 160 characters — quoted when it has a comma. An
+   *  empty cell clears it; a file without the column leaves every airport's as it is. */
+  description: z
+    .string()
+    .max(160)
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v.trim() || null)),
 });
 
 function parseCsv(raw: string): string[][] {
@@ -99,6 +109,7 @@ export async function importCatalog(deps: { db: Db }, input: ImportBody): Promis
           lng: r.lng,
           popularity: r.popularity,
           tz: r.tz,
+          description: r.description,
         })),
       );
       return { imported: n };
@@ -125,6 +136,7 @@ export async function importCatalog(deps: { db: Db }, input: ImportBody): Promis
         publishedPrice,
         publishedSource,
         currency: r.currency.toUpperCase(),
+        trip: r.trip,
         validFrom: new Date(r.valid_from),
         validUntil: new Date(r.valid_until),
       });
