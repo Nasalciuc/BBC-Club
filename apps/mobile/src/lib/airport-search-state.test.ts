@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { airportSearchState, chosenAirportLabel, homeAirportLabel, wantsAirportSearch } from "./airport-search-state";
+import {
+  airportSearchState,
+  chosenAirportLabel,
+  homeAirportLabel,
+  nearFirst,
+  rowCities,
+  wantsAirportSearch,
+} from "./airport-search-state";
 
 const jfk = { code: "JFK", city: "New York", name: "John F. Kennedy", countryCode: "US" };
 
@@ -57,5 +64,54 @@ describe("homeAirportLabel", () => {
   test("keeps the code alone while the city is unknown", () => {
     expect(homeAirportLabel("JFK", null)).toBe("JFK");
     expect(homeAirportLabel("JFK", "")).toBe("JFK");
+  });
+});
+
+describe("nearFirst", () => {
+  const ny = (code: string) => ({ code, tz: "America/New_York" });
+  const msy = { code: "MSY", tz: "America/Chicago" };
+  const ncl = { code: "NCL", tz: "Europe/London" };
+  const old = { code: "OLD" };
+
+  test("the phone's zone first, each group in the server's order (14: New → JFK, EWR, LGA)", () => {
+    const server = [ny("JFK"), ny("EWR"), msy, ncl, ny("LGA"), old];
+    expect(nearFirst(server, "America/New_York").map((a) => a.code)).toEqual([
+      "JFK",
+      "EWR",
+      "LGA",
+      "MSY",
+      "NCL",
+      "OLD",
+    ]);
+  });
+
+  test("without a zone the server's order stands, in a new array", () => {
+    const server = [msy, ny("JFK")];
+    const out = nearFirst(server, null);
+    expect(out).toEqual(server);
+    expect(out).not.toBe(server);
+  });
+});
+
+describe("rowCities", () => {
+  const row = (code: string, city: string, name: string) => ({ code, city, name });
+
+  test("a second airport of a city says its own name after the city (14)", () => {
+    const rows = [
+      row("JFK", "New York", "John F. Kennedy International Airport"),
+      row("EWR", "Newark", "Newark Liberty International Airport"),
+      row("LGA", "New York", "LaGuardia Airport"),
+    ];
+    expect([...rowCities(rows).values()]).toEqual(["New York", "Newark", "New York LaGuardia"]);
+  });
+
+  test("a name that starts with its city stands alone", () => {
+    const rows = [row("LHR", "London", "Heathrow Airport"), row("LCY", "London", "London City Airport")];
+    expect(rowCities(rows).get("LCY")).toBe("London City");
+  });
+
+  test("a name of only the shared words keeps the city", () => {
+    const rows = [row("AAA", "Anaa", "Anaa Airport"), row("AAB", "Anaa", "Airport")];
+    expect(rowCities(rows).get("AAB")).toBe("Anaa");
   });
 });

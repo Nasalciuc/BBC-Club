@@ -14,8 +14,14 @@ type Props = {
    * Requests (09) — light grey with slate words, navy with white words when chosen.
    */
   variant?: "trip" | "filter";
-  /** `equal`: an even share of its row; `content`: it grows from its own width. */
+  /** `equal`: an even share of its row; `content`: it grows from its own width. None: it hugs its words. */
   fill?: "equal" | "content";
+  /**
+   * A trip chip as the screen draws it: `route` on the globe's sheet (13) — 31.3 pt, the 16-pt icon 12.5 in, the words
+   * 8.1 after it and 13.2 from the edge; `place` on a destination's page (04) — 30 pt, 10.3 in, 7.1, 11.7, the words in
+   * Medium. 13's measure without one.
+   */
+  look?: "route" | "place";
   /** None: a fact, not a choice — drawn the same, not pressable. */
   onPress?: () => void;
   testID: string;
@@ -28,6 +34,10 @@ type Props = {
  */
 const FILTER = { height: 31.7, pad: 14, minWidth: 55.5 } as const;
 const TRIP = { height: 31, padLeft: 12, icon: 16, gap: 9, padRight: 14 } as const;
+const LOOKS = {
+  route: { height: 31.3, padLeft: 12.5, icon: 16, gap: 8.1, padRight: 13.2, stroke: 1.9, text: tokens.type.routeChip },
+  place: { height: 30, padLeft: 10.3, icon: 16, gap: 7.1, padRight: 11.7, stroke: 1.9, text: tokens.type.placeChip },
+} as const;
 
 export function Chip({
   label,
@@ -36,16 +46,23 @@ export function Chip({
   icon,
   variant = "trip",
   fill,
+  look,
   onPress,
   testID,
 }: Props) {
   const filter = variant === "filter";
+  const drawn = !filter && look ? LOOKS[look] : null;
   const color = selected ? tokens.colors.textOnPhoto : filter ? tokens.colors.textOnTint : tokens.colors.textPrimary;
   const content = (
     <>
-      {icon ? <Icon name={icon} size={TRIP.icon} color={color} strokeWidth={1.6} /> : null}
+      {icon ? (
+        <Icon name={icon} size={drawn?.icon ?? TRIP.icon} color={color} strokeWidth={drawn?.stroke ?? 1.6} />
+      ) : null}
       <Text
-        style={[filter ? (selected ? styles.filterOn : styles.filterLabel) : styles.label, { color }]}
+        style={[
+          filter ? (selected ? styles.filterOn : styles.filterLabel) : drawn ? rn(drawn.text) : styles.label,
+          { color },
+        ]}
         numberOfLines={1}
       >
         {label}
@@ -54,6 +71,12 @@ export function Chip({
   );
   const frame = [
     filter ? styles.filter : styles.trip,
+    drawn && {
+      minHeight: drawn.height,
+      paddingLeft: drawn.padLeft,
+      paddingRight: drawn.padRight,
+      gap: drawn.gap,
+    },
     fill === "equal" && styles.equal,
     fill === "content" && styles.content,
     selected && styles.selected,

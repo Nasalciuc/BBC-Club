@@ -44,7 +44,7 @@ import {
   Users,
   X,
 } from "lucide-react-native";
-import Svg, { Circle as SvgCircle, Path } from "react-native-svg";
+import Svg, { Circle as SvgCircle, Ellipse, Path } from "react-native-svg";
 import {
   CABIN_BUSINESS,
   CABIN_FIRST,
@@ -212,6 +212,51 @@ function UserPenFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProp
   );
 }
 
+/**
+ * 01's adult (`Adults`, who usually travels): the head — a little taller than wide — over a closed half-dome with a
+ * flat, rounded foot; not Lucide's open `user`. Measured on 01: 19.8 × 24.4 pt with a 1.38-pt line at a 24.4-pt box.
+ */
+function Adult({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Ellipse cx={12} cy={5.43} rx={4.08} ry={4.75} stroke={color} strokeWidth={strokeWidth} />
+      <Path
+        d="M2.94 21.97a9.06 9.06 0 0 1 18.12 0q0 1.35-1.35 1.35H4.29q-1.35 0-1.35-1.35Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** 02, 16: an offer's rating star, Lucide's `star` filled (10.3 pt across at 12.6). */
+function StarFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+/** 13: the destination saved — Lucide's `bookmark` filled, its outline kept so it stands as large as the line one. */
+function BookmarkFill({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"
+        fill={color}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 function PlaneFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
   // A plane seen from above, nose up, filled: the route's plane on the globe (13) and on a flight's line (sheet 40).
   return (
@@ -236,6 +281,7 @@ export const icons = {
   "plane-fill": PlaneFill,
   calendar: Calendar,
   user: User,
+  adult: Adult,
   users: Users,
   family: Family,
   seat: Seat,
@@ -253,6 +299,7 @@ export const icons = {
   share: Share,
   heart: Heart,
   bookmark: Bookmark,
+  "bookmark-fill": BookmarkFill,
   phone: Phone,
   "phone-fill": PhoneFill,
   "plane-right-fill": PlaneRightFill,
@@ -260,6 +307,7 @@ export const icons = {
   "lock-fill": LockFill,
   "user-pen-fill": UserPenFill,
   "info-fill": InfoFill,
+  "star-fill": StarFill,
   bell: Bell,
   lock: Lock,
   trash: Trash,

@@ -6,23 +6,23 @@
 export const EXPLORE = {
   /** 02: the sheet's top at rest — the search bar 16 pt under it, at 378 on the image. */
   restTop: 315,
-  /** 13 and 19: a chosen route's sheet at most this low, at 317 — the image's 327 less 10; higher on a phone too short
-   *  for the first flight to stand whole above the docked pill (`routeContent`). */
-  routeTop: 270,
+  /** 13 and 19: a chosen route's sheet at most this low, at 327.2 on the image; higher on a phone too short for the
+   *  first flight to stand whole above the docked pill (`routeContent`). */
+  routeTop: 280.2,
   /** Never higher than this: the route's box (globeRoute ± 80) stays above the sheet. */
   routeTopMin: 206,
   /**
-   * What a chosen route's sheet must show above the docked `Request a quote` (13): the grabber, the city, the chips,
-   * the fare's summary between its rules and the first flight whole — 403 pt, measured on the web render — then the
-   * pill's 64 pt and 9 to spare.
+   * What a chosen route's sheet must show above the tab bar (13): the grabber, the city, the chips, the fare's summary
+   * between its rules and the first flight whole — 381 pt from the sheet's top to the card's foot — then 9.4 to the
+   * docked `Request a quote`, its 40.6 and the 13.9 under it.
    */
-  routeContent: 476,
+  routeContent: 444.9,
   /** 16: every offer, the greeting still above it, at 128 on the image. */
   allTop: 81,
   /** 02: the globe's centre at rest, at 266 on the image. */
   globeRest: 219,
-  /** 13: a chosen route's middle, at 165 on the image. */
-  globeRoute: 118,
+  /** 13: a chosen route's middle, at 159.4 on the image — New York at 182, London at 137 (the image: 181.1, 139.6). */
+  globeRoute: 112.4,
 } as const;
 
 export type SheetStop = 0 | 1 | 2;
@@ -30,7 +30,7 @@ export type SheetStop = 0 | 1 | 2;
 /** The sheet's three heights on a container `height` points tall (the screen above the tab bar), lowest first. Never
  *  under 120 pt, and always rising from one stop to the next. */
 export function sheetSnaps(height: number, topInset: number): [number, number, number] {
-  const at = (top: number) => Math.max(120, Math.round(height - topInset - top));
+  const at = (top: number) => Math.max(120, height - topInset - top);
   const rest = at(EXPLORE.restTop);
   const route = Math.max(rest + 1, at(routeTop(height, topInset)));
   const all = Math.max(route + 1, at(EXPLORE.allTop));
@@ -38,14 +38,11 @@ export function sheetSnaps(height: number, topInset: number): [number, number, n
 }
 
 /**
- * A chosen route's sheet top, under the status bar: 270 where the phone is tall enough for the first flight to stand
+ * A chosen route's sheet top, under the status bar: 280.2 where the phone is tall enough for the first flight to stand
  * whole above the docked pill; higher on a shorter one, never above `routeTopMin`.
  */
 export function routeTop(height: number, topInset: number): number {
-  return Math.min(
-    EXPLORE.routeTop,
-    Math.max(EXPLORE.routeTopMin, Math.round(height - topInset - EXPLORE.routeContent)),
-  );
+  return Math.min(EXPLORE.routeTop, Math.max(EXPLORE.routeTopMin, height - topInset - EXPLORE.routeContent));
 }
 
 /** Where the sheet's top stands on screen at a stop — Mapbox keeps its logo just above it. */

@@ -23,6 +23,11 @@ type Props = {
  * baseline 23.4 pt down, 43 pt from the left, the airport's 17.1 pt under it; an 18-pt chevron 14 pt from the right.
  */
 const DETAIL = { height: 55, radius: 8, pinLeft: 11.2, pin: 20, textLeft: 43, chevron: 18, chevronRight: 5 } as const;
+/**
+ * 14, measured: a white row 53.3 pt tall, radius 9, on a hairline without a shadow; the pin's 25-pt box 17.5 pt in;
+ * the city 59.8 in, the code in slate 17.3 from the right; both centred on the row.
+ */
+const CODE = { height: 53.3, radius: 9, pinLeft: 17.5, pin: 25, pinStroke: 1.25, textLeft: 59.8, right: 17.3 } as const;
 const CITY_BASELINE = 23.4;
 const LINE_PITCH = 17.1;
 const DOT = { size: 2.6, gap: 8.8 } as const;
@@ -39,18 +44,18 @@ export function AirportRow({ code, city, airport, state = "default", layout = "d
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        layout === "code" && styles.codeRow,
+        layout === "code" ? styles.codeRow : styles.detailRow,
         selected && styles.selected,
         pressed && styles.pressed,
       ]}
     >
       <Icon
         name={state === "recent" ? "clock" : "map-pin"}
-        size={DETAIL.pin}
+        size={layout === "code" ? CODE.pin : DETAIL.pin}
         color={tokens.colors.textPrimary}
-        strokeWidth={1.8}
+        strokeWidth={layout === "code" ? CODE.pinStroke : 1.8}
       />
-      <View style={[styles.text, layout === "detail" && styles.detailText]}>
+      <View style={[styles.text, layout === "detail" ? styles.detailText : styles.codeText]}>
         <Text style={layout === "detail" ? styles.city : styles.codeCity} numberOfLines={1}>
           {city}
         </Text>
@@ -88,15 +93,21 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: tokens.colors.borderFaint,
     backgroundColor: tokens.colors.surfaceCard,
-    ...tokens.elevation.card,
   },
-  codeRow: { minHeight: 56, paddingHorizontal: tokens.space.gutter, gap: tokens.space.gutter },
+  detailRow: { ...tokens.elevation.card },
+  codeRow: {
+    minHeight: CODE.height,
+    borderRadius: CODE.radius,
+    paddingLeft: CODE.pinLeft,
+    paddingRight: CODE.right,
+  },
+  codeText: { marginLeft: CODE.textLeft - CODE.pinLeft - CODE.pin, marginRight: tokens.space.xs },
   selected: { borderWidth: 1.5, borderColor: tokens.colors.primary },
   pressed: { opacity: 0.8 },
   text: { flex: 1, marginLeft: DETAIL.textLeft - DETAIL.pinLeft - DETAIL.pin },
   detailText: { alignSelf: "flex-start", paddingTop: CITY_BASELINE - baselineOffset(city) },
   city: { ...rn(city), color: tokens.colors.textPrimary },
-  codeCity: { ...rn(tokens.type.bodyStrong), color: tokens.colors.textPrimary },
+  codeCity: { ...rn(tokens.type.onboardRow), color: tokens.colors.textPrimary },
   airportRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -105,5 +116,5 @@ const styles = StyleSheet.create({
   },
   airport: { ...rn(meta), color: tokens.colors.textSecondary, flexShrink: 1 },
   dot: { width: DOT.size, height: DOT.size, borderRadius: DOT.size, backgroundColor: tokens.colors.textSecondary },
-  code: { ...rn(tokens.type.bodyStrong), color: tokens.colors.textSecondary },
+  code: { ...rn(tokens.type.onboardCode), color: tokens.colors.textSecondary },
 });

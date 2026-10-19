@@ -5,7 +5,6 @@ re-encoded as WebP. Nothing here was generated or retouched; to replace a file, 
 
 | File                                | Source (under `assets/`)                           | Source sha256       | Pixels    | Encoding      |
 | ----------------------------------- | -------------------------------------------------- | ------------------- | --------- | ------------- |
-| `photos/new-york-onboarding.webp`   | `locked/photos/photo-new-york-onboarding.png`      | `f3dccf5440382e7e…` | 772x278   | WebP q90      |
 | `photos/london-search.webp`         | `locked/photos/photo-london-search.png`            | `a1239c9f7083e7b8…` | 781x250   | WebP q90      |
 | `photos/paris-search.webp`          | `locked/photos/photo-paris-search.png`             | `84d762b164d5a3a6…` | 781x249   | WebP q90      |
 | `photos/tokyo-search.webp`          | `locked/photos/photo-tokyo-search.png`             | `e80f7cf7616e2206…` | 781x239   | WebP q90      |

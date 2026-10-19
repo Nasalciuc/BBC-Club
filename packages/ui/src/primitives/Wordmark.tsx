@@ -8,7 +8,10 @@ type Props = {
   testID?: string;
 };
 
-/** The wordmark on one line (sheet 37): `BuyBusinessClass` in Bold, ` Club` in Regular. */
+/**
+ * The wordmark on one line (sheet 37): `BuyBusinessClass` in Semibold, ` Club` in Regular and a little larger, as 01
+ * draws it — the two parts share one baseline.
+ */
 export function Wordmark({ tone = "navy", testID }: Props) {
   const color = tone === "white" ? tokens.colors.textOnPhoto : tokens.colors.textPrimary;
   return (
@@ -26,9 +29,5 @@ export function Wordmark({ tone = "navy", testID }: Props) {
 
 const styles = StyleSheet.create({
   mark: { ...rn(tokens.type.wordmark) },
-  club: {
-    ...rn(tokens.type.body),
-    fontSize: tokens.type.wordmark.fontSize,
-    letterSpacing: tokens.type.wordmark.letterSpacing,
-  },
+  club: { ...rn(tokens.type.wordmarkClub), lineHeight: tokens.type.wordmark.lineHeight },
 });

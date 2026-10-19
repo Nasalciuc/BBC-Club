@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Icon, type IconName } from "../icons";
+import { FAMILY } from "../art-paths";
+import { ArtGlyph, Icon, type IconName } from "../icons";
 import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
 
@@ -15,9 +16,10 @@ type Props = {
   onPress?: () => void;
   /**
    * `attention`: 28's card over the list, as measured — the bare info mark (27 pt, its stroke 2), a Bold title and
-   * one line under it, on the notice tint, radius 9. Without it, the 1.0 card (01, 11 until they are measured).
+   * one line under it, on the notice tint, radius 9. `detail`: 11's, the mark in its circle. `family`: 01's
+   * `Travelling with children?`, the traced adult and child at their own size. Without it, the 1.0 card.
    */
-  look?: "attention" | "detail";
+  look?: "attention" | "detail" | "family";
   testID?: string;
 };
 
@@ -42,6 +44,24 @@ export function InfoCard({ title, body, icon, iconStyle = "circle", link, onPres
         <View style={styles.detailText}>
           <Text style={[styles.detailTitle, alone && styles.detailTitleAlone]}>{title}</Text>
           {body ? <Text style={styles.detailBody}>{body}</Text> : null}
+        </View>
+      </View>
+    );
+  }
+  if (look === "family") {
+    return (
+      <View
+        testID={testID}
+        style={styles.family}
+        accessible
+        accessibilityLabel={[title, body].filter(Boolean).join(". ")}
+      >
+        <View style={styles.familyIcon}>
+          <ArtGlyph art={FAMILY} height={FAMILY_CARD.icon} color={tokens.colors.textSecondary} />
+        </View>
+        <View style={styles.familyText}>
+          <Text style={styles.familyTitle}>{title}</Text>
+          {body ? <Text style={styles.familyBody}>{body}</Text> : null}
         </View>
       </View>
     );
@@ -143,7 +163,46 @@ const DETAIL = { radius: 9.5, circle: 35.5, circleLeft: 16.6, circleCentre: 33.5
 const detailTitle = tokens.type.noticeTitle;
 const detailBody = tokens.type.noticeBody;
 
+/**
+ * 01, measured (card top T, left L): 59.5 tall, radius 10.75, on the soft tint; the adult and child at their own size
+ * (23 pt tall) 18.7 in and 17.6 down; the words 56.3 in, the title's baseline T+26, the line's 17.4 under it.
+ */
+const FAMILY_CARD = {
+  height: 59.5,
+  radius: 10.75,
+  icon: 23.04,
+  iconLeft: 18.67,
+  iconTop: 17.58,
+  textLeft: 56.3,
+  title: 26,
+  pitch: 17.4,
+} as const;
+const familyTitle = tokens.type.familyTitle;
+const familyBody = tokens.type.familyBody;
+
 const styles = StyleSheet.create({
+  family: {
+    minHeight: FAMILY_CARD.height,
+    borderRadius: FAMILY_CARD.radius,
+    backgroundColor: tokens.colors.surfaceTintSoft,
+  },
+  familyIcon: { position: "absolute", left: FAMILY_CARD.iconLeft, top: FAMILY_CARD.iconTop },
+  familyText: {
+    marginLeft: FAMILY_CARD.textLeft,
+    marginRight: tokens.space.md,
+    // the card is 01's height (its minimum, a little more than the words need); more words grow it
+    paddingBottom: FAMILY_CARD.height - FAMILY_CARD.title - FAMILY_CARD.pitch - belowBaseline(familyBody) - 4,
+  },
+  familyTitle: {
+    ...rn(familyTitle),
+    color: tokens.colors.textPrimary,
+    marginTop: FAMILY_CARD.title - baselineOffset(familyTitle),
+  },
+  familyBody: {
+    ...rn(familyBody),
+    color: tokens.colors.textSecondary,
+    marginTop: FAMILY_CARD.pitch - belowBaseline(familyTitle) - baselineOffset(familyBody),
+  },
   detail: {
     flexDirection: "row",
     borderRadius: DETAIL.radius,

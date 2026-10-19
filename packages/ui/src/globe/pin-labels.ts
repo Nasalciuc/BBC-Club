@@ -31,8 +31,22 @@ export type PlacedPin = {
   label: { side: LabelSide; box: Rect } | null;
 };
 
-/** The label's frame (02): 7 pt either side of the words, 4 above and below, lines of 15 (`pin`, 13 × 1.15). */
-export const LABEL = { padX: 7, padY: 4, line: 15, gap: 2, charWidth: 8.8, radius: 8 } as const;
+/**
+ * The label's frame (02): the words 8.3 pt in, 11.7 before its right edge; 2.5 above and below lines of 14 (`pin`); 4
+ * from the pin, radius 9, centred 2.5 under the pin's head. The city runs up to 6.7 pt a character in `pin` Bold, the
+ * price 5.4 in `pin-detail`.
+ */
+export const LABEL = {
+  padLeft: 8.3,
+  padRight: 11.7,
+  padY: 2.5,
+  line: 14,
+  gap: 4,
+  charWidth: 6.7,
+  detailCharWidth: 5.4,
+  radius: 9,
+  drop: 2.5,
+} as const;
 
 /** The drop pin's box, its tip at the bottom centre; the head's centre 9 pt under its top (02). */
 const PIN = { w: GLOBE_SPEC.pin.width, h: GLOBE_SPEC.pin.height, head: 9 } as const;
@@ -46,13 +60,16 @@ export function labelScale(fontScale: number): number {
 }
 
 /**
- * An estimate of the label's size before it is drawn: Inter 13 Bold runs up to 8.8 pt a character in these words; at a
- * larger text size the words, the lines and the box grow together.
+ * An estimate of the label's size before it is drawn, from its lines' characters (the first in `pin` Bold, the rest in
+ * `pin-detail`); at a larger text size the words, the lines and the box grow together.
  */
 export function labelSize(lines: readonly string[], scale = 1): { width: number; height: number } {
-  const longest = lines.reduce((n, l) => Math.max(n, l.length), 0);
+  const widest = lines.reduce(
+    (w, l, i) => Math.max(w, l.length * (i === 0 ? LABEL.charWidth : LABEL.detailCharWidth)),
+    0,
+  );
   return {
-    width: Math.ceil(LABEL.padX * 2 + longest * LABEL.charWidth * scale),
+    width: Math.ceil(LABEL.padLeft + LABEL.padRight + widest * scale),
     height: Math.ceil(LABEL.padY * 2 + LABEL.line * scale * lines.length),
   };
 }
@@ -62,11 +79,11 @@ export function pinBox(x: number, y: number): Rect {
   return { left: x - PIN.w / 2, top: y - PIN.h, right: x + PIN.w / 2, bottom: y };
 }
 
-/** The label's box on one side, centred on the pin's head. */
+/** The label's box on one side, centred a little under the pin's head (02). */
 export function labelBox(x: number, y: number, lines: readonly string[], side: LabelSide, scale = 1): Rect {
   const { width, height } = labelSize(lines, scale);
   const headY = y - PIN.h + PIN.head;
-  const top = headY - height / 2;
+  const top = headY + LABEL.drop - height / 2;
   const left = side === "right" ? x + PIN.w / 2 + LABEL.gap : x - PIN.w / 2 - LABEL.gap - width;
   return { left, top, right: left + width, bottom: top + height };
 }
@@ -109,6 +126,34 @@ export function placeLabels(
   }
   // The caller's order, so React keeps each pin where it was.
   return pins.map((p) => placed.get(p.code)!);
+}
+
+/**
+ * 13: a chosen route's two ends — a small navy drop pin, 8.6 × 10.2 with its tip on the airport and a white edge, in a
+ * soft white glow 11 pt round its head; the code in a white box on a navy hairline, 16.1 tall, 5.4 either side of the
+ * words, radius 5. The departure's box stands right of its tip and just under it (the route leaves it upward), the
+ * arrival's right of its head.
+ */
+export const ROUTE_END = {
+  pin: { width: 8.6, height: 10.2, head: 4.3 },
+  halo: 11,
+  label: { padX: 5.4, height: 16.1, radius: 5, border: 0.7, charWidth: 6 },
+  origin: { dx: 2.3, dy: -0.5 },
+  destination: { dx: 6.9, dy: -5.1 },
+} as const;
+
+export type RouteEndKind = "origin" | "destination";
+
+/** A route end's whole box — the glow and the label — and where the tip sits in it: a MarkerView anchors on the tip. */
+export function routeEndFrame(code: string, end: RouteEndKind) {
+  const at = ROUTE_END[end];
+  const headY = -ROUTE_END.pin.height + ROUTE_END.pin.head;
+  const width = 2 * ROUTE_END.label.padX + code.length * ROUTE_END.label.charWidth;
+  const left = Math.min(-ROUTE_END.halo, at.dx);
+  const right = Math.max(ROUTE_END.halo, at.dx + width);
+  const top = Math.min(headY - ROUTE_END.halo, at.dy);
+  const bottom = Math.max(headY + ROUTE_END.halo, at.dy + ROUTE_END.label.height);
+  return { width: right - left, height: bottom - top, tip: { x: -left, y: -top } };
 }
 
 /** Lower draws first and labels first: the chosen destination, home, offers from the lowest price, then the rest. */

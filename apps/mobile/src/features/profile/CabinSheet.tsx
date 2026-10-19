@@ -66,17 +66,17 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
       <View style={styles.cabins}>
         <CabinCard
           testID="profile.cabin.business"
-          icon="seat"
+          cabin="business"
           title="Business"
-          line="More space, a better journey"
+          line={"More space,\na better journey"}
           selected={cabin === "business"}
           onPress={() => setCabin("business")}
         />
         <CabinCard
           testID="profile.cabin.first"
-          icon="seat-first"
+          cabin="first"
           title="First"
-          line="The highest level of comfort"
+          line={"The highest\nlevel of comfort"}
           selected={cabin === "first"}
           onPress={() => setCabin("first")}
         />

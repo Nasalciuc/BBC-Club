@@ -61,3 +61,14 @@ export function arriveYmd(fare: Fare): string | null {
 
 /** A fare is one flight (ADR-IMPL-055 · Facts stay facts): its price is `one way`. */
 export const ONE_WAY = "one way";
+
+/**
+ * What a fare's price buys, as the catalogue says (ADR-IMPL-056): `round trip` where it sells the fare round trip (04,
+ * 13), `one way` where it says one way, and nothing for a fare an older server sent without its trip — a price is never
+ * described as more than it buys.
+ */
+export function fareBasis(trip: FareVM["trip"]): string | null {
+  if (trip === "round_trip") return "round trip";
+  if (trip === "one_way") return ONE_WAY;
+  return null;
+}

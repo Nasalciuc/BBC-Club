@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { arriveYmd, cabinText, dayText, departYmd, durationText, flightFacts } from "./flight-facts";
+import { arriveYmd, cabinText, dayText, departYmd, durationText, fareBasis, flightFacts } from "./flight-facts";
 
 const fare = {
   nonstop: true,
@@ -28,6 +28,12 @@ describe("flight facts (sheet 40 · 04)", () => {
   it("names the cabin", () => {
     expect(cabinText("business")).toBe("Business");
     expect(cabinText("first")).toBe("First");
+  });
+
+  it("says what the price buys only as the catalogue names it (04, 13)", () => {
+    expect(fareBasis("round_trip")).toBe("round trip");
+    expect(fareBasis("one_way")).toBe("one way");
+    expect(fareBasis(undefined)).toBeNull();
   });
 });
 

@@ -14,8 +14,10 @@ type Props = {
   diameter?: number;
   iconSize?: number;
   strokeWidth?: number;
-  /** A toggle's state (a saved fare's heart): read out, and the icon filled. */
+  /** A toggle's state (a saved fare's heart, a saved destination's bookmark): read out, and `selectedIcon` drawn. */
   selected?: boolean;
+  /** The icon while `selected` (`bookmark-fill`); the same icon otherwise. */
+  selectedIcon?: IconName;
   style?: ViewStyle;
 };
 
@@ -27,6 +29,7 @@ export function RoundButton({
   testID,
   tone = "photo",
   selected,
+  selectedIcon,
   diameter = 44,
   iconSize = 22,
   strokeWidth = 1.75,
@@ -48,7 +51,12 @@ export function RoundButton({
         pressed && styles.pressed,
       ]}
     >
-      <Icon name={icon} size={iconSize} color={tokens.colors.textPrimary} strokeWidth={strokeWidth} />
+      <Icon
+        name={selected && selectedIcon ? selectedIcon : icon}
+        size={iconSize}
+        color={tokens.colors.textPrimary}
+        strokeWidth={strokeWidth}
+      />
     </Pressable>
   );
 }

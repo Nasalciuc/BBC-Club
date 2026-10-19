@@ -8,7 +8,10 @@ type Props = {
   fraction: number;
 };
 
-/** Onboarding's progress (01): a 4-pt navy line on a light navy track, round at both ends; it fills as answers come. */
+/** 01, measured: the line 4.4 pt tall, round at both ends; the screen sets its width (15.4 pt from either edge). */
+export const PROGRESS_HEIGHT = 4.4;
+
+/** Onboarding's progress (01): a navy line on its light navy track, round at both ends; it fills as answers come. */
 export function ProgressLine({ fraction }: Props) {
   const clamped = Math.min(1, Math.max(0, fraction));
   const reduceMotion = useReducedMotion();
@@ -30,11 +33,11 @@ export function ProgressLine({ fraction }: Props) {
 
 const styles = StyleSheet.create({
   track: {
-    height: 4,
-    width: "100%",
+    height: PROGRESS_HEIGHT,
+    alignSelf: "stretch",
     borderRadius: tokens.radius.pill,
-    backgroundColor: tokens.colors.borderDefault,
+    backgroundColor: tokens.colors.progressTrack,
     overflow: "hidden",
   },
-  fill: { height: 4, borderRadius: tokens.radius.pill, backgroundColor: tokens.colors.actionPrimary },
+  fill: { height: PROGRESS_HEIGHT, borderRadius: tokens.radius.pill, backgroundColor: tokens.colors.actionPrimary },
 });

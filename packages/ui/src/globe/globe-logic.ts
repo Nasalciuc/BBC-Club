@@ -14,7 +14,7 @@ export const GLOBE_SPEC = {
   radius: 168, //                     02: the globe at rest, 336 pt across
   opening: [-55, -27] as Rotation, // 02: centred near Dubai (55°E 27°N) — London, Paris, Dubai and Tokyo in view
   periodMs: 120_000, //               one turn in 120 s while nothing is chosen (1.0, kept)
-  routeStroke: 2, //                  13: the route, a white line
+  routeStroke: 1.3, //                13: the route, a white line 1.2–1.4 pt
   plane: 18, //                       13: the plane at the route's middle
   pin: { width: 18, height: 25, hit: 44 }, // 02: the navy drop pin, its tip on the place; 44-pt targets (DESIGN.md)
   idleResumeMs: 4_000, //             the turn resumes 4 s after the last touch
@@ -26,9 +26,9 @@ export const GLOBE_SPEC = {
 
 /**
  * Where a chosen route must fit, in points from the frame's centre (13): wide enough for the labels at either end,
- * low enough to stay clear of the sheet.
+ * low enough to stay clear of the sheet. New York to London spans 199 pt, as 13 draws it (JFK at 94, LHR at 296).
  */
-export const ROUTE_BOX = { halfWidth: 105, halfHeight: 80 } as const;
+export const ROUTE_BOX = { halfWidth: 99.5, halfHeight: 80 } as const;
 
 export const radiusFor = (size: number, zoom = 1): number => (size * GLOBE_SPEC.radius * zoom) / GLOBE_SPEC.frame;
 

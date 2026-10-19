@@ -7,7 +7,6 @@ import londonRequest from "@/assets/images/club/photos/london-request.webp";
 import londonSearch from "@/assets/images/club/photos/london-search.webp";
 import london from "@/assets/images/club/photos/london.webp";
 import loungeThumb from "@/assets/images/club/photos/lounge-thumb.webp";
-import newYorkOnboarding from "@/assets/images/club/photos/new-york-onboarding.webp";
 import newYork from "@/assets/images/club/photos/new-york.webp";
 import parisOffer from "@/assets/images/club/photos/paris-offer.webp";
 import parisRequest from "@/assets/images/club/photos/paris-request.webp";
@@ -38,8 +37,19 @@ const PHOTOS: Record<ClubCity, Partial<Record<PhotoContext, Bundled>> & { any: B
   tokyo: { any: tokyo, offer: tokyoOffer, search: tokyoSearch, request: tokyoRequest },
   dubai: { any: dubai, offer: dubaiOffer, request: dubaiRequest },
   rome: { any: rome },
-  "new-york": { any: newYork, onboarding: newYorkOnboarding },
+  // 01's card: the package's crop of it (`photo-new-york-onboarding`) stops above the card's label, so the card shows
+  // the city's own photograph, framed as 01 frames it (`clubHomePhoto`).
+  "new-york": { any: newYork },
 };
+
+/** 03: each popular card's photograph as tall as the design draws it — Tokyo's shorter than London's and Paris's. */
+const SEARCH_PHOTO_HEIGHT: Partial<Record<ClubCity, number>> = { london: 118, paris: 118.2, tokyo: 113.4 };
+
+/** The height 03 draws this city's popular photograph at; undefined — the card's own. */
+export function clubSearchPhotoHeight(code: string | null | undefined): number | undefined {
+  const city = clubCityOf(code);
+  return city ? SEARCH_PHOTO_HEIGHT[city] : undefined;
+}
 
 /** The design's photo of this airport's city in this place of the app, or null when the design has none. */
 export function clubPhoto(code: string | null | undefined, context: PhotoContext): Bundled | null {
@@ -65,6 +75,17 @@ export function clubTripPhoto(code: string | null | undefined): { source: Bundle
   const city = clubCityOf(code);
   if (!city) return null;
   return { source: PHOTOS[city].any, left: TRIP_WINDOW[city] ?? "50%" };
+}
+
+/** 01's home airport card: the city's photograph across the card, its top edge 50.5 % of the way down (cover fit). */
+const HOME_FRAME: Partial<Record<ClubCity, `${number}%`>> = { "new-york": "50.5%" };
+
+/** The home airport's photograph on onboarding (01) and how it is framed; null when the design has no photo of it. */
+export function clubHomePhoto(code: string | null | undefined): { source: Bundled; top: `${number}%` } | null {
+  const city = clubCityOf(code);
+  if (!city) return null;
+  const set = PHOTOS[city];
+  return { source: set.onboarding ?? set.any, top: HOME_FRAME[city] ?? "50%" };
 }
 
 /** The fare's photographs after the city's (05): the business-class seat and the lounge, as the carousel shows them;
