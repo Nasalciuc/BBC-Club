@@ -3,7 +3,7 @@ export type AskFailure = "error" | "timeout";
 
 /**
  * Asks the catalog a question a request is decorated with — the estimate a quote's search showed (ADR-IMPL-042), the
- * fare's published price (ADR-IMPL-046) — and waits at most `timeoutMs`. An answer comes back as `{ value }`; an error
+ * fare's published price and airline (ADR-IMPL-046, ADR-IMPL-056) — and waits at most `timeoutMs`. An answer comes back as `{ value }`; an error
  * or a slower answer as null, reported by reason. A read left behind by the timeout finishes on its own; its answer, or
  * its failure, is dropped — the ask is settled into a value first, so nothing it does later can surface as an unhandled
  * rejection.

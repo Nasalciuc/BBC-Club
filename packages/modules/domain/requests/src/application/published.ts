@@ -3,17 +3,26 @@ import { askWithin, type AskFailure } from "./ask-within";
 /** A fare's published price and its source, as a request records them when the member asks (ADR-IMPL-046). */
 export type PublishedAtRequest = { amount: number; source: string };
 
-/** The fare's prices as the catalog holds them (catalog.fares): its price, the published price and that price's
- *  source, the currency. */
-export type FarePrices = {
+/** The airline a request was made for, as its fare named it when the member asked (ADR-IMPL-056): the name the member
+ *  read and, when the fare has one, its two-character code. */
+export type CarrierAtRequest = { code: string | null; name: string };
+
+/** What a request made from a fare records of it, read once from the catalog when the request is created. */
+export type FareAtRequest = { published: PublishedAtRequest | null; carrier: CarrierAtRequest | null };
+
+/** The fare as the catalog holds it (catalog.fares): its price, the published price and that price's source, the
+ *  currency, and its airline — the code and the name. */
+export type CatalogFare = {
   price: string;
   publishedPrice: string | null;
   publishedSource: string | null;
   currency: string;
+  carrier: string | null;
+  carrierName: string | null;
 };
 
-/** How long a fare request waits for its fare's published price: one read by key; past this the request goes on. */
-export const PUBLISHED_TIMEOUT_MS = 1_000;
+/** How long a fare request waits for its fare: one read by key; past this the request goes on. */
+export const FARE_TIMEOUT_MS = 1_000;
 
 /**
  * What a request made from a fare records of the fare's published price — read from the catalog when the request is
@@ -22,7 +31,7 @@ export const PUBLISHED_TIMEOUT_MS = 1_000;
  * sent: a fare re-priced since the member opened it would pair one price with another's reference.
  */
 export function publishedAtRequest(
-  fare: FarePrices | null,
+  fare: CatalogFare | null,
   priceAtRequest: number | undefined,
 ): PublishedAtRequest | null {
   if (!fare || priceAtRequest == null) return null;
@@ -36,16 +45,34 @@ export function publishedAtRequest(
   return { amount, source };
 }
 
+/** An airline's code as a fare carries it: two letters or digits (`BA`, `U2`). */
+const CARRIER_CODE = /^[A-Z0-9]{2}$/;
+
 /**
- * Asks for the fare a request is made from and keeps what it records of the published price. Like the estimate, it
- * decorates a request and never decides whether one is accepted: an error or an answer slower than `timeoutMs` records
- * none, reported by reason.
+ * The airline a request made from a fare records (ADR-IMPL-056): the fare's carrier as its page named it — the name, else
+ * the code, which is then the name the page shows (toFareVM) — with the code when it is a well-formed one. Kept whatever
+ * the fare costs now: a re-priced fare is the same flight on the same airline. Nothing when the fare is gone or names no
+ * airline — never "Unknown".
  */
-export async function askPublished(
-  ask: () => Promise<FarePrices | null>,
+export function carrierAtRequest(fare: Pick<CatalogFare, "carrier" | "carrierName"> | null): CarrierAtRequest | null {
+  if (!fare) return null;
+  const raw = fare.carrier?.trim().toUpperCase() ?? "";
+  const code = CARRIER_CODE.test(raw) ? raw : null;
+  const name = fare.carrierName?.trim() || code;
+  return name ? { code, name } : null;
+}
+
+/**
+ * Asks once for the fare a request is made from and keeps what the request records of it: the published price, for the
+ * price the app sent, and the airline. Like the estimate, it decorates a request and never decides whether one is
+ * accepted: an error or an answer slower than `timeoutMs` records neither, reported by reason.
+ */
+export async function askFare(
+  ask: () => Promise<CatalogFare | null>,
   priceAtRequest: number | undefined,
   opts: { timeoutMs?: number; unavailable: (reason: AskFailure, err?: unknown) => void },
-): Promise<PublishedAtRequest | null> {
-  const answer = await askWithin(ask, opts.timeoutMs ?? PUBLISHED_TIMEOUT_MS, opts.unavailable);
-  return publishedAtRequest(answer?.value ?? null, priceAtRequest);
+): Promise<FareAtRequest> {
+  const answer = await askWithin(ask, opts.timeoutMs ?? FARE_TIMEOUT_MS, opts.unavailable);
+  const fare = answer?.value ?? null;
+  return { published: publishedAtRequest(fare, priceAtRequest), carrier: carrierAtRequest(fare) };
 }

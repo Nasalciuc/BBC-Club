@@ -56,6 +56,11 @@ export const requests = requestsSchema.table(
      *  (Figma 233:4204). Added by the named step 0029, not by a drizzle migration. */
     publishedAtRequest: numeric("published_at_request", { precision: 10, scale: 2 }),
     publishedSourceAtRequest: text("published_source_at_request"),
+    /** The airline the request was made for: its fare's carrier code and the name the member read, recorded by the
+     *  server from the fare — never from the app (ADR-IMPL-056); a code always with its name. The request received and
+     *  its detail name it (images 08, 11). Added by the named step 0030, not by a drizzle migration. */
+    carrierAtRequest: char("carrier_at_request", { length: 2 }),
+    carrierNameAtRequest: text("carrier_name_at_request"),
     contactName: text("contact_name").notNull(),
     contactPhone: text("contact_phone").notNull(),
     contactEmail: text("contact_email").notNull(),
@@ -116,6 +121,12 @@ export const requests = requestsSchema.table(
       "requests_published_at_request",
       // A struck price always carries its source (FTC): both or neither, each side IS NOT NULL (0029).
       sql`(${t.publishedAtRequest} IS NULL AND ${t.publishedSourceAtRequest} IS NULL) OR (${t.publishedAtRequest} IS NOT NULL AND ${t.publishedSourceAtRequest} IS NOT NULL AND ${t.publishedAtRequest} > 0 AND length(btrim(${t.publishedSourceAtRequest})) > 0)`,
+    ),
+    check(
+      "requests_carrier_at_request",
+      // A code requires the name the member read; a name says something (0030). Each side is true or false, never
+      // NULL: a CHECK passes on NULL (0025).
+      sql`(${t.carrierAtRequest} IS NULL OR ${t.carrierNameAtRequest} IS NOT NULL) AND (${t.carrierNameAtRequest} IS NULL OR length(btrim(${t.carrierNameAtRequest})) > 0)`,
     ),
     check(
       "requests_sync_consistent",

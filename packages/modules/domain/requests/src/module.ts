@@ -15,7 +15,7 @@ import { actionLabel, escapeHtml, routeLabel, verifyAction } from "./application
 import { toRequestVM } from "./application/to-request-vm";
 import { destinationCities, routeEnds } from "./application/route";
 import { askEstimate } from "./application/estimate";
-import { askPublished } from "./application/published";
+import { askFare } from "./application/published";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
@@ -75,10 +75,11 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           );
         },
       });
-    // What a fare request records of its fare's published price (ADR-IMPL-046): one read by key, never fatal — an error
-    // or an answer slower than a second is counted and logged, and the request goes through without it.
-    const published = (fareId: string, priceAtRequest: number) =>
-      askPublished(() => ports.catalog.getFare(undefined, fareId), priceAtRequest, {
+    // What a fare request records of its fare — the published price (ADR-IMPL-046) and the airline (ADR-IMPL-056): one
+    // read by key, never fatal — an error or an answer slower than a second is counted and logged (under the published
+    // price's metric, which counts every failed fare read), and the request goes through without either.
+    const fare = (fareId: string, priceAtRequest: number | undefined) =>
+      askFare(() => ports.catalog.getFare(undefined, fareId), priceAtRequest, {
         unavailable: (reason, err) => {
           platform.metrics.inc("request_published_unavailable", { reason });
           platform.logger.warn(
@@ -137,7 +138,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
             publish,
             rateLimit: platform.rateLimit,
             indicative,
-            published,
+            fare,
           });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);

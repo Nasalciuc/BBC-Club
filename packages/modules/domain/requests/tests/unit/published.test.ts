@@ -1,12 +1,15 @@
 import { describe, expect, it } from "bun:test";
+import { RequestVM } from "@bbc/shared/api/v1/requests";
 import type { AskFailure } from "../../src/application/ask-within";
-import { askPublished, publishedAtRequest, type FarePrices } from "../../src/application/published";
+import { askFare, carrierAtRequest, publishedAtRequest, type CatalogFare } from "../../src/application/published";
 
-const fare: FarePrices = {
+const fare: CatalogFare = {
   price: "4200.00",
   publishedPrice: "7850.00",
   publishedSource: "BA published · 16 Sep",
   currency: "USD",
+  carrier: "BA",
+  carrierName: "British Airways",
 };
 
 function recorder() {
@@ -45,29 +48,125 @@ describe("publishedAtRequest — what a fare request records of its fare's publi
   });
 });
 
-describe("askPublished — the published price never decides whether a request is accepted", () => {
-  it("passes the fare through, and its absence", async () => {
+describe("carrierAtRequest — the airline a fare request was made for (ADR-IMPL-056)", () => {
+  it("the fare's airline as its page named it: the name, with the code", () => {
+    expect(carrierAtRequest(fare)).toEqual({ code: "BA", name: "British Airways" });
+    expect(carrierAtRequest({ carrier: "u2", carrierName: " easyJet " })).toEqual({ code: "U2", name: "easyJet" });
+  });
+
+  it("a fare named without a code keeps its name; a code without a name is the name its page showed", () => {
+    expect(carrierAtRequest({ carrier: null, carrierName: "British Airways" })).toEqual({
+      code: null,
+      name: "British Airways",
+    });
+    expect(carrierAtRequest({ carrier: "VS", carrierName: null })).toEqual({ code: "VS", name: "VS" });
+    expect(carrierAtRequest({ carrier: "VS", carrierName: "  " })).toEqual({ code: "VS", name: "VS" });
+  });
+
+  it("a code that is not two letters or digits is no code — and never a name on its own", () => {
+    expect(carrierAtRequest({ carrier: "B ", carrierName: "British Airways" })).toEqual({
+      code: null,
+      name: "British Airways",
+    });
+    expect(carrierAtRequest({ carrier: "B-", carrierName: null })).toBeNull();
+  });
+
+  it("nothing for a fare that is gone or names no airline — never `Unknown`", () => {
+    expect(carrierAtRequest(null)).toBeNull();
+    expect(carrierAtRequest({ carrier: null, carrierName: null })).toBeNull();
+    expect(carrierAtRequest({ carrier: "", carrierName: "" })).toBeNull();
+  });
+
+  it("kept whatever the fare costs now: a re-priced fare is the same flight on the same airline", async () => {
     const r = recorder();
-    expect(await askPublished(async () => fare, 4200, r)).toEqual({ amount: 7850, source: "BA published · 16 Sep" });
-    expect(await askPublished(async () => null, 4200, r)).toBeNull();
+    expect(await askFare(async () => fare, 4100, r)).toEqual({
+      published: null,
+      carrier: { code: "BA", name: "British Airways" },
+    });
+    // A fare request without a price keeps its airline too.
+    expect((await askFare(async () => fare, undefined, r)).carrier).toEqual({ code: "BA", name: "British Airways" });
+  });
+});
+
+describe("askFare — what a fare request records never decides whether it is accepted", () => {
+  it("one read gives the published price and the airline, and its absence neither", async () => {
+    const r = recorder();
+    let reads = 0;
+    expect(
+      await askFare(
+        async () => {
+          reads++;
+          return fare;
+        },
+        4200,
+        r,
+      ),
+    ).toEqual({
+      published: { amount: 7850, source: "BA published · 16 Sep" },
+      carrier: { code: "BA", name: "British Airways" },
+    });
+    expect(reads).toBe(1);
+    expect(await askFare(async () => null, 4200, r)).toEqual({ published: null, carrier: null });
     expect(r.reasons).toEqual([]);
   });
 
-  it("an error or a slow answer records none, reported by reason — and a late failure surfaces nowhere", async () => {
+  it("an error or a slow answer records neither, reported by reason — and a late failure surfaces nowhere", async () => {
     const r = recorder();
     expect(
-      await askPublished(
+      await askFare(
         async () => {
           throw new Error("catalog down");
         },
         4200,
         r,
       ),
-    ).toBeNull();
+    ).toEqual({ published: null, carrier: null });
     const slow = () =>
-      new Promise<FarePrices>((_, reject) => setTimeout(() => reject(new Error("late")), 30)) as Promise<FarePrices>;
-    expect(await askPublished(slow, 4200, { ...r, timeoutMs: 5 })).toBeNull();
+      new Promise<CatalogFare>((_, reject) => setTimeout(() => reject(new Error("late")), 30)) as Promise<CatalogFare>;
+    expect(await askFare(slow, 4200, { ...r, timeoutMs: 5 })).toEqual({ published: null, carrier: null });
     expect(r.reasons).toEqual(["error", "timeout"]);
     await Bun.sleep(40); // the late rejection is handled: no unhandled rejection fails this test
+  });
+});
+
+describe("RequestVM.carrier — both upgrade orders (ADR-IMPL-056)", () => {
+  const answer = {
+    id: "33333333-3333-4333-8333-333333333333",
+    reference: "",
+    route: "JFK → LHR",
+    dates: "Oct 12–19, 2026",
+    cabin: "business",
+    passengers: { adult: 1, child: 0, infant: 0 },
+    priceAtRequest: 4200,
+    status: "received",
+    createdAt: new Date().toISOString(),
+    timeline: [],
+  };
+
+  it("an app built before the airline parses an answer that has it, and drops it", () => {
+    const older = RequestVM.omit({ carrier: true });
+    const parsed = older.parse({ ...answer, carrier: { code: "BA", name: "British Airways" } });
+    expect(parsed).not.toHaveProperty("carrier");
+  });
+
+  it("an app built with it reads an older server's answer: no airline", () => {
+    expect(RequestVM.parse(answer).carrier).toBeUndefined();
+  });
+
+  it("reads the airline, with or without its code; a value it cannot read is none, and the request still lists", () => {
+    expect(RequestVM.parse({ ...answer, carrier: { code: "BA", name: "British Airways" } }).carrier).toEqual({
+      code: "BA",
+      name: "British Airways",
+    });
+    expect(RequestVM.parse({ ...answer, carrier: { code: null, name: "British Airways" } }).carrier).toEqual({
+      code: null,
+      name: "British Airways",
+    });
+    expect(RequestVM.parse({ ...answer, carrier: null }).carrier).toBeNull();
+    for (const odd of [{ code: "BAW", name: "British Airways" }, { code: "BA", name: " " }, { code: "BA" }, "BA", 7]) {
+      const parsed = RequestVM.parse({ ...answer, carrier: odd });
+      expect(parsed.carrier).toBeNull();
+      expect(parsed.route).toBe("JFK → LHR");
+    }
   });
 });

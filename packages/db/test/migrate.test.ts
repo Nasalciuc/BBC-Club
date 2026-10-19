@@ -86,6 +86,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/journal sequence repair applied/);
     expect(second.out).not.toMatch(/auth.rate_limit.last_request → bigint/);
     expect(second.out).not.toMatch(/role idle_in_transaction timeout applied/);
+    expect(second.out).not.toMatch(/requests carrier at request applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -119,6 +120,7 @@ describe("extras ledger", () => {
       "0027_platform_idle_in_transaction_timeout.sql",
       "0028_catalog_site_destinations.sql",
       "0029_requests_published_at_request.sql",
+      "0030_requests_carrier_at_request.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -181,6 +183,38 @@ describe("extras ledger", () => {
     // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
     const [validated] = (await db.execute(
       sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_published_at_request'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-056: the airline a request was made for — a code never without the name the member read.
+  it("requests_carrier_at_request takes a name alone or with its code, never a code alone or a blank name", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (code: string | null, name: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`
+          INSERT INTO requests.requests (id, reference, idempotency_key, trip_type, cabin, legs, passengers,
+            contact_name, contact_phone, contact_email, source, carrier_at_request, carrier_name_at_request)
+          VALUES (gen_random_uuid(), ${`R-CAR${n}`}, ${`carrier-${n}`}, 'round', 'business',
+            '[{"from":"JFK","to":"LHR","date":"2027-10-12"}]'::jsonb, '{"adult":1,"child":0,"infant":0}'::jsonb,
+            'Alex Morgan', '+12125550148', 'alex@test.dev', 'ios', ${code}, ${name})`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null, null)).toBe("ok");
+    expect(await insert("BA", "British Airways")).toBe("ok");
+    expect(await insert(null, "British Airways")).toBe("ok");
+    expect(await insert("BA", null)).toBe("23514");
+    expect(await insert("BA", "  ")).toBe("23514");
+    expect(await insert(null, "")).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_carrier_at_request'`,
     )) as unknown as { convalidated: boolean }[];
     expect(validated?.convalidated).toBe(true);
   });

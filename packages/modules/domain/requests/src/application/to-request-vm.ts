@@ -52,6 +52,10 @@ export function toRequestVM(
       row.publishedAtRequest != null && row.publishedSourceAtRequest
         ? { amount: parseFloat(row.publishedAtRequest), source: row.publishedSourceAtRequest }
         : null,
+    // The airline the fare named when the member asked (0030, ADR-IMPL-056): a code never without its name.
+    carrier: row.carrierNameAtRequest
+      ? { code: row.carrierAtRequest?.trim() || null, name: row.carrierNameAtRequest }
+      : null,
     status,
     createdAt: row.createdAt.toISOString(),
     timeline: timeline.map((e) => ({

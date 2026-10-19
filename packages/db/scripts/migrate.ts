@@ -238,6 +238,29 @@ try {
     }
   }
 
+  // After 0005 (requests schema): the airline a fare request was made for, as its fare named it. ADR-IMPL-056.
+  const requestsCarrierAtRequest = join(migrationsDir, "0030_requests_carrier_at_request.sql");
+  if (existsSync(requestsCarrierAtRequest)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0030_requests_carrier_at_request.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the columns and the CHECK as NOT VALID, then the scan that validates the rows.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(requestsCarrierAtRequest, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE requests.requests VALIDATE CONSTRAINT requests_carrier_at_request`);
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0030_requests_carrier_at_request.sql')`,
+        );
+      });
+      console.log("requests carrier at request applied");
+    }
+  }
+
   const notifRequestId = join(migrationsDir, "0009_notifications_request_id.sql");
   if (existsSync(notifRequestId)) {
     const done = (await db.execute(

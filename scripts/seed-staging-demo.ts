@@ -150,6 +150,11 @@ function publishedAtRequest(fareId: string | undefined, priceAtRequest: number) 
   return { amount: price.published, source: price.publishedSource };
 }
 
+/** The airline a fare request records (ADR-IMPL-056), as the server would have: the fixture fare's carrier. */
+function carrierAtRequest(fareId: string | undefined) {
+  return fixture.fares.find((f) => f.id === fareId)?.carrier ?? null;
+}
+
 export const DEMO = { offerKey: (key: string) => `staging-demo:${key}` } as const;
 
 /** `SET col = excluded.col` for every column of `row` but the conflict key — one multi-row upsert per table. */
@@ -232,6 +237,7 @@ export function demoPlan(member: { id: string; email: string }, now: Date) {
       const createdAt = new Date(now.getTime() - plan.createdDaysAgo * DAY);
       const shift = createdAt.getTime() - new Date(r.createdAt).getTime();
       const published = publishedAtRequest(plan.fareId, r.priceAtRequest);
+      const carrier = carrierAtRequest(plan.fareId);
       return {
         row: {
           id: r.id,
@@ -251,6 +257,8 @@ export function demoPlan(member: { id: string; email: string }, now: Date) {
           priceAtRequest: String(r.priceAtRequest),
           publishedAtRequest: published ? published.amount.toFixed(2) : null,
           publishedSourceAtRequest: published ? published.source : null,
+          carrierAtRequest: carrier ? carrier.code : null,
+          carrierNameAtRequest: carrier ? carrier.name : null,
           contactName: fixture.member.name,
           contactPhone: fixture.member.phone,
           contactEmail: member.email,

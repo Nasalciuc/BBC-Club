@@ -106,6 +106,16 @@ export const RequestVM = z.object({
     .nullable()
     .optional()
     .catch(null),
+  /** The airline the request was made for: its fare's carrier as it stood when the member asked, recorded by the server
+   *  from the fare — never from the app (08: the airline on the trip's card; 11: `JFK → LHR · British Airways · 1
+   *  adult`). `code` is null when the fare names its airline without one. Null on a request made from an offer or as a
+   *  quote, or from a fare that names none. Optional both ways; a value this app cannot read reads as none
+   *  (ADR-IMPL-056). */
+  carrier: z
+    .object({ code: z.string().length(2).nullable(), name: z.string().trim().min(1) })
+    .nullable()
+    .optional()
+    .catch(null),
   /** A state a newer server adds reads as received in an older app — the request stays on the list instead of
    *  vanishing from it (the app parses rows one by one and drops those that fail). */
   status: z.enum(["received", "assigned", "quoted", "booked", "closed", "not_sent"]).catch("received"),
