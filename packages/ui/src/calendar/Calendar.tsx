@@ -122,7 +122,7 @@ const DAY = 48;
 const BAND = 32;
 const styles = StyleSheet.create({
   month: { width: DAY * 7, alignSelf: "center", gap: tokens.space.sm, marginBottom: tokens.space.lg },
-  title: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
+  title: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
   row: { flexDirection: "row" },
   dow: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, width: DAY, textAlign: "center" },
   cell: { width: DAY, height: DAY, alignItems: "center", justifyContent: "center" },
@@ -139,6 +139,6 @@ const styles = StyleSheet.create({
   dot: { width: DAY, height: DAY, borderRadius: DAY / 2, alignItems: "center", justifyContent: "center" },
   dotFilled: { backgroundColor: tokens.colors.actionPrimary },
   dayText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
-  dayDisabled: { color: tokens.colors.textTertiary },
-  dayFilled: { color: tokens.colors.textOnDark },
+  dayDisabled: { color: tokens.colors.textSecondary },
+  dayFilled: { color: tokens.colors.textOnPhoto },
 });

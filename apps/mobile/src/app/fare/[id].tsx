@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   hero: {
     height: HERO_BAND,
     justifyContent: "space-between",
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: tokens.colors.surfaceTint,
     overflow: "hidden",
   },
   bandVeil: {
@@ -394,15 +394,15 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: tokens.colors.surfaceNight,
+    backgroundColor: tokens.colors.primary,
     opacity: 0.32,
   },
   heroTop: { paddingHorizontal: tokens.space.lg },
   heroCopy: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg, gap: tokens.space.xs },
   plain: { paddingHorizontal: tokens.space.lg },
   display: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  displayOnDark: { ...rn(tokens.type.display), color: tokens.colors.textOnDark },
-  factsOnDark: { ...rn(tokens.type.factsMono), color: tokens.colors.textOnDark },
+  displayOnDark: { ...rn(tokens.type.display), color: tokens.colors.textOnPhoto },
+  factsOnDark: { ...rn(tokens.type.bodySm), color: tokens.colors.textOnPhoto },
   details: { paddingHorizontal: tokens.space.lg },
   // 135:845: the route, the flight, the line, the fares and the comparison 32 pt apart.
   detailsSearch: { gap: tokens.space.xl },
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   timeBlock: { flexDirection: "row", gap: tokens.space.lg },
   timeCol: { flex: 1, gap: tokens.space.xxs },
   timeDisplay: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  factsMono: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  factsMono: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   editorial: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
   // 135:845: the button and its line pinned over the tab bar, 6 pt above it.
   footer: {
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
     gap: tokens.space.md,
     paddingHorizontal: tokens.space.lg,
   },
-  goneNavTitle: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
+  goneNavTitle: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
   // 137:980: the content 44 pt under the navigation (136 on the frame), its blocks 24 apart.
   goneContent: {
     paddingHorizontal: tokens.space.lg,

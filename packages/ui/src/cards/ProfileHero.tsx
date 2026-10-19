@@ -46,8 +46,8 @@ export function ProfileHero({ name, home, image, fallback, cachePolicy = "disk",
 }
 
 const styles = StyleSheet.create({
-  band: { height: HEIGHT, borderRadius: tokens.radius.card, overflow: "hidden" },
-  scrim: { backgroundColor: tokens.colors.surfaceNight, opacity: 0.32 },
+  band: { height: HEIGHT, borderRadius: tokens.radius.md, overflow: "hidden" },
+  scrim: { backgroundColor: tokens.colors.primary, opacity: 0.32 },
   identity: {
     position: "absolute",
     left: tokens.space.lg,
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     gap: tokens.space.sm,
     alignItems: "flex-start",
   },
-  name: { ...rn(tokens.type.headline), color: tokens.colors.textOnDark },
+  name: { ...rn(tokens.type.headline), color: tokens.colors.textOnPhoto },
   pill: {
     minHeight: PILL,
     minWidth: PILL_WIDTH,

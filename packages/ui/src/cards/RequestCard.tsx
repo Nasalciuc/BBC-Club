@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
     borderWidth: 1,
     borderColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.card,
+    borderRadius: tokens.radius.md,
   },
   full: { padding: tokens.space.md, gap: tokens.space.xs },
   compact: { paddingHorizontal: tokens.space.md, paddingVertical: tokens.space.sm, gap: tokens.space.xxs },
@@ -75,5 +75,5 @@ const styles = StyleSheet.create({
   top: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: tokens.space.xs },
   city: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, minWidth: 176, maxWidth: "100%" },
   cityCompact: { ...rn(tokens.type.title) },
-  facts: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  facts: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
 });

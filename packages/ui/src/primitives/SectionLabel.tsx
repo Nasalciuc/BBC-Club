@@ -19,7 +19,11 @@ type Props = {
   box?: boolean;
 };
 
-/** The 24-above / 12-below rhythm, or Explore's 32-pt box. Callers pass the label; the component uppercases. */
+/**
+ * The small uppercase label (sheet 37: `INDICATIVE FARE`, `LOCAL TIME`, `BUSINESS CLASS`) — `label`, slate, letter-
+ * spaced: the 24-above / 12-below rhythm, or a 32-pt box. Callers pass the label; the component uppercases. A section's
+ * title with `See all` is `SectionHeader`.
+ */
 export function SectionLabel({ label, action, trailing, flush = false, box = false }: Props) {
   return (
     <View style={[styles.row, flush && styles.flush, box && styles.box, box && action && styles.boxWithAction]}>
@@ -63,8 +67,8 @@ const styles = StyleSheet.create({
   flush: { marginTop: 0, marginBottom: 0 },
   // The row wraps (above), so its line is centred in the box by `alignContent`, its words in the line by `alignItems`.
   box: { minHeight: 32, alignItems: "center", alignContent: "center", marginTop: 0, marginBottom: 0 },
-  label: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary, flexShrink: 1 },
-  action: { ...rn(tokens.type.bodySm), color: tokens.colors.primary },
+  label: { ...rn(tokens.type.label), color: tokens.colors.textSecondary, flexShrink: 1 },
+  action: { ...rn(tokens.type.body), color: tokens.colors.primary },
   // The row is the target's parent: 48 pt tall, 8 of them given back above and below, so its place in the rhythm
   // stays the 32-pt box while the 80 × 48 action lies wholly inside it.
   boxWithAction: { minHeight: 48, marginVertical: -tokens.space.xs },
@@ -74,6 +78,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  boxActionLabel: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  boxActionLabel: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
   pressed: { opacity: 0.6 },
 });

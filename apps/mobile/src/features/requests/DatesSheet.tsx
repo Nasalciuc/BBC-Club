@@ -168,6 +168,6 @@ const styles = StyleSheet.create({
   },
   date: { flex: 1, gap: tokens.space.xs },
   datePressed: { opacity: 0.6 },
-  dateLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
+  dateLabel: { ...rn(tokens.type.label), color: tokens.colors.textSecondary },
   dateValue: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
 });

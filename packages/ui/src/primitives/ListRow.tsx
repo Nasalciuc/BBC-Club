@@ -1,83 +1,111 @@
+import { Children, createContext, Fragment, isValidElement, type ReactNode, useContext } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
+import { Toggle } from "./Toggle";
+
+/** True inside a `RowGroup`: the group draws the card and the rules between rows. */
+const InGroup = createContext(false);
 
 type Props = {
   label: string;
   onPress?: () => void;
-  /** Figma Type=Navigation: the current value at the right, before the chevron (`JFK · New York`). */
+  /** The current value at the right, in slate (`+1 212 555 0142`, `Change`). */
   value?: string;
+  /** Under the label, in slate (`Request updates are always on.`). */
+  subtitle?: string;
+  /** `stacked`: the label small over the value (sheet 40, the row card with icons: `Home airport` / `New York (JFK)`). */
+  stacked?: boolean;
   icon?: IconName;
-  /**
-   * Prefer `trailing`; `chevron` kept so existing screens compile unchanged. `external`: Figma's `↗` in the value's
-   * place (479:8279) — the row opens a page outside the app.
-   */
+  /** `chevron` by default when the row acts; `external` opens a page outside the app. */
   trailing?: "chevron" | "none" | "external";
+  /** 1.0 prop, kept while its screens move to 3.0. */
   chevron?: boolean;
+  /** `Delete account`: the icon and the words in red. */
   danger?: boolean;
-  /** Figma Type=Disabled: the row at 40%, not tappable. */
   disabled?: boolean;
-  /**
-   * Figma Type=Switch on / off: a 48 × 28 switch in a 48 × 44 target, no chevron. Without `onChange` it only shows
-   * its value. `locked`: a switch the member cannot change (238:5502, `Request updates`, always on) — the label and the
-   * switch at 40% on the white card.
-   */
   toggle?: { value: boolean; onChange?: (next: boolean) => void; testID?: string; locked?: boolean };
-  /** `sm` is 56 pt — the fare page's `Why it's $X lower` (135:845). Otherwise 64. */
+  /** 1.0 prop, kept while its screens move to 3.0. */
   size?: "md" | "sm";
   testID?: string;
 };
 
 /**
- * Figma ListRow (37:72): a white card, 64 pt, the field's 12-pt radius — the label, its value at the right, a 20-pt
- * chevron in `text-secondary`. Rows stand 8 pt apart; the parent spaces them.
+ * A row of the row cards (12, 34, 36; sheet 40): the navy icon in a 24-pt column, the label, the value in slate at the
+ * right, the chevron. In a `RowGroup` the group is the card; alone, the row is its own white card.
  */
 export function ListRow({
   label,
   onPress,
   value,
+  subtitle,
+  stacked = false,
   icon,
   trailing,
   chevron = true,
   danger = false,
   disabled = false,
   toggle,
-  size = "md",
   testID,
 }: Props) {
+  const inGroup = useContext(InGroup);
   const pressable = onPress != null && !disabled;
-  const frame = [styles.row, size === "sm" && styles.sm];
   const showChevron = toggle == null && (trailing != null ? trailing === "chevron" : onPress != null && chevron);
-  const a11yLabel = value ? `${label}, ${value}` : label;
-  // Figma's `↗` row (479:8279) opens a page outside the app: a link to a screen reader, a button otherwise.
   const role = trailing === "external" ? "link" : "button";
+  const tint = danger ? tokens.colors.statusDanger : tokens.colors.textPrimary;
+  const a11yLabel = [label, value, subtitle].filter(Boolean).join(", ");
 
   const body = (
     <>
-      {icon ? <Icon name={icon} size={20} color={tokens.colors.textSecondary} /> : null}
-      <Text style={[styles.label, danger && styles.danger, toggle?.locked && styles.locked]} numberOfLines={1}>
-        {label}
-      </Text>
-      {value ? (
+      {icon ? (
+        <View style={styles.iconCol}>
+          <Icon name={icon} size={24} color={tint} strokeWidth={1.75} />
+        </View>
+      ) : null}
+      {stacked ? (
+        <View style={styles.text}>
+          <Text style={styles.small} numberOfLines={1}>
+            {label}
+          </Text>
+          {value ? (
+            <Text style={styles.label} numberOfLines={1}>
+              {value}
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.text}>
+          <Text style={[styles.label, danger && styles.danger]} numberOfLines={1}>
+            {label}
+          </Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        </View>
+      )}
+      {!stacked && value ? (
         <Text style={styles.value} numberOfLines={1}>
           {value}
         </Text>
       ) : null}
-      {showChevron ? <Icon name="chevron" size={20} color={tokens.colors.textSecondary} /> : null}
+      {showChevron ? <Icon name="chevron" size={20} color={tokens.colors.textSecondary} strokeWidth={2} /> : null}
       {trailing === "external" ? (
-        <Text style={styles.value} accessibilityElementsHidden importantForAccessibility="no">
-          ↗
-        </Text>
+        <Icon name="chevron" size={20} color={tokens.colors.textSecondary} strokeWidth={2} />
       ) : null}
-      {toggle ? <Switch {...toggle} label={label} disabled={disabled} /> : null}
+      {toggle ? (
+        <Toggle
+          value={toggle.value}
+          onChange={toggle.onChange}
+          testID={toggle.testID}
+          locked={toggle.locked}
+          disabled={disabled}
+          accessibilityLabel={label}
+        />
+      ) : null}
     </>
   );
 
+  const frame = [styles.row, !inGroup && styles.card, stacked && styles.stackedRow];
   if (!pressable) {
-    // A row that would act and cannot now (`disabled` with an `onPress`) stays one element to VoiceOver and TalkBack —
-    // a button, dimmed — so the 40% is not the only sign (DESIGN.md: nothing communicated by color alone). A row with a
-    // switch leaves the reading to its switch, which says the same.
     const dimmedAction = onPress != null && toggle == null;
     return (
       <View
@@ -92,7 +120,6 @@ export function ListRow({
       </View>
     );
   }
-
   return (
     <Pressable
       testID={testID}
@@ -106,72 +133,51 @@ export function ListRow({
   );
 }
 
-function Switch({
-  value,
-  onChange,
-  testID,
-  label,
-  disabled,
-  locked = false,
-}: {
-  value: boolean;
-  onChange?: (next: boolean) => void;
-  testID?: string;
-  label: string;
-  disabled: boolean;
-  locked?: boolean;
-}) {
-  const fixed = disabled || locked || onChange == null;
-  // 238:5502 draws a locked switch's target, track and thumb each at 40%: the track reads as a light grey, the thumb
-  // lighter still.
+/**
+ * A white card of rows (12, 34, 36): radius 16 with the card shadow, a light navy rule between rows that starts where
+ * the words start.
+ */
+export function RowGroup({ children, testID }: { children: ReactNode; testID?: string }) {
+  const rows = Children.toArray(children).filter(isValidElement);
   return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="switch"
-      accessibilityLabel={label}
-      accessibilityState={{ checked: value, disabled: fixed }}
-      disabled={fixed}
-      onPress={() => onChange?.(!value)}
-      style={[styles.switchTarget, locked && styles.locked]}
-    >
-      <View style={[styles.switch, value ? styles.switchOn : styles.switchOff, locked && styles.locked]}>
-        <View style={[styles.thumb, value ? styles.thumbOn : styles.thumbOff, locked && styles.locked]} />
+    <InGroup.Provider value>
+      <View style={styles.group} testID={testID}>
+        {rows.map((row, i) => (
+          <Fragment key={row.key ?? i}>
+            {i > 0 ? <View style={styles.rule} /> : null}
+            {row}
+          </Fragment>
+        ))}
       </View>
-    </Pressable>
+    </InGroup.Provider>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 64,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.space.sm,
+    gap: tokens.space.md,
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.sm,
-    borderRadius: tokens.radius.card,
-    backgroundColor: tokens.colors.surfaceCard,
   },
-  sm: { minHeight: 56 },
-  pressed: { opacity: 0.85 },
+  stackedRow: { minHeight: 64 },
+  card: { borderRadius: tokens.radius.md, backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.card },
+  group: { borderRadius: tokens.radius.md, backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.card },
+  // The rule starts under the words: the gutter, the 24-pt icon column and its 16-pt gap.
+  rule: {
+    height: StyleSheet.hairlineWidth * 2,
+    marginLeft: tokens.space.md + 24 + tokens.space.md,
+    backgroundColor: tokens.colors.borderDefault,
+  },
+  iconCol: { width: 24, alignItems: "center" },
+  text: { flex: 1, gap: 2 },
+  label: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  small: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  subtitle: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  value: { ...rn(tokens.type.body), color: tokens.colors.textSecondary, flexShrink: 1, maxWidth: "55%" },
+  danger: { color: tokens.colors.statusDangerText },
   disabled: { opacity: 0.4 },
-  locked: { opacity: 0.4 },
-  label: { ...rn(tokens.type.body), color: tokens.colors.textPrimary, flex: 1 },
-  value: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, flexShrink: 1, maxWidth: "50%" },
-  danger: { color: tokens.colors.statusDanger },
-  // The 44-pt target reaches 2 pt into the row's padding: a row with a switch stays Figma's 64 pt (238:5502).
-  switchTarget: { width: 48, height: 44, marginVertical: -2, alignItems: "center", justifyContent: "center" },
-  switch: {
-    width: 48,
-    height: 28,
-    borderRadius: tokens.radius.pill,
-    padding: tokens.space.xxs,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  switchOn: { backgroundColor: tokens.colors.primary, justifyContent: "flex-end" },
-  switchOff: { backgroundColor: tokens.colors.surfacePage, borderWidth: 1, borderColor: tokens.colors.textSecondary },
-  thumb: { width: 20, height: 20, borderRadius: 10 },
-  thumbOn: { backgroundColor: tokens.colors.surfaceCard },
-  thumbOff: { backgroundColor: tokens.colors.textSecondary },
+  pressed: { opacity: 0.7 },
 });

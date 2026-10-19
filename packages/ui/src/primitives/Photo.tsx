@@ -20,7 +20,7 @@ const keyOf = (source: PhotoSource | null) =>
   source === null ? null : typeof source === "number" ? `asset:${source}` : source.uri;
 
 /**
- * A photograph in its slot (design/components.md, photo-placeholder): `surface-muted` while it loads — never a spinner —
+ * A photograph in its slot (design/components.md): light tint while it loads — never a spinner —
  * and the fallback when it cannot load. Decorative: what the photograph shows is said by the text beside it.
  */
 export function Photo({ source, fallback, cachePolicy = "disk", style, testID }: Props) {
@@ -40,7 +40,7 @@ export function Photo({ source, fallback, cachePolicy = "disk", style, testID }:
           source={shown}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          transition={tokens.motion.stagger}
+          transition={tokens.motion.fade}
           cachePolicy={useFallback ? "memory-disk" : cachePolicy}
           recyclingKey={keyOf(shown)}
           onError={() => {
@@ -54,5 +54,5 @@ export function Photo({ source, fallback, cachePolicy = "disk", style, testID }:
 }
 
 const styles = StyleSheet.create({
-  slot: { backgroundColor: tokens.colors.surfaceMuted, overflow: "hidden" },
+  slot: { backgroundColor: tokens.colors.surfaceTint, overflow: "hidden" },
 });

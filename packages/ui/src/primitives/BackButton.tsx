@@ -5,11 +5,16 @@ import { tokens } from "../tokens";
 type Props = {
   onPress: () => void;
   testID: string;
+  /**
+   * `plain`: the chevron alone, in a top bar (07, 34, 36). `photo`: a round white button over a photograph (05, 11,
+   * 13). `tint`: the round button on a white page (26).
+   */
+  variant?: "plain" | "photo" | "tint";
   style?: ViewStyle;
 };
 
-/** Figma BackButton (299:197): 44 × 44 target, the 24-pt chevron 6 pt in from its left edge. Never the word Back. */
-export function BackButton({ onPress, testID, style }: Props) {
+/** Back (component sheet 38, round photo buttons; sheet 42, top bar): a 44-pt target, the chevron. Never the word Back. */
+export function BackButton({ onPress, testID, variant = "plain", style }: Props) {
   return (
     <Pressable
       testID={testID}
@@ -17,14 +22,27 @@ export function BackButton({ onPress, testID, style }: Props) {
       accessibilityLabel="Back"
       hitSlop={8}
       onPress={onPress}
-      style={({ pressed }) => [styles.hit, style, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.hit,
+        variant === "photo" && styles.photo,
+        variant === "tint" && styles.tint,
+        style,
+        pressed && styles.pressed,
+      ]}
     >
-      <Icon name="back" size={24} color={tokens.colors.textPrimary} />
+      <Icon
+        name="chevron-left"
+        size={variant === "plain" ? 28 : 24}
+        color={tokens.colors.textPrimary}
+        strokeWidth={2}
+      />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  hit: { width: 44, height: 44, justifyContent: "center", paddingLeft: 6 },
-  pressed: { opacity: 0.7 },
+  hit: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: tokens.radius.pill },
+  photo: { backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.float },
+  tint: { backgroundColor: tokens.colors.surfaceTint },
+  pressed: { opacity: 0.75 },
 });

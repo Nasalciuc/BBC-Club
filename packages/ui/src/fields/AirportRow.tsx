@@ -7,17 +7,19 @@ type Props = {
   code: string;
   city: string;
   airport: string;
-  /** Figma 28:65: `selected` is the chosen airport (border and check); `recent` one the member searched before (clock). */
+  /** `selected`: the chosen airport (a navy border and a check); `recent`: one searched before (a clock). */
   state?: "default" | "selected" | "recent";
+  /**
+   * `detail` (18, Search): the city over `Heathrow Airport · LHR`, a chevron. `code` (14, onboarding): the city alone,
+   * the code in slate at the right.
+   */
+  layout?: "detail" | "code";
   onPress: () => void;
   testID: string;
 };
 
-/**
- * Figma AirportRow (28:65): a white row, 72 pt — the city leads, the airport's name under it, the IATA code aligned at
- * the right in mono. Rows stand 8 pt apart; the parent spaces them.
- */
-export function AirportRow({ code, city, airport, state = "default", onPress, testID }: Props) {
+/** An airport to choose (14, 18): a white card with the map pin, the city, the airport and its code. */
+export function AirportRow({ code, city, airport, state = "default", layout = "detail", onPress, testID }: Props) {
   const selected = state === "selected";
   return (
     <Pressable
@@ -26,37 +28,56 @@ export function AirportRow({ code, city, airport, state = "default", onPress, te
       accessibilityLabel={`${city}, ${airport}, ${code}`}
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, selected && styles.selected, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        layout === "code" && styles.codeRow,
+        selected && styles.selected,
+        pressed && styles.pressed,
+      ]}
     >
+      <Icon
+        name={state === "recent" ? "clock" : "map-pin"}
+        size={24}
+        color={tokens.colors.textPrimary}
+        strokeWidth={1.75}
+      />
       <View style={styles.text}>
         <Text style={styles.city} numberOfLines={1}>
           {city}
         </Text>
-        <Text style={styles.airport} numberOfLines={1}>
-          {airport}
-        </Text>
+        {layout === "detail" ? (
+          <Text style={styles.airport} numberOfLines={1}>
+            {`${airport}  ·  ${code}`}
+          </Text>
+        ) : null}
       </View>
-      <Text style={styles.code}>{code}</Text>
-      {selected ? <Icon name="check" size={20} color={tokens.colors.textPrimary} /> : null}
-      {state === "recent" ? <Icon name="clock" size={20} color={tokens.colors.textSecondary} /> : null}
+      {layout === "code" ? <Text style={styles.code}>{code}</Text> : null}
+      {selected ? (
+        <Icon name="check" size={20} color={tokens.colors.textPrimary} strokeWidth={2.25} />
+      ) : layout === "detail" ? (
+        <Icon name="chevron" size={20} color={tokens.colors.textSecondary} strokeWidth={2} />
+      ) : null}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 72,
+    minHeight: 60,
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.space.sm,
+    gap: tokens.space.md,
     paddingHorizontal: tokens.space.md,
     paddingVertical: tokens.space.sm,
+    borderRadius: tokens.radius.md,
     backgroundColor: tokens.colors.surfaceCard,
+    ...tokens.elevation.card,
   },
-  selected: { backgroundColor: tokens.colors.surfacePage, borderWidth: 1, borderColor: tokens.colors.primary },
-  pressed: { opacity: 0.85 },
-  text: { flex: 1, gap: tokens.space.xxs },
-  city: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  airport: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  code: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  codeRow: { minHeight: 56, paddingHorizontal: tokens.space.gutter, gap: tokens.space.gutter },
+  selected: { borderWidth: 1.5, borderColor: tokens.colors.primary },
+  pressed: { opacity: 0.8 },
+  text: { flex: 1, gap: 2 },
+  city: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
+  airport: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  code: { ...rn(tokens.type.subtitle), color: tokens.colors.textSecondary },
 });

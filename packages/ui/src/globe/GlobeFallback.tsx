@@ -65,17 +65,17 @@ export function GlobeFallback({ pins, home, selected, onSelect, size = 520, paus
         <Svg width={size} height={size} style={StyleSheet.absoluteFill} pointerEvents="none">
           <Path
             d={proj.sphere()}
-            fill={tokens.colors.surfacePanel}
-            stroke={tokens.colors.textOnDarkMuted}
+            fill={tokens.colors.primary}
+            stroke={tokens.colors.textSecondary}
             strokeOpacity={GLOBE_SPEC.rimOpacity}
             strokeWidth={1}
           />
-          <Path d={frame.land} fill={tokens.colors.surfaceMuted} />
+          <Path d={frame.land} fill={tokens.colors.surfaceTint} />
           {arc ? (
             <Path
               d={arc}
               fill="none"
-              stroke={tokens.colors.textOnDark}
+              stroke={tokens.colors.textOnPhoto}
               strokeWidth={GLOBE_SPEC.arcStroke}
               strokeDasharray={[...GLOBE_SPEC.arcDash]}
             />
@@ -88,10 +88,10 @@ export function GlobeFallback({ pins, home, selected, onSelect, size = 520, paus
           const big = isSel || pin.hasOffer;
           const dot = big ? GLOBE_SPEC.pin.offerDot : GLOBE_SPEC.pin.dot;
           const colour = isSel
-            ? tokens.colors.accentWarm
+            ? tokens.colors.primary
             : pin.hasOffer
-              ? tokens.colors.textOnDark
-              : tokens.colors.textOnDarkMuted;
+              ? tokens.colors.textOnPhoto
+              : tokens.colors.textSecondary;
           const hit = GLOBE_SPEC.pin.hit;
           return (
             <Pressable

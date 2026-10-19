@@ -152,7 +152,7 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll, onSearch }
           <OfferCard
             key={item.id}
             testID={`explore.offer.${item.id}`}
-            title={item.title}
+            city={item.title}
             fromPrice={formatPrice(item.price.offer, item.price.currency)}
             image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
             fallback={CLUB_PICTURE}
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   skeletonCard: {
     width: 180,
     height: 120,
-    borderRadius: tokens.radius.card,
+    borderRadius: tokens.radius.md,
     backgroundColor: tokens.colors.borderDefault,
   },
 });
