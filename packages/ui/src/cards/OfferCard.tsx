@@ -105,7 +105,7 @@ export function OfferCardWide({
       <Photo
         source={image}
         fallback={fallback}
-        style={[styles.widePhoto, { width: (full ? "42%" : 64) as DimensionValue }]}
+        style={[styles.widePhoto, { width: (full ? "42%" : 52) as DimensionValue }]}
       />
       <View style={[styles.wideBody, full && styles.wideBodyFull]}>
         <View style={styles.wideText}>
@@ -172,12 +172,12 @@ const styles = StyleSheet.create({
     ...tokens.elevation.card,
   },
   pressed: { opacity: 0.9 },
-  photo: { height: 144, borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg },
-  body: { padding: tokens.space.sm, gap: 2 },
-  city: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
-  country: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  priceBlock: { marginTop: tokens.space.xs, marginBottom: tokens.space.sm },
-  from: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  photo: { height: 116, borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg },
+  body: { padding: 10, gap: 2 },
+  city: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
+  country: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  priceBlock: { marginTop: tokens.space.xxs, marginBottom: 6 },
+  from: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   price: { ...rn(tokens.type.price), color: tokens.colors.textPrimary },
   wide: {
     flexDirection: "row",
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   wideHalf: { flex: 1, minHeight: 104 },
   wideFull: { alignSelf: "stretch", minHeight: 84 },
   widePhoto: { alignSelf: "stretch" },
-  wideBody: { flex: 1, padding: tokens.space.sm, gap: tokens.space.xs, justifyContent: "space-between" },
+  wideBody: { flex: 1, padding: 10, gap: tokens.space.xs, justifyContent: "space-between" },
   wideBodyFull: { flexDirection: "row", alignItems: "flex-end" },
   wideText: { flex: 1, gap: 0, minWidth: 72 },
   wideCity: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },

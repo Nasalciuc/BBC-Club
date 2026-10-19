@@ -23,8 +23,7 @@ module.exports = {
   "globe-ocean-deep": "#0B3F73",
   "globe-land": "#8FA77A",
   "globe-desert": "#E5D3B0",
-  "globe-ice": "#F4F7FA",
-  "globe-night": "#0B0B19"
+  "globe-ice": "#F4F7FA"
 },
   fontFamily: {
   "inter": [

@@ -1,30 +1,32 @@
 import { createContext, type ReactNode, useContext } from "react";
 import { StyleSheet, View } from "react-native";
 import BottomSheet, {
+  type BottomSheetBackgroundProps,
   BottomSheetFooter,
   type BottomSheetFooterProps,
+  type BottomSheetHandleProps,
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { Extrapolation, interpolate, useAnimatedStyle } from "react-native-reanimated";
+
 import { tokens } from "../tokens";
-import { HOME_SHEET_SNAPS } from "./home-sheet-snaps";
 
-/** Figma's 300 / 544 / 656 pt sheets on a 768 pt container (home-sheet-snaps). Module const — no useMemo. */
-const SNAP_POINTS = HOME_SHEET_SNAPS.map((f) => `${f * 100}%`);
-
-/** Figma HomeSheet · London selected: the pill sits 12 pt above the sheet's bottom edge, inside the 24 pt gutter. */
+/** 13: the pill sits 12 pt above the sheet's bottom edge, inside the gutter. */
 const FOOTER_HEIGHT = 52 + tokens.space.sm;
+
+/** The grabber's band (13, 16): the grabber 11 pt from the sheet's top, 40 × 5; the content starts under it. */
+export const HOME_SHEET_HANDLE = 16;
 
 type Props = {
   index: number;
   onChange: (index: number) => void;
+  /** The sheet's three heights, in points, lowest first: at rest (02), a chosen route (13), every offer (16). */
+  snapPoints: readonly [number, number, number];
   children: ReactNode;
-  /** Docked at the sheet's bottom edge, above the scrolling content (Figma: `Request a quote` on 89:387). */
+  /** Docked at the sheet's bottom edge, above the scrolling content (13: `Request a quote`). */
   footer?: ReactNode;
-  /**
-   * Figma 89:390, 89:391 and 536:11155 draw a route's empty, offline and on-request states as a page, not a sheet: no
-   * handle, the field 40 pt under the header. The sheet then holds still at its top stop and shows no handle.
-   */
-  page?: boolean;
+  testID?: string;
 };
 
 // gorhom mounts `footerComponent` as a component type: a function created per render would remount the footer on every
@@ -40,30 +42,63 @@ function DockedFooter(props: BottomSheetFooterProps) {
   );
 }
 
-/** BottomSheetScrollView, never ScrollView — content gesture must not fight the sheet. */
-export function HomeSheet({ index, onChange, children, footer, page = false }: Props) {
+/** How far the sheet is from rest toward its next stop: 0 at rest (02, no card), 1 from halfway up (13, 16). */
+function cardness(index: number) {
+  "worklet";
+  return interpolate(index, [0, 0.5], [0, 1], Extrapolation.CLAMP);
+}
+
+/**
+ * At rest (02) the sheet is no card: the search bar floats over the globe's foot and the offers sit on the page, the
+ * sky fading into it behind the bar. Raised (13, 16) it is the white sheet with its 24-pt corners and its shadow.
+ */
+function SheetBackground({ animatedIndex, style, pointerEvents }: BottomSheetBackgroundProps) {
+  const card = useAnimatedStyle(() => ({ opacity: cardness(animatedIndex.value) }));
+  return (
+    <View style={style} pointerEvents={pointerEvents}>
+      <View style={StyleSheet.absoluteFill}>
+        <LinearGradient colors={[`${tokens.colors.surfacePage}00`, tokens.colors.surfacePage]} style={styles.haze} />
+        <View style={styles.page} />
+      </View>
+      <Animated.View style={[StyleSheet.absoluteFill, styles.card, card]} />
+    </View>
+  );
+}
+
+function SheetHandle({ animatedIndex }: BottomSheetHandleProps) {
+  const shown = useAnimatedStyle(() => ({ opacity: cardness(animatedIndex.value) }));
+  return (
+    <View style={styles.handleArea}>
+      <Animated.View style={[styles.handle, shown]} />
+    </View>
+  );
+}
+
+/** Explore's sheet over the globe, at three stops (02, 13, 16). BottomSheetScrollView, never ScrollView — the content's
+ *  gesture must not fight the sheet's. */
+export function HomeSheet({ index, onChange, snapPoints, children, footer, testID }: Props) {
   return (
     <FooterContext.Provider value={footer ?? null}>
       <BottomSheet
         index={index}
-        snapPoints={[...SNAP_POINTS]}
-        // v5 sizes to content by default and inserts that height as an extra snap, shifting every index. Explore and the
-        // globe read indices as HOME_SHEET_SNAPS: keep exactly these three.
+        snapPoints={[...snapPoints]}
+        // v5 sizes to content by default and inserts that height as an extra snap, shifting every index: keep exactly
+        // these three.
         enableDynamicSizing={false}
         onChange={onChange}
         // The index follows a snap as it starts, not only when it lands: a city chosen while a dragged sheet is still
         // settling must find the index already down, or raising it again would change nothing.
         onAnimate={(_from, to) => onChange(to)}
         enablePanDownToClose={false}
-        enableHandlePanningGesture={!page}
-        enableContentPanningGesture={!page}
         animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
-        handleStyle={[styles.handleArea, page && styles.handleAreaPage]}
-        handleIndicatorStyle={[styles.handle, page && styles.handleHidden]}
-        backgroundStyle={styles.background}
+        handleComponent={SheetHandle}
+        backgroundComponent={SheetBackground}
         footerComponent={footer ? DockedFooter : undefined}
       >
-        <BottomSheetScrollView contentContainerStyle={[styles.content, footer ? styles.contentAboveFooter : null]}>
+        <BottomSheetScrollView
+          testID={testID}
+          contentContainerStyle={[styles.content, footer ? styles.contentAboveFooter : null]}
+        >
           {children}
         </BottomSheetScrollView>
       </BottomSheet>
@@ -72,13 +107,12 @@ export function HomeSheet({ index, onChange, children, footer, page = false }: P
 }
 
 const styles = StyleSheet.create({
-  // The grabber (16, 13): 40 × 5, 10 pt from the sheet's top, 12 above the content.
-  handleArea: { paddingTop: 10, paddingBottom: tokens.space.sm },
+  handleArea: { height: HOME_SHEET_HANDLE, alignItems: "center", paddingTop: 11 },
   handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.colors.borderDefault },
-  // 89:390: no handle, and the field 4 pt lower than on the sheet (144 on the frame, 40 under the header).
-  handleAreaPage: { paddingBottom: tokens.space.md },
-  handleHidden: { opacity: 0 },
-  background: {
+  // 02: the sky fades into the page behind the search bar, then the page.
+  haze: { height: 72 },
+  page: { flex: 1, backgroundColor: tokens.colors.surfacePage },
+  card: {
     backgroundColor: tokens.colors.surfaceCard,
     borderTopLeftRadius: tokens.radius.xl,
     borderTopRightRadius: tokens.radius.xl,

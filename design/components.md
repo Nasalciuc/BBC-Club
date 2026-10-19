@@ -34,16 +34,25 @@ beside them. The entry's components (`ClubButton`, `ClubField`, `ClubIcon`) stay
 - **Toggle** — 52 × 32; navy on with the white knob at the right, light navy off.
 - **Chip** — `trip`: light tint pill, 40 pt, an icon and navy words (`Nov 12 – 19, 2026`, `Business`, `1 adult`);
   `filter`: the status filters, slate words, navy with white bold words when chosen.
-- **Cabin card** — two side by side: the seat icon, the cabin in `subtitle`, its line in slate, a check circle; chosen:
-  a navy border on light tint and a filled navy check.
+- **CabinCard** — two side by side (01): the seat icon, the cabin in `body-strong`, its line in `caption` slate on two
+  lines at most, a check circle; chosen: a navy border on light tint and a filled navy check.
 
 ## Cards and rows (sheet 40)
 
 - **InfoCard** — light tint, radius 16: the icon (in a light navy circle, or bare), a `body-strong` title, the body in
   slate; optionally a `Try again` link or a chevron when the whole card acts.
-- **OfferCard** — 124 pt wide, white, radius 20, the card shadow: the photo 144 pt, then the city (`title-sm`), the
-  country (slate), `from` and the price (`price`), the `Save 54%` pill across the foot. **OfferCardWide**: the same laid
+- **OfferCard** — 124 pt wide, white, radius 20, the card shadow: the photo 116 pt, then the city (`subtitle`), the
+  country (`body-sm` slate), `from` and the price (`price`), the `Save 54%` pill across the foot — the whole card above
+  the tab bar at rest (02). **OfferCardWide**: the same laid
   sideways, two to a row (`To Europe`) or one across it (`To Asia`). **CarouselRow** runs to the screen's edges.
+- **PopularCard** (03) — a destination as a white card: the city's photograph across the top (118 pt), then the city in
+  `subtitle` over `Heathrow Airport · LHR` in slate, `from` and the price (`price-sm`) at the right, a chevron.
+- **RecentRow** (03) — a recent search: a small photograph (48 × 44, radius 8), the city in `label-strong` over the
+  dates searched (or the airport) in slate, a chevron; white rows 8 pt apart.
+- **FlightCard** (13, 04) — a flight option, white, radius 16, the card shadow; its price says `one way`.
+  `detailed` for a fare on its own (13): the airline (its logo where the fare has one, else its name) and the cabin,
+  then both airports with their times and days and the plane's line between, the price at the right. `compact` for one
+  of several (04): the airline at the left, the times over the codes and `Nonstop · 7h 10m`, the price at the right.
 - **AirportRow** — a white card with the map pin: the city over `Heathrow Airport · LHR` and a chevron (Search), or the
   city and its code in slate at the right (onboarding).
 - **ListRow / RowGroup** — rows of 56 pt in one white card (radius 16, the card shadow): the navy icon in a 24-pt
@@ -75,6 +84,13 @@ online.`): title, words, the pill.
   at the left (`title` on a tall sheet, `headline` on the others) and the plain × at the right (in a light tint circle
   on `About this fare`); a question with its own answers hides the × (`showClose={false}`). Four heights (unchanged
   from 1.0): tall, explain, medium, short. Actions pinned at the foot.
-- **HomeSheet** — Explore's white sheet over the globe, its grabber, its three stops.
+- **HomeSheet** — Explore's sheet over the globe at three stops the screen sets (02, 13, 16). At rest it is no card: the
+  search bar floats on the globe's foot and the offers sit on the page, the sky fading into it; raised, it is the white
+  sheet with its grabber, 24-pt corners and the sheet shadow.
+- **Globe** (02, 13) — the Earth by day on the pale sky: Mapbox's satellite imagery where the build has it, else the
+  drawn globe in the `globe-*` colours. Destinations are navy drop pins (18 × 25, the tip on the place) with a white
+  label beside the head — the city over its price (`pin`, `pin-detail`) — placed right of the pin or else left, and left
+  out where it would cover another label, a pin or a button; a chosen route shows only its two ends with their codes, a
+  white line arcing between them and the plane at its middle.
 - **Wordmark** — `BuyBusinessClass` Bold and ` Club` Regular, one line; white over photographs.
 - **Avatar** — the member's portrait in a white ring; their initials on navy until the club keeps a photo.

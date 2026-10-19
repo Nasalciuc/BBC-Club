@@ -1,23 +1,35 @@
 /**
- * The destination's wall clock, as Figma writes it on the fare list (536:10864): `LONDON · 8:42 PM`. Display only —
- * `AirportVM.tz` is already dropped by the contract when this runtime cannot format in it, so a missing zone means no
- * label, never a wrong one.
+ * The destination's own clock (13, 04: `LOCAL TIME` · `14:32` · `London (GMT)`). Display only — `AirportVM.tz` is
+ * already dropped by the contract when this runtime cannot format in it, so a missing zone means no clock, never a
+ * wrong one.
  */
-export function localTimeLabel(city: string, tz: string | undefined, now: Date = new Date()): string | null {
+export type LocalTime = { clock: string; zone: string };
+
+export function localTime(city: string, tz: string | undefined, now: Date = new Date()): LocalTime | null {
   if (!tz) return null;
-  let time: string;
+  let clock: string;
   try {
-    time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: tz }).format(
-      now,
-    );
+    clock = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: tz,
+    }).format(now);
   } catch {
     return null; // a zone this runtime does not know
   }
-  // Some engines put a narrow no-break space (U+202F) or a no-break space before AM/PM; the mono label wants a plain one.
-  return `${city.toUpperCase()} · ${time.replace(/\u202f|\u00a0/g, " ")}`;
+  let abbr: string | undefined;
+  try {
+    abbr = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" })
+      .formatToParts(now)
+      .find((p) => p.type === "timeZoneName")?.value;
+  } catch {
+    abbr = undefined; // the clock still shows; the zone's name is a nicety
+  }
+  return { clock, zone: abbr ? `${city} (${abbr})` : city };
 }
 
-/** Milliseconds until the next whole minute — the label re-renders exactly when the clock changes. */
+/** Milliseconds until the next whole minute — the clock re-renders exactly when it changes. */
 export function msToNextMinute(now: Date = new Date()): number {
   return 60_000 - (now.getSeconds() * 1000 + now.getMilliseconds());
 }

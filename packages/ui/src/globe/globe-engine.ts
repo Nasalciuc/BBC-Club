@@ -6,30 +6,41 @@
 import { Gesture } from "react-native-gesture-handler";
 import {
   GLOBE_SPEC,
+  OPENING_VIEW,
   approach,
-  atOpening,
+  atView,
   detailFor,
   globeMode,
   panBy,
   pinchBy,
   projector,
   rotationAt,
+  routeView,
   touchesAfter,
   type Detail,
   type GlobeMode,
+  type LonLat,
   type Rotation,
+  type View,
 } from "./globe-logic";
 import { landFor } from "./land";
 
 /** What render draws: the land path is already computed, only when the view changed. */
 export type Frame = { rotation: Rotation; zoom: number; detail: Detail; land: string };
-export type GlobeSettings = { size: number; selected: string | null; reducedMotion: boolean };
-type Sinks = { frame: (f: Frame) => void; clock: (t: number) => void };
+/** A chosen route, home to destination (13); home is null when the member has none yet. */
+export type Route = { from: LonLat | null; to: LonLat };
+export type GlobeSettings = {
+  size: number;
+  selected: string | null;
+  route: Route | null;
+  reducedMotion: boolean;
+};
+type Sinks = { frame: (f: Frame) => void };
 
-/** Repaint cadence. Idle rotation is 3°/s, so 50 ms moves the centre 0.15° (under 1 px); fingers and returns get every frame. */
+/** Repaint cadence. Idle rotation is 3°/s, so 50 ms moves the centre 0.15° (under 1 px); fingers and framing every frame. */
 const CADENCE_MS: Record<GlobeMode | "gesture", number> = {
   rotating: 50,
-  returning: 16,
+  framing: 16,
   paused: 50,
   still: 50,
   gesture: 16,
@@ -40,15 +51,21 @@ const MAX_JS_SHARE = 1 / 3;
 const drawLand = (size: number, rotation: Rotation, zoom: number, detail: Detail) =>
   projector(size, rotation, zoom).path(landFor(detail));
 
+const sameRoute = (a: Route | null, b: Route | null) =>
+  a === b ||
+  (a !== null &&
+    b !== null &&
+    a.to[0] === b.to[0] &&
+    a.to[1] === b.to[1] &&
+    (a.from === b.from || (a.from !== null && b.from !== null && a.from[0] === b.from[0] && a.from[1] === b.from[1])));
+
 export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean }) {
   const { holdStill } = initial;
-  let settings: GlobeSettings = {
-    size: initial.size,
-    selected: initial.selected,
-    reducedMotion: initial.reducedMotion,
-  };
-  let rotation: Rotation = GLOBE_SPEC.opening;
-  let zoom = 1;
+  let settings: GlobeSettings = { ...initial };
+  /** Where the selection wants the globe: the route framed (13), or nothing — the turn resumes from where it stands. */
+  let target: View | null = initial.route ? routeView(initial.route.from, initial.route.to) : null;
+  let rotation: Rotation = target?.rotation ?? GLOBE_SPEC.opening;
+  let zoom = target?.zoom ?? 1;
   let interacting = false;
   let lastInteractionEnd: number | null = null;
   let rotateFrom: { t0: number; lambda0: number } | null = null;
@@ -63,11 +80,11 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
   const modeAt = (t: number): GlobeMode =>
     globeMode({
       reducedMotion: settings.reducedMotion,
-      appActive: true,
+      appActive: true, // the component stops the loop in the background and while the globe is covered
       interacting,
       selected: settings.selected,
       msSinceInteraction: lastInteractionEnd === null ? null : t - lastInteractionEnd,
-      atOpening: atOpening(rotation, zoom),
+      atTarget: target === null || atView({ rotation, zoom }, target),
     });
 
   /** Recompute the land only if the view changed; measure it, so the loop can slow down on a slow phone. */
@@ -97,6 +114,8 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     if (touches > 0) return;
     interacting = false;
     lastInteractionEnd = now;
+    // A route moved by hand stays where the member left it until another is chosen.
+    if (target) target = { rotation, zoom };
     if (holdStill) paint("still");
   };
   const pan = Gesture.Pan()
@@ -112,7 +131,9 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     .runOnJS(true)
     .onBegin(begin)
     .onChange((e) => {
-      ({ rotation, zoom } = pinchBy({ rotation, zoom }, e.scaleChange));
+      // A long route frames below the rest size: the pinch starts from there, never jumping up to it.
+      const floor = settings.route ? GLOBE_SPEC.routeZoom.min : GLOBE_SPEC.zoom.min;
+      ({ rotation, zoom } = pinchBy({ rotation, zoom }, e.scaleChange, floor));
       if (holdStill) paint("paused");
     })
     .onFinalize(end);
@@ -124,13 +145,14 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     const mode = modeAt(t);
     if (mode === "rotating") {
       rotateFrom ??= { t0: t, lambda0: rotation[0] }; // resume from where the globe stands
-      const eased = approach({ rotation, zoom }, { rotation: [rotation[0], GLOBE_SPEC.opening[1]], zoom: 1 }, dt);
+      // Back to the rest size and latitude as it turns.
+      const eased = approach({ rotation, zoom }, { rotation: [rotation[0], OPENING_VIEW.rotation[1]], zoom: 1 }, dt);
       rotation = [rotationAt(t - rotateFrom.t0, rotateFrom.lambda0), eased.rotation[1]];
       zoom = eased.zoom;
     } else {
       rotateFrom = null;
-      if (mode === "returning") {
-        const next = approach({ rotation, zoom }, { rotation: GLOBE_SPEC.opening, zoom: 1 }, dt);
+      if (mode === "framing" && target) {
+        const next = approach({ rotation, zoom }, target, dt);
         rotation = next.rotation;
         zoom = next.zoom;
       }
@@ -139,14 +161,13 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     if (t - lastPaint >= cadence) {
       lastPaint = t;
       paint(mode);
-      if (!settings.reducedMotion) sinks?.clock(t); // halos pulse; reduced motion holds them still
     }
   }
 
   return {
     gesture: Gesture.Simultaneous(pan, pinch),
     initialFrame: frame,
-    /** Connect React's setters; returns the disconnect. */
+    /** Connect React's setter; returns the disconnect. */
     attach(next: Sinks): () => void {
       sinks = next;
       return () => {
@@ -155,10 +176,29 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     },
     update(next: GlobeSettings): void {
       const resized = next.size !== settings.size;
+      const rerouted = !sameRoute(next.route, settings.route) || next.selected !== settings.selected;
       settings = next;
+      if (rerouted) {
+        target = next.route ? routeView(next.route.from, next.route.to) : null;
+        lastInteractionEnd = null;
+        // No flight under reduced motion, nor in e2e builds (no loop): the route is framed at once.
+        if (target && (next.reducedMotion || holdStill)) {
+          rotation = target.rotation;
+          zoom = target.zoom;
+          paint("still", true);
+          return;
+        }
+        // Back at rest with reduced motion or no loop: the opening view, at once.
+        if (!target && (next.reducedMotion || holdStill)) {
+          rotation = OPENING_VIEW.rotation;
+          zoom = OPENING_VIEW.zoom;
+          paint("still", true);
+          return;
+        }
+      }
       if (resized) paint(modeAt(now), true);
     },
-    /** Run the loop while the app is active; returns the stop. Figma: pause when backgrounded. */
+    /** Run the loop while the app is active; returns the stop. */
     run(): () => void {
       if (holdStill) return () => {};
       rotateFrom = null; // a fresh start: never jump by the time spent in the background

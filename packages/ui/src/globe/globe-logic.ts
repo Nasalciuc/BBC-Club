@@ -1,32 +1,34 @@
 /**
- * The globe's pure logic — no React Native imports, so all of it runs under `bun test`.
- * Every number marked "Figma" was measured from file nYP9gogb6hnpKxfpKiCc4g on 1 Oct 2026:
- * node 97:435 (Home · London selected / Globe), 482:1115 (Globe · Map style) and page 06 · Motion.
+ * The drawn globe's pure logic — no React Native imports, so all of it runs under `bun test`.
+ * 3.0 (ADR-IMPL-055): the Earth by day on the pale sky, measured on the owner's images — 02 (Explore at rest: a globe of
+ * radius 168 pt centred on Dubai, London to Tokyo in view) and 13 (a chosen route framed across the top of the screen).
  */
-import { geoDistance, geoOrthographic, geoPath, type GeoPermissibleObjects } from "d3-geo";
+import { geoDistance, geoInterpolate, geoOrthographic, geoPath, type GeoPermissibleObjects } from "d3-geo";
 
 export type LonLat = readonly [number, number];
 export type Rotation = readonly [number, number]; // d3 rotate([λ, φ]); the view's centre is (-λ, -φ)
 export type Point = readonly [number, number];
 
 export const GLOBE_SPEC = {
-  frame: 520, //                       Figma: the globe frame
-  radius: 248, //                      Figma: Ocean ellipse 496 × 496 at (12, 12)
-  opening: [30, -35] as Rotation, //  Figma: centre 30°W 35°N — places JFK, LHR, CDG and DXB within 0.1 px
-  periodMs: 120_000, //               Figma Motion: "Globe · 120 seconds"
-  haloPeriodMs: 2_000, //             Figma Motion: "Offer halos · 2 seconds"
-  haloOpacity: [0.07, 0.14] as const, // Figma Motion: "eases between 0.07 and 0.14"
-  arcLift: 0.485, //                  Figma: quadratic control = chord midpoint + 0.485 × chord, away from the centre
-  arcStroke: 1.5, //                  Figma: Route arc, 1.5 px
-  arcDash: [4, 4] as const, //        Figma: 4 px dash / 4 px gap
-  rimOpacity: 0.16, //                Figma: Ocean stroke, text-on-dark-muted at 16 %, 1 px
-  pin: { dot: 8, offerDot: 12, halo: 28, hit: 48 }, // Figma: Destination 8 / 12, Offer halo 28, Pin frame 48
-  pinRing: 1.5, //                    ours: the native globe's ring round a dot, so it reads over land and ocean
-  idleResumeMs: 4_000, //             ours: Figma says "resume when idle" without a number
-  returnTauMs: 180, //                ours: ease back to the opening position, ~95 % in 540 ms
-  zoom: { min: 1, max: 3, detailAbove: 1.5 }, // ours: the owner asked for zoom; not in Figma
-  tilt: { min: -80, max: 80 }, //     ours: keeps the poles from flipping while dragging
+  frame: 760, //                      the drawn globe's square frame: room for a route framed at up to 3× (13)
+  radius: 168, //                     02: the globe at rest, 336 pt across
+  opening: [-55, -27] as Rotation, // 02: centred near Dubai (55°E 27°N) — London, Paris, Dubai and Tokyo in view
+  periodMs: 120_000, //               one turn in 120 s while nothing is chosen (1.0, kept)
+  routeStroke: 2, //                  13: the route, a white line
+  plane: 18, //                       13: the plane at the route's middle
+  pin: { width: 18, height: 25, hit: 44 }, // 02: the navy drop pin, its tip on the place; 44-pt targets (DESIGN.md)
+  idleResumeMs: 4_000, //             the turn resumes 4 s after the last touch
+  returnTauMs: 180, //                ease toward a view, ~95 % in 540 ms
+  zoom: { min: 1, max: 3, detailAbove: 1.5 }, // a pinch: the rest size to 3×
+  routeZoom: { min: 0.75, max: 3 }, //  a route may frame below the rest size when it is long (New York to Singapore)
+  tilt: { min: -80, max: 80 }, //     keeps the poles from flipping while dragging
 } as const;
+
+/**
+ * Where a chosen route must fit, in points from the frame's centre (13): wide enough for the labels at either end,
+ * low enough to stay clear of the sheet.
+ */
+export const ROUTE_BOX = { halfWidth: 105, halfHeight: 80 } as const;
 
 export const radiusFor = (size: number, zoom = 1): number => (size * GLOBE_SPEC.radius * zoom) / GLOBE_SPEC.frame;
 
@@ -47,16 +49,17 @@ export type GlobeInputs = {
   interacting: boolean;
   selected: string | null;
   msSinceInteraction: number | null; // null: no interaction yet
-  atOpening: boolean; //               the view is at the opening rotation and zoom 1
+  /** The view is where the selection wants it: the route framed. */
+  atTarget: boolean;
 };
-export type GlobeMode = "still" | "rotating" | "paused" | "returning";
+export type GlobeMode = "still" | "rotating" | "paused" | "framing";
 
 /** Priority, top first: background → finger → reduced motion → selection → idle wait → rotation. */
 export function globeMode(i: GlobeInputs): GlobeMode {
   if (!i.appActive) return "paused";
   if (i.interacting) return "paused";
-  if (i.reducedMotion) return "still"; // Figma: "Globe and halos are still" — and no animated return either
-  if (i.selected !== null) return i.atOpening ? "still" : "returning"; // Figma: a stable route at the opening position
+  if (i.reducedMotion) return "still"; // the engine jumps to a chosen route instead of flying there
+  if (i.selected !== null) return i.atTarget ? "still" : "framing"; // 13: the route held still once framed
   if (i.msSinceInteraction !== null && i.msSinceInteraction < GLOBE_SPEC.idleResumeMs) return "paused";
   return "rotating";
 }
@@ -76,10 +79,7 @@ export function approach(
     ] as Rotation,
     zoom: from.zoom + (to.zoom - from.zoom) * k,
   };
-  const done =
-    Math.abs(normalizeLambda(to.rotation[0] - next.rotation[0])) < 0.05 &&
-    Math.abs(to.rotation[1] - next.rotation[1]) < 0.05 &&
-    Math.abs(to.zoom - next.zoom) < 0.002;
+  const done = atView(next, to);
   return done ? { rotation: to.rotation, zoom: to.zoom, done: true } : { ...next, done: false };
 }
 
@@ -96,7 +96,7 @@ export function projector(size: number, rotation: Rotation, zoom = 1) {
     .precision(0.7);
   const path = geoPath(projection);
   return {
-    /** Screen point, or null on the far hemisphere (Figma: pins "disappear on the far hemisphere"). */
+    /** Screen point, or null on the far hemisphere: a pin there is not drawn. */
     point(p: LonLat): Point | null {
       if (!isOnNearSide(p, rotation)) return null;
       const xy = projection([p[0], p[1]]);
@@ -107,32 +107,93 @@ export function projector(size: number, rotation: Rotation, zoom = 1) {
   };
 }
 
-/** Figma's route arc: a quadratic Bézier lifted perpendicular to the chord, away from the sphere's centre. */
-export function routeArcPath(a: Point, b: Point, centre: Point, lift: number = GLOBE_SPEC.arcLift): string {
-  const dx = b[0] - a[0],
-    dy = b[1] - a[1];
-  const chord = Math.hypot(dx, dy);
-  if (chord < 1e-6) return "";
-  const mx = (a[0] + b[0]) / 2,
-    my = (a[1] + b[1]) / 2;
-  let nx = -dy / chord,
-    ny = dx / chord;
-  if (nx * (mx - centre[0]) + ny * (my - centre[1]) < 0) {
-    nx = -nx;
-    ny = -ny;
-  }
-  const cx = mx + nx * lift * chord,
-    cy = my + ny * lift * chord;
-  return `M${a[0].toFixed(1)} ${a[1].toFixed(1)}Q${cx.toFixed(1)} ${cy.toFixed(1)} ${b[0].toFixed(1)} ${b[1].toFixed(1)}`;
+/** The great circle between two places, as a line d3 clips at the horizon. */
+export function greatCircle(from: LonLat, to: LonLat, steps = 48): GeoPermissibleObjects {
+  const at = geoInterpolate([from[0], from[1]], [to[0], to[1]]);
+  return { type: "LineString", coordinates: Array.from({ length: steps + 1 }, (_, i) => at(i / steps)) };
 }
 
-/** Figma Motion: offer halos ease between 0.07 and 0.14 over 2 s; still (reduced motion) holds 0.14, as the static frames do. */
-export function haloOpacity(ms: number, still: boolean): number {
-  const [lo, hi] = GLOBE_SPEC.haloOpacity;
-  if (still) return hi;
-  const t =
-    (((ms % GLOBE_SPEC.haloPeriodMs) + GLOBE_SPEC.haloPeriodMs) % GLOBE_SPEC.haloPeriodMs) / GLOBE_SPEC.haloPeriodMs;
-  return lo + ((hi - lo) * (1 - Math.cos(2 * Math.PI * t))) / 2;
+/** The plane at the route's middle (13): where it sits on screen and the way it points, in degrees clockwise from east. */
+export function planeOnRoute(
+  proj: ReturnType<typeof projector>,
+  from: LonLat,
+  to: LonLat,
+): { at: Point; angle: number } | null {
+  const at = geoInterpolate([from[0], from[1]], [to[0], to[1]]);
+  const mid = proj.point(at(0.5));
+  const before = proj.point(at(0.47));
+  const after = proj.point(at(0.53));
+  if (!mid || !before || !after) return null;
+  return { at: mid, angle: (Math.atan2(after[1] - before[1], after[0] - before[0]) * 180) / Math.PI };
+}
+
+/** A zoom within the pinch's range; `floor` lower while a long route is framed below the rest size (routeZoom). */
+export const clampZoom = (z: number, floor: number = GLOBE_SPEC.zoom.min) =>
+  Math.min(GLOBE_SPEC.zoom.max, Math.max(floor, z));
+export const clampTilt = (phi: number) => Math.min(GLOBE_SPEC.tilt.max, Math.max(GLOBE_SPEC.tilt.min, phi));
+
+/** The view the gestures move and the engine eases: a rotation and a zoom. */
+export type View = { rotation: Rotation; zoom: number };
+
+export const OPENING_VIEW: View = { rotation: GLOBE_SPEC.opening, zoom: 1 };
+
+/** 13: the view's centre this far toward the equator from the route's middle, so the great circle bows up as an arc
+ *  instead of crossing the globe as a straight line (a great circle through the centre of view is one). */
+export const ROUTE_TILT_DEG = 30;
+/** How far from the view's centre a route's ends may stand once tilted: on the near side Mapbox draws (80°). */
+export const ROUTE_REACH_DEG = 78;
+
+/**
+ * The tilt for a route `halfDeg` degrees long from end to middle: the full 30° from New York to London on; less for a
+ * short one, which the zoom brings so close that a full tilt would lift the globe off its frame (London to Paris is
+ * nearly level); less again for one nearly across the world, so both ends stay within ROUTE_REACH_DEG of the centre
+ * (New York to Singapore) — the middle is `halfDeg` from either end, the centre `tilt` from the middle.
+ */
+export function routeTilt(halfDeg: number): number {
+  return Math.max(0, Math.min(ROUTE_TILT_DEG, 1.25 * halfDeg, ROUTE_REACH_DEG - halfDeg));
+}
+
+/** A chosen route's view: where the globe turns and how close it comes, and how far the globe's centre stands below the
+ *  route's middle on screen — the arc rises above the centre of view, and `lift` brings it back to the band's middle. */
+export type RouteFrame = View & { lift: number };
+
+/**
+ * Where a chosen route is held (13): seen from nearer the equator, so it arcs; the globe zoomed so the whole arc fits
+ * ROUTE_BOX — closer for a short route, further out for a long one — and lifted so the arc sits in the box's middle.
+ * Without a home airport the destination is centred.
+ */
+export function routeView(from: LonLat | null, to: LonLat): RouteFrame {
+  const start = from ?? to;
+  const at = geoInterpolate([start[0], start[1]], [to[0], to[1]]);
+  const [lng, lat] = at(0.5);
+  // No home airport yet (onboarding skipped): the destination alone, closer than at rest.
+  if (!from || geoDistance([from[0], from[1]], [to[0], to[1]]) < 1e-6) {
+    return { rotation: [normalizeLambda(-lng), clampTilt(-lat)], zoom: 2, lift: 0 };
+  }
+  const tilt = routeTilt((geoDistance([start[0], start[1]], [to[0], to[1]]) * 90) / Math.PI);
+  const centreLat = lat >= 0 ? lat - tilt : lat + tilt;
+  const rotation: Rotation = [normalizeLambda(-lng), clampTilt(-centreLat)];
+  // The arc at zoom 1, relative to the centre; the projection scales it linearly with the zoom.
+  const proj = projector(GLOBE_SPEC.frame, rotation, 1);
+  const c = GLOBE_SPEC.frame / 2;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (let i = 0; i <= 20; i++) {
+    const xy = proj.point(at(i / 20));
+    if (!xy) continue; // past the horizon: the widest framing below keeps the rest in view
+    xs.push(xy[0] - c);
+    ys.push(xy[1] - c);
+  }
+  if (xs.length === 0) return { rotation, zoom: GLOBE_SPEC.routeZoom.min, lift: 0 };
+  const width = Math.max(...xs) - Math.min(...xs);
+  const height = Math.max(...ys) - Math.min(...ys);
+  const fit = Math.min(
+    width > 1e-6 ? (2 * ROUTE_BOX.halfWidth) / width : Number.POSITIVE_INFINITY,
+    height > 1e-6 ? (2 * ROUTE_BOX.halfHeight) / height : Number.POSITIVE_INFINITY,
+  );
+  const zoom = Math.min(GLOBE_SPEC.routeZoom.max, Math.max(GLOBE_SPEC.routeZoom.min, fit));
+  const middleY = ((Math.max(...ys) + Math.min(...ys)) / 2) * zoom;
+  return { rotation, zoom, lift: -middleY };
 }
 
 export type Detail = "low" | "mid" | "high";
@@ -140,20 +201,14 @@ export type Detail = "low" | "mid" | "high";
 export function detailFor(mode: GlobeMode, interacting: boolean, zoom: number): Detail {
   if (interacting) return "low";
   if (zoom >= GLOBE_SPEC.zoom.detailAbove) return "high";
-  return mode === "rotating" || mode === "returning" ? "mid" : "high";
+  return mode === "rotating" || mode === "framing" ? "mid" : "high";
 }
-
-export const clampZoom = (z: number) => Math.min(GLOBE_SPEC.zoom.max, Math.max(GLOBE_SPEC.zoom.min, z));
-export const clampTilt = (phi: number) => Math.min(GLOBE_SPEC.tilt.max, Math.max(GLOBE_SPEC.tilt.min, phi));
 
 /** A drag of (dx, dy) screen px on a globe of radius `radiusPx`: the surface follows the finger. */
 export function dragRotation(start: Rotation, dx: number, dy: number, radiusPx: number): Rotation {
   const deg = 180 / Math.PI / radiusPx;
   return [normalizeLambda(start[0] + dx * deg), clampTilt(start[1] - dy * deg)];
 }
-
-/** The view the two gestures move: a pan turns it, a pinch zooms it. */
-export type View = { rotation: Rotation; zoom: number };
 
 /**
  * Pan and pinch run together (Gesture.Simultaneous). Each applies only its change since its own previous event, at the zoom
@@ -164,16 +219,17 @@ export const panBy = (v: View, changeX: number, changeY: number, size: number): 
   rotation: dragRotation(v.rotation, changeX, changeY, radiusFor(size, v.zoom)),
   zoom: v.zoom,
 });
-export const pinchBy = (v: View, scaleChange: number): View => ({
+export const pinchBy = (v: View, scaleChange: number, floor: number = GLOBE_SPEC.zoom.min): View => ({
   rotation: v.rotation,
-  zoom: clampZoom(v.zoom * scaleChange),
+  zoom: clampZoom(v.zoom * scaleChange, floor),
 });
 
 /** The globe stays touched until the last active gesture ends. */
 export const touchesAfter = (active: number, event: "begin" | "end"): number =>
   event === "begin" ? active + 1 : Math.max(0, active - 1);
 
-export const atOpening = (rotation: Rotation, zoom: number) =>
-  Math.abs(normalizeLambda(rotation[0] - GLOBE_SPEC.opening[0])) < 0.05 &&
-  Math.abs(rotation[1] - GLOBE_SPEC.opening[1]) < 0.05 &&
-  Math.abs(zoom - 1) < 0.002;
+/** Whether a view has arrived at another, within what a screen can show. */
+export const atView = (v: View, target: View) =>
+  Math.abs(normalizeLambda(v.rotation[0] - target.rotation[0])) < 0.05 &&
+  Math.abs(v.rotation[1] - target.rotation[1]) < 0.05 &&
+  Math.abs(v.zoom - target.zoom) < 0.002;

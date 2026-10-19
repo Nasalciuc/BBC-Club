@@ -33,6 +33,7 @@ const START: SearchState = {
   route: null,
   status: "searching",
   errorMessage: null,
+  chosen: { cabin: false, passengers: false },
 };
 
 describe("search reducer — the estimate and the route", () => {
@@ -72,17 +73,34 @@ describe("search reducer — the estimate and the route", () => {
     expect(reducer(dated, { type: "clearDestination" }).dates).toEqual({ depart: null, return: null, flexible: true });
   });
 
-  it("takes the profile's usual cabin and travelers only before a route is chosen", () => {
+  it("takes the profile's usual cabin and travelers, a route already chosen included", () => {
     const fresh = { ...START, to: null, status: "idle" as const };
-    const seeded = reducer(fresh, {
+    const usual = { type: "seedPreferences", cabin: "first", passengers: { adult: 2, child: 0, infant: 0 } } as const;
+    const seeded = reducer(fresh, usual);
+    expect(seeded.cabin).toBe("first");
+    expect(seeded.passengers.adult).toBe(2);
+    // A destination's page selects the city before the profile arrives (04): its usual cabin still applies.
+    expect(reducer(START, usual)).toMatchObject({ cabin: "first", passengers: { adult: 2 } });
+    expect(reducer(fresh, { type: "seedPreferences" })).toBe(fresh);
+  });
+
+  it("never replaces a cabin or travelers the member chose on a chip", () => {
+    const picked = reducer(reducer(START, { type: "setCabin", cabin: "business" }), {
+      type: "setPassengers",
+      passengers: { adult: 3, child: 0, infant: 0 },
+    });
+    const seeded = reducer(picked, {
+      type: "seedPreferences",
+      cabin: "first",
+      passengers: { adult: 1, child: 0, infant: 0 },
+    });
+    expect(seeded).toBe(picked);
+    const cabinOnly = reducer(reducer(START, { type: "setCabin", cabin: "business" }), {
       type: "seedPreferences",
       cabin: "first",
       passengers: { adult: 2, child: 0, infant: 0 },
     });
-    expect(seeded.cabin).toBe("first");
-    expect(seeded.passengers.adult).toBe(2);
-    expect(reducer(START, { type: "seedPreferences", cabin: "first" })).toBe(START);
-    expect(reducer(fresh, { type: "seedPreferences" })).toMatchObject({ cabin: "business" });
+    expect(cabinOnly).toMatchObject({ cabin: "business", passengers: { adult: 2 } });
   });
 
   it("drops the estimate and the route with the destination, and on a failure", () => {

@@ -1,16 +1,16 @@
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
-/** The section label of 536:11093: `POPULAR FROM NEW YORK`. SectionLabel uppercases; this names the city. */
+/** Search's first title (03): `Popular from New York`. */
 export function popularLabel(from: Pick<AirportVM, "city">): string {
   return `Popular from ${from.city}`;
 }
 
-/** Figma 536:11093 shows at most four popular rows, none that already sits under RECENT, never the origin itself. */
+/** 03 shows three popular destinations, none that already sits under Recent searches, never the origin itself. */
 export function popularRows(
   popular: readonly AirportVM[],
   recent: readonly Pick<AirportVM, "code">[],
   from: Pick<AirportVM, "code"> | null,
-  max = 4,
+  max = 3,
 ): AirportVM[] {
   const taken = new Set(recent.map((a) => a.code));
   if (from) taken.add(from.code);
@@ -29,4 +29,19 @@ export function deviceTimeZone(resolve: () => string | undefined = defaultResolv
 
 function defaultResolve(): string | undefined {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+/**
+ * `Heathrow Airport` (03, 18): the catalogue's name (`Heathrow`), called an airport where it does not say so already
+ * (`John F Kennedy International`, `Leonardo da Vinci–Fiumicino Airport` stay as they are).
+ */
+export function airportName(airport: Pick<AirportVM, "name">): string {
+  return /airport|international|aeroport|aeropuerto|aeroporto|flughafen/i.test(airport.name)
+    ? airport.name
+    : `${airport.name} Airport`;
+}
+
+/** `Heathrow Airport  ·  LHR` — the line under a city on Search (03). */
+export function airportLine(airport: Pick<AirportVM, "name" | "code">): string {
+  return `${airportName(airport)}  ·  ${airport.code}`;
 }

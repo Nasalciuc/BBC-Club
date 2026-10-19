@@ -1,19 +1,26 @@
 import { describe, expect, it } from "bun:test";
+import { geoDistance } from "d3-geo";
 import {
   GLOBE_SPEC,
+  OPENING_VIEW,
+  ROUTE_BOX,
   approach,
-  atOpening,
+  atView,
   detailFor,
   dragRotation,
   globeMode,
-  haloOpacity,
+  greatCircle,
   isOnNearSide,
   normalizeLambda,
-  projector,
   panBy,
   pinchBy,
+  planeOnRoute,
+  projector,
+  ROUTE_REACH_DEG,
+  ROUTE_TILT_DEG,
   rotationAt,
-  routeArcPath,
+  routeTilt,
+  routeView,
   touchesAfter,
   type GlobeInputs,
   type LonLat,
@@ -25,77 +32,137 @@ const JFK: LonLat = [-73.78, 40.64],
   LHR: LonLat = [-0.45, 51.47],
   CDG: LonLat = [2.55, 49.01],
   DXB: LonLat = [55.36, 25.25],
-  HND: LonLat = [139.78, 35.55];
-const dist = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-function near(a: Point | null, b: Point, tol: number) {
-  expect(a).not.toBeNull();
-  if (a) expect(dist(a, b)).toBeLessThan(tol);
-}
+  HND: LonLat = [139.78, 35.55],
+  SIN: LonLat = [103.99, 1.36],
+  SYD: LonLat = [151.18, -33.95],
+  YYZ: LonLat = [-79.63, 43.68],
+  ORD: LonLat = [-87.9, 41.98];
+const C = GLOBE_SPEC.frame / 2;
+const fromCentre = (p: Point | null): Point => {
+  if (!p) throw new Error("expected a point on the near side");
+  return [p[0] - C, p[1] - C];
+};
 const base: GlobeInputs = {
   reducedMotion: false,
   appActive: true,
   interacting: false,
   selected: null,
   msSinceInteraction: null,
-  atOpening: true,
+  atTarget: true,
 };
 
-describe("matches Figma 97:435 (Home · London selected)", () => {
-  const p = projector(520, GLOBE_SPEC.opening);
-  it("places the four pins where Figma draws them", () => {
-    near(p.point(JFK), [129.8, 205.6], 0.5);
-    near(p.point(LHR), [336.2, 178.2], 0.5);
-    near(p.point(CDG), [347.5, 185.3], 0.5);
-    near(p.point(DXB), [483.6, 183.8], 0.5);
+describe("the opening view (image 02)", () => {
+  const p = projector(GLOBE_SPEC.frame, GLOBE_SPEC.opening);
+  it("draws a globe 336 pt across", () => {
+    expect(GLOBE_SPEC.radius * 2).toBe(336);
   });
-  it("draws the route arc within 1 px of Figma's reference path (Route arc · original reference)", () => {
-    const a = p.point(JFK),
-      b = p.point(LHR);
-    if (!a || !b) throw new Error("JFK and LHR must be visible at the opening position");
-    const nums = (routeArcPath(a, b, [260, 260]).match(/-?[\d.]+/g) ?? []).map(Number);
-    expect(nums).toHaveLength(6);
-    const [ax = 0, ay = 0, cx = 0, cy = 0, bx = 0, by = 0] = nums;
-    const ours = (t: number): Point => [
-      (1 - t) ** 2 * ax + 2 * (1 - t) * t * cx + t * t * bx,
-      (1 - t) ** 2 * ay + 2 * (1 - t) * t * cy + t * t * by,
-    ];
-    const F: readonly Point[] = [
-      [129.8, 205.6],
-      [188.6, 129.872],
-      [257.397, 120.719],
-      [336.19, 178.159],
-    ]; // Figma's cubic
-    const [f0 = [0, 0], f1 = [0, 0], f2 = [0, 0], f3 = [0, 0]] = F;
-    const figma = (t: number): Point => [
-      (1 - t) ** 3 * f0[0] + 3 * (1 - t) ** 2 * t * f1[0] + 3 * (1 - t) * t * t * f2[0] + t ** 3 * f3[0],
-      (1 - t) ** 3 * f0[1] + 3 * (1 - t) ** 2 * t * f1[1] + 3 * (1 - t) * t * t * f2[1] + t ** 3 * f3[1],
-    ];
-    const ref = Array.from({ length: 401 }, (_, k) => figma(k / 400));
-    let worst = 0;
-    for (let k = 0; k <= 200; k++) {
-      const q = ours(k / 200);
-      worst = Math.max(worst, Math.min(...ref.map((r) => dist(q, r))));
-    }
-    expect(worst).toBeLessThan(1);
+  it("centres Dubai, with London and Paris up at the left and Tokyo at the right", () => {
+    const [dx, dy] = fromCentre(p.point(DXB));
+    expect(Math.hypot(dx, dy)).toBeLessThan(8);
+    const [lx, ly] = fromCentre(p.point(LHR));
+    expect(lx).toBeLessThan(-60);
+    expect(ly).toBeLessThan(-60);
+    const [cx, cy] = fromCentre(p.point(CDG));
+    expect(cx).toBeLessThan(-60);
+    expect(cy).toBeLessThan(-60);
+    const [tx] = fromCentre(p.point(HND));
+    expect(tx).toBeGreaterThan(100);
+    expect(tx).toBeLessThan(GLOBE_SPEC.radius);
   });
-  it("hides pins on the far hemisphere", () => {
-    expect(p.point(HND)).toBeNull();
+  it("hides New York on the far hemisphere", () => {
+    expect(p.point(JFK)).toBeNull();
     expect(isOnNearSide(DXB, GLOBE_SPEC.opening)).toBe(true);
   });
 });
 
-describe("motion (Figma 06 · Motion)", () => {
-  it("one turn in 120 s; the loop closes on the same longitude", () => {
-    expect(rotationAt(0)).toBeCloseTo(30, 6);
-    expect(rotationAt(120_000)).toBeCloseTo(30, 6);
-    expect(rotationAt(60_000)).toBeCloseTo(-150, 6);
-    expect(rotationAt(1_000)).toBeCloseTo(33, 6);
+describe("routeView (image 13)", () => {
+  it("frames a route inside the route's box once lifted — an arc that bows up, not a line", () => {
+    for (const dest of [LHR, CDG, DXB, HND]) {
+      const v = routeView(JFK, dest);
+      const q = projector(GLOBE_SPEC.frame, v.rotation, v.zoom);
+      // on screen the globe's centre stands `lift` below the box's middle
+      const onScreen = (p: LonLat): Point => {
+        const [x, y] = fromCentre(q.point(p));
+        return [x, y + v.lift];
+      };
+      for (const end of [JFK, dest]) {
+        const [x, y] = onScreen(end);
+        expect(Math.abs(x)).toBeLessThanOrEqual(ROUTE_BOX.halfWidth + 1e-6);
+        expect(Math.abs(y)).toBeLessThanOrEqual(ROUTE_BOX.halfHeight + 1e-6);
+      }
+      expect(v.lift).toBeGreaterThan(0);
+      const plane = planeOnRoute(q, JFK, dest);
+      expect(plane).not.toBeNull();
+      if (!plane) continue;
+      const [px, py] = fromCentre(plane.at);
+      expect(Math.abs(px)).toBeLessThan(1);
+      // the middle stands above the line between the ends: the route bows up
+      const [ax, ay] = fromCentre(q.point(JFK));
+      const [bx, by] = fromCentre(q.point(dest));
+      const chordY = ay + ((by - ay) * (px - ax)) / (bx - ax);
+      expect(py).toBeLessThan(chordY - 8);
+    }
   });
-  it("halos ease 0.07 → 0.14 → 0.07 over 2 s, and hold 0.14 when still", () => {
-    expect(haloOpacity(0, false)).toBeCloseTo(0.07, 6);
-    expect(haloOpacity(1_000, false)).toBeCloseTo(0.14, 6);
-    expect(haloOpacity(2_000, false)).toBeCloseTo(0.07, 6);
-    expect(haloOpacity(700, true)).toBe(0.14);
+  it("keeps a short route nearly level, so the zoomed globe is never lifted off its frame", () => {
+    // London to Paris from London; New York to Toronto and to Chicago: the zoom at its closest, the lift small.
+    for (const [from, to] of [
+      [LHR, CDG],
+      [JFK, YYZ],
+      [JFK, ORD],
+    ] as const) {
+      const v = routeView(from, to);
+      expect(v.zoom).toBe(GLOBE_SPEC.routeZoom.max);
+      expect(Math.abs(v.lift)).toBeLessThan(100);
+    }
+    expect(routeTilt(1.55)).toBeCloseTo(1.94, 2);
+    expect(routeTilt(25)).toBe(ROUTE_TILT_DEG);
+  });
+  it("keeps both ends of a route nearly across the world on the near side", () => {
+    for (const to of [SIN, SYD]) {
+      const v = routeView(JFK, to);
+      const centre: LonLat = [-v.rotation[0], -v.rotation[1]];
+      for (const end of [JFK, to]) {
+        expect((geoDistance([end[0], end[1]], [centre[0], centre[1]]) * 180) / Math.PI).toBeLessThanOrEqual(
+          ROUTE_REACH_DEG + 1e-6,
+        );
+      }
+    }
+  });
+  it("comes closer for London than for Tokyo, and holds the long way to Singapore at its widest", () => {
+    expect(routeView(JFK, LHR).zoom).toBeGreaterThan(routeView(JFK, HND).zoom);
+    expect(routeView(JFK, SIN).zoom).toBe(GLOBE_SPEC.routeZoom.min);
+  });
+  it("puts London up and right of New York, as 13 draws them", () => {
+    const v = routeView(JFK, LHR);
+    const q = projector(GLOBE_SPEC.frame, v.rotation, v.zoom);
+    const [jx, jy] = fromCentre(q.point(JFK));
+    const [lx, ly] = fromCentre(q.point(LHR));
+    expect(jx).toBeLessThan(0);
+    expect(lx).toBeGreaterThan(0);
+    expect(ly).toBeLessThan(jy);
+  });
+  it("centres the destination when the member has no home airport", () => {
+    const v = routeView(null, LHR);
+    expect(normalizeLambda(-v.rotation[0])).toBeCloseTo(LHR[0], 6);
+    expect(-v.rotation[1]).toBeCloseTo(LHR[1], 6);
+    expect(v.zoom).toBe(2);
+    expect(v.lift).toBe(0);
+  });
+  it("draws the route as a great circle the projection clips at the horizon", () => {
+    const line = greatCircle(JFK, LHR) as { type: string; coordinates: number[][] };
+    expect(line.type).toBe("LineString");
+    expect(line.coordinates).toHaveLength(49);
+    expect(line.coordinates[0]?.[0]).toBeCloseTo(JFK[0], 6);
+    expect(line.coordinates.at(-1)?.[1]).toBeCloseTo(LHR[1], 6);
+  });
+});
+
+describe("motion", () => {
+  it("one turn in 120 s; the loop closes on the same longitude", () => {
+    expect(rotationAt(0)).toBeCloseTo(-55, 6);
+    expect(rotationAt(120_000)).toBeCloseTo(-55, 6);
+    expect(rotationAt(60_000)).toBeCloseTo(125, 6);
+    expect(rotationAt(1_000)).toBeCloseTo(-52, 6);
   });
 });
 
@@ -105,10 +172,10 @@ describe("globeMode — priority", () => {
   it("a finger on the globe pauses it", () =>
     expect(globeMode({ ...base, interacting: true, selected: "LHR" })).toBe("paused"));
   it("reduced motion is still", () =>
-    expect(globeMode({ ...base, reducedMotion: true, selected: "LHR", atOpening: false })).toBe("still"));
-  it("a selection returns to the opening position, then holds it", () => {
-    expect(globeMode({ ...base, selected: "LHR", atOpening: false })).toBe("returning");
-    expect(globeMode({ ...base, selected: "LHR", atOpening: true })).toBe("still");
+    expect(globeMode({ ...base, reducedMotion: true, selected: "LHR", atTarget: false })).toBe("still"));
+  it("a selection flies to its route, then holds it", () => {
+    expect(globeMode({ ...base, selected: "LHR", atTarget: false })).toBe("framing");
+    expect(globeMode({ ...base, selected: "LHR", atTarget: true })).toBe("still");
   });
   it("waits 4 s after an interaction, then rotates", () => {
     expect(globeMode({ ...base, msSinceInteraction: 3_999 })).toBe("paused");
@@ -119,27 +186,28 @@ describe("globeMode — priority", () => {
 
 describe("gestures and detail", () => {
   it("a drag of one radian-pixel turns one degree; tilt is clamped", () => {
-    expect(dragRotation([30, -35], (248 * Math.PI) / 180, 0, 248)[0]).toBeCloseTo(31, 6);
-    expect(dragRotation([30, -35], 0, -1e6, 248)[1]).toBe(GLOBE_SPEC.tilt.max);
+    expect(dragRotation([30, -35], (168 * Math.PI) / 180, 0, 168)[0]).toBeCloseTo(31, 6);
+    expect(dragRotation([30, -35], 0, -1e6, 168)[1]).toBe(GLOBE_SPEC.tilt.max);
   });
-  it("returning takes the short way across the date line and lands exactly", () => {
+  it("approaching takes the short way across the date line and lands exactly", () => {
     const first = approach({ rotation: [170, -35], zoom: 1 }, { rotation: [-170, -35], zoom: 1 }, 16);
     expect(normalizeLambda(first.rotation[0] - 170)).toBeGreaterThan(0);
     let s: { rotation: Rotation; zoom: number; done: boolean } = { rotation: [170, -35], zoom: 2, done: false };
-    for (let i = 0; i < 400 && !s.done; i++) s = approach(s, { rotation: GLOBE_SPEC.opening, zoom: 1 }, 16);
+    for (let i = 0; i < 400 && !s.done; i++) s = approach(s, OPENING_VIEW, 16);
     expect(s.done).toBe(true);
-    expect(atOpening(s.rotation, s.zoom)).toBe(true);
+    expect(atView(s, OPENING_VIEW)).toBe(true);
   });
-  it("detail: low under a finger, high when still or zoomed, mid while rotating", () => {
+  it("detail: low under a finger, high when still or zoomed, mid while moving", () => {
     expect(detailFor("paused", true, 1)).toBe("low");
     expect(detailFor("rotating", false, 1)).toBe("mid");
+    expect(detailFor("framing", false, 1)).toBe("mid");
     expect(detailFor("still", false, 1)).toBe("high");
     expect(detailFor("rotating", false, 2)).toBe("high");
   });
 });
 
 describe("pan and pinch together (Gesture.Simultaneous)", () => {
-  const size = 520;
+  const size = GLOBE_SPEC.frame;
   const degPerPx = (zoom: number) => 180 / Math.PI / ((size * GLOBE_SPEC.radius * zoom) / GLOBE_SPEC.frame);
   it("a pinch that ends mid-drag leaves the pan in control", () => {
     let touches = touchesAfter(0, "begin"); // pan
@@ -172,5 +240,11 @@ describe("pan and pinch together (Gesture.Simultaneous)", () => {
     for (let i = 0; i < 10; i++) v = pinchBy(v, 1.5);
     expect(v.zoom).toBe(GLOBE_SPEC.zoom.max);
     expect(touchesAfter(touchesAfter(0, "end"), "end")).toBe(0);
+  });
+  it("a pinch on a long route starts from its framing, never jumping up to the rest size", () => {
+    const framed = { rotation: [30, -35] as Rotation, zoom: 0.8 };
+    expect(pinchBy(framed, 1.01, GLOBE_SPEC.routeZoom.min).zoom).toBeCloseTo(0.808, 6);
+    expect(pinchBy(framed, 0.5, GLOBE_SPEC.routeZoom.min).zoom).toBe(GLOBE_SPEC.routeZoom.min);
+    expect(pinchBy(framed, 1.01).zoom).toBe(GLOBE_SPEC.zoom.min);
   });
 });

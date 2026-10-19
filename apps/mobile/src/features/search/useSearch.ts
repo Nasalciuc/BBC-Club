@@ -17,17 +17,15 @@ type Params = Pick<SearchState, "from" | "to" | "cabin" | "dates">;
 export function useSearch(options: Options = {}) {
   const [state, dispatch] = useReducer(searchReducer, INITIAL_SEARCH);
   const abortRef = useRef<AbortController | null>(null);
-  const seeded = useRef(false);
   const paramsRef = useRef<Params>({ from: state.from, to: state.to, cabin: state.cabin, dates: state.dates });
   paramsRef.current = { from: state.from, to: state.to, cabin: state.cabin, dates: state.dates };
 
+  // The origin is the member's home airport, never chosen here: it follows the default each time that changes airport —
+  // the profile can name it after Home has loaded, and a search already shown runs again from there.
+  const defaultCode = options.defaultFrom?.code;
   useEffect(() => {
-    if (seeded.current) return;
-    if (options.defaultFrom) {
-      seeded.current = true;
-      dispatch({ type: "selectOrigin", airport: options.defaultFrom });
-    }
-  }, [options.defaultFrom]);
+    if (options.defaultFrom) dispatch({ type: "selectOrigin", airport: options.defaultFrom });
+  }, [defaultCode]);
 
   function runSearch(from: AirportVM, to: AirportVM, cabin: SearchState["cabin"], dates: SearchState["dates"]) {
     abortRef.current?.abort();

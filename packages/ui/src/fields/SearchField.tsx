@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
     ...tokens.elevation.card,
   },
   field: {
-    minHeight: 48,
+    minHeight: 44,
     borderRadius: tokens.radius.md,
     backgroundColor: tokens.colors.surfaceTint,
     borderWidth: 1,
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.4 },
   pressed: { opacity: 0.92 },
   barText: { ...rn(tokens.type.bodyLg), flex: 1 },
-  fieldText: { ...rn(tokens.type.bodyLg), flex: 1 },
+  fieldText: { ...rn(tokens.type.body), flex: 1 },
   placeholder: { color: tokens.colors.textSecondary },
   filled: { color: tokens.colors.textPrimary },
   input: { color: tokens.colors.textPrimary, minWidth: 0, padding: 0, margin: 0, outlineWidth: 0 },

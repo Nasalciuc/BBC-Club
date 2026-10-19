@@ -2,6 +2,13 @@
 
 Status: accepted · Date: 2026-10-05 · Decided by: the owner · Supersedes: ADR-IMPL-033 "Why not Mapbox"
 
+**Amended 19 Oct 2026 (ADR-IMPL-055, 3.0).** The globe is by day: no night, no city lights, no stars — the satellite
+imagery on the pale sky (`sky`), a white haze at its rim; the drawn globe in the `globe-*` colours. The pins are React
+views on the map (`MarkerView`, `GlobePin`): navy drop pins with their city and price beside them where a label fits
+(`placeLabels`); a chosen route keeps only its two ends, with their codes, and draws a white line with its plane at the
+middle. The camera holds a route seen from nearer the equator, so it arcs (`routeView`), lifted over the sheet. The
+generator `scripts/globe-city-lights.ts` and its data are gone with the lights. What follows is the decision as taken.
+
 **Context.** The drawn globe (ADR-IMPL-033) ships by OTA and matches Figma, but members could tap only London: Paris
 sat 13 points from it under London's 48-point tap area, Tokyo and Singapore were on the far side, Dubai fell off a
 393-point screen, and a chosen route was framed behind the sheet. The owner wants the globe on Mapbox now.

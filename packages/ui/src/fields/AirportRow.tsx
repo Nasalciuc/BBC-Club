@@ -63,7 +63,7 @@ export function AirportRow({ code, city, airport, state = "default", layout = "d
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 60,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.space.md,
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   selected: { borderWidth: 1.5, borderColor: tokens.colors.primary },
   pressed: { opacity: 0.8 },
   text: { flex: 1, gap: 2 },
-  city: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
-  airport: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  code: { ...rn(tokens.type.subtitle), color: tokens.colors.textSecondary },
+  city: { ...rn(tokens.type.bodyStrong), color: tokens.colors.textPrimary },
+  airport: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  code: { ...rn(tokens.type.bodyStrong), color: tokens.colors.textSecondary },
 });

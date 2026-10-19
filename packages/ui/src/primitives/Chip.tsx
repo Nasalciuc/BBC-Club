@@ -58,7 +58,7 @@ export function Chip({
         pressed && !disabled && styles.pressed,
       ]}
     >
-      {icon ? <Icon name={icon} size={20} color={color} strokeWidth={1.75} /> : null}
+      {icon ? <Icon name={icon} size={18} color={color} strokeWidth={1.75} /> : null}
       <Text
         style={[filter ? styles.filterLabel : styles.label, { color }, selected && filter && styles.selectedLabel]}
         numberOfLines={1}
@@ -75,11 +75,11 @@ const styles = StyleSheet.create({
   chip: {
     minHeight: 40,
     borderRadius: tokens.radius.pill,
-    paddingHorizontal: tokens.space.md,
+    paddingHorizontal: tokens.space.sm,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: tokens.space.xs,
+    gap: 6,
     backgroundColor: tokens.colors.surfaceTint,
   },
   slopRoom: { marginVertical: tokens.space.xxs / 2 },
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   selected: { backgroundColor: tokens.colors.actionPrimary },
   disabled: { opacity: 0.4 },
   pressed: { opacity: 0.8 },
-  label: { ...rn(tokens.type.body) },
+  label: { ...rn(tokens.type.bodySm) },
   filterLabel: { ...rn(tokens.type.body) },
   selectedLabel: { ...rn(tokens.type.bodyStrong) },
 });

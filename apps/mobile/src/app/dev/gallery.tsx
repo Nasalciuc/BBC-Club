@@ -2,11 +2,13 @@ import { Redirect } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fixture } from "@bbc/shared/fixture";
 import {
   AirportRow,
   Avatar,
   BackButton,
   Button,
+  CabinCard,
   CardSkeleton,
   CheckCircle,
   Chip,
@@ -34,6 +36,9 @@ import {
   TextButton,
   TextField,
   FieldError,
+  FlightCard,
+  PopularCard,
+  RecentRow,
   Toggle,
   TopBar,
   Wordmark,
@@ -63,6 +68,7 @@ function GalleryScreen() {
   const [filter, setFilter] = useState("all");
   const [tab, setTab] = useState<"explore" | "requests" | "profile">("explore");
   const [query, setQuery] = useState("Lon");
+  const [cabin, setCabin] = useState<"business" | "first">("business");
   const noop = () => undefined;
 
   return (
@@ -307,6 +313,44 @@ function GalleryScreen() {
         />
         <ListRow testID="gallery.row.stackedCabin" stacked icon="seat" label="Cabin" value="Business" onPress={noop} />
       </RowGroup>
+
+      <View style={styles.row}>
+        <CabinCard
+          testID="gallery.cabin.business"
+          icon="seat"
+          title="Business"
+          line="More space, a better journey"
+          selected={cabin === "business"}
+          onPress={() => setCabin("business")}
+        />
+        <CabinCard
+          testID="gallery.cabin.first"
+          icon="armchair"
+          title="First"
+          line="The highest level of comfort"
+          selected={cabin === "first"}
+          onPress={() => setCabin("first")}
+        />
+      </View>
+      <PopularCard
+        testID="gallery.popular"
+        city="London"
+        airport="Heathrow Airport  ·  LHR"
+        fromPrice="$3,900"
+        image={null}
+        fallback={CLUB_PICTURE}
+        onPress={noop}
+      />
+      <RecentRow
+        testID="gallery.recent"
+        city="Paris"
+        detail="Oct 5 – 12, 2026"
+        image={null}
+        fallback={CLUB_PICTURE}
+        onPress={noop}
+      />
+      <FlightCard testID="gallery.flight.detailed" fare={fixture.fares[0]!} layout="detailed" onPress={noop} />
+      <FlightCard testID="gallery.flight.compact" fare={fixture.fares[1]!} layout="compact" onPress={noop} />
 
       <SectionHeader title="Status and feedback" size="subtitle" />
       <View style={styles.row}>

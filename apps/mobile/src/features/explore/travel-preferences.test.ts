@@ -3,46 +3,41 @@ import { describe, expect, it } from "bun:test";
 import {
   cabinLabel,
   datesChipLabel,
-  faresLabel,
+  flightOptionsTitle,
   noFareCopy,
-  preferencesLines,
   searchWhen,
   travelersLabel,
   withAdults,
 } from "./travel-preferences";
 
-const OCT_8 = new Date(2026, 9, 8, 10, 0, 0);
 const FLEXIBLE = { depart: null, return: null, flexible: true };
 
-describe("faresLabel", () => {
-  it("counts the fares as Figma does, and one fare is one fare (never `1 fares`)", () => {
-    expect(faresLabel(3)).toBe("3 fares · lowest first");
-    expect(faresLabel(1)).toBe("1 fare");
-    expect(faresLabel(30)).toBe("30 fares · lowest first");
+describe("flightOptionsTitle", () => {
+  it("says option over one fare (13) and options over several (04)", () => {
+    expect(flightOptionsTitle(1)).toBe("Flight option");
+    expect(flightOptionsTitle(3)).toBe("Flight options");
   });
 });
 
 describe("datesChipLabel", () => {
-  it("reads the current month and flexible while no date is chosen (Figma `Oct · flexible`)", () => {
-    expect(datesChipLabel(FLEXIBLE, OCT_8)).toBe("Oct · flexible");
-    expect(datesChipLabel(FLEXIBLE, new Date(2026, 0, 3))).toBe("Jan · flexible");
+  it("says flexible while no date is chosen", () => {
+    expect(datesChipLabel(FLEXIBLE)).toBe("Flexible dates");
   });
 
-  it("reads the chosen dates — one month once, two months twice, one way alone", () => {
-    expect(datesChipLabel({ depart: "2026-10-12", return: "2026-10-19", flexible: false }, OCT_8)).toBe("Oct 12 – 19");
-    expect(datesChipLabel({ depart: "2026-10-28", return: "2026-11-02", flexible: false }, OCT_8)).toBe(
-      "Oct 28 – Nov 2",
-    );
-    expect(datesChipLabel({ depart: "2026-10-12", return: null, flexible: false }, OCT_8)).toBe("Oct 12");
+  it("reads the chosen dates with their year, as 13 writes them", () => {
+    expect(datesChipLabel({ depart: "2026-11-12", return: "2026-11-19" })).toBe("Nov 12 – 19, 2026");
+    expect(datesChipLabel({ depart: "2026-10-28", return: "2026-11-02" })).toBe("Oct 28 – Nov 2, 2026");
+    expect(datesChipLabel({ depart: "2026-12-28", return: "2027-01-04" })).toBe("Dec 28, 2026 – Jan 4, 2027");
+    expect(datesChipLabel({ depart: "2026-11-12", return: null })).toBe("Nov 12, 2026");
   });
 });
 
 describe("cabin and travelers", () => {
-  it("names the cabin and counts every traveler, singular at one", () => {
+  it("names the cabin, and counts adults as 13 does — everyone once children travel", () => {
     expect(cabinLabel("business")).toBe("Business");
     expect(cabinLabel("first")).toBe("First");
-    expect(travelersLabel({ adult: 1, child: 0, infant: 0 })).toBe("1 traveler");
-    expect(travelersLabel({ adult: 2, child: 0, infant: 0 })).toBe("2 travelers");
+    expect(travelersLabel({ adult: 1, child: 0, infant: 0 })).toBe("1 adult");
+    expect(travelersLabel({ adult: 2, child: 0, infant: 0 })).toBe("2 adults");
     expect(travelersLabel({ adult: 1, child: 1, infant: 1 })).toBe("3 travelers");
   });
 
@@ -52,15 +47,6 @@ describe("cabin and travelers", () => {
     expect(travelersLabel(withAdults(family, 1))).toBe("3 travelers");
     expect(withAdults(family, 0).adult).toBe(1);
     expect(withAdults(undefined, 2)).toEqual({ adult: 2, child: 0, infant: 0 });
-  });
-});
-
-describe("preferencesLines", () => {
-  it("writes the two mono lines of 89:390", () => {
-    expect(preferencesLines(FLEXIBLE, "business", { adult: 1, child: 0, infant: 0 }, OCT_8)).toEqual([
-      "OCT · FLEXIBLE   ·   BUSINESS",
-      "1 TRAVELER",
-    ]);
   });
 });
 

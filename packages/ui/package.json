@@ -8,7 +8,6 @@
     "./tokens": "./src/tokens.ts",
     "./icons": "./src/icons.tsx",
     "./calendar-logic": "./src/calendar/calendar-logic.ts",
-    "./globe-sky": "./src/globe/sky.ts",
     "./status-copy": "./src/primitives/status-copy.ts"
   },
   "scripts": {
