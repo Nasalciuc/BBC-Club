@@ -88,6 +88,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/role idle_in_transaction timeout applied/);
     expect(second.out).not.toMatch(/requests carrier at request applied/);
     expect(second.out).not.toMatch(/catalog fare trip and airport description applied/);
+    expect(second.out).not.toMatch(/proposals offer rating applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -123,6 +124,7 @@ describe("extras ledger", () => {
       "0029_requests_published_at_request.sql",
       "0030_requests_carrier_at_request.sql",
       "0031_catalog_fare_trip_and_airport_description.sql",
+      "0032_proposals_offer_rating.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -264,6 +266,41 @@ describe("extras ledger", () => {
     // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
     const [validated] = (await db.execute(
       sql`SELECT convalidated FROM pg_constraint WHERE conname = 'airports_description'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-056: an offer's rating, one to five stars — on a table drizzle's own first migration creates.
+  it("offers_rating takes one to five, to one decimal place, or none", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (rating: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`
+          INSERT INTO proposals.offers (idempotency_key, source, targeting, route_from, route_to, cabin, price, title,
+            valid_until, rating)
+          VALUES (${`rating-${n}`}, 'marketing_campaign', 'broadcast', 'JFK', 'CDG', 'business', '3850.00',
+            'Autumn in Paris', now() + interval '7 days', ${rating}::numeric)`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null)).toBe("ok");
+    expect(await insert("4.8")).toBe("ok");
+    expect(await insert("1.0")).toBe("ok");
+    expect(await insert("5.0")).toBe("ok");
+    expect(await insert("5.1")).toBe("23514");
+    expect(await insert("0.9")).toBe("23514");
+    const [stored] = (await db.execute(
+      sql`SELECT rating FROM proposals.offers WHERE idempotency_key = 'rating-2'`,
+    )) as unknown as { rating: string }[];
+    expect(stored?.rating).toBe("4.8");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'offers_rating'`,
     )) as unknown as { convalidated: boolean }[];
     expect(validated?.convalidated).toBe(true);
   });

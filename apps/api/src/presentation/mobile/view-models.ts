@@ -24,6 +24,8 @@ export function toCard(row: OfferRow, state: "interested" | "dismissed" | null |
     },
     ...(row.mediaUrl ? { mediaUrl: row.mediaUrl } : {}),
     ...(row.mediaBlurhash ? { mediaBlurhash: row.mediaBlurhash } : {}),
+    // numeric(2,1) reads as a string ("4.8"); null when the offer was made without one (0032, ADR-IMPL-056).
+    rating: row.rating != null ? Number(row.rating) : null,
     validUntil: row.validUntil.toISOString(),
     state: resolveState(state),
     targeting: row.targeting === "broadcast" ? "broadcast" : "personal",

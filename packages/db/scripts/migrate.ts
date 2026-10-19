@@ -536,6 +536,27 @@ try {
     }
   }
 
+  // proposals.offers comes from drizzle's first migration, which ran above: an offer's rating. ADR-IMPL-056.
+  const offerRating = join(migrationsDir, "0032_proposals_offer_rating.sql");
+  if (existsSync(offerRating)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0032_proposals_offer_rating.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the column and the CHECK as NOT VALID, then the scan that validates it.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(offerRating, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE proposals.offers VALIDATE CONSTRAINT offers_rating`);
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0032_proposals_offer_rating.sql')`);
+      });
+      console.log("proposals offer rating applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);
