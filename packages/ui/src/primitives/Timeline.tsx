@@ -1,117 +1,116 @@
+import { Fragment } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
+import type { StepState, TimelineStep } from "./status-copy";
 
-const STEPS = [
-  { key: "received", label: "Request received" },
-  { key: "assigned", label: "Specialist review" },
-  { key: "quoted", label: "Quote ready" },
-  { key: "booked", label: "Booked by phone" },
-] as const;
-
-type StepKey = (typeof STEPS)[number]["key"];
-
-type Event = {
-  status: string;
-  at: string;
-  note?: string | null;
-};
+export type { StepState, TimelineStep } from "./status-copy";
 
 type Props = {
-  /** Current request status — drives which steps are done. `queued`, `not_sent` and `closed` keep every step hollow. */
-  status: string;
-  /** Server timeline events: a specialist's note on the current step replaces its caption. */
-  events?: Event[];
-  /** The line under the current step when its event has no note ("Review the quote with your specialist."). */
-  currentCaption?: string | null;
+  /** The steps in order; the screen works them out from the request (request-view-logic.ts). */
+  steps: readonly TimelineStep[];
   testID?: string;
 };
 
-function stepIndex(status: string): number {
-  if (status === "closed" || status === "not_sent" || status === "queued") return -1;
-  return STEPS.findIndex((s) => s.key === status);
-}
+const SPOKEN: Record<StepState, string> = { done: "done", current: "current step", todo: "not yet" };
 
-/** The latest note for a step: a request quoted twice shows the second quote's note, not the first. */
-function noteFor(key: StepKey, events: Event[]): string | null {
-  for (let k = events.length - 1; k >= 0; k--) {
-    const event = events[k];
-    if (event?.status !== key) continue;
-    const note = event.note?.trim();
-    return note ? note : null;
+/** 24 pt circles; the current one is a 22-pt dot in a 4-pt ring, so the row is 30 pt tall. */
+const MARK = 24;
+const RING = 4;
+const DOT = 22;
+const ROW = DOT + RING * 2;
+const LINE = 2;
+
+function Marker({ state }: { state: StepState }) {
+  if (state === "done") {
+    return (
+      <View style={[styles.mark, styles.done]}>
+        <Icon name="check" size={14} color={tokens.colors.textOnPhoto} strokeWidth={3} />
+      </View>
+    );
   }
-  return null;
+  if (state === "current") {
+    return (
+      <View style={styles.ring}>
+        <View style={styles.dot} />
+      </View>
+    );
+  }
+  return <View style={[styles.mark, styles.todo]} />;
 }
 
 /**
- * Figma 46:114: four milestones in a card. A done step has a check in a circle and a dark connector down to the next
- * done step; the current step says what happens now; future steps stay quiet (hollow, secondary). Review is a milestone
- * here, never a badge. Each step also says in words whether it is done, current or still to come — never the icon
- * alone (DESIGN.md, Accessibility).
+ * Request progress (11, 30–33; sheet 41, the horizontal stepper): Received → Quote ready → Booked. A step reached is a
+ * navy circle with a white check and its day under its name; the step the request is at, the navy dot in a light ring;
+ * a step to come, a hollow circle, its name in slate. The line between two steps is navy once the second is reached.
+ * Each step says in words whether it is done, current or still to come — never the circle alone (DESIGN.md).
  */
-export function Timeline({ status, events = [], currentCaption = null, testID }: Props) {
-  const current = stepIndex(status);
-
+export function Timeline({ steps, testID }: Props) {
   return (
-    <View testID={testID} style={styles.card}>
-      {STEPS.map((step, i) => {
-        const done = current >= i;
-        const caption = i === current ? (noteFor(step.key, events) ?? currentCaption) : null;
-        const last = i === STEPS.length - 1;
-        const state = i < current ? "done" : i === current ? "current step" : "not yet";
+    <View testID={testID} style={styles.row}>
+      {steps.map((step, i) => {
+        const next = steps[i + 1];
+        // A segment is navy when the step it leads to is reached: done, or the one the request is at.
+        const reached = next ? next.state !== "todo" : false;
+        const quiet = step.state === "todo";
         return (
-          <View
-            key={step.key}
-            style={styles.row}
-            testID={testID ? `${testID}.${step.key}` : undefined}
-            accessible
-            accessibilityLabel={`${step.label}, ${state}${caption ? `. ${caption}` : ""}`}
-          >
-            {last ? null : <View style={[styles.connector, current >= i + 1 && styles.connectorDone]} />}
-            <View style={styles.marker}>
-              <Icon
-                name={done ? "circle-check" : "circle"}
-                size={24}
-                color={done ? tokens.colors.textPrimary : tokens.colors.borderDefault}
-              />
+          <Fragment key={step.key}>
+            <View
+              style={styles.step}
+              testID={testID ? `${testID}.${step.key}` : undefined}
+              accessible
+              accessibilityLabel={[step.label, SPOKEN[step.state], step.date].filter(Boolean).join(", ")}
+            >
+              {/* The circle with half a line on either side, so the line runs from circle to circle whatever the
+                  words' widths. */}
+              <View style={styles.markRow}>
+                <View style={[styles.half, i > 0 && lineTone(step.state !== "todo")]} />
+                <Marker state={step.state} />
+                <View style={[styles.half, next && lineTone(reached)]} />
+              </View>
+              <Text style={[styles.label, quiet && styles.labelQuiet]}>{step.label}</Text>
+              {step.date ? <Text style={styles.date}>{step.date}</Text> : null}
             </View>
-            <View style={styles.copy}>
-              <Text style={[styles.label, !done && styles.labelQuiet]}>{step.label}</Text>
-              {caption ? <Text style={styles.caption}>{caption}</Text> : null}
-            </View>
-          </View>
+            {next ? <View style={[styles.link, lineTone(reached)]} /> : null}
+          </Fragment>
         );
       })}
     </View>
   );
 }
 
-const MARKER = 24;
+const lineTone = (reached: boolean) => (reached ? styles.lineReached : styles.lineAhead);
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: tokens.colors.surfaceCard,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.md,
-    padding: tokens.space.lg,
+  row: { flexDirection: "row", alignItems: "flex-start" },
+  // Each step as wide as its words, its circle centred over them.
+  step: { alignItems: "center", gap: tokens.space.xxs },
+  markRow: {
+    alignSelf: "stretch",
+    height: ROW,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: tokens.space.xxs,
   },
-  // 80 pt a step, as the frame draws it; a step grows (never clips) at larger text sizes.
-  row: { flexDirection: "row", alignItems: "flex-start", gap: tokens.space.md, minHeight: 80 },
-  marker: { width: MARKER, height: MARKER },
-  // From the circle's foot to the next circle's head: the drawn circle sits 2 pt inside its 24 pt box.
-  connector: {
-    position: "absolute",
-    left: MARKER / 2 - 0.5,
-    top: MARKER - 2,
-    bottom: -2,
-    width: 1,
+  half: { flex: 1, height: LINE },
+  // Between two steps: the line at the circles' middle.
+  link: { flex: 1, height: LINE, marginTop: ROW / 2 - LINE / 2 },
+  lineReached: { backgroundColor: tokens.colors.primary },
+  lineAhead: { backgroundColor: tokens.colors.borderDefault },
+  mark: { width: MARK, height: MARK, borderRadius: tokens.radius.pill, alignItems: "center", justifyContent: "center" },
+  done: { backgroundColor: tokens.colors.primary },
+  todo: { backgroundColor: tokens.colors.surfaceCard, borderWidth: 2, borderColor: tokens.colors.borderDefault },
+  ring: {
+    width: ROW,
+    height: ROW,
+    borderRadius: tokens.radius.pill,
     backgroundColor: tokens.colors.borderDefault,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  connectorDone: { backgroundColor: tokens.colors.textPrimary },
-  copy: { flex: 1, gap: tokens.space.xxs },
-  label: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  labelQuiet: { color: tokens.colors.textSecondary },
-  caption: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  dot: { width: DOT, height: DOT, borderRadius: tokens.radius.pill, backgroundColor: tokens.colors.primary },
+  label: { ...rn(tokens.type.labelStrong), color: tokens.colors.textPrimary, textAlign: "center" },
+  labelQuiet: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  date: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, textAlign: "center" },
 });

@@ -1,15 +1,15 @@
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, StateMessage, tokens, rn } from "@bbc/ui";
+import { ListRow, RowGroup, StateMessage, TopBar, tokens } from "@bbc/ui";
 
-import { ListRow } from "@/components/list-row";
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { CabinSheet } from "@/features/profile/CabinSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
 import { mergeSavedProfile, type SavedProfile } from "@/features/profile/notifications-logic";
+import { cabinLabel, travelersLabel } from "@/features/profile/profile-logic";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { airportByCode } from "@/lib/airport-by-code";
@@ -17,11 +17,7 @@ import { homeAirportLabel } from "@/lib/airport-search-state";
 import { fetchProfile, type Profile } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 
-function travelersLabel(prefs: Profile["preferences"] | undefined): string {
-  const n = prefs?.passengers?.adult ?? 1;
-  return n === 1 ? "1 adult" : `${n} adults`;
-}
-
+/** Edit profile (36): the home airport, the cabin and the travelers a search and a request start from. */
 export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -30,7 +26,7 @@ export default function EditProfileScreen() {
   // ("Not set", "Business", "1 adult") — and a profile that did not load takes their place, with `Try again`.
   const [loadFailure, setLoadFailure] = useState<{ title: string; body: string } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
-  // Figma 479:8296 names the home airport's city: `JFK · New York`.
+  // 36 names the home airport's city: `New York (JFK)`.
   const [homeCity, setHomeCity] = useState<{ code: string; city: string } | null>(null);
   const homeAirportRef = useRef<ProfileSheetHandle>(null);
   const cabinRef = useRef<ProfileSheetHandle>(null);
@@ -55,7 +51,7 @@ export default function EditProfileScreen() {
     void (async () => {
       const airport = await airportByCode(homeAirport);
       if (!cancelled && airport) setHomeCity({ code: airport.code, city: airport.city });
-    })();
+    })().catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -65,26 +61,18 @@ export default function EditProfileScreen() {
     setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
   }
 
-  const cabinLabel = profile ? (profile.preferences?.cabin === "first" ? "First" : "Business") : undefined;
   // The city shown is always the one of the airport shown — never the previous airport's while the new one resolves.
   const city = homeAirport && homeCity?.code === homeAirport ? homeCity.city : null;
 
   return (
-    // Figma 479:8296: the back button stays at the safe area; the page scrolls under it, 20 pt lower, and stops 16 pt
-    // above the tab bar.
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScreenStatusBar on="light" />
-      <View style={styles.top}>
-        <BackButton testID="editProfile.back" onPress={() => router.back()} />
-      </View>
-      <ScrollView testID="editProfile.root" style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.title} accessibilityRole="header">
-          Edit profile
-        </Text>
+      {/* 36: the back chevron and the page's title beside it. */}
+      <TopBar title="Edit profile" onBack={() => router.back()} backTestID="editProfile.back" />
+      <ScrollView testID="editProfile.root" style={styles.grow} contentContainerStyle={styles.content}>
         {!profile && loadFailure ? (
           <StateMessage
             testID="editProfile.error"
-            variant="error"
             title={loadFailure.title}
             body={loadFailure.body}
             primary={{
@@ -98,32 +86,32 @@ export default function EditProfileScreen() {
             }}
           />
         ) : (
-          <>
+          <RowGroup testID="editProfile.rows">
             <ListRow
               testID="editProfile.homeAirport"
+              icon="plane"
               label="Home airport"
-              size="sm"
               value={profile ? (homeAirport ? homeAirportLabel(homeAirport, city) : "Not set") : undefined}
               disabled={!profile}
               onPress={() => homeAirportRef.current?.present()}
             />
             <ListRow
               testID="editProfile.cabin"
+              icon="seat"
               label="Cabin"
-              size="sm"
-              value={cabinLabel}
+              value={profile ? cabinLabel(profile.preferences) : undefined}
               disabled={!profile}
               onPress={() => cabinRef.current?.present()}
             />
             <ListRow
               testID="editProfile.travelers"
+              icon="users"
               label="Travelers"
-              size="sm"
               value={profile ? travelersLabel(profile.preferences) : undefined}
               disabled={!profile}
               onPress={() => travelersRef.current?.present()}
             />
-          </>
+          </RowGroup>
         )}
       </ScrollView>
       <RootTabBar active="profile" />
@@ -140,14 +128,7 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  top: { paddingHorizontal: tokens.space.lg },
-  scroll: { flex: 1, marginTop: 20, marginBottom: tokens.space.md },
-  // Figma 479:8299: the title and the rows 24 pt apart, 8 pt into the scroll.
-  content: {
-    paddingTop: tokens.space.xs,
-    paddingHorizontal: tokens.space.lg,
-    paddingBottom: tokens.space.lg,
-    gap: tokens.space.lg,
-  },
-  title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
+  grow: { flex: 1 },
+  // 36: the rows' card 16 pt under the top bar.
+  content: { paddingTop: tokens.space.md, paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.lg },
 });

@@ -97,7 +97,8 @@ const styles = StyleSheet.create({
   bare: { width: 36, alignItems: "center" },
   text: { flex: 1, gap: 2 },
   title: { ...rn(tokens.type.bodyStrong), color: tokens.colors.textPrimary },
-  body: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  // Words on the light tint: `text-on-tint`, where slate falls under 4.5:1 (DESIGN.md, Colors).
+  body: { ...rn(tokens.type.bodySm), color: tokens.colors.textOnTint },
   linkHit: { alignSelf: "flex-start", marginTop: tokens.space.xxs },
   link: { ...rn(tokens.type.bodyStrong), color: tokens.colors.textPrimary, textDecorationLine: "underline" },
   pressed: { opacity: 0.7 },

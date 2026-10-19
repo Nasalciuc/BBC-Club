@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "../icons";
 import { Photo, type PhotoSource } from "../primitives/Photo";
@@ -151,6 +152,64 @@ export function TripCard({ photo, fallback, cabin, from, to, dates, facts, carri
   );
 }
 
+type PhotoCardProps = {
+  photo: PhotoSource | null;
+  fallback: PhotoSource | null;
+  /** `memory` for a satellite view (its terms ask that it not be kept). */
+  cachePolicy?: "memory" | "disk";
+  /** `London`. */
+  city: string;
+  /** `Nov 12 – 19`; null when the request names no day. */
+  dates: string | null;
+  /** `JFK → LHR`. */
+  route: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+  testID: string;
+};
+
+/**
+ * A trip on Profile (12, `My trips`; sheet 40 · 12): the city's photograph, darkened at its foot, with the city, the
+ * days and the route over it in white. The whole card opens the request.
+ */
+export function TripPhotoCard({
+  photo,
+  fallback,
+  cachePolicy = "disk",
+  city,
+  dates,
+  route,
+  onPress,
+  accessibilityLabel,
+  testID,
+}: PhotoCardProps) {
+  const spoken = accessibilityLabel ?? [city, dates, route.replace(/→/g, "to")].filter(Boolean).join(", ");
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={spoken}
+      onPress={onPress}
+      style={({ pressed }) => [styles.photoCard, pressed && styles.pressed]}
+    >
+      <Photo source={photo} fallback={fallback} cachePolicy={cachePolicy} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={["transparent", tokens.colors.photoVeil]}
+        locations={[0.35, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={styles.photoText}>
+        <Text style={styles.photoCity} numberOfLines={1}>
+          {city}
+        </Text>
+        {dates ? <Text style={styles.photoLine}>{dates}</Text> : null}
+        <Text style={styles.photoLine}>{route}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
@@ -161,6 +220,20 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
     ...tokens.elevation.card,
   },
+  // 12: four to the screen's width in the image; three and a part here, at the club's own type sizes. Larger text makes
+  // the cards taller, never cut: the city alone keeps one line.
+  photoCard: {
+    width: 112,
+    minHeight: 148,
+    borderRadius: tokens.radius.md,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+    backgroundColor: tokens.colors.surfaceTint,
+  },
+  pressed: { opacity: 0.85 },
+  photoText: { padding: tokens.space.sm, gap: 2 },
+  photoCity: { ...rn(tokens.type.subtitle), color: tokens.colors.textOnPhoto },
+  photoLine: { ...rn(tokens.type.bodySm), color: tokens.colors.textOnPhoto },
   summaryPhoto: { width: 76, minHeight: 76, borderRadius: tokens.radius.sm },
   tripPhoto: { width: 120, minHeight: 96, borderRadius: tokens.radius.sm },
   body: { flex: 1, gap: tokens.space.xxs, paddingVertical: tokens.space.xxs, paddingRight: tokens.space.xxs },

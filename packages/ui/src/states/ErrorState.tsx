@@ -154,7 +154,8 @@ const styles = StyleSheet.create({
   },
   noticeText: { flex: 1, gap: tokens.space.xxs },
   noticeTitle: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
-  noticeBody: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  // Words on a tinted card: `text-on-tint`, where slate falls under 4.5:1 (DESIGN.md, Colors).
+  noticeBody: { ...rn(tokens.type.body), color: tokens.colors.textOnTint },
   linkHit: { alignSelf: "flex-start", marginTop: tokens.space.xxs },
   link: { ...rn(tokens.type.bodyStrong), color: tokens.colors.textPrimary, textDecorationLine: "underline" },
 });

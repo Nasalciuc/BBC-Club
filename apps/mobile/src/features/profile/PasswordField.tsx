@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet } from "react-native";
-import { Icon, TextField, tokens } from "@bbc/ui";
+import { Icon, type IconName, TextField, tokens } from "@bbc/ui";
 
 type Props = {
   testID: string;
@@ -11,19 +11,22 @@ type Props = {
   /** The danger border; the words that explain it sit under the field, in the sheet. */
   error?: boolean;
   autoFocus?: boolean;
+  /** The field's icon in its column (35: the lock). */
+  icon?: IconName;
 };
 
 /**
  * Figma's password field (319:202, 238:4974): the text field with `Enter password` and, at its right edge, the eye in a
  * 44-pt target that shows or hides what was typed.
  */
-export function PasswordField({ testID, label, labelTone, value, onChangeText, error, autoFocus }: Props) {
+export function PasswordField({ testID, label, labelTone, value, onChangeText, error, autoFocus, icon }: Props) {
   const [visible, setVisible] = useState(false);
   return (
     <TextField
       testID={testID}
       label={label}
       labelTone={labelTone}
+      icon={icon}
       value={value}
       onChangeText={onChangeText}
       error={error}

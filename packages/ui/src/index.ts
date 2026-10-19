@@ -25,7 +25,7 @@ export { CardSkeleton, RowSkeleton, Skeleton } from "./primitives/Skeleton";
 export { StatusBadge, statusCopy, type BadgeStatus } from "./primitives/StatusBadge";
 export { Stepper } from "./primitives/Stepper";
 export { TextButton } from "./primitives/TextButton";
-export { Timeline } from "./primitives/Timeline";
+export { Timeline, type StepState, type TimelineStep } from "./primitives/Timeline";
 export { Toggle } from "./primitives/Toggle";
 export { Wordmark } from "./primitives/Wordmark";
 
@@ -38,11 +38,11 @@ export { FieldError, TextField } from "./fields/TextField";
 export { CarouselRow, OfferCard, OfferCardWide } from "./cards/OfferCard";
 export { FlightCard } from "./cards/FlightCard";
 export { FlightOverview, RouteCard, YourFareCard } from "./cards/FareCards";
-export { TripCard, TripSummaryCard } from "./cards/TripCards";
+export { TripCard, TripPhotoCard, TripSummaryCard } from "./cards/TripCards";
 export { ONE_WAY, arriveYmd, cabinText, dayText, departYmd, durationText, flightFacts } from "./cards/flight-facts";
 export { PopularCard } from "./cards/PopularCard";
 export { RecentRow } from "./cards/RecentRow";
-export { ProfileHero } from "./cards/ProfileHero";
+export { ProfileHero, profileBandHeight } from "./cards/ProfileHero";
 export { RequestCard } from "./cards/RequestCard";
 
 export { HOME_SHEET_HANDLE, HomeSheet } from "./layout/HomeSheet";

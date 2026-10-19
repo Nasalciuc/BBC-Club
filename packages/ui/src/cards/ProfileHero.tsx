@@ -1,72 +1,78 @@
+import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { Avatar } from "../primitives/Avatar";
 import { Photo, type PhotoSource } from "../primitives/Photo";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 
 type Props = {
-  /** The member's name, in the serif headline. */
+  /** The member's name. */
   name: string;
-  /** `Flies from JFK`; null — no home airport, no pill. */
+  /** `Flies from JFK`; null — no home airport, no line. */
   home: string | null;
-  /** The home city's photo (ADR-IMPL-043); null — the fallback. */
+  /** The member's initials (`DR`), in the portrait until the club keeps a photo of them (ADR-IMPL-055 §7). */
+  initials: string;
+  /** The home city's photograph (ADR-IMPL-043); null — the fallback. */
   image: PhotoSource | null;
   fallback: PhotoSource | null;
   /** `memory` for a satellite view (its terms ask that it not be kept). */
   cachePolicy?: "memory" | "disk";
+  /** The safe area's top: the photograph runs under the status bar. */
+  topInset: number;
+  /** Over the photograph at the right, under the status bar: the round settings button (ADR-IMPL-055 §9). */
+  action?: ReactNode;
   testID: string;
 };
 
-/** Figma 436:1221: the band is 304 pt high, the home airport's pill 36 by 144 — its words centred. No token is either. */
-const HEIGHT = 304;
-const PILL = 36;
-const PILL_WIDTH = 144;
+/** 12: the photograph 96 pt below the safe area; the 120-pt portrait over its foot, two thirds on the photograph. */
+const BAND_BELOW_INSET = 96;
+const AVATAR = 120;
+const AVATAR_OVER = 80;
+
+/** The band's height on a phone with this top inset — for a satellite view asked for at the band's size. */
+export function profileBandHeight(topInset: number): number {
+  return topInset + BAND_BELOW_INSET;
+}
 
 /**
- * Figma `Proposal / ProfileHero` (436:1221): identity anchored in the home airport's city, not a member portrait — the
- * city's photograph under a flat `surface-night` scrim at 32 %, the name in `headline`, the home airport on a white pill.
- * The block sits on the band's bottom edge (Figma: 36 pt above it), so a name on two lines at 1.3× still fits.
+ * The top of Profile (12): the home city's photograph from edge to edge under the status bar, the member's portrait in
+ * its white ring over the photograph's foot, the name in `headline` and `Flies from JFK` under it, centred.
  */
-export function ProfileHero({ name, home, image, fallback, cachePolicy = "disk", testID }: Props) {
+export function ProfileHero({
+  name,
+  home,
+  initials,
+  image,
+  fallback,
+  cachePolicy = "disk",
+  topInset,
+  action,
+  testID,
+}: Props) {
   return (
-    <View testID={testID} style={styles.band}>
-      <Photo source={image} fallback={fallback} cachePolicy={cachePolicy} style={StyleSheet.absoluteFill} />
-      <View style={[StyleSheet.absoluteFill, styles.scrim]} />
+    <View testID={testID}>
+      <View style={[styles.band, { height: profileBandHeight(topInset) }]}>
+        <Photo source={image} fallback={fallback} cachePolicy={cachePolicy} style={StyleSheet.absoluteFill} />
+        {action ? <View style={[styles.action, { top: topInset + tokens.space.xs }]}>{action}</View> : null}
+      </View>
       <View style={styles.identity}>
-        <Text style={styles.name} numberOfLines={2}>
+        <View style={styles.avatar}>
+          <Avatar initials={initials} size={AVATAR} testID={`${testID}.avatar`} />
+        </View>
+        <Text style={styles.name} accessibilityRole="header" numberOfLines={2}>
           {name}
         </Text>
-        {home ? (
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>{home}</Text>
-          </View>
-        ) : null}
+        {home ? <Text style={styles.home}>{home}</Text> : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  band: { height: HEIGHT, borderRadius: tokens.radius.md, overflow: "hidden" },
-  scrim: { backgroundColor: tokens.colors.primary, opacity: 0.32 },
-  identity: {
-    position: "absolute",
-    left: tokens.space.lg,
-    right: tokens.space.lg,
-    bottom: tokens.space.lg + tokens.space.sm,
-    gap: tokens.space.sm,
-    alignItems: "flex-start",
-  },
-  name: { ...rn(tokens.type.headline), color: tokens.colors.textOnPhoto },
-  pill: {
-    minHeight: PILL,
-    minWidth: PILL_WIDTH,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: tokens.space.md,
-    backgroundColor: tokens.colors.surfaceCard,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.pill,
-  },
-  pillText: { ...rn(tokens.type.bodySm), color: tokens.colors.textPrimary },
+  band: { backgroundColor: tokens.colors.surfaceTint },
+  action: { position: "absolute", right: tokens.space.gutter },
+  identity: { alignItems: "center", paddingHorizontal: tokens.space.gutter, gap: 2 },
+  avatar: { marginTop: -AVATAR_OVER, marginBottom: tokens.space.xs },
+  name: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, textAlign: "center" },
+  home: { ...rn(tokens.type.bodyLg), color: tokens.colors.textSecondary, textAlign: "center" },
 });

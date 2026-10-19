@@ -23,3 +23,17 @@ export function badgeOf(status: string): { badge: BadgeStatus; known: boolean } 
 export function statusCopy(status: string): string {
   return STATUS_COPY[badgeOf(status).badge];
 }
+
+/** A step of a request's progress (sheet 41, the horizontal stepper): `done` — reached; `current` — where the request
+ *  is; `todo` — still to come. */
+export type StepState = "done" | "current" | "todo";
+
+export type TimelineStep = {
+  /** For the step's testID (`request.timeline.quoted`). */
+  key: string;
+  /** `Received`, `Quote ready`, `Booked`. */
+  label: string;
+  /** `Oct 16`: the day the step was reached, in the phone's zone; null — not reached, or not on record. */
+  date: string | null;
+  state: StepState;
+};

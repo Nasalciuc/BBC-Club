@@ -108,5 +108,5 @@ const styles = StyleSheet.create({
   intro: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
   // 325:8525: the error 8 pt under the field, in the danger colour.
   group: { gap: tokens.space.xs },
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
 });

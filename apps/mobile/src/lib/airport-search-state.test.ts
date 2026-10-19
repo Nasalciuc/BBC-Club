@@ -50,8 +50,8 @@ describe("wantsAirportSearch", () => {
 });
 
 describe("homeAirportLabel", () => {
-  test("names the city after the code, as Figma's Edit profile does", () => {
-    expect(homeAirportLabel("JFK", "New York")).toBe("JFK · New York");
+  test("names the city with its code after it, as Profile and Edit profile do (12, 36)", () => {
+    expect(homeAirportLabel("JFK", "New York")).toBe("New York (JFK)");
   });
 
   test("keeps the code alone while the city is unknown", () => {
