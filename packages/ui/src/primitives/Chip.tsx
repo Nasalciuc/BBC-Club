@@ -28,8 +28,8 @@ type Props = {
 };
 
 /**
- * 09's filters: 31.7 pt tall, the words 12.5 Medium 14 pt either side, at least 55.5 wide (`All`); chosen, navy with
- * 13.5 Semibold white words. 13's trip chips: 31 pt, a 16-pt icon 12 pt in, the words 9 pt after it, 14 pt to the
+ * 09's filters: 31.7 pt tall, the words 12.3 Medium 14 pt either side, at least 55.5 wide (`All`); chosen, navy with
+ * 12.5 Semibold white words. 13's trip chips: 31 pt, a 16-pt icon 12 pt in, the words 9 pt after it, 14 pt to the
  * edge. Both light grey and fully round; the target reaches 44 pt by its hit slop.
  */
 const FILTER = { height: 31.7, pad: 14, minWidth: 55.5 } as const;

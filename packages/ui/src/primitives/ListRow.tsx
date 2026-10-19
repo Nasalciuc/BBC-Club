@@ -382,7 +382,7 @@ function LookRow({
 /**
  * A white card of rows (12, 34, 36). In a screen's `look`: its radius and shadow, its rows' height (`rowHeight` where
  * a card's rows differ from the screen's others), its rules from where the screen starts them. Without one, the 1.0
- * card: radius 16, a rule from where the words start.
+ * card: radius 11, a rule from where the words start.
  */
 export function RowGroup({
   children,

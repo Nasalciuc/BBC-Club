@@ -28,7 +28,7 @@ type Props = {
   /** An icon above the words (15: the magnifier). */
   icon?: IconName;
   /**
-   * The screen it stands in, as measured: `requests` (10: 33.5-pt title, 16.5-pt words, a 53.8-pt full-width pill),
+   * The screen it stands in, as measured: `requests` (10: 32.5-pt title, 15.5-pt words, a 53.8-pt full-width pill),
    * `explore` (17: 22.6 / 13.6, a 43.4-pt pill hugging its words), `search` (15: the magnifier, 18 / 14.5, a 33.2-pt
    * outline pill).
    */

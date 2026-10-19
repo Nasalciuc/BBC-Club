@@ -3,7 +3,7 @@ import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 
 type Props = {
-  /** White over a photograph (08); navy on a page (01, 07). */
+  /** Navy on a page (01, 07) and over 08's daylight photograph; white only over a dark one. */
   tone?: "navy" | "white";
   /**
    * `dates`: the dates page's top bar (07), `BuyBusinessClass` in Bold a little smaller than 01's; `received`: over 08's

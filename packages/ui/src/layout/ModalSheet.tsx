@@ -102,9 +102,9 @@ type Props = {
 };
 
 /**
- * Figma's modal sheet (135:849, 238:4561, 320:5969 …): the page under a 35% night backdrop; the sheet in `surface-page`
- * with 24-pt top corners and a 48 × 4 handle; its title and the filled × 24 pt below the top; the content in the 24-pt
- * gutters; the actions pinned at the bottom.
+ * Figma's modal sheet (135:849, 238:4561, 320:5969 …): the page under the night backdrop (`scrim`); the sheet in
+ * `surface-page` with 24-pt top corners and a 40 × 5 handle; its title and the filled × 24 pt below the top; the
+ * content in the 24-pt gutters; the actions pinned at the bottom.
  *
  * Figma lays the header out as the title's box, 8 pt, then the × — 257 pt then the × on a title, 281 on a headline — so
  * the × stands 36 pt (12 on a headline) inside the gutter rather than at its edge. The sheet keeps those measures.

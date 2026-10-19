@@ -63,11 +63,13 @@ export default function SettingsScreen() {
     setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
   }
 
-  const legal = [
-    { key: "privacy", label: "Privacy policy", url: env.EXPO_PUBLIC_PRIVACY_URL },
-    { key: "terms", label: "Terms of use", url: env.EXPO_PUBLIC_TERMS_URL },
+  // 34 draws each card's second row taller than its first; Help, which 34 does not draw, takes the look's own height.
+  const rows: { key: string; label: string; url: string | undefined; height?: number }[] = [
+    { key: "privacy", label: "Privacy policy", url: env.EXPO_PUBLIC_PRIVACY_URL, height: ROW.privacy },
+    { key: "terms", label: "Terms of use", url: env.EXPO_PUBLIC_TERMS_URL, height: ROW.terms },
     { key: "help", label: "Help", url: env.EXPO_PUBLIC_HELP_URL },
-  ].filter((row): row is { key: string; label: string; url: string } => Boolean(row.url));
+  ];
+  const legal = rows.filter((row): row is (typeof rows)[number] & { url: string } => Boolean(row.url));
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -97,6 +99,7 @@ export default function SettingsScreen() {
                 testID="settings.phone"
                 icon="phone-fill"
                 label="Phone"
+                height={ROW.phone}
                 value={profile ? (displayPhone(profile.phone) ?? "Add phone") : undefined}
                 disabled={!profile}
                 onPress={() => phoneRef.current?.present()}
@@ -105,6 +108,7 @@ export default function SettingsScreen() {
                 testID="settings.password"
                 icon="lock-fill"
                 label="Password"
+                height={ROW.password}
                 value="Change"
                 disabled={!profile}
                 onPress={() => passwordRef.current?.present()}
@@ -131,6 +135,7 @@ export default function SettingsScreen() {
                 testID={`settings.${row.key}`}
                 icon="file-text"
                 label={row.label}
+                height={row.height}
                 trailing="external"
                 onPress={() => void Linking.openURL(row.url)}
               />
@@ -139,16 +144,18 @@ export default function SettingsScreen() {
         ) : null}
         {/* It waits for the load like the rows above; a load that failed leaves it to tap, and a count that did not load
             is said without a number (ADR-IMPL-047). */}
-        <ListRow
-          testID="settings.delete"
-          icon="trash"
-          label="Delete account"
-          danger
-          look="settings"
-          height={46.7}
-          disabled={!profile && !loadFailure}
-          onPress={() => deleteRef.current?.present()}
-        />
+        <View style={styles.deleteGap}>
+          <ListRow
+            testID="settings.delete"
+            icon="trash"
+            label="Delete account"
+            danger
+            look="settings"
+            height={ROW.delete}
+            disabled={!profile && !loadFailure}
+            onPress={() => deleteRef.current?.present()}
+          />
+        </View>
         <Button
           testID="settings.signOut"
           label={signingOut ? "Signing out…" : "Sign out"}
@@ -178,11 +185,18 @@ export default function SettingsScreen() {
   );
 }
 
+/**
+ * 34 (and 35 under its sheet), measured: the rows' heights as drawn — Phone 45.4 and Password 48 in the first card,
+ * Privacy policy 46.6 and Terms of use 48.4 in the third, Delete account 46.8 on its own.
+ */
+const ROW = { phone: 45.4, password: 48, privacy: 46.6, terms: 48.4, delete: 46.8 } as const;
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   grow: { flex: 1 },
-  // 34: the cards 14.8 pt in, 11 apart (14.8 before Delete account, 13.2 before Sign out), from under the top bar.
+  // 34: the cards 14.8 pt in, 11.2 apart (15 before Delete account, 13.2 before Sign out), from under the top bar.
   content: { paddingHorizontal: 14.8, paddingBottom: tokens.space.lg, gap: 11.2 },
+  deleteGap: { marginTop: 15 - 11.2 },
   signOut: { alignSelf: "stretch", borderWidth: 0.6, marginTop: 13.2 - 11.2 },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
   message: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, textAlign: "center" },
