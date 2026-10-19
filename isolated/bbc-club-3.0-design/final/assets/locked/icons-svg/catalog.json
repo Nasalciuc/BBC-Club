@@ -1,0 +1,558 @@
+{
+  "library": "lucide-react-native",
+  "version": "1.47.0",
+  "notes": "Existing library geometry exported without regeneration. Raster examples remain the visual baseline. Family and cabin-business have screenshot-only canonical assets; never substitute armchair/users for them. Do not use these line SVGs for filled active tab icons.",
+  "icons": [
+    {
+      "id": "search",
+      "file": "assets/locked/icons-svg/search.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "search",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-search.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "e4b587bde40b7d14fd0f38eb17b4fb6b5a01935883a42eccd0e78a4b78c6f4ca"
+    },
+    {
+      "id": "map-pin",
+      "file": "assets/locked/icons-svg/map-pin.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "map-pin",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-map-pin.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "4aabb9c019e81ed2af39096b4e07bed517840e0307b4753ab8894aa962d845d4"
+    },
+    {
+      "id": "plane",
+      "file": "assets/locked/icons-svg/plane.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "plane",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-plane.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "39d79ba67e35ade0dfafaabd6f202eeb95db6c954d38346dc9aefeb84fe3e8d4"
+    },
+    {
+      "id": "calendar",
+      "file": "assets/locked/icons-svg/calendar.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "calendar",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-calendar.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "a11b6dfda49abb51acdccc72b29b33b90fcc95209e962dc282e7784705da2108"
+    },
+    {
+      "id": "user",
+      "file": "assets/locked/icons-svg/user.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "user",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-user.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "f9bceeb9591f04f0ca81008e1b3b56c4cb0702f72635f90f7e5864a74a151954"
+    },
+    {
+      "id": "users",
+      "file": "assets/locked/icons-svg/users.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "users",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-users.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "99c3453d4591b0e23cf9e93d6491fc1d4a677239901debea0edf1538ada265f1"
+    },
+    {
+      "id": "armchair",
+      "file": "assets/locked/icons-svg/armchair.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "armchair",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-armchair.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "f216b1a0f0b15bddb2529aeb6ba5f1e2695b8be9a357bef4e5306ce8ffe28fe9"
+    },
+    {
+      "id": "globe",
+      "file": "assets/locked/icons-svg/globe.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "globe",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-globe.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "64e5e6dbef9b80cc6ea13ff9c603518cbb8cc3b0e3aa3b721b702dacb9256dc2"
+    },
+    {
+      "id": "compass",
+      "file": "assets/locked/icons-svg/compass.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "compass",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-compass.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "c86ada4da2e9474b1d9711e8bf53738585f22991ca0e9ab2dc86b2c624cad795"
+    },
+    {
+      "id": "clipboard-list",
+      "file": "assets/locked/icons-svg/clipboard-list.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "clipboard-list",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-clipboard-list.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "4cdfc39cbf1d1957d3f86becdd4aa9284bfd4a441792c9465399b6a3ede5ab5b"
+    },
+    {
+      "id": "chevron-right",
+      "file": "assets/locked/icons-svg/chevron-right.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "chevron-right",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-chevron-right.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "4603d04e9430d3bb9f65b9bcce7bb0cbdd947b24830d808f03afbb69e2a89e8e"
+    },
+    {
+      "id": "chevron-down",
+      "file": "assets/locked/icons-svg/chevron-down.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "chevron-down",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-chevron-down.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "ee4202ca18ec5a2f9b01f28edaefc57dda15d85c9f33e110d99633e6de9a4783"
+    },
+    {
+      "id": "arrow-left",
+      "file": "assets/locked/icons-svg/arrow-left.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "arrow-left",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-arrow-left.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "a7856f4f4b8a5d853001125fcccd7f4b72ab6f6ba9203fe8a56aab5dba1f11f7"
+    },
+    {
+      "id": "arrow-right",
+      "file": "assets/locked/icons-svg/arrow-right.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "arrow-right",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-arrow-right.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "9c48a2e7d7146be751dabdff2b6eccf9cf4e794a95fc540af6a70688597df5fc"
+    },
+    {
+      "id": "x",
+      "file": "assets/locked/icons-svg/x.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "x",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-x.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "b257ad0db7255a6c6b239d1f097eeb6f541e61be05fc151cab0ae8b6817eab4a"
+    },
+    {
+      "id": "share",
+      "file": "assets/locked/icons-svg/share.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "share",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-share.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "acf100e52ccfa0f53a2a758bf42f2059126fc7c1799ad3d0a34713c062146950"
+    },
+    {
+      "id": "heart",
+      "file": "assets/locked/icons-svg/heart.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "heart",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-heart.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "0879aac104b8c81e4a136063cabf2f04262b4150682ae633ee5efc467d5a7ff5"
+    },
+    {
+      "id": "bookmark",
+      "file": "assets/locked/icons-svg/bookmark.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "bookmark",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-bookmark.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "55c790e218b63d58e9511bdabb90caf13a226c999fea9b567eda77be62bd6b87"
+    },
+    {
+      "id": "phone",
+      "file": "assets/locked/icons-svg/phone.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "phone",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-phone.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "40f454c213e033a1d57dea04777c4e8ef843a2909c43a3e25170b4304dc76a7c"
+    },
+    {
+      "id": "bell",
+      "file": "assets/locked/icons-svg/bell.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "bell",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-bell.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "254e1c7a0db7ac40a525ff1458493549397bf7f587d4dd63c12da5abba0b6437"
+    },
+    {
+      "id": "lock",
+      "file": "assets/locked/icons-svg/lock.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "lock",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-lock.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "8958daab2dcf70ed5b4444d0f8b3fdeac40915929292db3a77a6c7f9b51048b4"
+    },
+    {
+      "id": "trash",
+      "file": "assets/locked/icons-svg/trash.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "trash",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-trash.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "824d4673981e5caab891b9f3a0e4180cca9e45e11285a577625a4c3c36776c22"
+    },
+    {
+      "id": "user-pen",
+      "file": "assets/locked/icons-svg/user-pen.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "user-pen",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-user-pen.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "21e72e97528e4be7b05f533b09d6f09d0650c884268486c77d8116e717246643"
+    },
+    {
+      "id": "check",
+      "file": "assets/locked/icons-svg/check.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "check",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-check.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "f017fd537308edd0a193afcd028f6f6db5ebed62de72f46ed1cd9d39442f52af"
+    },
+    {
+      "id": "info",
+      "file": "assets/locked/icons-svg/info.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "info",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-info.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "1f1c849db5a657674d145ac246e1d3c07aa0b170dc43801ad47f2dfa2550b325"
+    },
+    {
+      "id": "sun-cloud",
+      "file": "assets/locked/icons-svg/sun-cloud.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "cloud-sun",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-sun-cloud.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "a021ef1c1879b97cde429ddf7edde51a2f263af2fd99c9f990d0178a4dc0bace"
+    },
+    {
+      "id": "bar-chart",
+      "file": "assets/locked/icons-svg/bar-chart.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "chart-column-increasing",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-bar-chart.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "2b589d92d9aafa4160d87af61348f59fc9f776b0764b914116aea2061b278d5e"
+    },
+    {
+      "id": "file-text",
+      "file": "assets/locked/icons-svg/file-text.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "file-text",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-file-text.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "45774328634053140560b84cfeaee6cd0c41f59e97afabf3917866414024d2a2"
+    },
+    {
+      "id": "message",
+      "file": "assets/locked/icons-svg/message.svg",
+      "library": "lucide-react-native",
+      "version": "1.47.0",
+      "sourceIcon": "message-square",
+      "viewBox": [
+        0,
+        0,
+        24,
+        24
+      ],
+      "stroke": "#1E293B",
+      "strokeWidth": 2,
+      "usage": "pinned-native-vector-implementation",
+      "reference": "assets/locked/icons-reference/icon-message.png",
+      "pixelIdenticalToRaster": false,
+      "sha256": "f782f20b5a2e270fe6abc2e6ff32f957b48e662bc3222f899008e3e5eada112c"
+    }
+  ]
+}
