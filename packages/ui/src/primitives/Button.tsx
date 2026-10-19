@@ -183,9 +183,9 @@ const TONE: Record<Variant, { frame: ViewStyle; pressed: ViewStyle; label: TextS
     pressed: { backgroundColor: tokens.colors.statusDangerTint },
     label: { color: tokens.colors.statusDangerText },
   },
-  // 35's red, a little lighter than the words of `Sign out` and `Delete account` (`action-danger`).
+  // 35 draws the pill a lighter red (#F34649), under which its white words fall to 3.6:1: the club's red keeps 4.6:1.
   "destructive-filled": {
-    frame: { backgroundColor: tokens.colors.actionDanger },
+    frame: { backgroundColor: tokens.colors.statusDangerText },
     pressed: { opacity: 0.9 },
     label: { color: tokens.colors.textOnPhoto },
   },

@@ -66,7 +66,6 @@ colors:
   scrim-question: "rgba(12,15,22,0.685)"
   grabber-question: "#E1E3E7"
   surface-round: "#F3F3F3"
-  action-danger: "#F34649"
   grabber-delete: "#BFC4CB"
   scrim-delete: "rgba(10,13,15,0.74)"
   text-field-label: "#243961"
@@ -2077,18 +2076,20 @@ motion:
 ## Overview
 
 BuyBusinessClass Club is a private business-class travel club: members see fares from their home airport, request a
-quote, and a travel specialist arranges the trip by phone. 3.0 (ADR-IMPL-055) makes the inside a bright, modern 2026
-travel app — airy white space, daylight photography of the cities, white cards with soft shadows, sheets that overlap
-the photographs with 24 pt corners, round white buttons over photos, navy pills and chips, thin line icons, Apple-level
-clean UI with luxury travel branding.
+quote, and a travel specialist arranges the trip by phone. 3.0 (ADR-IMPL-055, as drawn since ADR-IMPL-056) makes the
+inside a bright, modern 2026 travel app — airy white space, daylight photography of the cities, white cards with soft
+shadows, sheets that overlap the photographs, round white buttons over photos, navy pills and chips, thin line icons,
+Apple-level clean UI with luxury travel branding.
 
 - **Two worlds.** The entry — Welcome, Sign in, Join, Verify, Set password, Reset — stays the 1.0 night cabin, exactly
   as it is: its values live in `apps/mobile/src/constants/club.ts`, written by hand and pinned by `club.test.ts`; none
   of the tokens below reaches it. Everything from onboarding on is 3.0.
 - **The reference.** The 46 images in `isolated/bbc-club-3.0-design/final/` — 13 screens, 23 states, 8 component
-  sheets — show every screen and element; this file holds their values. Where an image and this file differ, this file
-  wins (the images are generated and not always consistent with one another); where an image shows something the app
-  has no data for, the app leaves it out rather than invent it (ADR-IMPL-055).
+  sheets — show every screen and element; this file holds their values, measured from the pixels and not evened out
+  (ADR-IMPL-056): each image is read as a 393-pt phone on a 47-pt status bar, every line fitted to the app's face by
+  its glyph height, every box, gap, radius, colour and shadow taken from the image it belongs to. Where an image and
+  this file differ, this file wins (the images are generated and not always consistent with one another); where two
+  images draw the same component differently, the screen it appears on most wins and a state follows its screen.
 - **One accent.** Navy is the only strong colour: text, filled buttons, the selected chip and the active tab. Red only
   for Sign out, Delete account and errors.
 
@@ -2100,67 +2101,73 @@ and states, `design/motion.md` its motion. The generated `packages/ui/src/tokens
 
 ## Colors
 
-- **Navy** `primary` / `action-primary` (#1E293B): text, filled pills, selected chips and segments, the active tab, the
-  pins, the stepper's done steps. `action-pressed` (#0F172A) while a filled pill is pressed.
-- **White** `surface-card` (#FFFFFF): cards, sheets, fields, the tab bar. **Off-white** `surface-page` (#FAFAF8): pages.
-- **Light tint** `surface-tint` (#F1F5F9): chips, info cards, filled search fields, the stepper, a disabled pill,
-  skeletons, the Closed badge.
-- **Light navy** `border-default` (#E2E8F0): borders, dividers, the light badges (Received), the `Save 48%` pill, the
-  progress line's track.
-- **Slate** `text-secondary` (#64748B): secondary text, placeholders, inactive tabs, labels; `text-on-tint` (#475569)
-  for words on the light tint (an inactive filter chip), where slate would fall under 4.5:1.
-- **Pale sky** `sky` (#BAD2EB): only behind the globe. The `globe-*` colours are the drawn globe's imagery (ocean, land,
-  desert, ice) — never UI.
-- **Red** `status-danger` (#EF4444): the border and icon of `Sign out`, `Delete account` and a field at fault;
-  `status-danger-text` (#DC2626) for their words and the filled `Delete account` pill — the same red a step darker, so
-  the words keep 4.5:1 on white (#EF4444 gives 3.76:1); `status-danger-tint` behind an error card.
-- `text-on-photo` (#FFFFFF): words on photographs and on navy. `photo-veil` darkens the foot of a photograph that
-  carries words; `scrim` dims the page under a sheet; `shadow` is the colour of every shadow.
-- No gold, bronze, orange, yellow, green or azure anywhere in the UI.
+The images' own pixels (ADR-IMPL-056 §3); sheet 37's printed hex values are the generator's labels and no screen
+renders them.
+
+- **Navy**: `text-primary` (#0A1B37) for words; `action-primary` / `primary` (#1D2D46) for fills — filled pills, the
+  selected chip and segment, the active tab, the pins, the received check; `action-pressed` (#14223A) while a pill is
+  pressed.
+- **White** `surface-page` and `surface-card` (#FFFFFF): pages, cards, sheets, fields, the tab bar.
+- **Tints**: `surface-tint` (#F0F2F7) for chips, fields, the stepper and skeletons; `surface-tint-soft` (#F5F7FA) for
+  information cards; `surface-tint-blue` (#DBE8F9) for the light badges and the `Save` pill; `surface-neutral` and
+  `surface-round` for the round buttons drawn grey (07, 26).
+- **Lines**: `border-default` (#E8EAEF) for borders and dividers, `border-faint` for a card's hairline, `rule-line` for
+  the rules inside cards.
+- **Slate**: `text-secondary` (#5F6A7F) for secondary words, placeholders and inactive tabs; `text-on-tint` (#48546A)
+  on the tints, where slate would fall under 4.5:1; `text-label`, `text-muted`, `text-subtle` (#3F4C65: an airline's
+  name, 08's `See all`) and `text-link` (#0A1F6B: Search's `Cancel` and `Clear all`) where the images draw them.
+- **Red** `status-danger` / `status-danger-text` (#EC0017) everywhere — the border, icon and words of `Sign out`,
+  `Delete account` and a field at fault, and the filled pill that confirms a deletion: the images' brighter and lighter
+  reds leave red words, or white words on red, under 4.5:1. `status-danger-tint` behind an error card.
+- **Sky** `sky` and `sky-light` behind the globe; `map-*` the route card's map; the `globe-*` colours are the drawn
+  globe's imagery (ocean, land, desert, ice) — never UI.
+- **Scrims and veils**: `scrim` dims the page under a sheet (black at about 61%); 25's question and 35's deletion dim
+  it darker (`scrim-question`, `scrim-delete`). `photo-veil` darkens the foot of a photograph that carries words;
+  `shadow` is the colour of every shadow.
+- A few colours belong to one screen and are used only there: a sheet's grabber grey (`grabber-*`), 07's band and
+  toggle (`day-band`, `toggle-off`, `dates-mark`), 24's disabled pill (`pill-disabled`, `text-pill-disabled`), 35's
+  field label (`text-field-label`).
+- The weather mark's sun (`art-sun`) is the only yellow; no gold, bronze, orange or green anywhere in the UI.
 
 ## Typography
 
-One sans-serif, Inter (the bundled `@expo-google-fonts/inter` 400, 500, 600, 700), everywhere inside; no serif.
+One sans-serif, Inter Tight (the bundled `@expo-google-fonts/inter-tight` 400, 500, 600, 700), everywhere inside; no
+serif. The images were drawn with a face about 8% narrower than Inter; at the images' glyph heights Inter Tight sets
+their widths, so lines break where the images break them (ADR-IMPL-056 §2).
 
-- `display` 36 Bold: screen titles (`Requests`, `London`, `New York to London`), the member's name in the greeting.
-- `headline` 30 Bold: the onboarding question, sheet titles, empty and confirmation titles (`No requests yet.`,
-  `Request received.`).
-- `title` 24 Bold: section titles (`Offers to inspire`, `To Europe`, `My trips`, `Request progress`).
-- `title-sm` 20 Bold: card titles (the city on a request), the smaller section titles (`Popular from New York`,
-  `Recent searches`, `Flight option`).
-- `subtitle` 17 Semibold: row and group titles (`Your home airport`, `Adults`), the city on an offer or a popular card.
-- `greeting` 26 Regular in slate: `Good morning,`.
-- `body-lg` 18: subtitles under a title, the search field's words. `body` 16 and `body-strong` 16 Semibold: text and
-  the titles of info cards. `body-sm` 14: secondary lines; `label-strong` 14 Semibold: badges, the `Save 48%` pill,
-  small titles in cards. `caption` 12: fine print (`No payment is taken in the app.`).
-- `label` 11 Semibold, uppercase, letter-spaced, slate: `INDICATIVE FARE`, `LOCAL TIME`, `BUSINESS CLASS`.
-- `price-display` 36, `price` 24, `price-sm` 18: Bold with tabular figures.
-- `button` 17 Semibold. `tab` 12 Medium, `tab-active` 12 Bold.
-- `wordmark`: `BuyBusinessClass` in Bold and ` Club` in Regular, on one line, navy (white over photos).
-- `pin` 13 Bold and `pin-detail` 13: the globe's labels — a city over its price, an airport's code at either end of a
-  route (02, 13).
-- Body never below 14; `caption` only for fine print, `pin` and `pin-detail` only on the globe. Titles wrap to two
-  lines at most.
+- **The roles are the screens' own.** A line takes the size, weight and tracking its image draws: the shared roles
+  (`display`, `headline`, `title`, `title-sm`, `subtitle`, `body-lg`, `body`, `body-sm`, `caption`, `label`, `button`,
+  `price*`, `tab`) hold the values most screens draw, and a screen that draws a line otherwise has a role of its own,
+  named for it (`summary-title` on 06, `month-title` on 07, `received-title` on 08, `delete-body` on 35).
+- Secondary lines are 10–13 pt, as drawn — under 3.0's first 14-pt floor; Dynamic Type still scales them, up to 1.3×.
+- Prices and the calendar's days use tabular figures where the images align them.
+- A line's baseline is where the image puts it on each platform (`lineBaseline`, ADR-IMPL-056): iOS keeps a shorter
+  line's descent at its foot, Android and the web centre it, and the screens place their words from the baseline.
+- `wordmark`: `BuyBusinessClass` in Semibold and ` Club` in Regular, on one line, navy — at the size each screen draws
+  it (01, 07, 08).
+- `pin` and `pin-detail`: only the globe's labels.
 
 ## Layout and Responsiveness
 
-- Single column, phones only; 20 pt gutters (`spacing.gutter`); horizontal carousels run to the screen's edge and
-  start at the gutter. Content capped at 430 pt on large phones, centred.
+- Single column, phones only; content sits where the images put it — their 15-pt gutter (`spacing.gutter`) where a
+  screen has no measure of its own — and moves down with a taller safe area than the images' 47 pt; what the images
+  pin to the foot keeps its distance from it. Horizontal carousels run to the screen's edge and start where drawn.
 - The primary action sits in the lower third: pinned over the tab bar on a page, at the foot of a sheet.
 - Font scale up to 1.3×: cards grow; nothing truncates but one-line titles in carousels.
 - Android edge-to-edge: the tab bar and the pinned actions respect the safe-area insets.
 
 ## Elevation and Depth
 
-- Cards and the search field: the card shadow `0 4 16` at 8% of `shadow`; sheets: `0 10 30` at 8%; round white buttons
-  over photos and the globe's labels: `float`. Shadows come from the `elevation` group (generated as `boxShadow`).
-- Sheets overlap photographs with 24 pt top corners; photographs run to the screen's edges under the status bar.
+- Shadows come from the `elevation` group (generated as `boxShadow`), as the images draw them: `card` under cards and
+  the search bar, `sheet` under sheets, `float` under round white buttons and the globe's labels, `soft` and `lift`
+  under the lighter cards of 06–08, `knob` under the toggle's knob.
+- Sheets overlap photographs with rounded top corners (the radius each sheet is drawn with); photographs run to the
+  screen's edges under the status bar.
 
 ## Shapes
 
-- `pill` for buttons, chips, badges, the stepper, the search field on a page; `xs` 8 for the segmented control and small
-  thumbnails; `sm` 12 for fields and cabin cards; `md` 16 for cards and rows; `lg` 20 for offer and request cards;
-  `xl` 24 for sheets and photo cards.
+- `pill` for buttons, chips, badges, the stepper and the search bar; `xs` 8, `sm` 10, `md` 11, `lg` 16 and `xl` 24
+  for the radii most screens share — the rest are each component's own, as measured (`design/components.md`).
 
 ## Components
 
@@ -2170,22 +2177,23 @@ Documented in `design/components.md`. The rules an agent most often gets wrong:
   (`Call your specialist`). A second action is an outline pill or a text button.
 - Destructive actions are red: the outline pill `Sign out`, the row `Delete account`, and the filled red pill only to
   confirm a deletion.
-- Badges: `Quote ready` navy, `Received` light navy, `Booked` navy outline with a check, `Closed` light tint,
-  `Not sent` light navy outline.
+- Badges: `Quote ready` navy, `Received` light blue, `Booked` navy outline with a check, `Closed` light grey,
+  `Not sent` light outline.
 - The tab bar: Explore (compass), Requests (clipboard), Profile (person); the active tab a filled navy icon and a bold
-  label, the others slate line icons; a 6 pt navy dot on Requests while a quote is ready.
+  label, the others slate line icons; a navy dot on Requests while a quote is ready.
 
 ## Interaction and States
 
-- Pressed: a filled pill turns `action-pressed`; cards and rows dim to 85%. Focus: a navy border. Disabled: light tint
-  with slate words. Error: a red border and red words under the field.
+- Pressed: a filled pill turns `action-pressed`; cards and rows dim to 85%. Focus: a navy border. Disabled: as each
+  screen draws it (24: a pale blue pill with blue-grey words). Error: a red border and red words under the field.
 - Loading lists show skeletons in light tint that shimmer; a pill that sends shows a small white spinner and `Sending…`.
 - Error, empty, offline and loading are separate states, never stacked on one screen.
 
 ## Accessibility
 
-- Tap targets ≥ 44 pt; contrast ≥ 4.5:1 for body text; `accessibilityLabel` on every interactive element; reading order
-  follows the visual order; nothing said by colour alone (badges have words, the selected chip is filled).
+- Tap targets ≥ 44 pt (a smaller drawn element reaches it by its hit slop); contrast ≥ 4.5:1 for words, which is why
+  the red stays #EC0017; `accessibilityLabel` on every interactive element; reading order follows the visual order;
+  nothing said by colour alone (badges have words, the selected chip is filled).
 
 ## Motion
 
@@ -2195,21 +2203,23 @@ Documented in `design/components.md`. The rules an agent most often gets wrong:
 
 ## Iconography
 
-- Lucide line icons, 1.75 stroke, 20 pt in rows and fields, 24 pt in the tab bar and on round buttons. The tab bar's
-  active icons are filled (drawn in `packages/ui`). No emoji.
+- Lucide line icons at the box and stroke each screen draws them (1.75 where none is measured). The glyphs that exist
+  only as raster crops — the cabins' seats, the family, the active tabs, the weather mark, the received check, 25's
+  bell — are traced from the design's pixels (`packages/ui/src/art-paths.ts`), never redrawn. No emoji.
 
 ## Product Content
 
 - Sentence case; buttons start with a verb (`Request a quote`, `Use these dates`, `Call your specialist`).
-- Facts are facts: a fare is one way and says so; `round trip` only on an indicative fare; `Save 48%` only where the
-  published fare is on record; no rating, saved count, weather, city description or member photo until the club has
-  them (ADR-IMPL-055). The specialist confirms availability and books by phone; no payment in the app.
+- Facts are facts: a fare says what its price covers (`one way` until the catalogue says `round trip`); a starting
+  fare says `from`; `Save 48%` only where the published fare is on record, its source beside it; a rating, a saved
+  count, the weather, a city's line and the member's photo only where the club has them (ADR-IMPL-056 §5). The
+  specialist confirms availability and books by phone; no payment in the app.
 - Errors say what happened and what to do next, calmly. No urgency, no scarcity, no exclamation marks.
 
 ## Do's and Don'ts
 
-- Do keep one filled pill per screen · Do let sheets overlap the photographs · Do use the city's own photograph
-  everywhere it appears · Do render states as separate frames.
+- Do keep one filled pill per screen · Do let sheets overlap the photographs · Do use the design's own photograph of
+  the city in each place it appears · Do render states as separate frames.
 - Don't add colours outside the palette · Don't use serif type inside · Don't print numbers the club does not have ·
   Don't touch the entry (its values are `club.ts`).
 

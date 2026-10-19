@@ -426,7 +426,8 @@ export default function RequestConfirmedScreen() {
                   testID="confirmation.seeAll"
                   accessibilityRole="button"
                   accessibilityLabel="See all fares"
-                  hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                  // A 44-pt target around the 13.3-pt row.
+                  hitSlop={{ top: 16, bottom: 16, left: 10, right: 10 }}
                   onPress={() => router.dismissTo({ pathname: "/(tabs)/explore", params: { offers: "all" } })}
                   style={({ pressed }) => [
                     styles.seeAll,

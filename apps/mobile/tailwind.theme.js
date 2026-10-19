@@ -63,7 +63,6 @@ module.exports = {
   "scrim-question": "rgba(12,15,22,0.685)",
   "grabber-question": "#E1E3E7",
   "surface-round": "#F3F3F3",
-  "action-danger": "#F34649",
   "grabber-delete": "#BFC4CB",
   "scrim-delete": "rgba(10,13,15,0.74)",
   "text-field-label": "#243961",

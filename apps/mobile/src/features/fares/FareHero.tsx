@@ -83,32 +83,46 @@ export function FareHero({
         if (next > 0 && Math.abs(next - laidOut) > 0.5) setLaidOut(next);
       }}
     >
-      <ScrollView
-        ref={scroller}
-        horizontal
-        pagingEnabled
-        scrollEnabled={several}
-        showsHorizontalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={(e) => {
-          const page = Math.round(e.nativeEvent.contentOffset.x / Math.max(1, width));
-          if (page !== current && page >= 0 && page < shown.length) setCurrent(page);
-        }}
-        style={StyleSheet.absoluteFill}
-      >
-        {(shown.length > 0 ? shown : [null]).map((page, i) => (
-          <View key={i} style={{ width, height }}>
-            <Photo
-              source={page?.source ?? null}
-              fallback={null}
-              cachePolicy={page?.cache}
-              position={page?.position}
-              style={[styles.photo, { top: h.photo.top + dy, height: h.photo.height }]}
-              testID={i === 0 ? `${testID}.photo` : undefined}
-            />
-          </View>
-        ))}
-      </ScrollView>
+      {several ? (
+        <ScrollView
+          ref={scroller}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            const page = Math.round(e.nativeEvent.contentOffset.x / Math.max(1, width));
+            if (page !== current && page >= 0 && page < shown.length) setCurrent(page);
+          }}
+          style={StyleSheet.absoluteFill}
+        >
+          {shown.map((page, i) => (
+            <View key={i} style={{ width, height }}>
+              <Photo
+                source={page.source}
+                fallback={null}
+                cachePolicy={page.cache}
+                position={page.position}
+                style={[styles.photo, { top: h.photo.top + dy, height: h.photo.height }]}
+                testID={i === 0 ? `${testID}.photo` : undefined}
+              />
+            </View>
+          ))}
+        </ScrollView>
+      ) : (
+        // One photograph (21, or 05 before its others are known): no pager to size, the photo across the hero, cut
+        // at its foot as the pager cuts it.
+        <View style={styles.clip}>
+          <Photo
+            source={shown[0]?.source ?? null}
+            fallback={null}
+            cachePolicy={shown[0]?.cache}
+            position={shown[0]?.position}
+            style={[styles.photo, { top: h.photo.top + dy, height: h.photo.height }]}
+            testID={`${testID}.photo`}
+          />
+        </View>
+      )}
       <LinearGradient
         colors={[`${tokens.colors.surfacePage}00`, tokens.colors.surfacePage, tokens.colors.surfacePage]}
         locations={[0, (fade.to - fade.from) / Math.max(1, height - fadeTop), 1]}
@@ -151,6 +165,7 @@ export function FareHero({
 
 const styles = StyleSheet.create({
   photo: { position: "absolute", left: 0, right: 0 },
+  clip: { ...StyleSheet.absoluteFill, overflow: "hidden" },
   fade: { position: "absolute", left: 0, right: 0, bottom: 0 },
   round: { position: "absolute" },
   thumbs: { position: "absolute" },

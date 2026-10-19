@@ -63,7 +63,6 @@ export const tokens = {
   "scrimQuestion": "rgba(12,15,22,0.685)",
   "grabberQuestion": "#E1E3E7",
   "surfaceRound": "#F3F3F3",
-  "actionDanger": "#F34649",
   "grabberDelete": "#BFC4CB",
   "scrimDelete": "rgba(10,13,15,0.74)",
   "textFieldLabel": "#243961",
