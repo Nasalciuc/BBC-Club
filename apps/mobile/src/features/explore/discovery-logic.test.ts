@@ -11,11 +11,10 @@ describe("popular from", () => {
     expect(popularLabel({ city: "New York" })).toBe("Popular from New York");
   });
 
-  it("shows three, as 03 does, skipping recents and the origin", () => {
-    expect(popularRows(POPULAR, [], null).map((x) => x.code)).toEqual(["LHR", "CDG", "HND"]);
-    expect(popularRows(POPULAR, [a("CDG", "Paris")], null).map((x) => x.code)).toEqual(["LHR", "HND", "DXB"]);
-    expect(popularRows(POPULAR, [], a("LHR", "London")).map((x) => x.code)).toEqual(["CDG", "HND", "DXB"]);
-    expect(popularRows([], [], null)).toEqual([]);
+  it("shows three, as 03 does, never the origin — a city searched lately stays (03: London under both)", () => {
+    expect(popularRows(POPULAR, null).map((x) => x.code)).toEqual(["LHR", "CDG", "HND"]);
+    expect(popularRows(POPULAR, a("LHR", "London")).map((x) => x.code)).toEqual(["CDG", "HND", "DXB"]);
+    expect(popularRows([], null)).toEqual([]);
   });
 });
 
@@ -24,6 +23,10 @@ describe("airportName", () => {
     expect(airportName({ name: "Heathrow" })).toBe("Heathrow Airport");
     expect(airportName({ name: "John F Kennedy International" })).toBe("John F Kennedy International");
     expect(airportName({ name: "London City Airport" })).toBe("London City Airport");
+    // 18: under `London`, the airport without its city.
+    expect(airportName({ name: "London City Airport", city: "London" })).toBe("City Airport");
+    expect(airportName({ name: "Gatwick", city: "London" })).toBe("Gatwick Airport");
+    expect(airportName({ name: "London", city: "London" })).toBe("London Airport");
     expect(airportLine({ name: "Heathrow", code: "LHR" })).toBe("Heathrow Airport  ·  LHR");
   });
 });

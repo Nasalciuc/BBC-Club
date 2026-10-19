@@ -14,7 +14,7 @@ type Props = {
 
 /**
  * Figma 320:5969 / 325:8525: the short sheet under its 28-pt headline — what the number is for, then `Phone number`
- * over one field holding the number as a person reads it (`+1 (212) 555-0148`). A number that does not parse turns the
+ * over one field holding the number as a person reads it (`+1 212 555 0142`). A number that does not parse turns the
  * border red and says so under it.
  */
 export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSheet({ profile, onSaved }, ref) {

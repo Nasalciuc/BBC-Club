@@ -1,6 +1,7 @@
 import { authClient, waitForSessionCookie } from "./client";
 import { authMessage, CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
 import { resetUnreadQuotes } from "@/features/requests/unread-quotes-store";
+import { clearSaved } from "@/features/saved/saved";
 import { fetchPasswordStatus, postAccountPassword } from "@/lib/api";
 import { unregisterPushDevice } from "@/lib/push";
 import { clearQueue } from "@/lib/queue";
@@ -8,11 +9,13 @@ import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-k
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
 
-/** Unregister push, drop pending queue and the Requests dot's number, clear onboarded — then auth ends. */
+/** Unregister push, drop pending queue, the Requests dot's number and what was saved, clear onboarded — then auth
+ *  ends. */
 async function clearLocalSession(): Promise<void> {
   await unregisterPushDevice().catch(() => undefined);
   clearQueue();
   resetUnreadQuotes();
+  clearSaved();
   appStorage.remove(ONBOARDED_KEY);
   appStorage.remove(PENDING_PASSWORD_KEY);
 }

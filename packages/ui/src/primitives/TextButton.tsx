@@ -3,30 +3,44 @@ import { Icon } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 
+type Tone = "primary" | "secondary" | "link";
+
 type Props = {
   label: string;
   onPress: () => void;
   testID: string;
   /** `See all ›`. */
   chevron?: boolean;
-  /** `primary` navy (`Cancel`, `Clear all`, `See all`), `secondary` slate (`Skip`, `Not now`). */
-  tone?: "primary" | "secondary";
-  /** `button` 17 Semibold for `Skip` and `Not now` under a pill; `body` 16 for the header actions. */
-  size?: "body" | "button";
+  /**
+   * `primary` navy (`See all`, `Done`), `secondary` slate (`Skip`, `Not now`), `link` the deeper blue Search draws
+   * `Cancel` and `Clear all` in (03, 18).
+   */
+  tone?: Tone;
+  /** The words' style: `link` 13.5 (`Cancel`), `linkSm` 12 Medium (`Clear all`, `See all`), `button` (`Skip`). */
+  size?: "link" | "linkSm" | "button";
   disabled?: boolean;
 };
 
-/** The text buttons of sheet 38: the words alone, in a 44-pt target. */
+const COLOR: Record<Tone, string> = {
+  primary: tokens.colors.textPrimary,
+  secondary: tokens.colors.textSecondary,
+  link: tokens.colors.textLink,
+};
+
+/**
+ * The text buttons of sheet 38: the words alone. The words are the button's box — the screens place them where the
+ * images do — and the target reaches 44 pt around them by its hit slop.
+ */
 export function TextButton({
   label,
   onPress,
   testID,
   chevron = false,
   tone = "primary",
-  size = "body",
+  size = "link",
   disabled = false,
 }: Props) {
-  const color = tone === "primary" ? tokens.colors.textPrimary : tokens.colors.textSecondary;
+  const color = COLOR[tone];
   return (
     <Pressable
       testID={testID}
@@ -34,22 +48,26 @@ export function TextButton({
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
       disabled={disabled}
-      hitSlop={6}
+      hitSlop={HIT_SLOP}
       onPress={onPress}
       style={({ pressed }) => [styles.hit, (pressed || disabled) && styles.pressed]}
     >
       <View style={styles.row}>
-        <Text style={[size === "button" ? styles.button : styles.body, { color }]}>{label}</Text>
-        {chevron ? <Icon name="chevron" size={18} color={color} strokeWidth={2} /> : null}
+        <Text style={[styles[size], { color }]}>{label}</Text>
+        {chevron ? <Icon name="chevron" size={16} color={color} strokeWidth={2} /> : null}
       </View>
     </Pressable>
   );
 }
 
+/** Around a 16-pt line of words: 44 pt tall, and wide enough for a short word like `Done`. */
+const HIT_SLOP = { top: 14, bottom: 14, left: 10, right: 10 } as const;
+
 const styles = StyleSheet.create({
-  hit: { minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "center" },
+  hit: { justifyContent: "center", alignItems: "center" },
   row: { flexDirection: "row", alignItems: "center", gap: tokens.space.xxs },
-  body: { ...rn(tokens.type.body) },
+  link: { ...rn(tokens.type.link) },
+  linkSm: { ...rn(tokens.type.linkSm) },
   button: { ...rn(tokens.type.button) },
   pressed: { opacity: 0.55 },
 });

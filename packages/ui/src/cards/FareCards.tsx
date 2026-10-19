@@ -5,7 +5,7 @@ import type { PricePair } from "@bbc/shared/api/v1/proposals";
 import { Icon } from "../icons";
 import { RouteMap } from "../globe/RouteMap";
 import { SavePill } from "../primitives/SavePill";
-import { rn } from "../rn-type";
+import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { ONE_WAY, arriveYmd, dayText, departYmd } from "./flight-facts";
 
@@ -55,6 +55,72 @@ export function YourFareCard({
     </View>
   );
 }
+
+/**
+ * The quote's fare on a request (11), measured (card top T): white, radius 11.5, the card shadow; the words 18.6 pt in.
+ * `Your fare` with its baseline T+21.4, the price T+57.3; where the published fare is on record, it struck through at
+ * T+83.6 with `Save 48%` 14.3 pt after it (78.5 × 21.2, its top T+66.8) and the fare's source after the pill — a
+ * reference price always carries its source (DESIGN.md). The card's foot 8.7 pt under the pill (96.7 tall).
+ */
+export function QuoteFareCard({
+  price,
+  percent,
+  testID,
+}: {
+  price: Pick<PricePair, "offer" | "published" | "publishedSource" | "currency">;
+  percent: number | null;
+  testID?: string;
+}) {
+  const amount = money(price.offer, price.currency);
+  const published = price.published != null ? money(price.published, price.currency) : null;
+  const source = published ? price.publishedSource?.trim() || null : null;
+  const spoken = [
+    `Your fare ${amount}`,
+    published ? `published at ${published}` : null,
+    source,
+    percent ? `save ${percent}%` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return (
+    <View style={styles.quote} testID={testID} accessible accessibilityLabel={spoken}>
+      <Text style={styles.quoteLabel}>Your fare</Text>
+      <Text style={styles.quotePrice} numberOfLines={1}>
+        {amount}
+      </Text>
+      {published ? (
+        <View style={styles.quoteWasRow}>
+          <Text style={styles.quoteWas}>{published}</Text>
+          {percent ? (
+            <View style={styles.quoteSave}>
+              <Text style={styles.quoteSaveText}>{`Save ${percent}%`}</Text>
+            </View>
+          ) : null}
+          {source ? (
+            <Text style={styles.quoteSource} numberOfLines={1}>
+              {source}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const QUOTE = {
+  radius: 11.5,
+  left: 18.6,
+  label: 21.4,
+  price: 57.3,
+  was: 83.6,
+  saveTop: 66.8,
+  saveH: 21.2,
+  foot: 8.7,
+} as const;
+const quoteLabel = tokens.type.fareLabel;
+const quotePrice = tokens.type.quotePrice;
+const quoteWas = tokens.type.fareWas;
+const quoteSave = tokens.type.save;
 
 /**
  * `Flight overview` (05; sheet 40 · 07): the airline — its logo where the fare has one, its name — then both airports,
@@ -156,6 +222,53 @@ export function RouteCard({ from, to, testID }: { from: Place; to: Place; testID
 }
 
 const styles = StyleSheet.create({
+  quote: {
+    borderRadius: QUOTE.radius,
+    backgroundColor: tokens.colors.surfaceCard,
+    paddingLeft: QUOTE.left,
+    paddingRight: tokens.space.md,
+    paddingBottom: tokens.space.md,
+    ...tokens.elevation.card,
+  },
+  quoteLabel: {
+    ...rn(quoteLabel),
+    color: tokens.colors.textSecondary,
+    marginTop: QUOTE.label - baselineOffset(quoteLabel),
+  },
+  quotePrice: {
+    ...rn(quotePrice),
+    color: tokens.colors.textPrimary,
+    marginTop: QUOTE.price - QUOTE.label - belowBaseline(quoteLabel) - baselineOffset(quotePrice),
+  },
+  // The row's box starts at the pill's top: the struck price and the source sit on the price's baseline in it.
+  quoteWasRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: QUOTE.saveTop - QUOTE.price - belowBaseline(quotePrice),
+    marginBottom: QUOTE.foot - tokens.space.md,
+  },
+  quoteWas: {
+    ...rn(quoteWas),
+    color: tokens.colors.textMuted,
+    textDecorationLine: "line-through",
+    marginTop: QUOTE.was - QUOTE.saveTop - baselineOffset(quoteWas),
+  },
+  quoteSave: {
+    height: QUOTE.saveH,
+    marginLeft: 13.6,
+    paddingHorizontal: 12,
+    borderRadius: QUOTE.saveH / 2,
+    backgroundColor: tokens.colors.surfaceSave,
+    justifyContent: "center",
+  },
+  quoteSaveText: { ...rn(quoteSave), color: tokens.colors.textPrimary },
+  quoteSource: {
+    ...rn(tokens.type.finePrint),
+    color: tokens.colors.textSecondary,
+    flexShrink: 1,
+    marginLeft: 10,
+    marginTop: QUOTE.was - QUOTE.saveTop - baselineOffset(tokens.type.finePrint),
+  },
   card: {
     flexDirection: "row",
     alignItems: "center",

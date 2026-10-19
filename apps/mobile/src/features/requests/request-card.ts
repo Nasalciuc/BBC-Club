@@ -76,17 +76,23 @@ export function detailTitle(r: { city?: string | null; route: string }, originCi
   return `${originCity?.trim() || codes.from} to ${city}`;
 }
 
+/** Between two facts on a request's page: the dot with two spaces either side, as 11 and 30–33 set it. */
+export const DETAIL_SEPARATOR = "  ·  ";
+
 /**
- * The facts under the detail's title (11): the days and the trip, then the route, the cabin and the travelers. 11 names
- * the airline where the cabin is: a request carries no airline (ADR-IMPL-055 report).
+ * The facts under the detail's title (11, 30–33): the days and the trip; then the route, the airline the request was
+ * made for — where the server recorded one (ADR-IMPL-056) — and the travelers. The images print no cabin there.
  */
 export function detailLines(
-  r: Pick<RequestVM, "route" | "dates" | "cabin" | "passengers"> & { tripType?: TripType },
+  r: Pick<RequestVM, "route" | "dates" | "passengers"> & {
+    tripType?: TripType;
+    carrier?: { name: string } | null;
+  },
 ): string[] {
-  const first = [spacedDates(r.dates), tripText(r.tripType)].filter(Boolean).join(" · ");
-  const second = [r.route, r.cabin === "first" ? "First" : "Business", travelersText(r.passengers)]
+  const first = [spacedDates(r.dates), tripText(r.tripType)].filter(Boolean).join(DETAIL_SEPARATOR);
+  const second = [r.route, r.carrier?.name?.trim() || null, travelersText(r.passengers)]
     .filter(Boolean)
-    .join(" · ");
+    .join(DETAIL_SEPARATOR);
   return [first, second].filter(Boolean);
 }
 
@@ -194,7 +200,7 @@ export function queuedView(q: {
     city: q.city ?? null,
     tripType: q.body.tripType,
     phone: q.body.contact.phone || null,
-    dates: requestDates(q.body.legs),
+    dates: requestDates(q.body.legs, { year: true }),
     cabin: q.body.cabin,
     passengers: q.body.passengers,
     priceAtRequest: q.body.priceAtRequest ?? null,

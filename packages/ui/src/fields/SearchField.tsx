@@ -21,7 +21,7 @@ type Props = {
   onChangeText?: (text: string) => void;
   autoFocus?: boolean;
   /**
-   * `bar`: Explore's white search bar with the card shadow (02). `field`: light tint while searching (03, 14, 18) — the
+   * `bar`: Explore's white search bar with the card shadow (02). `field`: light tint while searching (03, 18, 14) — the
    * default for an editable field.
    */
   tone?: "bar" | "field";
@@ -30,9 +30,23 @@ type Props = {
   testID: string;
 };
 
+/** 03 / 18: the field 36.5 pt tall, radius 10.5; the magnifier's box 10.5 pt in; the words 39 pt in. */
+const FIELD = {
+  height: 36.5,
+  radius: 10.5,
+  iconLeft: 10.5,
+  icon: 19.5,
+  textLeft: 39,
+  clear: 16,
+  clearRight: 12,
+} as const;
+/** 03: `Cancel` 16 pt right of the field. */
+const CANCEL_GAP = 16.1;
+
 /**
- * The search field (sheet 39): the magnifier, the words; filled, a clear button (a slate circle with a white ×) at the
- * right edge; `Cancel` beside the field while searching. Not editable, it is a button that opens the search.
+ * The search field (sheet 39; measured on 03 and 18): the magnifier, the words; filled, a clear button (a light slate
+ * circle with a white ×) at the right edge; `Cancel` beside the field while searching. Not editable, it is a button
+ * that opens the search.
  */
 export function SearchField({
   placeholder,
@@ -55,16 +69,17 @@ export function SearchField({
   const shownPlaceholder = disabled ? (disabledReason ?? placeholder) : placeholder;
   const frame = [
     look === "bar" ? styles.bar : styles.field,
-    focused && !error && look === "field" && styles.focused,
+    focused && !error && look === "bar" && styles.focused,
     error && styles.error,
     disabled && styles.disabled,
   ];
   const iconColor = look === "bar" ? tokens.colors.textPrimary : tokens.colors.textSecondary;
   const textStyle = look === "bar" ? styles.barText : styles.fieldText;
+  const icon = <Icon name="search" size={look === "bar" ? 24 : FIELD.icon} color={iconColor} strokeWidth={2} />;
 
   const field = editable ? (
     <View style={[...frame, styles.grow]} accessibilityState={{ disabled }}>
-      <Icon name="search" size={look === "bar" ? 24 : 22} color={iconColor} strokeWidth={2} />
+      {icon}
       <SheetTextInput
         testID={testID}
         editable={!disabled}
@@ -74,6 +89,7 @@ export function SearchField({
         onBlur={() => setFocused(false)}
         placeholder={shownPlaceholder}
         placeholderTextColor={tokens.colors.textSecondary}
+        selectionColor={tokens.colors.textPrimary}
         style={[textStyle, styles.input]}
         autoCorrect={false}
         autoCapitalize="none"
@@ -91,7 +107,7 @@ export function SearchField({
       onPress={disabled ? undefined : onPress}
       style={({ pressed }) => [...frame, styles.grow, pressed && !disabled && styles.pressed]}
     >
-      <Icon name="search" size={look === "bar" ? 24 : 22} color={iconColor} strokeWidth={2} />
+      {icon}
       {filled ? (
         <Text style={[textStyle, styles.filled]} numberOfLines={1}>
           {`${value.prefix ?? ""}${value.text}`}
@@ -109,27 +125,23 @@ export function SearchField({
   return (
     <View style={styles.withCancel}>
       {field}
-      <TextButton testID={`${testID}.cancel`} label="Cancel" onPress={onCancel} />
+      <TextButton testID={`${testID}.cancel`} label="Cancel" tone="link" onPress={onCancel} />
     </View>
   );
 }
 
-/** The clear circle, 22 across, and the 44-pt target it reaches to. */
-const CLEAR = 22;
-const TARGET = 44;
-
-/** The clear button of sheet 39: a slate circle with a white ×, in a 44-pt target. */
+/** 18: the clear button — a 16-pt light slate circle with a white ×, 12 pt from the field's edge; a 44-pt target. */
 function ClearButton({ testID, onPress }: { testID: string; onPress: () => void }) {
   return (
     <Pressable
       testID={`${testID}.clear`}
       accessibilityRole="button"
       accessibilityLabel="Clear"
-      hitSlop={(TARGET - CLEAR) / 2}
+      hitSlop={14}
       onPress={onPress}
       style={({ pressed }) => [styles.clear, pressed && styles.clearPressed]}
     >
-      <Icon name="x" size={14} color={tokens.colors.textOnPhoto} strokeWidth={3} />
+      <Icon name="x" size={10} color={tokens.colors.textOnPhoto} strokeWidth={2.4} />
     </Pressable>
   );
 }
@@ -146,34 +158,35 @@ const styles = StyleSheet.create({
     ...tokens.elevation.card,
   },
   field: {
-    minHeight: 44,
-    borderRadius: tokens.radius.md,
+    minHeight: FIELD.height,
+    borderRadius: FIELD.radius,
     backgroundColor: tokens.colors.surfaceTint,
-    borderWidth: 1,
-    borderColor: tokens.colors.surfaceTint,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.colors.borderFaint,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: tokens.space.md,
-    gap: tokens.space.sm,
+    paddingLeft: FIELD.iconLeft,
+    paddingRight: FIELD.clearRight,
+    gap: FIELD.textLeft - FIELD.iconLeft - FIELD.icon,
   },
   grow: { flexGrow: 1, flexShrink: 1 },
-  focused: { borderColor: tokens.colors.borderDefault },
+  focused: { borderColor: tokens.colors.borderStrong },
   error: { borderColor: tokens.colors.statusDanger },
   disabled: { opacity: 0.4 },
   pressed: { opacity: 0.92 },
   barText: { ...rn(tokens.type.bodyLg), flex: 1 },
-  fieldText: { ...rn(tokens.type.body), flex: 1 },
+  fieldText: { ...rn(tokens.type.field), flex: 1 },
   placeholder: { color: tokens.colors.textSecondary },
   filled: { color: tokens.colors.textPrimary },
   input: { color: tokens.colors.textPrimary, minWidth: 0, padding: 0, margin: 0, outlineWidth: 0 },
   clear: {
-    width: CLEAR,
-    height: CLEAR,
+    width: FIELD.clear,
+    height: FIELD.clear,
     borderRadius: tokens.radius.pill,
-    backgroundColor: tokens.colors.textSecondary,
+    backgroundColor: tokens.colors.fillMuted,
     alignItems: "center",
     justifyContent: "center",
   },
   clearPressed: { opacity: 0.6 },
-  withCancel: { flexDirection: "row", alignItems: "center", gap: tokens.space.sm },
+  withCancel: { flexDirection: "row", alignItems: "center", gap: CANCEL_GAP },
 });

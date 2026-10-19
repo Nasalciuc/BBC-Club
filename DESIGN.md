@@ -4,24 +4,45 @@ name: BBC-Club
 description: Private business-class travel club, 3.0. The entry (Welcome, Sign in, Join, Verify, Set password, Reset) stays the 1.0 night cabin, frozen in apps/mobile/src/constants/club.ts. Inside, from onboarding on, the club is a bright 2026 travel app — off-white pages, white cards with soft shadows, daylight city photography, sheets with 24 pt corners that overlap the photographs, round white buttons over photos, navy pills and chips, thin line icons, one sans-serif (Inter). Navy is the only accent; red only for Sign out, Delete account and errors.
 
 colors:
-  primary: "#1E293B"
-  action-primary: "#1E293B"
-  action-pressed: "#0F172A"
-  surface-page: "#FAFAF8"
+  primary: "#1D2D46"
+  action-primary: "#1D2D46"
+  action-pressed: "#14223A"
+  surface-page: "#FFFFFF"
   surface-card: "#FFFFFF"
-  surface-tint: "#F1F5F9"
-  border-default: "#E2E8F0"
-  text-primary: "#1E293B"
-  text-secondary: "#64748B"
-  text-on-tint: "#475569"
+  surface-tint: "#F0F2F7"
+  surface-tint-soft: "#F5F7FA"
+  surface-tint-blue: "#DBE8F9"
+  surface-selected: "#F4F8FE"
+  surface-closed: "#E9ECF1"
+  surface-notice: "#F1F5FA"
+  surface-sheet: "#FCFCFC"
+  surface-save: "#D2E2FB"
+  notice-circle: "#E1E8F2"
+  call-circle: "#E9EFF7"
+  step-ring: "#C3D9FC"
+  step-line: "#D0D4DE"
+  photo-button: "rgba(255,255,255,0.9)"
+  info-mark: "#364966"
+  border-default: "#E8EAEF"
+  border-faint: "#EDEEF2"
+  border-strong: "#C5CBD8"
+  text-primary: "#0A1B37"
+  text-secondary: "#5F6A7F"
+  text-muted: "#768095"
+  text-on-tint: "#48546A"
+  text-on-closed: "#28354B"
+  text-link: "#0A1F6B"
+  fill-muted: "#8A90A4"
   text-on-photo: "#FFFFFF"
-  status-danger: "#EF4444"
-  status-danger-text: "#DC2626"
-  status-danger-tint: "#FEF2F2"
-  sky: "#BAD2EB"
-  scrim: "rgba(15,23,42,0.40)"
-  photo-veil: "rgba(15,23,42,0.45)"
-  shadow: "#1E293B"
+  status-danger: "#EC0017"
+  status-danger-text: "#EC0017"
+  status-danger-tint: "#FDEDEF"
+  sky: "#C9E4FD"
+  sky-light: "#E6F2FD"
+  scrim: "rgba(0,0,0,0.62)"
+  photo-veil: "rgba(5,12,28,0.55)"
+  shadow: "#0F172A"
+  art-sun: "#FDB20F"
   globe-ocean: "#1B5E9E"
   globe-ocean-deep: "#0B3F73"
   globe-land: "#8FA77A"
@@ -30,155 +51,461 @@ colors:
 
 typography:
   display:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 36px
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 36.25px
+    fontWeight: 700
+    lineHeight: 1.06
+    letterSpacing: -1.2px
+  display-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 38px
+    fontWeight: 700
+    lineHeight: 1.06
+    letterSpacing: 0px
+  question:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 32px
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: 0px
+  headline:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 28.3px
     fontWeight: 700
     lineHeight: 1.12
-    letterSpacing: -0.8px
-  headline:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 30px
+    letterSpacing: -0.05px
+  title-lg:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 23.5px
     fontWeight: 700
-    lineHeight: 1.16
-    letterSpacing: -0.6px
+    lineHeight: 1.15
+    letterSpacing: 0px
   title:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 24px
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 21px
     fontWeight: 700
-    lineHeight: 1.22
-    letterSpacing: -0.4px
+    lineHeight: 1.18
+    letterSpacing: 0px
   title-sm:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 20px
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.3px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.1px
+  subtitle:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.85px
     fontWeight: 700
     lineHeight: 1.25
-    letterSpacing: -0.3px
-  subtitle:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 17px
-    fontWeight: 600
-    lineHeight: 1.3
-    letterSpacing: -0.2px
+    letterSpacing: 0.1px
   greeting:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 26px
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 24px
     fontWeight: 400
-    lineHeight: 1.2
-    letterSpacing: -0.4px
-  body-lg:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 18px
-    fontWeight: 400
-    lineHeight: 1.4
-    letterSpacing: -0.2px
-  body:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 16px
-    fontWeight: 400
-    lineHeight: 1.4
-    letterSpacing: -0.1px
-  body-strong:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 16px
-    fontWeight: 600
-    lineHeight: 1.4
-    letterSpacing: -0.1px
-  body-sm:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 14px
-    fontWeight: 400
-    lineHeight: 1.4
+    lineHeight: 1.15
     letterSpacing: 0px
-  label-strong:
-    fontFamily: "Inter, system-ui, sans-serif"
+  body-lg:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.7px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.41px
+  body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.37
+    letterSpacing: 0px
+  body-strong:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 14px
     fontWeight: 600
-    lineHeight: 1.3
-    letterSpacing: -0.1px
-  caption:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 12px
+    lineHeight: 1.35
+    letterSpacing: 0px
+  body-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13px
     fontWeight: 400
     lineHeight: 1.35
     letterSpacing: 0px
-  label:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 11px
-    fontWeight: 600
+  field:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.95px
+    fontWeight: 400
     lineHeight: 1.3
-    letterSpacing: 1.6px
-  price-display:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 36px
-    fontWeight: 700
-    lineHeight: 1.12
-    letterSpacing: -0.8px
-    fontFeature: "'tnum'"
-  price:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 24px
-    fontWeight: 700
-    lineHeight: 1.17
-    letterSpacing: -0.4px
-    fontFeature: "'tnum'"
-  price-sm:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 18px
-    fontWeight: 700
-    lineHeight: 1.22
-    letterSpacing: -0.2px
-    fontFeature: "'tnum'"
-  button:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 17px
-    fontWeight: 600
+    letterSpacing: 0.4px
+  link:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.1px
+    fontWeight: 400
     lineHeight: 1.3
-    letterSpacing: -0.2px
-  tab:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 12px
+    letterSpacing: 0.18px
+  link-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.2px
     fontWeight: 500
     lineHeight: 1.3
-    letterSpacing: 0px
-  tab-active:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 12px
+    letterSpacing: -0.15px
+  row-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.9px
     fontWeight: 700
     lineHeight: 1.3
-    letterSpacing: 0px
-  wordmark:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 17px
+    letterSpacing: -0.18px
+  row-title-lg:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.5px
     fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: 0px
+  row-meta:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 400
     lineHeight: 1.3
-    letterSpacing: -0.4px
-  pin:
-    fontFamily: "Inter, system-ui, sans-serif"
-    fontSize: 13px
+    letterSpacing: 0px
+  card-meta:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.9px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.44px
+  fact:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.7px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.3px
+  request-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20.6px
     fontWeight: 700
     lineHeight: 1.15
-    letterSpacing: -0.1px
-  pin-detail:
-    fontFamily: "Inter, system-ui, sans-serif"
+    letterSpacing: -0.5px
+  request-route:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.75px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.5px
+  request-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.35px
+    fontFeature: "'tnum'"
+  notice-title-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.2px
+    fontWeight: 700
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  notice-body-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.7px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0px
+  detail-facts:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.25px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.4px
+  detail-meta:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.4px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.6px
+  detail-section:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.58px
+  step:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.15px
+    fontWeight: 500
+    lineHeight: 1.25
+    letterSpacing: 0.28px
+  step-todo:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.8px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.67px
+  step-date:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.6px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.46px
+  notice-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.5px
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: 0.05px
+  notice-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.8px
+    fontWeight: 400
+    lineHeight: 1.23
+    letterSpacing: 0.4px
+  detail-caption:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 13px
     fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.46px
+  fare-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.2px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.23px
+  quote-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 33.9px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -1.2px
+    fontFeature: "'tnum'"
+  fare-was:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.25px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.28px
+    fontFeature: "'tnum'"
+  save:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 500
+    lineHeight: 1.2
+    letterSpacing: 0.13px
+  call-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.15px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.34px
+  call-phone:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.85px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.43px
+  fine-print:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.9px
+    fontWeight: 400
+    lineHeight: 1.275
+    letterSpacing: 0.2px
+  button-detail:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.7px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.32px
+  badge-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 500
+    lineHeight: 1.2
+    letterSpacing: -0.3px
+  badge:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.7px
+    fontWeight: 500
+    lineHeight: 1.2
+    letterSpacing: -0.2px
+  badge-strong:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.95px
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: 0.3px
+  chip:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.3px
+    fontWeight: 500
+    lineHeight: 1.2
+    letterSpacing: -0.3px
+  chip-selected:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: 0.25px
+  chip-trip:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: 0px
+  label-strong:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0px
+  caption:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0px
+  caption-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0px
+  label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.5px
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: 1.2px
+  price-display:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 34px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: 0px
+    fontFeature: "'tnum'"
+  price-lg:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 26.5px
+    fontWeight: 600
+    lineHeight: 1.1
+    letterSpacing: 0px
+    fontFeature: "'tnum'"
+  price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17px
+    fontWeight: 700
     lineHeight: 1.15
+    letterSpacing: 0px
+    fontFeature: "'tnum'"
+  price-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.45px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.28px
+    fontFeature: "'tnum'"
+  button:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.5px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0px
+  button-bold:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: 0px
+  button-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.5px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0px
+  button-lg:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 18.1px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.15px
+  display-lg:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 42.5px
+    fontWeight: 700
+    lineHeight: 1.06
+    letterSpacing: -0.4px
+  subtitle-lg:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 18.25px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.85px
+  empty-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 32.5px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -1.3px
+  empty-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.5px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0.2px
+  empty-title-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 18px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0px
+  empty-body-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.5px
+    fontWeight: 400
+    lineHeight: 1.28
+    letterSpacing: 0px
+  tab:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.75px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.38px
+  tab-active:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.25px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.4px
+  wordmark:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: 0px
+  pin:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.5px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0px
+  pin-detail:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.5px
+    fontWeight: 400
+    lineHeight: 1.2
     letterSpacing: 0px
 
 rounded:
+  xxs: 6px
   xs: 8px
-  sm: 12px
-  md: 16px
-  lg: 20px
+  sm: 10px
+  md: 11px
+  lg: 16px
   xl: 24px
   pill: 9999px
 
 spacing:
+  hair: 2px
   xxs: 4px
   xs: 8px
   sm: 12px
   md: 16px
-  gutter: 20px
+  gutter: 15px
   lg: 24px
   xl: 32px
   xxl: 40px

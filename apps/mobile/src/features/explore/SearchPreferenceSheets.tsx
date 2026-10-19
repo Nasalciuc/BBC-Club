@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Chip, ModalSheet, type ModalSheetHandle, Stepper, tokens, rn } from "@bbc/ui";
+import { Button, CabinCard, ModalSheet, type ModalSheetHandle, Stepper, tokens, rn } from "@bbc/ui";
 
 import { type Cabin, type Passengers, travelersLabel, withAdults } from "./travel-preferences";
 
@@ -36,8 +36,7 @@ export const SearchCabinSheet = forwardRef<CabinSheetHandle, { onPick: (cabin: C
     }
 
     return (
-      // No Figma frame of its own: Profile's cabin sheet (238:4710) is the model — the tall sheet, the two cabins one
-      // under the other, 56 pt each, 24 apart.
+      // No image of its own: onboarding's two cabin cards side by side (01), as Profile's cabin sheet.
       <ModalSheet
         ref={modalRef}
         title="Cabin"
@@ -46,20 +45,24 @@ export const SearchCabinSheet = forwardRef<CabinSheetHandle, { onPick: (cabin: C
         insets={insets}
       >
         <Text style={styles.body}>For this search. Your usual cabin stays in your profile.</Text>
-        <Chip
-          testID="explore.cabin.business"
-          label="Business"
-          size="lg"
-          selected={cabin === "business"}
-          onPress={() => pick("business")}
-        />
-        <Chip
-          testID="explore.cabin.first"
-          label="First"
-          size="lg"
-          selected={cabin === "first"}
-          onPress={() => pick("first")}
-        />
+        <View style={styles.cabins}>
+          <CabinCard
+            testID="explore.cabin.business"
+            icon="seat"
+            title="Business"
+            line="More space, a better journey"
+            selected={cabin === "business"}
+            onPress={() => pick("business")}
+          />
+          <CabinCard
+            testID="explore.cabin.first"
+            icon="seat-first"
+            title="First"
+            line="The highest level of comfort"
+            selected={cabin === "first"}
+            onPress={() => pick("first")}
+          />
+        </View>
       </ModalSheet>
     );
   },
@@ -130,5 +133,6 @@ export const SearchTravelersSheet = forwardRef<TravelersSheetHandle, TravelersPr
 
 const styles = StyleSheet.create({
   body: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  cabins: { flexDirection: "row", gap: 7.7 },
   caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
 });

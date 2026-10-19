@@ -18,7 +18,7 @@ import {
 } from "./request-view-logic";
 
 describe("requestView — one image per state", () => {
-  test("just received (30): the shorter line, the number we call, no call yet", () => {
+  test("just received (30): the message, the number we call and the call", () => {
     const v = requestView("just_received");
     expect(v.badge).toBe("received");
     expect(v.notice).toEqual({
@@ -27,16 +27,11 @@ describe("requestView — one image per state", () => {
       icon: "phone",
     });
     expect(v.caption).toBe("We have your travel details.");
-    expect([v.titleBadge, v.callback, v.fare, v.call, v.sendNow]).toEqual([false, true, false, null, false]);
+    expect([v.titleBadge, v.callback, v.fare, v.call, v.sendNow]).toEqual([false, true, false, "specialist", false]);
   });
 
-  test("received: the number we call, no call yet — the call follows the state (ADR-IMPL-055 §9)", () => {
-    const v = requestView("received");
-    expect(v.badge).toBe("received");
-    expect(v.notice?.title).toBe("We have your request.");
-    expect(v.notice?.body).toBe("A specialist will call shortly to discuss your flight.");
-    expect(v.caption).toBe("We have your travel details.");
-    expect([v.titleBadge, v.callback, v.call]).toEqual([false, true, null]);
+  test("received (30): the same page as just received — the call as 30 draws it (ADR-IMPL-056 §7)", () => {
+    expect(requestView("received")).toEqual(requestView("just_received"));
   });
 
   test("specialist review: the message and the steps — no number to call yet", () => {
@@ -71,22 +66,22 @@ describe("requestView — one image per state", () => {
     expect(withFare).toEqual(["quoted"]);
   });
 
-  test("booked (31): the message, no number, no call — the call follows the state", () => {
+  test("booked (31): the message, the number we call and the call (ADR-IMPL-056 §7)", () => {
     const v = requestView("booked");
     expect(v.badge).toBe("booked");
     expect(v.notice?.title).toBe("Your specialist completed this booking by phone.");
     expect(v.notice?.body).toBe("Your itinerary was sent by email.");
     expect(v.caption).toBe("Your specialist confirms your flights.");
-    expect([v.titleBadge, v.callback, v.call]).toEqual([false, false, null]);
+    expect([v.titleBadge, v.callback, v.call]).toEqual([false, true, "specialist"]);
   });
 
-  test("closed (33): the Closed badge by the title, the day it closed — and no call (ADR-IMPL-055 §9)", () => {
+  test("closed (33): the Closed badge by the title, the day it closed, the number we call and the call", () => {
     const v = requestView("closed", "2026-10-03T15:00:00.000Z", "UTC");
     expect(v.badge).toBe("closed");
     expect(v.titleBadge).toBe(true);
     expect(v.notice).toEqual({ title: "This request is closed.", body: null, icon: "info" });
-    expect(v.closedLine).toBe("Closed · Oct 3");
-    expect([v.callback, v.call, v.sendNow]).toEqual([false, null, false]);
+    expect(v.closedLine).toBe("Closed  ·  Oct 3");
+    expect([v.callback, v.call, v.sendNow]).toEqual([true, "specialist", false]);
   });
 
   test("waiting on the phone (32): Not sent by the title, saved, Send now", () => {
@@ -273,8 +268,8 @@ describe("closedAt, closedLine and shortDay", () => {
   });
 
   test("the day the member lived it: 22:30 in New York is still Oct 2 there", () => {
-    expect(closedLine("2026-10-03T02:30:00.000Z", "America/New_York")).toBe("Closed · Oct 2");
-    expect(closedLine("2026-10-03T02:30:00.000Z", "UTC")).toBe("Closed · Oct 3");
+    expect(closedLine("2026-10-03T02:30:00.000Z", "America/New_York")).toBe("Closed  ·  Oct 2");
+    expect(closedLine("2026-10-03T02:30:00.000Z", "UTC")).toBe("Closed  ·  Oct 3");
     expect(shortDay(null)).toBeNull();
   });
 });

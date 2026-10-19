@@ -1,6 +1,6 @@
 export { tokens } from "./tokens";
-export { Icon, icons, type IconName, type IconSize } from "./icons";
-export { rn } from "./rn-type";
+export { ArtGlyph, CheckMark, Icon, TAB_ACTIVE, WeatherMark, icons, type IconName, type IconSize } from "./icons";
+export { baselineOffset, belowBaseline, rn } from "./rn-type";
 
 export { Avatar } from "./primitives/Avatar";
 export { BackButton } from "./primitives/BackButton";
@@ -25,7 +25,13 @@ export { CardSkeleton, RowSkeleton, Skeleton } from "./primitives/Skeleton";
 export { StatusBadge, statusCopy, type BadgeStatus } from "./primitives/StatusBadge";
 export { Stepper } from "./primitives/Stepper";
 export { TextButton } from "./primitives/TextButton";
-export { Timeline, type StepState, type TimelineStep } from "./primitives/Timeline";
+export {
+  TIMELINE_HEIGHT,
+  TIMELINE_LABEL_BASELINE,
+  Timeline,
+  type StepState,
+  type TimelineStep,
+} from "./primitives/Timeline";
 export { Toggle } from "./primitives/Toggle";
 export { Wordmark } from "./primitives/Wordmark";
 
@@ -37,7 +43,7 @@ export { FieldError, TextField } from "./fields/TextField";
 
 export { CarouselRow, OfferCard, OfferCardWide } from "./cards/OfferCard";
 export { FlightCard } from "./cards/FlightCard";
-export { FlightOverview, RouteCard, YourFareCard } from "./cards/FareCards";
+export { FlightOverview, QuoteFareCard, RouteCard, YourFareCard } from "./cards/FareCards";
 export { TripCard, TripPhotoCard, TripSummaryCard } from "./cards/TripCards";
 export { ONE_WAY, arriveYmd, cabinText, dayText, departYmd, durationText, flightFacts } from "./cards/flight-facts";
 export { PopularCard } from "./cards/PopularCard";

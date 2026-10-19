@@ -78,8 +78,8 @@ describe("splitStoredPhone / callingCodeLabel", () => {
 });
 
 describe("displayPhone — the number we will call, as a person reads it", () => {
-  it("North America after +1 in its national shape (Figma 233:4245)", () => {
-    expect(displayPhone("+12125550148")).toBe("+1 (212) 555-0148");
+  it("North America in international form with spaces, as 3.0 prints it (11, 34)", () => {
+    expect(displayPhone("+12125550142")).toBe("+1 212 555 0142");
   });
   it("elsewhere in international form", () => {
     expect(displayPhone("+37369123456")).toBe("+373 691 23 456");

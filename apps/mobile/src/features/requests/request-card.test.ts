@@ -74,14 +74,18 @@ describe("titles", () => {
 });
 
 describe("detailLines (11, 30–33)", () => {
-  it("the days and the trip, then the route, the cabin and the travelers", () => {
-    expect(detailLines(london)).toEqual(["Oct 12 – 19 · Round trip", "JFK → LHR · Business · 1 adult"]);
+  it("the days and the trip, then the route and the travelers, the dot set wide as the images do", () => {
+    expect(detailLines(london)).toEqual(["Oct 12 – 19  ·  Round trip", "JFK → LHR  ·  1 adult"]);
   });
-  it("first class says so; an older server's missing trip type is left out", () => {
-    expect(detailLines({ ...london, cabin: "first", tripType: undefined })).toEqual([
-      "Oct 12 – 19",
-      "JFK → LHR · First · 1 adult",
+  it("the airline the request was made for, when the server recorded one (11)", () => {
+    expect(detailLines({ ...london, carrier: { name: "British Airways" } })).toEqual([
+      "Oct 12 – 19  ·  Round trip",
+      "JFK → LHR  ·  British Airways  ·  1 adult",
     ]);
+    expect(detailLines({ ...london, carrier: { name: "  " } })[1]).toBe("JFK → LHR  ·  1 adult");
+  });
+  it("an older server's missing trip type is left out", () => {
+    expect(detailLines({ ...london, tripType: undefined })).toEqual(["Oct 12 – 19", "JFK → LHR  ·  1 adult"]);
   });
 });
 
@@ -97,14 +101,14 @@ describe("queuedView", () => {
       contact: { phone: "+12125550148" },
     },
   };
-  it("reads like the server's answer: not sent, the outbound route, its dates", () => {
+  it("reads like the server's answer: not sent, the outbound route, its dates with the year (28)", () => {
     expect(queuedView({ ...q, city: "London" })).toMatchObject({
       id: q.id,
       route: "JFK → LHR",
       city: "London",
       tripType: "round",
       phone: "+12125550148",
-      dates: "Oct 12–19",
+      dates: "Oct 12–19, 2026",
       status: "not_sent",
       priceAtRequest: null,
       timeline: [],
@@ -115,7 +119,7 @@ describe("queuedView", () => {
   });
   it("reads its route and dates with the server's own functions — one way, multi-city, a same-day return", () => {
     const oneWay = { ...q, body: { ...q.body, tripType: "oneway" as const, legs: round.slice(0, 1) } };
-    expect([queuedView(oneWay).route, queuedView(oneWay).dates]).toEqual(["JFK → LHR", "Oct 12"]);
+    expect([queuedView(oneWay).route, queuedView(oneWay).dates]).toEqual(["JFK → LHR", "Oct 12, 2026"]);
     const tour = [
       { from: "JFK", to: "LHR", date: "2026-10-12" },
       { from: "LHR", to: "CDG", date: "2026-10-15" },
@@ -126,7 +130,7 @@ describe("queuedView", () => {
       { from: "JFK", to: "BOS", date: "2026-10-12" },
       { from: "BOS", to: "JFK", date: "2026-10-12" },
     ];
-    expect(queuedView({ ...q, body: { ...q.body, legs: sameDay } }).dates).toBe("Oct 12");
+    expect(queuedView({ ...q, body: { ...q.body, legs: sameDay } }).dates).toBe("Oct 12, 2026");
   });
 });
 

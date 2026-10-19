@@ -7,23 +7,28 @@ type Props = {
   label: string;
   selected?: boolean;
   disabled?: boolean;
-  /** An icon before the words: the trip's chips (`Nov 12 – 19, 2026`, `Business`, `1 adult`, sheet 39). */
+  /** An icon before the words: the trip's chips (`Nov 12 – 19, 2026`, `Business`, `1 adult`; 04, 13). */
   icon?: IconName;
   /**
-   * `trip` (default): light tint, navy words, an icon — the trip's chips. `filter`: the status filters of Requests —
-   * light tint with slate words, navy when selected (sheet 39).
+   * `trip` (default): light grey, navy words, an icon — the trip's chips (04, 13). `filter`: the status filters of
+   * Requests (09) — light grey with slate words, navy with white words when chosen.
    */
   variant?: "trip" | "filter";
   /** `equal`: an even share of its row; `content`: it grows from its own width. */
   fill?: "equal" | "content";
-  /** 1.0 prop, kept while its screens move to 3.0: `lg` was 56 pt. */
-  size?: "md" | "lg";
-  /** None: a fact, not a choice — the fare's cabin, its one way, its day (05) — drawn the same, not pressable. */
+  /** None: a fact, not a choice — drawn the same, not pressable. */
   onPress?: () => void;
   testID: string;
 };
 
-/** A pill that chooses or edits (sheet 39): 40 pt, `pill`, light tint; selected is navy with white words. */
+/**
+ * 09's filters: 31.7 pt tall, the words 12.5 Medium 14 pt either side, at least 55.5 wide (`All`); chosen, navy with
+ * 13.5 Semibold white words. 13's trip chips: 31 pt, a 16-pt icon 12 pt in, the words 9 pt after it, 14 pt to the
+ * edge. Both light grey and fully round; the target reaches 44 pt by its hit slop.
+ */
+const FILTER = { height: 31.7, pad: 14, minWidth: 55.5 } as const;
+const TRIP = { height: 31, padLeft: 12, icon: 16, gap: 9, padRight: 14 } as const;
+
 export function Chip({
   label,
   selected = false,
@@ -31,7 +36,6 @@ export function Chip({
   icon,
   variant = "trip",
   fill,
-  size = "md",
   onPress,
   testID,
 }: Props) {
@@ -39,28 +43,24 @@ export function Chip({
   const color = selected ? tokens.colors.textOnPhoto : filter ? tokens.colors.textOnTint : tokens.colors.textPrimary;
   const content = (
     <>
-      {icon ? <Icon name={icon} size={18} color={color} strokeWidth={1.75} /> : null}
+      {icon ? <Icon name={icon} size={TRIP.icon} color={color} strokeWidth={1.6} /> : null}
       <Text
-        style={[filter ? styles.filterLabel : styles.label, { color }, selected && filter && styles.selectedLabel]}
+        style={[filter ? (selected ? styles.filterOn : styles.filterLabel) : styles.label, { color }]}
         numberOfLines={1}
       >
         {label}
       </Text>
     </>
   );
+  const frame = [
+    filter ? styles.filter : styles.trip,
+    fill === "equal" && styles.equal,
+    fill === "content" && styles.content,
+    selected && styles.selected,
+  ];
   if (!onPress) {
     return (
-      <View
-        testID={testID}
-        accessible
-        accessibilityLabel={label}
-        style={[
-          styles.chip,
-          fill === "equal" && styles.equal,
-          fill === "content" && styles.content,
-          selected && styles.selected,
-        ]}
-      >
+      <View testID={testID} accessible accessibilityLabel={label} style={frame}>
         {content}
       </View>
     );
@@ -72,49 +72,42 @@ export function Chip({
       accessibilityState={{ selected, disabled }}
       accessibilityLabel={label}
       disabled={disabled}
-      // 40 pt drawn, 44 to the finger: the slop's room is the chip's own margin, so no parent bounds clip it.
-      hitSlop={size === "lg" ? undefined : SLOP}
+      hitSlop={{ top: 7, bottom: 7 }}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        size !== "lg" && styles.slopRoom,
-        size === "lg" && styles.lg,
-        filter && styles.filter,
-        fill === "equal" && styles.equal,
-        fill === "content" && styles.content,
-        selected && styles.selected,
-        disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
-      ]}
+      style={({ pressed }) => [...frame, disabled && styles.disabled, pressed && !disabled && styles.pressed]}
     >
       {content}
     </Pressable>
   );
 }
 
-const SLOP = { top: tokens.space.xxs / 2, bottom: tokens.space.xxs / 2 } as const;
-
 const styles = StyleSheet.create({
-  chip: {
-    minHeight: 40,
+  trip: {
+    minHeight: TRIP.height,
     borderRadius: tokens.radius.pill,
-    paddingHorizontal: tokens.space.sm,
+    paddingLeft: TRIP.padLeft,
+    paddingRight: TRIP.padRight,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: TRIP.gap,
+    backgroundColor: tokens.colors.surfaceTint,
+  },
+  filter: {
+    minHeight: FILTER.height,
+    minWidth: FILTER.minWidth,
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: FILTER.pad,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
     backgroundColor: tokens.colors.surfaceTint,
   },
-  slopRoom: { marginVertical: tokens.space.xxs / 2 },
-  lg: { minHeight: 52 },
-  // 09: five filters to a phone's width, nearly — the words in `body-sm`, 16 pt either side.
-  filter: { minHeight: 40, paddingHorizontal: tokens.space.md },
   equal: { flex: 1 },
   content: { flexGrow: 1 },
-  selected: { backgroundColor: tokens.colors.actionPrimary },
+  selected: { backgroundColor: tokens.colors.primary },
   disabled: { opacity: 0.4 },
   pressed: { opacity: 0.8 },
-  label: { ...rn(tokens.type.bodySm) },
-  filterLabel: { ...rn(tokens.type.bodySm) },
-  selectedLabel: { ...rn(tokens.type.labelStrong) },
+  label: { ...rn(tokens.type.chipTrip) },
+  filterLabel: { ...rn(tokens.type.chip) },
+  filterOn: { ...rn(tokens.type.chipSelected) },
 });
