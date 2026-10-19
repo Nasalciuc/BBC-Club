@@ -20,6 +20,8 @@ export const tokens = {
   "stepLine": "#D0D4DE",
   "photoButton": "rgba(255,255,255,0.9)",
   "infoMark": "#364966",
+  "chevronLight": "#A4A9B8",
+  "skeleton": "#EBF0F5",
   "borderDefault": "#E8EAEF",
   "borderFaint": "#EDEEF2",
   "borderStrong": "#C5CBD8",
@@ -363,6 +365,167 @@ export const tokens = {
     "fontWeight": "500",
     "lineHeight": 15,
     "letterSpacing": -0.3
+  },
+  "profileName": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 24.1,
+    "fontWeight": "700",
+    "lineHeight": 29,
+    "letterSpacing": 0.09
+  },
+  "profileHome": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 12.15,
+    "fontWeight": "400",
+    "lineHeight": 16,
+    "letterSpacing": 0.28
+  },
+  "statValue": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 20,
+    "fontWeight": "700",
+    "lineHeight": 24,
+    "letterSpacing": -0.46
+  },
+  "statLabel": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 10.3,
+    "fontWeight": "400",
+    "lineHeight": 13,
+    "letterSpacing": 0.2
+  },
+  "profilePill": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 12.3,
+    "fontWeight": "600",
+    "lineHeight": 15,
+    "letterSpacing": 0.3
+  },
+  "profileSection": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 18.8,
+    "fontWeight": "700",
+    "lineHeight": 23,
+    "letterSpacing": 0.6
+  },
+  "profileLink": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 10.6,
+    "fontWeight": "400",
+    "lineHeight": 14,
+    "letterSpacing": 0.31
+  },
+  "tripCity": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 12.3,
+    "fontWeight": "700",
+    "lineHeight": 15,
+    "letterSpacing": 0.06
+  },
+  "tripDates": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 8,
+    "fontWeight": "500",
+    "lineHeight": 10,
+    "letterSpacing": 0.63
+  },
+  "tripRoute": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 8.1,
+    "fontWeight": "400",
+    "lineHeight": 11,
+    "letterSpacing": 0.52
+  },
+  "profileRow": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 10.15,
+    "fontWeight": "400",
+    "lineHeight": 13,
+    "letterSpacing": 0.23
+  },
+  "profileValue": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 9.6,
+    "fontWeight": "400",
+    "lineHeight": 12,
+    "letterSpacing": 0.43
+  },
+  "profileDanger": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 11.25,
+    "fontWeight": "400",
+    "lineHeight": 15,
+    "letterSpacing": -0.11
+  },
+  "profileSignout": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 10.9,
+    "fontWeight": "600",
+    "lineHeight": 14,
+    "letterSpacing": 0.26
+  },
+  "settingsTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 18.25,
+    "fontWeight": "700",
+    "lineHeight": 22,
+    "letterSpacing": 0.66
+  },
+  "settingsRow": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.55,
+    "fontWeight": "400",
+    "lineHeight": 18,
+    "letterSpacing": 0.2
+  },
+  "settingsValue": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.2,
+    "fontWeight": "400",
+    "lineHeight": 17,
+    "letterSpacing": 0.4
+  },
+  "settingsSub": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 11.25,
+    "fontWeight": "400",
+    "lineHeight": 15,
+    "letterSpacing": 0.25
+  },
+  "settingsDanger": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.75,
+    "fontWeight": "400",
+    "lineHeight": 18,
+    "letterSpacing": -0.14
+  },
+  "settingsSignout": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 13.35,
+    "fontWeight": "600",
+    "lineHeight": 17,
+    "letterSpacing": 0.4
+  },
+  "editTitle": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 19.45,
+    "fontWeight": "700",
+    "lineHeight": 23,
+    "letterSpacing": 0.67
+  },
+  "editRow": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 12.05,
+    "fontWeight": "400",
+    "lineHeight": 16,
+    "letterSpacing": 0.2
+  },
+  "editValue": {
+    "fontFamily": "Inter Tight",
+    "fontSize": 11.8,
+    "fontWeight": "400",
+    "lineHeight": 15,
+    "letterSpacing": 0.39
   },
   "badge": {
     "fontFamily": "Inter Tight",

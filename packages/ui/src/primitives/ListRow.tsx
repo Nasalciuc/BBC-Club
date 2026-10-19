@@ -1,12 +1,87 @@
 import { Children, createContext, Fragment, isValidElement, type ReactNode, useContext } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type TextStyle } from "react-native";
 import { Icon, type IconName } from "../icons";
-import { rn } from "../rn-type";
+import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { Toggle } from "./Toggle";
 
-/** True inside a `RowGroup`: the group draws the card and the rules between rows. */
-const InGroup = createContext(false);
+/**
+ * The row cards as each screen draws them, measured from the card's left and right edges (pt): `profile` (12), the
+ * compact rows under My trips; `settings` (34); `edit` (36). Each its row height, its mark's box and centre, where the
+ * words start, where the value ends, its chevron (box, stroke, ink 'right' inset) and its rules.
+ */
+type RowLook = {
+  radius: number;
+  height: number;
+  icon: number;
+  iconCentre: number;
+  labelLeft: number;
+  valueRight: number;
+  chevron: { size: number; stroke: number; right: number; color: string };
+  rule: { left: number; right: number };
+  label: TextStyle & { fontSize: number; lineHeight: number };
+  value: TextStyle;
+  sub: TextStyle & { fontSize: number; lineHeight: number };
+  danger: TextStyle;
+  labelColor: string;
+  valueColor: string;
+};
+
+export type RowLookName = "profile" | "settings" | "edit";
+
+const LOOKS: Record<RowLookName, RowLook> = {
+  profile: {
+    radius: 10,
+    height: 29.65,
+    icon: 16.5,
+    iconCentre: 22.5,
+    labelLeft: 45.3,
+    valueRight: 25.9,
+    chevron: { size: 13.4, stroke: 1.6, right: 11.2, color: tokens.colors.chevronLight },
+    rule: { left: 45.4, right: 11 },
+    label: rn(tokens.type.profileRow) as RowLook["label"],
+    value: rn(tokens.type.profileValue),
+    sub: rn(tokens.type.profileValue) as RowLook["sub"],
+    danger: rn(tokens.type.profileDanger),
+    labelColor: tokens.colors.textOnTint,
+    valueColor: tokens.colors.textOnTint,
+  },
+  settings: {
+    radius: 9,
+    height: 47.1,
+    icon: 19.4,
+    iconCentre: 25.2,
+    labelLeft: 52.4,
+    valueRight: 30.4,
+    chevron: { size: 17, stroke: 1.98, right: 12.9, color: tokens.colors.chevronLight },
+    rule: { left: 19.3, right: 7.8 },
+    label: rn(tokens.type.settingsRow) as RowLook["label"],
+    value: rn(tokens.type.settingsValue),
+    sub: rn(tokens.type.settingsSub) as RowLook["sub"],
+    danger: rn(tokens.type.settingsDanger),
+    labelColor: tokens.colors.textPrimary,
+    valueColor: tokens.colors.textPrimary,
+  },
+  edit: {
+    radius: 11,
+    height: 48.2,
+    icon: 21,
+    iconCentre: 25.4,
+    labelLeft: 52.2,
+    valueRight: 31.3,
+    chevron: { size: 17.4, stroke: 1.66, right: 12, color: tokens.colors.chevronLight },
+    rule: { left: 51.9, right: 12.9 },
+    label: rn(tokens.type.editRow) as RowLook["label"],
+    value: rn(tokens.type.editValue),
+    sub: rn(tokens.type.editValue) as RowLook["sub"],
+    danger: rn(tokens.type.editRow),
+    labelColor: tokens.colors.textOnTint,
+    valueColor: tokens.colors.textOnTint,
+  },
+};
+
+/** Inside a `RowGroup`: the group draws the card and the rules between rows, in its look (null: the 1.0 rows). */
+const InGroup = createContext<{ look: RowLookName | null; height: number | null } | null>(null);
 
 type Props = {
   label: string;
@@ -28,6 +103,9 @@ type Props = {
   toggle?: { value: boolean; onChange?: (next: boolean) => void; testID: string; locked?: boolean };
   /** 1.0 prop, kept while its screens move to 3.0. */
   size?: "md" | "sm";
+  /** A row alone in its card (`Delete account`): the look and height of its screen's rows. */
+  look?: RowLookName;
+  height?: number;
   testID?: string;
 };
 
@@ -47,9 +125,31 @@ export function ListRow({
   danger = false,
   disabled = false,
   toggle,
+  look: ownLook,
+  height: ownHeight,
   testID,
 }: Props) {
-  const inGroup = useContext(InGroup);
+  const group = useContext(InGroup);
+  const inGroup = group !== null;
+  const lookName = group?.look ?? ownLook ?? null;
+  if (lookName) {
+    return (
+      <LookRow
+        look={LOOKS[lookName]}
+        height={group?.height ?? ownHeight ?? null}
+        alone={!inGroup}
+        label={label}
+        value={value}
+        subtitle={subtitle}
+        icon={icon}
+        danger={danger}
+        disabled={disabled}
+        onPress={onPress}
+        toggle={toggle}
+        testID={testID}
+      />
+    );
+  }
   const pressable = onPress != null && !disabled;
   const showChevron = toggle == null && (trailing != null ? trailing === "chevron" : onPress != null && chevron);
   const role = trailing === "external" ? "link" : "button";
@@ -134,24 +234,180 @@ export function ListRow({
 }
 
 /**
- * A white card of rows (12, 34, 36): radius 16 with the card shadow, a light navy rule between rows that starts where
- * the words start.
+ * A row in a screen's look (12, 34, 36), as measured: the mark centred in its column, the label from where the words
+ * start, the value ending where the screen ends it, the thin chevron at its inset; everything centred on the row. With
+ * a subtitle (34's Notifications), the label's baseline 25.9 pt under the row's top, the subtitle 16.6 under it, the
+ * row's foot 16.6 under that.
  */
-export function RowGroup({ children, testID }: { children: ReactNode; testID?: string }) {
-  const rows = Children.toArray(children).filter(isValidElement);
+function LookRow({
+  look,
+  height,
+  alone,
+  label,
+  value,
+  subtitle,
+  icon,
+  danger,
+  disabled,
+  onPress,
+  toggle,
+  testID,
+}: {
+  look: RowLook;
+  height: number | null;
+  alone: boolean;
+  label: string;
+  value?: string;
+  subtitle?: string;
+  icon?: IconName;
+  danger: boolean;
+  disabled: boolean;
+  onPress?: () => void;
+  toggle?: Props["toggle"];
+  testID?: string;
+}) {
+  const pressable = onPress != null && !disabled;
+  const tint = danger ? tokens.colors.statusDanger : tokens.colors.textPrimary;
+  const a11yLabel = [label, value, subtitle].filter(Boolean).join(", ");
+  const rowHeight = height ?? look.height;
+  const chevronBoxRight = look.chevron.right - ((9 - look.chevron.stroke / 2) * look.chevron.size) / 24;
+  const body = (
+    <>
+      {icon ? (
+        <View style={[lookStyles.icon, { left: look.iconCentre - look.icon / 2, width: look.icon }]}>
+          <Icon name={icon} size={look.icon} color={tint} strokeWidth={1.75} />
+        </View>
+      ) : null}
+      <View style={[lookStyles.text, { marginLeft: look.labelLeft }]}>
+        <Text
+          style={[
+            danger ? look.danger : look.label,
+            { color: danger ? tokens.colors.statusDangerText : look.labelColor },
+            subtitle ? { marginTop: 25.9 - baselineOffset(look.label) } : null,
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        {subtitle ? (
+          <Text
+            style={[
+              look.sub,
+              {
+                color: tokens.colors.textSecondary,
+                marginTop: 16.6 - belowBaseline(look.label) - baselineOffset(look.sub),
+                marginBottom: 16.6 - belowBaseline(look.sub),
+              },
+            ]}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {value ? (
+        <Text style={[look.value, lookStyles.value, { color: look.valueColor }]} numberOfLines={1}>
+          {value}
+        </Text>
+      ) : null}
+      {toggle ? (
+        <Toggle
+          value={toggle.value}
+          onChange={toggle.onChange}
+          testID={toggle.testID}
+          locked={toggle.locked}
+          disabled={disabled}
+          accessibilityLabel={label}
+        />
+      ) : onPress ? (
+        <View style={[lookStyles.chevron, { right: chevronBoxRight }]} pointerEvents="none">
+          <Icon name="chevron" size={look.chevron.size} color={look.chevron.color} strokeWidth={look.chevron.stroke} />
+        </View>
+      ) : null}
+    </>
+  );
+  const frame = [
+    lookStyles.row,
+    { minHeight: rowHeight, paddingRight: look.valueRight },
+    alone && [lookStyles.card, { borderRadius: look.radius }],
+  ];
+  if (!pressable) {
+    return (
+      <View
+        testID={testID}
+        style={[...frame, disabled && styles.disabled]}
+        accessible={onPress != null}
+        accessibilityRole={onPress != null ? "button" : undefined}
+        accessibilityState={onPress != null ? { disabled: true } : undefined}
+        accessibilityLabel={a11yLabel}
+      >
+        {body}
+      </View>
+    );
+  }
   return (
-    <InGroup.Provider value>
-      <View style={styles.group} testID={testID}>
-        {rows.map((row, i) => (
-          <Fragment key={row.key ?? i}>
-            {i > 0 ? <View style={styles.rule} /> : null}
-            {row}
-          </Fragment>
-        ))}
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      onPress={onPress}
+      style={({ pressed }) => [...frame, pressed && styles.pressed]}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+/**
+ * A white card of rows (12, 34, 36). In a screen's `look`: its radius and shadow, its rows' height (`rowHeight` where
+ * a card's rows differ from the screen's others), its rules from where the screen starts them. Without one, the 1.0
+ * card: radius 16, a rule from where the words start.
+ */
+export function RowGroup({
+  children,
+  testID,
+  look,
+  rowHeight,
+}: {
+  children: ReactNode;
+  testID?: string;
+  look?: RowLookName;
+  rowHeight?: number;
+}) {
+  const rows = Children.toArray(children).filter(isValidElement);
+  const l = look ? LOOKS[look] : null;
+  return (
+    <InGroup.Provider value={{ look: look ?? null, height: rowHeight ?? null }}>
+      <View style={l ? [lookStyles.card, { borderRadius: l.radius }] : styles.group} testID={testID}>
+        {rows.map((row, i) =>
+          l ? (
+            // The rule lies over the row's top edge: the rows keep the screen's pitch exactly.
+            <View key={row.key ?? i}>
+              {row}
+              {i > 0 ? (
+                <View style={[lookStyles.rule, { left: l.rule.left, right: l.rule.right }]} pointerEvents="none" />
+              ) : null}
+            </View>
+          ) : (
+            <Fragment key={row.key ?? i}>
+              {i > 0 ? <View style={styles.rule} /> : null}
+              {row}
+            </Fragment>
+          ),
+        )}
       </View>
     </InGroup.Provider>
   );
 }
+
+const lookStyles = StyleSheet.create({
+  card: { backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.card },
+  row: { flexDirection: "row", alignItems: "center" },
+  icon: { position: "absolute", alignItems: "center" },
+  text: { flex: 1 },
+  value: { flexShrink: 1, maxWidth: "55%", textAlign: "right" },
+  chevron: { position: "absolute" },
+  rule: { position: "absolute", top: 0, height: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderFaint },
+});
 
 const styles = StyleSheet.create({
   row: {

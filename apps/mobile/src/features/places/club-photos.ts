@@ -49,6 +49,24 @@ export function clubPhoto(code: string | null | undefined, context: PhotoContext
   return set[context] ?? set.any;
 }
 
+/**
+ * 12's trips: each city's 3:2 photograph through a portrait window, as the image frames it — London from 34 % of its
+ * width, Tokyo 18 % (Fuji, not the tower), Dubai 43 %, Paris 44 % (`contentPosition` of the left edge, cover fit).
+ */
+const TRIP_WINDOW: Partial<Record<ClubCity, `${number}%`>> = {
+  london: "60%",
+  tokyo: "33%",
+  dubai: "78%",
+  paris: "80%",
+};
+
+/** A trip's photograph on Profile (12) and which part of it shows; null when the design has no photo of the city. */
+export function clubTripPhoto(code: string | null | undefined): { source: Bundled; left: `${number}%` } | null {
+  const city = clubCityOf(code);
+  if (!city) return null;
+  return { source: PHOTOS[city].any, left: TRIP_WINDOW[city] ?? "50%" };
+}
+
 /** The fare's photographs after the city's (05): the business-class seat and the lounge, as the carousel shows them;
  *  the small cuts for its thumbnails. */
 export const CABIN_PHOTOS = {

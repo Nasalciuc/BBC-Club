@@ -158,6 +158,60 @@ function InfoFill({ size = 24, color = tokens.colors.infoMark }: GlyphProps) {
   );
 }
 
+/** 12, 36: the home airport's plane, solid, nose to the right. */
+function PlaneRightFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2c.8 0 1.3.9 1.3 2v5.2l7.7 4.6v2.1l-7.7-2.3v4.6l2.2 1.6V21l-3.5-1-3.5 1v-1.2l2.2-1.6v-4.6L3 15.9v-2.1l7.7-4.6V4c0-1.1.5-2 1.3-2Z"
+        fill={color}
+        transform="rotate(90 12 12)"
+      />
+    </Svg>
+  );
+}
+
+/** 12, 36: the travelers, two people solid (Lucide `users`, filled). */
+function UsersFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgCircle cx={16.4} cy={7.6} r={3.4} fill={color} />
+      <Path d="M17.2 13.6h.6a4.6 4.6 0 0 1 4.6 4.6V21h-4.3v-2.8a6.6 6.6 0 0 0-2.4-5.1 4 4 0 0 1 1.5-.5Z" fill={color} />
+      <SvgCircle cx={9} cy={7.2} r={4.1} fill={color} />
+      <Path d="M5.6 13.2h6.8a4.6 4.6 0 0 1 4.6 4.6V21H1v-3.2a4.6 4.6 0 0 1 4.6-4.6Z" fill={color} />
+    </Svg>
+  );
+}
+
+/** 12, 34: the password's lock, solid, its keyhole cut out (Lucide `lock`, filled). */
+function LockFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+      <Path
+        d="M5.5 10.5h13A2.5 2.5 0 0 1 21 13v6.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 19.5V13a2.5 2.5 0 0 1 2.5-2.5Z"
+        fill={color}
+      />
+      <SvgCircle cx={12} cy={15.6} r={1.6} fill={tokens.colors.surfaceCard} />
+      <Path d="M12 16.4v2.2" stroke={tokens.colors.surfaceCard} strokeWidth={1.4} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** 12: `Edit profile`'s mark, a person solid with a pen (Lucide `user-pen`, filled). */
+function UserPenFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgCircle cx={10} cy={7} r={4.4} fill={color} />
+      <Path d="M7 14h5.4l-1.9 1.9a3 3 0 0 0-.8 1.3L8.9 21H2.6v-2.4A4.6 4.6 0 0 1 7 14Z" fill={color} />
+      <Path
+        d="M21.4 16.6a1.4 1.4 0 0 0-2-2l-4.6 4.6a1.6 1.6 0 0 0-.4.7l-.7 2.4a.4.4 0 0 0 .5.5l2.4-.7a1.6 1.6 0 0 0 .7-.4Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
 function PlaneFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
   // A plane seen from above, nose up, filled: the route's plane on the globe (13) and on a flight's line (sheet 40).
   return (
@@ -201,6 +255,10 @@ export const icons = {
   bookmark: Bookmark,
   phone: Phone,
   "phone-fill": PhoneFill,
+  "plane-right-fill": PlaneRightFill,
+  "users-fill": UsersFill,
+  "lock-fill": LockFill,
+  "user-pen-fill": UserPenFill,
   "info-fill": InfoFill,
   bell: Bell,
   lock: Lock,

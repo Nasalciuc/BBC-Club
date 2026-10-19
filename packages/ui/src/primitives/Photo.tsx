@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import { Image } from "expo-image";
+import { Image, type ImageContentPosition } from "expo-image";
 import { tokens } from "../tokens";
 
 /** A remote photograph, with the headers its host asks for, or a bundled image (the number `require` gives). */
@@ -13,6 +13,8 @@ type Props = {
   /** `memory` for an image whose terms ask that it not be kept (a satellite view); a photograph stays on disk. */
   cachePolicy?: "memory" | "disk" | "memory-disk";
   style?: StyleProp<ViewStyle>;
+  /** Which part of a photograph wider or taller than its slot shows (12's trips: each city's own window). */
+  position?: ImageContentPosition;
   testID?: string;
 };
 
@@ -23,7 +25,7 @@ const keyOf = (source: PhotoSource | null) =>
  * A photograph in its slot (design/components.md): light tint while it loads — never a spinner —
  * and the fallback when it cannot load. Decorative: what the photograph shows is said by the text beside it.
  */
-export function Photo({ source, fallback, cachePolicy = "disk", style, testID }: Props) {
+export function Photo({ source, fallback, cachePolicy = "disk", style, position, testID }: Props) {
   const [failed, setFailed] = useState<string | null>(null);
   const key = keyOf(source);
   const useFallback = key === null || failed === key;
@@ -40,6 +42,7 @@ export function Photo({ source, fallback, cachePolicy = "disk", style, testID }:
           source={shown}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+          contentPosition={useFallback ? undefined : position}
           transition={tokens.motion.fade}
           cachePolicy={useFallback ? "memory-disk" : cachePolicy}
           recyclingKey={keyOf(shown)}

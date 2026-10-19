@@ -22,8 +22,8 @@ describe("profileStats (12)", () => {
     { status: "booked" as const },
     { status: "closed" as const },
   ];
-  it("trips are every request the club holds; open requests those in progress", () => {
-    expect(profileStats(items, false)).toEqual({ trips: "4", open: "2" });
+  it("trips are the requests not closed (12: 3 of 4); open requests those in progress", () => {
+    expect(profileStats(items, false)).toEqual({ trips: "3", open: "2" });
     expect(profileStats([], false)).toEqual({ trips: "0", open: "0" });
   });
   it("a request the server could not pass on is still open", () => {
@@ -31,7 +31,7 @@ describe("profileStats (12)", () => {
   });
   it("past the server's first fifty: more trips, and more open requests only when all fifty are open", () => {
     // The server lists the requests in progress first: a page that ends on a closed one has listed every open one.
-    expect(profileStats(items, true)).toEqual({ trips: "4+", open: "2" });
+    expect(profileStats(items, true)).toEqual({ trips: "3+", open: "2" });
     const allOpen = [{ status: "quoted" as const }, { status: "received" as const }];
     expect(profileStats(allOpen, true)).toEqual({ trips: "2+", open: "2+" });
   });

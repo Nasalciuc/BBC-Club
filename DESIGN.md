@@ -23,6 +23,8 @@ colors:
   step-line: "#D0D4DE"
   photo-button: "rgba(255,255,255,0.9)"
   info-mark: "#364966"
+  chevron-light: "#A4A9B8"
+  skeleton: "#EBF0F5"
   border-default: "#E8EAEF"
   border-faint: "#EDEEF2"
   border-strong: "#C5CBD8"
@@ -317,6 +319,144 @@ typography:
     fontWeight: 500
     lineHeight: 1.2
     letterSpacing: -0.3px
+  profile-name:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 24.1px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.09px
+  profile-home:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.15px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.28px
+  stat-value:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.46px
+  stat-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.3px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  profile-pill:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.3px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.3px
+  profile-section:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 18.8px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.6px
+  profile-link:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.6px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.31px
+  trip-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.3px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.06px
+  trip-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.63px
+  trip-route:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.1px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.52px
+  profile-row:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.15px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.23px
+  profile-value:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.6px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.43px
+  profile-danger:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.25px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: -0.11px
+  profile-signout:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.9px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.26px
+  settings-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 18.25px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.66px
+  settings-row:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.55px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  settings-value:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.2px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.4px
+  settings-sub:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.25px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.25px
+  settings-danger:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.75px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: -0.14px
+  settings-signout:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.35px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.4px
+  edit-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 19.45px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.67px
+  edit-row:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.05px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  edit-value:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.8px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.39px
   badge:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 11.7px

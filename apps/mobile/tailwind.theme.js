@@ -20,6 +20,8 @@ module.exports = {
   "step-line": "#D0D4DE",
   "photo-button": "rgba(255,255,255,0.9)",
   "info-mark": "#364966",
+  "chevron-light": "#A4A9B8",
+  "skeleton": "#EBF0F5",
   "border-default": "#E8EAEF",
   "border-faint": "#EDEEF2",
   "border-strong": "#C5CBD8",
@@ -402,6 +404,190 @@ module.exports = {
       "lineHeight": "15px",
       "letterSpacing": "-0.3px",
       "fontWeight": "500"
+    }
+  ],
+  "profile-name": [
+    "24.1px",
+    {
+      "lineHeight": "29px",
+      "letterSpacing": "0.09px",
+      "fontWeight": "700"
+    }
+  ],
+  "profile-home": [
+    "12.15px",
+    {
+      "lineHeight": "16px",
+      "letterSpacing": "0.28px",
+      "fontWeight": "400"
+    }
+  ],
+  "stat-value": [
+    "20px",
+    {
+      "lineHeight": "24px",
+      "letterSpacing": "-0.46px",
+      "fontWeight": "700"
+    }
+  ],
+  "stat-label": [
+    "10.3px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "400"
+    }
+  ],
+  "profile-pill": [
+    "12.3px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "0.3px",
+      "fontWeight": "600"
+    }
+  ],
+  "profile-section": [
+    "18.8px",
+    {
+      "lineHeight": "23px",
+      "letterSpacing": "0.6px",
+      "fontWeight": "700"
+    }
+  ],
+  "profile-link": [
+    "10.6px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.31px",
+      "fontWeight": "400"
+    }
+  ],
+  "trip-city": [
+    "12.3px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "0.06px",
+      "fontWeight": "700"
+    }
+  ],
+  "trip-dates": [
+    "8px",
+    {
+      "lineHeight": "10px",
+      "letterSpacing": "0.63px",
+      "fontWeight": "500"
+    }
+  ],
+  "trip-route": [
+    "8.1px",
+    {
+      "lineHeight": "11px",
+      "letterSpacing": "0.52px",
+      "fontWeight": "400"
+    }
+  ],
+  "profile-row": [
+    "10.15px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.23px",
+      "fontWeight": "400"
+    }
+  ],
+  "profile-value": [
+    "9.6px",
+    {
+      "lineHeight": "12px",
+      "letterSpacing": "0.43px",
+      "fontWeight": "400"
+    }
+  ],
+  "profile-danger": [
+    "11.25px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "-0.11px",
+      "fontWeight": "400"
+    }
+  ],
+  "profile-signout": [
+    "10.9px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.26px",
+      "fontWeight": "600"
+    }
+  ],
+  "settings-title": [
+    "18.25px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "0.66px",
+      "fontWeight": "700"
+    }
+  ],
+  "settings-row": [
+    "13.55px",
+    {
+      "lineHeight": "18px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "400"
+    }
+  ],
+  "settings-value": [
+    "13.2px",
+    {
+      "lineHeight": "17px",
+      "letterSpacing": "0.4px",
+      "fontWeight": "400"
+    }
+  ],
+  "settings-sub": [
+    "11.25px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "0.25px",
+      "fontWeight": "400"
+    }
+  ],
+  "settings-danger": [
+    "13.75px",
+    {
+      "lineHeight": "18px",
+      "letterSpacing": "-0.14px",
+      "fontWeight": "400"
+    }
+  ],
+  "settings-signout": [
+    "13.35px",
+    {
+      "lineHeight": "17px",
+      "letterSpacing": "0.4px",
+      "fontWeight": "600"
+    }
+  ],
+  "edit-title": [
+    "19.45px",
+    {
+      "lineHeight": "23px",
+      "letterSpacing": "0.67px",
+      "fontWeight": "700"
+    }
+  ],
+  "edit-row": [
+    "12.05px",
+    {
+      "lineHeight": "16px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "400"
+    }
+  ],
+  "edit-value": [
+    "11.8px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "0.39px",
+      "fontWeight": "400"
     }
   ],
   "badge": [

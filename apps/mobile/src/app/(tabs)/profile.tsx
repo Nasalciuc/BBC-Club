@@ -1,20 +1,21 @@
 import { useIsFocused, useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Linking, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 import {
   Button,
-  CarouselRow,
+  Icon,
   ListRow,
   PhotoCredit,
   ProfileHero,
   RoundButton,
   RowGroup,
-  SectionHeader,
   Skeleton,
   StateMessage,
   TripPhotoCard,
+  baselineOffset,
+  belowBaseline,
   profileBandHeight,
   tokens,
   rn,
@@ -22,8 +23,9 @@ import {
 
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { Club } from "@/constants/club";
+import { clubPhoto, clubTripPhoto } from "@/features/places/club-photos";
 import { bandPicture, cardPicture } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { CabinSheet } from "@/features/profile/CabinSheet";
 import { DeleteAccountSheet } from "@/features/profile/DeleteAccountSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
@@ -40,6 +42,7 @@ import { cabinLabel, profileStats, travelersLabel } from "@/features/profile/pro
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { useSignOut } from "@/features/profile/useSignOut";
+import { useSaved } from "@/features/saved/saved";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { requestCard } from "@/features/requests/request-card";
 import { recentRequests } from "@/features/requests/request-view-logic";
@@ -80,6 +83,7 @@ export default function ProfileScreen() {
   const [pastHero, setPastHero] = useState(false);
   const focused = useIsFocused();
   const { signingOut, failure: signOutFailure, signOutNow } = useSignOut();
+  const saved = useSaved();
   const homeAirportRef = useRef<ProfileSheetHandle>(null);
   const cabinRef = useRef<ProfileSheetHandle>(null);
   const travelersRef = useRef<ProfileSheetHandle>(null);
@@ -137,10 +141,16 @@ export default function ProfileScreen() {
   }, [home]);
 
   const band = profileBandHeight(insets.top);
+  // 12 draws no button over the photograph; Settings keeps the privacy policy and the terms, which must stay reachable
+  // (App Store 5.1.1, ADR-IMPL-055 §9): the glass button of 11, at the photograph's top right.
   const settingsButton = (
     <RoundButton
       testID="profile.settings"
       icon="settings"
+      tone="glass"
+      diameter={35}
+      iconSize={19}
+      strokeWidth={1.6}
       accessibilityLabel="Settings"
       onPress={() => router.push("/settings" as Href)}
     />
@@ -204,9 +214,12 @@ export default function ProfileScreen() {
     mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
     size: { width: Math.min(width, Club.layout.phoneMaxWidth), height: band },
   });
-  const credit = picture.credit;
+  const homePhoto = clubPhoto(home, "any");
+  const credit = homePhoto ? null : picture.credit;
   const creditLink = credit?.link ?? null;
   const stats = requests ? profileStats(requests.items, requests.hasMore) : null;
+  // 12's third number: what the member saved on this phone (ADR-IMPL-056).
+  const savedCount = saved.length;
   const openRequests = requests ? requests.items.filter((r) => isOpen(r.status)).length : null;
   const ready = profile !== null;
 
@@ -232,83 +245,111 @@ export default function ProfileScreen() {
           testID="profile.hero"
           name={displayName}
           initials={monogram(profile?.displayName)}
+          portrait={profile?.avatarUrl ? { uri: profile.avatarUrl } : null}
           home={home ? `Flies from ${home}` : null}
-          image={picture.source}
-          fallback={CLUB_PICTURE}
-          cachePolicy={picture.cache}
+          image={homePhoto ?? picture.source}
+          fallback={null}
+          cachePolicy={homePhoto ? "disk" : picture.cache}
           topInset={insets.top}
           action={settingsButton}
         />
-        <View style={styles.content}>
-          {stats ? (
-            // 12: two numbers the club has; the saved count is left out (ADR-IMPL-055 §7).
-            <View style={styles.stats} testID="profile.stats">
-              <Stat value={stats.trips} label="Trips" />
-              <View style={styles.statRule} />
-              <Stat value={stats.open} label="Open requests" />
-            </View>
-          ) : null}
-          {/* 12: Edit profile, the one filled pill, and Call us beside it. */}
-          <View style={styles.actions}>
+        {stats ? (
+          // 12: three numbers over their names, two rules between them.
+          <View style={styles.stats} testID="profile.stats">
+            <Stat value={stats.trips} label="Trips" at={-121.3} />
+            <View style={[styles.statRule, { marginLeft: -66.7 }]} />
+            <Stat value={stats.open} label="Open requests" at={0} />
+            <View style={[styles.statRule, { marginLeft: 66.9 }]} />
+            <Stat value={String(savedCount)} label="Saved" at={120.3} />
+          </View>
+        ) : null}
+        {/* 12: Edit profile, the one filled pill, and Call us beside it. */}
+        <View style={[styles.actions, !stats && styles.actionsAlone]}>
+          <View style={styles.action}>
+            <Button
+              testID="profile.edit"
+              label="Edit profile"
+              icon="user-pen-fill"
+              iconSize={17.5}
+              iconGap={11.8}
+              variant="primary"
+              height={PILL}
+              text="profilePill"
+              // 12 sets the mark and the words 4 pt right of the pill's middle.
+              style={StyleSheet.flatten([styles.pill, { paddingLeft: 28, paddingRight: 20 }])}
+              onPress={() => router.push("/edit-profile" as Href)}
+            />
+          </View>
+          {call ? (
             <View style={styles.action}>
               <Button
-                testID="profile.edit"
-                label="Edit profile"
-                icon="user-pen"
-                variant="primary"
-                size="md"
-                onPress={() => router.push("/edit-profile" as Href)}
-              />
-            </View>
-            {call ? (
-              <View style={styles.action}>
-                <Button
-                  testID="profile.call"
-                  label="Call us"
-                  icon="phone"
-                  variant="outline"
-                  size="md"
-                  onPress={() => {
-                    Linking.openURL(call).catch(() => undefined);
-                  }}
-                />
-              </View>
-            ) : null}
-          </View>
-
-          {tripCards.length > 0 ? (
-            <View style={styles.trips}>
-              <SectionHeader
-                title="My trips"
-                action={{
-                  label: "See all",
-                  chevron: true,
-                  testID: "profile.trips.seeAll",
-                  onPress: () => router.push("/(tabs)/requests" as Href),
+                testID="profile.call"
+                label="Call us"
+                icon="phone-fill"
+                iconSize={17.2}
+                iconGap={11.8}
+                variant="outline"
+                height={PILL}
+                text="profilePill"
+                style={StyleSheet.flatten([styles.pill, { paddingLeft: 26, paddingRight: 22 }])}
+                onPress={() => {
+                  Linking.openURL(call).catch(() => undefined);
                 }}
               />
-              <CarouselRow testID="profile.trips">
-                {tripCards.map(({ id, card }) => (
+            </View>
+          ) : null}
+        </View>
+
+        {tripCards.length > 0 ? (
+          <View>
+            <View style={styles.tripsHead}>
+              <Text style={styles.tripsTitle} accessibilityRole="header">
+                My trips
+              </Text>
+              <Pressable
+                testID="profile.trips.seeAll"
+                accessibilityRole="button"
+                accessibilityLabel="See all trips"
+                hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                onPress={() => router.push("/(tabs)/requests" as Href)}
+                style={({ pressed }) => [styles.seeAll, pressed && styles.pressed]}
+              >
+                <Text style={styles.seeAllText}>See all</Text>
+                <Icon name="chevron" size={13.6} color={tokens.colors.textOnTint} strokeWidth={1.9} />
+              </Pressable>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tripsRow}
+              testID="profile.trips"
+            >
+              {tripCards.map(({ id, card }) => {
+                const own = clubTripPhoto(card.to);
+                return (
                   <TripPhotoCard
                     key={id}
                     testID={`profile.request.${id}`}
-                    photo={cardPicture(null, photoFor(card.to), PICTURE_HEADERS)}
-                    fallback={CLUB_PICTURE}
+                    photo={own?.source ?? cardPicture(null, photoFor(card.to), PICTURE_HEADERS)}
+                    position={own ? { left: own.left, top: "50%" } : undefined}
+                    fallback={null}
                     city={card.city}
                     dates={card.dates}
                     route={card.route}
                     accessibilityLabel={card.spoken}
                     onPress={() => router.push(`/request/${id}` as Href)}
                   />
-                ))}
-              </CarouselRow>
-            </View>
-          ) : null}
+                );
+              })}
+            </ScrollView>
+          </View>
+        ) : null}
 
-          <RowGroup testID="profile.travel">
+        <View style={styles.rows}>
+          <RowGroup testID="profile.travel" look="profile">
             <ListRow
               testID="profile.homeAirport"
-              icon="plane"
+              icon="plane-right-fill"
               label="Home airport"
               value={home ? homeAirportLabel(home, city) : "Not set"}
               disabled={!ready}
@@ -324,7 +365,7 @@ export default function ProfileScreen() {
             />
             <ListRow
               testID="profile.travelers"
-              icon="users"
+              icon="users-fill"
               label="Travelers"
               value={travelersLabel(profile?.preferences)}
               disabled={!ready}
@@ -332,44 +373,55 @@ export default function ProfileScreen() {
             />
             <ListRow
               testID="profile.account.phone"
-              icon="phone"
+              icon="phone-fill"
               label="Phone"
-              // 12: `+1 212 555 0142`, as the request's detail writes it; none asks for one.
+              // 12: `+1 212 555 0142`, as the request's page writes it; none asks for one.
               value={displayPhone(profile?.phone) ?? "Add phone"}
               disabled={!ready}
               onPress={() => phoneRef.current?.present()}
             />
           </RowGroup>
-          <RowGroup testID="profile.account">
+          <View style={styles.cardGap}>
+            <RowGroup testID="profile.account" look="profile" rowHeight={31.2}>
+              <ListRow
+                testID="profile.notifications"
+                icon="bell"
+                label="Notifications"
+                disabled={!ready}
+                onPress={() => notificationsRef.current?.present()}
+              />
+              <ListRow
+                testID="profile.password"
+                icon="lock-fill"
+                label="Password"
+                disabled={!ready}
+                onPress={() => passwordRef.current?.present()}
+              />
+            </RowGroup>
+          </View>
+          <View style={styles.deleteGap}>
             <ListRow
-              testID="profile.notifications"
-              icon="bell"
-              label="Notifications"
-              disabled={!ready}
-              onPress={() => notificationsRef.current?.present()}
+              testID="profile.delete"
+              icon="trash"
+              label="Delete account"
+              danger
+              look="profile"
+              height={33.4}
+              onPress={() => deleteRef.current?.present()}
             />
-            <ListRow
-              testID="profile.password"
-              icon="lock"
-              label="Password"
-              disabled={!ready}
-              onPress={() => passwordRef.current?.present()}
+          </View>
+          <View style={styles.signOutGap}>
+            <Button
+              testID="profile.signOut"
+              label={signingOut ? "Signing out…" : "Sign out"}
+              variant="destructive"
+              busy={signingOut}
+              height={29.3}
+              text="profileSignout"
+              style={styles.signOut}
+              onPress={signOutNow}
             />
-          </RowGroup>
-          <ListRow
-            testID="profile.delete"
-            icon="trash"
-            label="Delete account"
-            danger
-            onPress={() => deleteRef.current?.present()}
-          />
-          <Button
-            testID="profile.signOut"
-            label={signingOut ? "Signing out…" : "Sign out"}
-            variant="destructive"
-            busy={signingOut}
-            onPress={signOutNow}
-          />
+          </View>
           {signOutFailure ? <Text style={styles.message}>{signOutFailure}</Text> : null}
           {credit ? (
             // The credit the photograph owes (ADR-IMPL-043).
@@ -410,32 +462,94 @@ export default function ProfileScreen() {
   );
 }
 
-/** 12: a number in `title-sm` over its name in slate. */
-function Stat({ value, label }: { value: string; label: string }) {
+/** 12: a number over its name, centred on its column — `at` pt from the screen's middle. */
+function Stat({ value, label, at }: { value: string; label: string; at: number }) {
   return (
-    <View style={styles.stat} accessible accessibilityLabel={`${value} ${label}`}>
+    <View style={[styles.stat, { marginLeft: at - STAT_W / 2 }]} accessible accessibilityLabel={`${value} ${label}`}>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
+/**
+ * 12, measured (pt): the numbers' baseline 29.6 under `Flies from JFK`'s, their names' 14.7 under that; the columns
+ * centred 121.3 left of the middle, on it and 120.3 right of it; two rules 22.6 tall from 16.9 under the home line,
+ * 66.7 and 66.9 either side of the middle. The pills 33.9 tall, 14.7 under the names, from
+ * 16.3 to 16.1 pt in, 8.1 apart. `My trips` 37.2 under the pills (its ink 17.1 in), `See all ›` ending 18.9 pt from the
+ * edge, 2.3 above its baseline. The trips 10.8 under the title, from 12.5 in, 4.9 apart. The row cards 13.1 under the
+ * trips, 15 in from the left and 16 from the right, 9.5 apart (8.8 before Delete account); Sign out 7.6 under, 29.3
+ * tall, 15.6 in.
+ */
+const STAT_W = 110;
+const PILL = 33.9;
+const statValue = tokens.type.statValue;
+const statLabel = tokens.type.statLabel;
+const homeType = tokens.type.profileHome;
+const tripsTitle = tokens.type.profileSection;
+const seeAll = tokens.type.profileLink;
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   scroll: { paddingBottom: tokens.space.xl },
   bandPlaceholder: { backgroundColor: tokens.colors.surfaceTint },
-  bandAction: { position: "absolute", right: tokens.space.gutter },
+  bandAction: { position: "absolute", right: 19.2 },
   loadingIdentity: { alignItems: "center", gap: tokens.space.sm, marginTop: -AVATAR_OVER },
   content: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.lg, gap: tokens.space.md },
-  // 12: the two numbers centred, a rule between them.
-  stats: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
-  stat: { flex: 1, alignItems: "center", gap: 2 },
-  statRule: { width: StyleSheet.hairlineWidth * 2, alignSelf: "stretch", backgroundColor: tokens.colors.borderDefault },
-  statValue: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
-  statLabel: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  actions: { flexDirection: "row", gap: tokens.space.sm, marginTop: tokens.space.xs },
+  // The block's top is the numbers' line box: their baseline 29.6 under the home line's.
+  stats: {
+    height: baselineOffset(statValue) + 14.7 + belowBaseline(statLabel),
+    marginTop: 29.6 - belowBaseline(homeType) - baselineOffset(statValue),
+  },
+  stat: { position: "absolute", left: "50%", top: 0, width: STAT_W, alignItems: "center" },
+  statRule: {
+    position: "absolute",
+    left: "50%",
+    // 16.9 under the home line's baseline, which is 29.6 − the numbers' offset above the block.
+    top: 16.9 - (29.6 - baselineOffset(statValue)),
+    width: StyleSheet.hairlineWidth,
+    height: 22.6,
+    backgroundColor: tokens.colors.borderDefault,
+  },
+  statValue: { ...rn(statValue), color: tokens.colors.textPrimary },
+  statLabel: {
+    ...rn(statLabel),
+    color: tokens.colors.textOnTint,
+    marginTop: 14.7 - belowBaseline(statValue) - baselineOffset(statLabel),
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 8.1,
+    paddingLeft: 16.3,
+    paddingRight: 16.1,
+    marginTop: 14.7 - belowBaseline(statLabel),
+  },
+  actionsAlone: { marginTop: tokens.space.lg },
   action: { flex: 1 },
-  trips: { gap: tokens.space.sm, marginTop: tokens.space.xs },
+  pill: { alignSelf: "stretch", ...tokens.elevation.card },
+  tripsHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingLeft: 16,
+    paddingRight: 18.9 - 3.2 - 2,
+    marginTop: 37.2 - baselineOffset(tripsTitle),
+  },
+  tripsTitle: { ...rn(tripsTitle), color: tokens.colors.textPrimary },
+  seeAll: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10.1 - 4.4,
+    marginTop: baselineOffset(tripsTitle) - 2.3 - baselineOffset(seeAll),
+  },
+  seeAllText: { ...rn(seeAll), color: tokens.colors.textOnTint },
+  pressed: { opacity: 0.7 },
+  tripsRow: { paddingLeft: 12.5, paddingRight: 8.3, gap: 4.9, marginTop: 10.8 - belowBaseline(tripsTitle) },
+  rows: { paddingLeft: 15, paddingRight: 16, marginTop: 13.1 },
+  cardGap: { marginTop: 9.5 },
+  deleteGap: { marginTop: 8.8 },
+  signOutGap: { marginTop: 7.6, marginLeft: 0.6, marginRight: -0.4 },
+  signOut: { alignSelf: "stretch", borderWidth: 0.6 },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
-  message: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, textAlign: "center" },
+  message: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, textAlign: "center", marginTop: 8 },
 });

@@ -1,9 +1,10 @@
+import type { ImageContentPosition } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "../icons";
 import { Photo, type PhotoSource } from "../primitives/Photo";
-import { rn } from "../rn-type";
+import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
 
 type Carrier = { name: string; logoUrl: string | null };
@@ -154,6 +155,8 @@ export function TripCard({ photo, fallback, cabin, from, to, dates, facts, carri
 
 type PhotoCardProps = {
   photo: PhotoSource | null;
+  /** The part of a wide photograph the card shows (12: London's window from 34 % of its width). */
+  position?: ImageContentPosition;
   fallback: PhotoSource | null;
   /** `memory` for a satellite view (its terms ask that it not be kept). */
   cachePolicy?: "memory" | "disk";
@@ -169,11 +172,13 @@ type PhotoCardProps = {
 };
 
 /**
- * A trip on Profile (12, `My trips`; sheet 40 · 12): the city's photograph, darkened at its foot, with the city, the
- * days and the route over it in white. The whole card opens the request.
+ * A trip on Profile (12, `My trips`; sheet 40 · 12), measured: 89.4 × 135, radius 8; the city's photograph darkened
+ * from 42 % of its height to its foot; the words 8 pt in, in white — the city's baseline 32.6 pt above the foot, the
+ * days' 19.9, the route's 8.1. The whole card opens the request.
  */
 export function TripPhotoCard({
   photo,
+  position,
   fallback,
   cachePolicy = "disk",
   city,
@@ -192,10 +197,16 @@ export function TripPhotoCard({
       onPress={onPress}
       style={({ pressed }) => [styles.photoCard, pressed && styles.pressed]}
     >
-      <Photo source={photo} fallback={fallback} cachePolicy={cachePolicy} style={StyleSheet.absoluteFill} />
+      <Photo
+        source={photo}
+        fallback={fallback}
+        cachePolicy={cachePolicy}
+        position={position}
+        style={StyleSheet.absoluteFill}
+      />
       <LinearGradient
         colors={["transparent", tokens.colors.photoVeil]}
-        locations={[0.35, 1]}
+        locations={[0.42, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -203,8 +214,14 @@ export function TripPhotoCard({
         <Text style={styles.photoCity} numberOfLines={1}>
           {city}
         </Text>
-        {dates ? <Text style={styles.photoLine}>{dates}</Text> : null}
-        <Text style={styles.photoLine}>{route}</Text>
+        {dates ? (
+          <Text style={styles.photoDates} numberOfLines={1}>
+            {dates}
+          </Text>
+        ) : null}
+        <Text style={styles.photoRoute} numberOfLines={1}>
+          {route}
+        </Text>
       </View>
     </Pressable>
   );
@@ -220,20 +237,28 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
     ...tokens.elevation.card,
   },
-  // 12: four to the screen's width in the image; three and a part here, at the club's own type sizes. Larger text makes
-  // the cards taller, never cut: the city alone keeps one line.
+  // 12: four to the screen's width. Larger text makes the cards taller, never cut: the city alone keeps one line.
   photoCard: {
-    width: 112,
-    minHeight: 148,
-    borderRadius: tokens.radius.md,
+    width: 89.4,
+    minHeight: 135,
+    borderRadius: 8,
     overflow: "hidden",
     justifyContent: "flex-end",
     backgroundColor: tokens.colors.surfaceTint,
   },
   pressed: { opacity: 0.85 },
-  photoText: { padding: tokens.space.sm, gap: 2 },
-  photoCity: { ...rn(tokens.type.subtitle), color: tokens.colors.textOnPhoto },
-  photoLine: { ...rn(tokens.type.bodySm), color: tokens.colors.textOnPhoto },
+  photoText: { paddingLeft: 8, paddingRight: 6, paddingBottom: 8.1 - belowBaseline(tokens.type.tripRoute) },
+  photoCity: { ...rn(tokens.type.tripCity), color: tokens.colors.textOnPhoto },
+  photoDates: {
+    ...rn(tokens.type.tripDates),
+    color: tokens.colors.textOnPhoto,
+    marginTop: 32.6 - 19.9 - belowBaseline(tokens.type.tripCity) - baselineOffset(tokens.type.tripDates),
+  },
+  photoRoute: {
+    ...rn(tokens.type.tripRoute),
+    color: tokens.colors.textOnPhoto,
+    marginTop: 19.9 - 8.1 - belowBaseline(tokens.type.tripDates) - baselineOffset(tokens.type.tripRoute),
+  },
   summaryPhoto: { width: 76, minHeight: 76, borderRadius: tokens.radius.sm },
   tripPhoto: { width: 120, minHeight: 96, borderRadius: tokens.radius.sm },
   body: { flex: 1, gap: tokens.space.xxs, paddingVertical: tokens.space.xxs, paddingRight: tokens.space.xxs },

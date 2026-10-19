@@ -28,8 +28,9 @@ type Props = {
   trailingAtEdge?: boolean;
   /** The pill's height as the screen draws it (01 `Continue` 44.2, 04 36.6, 10 53.8 …); 44 by default. */
   height?: number;
-  /** The words' style (`button` 14.5 Semibold by default; 04's `buttonBold`, 10's `buttonLg`, 11's `buttonDetail`). */
-  text?: "button" | "buttonBold" | "buttonSm" | "buttonLg" | "buttonDetail";
+  /** The words' type role (`button` by default; 04's `buttonBold`, 10's `buttonLg`, 11's `buttonDetail`, 12's
+   *  `profilePill`, …): each screen's pills as it draws them. */
+  text?: keyof typeof tokens.type;
   /** The icon's box (11: the filled handset at 21.4) and the space from it to the words (11: 14.75). */
   iconSize?: number;
   iconGap?: number;
@@ -88,7 +89,7 @@ export function Button({
     >
       {busy ? <ActivityIndicator size="small" color={glyph} style={styles.spinner} /> : null}
       {!busy && icon ? <Icon name={icon} size={iconSize} color={glyph} strokeWidth={2} /> : null}
-      <Text style={[styles.label, TEXT[text], tone.label, dimmed && { color: word }]} numberOfLines={1}>
+      <Text style={[styles.label, rn(tokens.type[text]), tone.label, dimmed && { color: word }]} numberOfLines={1}>
         {label}
       </Text>
       {trailing && !busy ? (
@@ -134,14 +135,6 @@ const TONE: Record<Variant, { frame: ViewStyle; pressed: ViewStyle; label: TextS
 };
 
 const DEFAULT_HEIGHT = 44;
-
-const TEXT: Record<NonNullable<Props["text"]>, TextStyle> = {
-  button: rn(tokens.type.button),
-  buttonBold: rn(tokens.type.buttonBold),
-  buttonSm: rn(tokens.type.buttonSm),
-  buttonLg: rn(tokens.type.buttonLg),
-  buttonDetail: rn(tokens.type.buttonDetail),
-};
 
 const styles = StyleSheet.create({
   button: {
