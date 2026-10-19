@@ -21,7 +21,7 @@ type Props = {
    * 8.1 after it and 13.2 from the edge; `place` on a destination's page (04) — 30 pt, 10.3 in, 7.1, 11.7, the words in
    * Medium. 13's measure without one.
    */
-  look?: "route" | "place";
+  look?: "route" | "place" | "fare";
   /** None: a fact, not a choice — drawn the same, not pressable. */
   onPress?: () => void;
   testID: string;
@@ -37,7 +37,25 @@ const TRIP = { height: 31, padLeft: 12, icon: 16, gap: 9, padRight: 14 } as cons
 const LOOKS = {
   route: { height: 31.3, padLeft: 12.5, icon: 16, gap: 8.1, padRight: 13.2, stroke: 1.9, text: tokens.type.routeChip },
   place: { height: 30, padLeft: 10.3, icon: 16, gap: 7.1, padRight: 11.7, stroke: 1.9, text: tokens.type.placeChip },
+  // 05: the fare's facts, 26.8 pt, 9.3 in, the words 7.15 after the icon's 16-pt box and 12.6 from the edge; the seat
+  // drawn smaller in its box (13.4 tall).
+  fare: {
+    height: 26.8,
+    padLeft: 9.3,
+    icon: 16,
+    gap: 7.15,
+    padRight: 12.6,
+    stroke: 1.75,
+    text: tokens.type.fareChip,
+    sizes: { seat: 13.65 },
+  },
 } as const;
+
+/** A glyph drawn smaller than its look's box, centred in that box (05's seat). */
+function glyphSize(look: (typeof LOOKS)[keyof typeof LOOKS] | null, icon: IconName): number | undefined {
+  if (!look || !("sizes" in look)) return undefined;
+  return (look.sizes as Partial<Record<IconName, number>>)[icon];
+}
 
 export function Chip({
   label,
@@ -56,7 +74,14 @@ export function Chip({
   const content = (
     <>
       {icon ? (
-        <Icon name={icon} size={drawn?.icon ?? TRIP.icon} color={color} strokeWidth={drawn?.stroke ?? 1.6} />
+        <View style={[styles.iconBox, { width: drawn?.icon ?? TRIP.icon }]}>
+          <Icon
+            name={icon}
+            size={glyphSize(drawn, icon) ?? drawn?.icon ?? TRIP.icon}
+            color={color}
+            strokeWidth={drawn?.stroke ?? 1.6}
+          />
+        </View>
       ) : null}
       <Text
         style={[
@@ -125,6 +150,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: tokens.colors.surfaceTint,
   },
+  iconBox: { alignItems: "center" },
   equal: { flex: 1 },
   content: { flexGrow: 1 },
   selected: { backgroundColor: tokens.colors.primary },

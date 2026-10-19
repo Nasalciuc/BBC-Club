@@ -1,13 +1,12 @@
 import {
   AlertTriangle,
   ArrowLeft,
-  ArrowLeftRight,
+  ArrowRightLeft,
   ArrowRight,
   Armchair,
   Bell,
   Bookmark,
   Calendar,
-  ChartNoAxesColumn,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -28,7 +27,7 @@ import {
   Lock,
   Mail,
   MapPin,
-  MessageSquare,
+  MessageSquareText,
   Minus,
   Phone,
   Plane,
@@ -44,7 +43,7 @@ import {
   Users,
   X,
 } from "lucide-react-native";
-import Svg, { Circle as SvgCircle, Ellipse, Path } from "react-native-svg";
+import Svg, { Circle as SvgCircle, Ellipse, Path, Rect } from "react-native-svg";
 import {
   CABIN_BUSINESS,
   CABIN_FIRST,
@@ -257,6 +256,50 @@ function BookmarkFill({ size = 24, color = tokens.colors.textPrimary, strokeWidt
   );
 }
 
+/**
+ * 05's two row marks, fitted to the screen's own pixels (`screens/05-fare-details.png`, ffe6eee44a4db897…) as stroked
+ * geometry — rendered at 8x and matched to the crop's ink — in the 20-pt box the row centres on its mark: `About this
+ * fare`'s document (a rounded rectangle and three lines, no folded corner) and `The comparison`'s three outlined bars.
+ * The handoff's pinned Lucide `file-text` and `chart-column-increasing` draw a fold and axes the screen does not.
+ */
+function DocumentLines({ size = 20, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Rect x={3.62} y={2.09} width={12.69} height={16.27} rx={1.41} stroke={color} strokeWidth={1.2} />
+      <Path d="M7.09 7.09H13M7.09 10.26H13M7.09 13.43H10.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function BarsOutline({ size = 20, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      {[
+        [3.48, 9.86],
+        [8.35, 5.97],
+        [13.15, 2.21],
+      ].map(([x, y]) => (
+        <Rect key={x} x={x} y={y} width={3.05} height={16.71 - y!} rx={0.64} stroke={color} strokeWidth={1.19} />
+      ))}
+    </Svg>
+  );
+}
+
+/** 05: the fare saved — Lucide's `heart` filled, its outline kept so it stands as large as the line one. */
+function HeartFill({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
+        fill={color}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 function PlaneFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
   // A plane seen from above, nose up, filled: the route's plane on the globe (13) and on a flight's line (sheet 40).
   return (
@@ -298,6 +341,7 @@ export const icons = {
   x: X,
   share: Share,
   heart: Heart,
+  "heart-fill": HeartFill,
   bookmark: Bookmark,
   "bookmark-fill": BookmarkFill,
   phone: Phone,
@@ -315,11 +359,12 @@ export const icons = {
   check: Check,
   info: Info,
   "sun-cloud": CloudSun,
-  "bar-chart": ChartNoAxesColumn,
+  "bar-chart": BarsOutline,
+  document: DocumentLines,
   "file-text": FileText,
-  message: MessageSquare,
+  message: MessageSquareText,
   mail: Mail,
-  "round-trip": ArrowLeftRight,
+  "round-trip": ArrowRightLeft,
   alert: CircleAlert,
   settings: Settings,
   clock: Clock,

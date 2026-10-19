@@ -16,6 +16,9 @@ module.exports = {
   "surface-save": "#D2E2FB",
   "surface-save-soft": "#E0EBF5",
   "grabber": "#D5D9E4",
+  "grabber-about": "#D9E1ED",
+  "grabber-request": "#B8C1CC",
+  "text-label": "#4E5E7B",
   "notice-circle": "#E1E8F2",
   "call-circle": "#E9EFF7",
   "step-ring": "#C3D9FC",
@@ -42,10 +45,14 @@ module.exports = {
   "status-danger-tint": "#FDEDEF",
   "sky": "#C9E4FD",
   "sky-light": "#E6F2FD",
-  "scrim": "rgba(0,0,0,0.62)",
+  "scrim": "rgba(12,15,22,0.61)",
   "photo-veil": "rgba(5,12,28,0.55)",
   "shadow": "#0F172A",
   "art-sun": "#FDB20F",
+  "surface-neutral": "#F8F8F8",
+  "map-ocean": "#AFD8F7",
+  "map-land": "#EEF2F6",
+  "rule-line": "#DCDFE6",
   "globe-ocean": "#1B5E9E",
   "globe-ocean-deep": "#0B3F73",
   "globe-land": "#8FA77A",
@@ -1511,6 +1518,350 @@ module.exports = {
     {
       "lineHeight": "13px",
       "letterSpacing": "0.31px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-title": [
+    "30px",
+    {
+      "lineHeight": "33px",
+      "letterSpacing": "-0.41px",
+      "fontWeight": "700"
+    }
+  ],
+  "fare-chip": [
+    "10.15px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.26px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-small": [
+    "10.2px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "-0.06px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-temp": [
+    "21.7px",
+    {
+      "lineHeight": "26px",
+      "letterSpacing": "0.13px",
+      "fontWeight": "600"
+    }
+  ],
+  "fare-weather": [
+    "9.34px",
+    {
+      "lineHeight": "12px",
+      "letterSpacing": "0.22px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-amount": [
+    "25.2px",
+    {
+      "lineHeight": "29px",
+      "letterSpacing": "-0.85px",
+      "fontWeight": "700"
+    }
+  ],
+  "fare-down": [
+    "9.73px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.71px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-save": [
+    "10.65px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.28px",
+      "fontWeight": "500"
+    }
+  ],
+  "fare-card-title": [
+    "12.44px",
+    {
+      "lineHeight": "16px",
+      "letterSpacing": "-0.15px",
+      "fontWeight": "700"
+    }
+  ],
+  "fare-code": [
+    "19.1px",
+    {
+      "lineHeight": "23px",
+      "letterSpacing": "-0.55px",
+      "fontWeight": "600"
+    }
+  ],
+  "fare-city": [
+    "9.38px",
+    {
+      "lineHeight": "12px",
+      "letterSpacing": "0.05px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-time": [
+    "12.3px",
+    {
+      "lineHeight": "15px",
+      "letterSpacing": "0.17px",
+      "fontWeight": "700"
+    }
+  ],
+  "fare-day": [
+    "9.12px",
+    {
+      "lineHeight": "12px",
+      "letterSpacing": "0.23px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-plus": [
+    "10px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-airline": [
+    "10.3px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.33px",
+      "fontWeight": "400"
+    }
+  ],
+  "fare-row": [
+    "11px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.18px",
+      "fontWeight": "600"
+    }
+  ],
+  "map-code": [
+    "11.1px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "700"
+    }
+  ],
+  "map-city": [
+    "7.85px",
+    {
+      "lineHeight": "10px",
+      "letterSpacing": "0.14px",
+      "fontWeight": "500"
+    }
+  ],
+  "button-fare": [
+    "14.55px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "-0.12px",
+      "fontWeight": "600"
+    }
+  ],
+  "fare-fine": [
+    "8.6px",
+    {
+      "lineHeight": "11px",
+      "letterSpacing": "0.3px",
+      "fontWeight": "400"
+    }
+  ],
+  "about-title": [
+    "26.6px",
+    {
+      "lineHeight": "31px",
+      "letterSpacing": "0.1px",
+      "fontWeight": "700"
+    }
+  ],
+  "about-body": [
+    "14px",
+    {
+      "lineHeight": "18px",
+      "letterSpacing": "0.18px",
+      "fontWeight": "400"
+    }
+  ],
+  "button-about": [
+    "13.8px",
+    {
+      "lineHeight": "18px",
+      "letterSpacing": "0.33px",
+      "fontWeight": "600"
+    }
+  ],
+  "gone-title": [
+    "25.15px",
+    {
+      "lineHeight": "29px",
+      "letterSpacing": "0.38px",
+      "fontWeight": "700"
+    }
+  ],
+  "button-gone": [
+    "14.8px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.25px",
+      "fontWeight": "600"
+    }
+  ],
+  "request-title": [
+    "18.5px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "0.45px",
+      "fontWeight": "700"
+    }
+  ],
+  "summary-title": [
+    "12.4px",
+    {
+      "lineHeight": "16px",
+      "letterSpacing": "0.4px",
+      "fontWeight": "700"
+    }
+  ],
+  "summary-cabin": [
+    "8.95px",
+    {
+      "lineHeight": "12px",
+      "letterSpacing": "0.4px",
+      "fontWeight": "400"
+    }
+  ],
+  "summary-dates": [
+    "10.8px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.5px",
+      "fontWeight": "400"
+    }
+  ],
+  "summary-route": [
+    "9.4px",
+    {
+      "lineHeight": "12px",
+      "letterSpacing": "0.6px",
+      "fontWeight": "400"
+    }
+  ],
+  "summary-price": [
+    "10.7px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "-0.1px",
+      "fontWeight": "700"
+    }
+  ],
+  "summary-published": [
+    "8.6px",
+    {
+      "lineHeight": "11px",
+      "letterSpacing": "0.12px",
+      "fontWeight": "400"
+    }
+  ],
+  "summary-save": [
+    "8.6px",
+    {
+      "lineHeight": "11px",
+      "letterSpacing": "0.12px",
+      "fontWeight": "500"
+    }
+  ],
+  "summary-source": [
+    "6.9px",
+    {
+      "lineHeight": "9px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "400"
+    }
+  ],
+  "segment-on": [
+    "9.9px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "600"
+    }
+  ],
+  "segment-off": [
+    "9.65px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.12px",
+      "fontWeight": "400"
+    }
+  ],
+  "field-label": [
+    "8.7px",
+    {
+      "lineHeight": "11px",
+      "letterSpacing": "0.25px",
+      "fontWeight": "400"
+    }
+  ],
+  "field-value": [
+    "10.65px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.4px",
+      "fontWeight": "400"
+    }
+  ],
+  "field-placeholder": [
+    "9.1px",
+    {
+      "lineHeight": "12px",
+      "letterSpacing": "0.55px",
+      "fontWeight": "400"
+    }
+  ],
+  "request-section": [
+    "15.8px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.33px",
+      "fontWeight": "700"
+    }
+  ],
+  "button-request": [
+    "10.57px",
+    {
+      "lineHeight": "14px",
+      "letterSpacing": "0.4px",
+      "fontWeight": "600"
+    }
+  ],
+  "request-promise": [
+    "9.65px",
+    {
+      "lineHeight": "13px",
+      "letterSpacing": "0.2px",
+      "fontWeight": "400"
+    }
+  ],
+  "field-error": [
+    "7.96px",
+    {
+      "lineHeight": "10px",
+      "letterSpacing": "0.42px",
       "fontWeight": "400"
     }
   ]

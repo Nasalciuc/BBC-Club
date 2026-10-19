@@ -43,6 +43,15 @@ export { FieldError, TextField } from "./fields/TextField";
 
 export { CAROUSEL_PAD, CarouselRow, OfferCard, OfferCardWide } from "./cards/OfferCard";
 export { type AirlineMark, FlightCard } from "./cards/FlightCard";
+export {
+  type AirlineRibbon,
+  FareOverviewCard,
+  FareRouteCard,
+  FareSummaryCard,
+  type FareWeather,
+  PageDots,
+  PhotoThumbs,
+} from "./cards/FarePage";
 export { FlightOverview, QuoteFareCard, RouteCard, YourFareCard } from "./cards/FareCards";
 export { TripCard, TripPhotoCard, TripSummaryCard } from "./cards/TripCards";
 export {
@@ -64,6 +73,7 @@ export { HOME_SHEET_HANDLE, HOME_SHEET_PILL, HomeSheet } from "./layout/HomeShee
 export { ModalSheet, type ModalSheetHandle, useKeyboardShown } from "./layout/ModalSheet";
 export { PageModal, type PageModalHandle } from "./layout/PageModal";
 export { MODAL_SHEET_TOP, modalSheetHeight, type ModalSheetSize } from "./layout/modal-sheet-sizes";
+export { ABOUT_BODY, MODAL_SHEET_LOOKS, type ModalSheetLookName } from "./layout/modal-sheet-looks";
 export { TabBar } from "./layout/TabBar";
 export { TopBar } from "./layout/TopBar";
 

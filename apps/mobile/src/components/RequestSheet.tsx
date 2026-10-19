@@ -1,13 +1,12 @@
 import NetInfo from "@react-native-community/netinfo";
 import { useRouter, type Href } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Keyboard, StyleSheet, Text, View } from "react-native";
+import { Keyboard, StyleSheet, Text, type TextStyle, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
 import {
   Button,
-  Divider,
   FieldError,
   Icon,
   ModalSheet,
@@ -18,6 +17,7 @@ import {
   TextButton,
   TextField,
   TripSummaryCard,
+  baselineOffset,
   dayText,
   rn,
   tokens,
@@ -26,6 +26,8 @@ import {
 
 import { SearchTravelersSheet, type TravelersSheetHandle } from "@/features/explore/SearchPreferenceSheets";
 import { cabinLabel, datesChipLabel, travelersLabel } from "@/features/explore/travel-preferences";
+import { airlineMark } from "@/features/fares/airline-marks";
+import { clubPhoto } from "@/features/places/club-photos";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
@@ -301,56 +303,74 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       <ModalSheet
         ref={modalRef}
         title={title}
+        look="request"
         closeTestID="request.close"
         testID="request.sheet"
-        contentGap={tokens.space.sm}
-        // 06: the pill and its promise just over the home indicator, leaving the form its room.
-        footerBottom={tokens.space.sm}
         dismissible={!busy}
         closable={!busy}
         insets={insets}
         footer={
-          <View style={styles.footer}>
+          <View>
             <Button
               testID="request.submit"
               label={busy ? "Sending…" : title}
               variant="primary"
               trailing="arrow"
+              height={SHEET.pill.height}
+              text="buttonRequest"
+              trailingSize={SHEET.pill.arrow}
+              trailingStroke={SHEET.pill.arrowStroke}
+              trailingGap={SHEET.pill.arrowGap}
+              style={{ ...SHEET.pill.shadow, paddingTop: 2 * SHEET.pill.drop }}
               busy={busy}
               onPress={() => void onSubmit()}
             />
-            <View style={styles.promise}>
-              <Icon name="phone" size={16} color={tokens.colors.textPrimary} strokeWidth={1.75} />
-              <Text style={styles.promiseText}>A specialist will call you shortly.</Text>
+            <View style={[styles.promise, { marginTop: SHEET.promise.below - baselineOffset(PROMISE) }]}>
+              <View style={{ marginTop: baselineOffset(PROMISE) - SHEET.promise.iconRise - SHEET.promise.icon / 2 }}>
+                <Icon name="phone-fill" size={SHEET.promise.icon} color={tokens.colors.textPrimary} />
+              </View>
+              <Text style={[PROMISE, styles.promiseText]}>A specialist will call you shortly.</Text>
             </View>
           </View>
         }
       >
-        <TripSummaryCard
-          testID="request.summary"
-          photo={cardPicture(trip.media, photoFor(trip.toCode), PICTURE_HEADERS)}
-          fallback={CLUB_PICTURE}
-          title={summary.title}
-          cabin={cabinLabel(state.cabin)}
-          dates={datesChipLabel({ depart: outbound?.date || null, return: round ? state.legs[1]?.date || null : null })}
-          route={summary.route}
-          carrier={summary.carrier}
-          price={summary.price}
-        />
+        <View style={SHEET.card}>
+          <TripSummaryCard
+            testID="request.summary"
+            // The design's photograph of the city where it has one (ADR-IMPL-056); else the offer's own picture or the
+            // city's photograph (ADR-IMPL-043).
+            photo={
+              (!trip.media ? clubPhoto(trip.toCode, "request") : null) ??
+              cardPicture(trip.media, photoFor(trip.toCode), PICTURE_HEADERS)
+            }
+            fallback={CLUB_PICTURE}
+            title={summary.title}
+            cabin={cabinLabel(state.cabin)}
+            dates={summaryDates(outbound?.date || null, round ? state.legs[1]?.date || null : null)}
+            route={summary.route}
+            carrier={summary.carrier}
+            mark={airlineMark(summary.carrier?.code)}
+            price={summary.price}
+          />
+        </View>
 
-        <Segmented
-          options={[
-            { key: "round", label: "Round trip", testID: "request.tripType.round" },
-            { key: "oneway", label: "One way", testID: "request.tripType.oneway" },
-          ]}
-          value={state.tripType}
-          disabled={busy}
-          onChange={(tripType) => dispatch({ type: "setTripType", tripType })}
-        />
+        <View style={[SHEET.column, { marginTop: SHEET.segments.top - SHEET.cardBottom }]}>
+          <Segmented
+            look="request"
+            options={[
+              { key: "round", label: "Round trip", testID: "request.tripType.round" },
+              { key: "oneway", label: "One way", testID: "request.tripType.oneway" },
+            ]}
+            value={state.tripType}
+            disabled={busy}
+            onChange={(tripType) => dispatch({ type: "setTripType", tripType })}
+          />
+        </View>
 
-        <View ref={returnBlock}>
-          <View style={styles.dates}>
+        <View ref={returnBlock} style={[SHEET.column, { marginTop: SHEET.dates.top - SHEET.segments.bottom }]}>
+          <View style={[styles.dates, { gap: SHEET.dates.gap }]}>
             <PickerField
+              look="request"
               testID="request.depart"
               label="Depart"
               icon="calendar"
@@ -361,11 +381,12 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             />
             {round ? (
               <PickerField
+                look="request"
                 testID="request.return"
                 label="Return"
                 icon="calendar"
                 value={state.legs[1]?.date ? dayText(state.legs[1].date) : null}
-                placeholder="Select date"
+                placeholder=" "
                 error={Boolean(state.returnError)}
                 disabled={busy}
                 onPress={() => presentDates("return")}
@@ -373,14 +394,17 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             ) : null}
           </View>
           {state.returnError ? (
-            <View style={round ? styles.returnErrorRound : undefined}>
-              <FieldError testID="request.returnError">{state.returnError}</FieldError>
+            <View style={round ? { marginLeft: SHEET.returnError.left } : undefined}>
+              <FieldError testID="request.returnError" look="request">
+                {state.returnError}
+              </FieldError>
             </View>
           ) : null}
         </View>
 
-        <View style={styles.row}>
+        <View style={[SHEET.column, styles.row, { marginTop: SHEET.travelers.top - SHEET.dates.bottom }]}>
           <PickerField
+            look="request"
             testID="request.travelers"
             label="Travelers"
             icon="user"
@@ -393,22 +417,29 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
           />
         </View>
 
-        <Divider style={styles.divider} />
-        <Text style={styles.contactTitle} accessibilityRole="header">
+        <View style={[styles.divider, SHEET.divider]} />
+        <Text
+          style={[SECTION, styles.contactTitle, { marginTop: SHEET.section.top, marginLeft: SHEET.section.left }]}
+          accessibilityRole="header"
+        >
           We will contact you
         </Text>
-        <TextField
-          testID="request.name"
-          label="Name"
-          icon="user"
-          value={state.contact.name}
-          editable={!busy}
-          onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
-          autoCapitalize="words"
-          autoComplete="name"
-        />
-        <View ref={phoneBlock}>
+        <View style={[SHEET.column, { marginTop: SHEET.contact.first - SHEET.section.bottom }]}>
           <TextField
+            look="request"
+            testID="request.name"
+            label="Name"
+            icon="user"
+            value={state.contact.name}
+            editable={!busy}
+            onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
+            autoCapitalize="words"
+            autoComplete="name"
+          />
+        </View>
+        <View ref={phoneBlock} style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
+          <TextField
+            look="request"
             testID="request.phone"
             label="Phone"
             icon="phone"
@@ -419,7 +450,11 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             keyboardType="phone-pad"
             autoComplete="tel"
           />
-          {state.phoneError ? <FieldError testID="request.phoneError">{state.phoneError}</FieldError> : null}
+          {state.phoneError ? (
+            <FieldError testID="request.phoneError" look="request">
+              {state.phoneError}
+            </FieldError>
+          ) : null}
           {canUseSaved && savedPhone ? (
             <View style={styles.savedPhone}>
               <TextButton
@@ -430,31 +465,37 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             </View>
           ) : null}
         </View>
-        <TextField
-          testID="request.email"
-          label="Email"
-          icon="mail"
-          value={state.contact.email}
-          editable={!busy}
-          onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-        />
-        <TextField
-          testID="request.note"
-          label="Note (optional)"
-          icon="message"
-          value={state.note}
-          editable={!busy}
-          placeholder="Tell us about your travel plans or any special requests"
-          onChangeText={(v) => dispatch({ type: "setNote", note: v })}
-          multiline
-          maxLength={NOTE_MAX}
-        />
+        <View style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
+          <TextField
+            look="request"
+            testID="request.email"
+            label="Email"
+            icon="mail"
+            value={state.contact.email}
+            editable={!busy}
+            onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+          />
+        </View>
+        <View style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
+          <TextField
+            look="request"
+            testID="request.note"
+            label="Note (optional)"
+            icon="message"
+            value={state.note}
+            editable={!busy}
+            placeholder="Tell us about your travel plans or any special requests"
+            onChangeText={(v) => dispatch({ type: "setNote", note: v })}
+            multiline
+            maxLength={NOTE_MAX}
+          />
+        </View>
 
         {state.submitError ? (
-          <View ref={notSent}>
+          <View ref={notSent} style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
             <NoticeCard
               testID="request.notSent"
               tone="error"
@@ -482,16 +523,63 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   );
 });
 
+type Role = TextStyle & { fontSize: number; lineHeight: number };
+const PROMISE = rn(tokens.type.requestPromise) as Role;
+const SECTION = rn(tokens.type.requestSection) as Role;
+
+/**
+ * 06 from the screen's top (pt; the sheet's top on 266): the trip card 17.3 in and 16.2 from the right, 318.4 to 408.5;
+ * the segments from 418.4, 24.8 tall; Depart and Return from 453.2, 37.4 tall, 9.5 apart; Travelers from 499.3; the
+ * rule on 549.6; `We will contact you` on 576.7, 20.2 in; the contact fields from 589.3, 36.8 tall, 7.6 apart — the
+ * fields 19.2 in and 17.8 from the right; the pill 29 tall, its words and arrow centred, the promise 15.3 under it.
+ */
+const SHEET = {
+  card: { marginLeft: 17.3, marginRight: 16.2 },
+  cardBottom: 408.5,
+  column: { marginLeft: 19.2, marginRight: 17.8 },
+  segments: { top: 418.4, bottom: 418.4 + 24.8 },
+  dates: { top: 453.17, bottom: 453.17 + 37.4, gap: 9.5 },
+  // 22: the return's line under its field, from the field's own left.
+  returnError: { left: 173.1 + 9.5 },
+  travelers: { top: 499.32, bottom: 499.32 + 37.4 },
+  divider: { marginTop: 549.37 - (499.32 + 37.4), marginLeft: 18.7, marginRight: 17.8 },
+  section: {
+    top: 576.68 - baselineOffset(SECTION) - 549.83,
+    left: 20.2,
+    bottom: 576.68 - baselineOffset(SECTION) + SECTION.lineHeight,
+  },
+  contact: { first: 588.12, gap: 7.6 },
+  pill: {
+    height: 29,
+    arrow: 16.4,
+    arrowStroke: 1.6,
+    arrowGap: 5.2,
+    // As the web harness renders it, the words 1.77 under the pill's middle.
+    drop: 1.77,
+    shadow: { ...tokens.elevation.card },
+  },
+  promise: { below: 15.91, icon: 9.5, iconRise: 3.4 },
+} as const;
+
+/** 06's days on the card: `Nov 12 – Nov 19, 2026` — each day by its month, the year once. */
+function summaryDates(depart: string | null, ret: string | null): string {
+  if (!depart) return datesChipLabel({ depart: null, return: null });
+  const day = (ymd: string) => {
+    const label = dayText(ymd) ?? ymd;
+    return label.replace(/, \d{4}$/, "");
+  };
+  if (!ret) return dayText(depart) ?? depart;
+  const sameYear = depart.slice(0, 4) === ret.slice(0, 4);
+  return sameYear ? `${day(depart)} – ${day(ret)}, ${ret.slice(0, 4)}` : `${dayText(depart)} – ${dayText(ret)}`;
+}
+
 const styles = StyleSheet.create({
-  footer: { gap: tokens.space.xs },
-  promise: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: tokens.space.xs },
-  promiseText: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  // 06: Depart and Return side by side, 12 pt apart.
-  dates: { flexDirection: "row", gap: tokens.space.sm },
-  // 22: the return's line under the return's field, in the right half.
-  returnErrorRound: { marginLeft: "50%", paddingLeft: tokens.space.xs },
+  promise: { flexDirection: "row", alignItems: "flex-start", justifyContent: "center", gap: 7.2 },
+  promiseText: { color: tokens.colors.textLabel },
+  // 06: Depart and Return side by side.
+  dates: { flexDirection: "row" },
   row: { flexDirection: "row" },
-  divider: { marginTop: tokens.space.xs },
-  contactTitle: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, marginTop: tokens.space.xs },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderDefault },
+  contactTitle: { color: tokens.colors.textPrimary },
   savedPhone: { alignItems: "flex-start" },
 });

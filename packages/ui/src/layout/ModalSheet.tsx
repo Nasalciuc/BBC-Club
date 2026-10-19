@@ -16,10 +16,11 @@ import {
   Text,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
 import { Icon, type IconName } from "../icons";
 import { CloseButton } from "../primitives/CloseButton";
-import { rn } from "../rn-type";
+import { baselineOffset, rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { InModalSheet } from "./in-modal-sheet";
 import {
@@ -31,6 +32,7 @@ import {
   type ModalSheetSize,
   revealScroll,
 } from "./modal-sheet-sizes";
+import { MODAL_SHEET_LOOKS, type ModalSheetLookName, sheetLookFooterBottom } from "./modal-sheet-looks";
 
 /** What the sheet can bring into view: an error, or the block of the field at fault with its error. */
 type Revealable = Pick<View, "measureInWindow">;
@@ -90,6 +92,11 @@ type Props = {
    * notifications question under its bell); never taller than the size's own.
    */
   height?: number;
+  /**
+   * The sheet as its screen draws it (`about`: 20) — its height, corners, grabber, ×, title, the words' column and the
+   * pinned action, measured from the sheet's top (modal-sheet-looks). Without one, the 1.0 sizes.
+   */
+  look?: ModalSheetLookName;
   stackBehavior?: "push" | "replace" | "switch";
   onDismiss?: () => void;
 };
@@ -115,7 +122,7 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     footer,
     footerBottom,
     contentTop,
-    contentGap = tokens.space.lg,
+    contentGap,
     scroll = true,
     insets = NO_INSETS,
     dismissible = true,
@@ -124,6 +131,7 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     titleAlign = "start",
     icon,
     height,
+    look: lookName,
     stackBehavior,
     onDismiss,
   },
@@ -177,7 +185,11 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
   const headerBottom =
     HANDLE_AREA + (icon ? ICON_AREA : 0) + (headline ? HEADER_HEADLINE : titleAlone ? TITLE_LINE : HEADER_TITLE);
   const contentOffset = Math.max(0, (contentTop ?? modalSheetContentTop(size)) - headerBottom);
-  const sheetHeight = Math.min(modalSheetHeight(size, windowHeight), height ?? Number.POSITIVE_INFINITY);
+  const look = lookName ? MODAL_SHEET_LOOKS[lookName] : null;
+  const sheetHeight = Math.min(
+    modalSheetHeight(size, windowHeight),
+    height ?? look?.height ?? Number.POSITIVE_INFINITY,
+  );
 
   return (
     <BottomSheetModal
@@ -192,67 +204,158 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
         onDismiss?.();
       }}
       backdropComponent={dismissible ? ClosingBackdrop : StillBackdrop}
-      handleComponent={Handle}
-      backgroundStyle={styles.background}
+      handleComponent={look ? null : Handle}
+      backgroundStyle={[
+        styles.background,
+        look ? { borderTopLeftRadius: look.radius, borderTopRightRadius: look.radius } : null,
+      ]}
     >
       <InModalSheet.Provider value>
-        <View style={styles.sheet}>
-          {icon ? (
-            <View style={styles.icon} importantForAccessibility="no-hide-descendants">
-              <Icon name={icon} size={32} color={tokens.colors.textPrimary} strokeWidth={1.75} />
-            </View>
-          ) : null}
-          <View
-            style={[
-              styles.header,
-              headline ? styles.headerHeadline : titleAlone ? styles.headerTitleAlone : styles.headerTitle,
-              titleAlign === "centre" && !(closable && showClose) && styles.headerCentred,
-            ]}
-          >
+        {look ? (
+          <View style={styles.sheet}>
+            {/* The grabber, the title on its baseline and the × where the screen draws them, from the sheet's top. */}
+            <View
+              style={[
+                styles.lookGrabber,
+                {
+                  top: look.grabber.top,
+                  width: look.grabber.width,
+                  height: look.grabber.height,
+                  marginLeft: -look.grabber.width / 2,
+                  borderRadius: look.grabber.height / 2,
+                  backgroundColor: look.grabber.color,
+                },
+              ]}
+              pointerEvents="none"
+            />
             <Text
-              style={[headline ? styles.headline : styles.title, titleAlign === "centre" && styles.centred]}
+              style={[
+                look.title.role,
+                styles.lookTitle,
+                {
+                  marginTop: look.title.baseline - baselineOffset(look.title.role),
+                  marginLeft: look.title.left,
+                  marginRight: look.title.right,
+                },
+              ]}
               accessibilityRole="header"
             >
               {title}
             </Text>
-            {closable && showClose ? (
+            {showClose ? (
+              // A sheet with no way out for now (23: sending) keeps its × in place, not pressable.
               <CloseButton
                 testID={closeTestID}
-                tone={size === "explain" ? "tint" : "plain"}
+                tone={look.close.tone ?? "tint"}
+                diameter={look.close.diameter}
+                glyph={look.close.glyph}
+                disabled={!closable}
                 onPress={() => modal.current?.dismiss()}
+                style={StyleSheet.flatten([styles.lookClose, { top: look.close.top, right: look.close.right }])}
               />
-            ) : headline && showClose ? (
-              <View style={styles.closePlace} />
+            ) : null}
+            <View
+              ref={viewportRef}
+              style={[
+                styles.body,
+                {
+                  marginTop:
+                    look.content.top -
+                    (look.title.baseline - baselineOffset(look.title.role) + look.title.role.lineHeight),
+                },
+              ]}
+              testID={scroll ? undefined : testID}
+            >
+              {scroll ? (
+                <BottomSheetScrollView
+                  ref={scrollRef}
+                  style={styles.body}
+                  contentContainerStyle={{
+                    paddingLeft: look.content.left,
+                    paddingRight: look.content.right,
+                    paddingBottom: tokens.space.sm,
+                    gap: contentGap ?? look.content.gap,
+                  }}
+                  keyboardShouldPersistTaps="handled"
+                  onScroll={(e) => {
+                    offset.current = e.nativeEvent.contentOffset.y;
+                  }}
+                  testID={testID}
+                >
+                  {children}
+                </BottomSheetScrollView>
+              ) : (
+                children
+              )}
+            </View>
+            {footer ? (
+              <SheetFooter
+                bottom={sheetLookFooterBottom(look, insets.bottom)}
+                style={{ paddingLeft: look.footer.left, paddingRight: look.footer.right, paddingTop: 0 }}
+              >
+                {footer}
+              </SheetFooter>
             ) : null}
           </View>
-          <View
-            ref={viewportRef}
-            style={[styles.body, { marginTop: contentOffset }]}
-            testID={scroll ? undefined : testID}
-          >
-            {scroll ? (
-              <BottomSheetScrollView
-                ref={scrollRef}
-                style={styles.body}
-                contentContainerStyle={[styles.content, { gap: contentGap }]}
-                keyboardShouldPersistTaps="handled"
-                onScroll={(e) => {
-                  offset.current = e.nativeEvent.contentOffset.y;
-                }}
-                testID={testID}
+        ) : (
+          <View style={styles.sheet}>
+            {icon ? (
+              <View style={styles.icon} importantForAccessibility="no-hide-descendants">
+                <Icon name={icon} size={32} color={tokens.colors.textPrimary} strokeWidth={1.75} />
+              </View>
+            ) : null}
+            <View
+              style={[
+                styles.header,
+                headline ? styles.headerHeadline : titleAlone ? styles.headerTitleAlone : styles.headerTitle,
+                titleAlign === "centre" && !(closable && showClose) && styles.headerCentred,
+              ]}
+            >
+              <Text
+                style={[headline ? styles.headline : styles.title, titleAlign === "centre" && styles.centred]}
+                accessibilityRole="header"
               >
-                {children}
-              </BottomSheetScrollView>
-            ) : (
-              children
-            )}
+                {title}
+              </Text>
+              {closable && showClose ? (
+                <CloseButton
+                  testID={closeTestID}
+                  tone={size === "explain" ? "tint" : "plain"}
+                  onPress={() => modal.current?.dismiss()}
+                />
+              ) : headline && showClose ? (
+                <View style={styles.closePlace} />
+              ) : null}
+            </View>
+            <View
+              ref={viewportRef}
+              style={[styles.body, { marginTop: contentOffset }]}
+              testID={scroll ? undefined : testID}
+            >
+              {scroll ? (
+                <BottomSheetScrollView
+                  ref={scrollRef}
+                  style={styles.body}
+                  contentContainerStyle={[styles.content, { gap: contentGap ?? tokens.space.lg }]}
+                  keyboardShouldPersistTaps="handled"
+                  onScroll={(e) => {
+                    offset.current = e.nativeEvent.contentOffset.y;
+                  }}
+                  testID={testID}
+                >
+                  {children}
+                </BottomSheetScrollView>
+              ) : (
+                children
+              )}
+            </View>
+            {footer ? (
+              <SheetFooter bottom={modalSheetFooterBottom(size, insets.bottom, windowHeight, footerBottom)}>
+                {footer}
+              </SheetFooter>
+            ) : null}
           </View>
-          {footer ? (
-            <SheetFooter bottom={modalSheetFooterBottom(size, insets.bottom, windowHeight, footerBottom)}>
-              {footer}
-            </SheetFooter>
-          ) : null}
-        </View>
+        )}
       </InModalSheet.Provider>
     </BottomSheetModal>
   );
@@ -269,10 +372,12 @@ const TITLE_LINE = 24;
 const NO_INSETS = { top: 0, bottom: 0 };
 
 /** The actions, pinned: Figma's distance above the sheet's edge — or, with the keyboard up, 12 pt over its keys. */
-function SheetFooter({ bottom, children }: { bottom: number; children: ReactNode }) {
+function SheetFooter({ bottom, style, children }: { bottom: number; style?: ViewStyle; children: ReactNode }) {
   const keyboard = useKeyboardShown();
   return (
-    <View style={[styles.footer, { paddingBottom: keyboard ? MODAL_SHEET_KEYBOARD_GAP : bottom }]}>{children}</View>
+    <View style={[styles.footer, style, { paddingBottom: keyboard ? MODAL_SHEET_KEYBOARD_GAP : bottom }]}>
+      {children}
+    </View>
   );
 }
 
@@ -364,4 +469,7 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   content: { paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.lg },
   footer: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.md, gap: tokens.space.sm },
+  lookGrabber: { position: "absolute", left: "50%" },
+  lookTitle: { color: tokens.colors.textPrimary },
+  lookClose: { position: "absolute" },
 });

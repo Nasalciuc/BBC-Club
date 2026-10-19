@@ -25,3 +25,11 @@ export function airlineMarkKey(code: string | null | undefined): MarkKey | null 
   const c = code?.trim().toUpperCase();
   return c === "BA" || c === "VS" || c === "AA" ? c : null;
 }
+
+/**
+ * 05: the British Airways speedmarque alone, over the airline's name — the window of its crop that holds only the ribbon
+ * (the wordmark under it left out): 37.8 in, 6 down, 39.7 × 10.4 of the crop's 81.65 × 28.6.
+ */
+export const RIBBON_WINDOW: Partial<Record<MarkKey, { left: number; top: number; width: number; height: number }>> = {
+  BA: { left: 82 / PX_PER_PT, top: 13 / PX_PER_PT, width: 86 / PX_PER_PT, height: 22.5 / PX_PER_PT },
+};

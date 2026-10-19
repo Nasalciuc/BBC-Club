@@ -309,7 +309,15 @@ export default function ExploreScreen() {
             state={state}
             offline={offline}
             onRetry={retrySearch}
-            onOpenFare={(fare: FareVM) => router.push(fareHref(fare.id, fare.offerId))}
+            onOpenFare={(fare: FareVM) =>
+              router.push(
+                fareHref(fare.id, fare.offerId, {
+                  depart: state.dates.depart,
+                  return: state.dates.return,
+                  passengers: state.passengers,
+                }),
+              )
+            }
             onEditDates={() =>
               datesRef.current?.present(
                 {

@@ -18,16 +18,19 @@ type RowLook = {
   labelLeft: number;
   valueRight: number;
   chevron: { size: number; stroke: number; right: number; color: string };
-  rule: { left: number; right: number };
+  /** The rule between rows: from where it starts, how short of the right edge it stops, its colour (05's darker). */
+  rule: { left: number; right: number; color?: string };
   label: TextStyle & { fontSize: number; lineHeight: number };
   value: TextStyle;
   sub: TextStyle & { fontSize: number; lineHeight: number };
   danger: TextStyle;
   labelColor: string;
   valueColor: string;
+  /** `edge`: the card on a hairline with the soft shadow (05), not the card shadow alone. */
+  card?: "edge";
 };
 
-export type RowLookName = "profile" | "settings" | "edit";
+export type RowLookName = "profile" | "settings" | "edit" | "fare";
 
 const LOOKS: Record<RowLookName, RowLook> = {
   profile: {
@@ -61,6 +64,25 @@ const LOOKS: Record<RowLookName, RowLook> = {
     danger: rn(tokens.type.settingsDanger),
     labelColor: tokens.colors.textPrimary,
     valueColor: tokens.colors.textPrimary,
+  },
+  // 05: `About this fare` and `The comparison`, 37 pt each; the marks 20 pt on 22, the words from 51.05; the rule
+  // from 43.1 to 13.1 short of the right edge; the chevron 20 at 1.8, its ink 15 from the edge.
+  fare: {
+    radius: 9,
+    height: 37,
+    icon: 20,
+    iconCentre: 22,
+    labelLeft: 51.05,
+    valueRight: 30,
+    chevron: { size: 20, stroke: 1.8, right: 15, color: tokens.colors.textMuted },
+    rule: { left: 43.1, right: 13.1, color: tokens.colors.ruleLine },
+    label: rn(tokens.type.fareRow) as RowLook["label"],
+    value: rn(tokens.type.fareRow),
+    sub: rn(tokens.type.fareRow) as RowLook["sub"],
+    danger: rn(tokens.type.fareRow),
+    labelColor: tokens.colors.textPrimary,
+    valueColor: tokens.colors.textSecondary,
+    card: "edge",
   },
   edit: {
     radius: 11,
@@ -377,14 +399,26 @@ export function RowGroup({
   const l = look ? LOOKS[look] : null;
   return (
     <InGroup.Provider value={{ look: look ?? null, height: rowHeight ?? null }}>
-      <View style={l ? [lookStyles.card, { borderRadius: l.radius }] : styles.group} testID={testID}>
+      <View
+        style={
+          l ? [l.card === "edge" ? lookStyles.edgeCard : lookStyles.card, { borderRadius: l.radius }] : styles.group
+        }
+        testID={testID}
+      >
         {rows.map((row, i) =>
           l ? (
             // The rule lies over the row's top edge: the rows keep the screen's pitch exactly.
             <View key={row.key ?? i}>
               {row}
               {i > 0 ? (
-                <View style={[lookStyles.rule, { left: l.rule.left, right: l.rule.right }]} pointerEvents="none" />
+                <View
+                  style={[
+                    lookStyles.rule,
+                    { left: l.rule.left, right: l.rule.right },
+                    l.rule.color ? { backgroundColor: l.rule.color } : null,
+                  ]}
+                  pointerEvents="none"
+                />
               ) : null}
             </View>
           ) : (
@@ -394,6 +428,10 @@ export function RowGroup({
             </Fragment>
           ),
         )}
+        {l?.card === "edge" ? (
+          // The hairline over the card's edge: it does not move the rows measured from the card's corner.
+          <View pointerEvents="none" style={[lookStyles.edge, { borderRadius: l.radius }]} />
+        ) : null}
       </View>
     </InGroup.Provider>
   );
@@ -401,6 +439,16 @@ export function RowGroup({
 
 const lookStyles = StyleSheet.create({
   card: { backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.card },
+  edgeCard: { backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.soft },
+  edge: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.colors.borderFaint,
+  },
   row: { flexDirection: "row", alignItems: "center" },
   icon: { position: "absolute", alignItems: "center" },
   text: { flex: 1 },

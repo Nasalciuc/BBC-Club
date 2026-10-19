@@ -1,8 +1,9 @@
 import { type ReactNode, useState } from "react";
-import { StyleSheet, Text, type TextInputProps, View } from "react-native";
+import { StyleSheet, Text, type TextInputProps, type TextStyle, View } from "react-native";
 import { Icon, type IconName } from "../icons";
-import { rn } from "../rn-type";
+import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
+import { TEXT_REQUEST } from "./field-looks";
 import { SheetTextInput } from "./SheetTextInput";
 
 type Props = Omit<TextInputProps, "style" | "placeholderTextColor"> & {
@@ -15,6 +16,8 @@ type Props = Omit<TextInputProps, "style" | "placeholderTextColor"> & {
   error?: boolean;
   /** Inside the field at its right edge — the password's eye. */
   trailing?: ReactNode;
+  /** `request`: the request sheet's (06, 22, 23), as measured. Without one, sheet 39's. */
+  look?: "request";
   testID: string;
 };
 
@@ -34,9 +37,93 @@ export function TextField({
   onBlur,
   accessibilityLabel,
   labelTone: _labelTone,
+  look,
   ...input
 }: Props) {
   const [focused, setFocused] = useState(false);
+  if (look === "request") {
+    const l = TEXT_REQUEST;
+    const muted = !editable;
+    // 06's note: the placeholder in its own smaller type until words are typed.
+    const empty = input.value == null || input.value === "";
+    const placeholding = Boolean(empty && input.placeholder && l.value.placeholder);
+    const shown = placeholding && l.value.placeholder ? l.value.placeholder : l.value.role;
+    const valueBaseline = placeholding ? (l.value.placeholderBaseline ?? l.value.baseline) : l.value.baseline;
+    return (
+      <View style={[drawn.field, { minHeight: l.height, borderRadius: l.radius }, muted && drawn.disabled]}>
+        {icon ? (
+          <>
+            <View
+              style={[
+                drawn.icon,
+                { left: l.icon.centre - l.icon.size / 2, top: l.height / 2 - l.icon.rise - l.icon.size / 2 },
+              ]}
+              importantForAccessibility="no-hide-descendants"
+            >
+              <Icon
+                name={icon}
+                size={l.icon.size}
+                color={muted ? tokens.colors.fillMuted : error ? tokens.colors.statusDanger : tokens.colors.textPrimary}
+                strokeWidth={l.icon.stroke}
+              />
+            </View>
+            <View style={[drawn.rule, { left: l.rule.left, top: l.rule.top, bottom: l.rule.bottom }]} />
+          </>
+        ) : null}
+        <View style={{ marginLeft: l.label.left, marginRight: tokens.space.sm }}>
+          <Text
+            style={[
+              l.label.role,
+              { color: error ? tokens.colors.statusDangerText : muted ? tokens.colors.chevronLight : l.label.color },
+              { marginTop: l.label.baseline - baselineOffset(l.label.role) },
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+          <SheetTextInput
+            {...input}
+            testID={testID}
+            editable={editable}
+            accessibilityLabel={accessibilityLabel ?? label}
+            multiline={multiline}
+            // One line to start (06's note), growing with what is typed where the platform lets it.
+            numberOfLines={multiline ? 1 : undefined}
+            onFocus={(e) => {
+              setFocused(true);
+              onFocus?.(e);
+            }}
+            onBlur={(e) => {
+              setFocused(false);
+              onBlur?.(e);
+            }}
+            placeholderTextColor={muted ? tokens.colors.chevronLight : tokens.colors.fillMuted}
+            style={[
+              shown,
+              styles.inputReset,
+              { color: muted ? tokens.colors.fillMuted : tokens.colors.textPrimary },
+              {
+                marginTop: valueBaseline - l.label.baseline - belowBaseline(l.label.role) - baselineOffset(shown),
+                minHeight: shown.lineHeight,
+              },
+            ]}
+          />
+        </View>
+        {trailing}
+        {muted ? null : (
+          <View
+            pointerEvents="none"
+            style={[
+              drawn.edge,
+              { borderRadius: l.radius },
+              focused && !error && drawn.edgeFocus,
+              error && drawn.edgeError,
+            ]}
+          />
+        )}
+      </View>
+    );
+  }
   return (
     <View
       style={[styles.field, !editable && styles.disabled, focused && !error && styles.focused, error && styles.error]}
@@ -76,8 +163,33 @@ export function TextField({
   );
 }
 
-/** The red line under a field at fault (22: `Select a return date or choose One way.`). */
-export function FieldError({ children, testID }: { children: string; testID?: string }) {
+/** 22: the line's baseline 11.4 under the field's foot, from the field's own left; the next field 10.44 under it. */
+const ERROR_REQUEST = { baseline: 11.4, next: 10.44, gap: 8.84 } as const;
+
+/**
+ * The red line under a field at fault (22: `Select a return date or choose One way.`). `request`: 22's, measured —
+ * the field after it keeps the sheet's gap from the line's foot.
+ */
+export function FieldError({ children, testID, look }: { children: string; testID?: string; look?: "request" }) {
+  if (look === "request") {
+    const r = rn(tokens.type.fieldError) as TextStyle & { fontSize: number; lineHeight: number };
+    return (
+      <Text
+        testID={testID}
+        style={[
+          r,
+          styles.danger,
+          {
+            marginTop: ERROR_REQUEST.baseline - baselineOffset(r),
+            marginBottom: ERROR_REQUEST.next - ERROR_REQUEST.gap - belowBaseline(r),
+          },
+        ]}
+        accessibilityLiveRegion="polite"
+      >
+        {children}
+      </Text>
+    );
+  }
   return (
     <Text testID={testID} style={styles.message} accessibilityLiveRegion="polite">
       {children}
@@ -85,7 +197,26 @@ export function FieldError({ children, testID }: { children: string; testID?: st
   );
 }
 
+const drawn = StyleSheet.create({
+  field: { backgroundColor: tokens.colors.surfaceCard },
+  disabled: { backgroundColor: tokens.colors.surfaceTint },
+  icon: { position: "absolute" },
+  rule: { position: "absolute", width: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderDefault },
+  edge: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.colors.borderDefault,
+  },
+  edgeFocus: { borderWidth: 0.9, borderColor: tokens.colors.primary },
+  edgeError: { borderWidth: 0.7, borderColor: tokens.colors.statusDanger },
+});
+
 const styles = StyleSheet.create({
+  inputReset: { minWidth: 0, padding: 0, margin: 0, outlineWidth: 0 },
   field: {
     minHeight: 60,
     flexDirection: "row",
@@ -121,4 +252,5 @@ const styles = StyleSheet.create({
   },
   inputDisabled: { color: tokens.colors.textSecondary },
   message: { ...rn(tokens.type.bodySm), color: tokens.colors.statusDangerText, marginTop: tokens.space.xs },
+  danger: { color: tokens.colors.statusDangerText },
 });

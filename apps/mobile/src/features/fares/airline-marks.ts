@@ -1,9 +1,9 @@
 import aa from "@/assets/images/club/airlines/aa.webp";
 import ba from "@/assets/images/club/airlines/ba.webp";
 import vs from "@/assets/images/club/airlines/vs.webp";
-import type { AirlineMark } from "@bbc/ui";
+import type { AirlineMark, AirlineRibbon } from "@bbc/ui";
 
-import { airlineMarkKey, MARK_NUDGE, MARK_PIXELS, type MarkKey } from "./airline-mark-logic";
+import { airlineMarkKey, MARK_NUDGE, MARK_PIXELS, type MarkKey, RIBBON_WINDOW } from "./airline-mark-logic";
 
 const SOURCES: Record<MarkKey, number> = { BA: ba, VS: vs, AA: aa };
 
@@ -17,4 +17,13 @@ export function airlineMark(code: string | null | undefined): AirlineMark | null
   if (!key) return null;
   const { width, height } = MARK_PIXELS[key];
   return { source: SOURCES[key], width, height, nudge: MARK_NUDGE[key] };
+}
+
+/** The airline's ribbon alone where the design draws it so (05: British Airways); null for the others. */
+export function airlineRibbon(code: string | null | undefined): AirlineRibbon | null {
+  const key = airlineMarkKey(code);
+  const window = key ? RIBBON_WINDOW[key] : undefined;
+  if (!key || !window) return null;
+  const { width, height } = MARK_PIXELS[key];
+  return { source: SOURCES[key], width, height, window };
 }
