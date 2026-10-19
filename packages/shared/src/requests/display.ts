@@ -54,8 +54,11 @@ const order = (d: Day) => d.year * 10_000 + d.month * 100 + d.day;
  * The trip's dates as the frames write them (Figma 233:4069): `Oct 12–19` within a month, `Oct 30–Nov 6` across months
  * (or the same month a year apart), `Nov 3` for one day — a one-way trip or a same-day return. From the earliest to
  * the latest leg, so legs out of order still read forwards; a date that is not a real day is left out.
+ *
+ * With `year`, as the 3.0 images write them (09, 11, 12; ADR-IMPL-056): `Nov 12–19, 2026`, `Oct 30–Nov 6, 2026`,
+ * `Nov 3, 2026` — and both years when the trip crosses one: `Dec 28, 2026–Jan 4, 2027`.
  */
-export function requestDates(legs: unknown): string {
+export function requestDates(legs: unknown, opts: { year?: boolean } = {}): string {
   if (!Array.isArray(legs) || legs.length === 0) return "";
   const days = legs.map((l) => calendarDay((l as LegLike)?.date)).filter((d): d is Day => d !== null);
   if (days.length === 0) {
@@ -65,6 +68,12 @@ export function requestDates(legs: unknown): string {
   days.sort((a, b) => order(a) - order(b));
   const a = days[0]!;
   const b = days[days.length - 1]!;
+  if (opts.year) {
+    if (order(a) === order(b)) return `${label(a)}, ${a.year}`;
+    if (a.year !== b.year) return `${label(a)}, ${a.year}–${label(b)}, ${b.year}`;
+    if (a.month === b.month) return `${label(a)}–${b.day}, ${a.year}`;
+    return `${label(a)}–${label(b)}, ${a.year}`;
+  }
   if (order(a) === order(b)) return label(a);
   if (a.year === b.year && a.month === b.month) return `${label(a)}–${b.day}`;
   return `${label(a)}–${label(b)}`;

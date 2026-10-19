@@ -108,6 +108,14 @@ describe("requestDates — the frames' `Oct 12–19`, shared with the app", () =
     expect(requestDates([])).toBe("");
     expect(requestDates(null)).toBe("");
   });
+  it("with the year, as the 3.0 images write it — both years when the trip crosses one", () => {
+    expect(requestDates(on("2026-11-12", "2026-11-19"), { year: true })).toBe("Nov 12–19, 2026");
+    expect(requestDates(on("2026-10-30", "2026-11-06"), { year: true })).toBe("Oct 30–Nov 6, 2026");
+    expect(requestDates(on("2026-12-28", "2027-01-04"), { year: true })).toBe("Dec 28, 2026–Jan 4, 2027");
+    expect(requestDates(on("2026-11-03"), { year: true })).toBe("Nov 3, 2026");
+    expect(requestDates(on("2026-10-12", "2027-10-05"), { year: true })).toBe("Oct 12, 2026–Oct 5, 2027");
+    expect(requestDates(on("2027-02-30"), { year: true })).toBe("2027-02-30");
+  });
   it("calendarDay knows a leap year", () => {
     expect(calendarDay("2028-02-29")).toEqual({ year: 2028, month: 2, day: 29 });
     expect(calendarDay("2027-02-29")).toBeNull();

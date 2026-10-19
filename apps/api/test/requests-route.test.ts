@@ -30,8 +30,8 @@ describe("a request names its destination", () => {
     expect(detail.route).toBe("JFK → LHR");
     expect(detail.city).toBe("London");
     expect([detail.tripType, detail.phone]).toEqual(["round", "+12125550148"]);
-    // One month is named once (Figma 233:4069: `OCT 12–19`).
-    expect(detail.dates).toBe("Oct 12–19");
+    // One month is named once, with the year (09: `Nov 12 – 19, 2026`; ADR-IMPL-056).
+    expect(detail.dates).toBe("Oct 12–19, 2026");
 
     // The operator's page and the status event the quote-ready push is written from.
     const html = await (await t.app.request(`/ops/requests/${signAction(SECRET, vm.id, "quoted")}`)).text();

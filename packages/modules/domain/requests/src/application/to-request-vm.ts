@@ -42,7 +42,8 @@ export function toRequestVM(
     city,
     tripType: row.tripType,
     phone: row.phoneE164 ?? (row.contactPhone || null),
-    dates: requestDates(row.legs),
+    // With the year, as the 3.0 images write a trip (`Nov 12–19, 2026`, ADR-IMPL-056).
+    dates: requestDates(row.legs, { year: true }),
     cabin: row.cabin,
     passengers: row.passengers,
     priceAtRequest: row.priceAtRequest != null ? parseFloat(row.priceAtRequest) : null,
