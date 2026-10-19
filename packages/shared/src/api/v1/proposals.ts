@@ -42,9 +42,9 @@ export const ProposalCardVM = z.object({
   price: PricePair,
   mediaUrl: z.string().url().optional(),
   mediaBlurhash: z.string().optional(),
-  /** The offer's rating, as its card prints it beside the city (02, 16: `★ 4.8`): one to five, given by whoever made the
-   *  offer. Null when it has none — no star is shown, none is made up (ADR-IMPL-056). Optional both ways; a value this
-   *  app cannot read reads as none, and the card still shows. */
+  /** The offer's rating, as its card prints it beside the city (02, 16: `★ 4.8`): one to five, given by whoever made
+   *  the offer. Null when it has none — no star is shown, none is made up (ADR-IMPL-056). Optional both ways; a value
+   *  this app cannot read reads as none, and the card still shows. */
   rating: z.number().min(1).max(5).nullable().optional().catch(null),
   validUntil: z.string().datetime(),
   state: ResponseState,

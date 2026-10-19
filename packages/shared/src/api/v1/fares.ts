@@ -59,9 +59,9 @@ export const FareVM = z.object({
     .nullable()
     .optional(),
   price: PricePair,
-  /** What the price is for, as the catalogue says (ADR-IMPL-056): `round_trip` only where the catalogue says so — 04 and
-   *  13 print `round trip` beside such a fare — else `one_way`. Optional both ways: an older server sends none, and a
-   *  value this app does not know reads as none (the fare still lists; its trip is not printed). */
+  /** What the price is for, as the catalogue says (ADR-IMPL-056): `round_trip` only where the catalogue says so — 04
+   *  and 13 print `round trip` beside such a fare — else `one_way`. Optional both ways: an older server sends none, and
+   *  a value this app does not know reads as none (the fare still lists; its trip is not printed). */
   trip: z.enum(["round_trip", "one_way"]).optional().catch(undefined),
   validUntil: z.string().datetime(),
   /** A promotional offer exists on this route. */

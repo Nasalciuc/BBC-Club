@@ -1,8 +1,8 @@
 /** ADR-IMPL-046: a request made from a fare keeps the fare's published price and its source as they stood when the
  *  member asked — read by the server from the fare, never taken from the app — and the member's answers carry it (the
  *  detail strikes it beside a ready quote's fare, Figma 233:4204). A fare re-priced since the app showed it keeps none,
- *  as does a quote. ADR-IMPL-056: the same read keeps the fare's airline, which the request received and its detail name
- *  (images 08, 11) — for a re-priced fare too; never for a quote. */
+ *  as does a quote. ADR-IMPL-056: the same read keeps the fare's airline, which the request received and its detail
+ *  name (images 08, 11) — for a re-priced fare too; never for a quote. */
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { RequestVM } from "@bbc/shared/api/v1/requests";

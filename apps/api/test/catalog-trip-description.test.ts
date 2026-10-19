@@ -1,5 +1,5 @@
-/** ADR-IMPL-056: the trip a fare's price is for (04 and 13 print `round trip` beside a fare) and a destination's one line
- *  under its city (04), from the catalogue's imports to every answer that carries a fare or an airport. */
+/** ADR-IMPL-056: the trip a fare's price is for (04 and 13 print `round trip` beside a fare) and a destination's one
+ *  line under its city (04), from the catalogue's imports to every answer that carries a fare or an airport. */
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { PopularVM } from "@bbc/shared/api/v1/discovery";

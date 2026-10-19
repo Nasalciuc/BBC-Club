@@ -46,8 +46,8 @@ export async function submit(
     /** The indicative price the search shows for a route (catalog, ADR-IMPL-042). Never throws: null when unknown. */
     indicative: (q: { from: string; to: string; cabin: "business" | "first" }) => Promise<ShownEstimate | null>;
     /** What a fare request records of its fare, read once from the catalog: the published price, for the price the app
-     *  sent (ADR-IMPL-046), and the airline (ADR-IMPL-056). Never throws: nulls when there is nothing to record. Absent,
-     *  a request records neither. */
+     *  sent (ADR-IMPL-046), and the airline (ADR-IMPL-056). Never throws: nulls when there is nothing to record.
+     *  Absent, a request records neither. */
     fare?: (fareId: string, priceAtRequest: number | undefined) => Promise<FareAtRequest>;
   },
 ) {

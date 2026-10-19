@@ -49,10 +49,10 @@ export function publishedAtRequest(
 const CARRIER_CODE = /^[A-Z0-9]{2}$/;
 
 /**
- * The airline a request made from a fare records (ADR-IMPL-056): the fare's carrier as its page named it — the name, else
- * the code, which is then the name the page shows (toFareVM) — with the code when it is a well-formed one. Kept whatever
- * the fare costs now: a re-priced fare is the same flight on the same airline. Nothing when the fare is gone or names no
- * airline — never "Unknown".
+ * The airline a request made from a fare records (ADR-IMPL-056): the fare's carrier as its page named it — the name,
+ * else the code, which is then the name the page shows (toFareVM) — with the code when it is a well-formed one. Kept
+ * whatever the fare costs now: a re-priced fare is the same flight on the same airline. Nothing when the fare is gone
+ * or names no airline — never "Unknown".
  */
 export function carrierAtRequest(fare: Pick<CatalogFare, "carrier" | "carrierName"> | null): CarrierAtRequest | null {
   if (!fare) return null;
