@@ -1,6 +1,6 @@
 # AGENTS.md — read before touching anything
 
-**Truth lives in exactly one place each.** Contracts: `packages/shared/src/{api,events}` (Zod). Design tokens: generated `packages/ui/src/tokens.ts` from `DESIGN.md` (never edit the output). Tables: one file per Postgres schema in `packages/db/src/schema/` (`auth.ts` is identity's), each owned by one module; platform's is `packages/modules/platform/src/infrastructure/schema.ts`, and `packages/db/src/schema/index.ts` lists them all. Naming, files, flows: each module's `MODULE.md` and the ADRs in `docs/adr/`. Screens and copy: the Figma file `nYP9gogb6hnpKxfpKiCc4g` — **where `DESIGN.md` contradicts Figma, Figma wins**, except what the owner approved (ADR-IMPL-046); the entry (Welcome, Sign in, Join, Verify, Set password, Reset) stays as it is (ADR-IMPL-046, ADR-IMPL-047).
+**Truth lives in exactly one place each.** Contracts: `packages/shared/src/{api,events}` (Zod). Design tokens: generated `packages/ui/src/tokens.ts` from `DESIGN.md` (never edit the output). Tables: one file per Postgres schema in `packages/db/src/schema/` (`auth.ts` is identity's), each owned by one module; platform's is `packages/modules/platform/src/infrastructure/schema.ts`, and `packages/db/src/schema/index.ts` lists them all. Naming, files, flows: each module's `MODULE.md` and the ADRs in `docs/adr/`. Screens and copy: from onboarding on, `DESIGN.md` 3.0 and the 46 images in `isolated/bbc-club-3.0-design/final/` (ADR-IMPL-055) — where an image and `DESIGN.md` differ, `DESIGN.md` wins; the Figma file `nYP9gogb6hnpKxfpKiCc4g` keeps 1.0 for history. The entry (Welcome, Sign in, Join, Verify, Set password, Reset) stays exactly as it is (ADR-IMPL-046, ADR-IMPL-047): its values live in `apps/mobile/src/constants/club.ts`, pinned by `club.test.ts`.
 
 ## Ten rules
 
@@ -40,6 +40,6 @@ React Compiler is ON. Do not add `useMemo` or `useCallback`.
 
 Every interactive element must have a `testID`.
 
-Colors, sizes, radii and type come from the generated tokens (`tokens` from `@bbc/ui`). `src/constants/club.ts` holds the entry's own colours, spacing and radii, written by hand so a token change does not reach them (ADR-IMPL-047) — the entry's type roles and `ClubButton` still read the tokens. The entry screens read it; outside them only the root's dark chrome and the phone column's width (`Club.layout.phoneMaxWidth`). Never inline hex, rgba, font sizes, spacing, or radii.
+Colors, sizes, radii, shadows and type come from the generated tokens (`tokens` from `@bbc/ui`). `src/constants/club.ts` holds the entry's own colours, spacing, radii, type and motion, written by hand so a token change does not reach them (ADR-IMPL-047, ADR-IMPL-055); `ClubButton`, `ClubIcon` and `AnimatedEntrance` read only it. The entry screens read it; outside them only the root's dark chrome and the phone column's width (`Club.layout.phoneMaxWidth`). Never inline hex, rgba, font sizes, spacing, or radii.
 
 Never run the app. Provide the commands instead.

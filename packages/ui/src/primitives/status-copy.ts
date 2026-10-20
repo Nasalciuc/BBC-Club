@@ -1,8 +1,9 @@
-/** The words a request's state shows (Figma 26:20) — pure, so it is tested without React Native. */
+/** The words a request's state shows (component sheet 41) — pure, so it is tested without React Native. */
 export const STATUS_COPY = {
   received: "Received",
   quote_ready: "Quote ready",
   booked: "Booked",
+  closed: "Closed",
   not_sent: "Not sent",
 } as const;
 

@@ -322,7 +322,7 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   // Figma P3.1 / P3.2: the night page behind the globe.
-  night: { backgroundColor: tokens.colors.surfaceNight },
+  night: { backgroundColor: tokens.colors.primary },
   // Figma P3.3–P3.6: the porcelain page once the sheet fills the screen.
   page: { backgroundColor: tokens.colors.surfacePage },
 });

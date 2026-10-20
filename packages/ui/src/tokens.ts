@@ -3,124 +3,200 @@ export const tokens = {
   colors: {
   "primary": "#1E293B",
   "actionPrimary": "#1E293B",
-  "actionInverted": "#F8FAFC",
-  "surfacePage": "#F4F5F4",
+  "actionPressed": "#0F172A",
+  "surfacePage": "#FAFAF8",
   "surfaceCard": "#FFFFFF",
-  "surfacePanel": "#1E293B",
-  "surfaceMuted": "#334155",
-  "surfaceNight": "#0F172A",
-  "globeSpace": "#0B0B19",
-  "globeAtmosphere": "#BAD2EB",
-  "globeAtmosphereHigh": "#245BDF",
-  "globeCityLights": "#FFE4B0",
+  "surfaceTint": "#F1F5F9",
+  "borderDefault": "#E2E8F0",
   "textPrimary": "#1E293B",
   "textSecondary": "#64748B",
-  "textTertiary": "#94A3B8",
-  "textOnDark": "#F8FAFC",
-  "textOnDarkMuted": "#94A3B8",
-  "borderDefault": "#E2E8F0",
-  "statusDanger": "#B42318",
-  "accentWarm": "#9A7B4F",
-  "scrim": "rgba(15,23,42,0.78)"
+  "textOnTint": "#475569",
+  "textOnPhoto": "#FFFFFF",
+  "statusDanger": "#EF4444",
+  "statusDangerText": "#DC2626",
+  "statusDangerTint": "#FEF2F2",
+  "sky": "#BAD2EB",
+  "scrim": "rgba(15,23,42,0.40)",
+  "photoVeil": "rgba(15,23,42,0.45)",
+  "shadow": "#1E293B",
+  "globeOcean": "#1B5E9E",
+  "globeOceanDeep": "#0B3F73",
+  "globeLand": "#8FA77A",
+  "globeDesert": "#E5D3B0",
+  "globeIce": "#F4F7FA",
+  "globeNight": "#0B0B19"
 },
   type: {
   "display": {
-    "fontFamily": "Fraunces",
-    "fontSize": 34,
-    "fontWeight": "400",
-    "lineHeight": 37,
-    "letterSpacing": -0.4
+    "fontFamily": "Inter",
+    "fontSize": 36,
+    "fontWeight": "700",
+    "lineHeight": 40,
+    "letterSpacing": -0.8
   },
   "headline": {
-    "fontFamily": "Fraunces",
-    "fontSize": 28,
-    "fontWeight": "400",
-    "lineHeight": 32,
-    "letterSpacing": -0.3
+    "fontFamily": "Inter",
+    "fontSize": 30,
+    "fontWeight": "700",
+    "lineHeight": 35,
+    "letterSpacing": -0.6
   },
   "title": {
-    "fontFamily": "Fraunces",
-    "fontSize": 20,
-    "fontWeight": "400",
-    "lineHeight": 24,
-    "letterSpacing": 0
+    "fontFamily": "Inter",
+    "fontSize": 24,
+    "fontWeight": "700",
+    "lineHeight": 29,
+    "letterSpacing": -0.4
   },
   "titleSm": {
-    "fontFamily": "Fraunces",
+    "fontFamily": "Inter",
+    "fontSize": 20,
+    "fontWeight": "700",
+    "lineHeight": 25,
+    "letterSpacing": -0.3
+  },
+  "subtitle": {
+    "fontFamily": "Inter",
+    "fontSize": 17,
+    "fontWeight": "600",
+    "lineHeight": 22,
+    "letterSpacing": -0.2
+  },
+  "greeting": {
+    "fontFamily": "Inter",
+    "fontSize": 26,
+    "fontWeight": "400",
+    "lineHeight": 31,
+    "letterSpacing": -0.4
+  },
+  "bodyLg": {
+    "fontFamily": "Inter",
+    "fontSize": 18,
+    "fontWeight": "400",
+    "lineHeight": 25,
+    "letterSpacing": -0.2
+  },
+  "body": {
+    "fontFamily": "Inter",
     "fontSize": 16,
+    "fontWeight": "400",
+    "lineHeight": 22,
+    "letterSpacing": -0.1
+  },
+  "bodyStrong": {
+    "fontFamily": "Inter",
+    "fontSize": 16,
+    "fontWeight": "600",
+    "lineHeight": 22,
+    "letterSpacing": -0.1
+  },
+  "bodySm": {
+    "fontFamily": "Inter",
+    "fontSize": 14,
     "fontWeight": "400",
     "lineHeight": 20,
     "letterSpacing": 0
   },
-  "body": {
-    "fontFamily": "Geist",
-    "fontSize": 17,
-    "fontWeight": "400",
-    "lineHeight": 25,
-    "letterSpacing": 0
-  },
-  "bodySm": {
-    "fontFamily": "Geist",
-    "fontSize": 15,
-    "fontWeight": "400",
-    "lineHeight": 21,
-    "letterSpacing": 0
+  "labelStrong": {
+    "fontFamily": "Inter",
+    "fontSize": 14,
+    "fontWeight": "600",
+    "lineHeight": 18,
+    "letterSpacing": -0.1
   },
   "caption": {
-    "fontFamily": "Geist",
-    "fontSize": 13,
-    "fontWeight": "400",
-    "lineHeight": 18,
-    "letterSpacing": 0
-  },
-  "price": {
-    "fontFamily": "Geist",
-    "fontSize": 24,
-    "fontWeight": "500",
-    "lineHeight": 26,
-    "letterSpacing": -0.2
-  },
-  "priceStruck": {
-    "fontFamily": "Geist",
-    "fontSize": 14,
-    "fontWeight": "400",
-    "lineHeight": 17,
-    "letterSpacing": 0
-  },
-  "button": {
-    "fontFamily": "Geist",
-    "fontSize": 17,
-    "fontWeight": "500",
-    "lineHeight": 17,
-    "letterSpacing": 0
-  },
-  "labelMono": {
-    "fontFamily": "Geist Mono",
-    "fontSize": 11,
-    "fontWeight": "500",
-    "lineHeight": 14,
-    "letterSpacing": 1.5
-  },
-  "factsMono": {
-    "fontFamily": "Geist Mono",
+    "fontFamily": "Inter",
     "fontSize": 12,
     "fontWeight": "400",
-    "lineHeight": 17,
-    "letterSpacing": 1
+    "lineHeight": 16,
+    "letterSpacing": 0
   },
-  "tabMono": {
-    "fontFamily": "Geist Mono",
+  "label": {
+    "fontFamily": "Inter",
     "fontSize": 11,
+    "fontWeight": "600",
+    "lineHeight": 14,
+    "letterSpacing": 1.6
+  },
+  "priceDisplay": {
+    "fontFamily": "Inter",
+    "fontSize": 36,
+    "fontWeight": "700",
+    "lineHeight": 40,
+    "letterSpacing": -0.8,
+    "fontVariant": [
+      "tabular-nums"
+    ]
+  },
+  "price": {
+    "fontFamily": "Inter",
+    "fontSize": 24,
+    "fontWeight": "700",
+    "lineHeight": 28,
+    "letterSpacing": -0.4,
+    "fontVariant": [
+      "tabular-nums"
+    ]
+  },
+  "priceSm": {
+    "fontFamily": "Inter",
+    "fontSize": 18,
+    "fontWeight": "700",
+    "lineHeight": 22,
+    "letterSpacing": -0.2,
+    "fontVariant": [
+      "tabular-nums"
+    ]
+  },
+  "button": {
+    "fontFamily": "Inter",
+    "fontSize": 17,
+    "fontWeight": "600",
+    "lineHeight": 22,
+    "letterSpacing": -0.2
+  },
+  "tab": {
+    "fontFamily": "Inter",
+    "fontSize": 12,
     "fontWeight": "500",
-    "lineHeight": 13,
-    "letterSpacing": 1
+    "lineHeight": 16,
+    "letterSpacing": 0
+  },
+  "tabActive": {
+    "fontFamily": "Inter",
+    "fontSize": 12,
+    "fontWeight": "700",
+    "lineHeight": 16,
+    "letterSpacing": 0
+  },
+  "wordmark": {
+    "fontFamily": "Inter",
+    "fontSize": 17,
+    "fontWeight": "700",
+    "lineHeight": 22,
+    "letterSpacing": -0.4
+  },
+  "pin": {
+    "fontFamily": "Inter",
+    "fontSize": 13,
+    "fontWeight": "700",
+    "lineHeight": 15,
+    "letterSpacing": -0.1
+  },
+  "pinDetail": {
+    "fontFamily": "Inter",
+    "fontSize": 13,
+    "fontWeight": "400",
+    "lineHeight": 15,
+    "letterSpacing": 0
   }
 },
   radius: {
-  "badge": 4,
-  "field": 12,
-  "card": 12,
-  "panel": 24,
+  "xs": 8,
+  "sm": 12,
+  "md": 16,
+  "lg": 20,
+  "xl": 24,
   "pill": 999
 },
   space: {
@@ -128,18 +204,30 @@ export const tokens = {
   "xs": 8,
   "sm": 12,
   "md": 16,
+  "gutter": 20,
   "lg": 24,
   "xl": 32,
-  "xxl": 48
+  "xxl": 40,
+  "xxxl": 48
 },
   motion: {
-  "entrance": 900,
-  "stagger": 150,
-  "headline": 200,
   "press": 120,
   "release": 160,
+  "fade": 200,
   "panel": 300,
-  "rise": 12
+  "fill": 400,
+  "shimmer": 1400
+},
+  elevation: {
+  "card": {
+    "boxShadow": "0px 4px 16px 0px rgba(30, 41, 59, 0.08)"
+  },
+  "sheet": {
+    "boxShadow": "0px 10px 30px 0px rgba(30, 41, 59, 0.08)"
+  },
+  "float": {
+    "boxShadow": "0px 6px 20px 0px rgba(30, 41, 59, 0.12)"
+  }
 },
 } as const;
 export type ColorToken = keyof typeof tokens.colors;

@@ -12,14 +12,15 @@ On Reanimated 4 use `sharedValue.get()` / `sharedValue.set(…)`, not `.value`.
 
 **Styling:** every colour, size, radius, spacing and type role comes from the generated tokens (`tokens` and
 `rn()` from `@bbc/ui`, made from `DESIGN.md` by `bun run tokens`). `src/constants/club.ts` (the `Club` object)
-holds the entry's own colours, spacing and radii, written by hand so a token change does not reach them
-(ADR-IMPL-047) — the entry's type roles and `ClubButton` still read the tokens. The entry screens read it; outside
-them only the root's dark chrome and the phone column's width (`Club.layout.phoneMaxWidth`). No inline hex, no
-`rgba(...)`, no magic numbers. If a token is missing, say so — do not invent one. Where `DESIGN.md` and Figma
-disagree, Figma wins (ADR-IMPL-046); report the conflict.
+holds the entry's own colours, spacing, radii, type and motion, written by hand so a token change does not reach
+them (ADR-IMPL-047, ADR-IMPL-055); `ClubButton`, `ClubIcon` and `AnimatedEntrance` read only it. The entry screens
+read it; outside them only the root's dark chrome and the phone column's width (`Club.layout.phoneMaxWidth`). No
+inline hex, no `rgba(...)`, no magic numbers. If a token is missing, say so — do not invent one. Where an image of
+`isolated/bbc-club-3.0-design/final/` and `DESIGN.md` disagree, `DESIGN.md` wins (ADR-IMPL-055); report the conflict.
 
-**Typography roles** (do not swap them): `display`/`headline`/`title` are Fraunces (serif); body text is
-Geist; flight facts and field labels are Geist Mono, uppercase for labels.
+**Typography roles** (do not swap them): inside the club, one sans-serif — Inter — for every role (`display`,
+`headline`, `title`, `subtitle`, `body`, `label` uppercase and letter-spaced, `price` with tabular figures); no serif.
+The entry keeps its 1.0 Fraunces, Geist and Geist Mono from `club.ts`.
 
 **Status bar:** the root shows light glyphs (the entry, Welcome). A screen on the porcelain page, a photograph
 or the night mounts `<ScreenStatusBar on="light" | "dark" />` (`src/components/screen-status-bar.tsx`) for the

@@ -46,7 +46,7 @@ export function SheetExpanded({ sections, onOpenOffer, onSearch }: Props) {
         <OfferCard
           key={`${section.key}-${item.id}`}
           testID={`explore.offer.${section.key}.${item.id}`}
-          title={item.title}
+          city={item.title}
           fromPrice={formatPrice(item.price.offer, item.price.currency)}
           image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
           fallback={CLUB_PICTURE}

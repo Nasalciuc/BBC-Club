@@ -4,7 +4,7 @@ Private travel club app for BuyBusinessClass clients. Entry is a cinematic cabin
 
 ## Stack
 
-One Bun monorepo. `apps/mobile`: Expo SDK 57, Expo Router, React Native, Reanimated 4, expo-image. `apps/api` and `packages/modules`: Bun, Hono, Drizzle, Postgres, Better Auth. Design tokens are generated into `packages/ui/src/tokens.ts` from [DESIGN.md](./DESIGN.md); screens follow the Figma file, which wins where DESIGN.md differs (ADR-IMPL-046). Rules for agents: [AGENTS.md](./AGENTS.md).
+One Bun monorepo. `apps/mobile`: Expo SDK 57, Expo Router, React Native, Reanimated 4, expo-image. `apps/api` and `packages/modules`: Bun, Hono, Drizzle, Postgres, Better Auth. Design tokens are generated into `packages/ui/src/tokens.ts` from [DESIGN.md](./DESIGN.md); screens from onboarding on follow DESIGN.md 3.0 and the images in `isolated/bbc-club-3.0-design/final/` (ADR-IMPL-055); the entry keeps 1.0. Rules for agents: [AGENTS.md](./AGENTS.md).
 
 ## Develop
 

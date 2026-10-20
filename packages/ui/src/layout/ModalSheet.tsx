@@ -75,6 +75,13 @@ type Props = {
    * headline keeps the ×'s place.
    */
   closable?: boolean;
+  /**
+   * False hides the × while the sheet still closes by its backdrop, a drag, Back and its own `Cancel` / `Not now` (35,
+   * 25: a question with its answers in the sheet).
+   */
+  showClose?: boolean;
+  /** `centre` for a question with an icon above it (25); otherwise the title at the left. */
+  titleAlign?: "start" | "centre";
   stackBehavior?: "push" | "replace" | "switch";
   onDismiss?: () => void;
 };
@@ -105,6 +112,8 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     insets = NO_INSETS,
     dismissible = true,
     closable = true,
+    showClose = true,
+    titleAlign = "start",
     stackBehavior,
     onDismiss,
   },
@@ -182,12 +191,19 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
               headline ? styles.headerHeadline : titleAlone ? styles.headerTitleAlone : styles.headerTitle,
             ]}
           >
-            <Text style={headline ? styles.headline : styles.title} accessibilityRole="header">
+            <Text
+              style={[headline ? styles.headline : styles.title, titleAlign === "centre" && styles.centred]}
+              accessibilityRole="header"
+            >
               {title}
             </Text>
-            {closable ? (
-              <CloseButton testID={closeTestID} onPress={() => modal.current?.dismiss()} />
-            ) : headline ? (
+            {closable && showClose ? (
+              <CloseButton
+                testID={closeTestID}
+                tone={size === "explain" ? "tint" : "plain"}
+                onPress={() => modal.current?.dismiss()}
+              />
+            ) : headline && showClose ? (
               <View style={styles.closePlace} />
             ) : null}
           </View>
@@ -224,7 +240,7 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
   );
 });
 
-/** Figma's handle: 48 × 4 at 8 pt from the top; the header starts 24 pt down. */
+/** The grabber (sheet 42): 40 × 5 at 10 pt from the top; the header starts 24 pt down. */
 const HANDLE_AREA = 24;
 const HEADER_TITLE = 44;
 const HEADER_HEADLINE = 64;
@@ -279,14 +295,14 @@ function StillBackdrop(props: BottomSheetBackdropProps) {
   return <NightBackdrop {...props} pressBehavior="none" />;
 }
 
-/** Figma's backdrop: `surface-night` at 35% over the page. */
+/** The page dimmed under the sheet (`scrim`). */
 function NightBackdrop({ pressBehavior, ...props }: BottomSheetBackdropProps & { pressBehavior: "close" | "none" }) {
   return (
     <BottomSheetBackdrop
       {...props}
       appearsOnIndex={0}
       disappearsOnIndex={-1}
-      opacity={0.35}
+      opacity={1}
       pressBehavior={pressBehavior}
       style={[props.style, styles.backdrop]}
     />
@@ -302,25 +318,27 @@ function Handle(_props: BottomSheetHandleProps) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { backgroundColor: tokens.colors.surfaceNight },
+  backdrop: { backgroundColor: tokens.colors.scrim },
   background: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
+    backgroundColor: tokens.colors.surfaceCard,
+    borderTopLeftRadius: tokens.radius.xl,
+    borderTopRightRadius: tokens.radius.xl,
+    ...tokens.elevation.sheet,
   },
-  handleArea: { height: HANDLE_AREA, paddingTop: tokens.space.xs, alignItems: "center" },
-  handle: { width: 48, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
+  handleArea: { height: HANDLE_AREA, paddingTop: 10, alignItems: "center" },
+  handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.colors.borderDefault },
   sheet: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", gap: tokens.space.xs, paddingLeft: tokens.space.lg },
-  headerTitle: { minHeight: HEADER_TITLE, paddingRight: tokens.space.lg + 36 },
-  // The title keeps its 257-pt box without the ×: it wraps where it did.
-  headerTitleAlone: { minHeight: TITLE_LINE, paddingRight: tokens.space.lg + 36 + tokens.space.xs + 44 },
-  headerHeadline: { minHeight: HEADER_HEADLINE, paddingRight: tokens.space.lg + 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: tokens.space.xs, paddingLeft: tokens.space.gutter },
+  headerTitle: { minHeight: HEADER_TITLE, paddingRight: tokens.space.sm },
+  // The title keeps its box without the ×: it wraps where it did.
+  headerTitleAlone: { minHeight: TITLE_LINE, paddingRight: tokens.space.sm + tokens.space.xs + 44 },
+  headerHeadline: { minHeight: HEADER_HEADLINE, paddingRight: tokens.space.sm },
+  centred: { textAlign: "center" },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, flex: 1 },
   headline: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, flex: 1 },
   // The ×'s 44-pt target, kept beside a headline while it is hidden.
   closePlace: { width: 44, height: 44 },
   body: { flex: 1 },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg },
-  footer: { paddingHorizontal: tokens.space.lg, paddingTop: tokens.space.md, gap: tokens.space.sm },
+  content: { paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.lg },
+  footer: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.md, gap: tokens.space.sm },
 });

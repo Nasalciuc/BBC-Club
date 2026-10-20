@@ -2,37 +2,46 @@ import { Redirect } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fixture } from "@bbc/shared/fixture";
-
-import { CLUB_PICTURE } from "@/features/places/usePlacePhotos";
 import {
   AirportRow,
+  Avatar,
+  BackButton,
   Button,
+  CardSkeleton,
+  CheckCircle,
   Chip,
+  CloseButton,
   EmptyState,
-  ErrorState,
-  StateMessage,
-  FareRow,
-  GlobeFallback,
+  InfoCard,
   ListRow,
+  NoticeCard,
   OfferCard,
+  OfferCardWide,
   CarouselRow,
-  PhotoCredit,
-  PricePair,
-  ProfileHero,
-  RequestCard,
+  PickerField,
+  ProgressLine,
+  RoundButton,
+  RowGroup,
+  RowSkeleton,
+  SavePill,
   SearchField,
+  SectionHeader,
   SectionLabel,
+  Segmented,
   StatusBadge,
   Stepper,
-  type BadgeStatus,
   TabBar,
-  Timeline,
-  Calendar,
+  TextButton,
+  TextField,
+  FieldError,
+  Toggle,
+  TopBar,
+  Wordmark,
   tokens,
   rn,
-  type Selection,
 } from "@bbc/ui";
+
+import { CLUB_PICTURE } from "@/features/places/usePlacePhotos";
 
 /**
  * The route: the gallery in a development build only. A release build that reaches it — a link, Expo's sitemap — goes
@@ -42,31 +51,19 @@ export default function GalleryRoute() {
   return __DEV__ ? <GalleryScreen /> : <Redirect href="/" />;
 }
 
-/** Storybook substitute. A component without a state here does not exist. */
+/**
+ * The 3.0 components side by side with the component sheets (isolated/bbc-club-3.0-design/final/components, 37–42):
+ * a component without a state here does not exist.
+ */
 function GalleryScreen() {
   const insets = useSafeAreaInsets();
-  const [chipOn, setChipOn] = useState(false);
-  const [switchOn, setSwitchOn] = useState(true);
+  const [trip, setTrip] = useState<"round" | "oneway">("round");
+  const [adults, setAdults] = useState(1);
+  const [flexible, setFlexible] = useState(false);
+  const [filter, setFilter] = useState("all");
   const [tab, setTab] = useState<"explore" | "requests" | "profile">("explore");
-  const [pin, setPin] = useState<string | null>("LHR");
-  const [stepperAdult, setStepperAdult] = useState(1);
-  const [stepperChild, setStepperChild] = useState(0);
-  const [stepperInfant, setStepperInfant] = useState(0);
-  const [editableQuery, setEditableQuery] = useState("");
+  const [query, setQuery] = useState("Lon");
   const noop = () => undefined;
-  const calendarToday = "2026-09-26";
-  const calendarDepart: Selection = { tripType: "round", depart: "2026-10-12", ret: null, editing: "return" };
-  const calendarRange: Selection = {
-    tripType: "round",
-    depart: "2026-10-12",
-    ret: "2026-10-19",
-    editing: "depart",
-  };
-  const calendarOneWay: Selection = { tripType: "oneway", depart: "2026-10-12", ret: null, editing: "depart" };
-
-  const fareTimed = fixture.fares[0]!;
-  const fareNoTimes = fixture.fares[2]!;
-  const fareOffer = fixture.fares[1]!;
 
   return (
     <ScrollView
@@ -74,421 +71,335 @@ function GalleryScreen() {
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 48 }]}
     >
-      <Text style={styles.h1}>UI gallery</Text>
+      <Wordmark />
+      <Text style={styles.h1}>Components</Text>
 
-      {/* Figma 26:8: Default, Selected, Disabled; the request's trip type (equal shares), Explore's preferences (filling
-          the row), Profile's cabins (56 pt, across the width). */}
-      <SectionLabel label="Chip" />
+      <SectionHeader title="Buttons" size="subtitle" />
+      <Button testID="gallery.button.continue" label="Continue" trailing="arrow" onPress={noop} />
+      <Button testID="gallery.button.call" label="Call your specialist" icon="phone" onPress={noop} />
+      <Button testID="gallery.button.disabled" label="Continue" trailing="arrow" disabled onPress={noop} />
+      <Button testID="gallery.button.sending" label="Sending…" busy onPress={noop} />
+      <Button testID="gallery.button.edge" label="Use these dates" trailing="arrow" trailingAtEdge onPress={noop} />
       <View style={styles.row}>
-        <Chip testID="gallery.chip.default" label="Dates" onPress={noop} />
-        <Chip testID="gallery.chip.selected" label="Business" selected={chipOn} onPress={() => setChipOn(!chipOn)} />
-        <Chip testID="gallery.chip.disabled" label="First" disabled onPress={noop} />
-        <Chip testID="gallery.chip.long" label="Very long cabin filter label" onPress={noop} />
-      </View>
-      <View style={styles.chipRow}>
-        <Chip testID="gallery.chip.round" label="Round trip" selected fill="equal" onPress={noop} />
-        <Chip testID="gallery.chip.oneway" label="One way" fill="equal" onPress={noop} />
-      </View>
-      <View style={styles.chipRow}>
-        <Chip testID="gallery.chip.dates" label="Oct · flexible" fill="content" onPress={noop} />
-        <Chip testID="gallery.chip.cabin" label="Business" fill="content" onPress={noop} />
-        <Chip testID="gallery.chip.travelers" label="1 traveler" fill="content" onPress={noop} />
-      </View>
-      <Chip testID="gallery.chip.business" label="Business" size="lg" selected onPress={noop} />
-      <Chip testID="gallery.chip.first" label="First" size="lg" onPress={noop} />
-
-      <SectionLabel label="SearchField" />
-      <SearchField testID="gallery.search.rest" placeholder="Where to?" onPress={noop} />
-      <View style={styles.gap} />
-      <SearchField
-        testID="gallery.search.filled"
-        placeholder="Where to?"
-        value={{ prefix: "JFK → ", text: "London · LHR" }}
-        onPress={noop}
-        onClear={noop}
-      />
-      <View style={styles.gap} />
-      <SearchField
-        testID="gallery.search.error"
-        placeholder="Where to?"
-        value={{ text: "London" }}
-        error
-        onPress={noop}
-      />
-      <View style={styles.gap} />
-      <SearchField
-        testID="gallery.search.disabled"
-        placeholder="Where to?"
-        disabled
-        disabledReason="Search needs a connection"
-        onPress={noop}
-      />
-      <View style={styles.gap} />
-      <SearchField
-        testID="gallery.search.editable"
-        placeholder="City or code"
-        editable
-        value={editableQuery ? { text: editableQuery } : null}
-        onChangeText={setEditableQuery}
-        onClear={() => setEditableQuery("")}
-      />
-
-      <SectionLabel label="Stepper" />
-      <Stepper
-        testID="gallery.stepper.adult"
-        label="Adults"
-        value={stepperAdult}
-        min={1}
-        max={9}
-        onChange={setStepperAdult}
-      />
-      <Stepper
-        testID="gallery.stepper.child"
-        label="Children"
-        value={stepperChild}
-        min={0}
-        max={8}
-        onChange={setStepperChild}
-      />
-      <Stepper
-        testID="gallery.stepper.infant"
-        label="Infants"
-        value={stepperInfant}
-        min={0}
-        max={4}
-        onChange={setStepperInfant}
-      />
-      <Stepper testID="gallery.stepper.disabled" label="Adults" value={2} disabled onChange={noop} />
-
-      {/* Figma 28:65: Default, Selected (border and check), Recent (clock). */}
-      <SectionLabel label="AirportRow" />
-      {fixture.airports.slice(0, 3).map((a, i) => (
-        <AirportRow
-          key={a.code}
-          testID={`gallery.airport.${a.code}`}
-          code={a.code}
-          city={a.city}
-          airport={a.name}
-          state={i === 1 ? "selected" : i === 2 ? "recent" : "default"}
+        <Button
+          testID="gallery.button.callUs"
+          label="Call us"
+          icon="phone"
+          variant="outline"
+          fill={false}
           onPress={noop}
         />
-      ))}
+        <TextButton testID="gallery.text.skip" label="Skip" tone="secondary" size="button" onPress={noop} />
+        <TextButton testID="gallery.text.seeAll" label="See all" chevron onPress={noop} />
+        <TextButton testID="gallery.text.cancel" label="Cancel" onPress={noop} />
+      </View>
+      <Button testID="gallery.button.signOut" label="Sign out" variant="destructive" onPress={noop} />
+      <Button testID="gallery.button.delete" label="Delete account" variant="destructive-filled" onPress={noop} />
+      <View style={[styles.row, styles.photoStrip]}>
+        <BackButton testID="gallery.round.back" variant="photo" onPress={noop} />
+        <RoundButton testID="gallery.round.share" icon="share" accessibilityLabel="Share" onPress={noop} />
+        <RoundButton testID="gallery.round.heart" icon="heart" accessibilityLabel="Save" onPress={noop} />
+        <RoundButton testID="gallery.round.bookmark" icon="bookmark" accessibilityLabel="Save" onPress={noop} />
+        <RoundButton testID="gallery.round.close" icon="x" accessibilityLabel="Close" onPress={noop} />
+      </View>
 
-      <SectionLabel label="Bronze — the three places it lives" />
-      <Text style={styles.note}>Selected globe pin · offer price on FareRow · Requests unread dot</Text>
+      <SectionHeader title="Fields and controls" size="subtitle" />
+      <SearchField testID="gallery.search.bar" placeholder="Where would you like to go?" onPress={noop} />
+      <SearchField
+        testID="gallery.search.typing"
+        placeholder="Where would you like to go?"
+        editable
+        value={query ? { text: query } : null}
+        onChangeText={setQuery}
+        onClear={() => setQuery("")}
+        onCancel={noop}
+      />
+      <TextField testID="gallery.field.name" label="Name" icon="user" defaultValue="Daniel Reed" />
+      <TextField testID="gallery.field.phone" label="Phone" icon="phone" defaultValue="+1 212 555 0142" />
+      <TextField
+        testID="gallery.field.email"
+        label="Email"
+        icon="mail"
+        defaultValue="daniel@example.com"
+        editable={false}
+      />
+      <TextField
+        testID="gallery.field.note"
+        label="Note (optional)"
+        icon="message"
+        placeholder="Tell us about your travel plans or any special requests"
+      />
+      <View style={styles.row}>
+        <PickerField
+          testID="gallery.picker.depart"
+          label="Depart"
+          value="Nov 12, 2026"
+          icon="calendar"
+          onPress={noop}
+        />
+        <PickerField
+          testID="gallery.picker.return"
+          label="Return"
+          value={null}
+          placeholder="Select date"
+          icon="calendar"
+          error
+          onPress={noop}
+        />
+      </View>
+      <FieldError>Select a return date or choose One way.</FieldError>
+      <PickerField testID="gallery.picker.travelers" label="Travelers" value="1 adult" icon="user" onPress={noop} />
+      <Segmented
+        value={trip}
+        onChange={setTrip}
+        options={[
+          { key: "round", label: "Round trip", testID: "gallery.trip.round" },
+          { key: "oneway", label: "One way", testID: "gallery.trip.oneway" },
+        ]}
+      />
+      <Stepper
+        testID="gallery.stepper"
+        label="Adults"
+        caption="Ages 18+"
+        icon="user"
+        value={adults}
+        min={1}
+        onChange={setAdults}
+      />
+      <View style={styles.row}>
+        <Toggle testID="gallery.toggle.on" value accessibilityLabel="On" onChange={noop} />
+        <Toggle
+          testID="gallery.toggle.flexible"
+          value={flexible}
+          accessibilityLabel="Keep the dates flexible"
+          onChange={setFlexible}
+        />
+      </View>
+      <View style={styles.row}>
+        <Chip testID="gallery.chip.dates" icon="calendar" label="Nov 12 – 19, 2026" onPress={noop} />
+        <Chip testID="gallery.chip.cabin" icon="seat" label="Business" onPress={noop} />
+        <Chip testID="gallery.chip.adults" icon="user" label="1 adult" onPress={noop} />
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {["all", "quote_ready", "received", "booked", "closed"].map((key) => (
+          <Chip
+            key={key}
+            testID={`gallery.filter.${key}`}
+            variant="filter"
+            label={
+              { all: "All", quote_ready: "Quote ready", received: "Received", booked: "Booked", closed: "Closed" }[key]!
+            }
+            selected={filter === key}
+            onPress={() => setFilter(key)}
+          />
+        ))}
+      </ScrollView>
+      <ProgressLine fraction={2 / 3} />
 
-      <SectionLabel label="FareRow" />
-      <FareRow testID="gallery.fare.timed" fare={fareTimed} onPress={noop} />
-      <FareRow testID="gallery.fare.notimes" fare={fareNoTimes} onPress={noop} />
-      <FareRow testID="gallery.fare.offer" fare={fareOffer} onPress={noop} />
-
-      <SectionLabel label="OfferCard" />
-      <CarouselRow testID="gallery.carousel">
+      <SectionHeader title="Cards and rows" size="subtitle" />
+      <InfoCard
+        icon="family"
+        iconStyle="bare"
+        title="Travelling with children?"
+        body="Add their ages in a note when you request."
+      />
+      <CarouselRow testID="gallery.offers">
         <OfferCard
-          testID="gallery.offer.full"
-          title="London"
-          fromPrice="$4,200"
+          testID="gallery.offer.paris"
+          city="Paris"
+          country="France"
+          fromPrice="$3,450"
+          savePercent={54}
           image={null}
           fallback={CLUB_PICTURE}
           onPress={noop}
         />
-        <OfferCard testID="gallery.offer.noprice" title="Paris" image={null} fallback={CLUB_PICTURE} onPress={noop} />
         <OfferCard
-          testID="gallery.offer.noimage"
-          title="Tokyo"
-          fromPrice="$4,650"
+          testID="gallery.offer.tokyo"
+          city="Tokyo"
+          country="Japan"
+          fromPrice="$4,200"
+          savePercent={44}
           image={null}
-          fallback={null}
+          fallback={CLUB_PICTURE}
+          onPress={noop}
+        />
+        <OfferCard
+          testID="gallery.offer.dubai"
+          city="Dubai"
+          country="UAE"
+          fromPrice="$4,100"
+          image={null}
+          fallback={CLUB_PICTURE}
           onPress={noop}
         />
       </CarouselRow>
-
-      {/* Figma 436:1221; the club's image stands in for the city's photo (ADR-IMPL-043). */}
-      <SectionLabel label="ProfileHero" />
-      <ProfileHero
-        testID="gallery.profileHero"
-        name="Alex Morgan"
-        home="Flies from JFK"
+      <View style={styles.row}>
+        <OfferCardWide
+          span="half"
+          testID="gallery.wide.london"
+          city="London"
+          country="United Kingdom"
+          fromPrice="$3,900"
+          savePercent={48}
+          image={null}
+          fallback={CLUB_PICTURE}
+          onPress={noop}
+        />
+        <OfferCardWide
+          span="half"
+          testID="gallery.wide.paris"
+          city="Paris"
+          country="France"
+          fromPrice="$3,450"
+          savePercent={54}
+          image={null}
+          fallback={CLUB_PICTURE}
+          onPress={noop}
+        />
+      </View>
+      <OfferCardWide
+        span="full"
+        testID="gallery.wide.tokyo"
+        city="Tokyo"
+        country="Japan"
+        fromPrice="$4,200"
+        savePercent={44}
         image={null}
         fallback={CLUB_PICTURE}
-      />
-      <PhotoCredit
-        testID="gallery.photoCredit"
-        label="Photo: Jane Doe · CC BY-SA 4.0 · Wikimedia Commons"
-        accessibilityLabel="Photo by Jane Doe, CC BY-SA 4.0, Wikimedia Commons"
         onPress={noop}
       />
+      <AirportRow testID="gallery.airport.lhr" code="LHR" city="London" airport="Heathrow Airport" onPress={noop} />
+      <AirportRow
+        testID="gallery.airport.jfk"
+        layout="code"
+        code="JFK"
+        city="New York"
+        airport="John F. Kennedy"
+        onPress={noop}
+      />
+      <RowGroup>
+        <ListRow testID="gallery.row.home" icon="plane" label="Home airport" value="New York (JFK)" onPress={noop} />
+        <ListRow testID="gallery.row.cabin" icon="seat" label="Cabin" value="Business" onPress={noop} />
+        <ListRow testID="gallery.row.travelers" icon="users" label="Travelers" value="1 adult" onPress={noop} />
+        <ListRow testID="gallery.row.phone" icon="phone" label="Phone" value="+1 212 555 0142" onPress={noop} />
+      </RowGroup>
+      <RowGroup>
+        <ListRow
+          testID="gallery.row.notifications"
+          icon="bell"
+          label="Notifications"
+          subtitle="Request updates are always on."
+          value="Preferences"
+          onPress={noop}
+        />
+        <ListRow testID="gallery.row.password" icon="lock" label="Password" value="Change" onPress={noop} />
+      </RowGroup>
+      <ListRow testID="gallery.row.delete" icon="trash" label="Delete account" danger onPress={noop} />
+      <RowGroup>
+        <ListRow
+          testID="gallery.row.stackedHome"
+          stacked
+          icon="plane"
+          label="Home airport"
+          value="New York (JFK)"
+          onPress={noop}
+        />
+        <ListRow testID="gallery.row.stackedCabin" stacked icon="seat" label="Cabin" value="Business" onPress={noop} />
+      </RowGroup>
 
-      <SectionLabel label="PricePair" />
+      <SectionHeader title="Status and feedback" size="subtitle" />
       <View style={styles.row}>
-        <PricePair price={fareTimed.price} size="sm" />
-        <PricePair price={fareTimed.price} size="lg" />
-        <PricePair price={{ offer: 3900, currency: "USD" }} size="sm" />
-      </View>
-      {/* Figma 26:29: a request's fare (the detail), with and without the published fare beside it; then a fare's
-          page (the editorial). */}
-      <PricePair price={{ offer: fareTimed.price.offer, currency: fareTimed.price.currency }} layout="detail" />
-      <PricePair price={fareTimed.price} layout="detail" />
-      <PricePair price={fareTimed.price} layout="editorial" />
-
-      <SectionLabel label="StatusBadge" />
-      <View style={styles.row}>
-        <StatusBadge status="received" />
         <StatusBadge status="quote_ready" />
+        <StatusBadge status="received" />
         <StatusBadge status="booked" />
+      </View>
+      <View style={styles.row}>
+        <StatusBadge status="closed" />
         <StatusBadge status="not_sent" />
-        {/* A state a newer server adds reads as Received (and warns in development). */}
-        <StatusBadge status={"mystery_future_status" as BadgeStatus} />
-        <StatusBadge status="quote_ready" size="sm" />
+        <SavePill percent={48} />
       </View>
-
-      <SectionLabel label="Calendar" />
-      <Calendar
-        testID="gallery.calendar.depart"
-        selection={calendarDepart}
-        today={calendarToday}
-        months={2}
-        onSelect={noop}
-      />
-      <Calendar
-        testID="gallery.calendar.range"
-        selection={calendarRange}
-        today={calendarToday}
-        months={2}
-        onSelect={noop}
-      />
-      <Calendar
-        testID="gallery.calendar.oneway"
-        selection={calendarOneWay}
-        today={calendarToday}
-        months={2}
-        onSelect={noop}
-      />
-
-      <SectionLabel label="Timeline" />
-      <Timeline
-        testID="gallery.timeline.received"
-        status="received"
-        events={[{ status: "received", at: "2026-09-18T12:00:00.000Z" }]}
-      />
-      <View style={styles.gap} />
-      <Timeline
-        testID="gallery.timeline.partial"
-        status="assigned"
-        currentCaption="A specialist will call you shortly."
-        events={[
-          { status: "received", at: "2026-09-18T12:00:00.000Z" },
-          { status: "assigned", at: "2026-09-18T14:30:00.000Z", note: "A specialist will call you shortly." },
-        ]}
-      />
-      <View style={styles.gap} />
-      <Timeline
-        testID="gallery.timeline.quoted"
-        status="quoted"
-        currentCaption="Review the quote with your specialist."
-        events={[
-          { status: "received", at: "2026-09-18T12:00:00.000Z" },
-          { status: "quoted", at: "2026-09-19T12:00:00.000Z" },
-        ]}
-      />
-      <View style={styles.gap} />
-      <Timeline
-        testID="gallery.timeline.booked"
-        status="booked"
-        events={[{ status: "booked", at: "2026-09-20T12:00:00.000Z" }]}
-      />
-      <View style={styles.gap} />
-      <Text testID="gallery.request.closedLine" style={styles.closedLine}>
-        Closed · Oct 3
-      </Text>
-      <Text style={styles.closedSentence}>This request is closed.</Text>
-      <View style={styles.gap} />
-      <Timeline testID="gallery.timeline.empty" status="queued" events={[]} />
-
-      <SectionLabel
-        label="SectionLabel"
-        action={{ label: "See all", onPress: noop, testID: "gallery.section.seeAll" }}
-      />
-      <SectionLabel label="Without action" />
-
-      <SectionLabel label="Button" />
-      <Button testID="gallery.btn.inverted" label="Inverted" onPress={noop} />
-      <View style={styles.gap} />
-      <Button testID="gallery.btn.primary" label="Primary" variant="primary" onPress={noop} />
-      <View style={styles.gap} />
-      <Button testID="gallery.btn.secondary" label="Secondary" variant="secondary" onPress={noop} />
-      <View style={styles.gap} />
-      <Button testID="gallery.btn.busy" label="Sending…" variant="primary" busy onPress={noop} />
-      <View style={styles.gap} />
-      <Button testID="gallery.btn.disabledPrimary" label="Disabled" variant="primary" disabled onPress={noop} />
-      <View style={styles.gap} />
-      <Button testID="gallery.btn.disabled" label="Disabled" disabled onPress={noop} />
-      <View style={styles.gap} />
-      <Button testID="gallery.btn.destructive" label="Destructive" variant="destructive" onPress={noop} />
-
-      <SectionLabel label="ListRow" />
-      <ListRow testID="gallery.list.label" label="Label only" onPress={noop} />
-      <ListRow testID="gallery.list.value" label="Home airport" value="JFK · New York" onPress={noop} />
-      <ListRow testID="gallery.list.icon" label="Call support" icon="call" trailing="none" onPress={noop} />
-      <ListRow testID="gallery.list.danger" label="Delete account" danger chevron={false} onPress={noop} />
-      <ListRow testID="gallery.list.static" label="Email" value="member@example.com" />
-      <ListRow testID="gallery.list.comingSoon" label="Privacy policy" value="Coming soon" />
-      <ListRow testID="gallery.list.disabled" label="Home airport" value="JFK" disabled onPress={noop} />
-      <ListRow
-        testID="gallery.list.switchOn"
-        label="Request updates"
-        toggle={{ value: switchOn, onChange: setSwitchOn, testID: "gallery.list.switchOn.toggle" }}
-      />
-      <ListRow
-        testID="gallery.list.switchOff"
-        label="Offers to inspire"
-        toggle={{ value: !switchOn, onChange: (v) => setSwitchOn(!v), testID: "gallery.list.switchOff.toggle" }}
-      />
-
-      <SectionLabel label="TabBar" />
-      <TabBar testID="gallery.tabbar" active={tab} unread={0} onPress={setTab} />
-      <TabBar testID="gallery.tabbar.dot" active="requests" unread={2} onPress={noop} />
-      {/* A phone whose home indicator / navigation bar is taller than Figma's 32 pt: the white runs to the edge. */}
-      <TabBar testID="gallery.tabbar.inset" active="profile" unread={0} bottomInset={48} onPress={noop} />
-
-      <SectionLabel label="GlobeFallback" />
-      <GlobeFallback
-        size={320}
-        home={{ lat: 40.64, lng: -73.78 }}
-        selected={pin}
-        onSelect={setPin}
-        pins={fixture.destinations.slice(0, 6).map((d) => ({
-          code: d.code,
-          lat: d.lat,
-          lng: d.lng,
-          hasOffer: d.hasOffer,
-          fromPrice: `from $${d.fromPrice.toLocaleString()}`,
-        }))}
-      />
-
-      <SectionLabel label="RequestCard" />
-      <View style={styles.cardStack}>
-        <RequestCard
-          testID="gallery.request.quote"
-          title="London"
-          facts="JFK → LHR · BUSINESS"
-          when="OCT 12–19 · 1 ADULT"
-          badgeStatus="quote_ready"
-          onPress={noop}
-        />
-        <RequestCard
-          testID="gallery.request.received"
-          title="Paris"
-          facts="JFK → CDG · BUSINESS"
-          when="NOV 3 · 2 ADULTS"
-          badgeStatus="received"
-          onPress={noop}
-        />
-        <RequestCard
-          testID="gallery.request.notSent"
-          title="London"
-          facts="JFK → LHR · BUSINESS"
-          when="Your travel details are saved"
-          badgeStatus="not_sent"
-          onPress={noop}
-        />
-        <RequestCard
-          testID="gallery.request.booked"
-          title="Tokyo"
-          facts="JFK → NRT · BUSINESS"
-          when="AUG 2 · 1 ADULT"
-          badgeStatus="booked"
-          onPress={noop}
-        />
-        <RequestCard
-          testID="gallery.request.closed"
-          title="London"
-          facts="JFK → LHR · BUSINESS"
-          when="CLOSED · OCT 3"
-          badgeStatus={null}
-          onPress={noop}
-        />
-        <RequestCard
-          testID="gallery.request.compact"
-          size="compact"
-          title="Dubai"
-          facts="JFK → DXB · FIRST"
-          when="DEC 18 · 1 ADULT"
-          badgeStatus="received"
-          onPress={noop}
-        />
-        <RequestCard
-          testID="gallery.request.long"
-          title="Rio de Janeiro"
-          facts="JFK → GIG · BUSINESS"
-          when="OCT 30–NOV 6 · 2 ADULTS · 1 CHILD · 1 INFANT"
-          badgeStatus="received"
-          onPress={noop}
-        />
-        {/* A city too long to share its line with the badge at the default text size: the badge moves below it. */}
-        <RequestCard
-          testID="gallery.request.longCity"
-          title="Santa Cruz de Tenerife"
-          facts="JFK → TFN · BUSINESS"
-          when="NOV 3 · 1 ADULT"
-          badgeStatus="quote_ready"
-          onPress={noop}
-        />
-      </View>
-
-      <SectionLabel label="StateMessage" />
-      <StateMessage
-        testID="gallery.error"
-        variant="error"
+      <NoticeCard
+        testID="gallery.notice.error"
+        tone="error"
         title="Something went wrong."
-        body="We couldn't load fares just now."
-        primary={{ label: "Try again", onPress: noop }}
-        secondary={{ label: "Call a specialist", onPress: noop }}
-        reference="9F3C21A0"
+        link={{ label: "Try again", onPress: noop, testID: "gallery.notice.error.retry" }}
       />
-      <View style={styles.gap} />
-      <ErrorState
-        testID="gallery.gone"
-        variant="gone"
-        title="This fare has closed."
-        body="The price you saw is no longer available."
-        primary={{ label: "Request the route", onPress: noop }}
+      <NoticeCard
+        testID="gallery.notice.offline"
+        tone="offline"
+        title="You’re offline."
+        body="You can still request a fare — it goes out as soon as you’re back online."
+        link={{ label: "Try again", onPress: noop, testID: "gallery.notice.offline.retry" }}
       />
-      <View style={styles.gap} />
-      <ErrorState
-        testID="gallery.offline"
-        variant="offline"
-        title="You're offline."
-        body="Saved offers are still here."
+      <NoticeCard
+        testID="gallery.notice.attention"
+        tone="attention"
+        title="One request needs your attention."
+        body="Open your request to check the details and try again."
+      />
+      <InfoCard
+        icon="phone"
+        title="Your quote is ready."
+        body="A specialist will call shortly to confirm the details."
+      />
+      <CardSkeleton />
+      <RowSkeleton />
+      <View style={styles.row}>
+        <CheckCircle />
+        <Avatar initials="DR" size={56} />
+        <Avatar initials="DR" size={120} />
+      </View>
+      <EmptyState
+        testID="gallery.empty"
+        title="No offers yet."
+        body="Your specialist's offers will appear here. Search a destination to request a fare."
+        primary={{ label: "Search a destination", onPress: noop }}
+        primaryFill={false}
+      />
+      <EmptyState
+        testID="gallery.empty.airports"
+        icon="search"
+        title="No airports found"
+        body="Try a city name or a three-letter airport code, such as JFK."
+        primary={{ label: "Clear search", onPress: noop }}
+        primaryVariant="outline"
+        primaryFill={false}
       />
 
-      <SectionLabel label="EmptyState" />
-      <EmptyState
-        testID="gallery.empty.fares"
-        title="We don't publish fares for this route."
-        body="Tell us your dates and a specialist calls you with options."
-        primary={{ label: "Request a quote", onPress: noop }}
+      <SectionHeader title="Navigation" size="subtitle" />
+      <TopBar
+        onBack={noop}
+        backTestID="gallery.topbar.back"
+        right={
+          <RoundButton
+            testID="gallery.topbar.profile"
+            icon="user"
+            tone="tint"
+            accessibilityLabel="Profile"
+            onPress={noop}
+          />
+        }
       />
-      <View style={styles.gap} />
-      <EmptyState
-        testID="gallery.empty.requests"
-        title="No requests yet."
-        body="Search a route or pick an offer to get started."
-        primary={{ label: "Search", onPress: noop }}
+      <TopBar title="Settings" onBack={noop} backTestID="gallery.topbar.settings.back" />
+      <SectionHeader
+        title="Offers to inspire"
+        action={{ label: "See all", onPress: noop, testID: "gallery.seeAll", chevron: true }}
       />
+      <SectionLabel label="Indicative fare" flush />
+      <View style={styles.row}>
+        <CloseButton testID="gallery.close.plain" onPress={noop} />
+        <CloseButton testID="gallery.close.tint" tone="tint" onPress={noop} />
+      </View>
+      <TabBar testID="gallery.tabbar" active={tab} unread={1} onPress={setTab} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  content: { paddingHorizontal: tokens.space.lg, gap: tokens.space.xs },
-  h1: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, marginBottom: tokens.space.md },
-  note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
-  row: { flexDirection: "row", flexWrap: "wrap", gap: tokens.space.xs, alignItems: "center" },
-  chipRow: { flexDirection: "row", gap: tokens.space.xs },
-  gap: { height: tokens.space.sm },
-  cardStack: { gap: tokens.space.sm },
-  closedLine: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  closedSentence: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  content: { paddingHorizontal: tokens.space.gutter, gap: tokens.space.md },
+  h1: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
+  row: { flexDirection: "row", alignItems: "center", gap: tokens.space.sm, flexWrap: "wrap" },
+  photoStrip: { backgroundColor: tokens.colors.sky, padding: tokens.space.sm, borderRadius: tokens.radius.md },
 });

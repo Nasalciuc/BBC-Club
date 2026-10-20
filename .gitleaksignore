@@ -1,0 +1,3 @@
+# isolated/bbc-club-3.0-design/final/figma/project.json (#75): `fileKey` is the Figma file's id, the same string the
+# file's own URL carries on the next line, not a credential; gitleaks' generic-api-key rule reads the key's name.
+d41d7e5360b5d2c0f8df4c74008432bcd290bb0e:isolated/bbc-club-3.0-design/final/figma/project.json:generic-api-key:2

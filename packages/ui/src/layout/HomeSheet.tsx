@@ -12,7 +12,7 @@ import { HOME_SHEET_SNAPS } from "./home-sheet-snaps";
 const SNAP_POINTS = HOME_SHEET_SNAPS.map((f) => `${f * 100}%`);
 
 /** Figma HomeSheet · London selected: the pill sits 12 pt above the sheet's bottom edge, inside the 24 pt gutter. */
-const FOOTER_HEIGHT = 56 + tokens.space.sm;
+const FOOTER_HEIGHT = 52 + tokens.space.sm;
 
 type Props = {
   index: number;
@@ -72,22 +72,23 @@ export function HomeSheet({ index, onChange, children, footer, page = false }: P
 }
 
 const styles = StyleSheet.create({
-  // Figma HomeSheet (52:24): 12 pt above the 32 × 4 handle and 12 under it, to the search field.
-  handleArea: { paddingTop: tokens.space.sm, paddingBottom: tokens.space.sm },
-  handle: { width: 32, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
+  // The grabber (16, 13): 40 × 5, 10 pt from the sheet's top, 12 above the content.
+  handleArea: { paddingTop: 10, paddingBottom: tokens.space.sm },
+  handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.colors.borderDefault },
   // 89:390: no handle, and the field 4 pt lower than on the sheet (144 on the frame, 40 under the header).
   handleAreaPage: { paddingBottom: tokens.space.md },
   handleHidden: { opacity: 0 },
   background: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
+    backgroundColor: tokens.colors.surfaceCard,
+    borderTopLeftRadius: tokens.radius.xl,
+    borderTopRightRadius: tokens.radius.xl,
+    ...tokens.elevation.sheet,
   },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl },
+  content: { paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.xxxl },
   contentAboveFooter: { paddingBottom: FOOTER_HEIGHT + tokens.space.lg },
   footer: {
-    paddingHorizontal: tokens.space.lg,
+    paddingHorizontal: tokens.space.gutter,
     paddingBottom: tokens.space.sm,
-    backgroundColor: tokens.colors.surfacePage,
+    backgroundColor: tokens.colors.surfaceCard,
   },
 });

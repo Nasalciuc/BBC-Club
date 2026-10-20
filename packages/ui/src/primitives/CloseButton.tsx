@@ -1,17 +1,16 @@
-import { Pressable, StyleSheet, View } from "react-native";
-import { icons } from "../icons";
+import { Pressable, StyleSheet } from "react-native";
+import { Icon } from "../icons";
 import { tokens } from "../tokens";
-
-/** Figma's × spans 14 pt of the 32-pt circle (299:200): lucide's `x` drawn on a 28-pt box, its 1.5 stroke to scale. */
-const Cross = icons.clear;
 
 type Props = {
   onPress: () => void;
   testID: string;
+  /** `plain`: the × alone (a sheet's header, 06). `tint`: the × in a light tint circle (20). */
+  tone?: "plain" | "tint";
 };
 
-/** Figma CloseButton (299:200): 44 × 44 target; a 32-pt circle filled `border-default`, the ×. Never the word Close. */
-export function CloseButton({ onPress, testID }: Props) {
+/** A sheet's close (sheet 42): 44 × 44, the × in navy. Never the word Close. */
+export function CloseButton({ onPress, testID, tone = "plain" }: Props) {
   return (
     <Pressable
       testID={testID}
@@ -19,24 +18,15 @@ export function CloseButton({ onPress, testID }: Props) {
       accessibilityLabel="Close"
       hitSlop={8}
       onPress={onPress}
-      style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.hit, tone === "tint" && styles.tint, pressed && styles.pressed]}
     >
-      <View style={styles.circle}>
-        <Cross size={28} color={tokens.colors.textPrimary} strokeWidth={1.5} />
-      </View>
+      <Icon name="x" size={24} color={tokens.colors.textPrimary} strokeWidth={1.75} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  hit: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  circle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: tokens.colors.borderDefault,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  hit: { width: 44, height: 44, borderRadius: tokens.radius.pill, alignItems: "center", justifyContent: "center" },
+  tint: { backgroundColor: tokens.colors.surfaceTint },
   pressed: { opacity: 0.7 },
 });

@@ -1,11 +1,12 @@
-import { rn, tokens } from "@bbc/ui";
+import type { TextStyle } from "react-native";
 
 /**
- * The entry's own colours, spacing and radii — Welcome, Sign in, Join, Verify, Set password, Reset — which the owner
- * keeps as they were (ADR-IMPL-046, ADR-IMPL-047): written here on purpose, so a change to the club's tokens does not
- * reach them by accident. The entry's type roles (`type` below) and its buttons (`ClubButton`) do read the generated
- * tokens, as everything inside the club does (`@bbc/ui`, from DESIGN.md); from here the club takes only the root's dark
- * chrome (the black behind the entry, the navigator's theme) and the column's width.
+ * The entry's own values — Welcome, Sign in, Join, Verify, Set password, Reset — which the owner keeps exactly as they
+ * were in 1.0 (ADR-IMPL-046, ADR-IMPL-047): colours, spacing, radii, type, motion, all written here, so the club's
+ * tokens can move to 3.0 (ADR-IMPL-055) without touching the entry. Nothing here reads `@bbc/ui`'s tokens; the entry's
+ * components (`ClubButton`, `ClubIcon`, `AnimatedEntrance`) read only this file, and `club.test.ts` pins every value.
+ * From here the club takes only the root's dark chrome (the black behind the entry, the navigator's theme) and the
+ * column's width.
  */
 export const Club = {
   colors: {
@@ -46,19 +47,48 @@ export const Club = {
   layout: {
     phoneMaxWidth: 430,
   },
-  // One type system on every screen (DESIGN.md, ADR-IMPL-041): Entry reads the same roles as the interior, from the
-  // generated tokens, mapped to the bundled Fraunces / Geist / Geist Mono files by rn().
+  // The 1.0 type roles as the entry draws them: the bundled Fraunces, Geist and Geist Mono files (ADR-IMPL-041), the
+  // sizes, weights, line heights and tracking DESIGN.md 1.0 generated — frozen, not read from the tokens.
   type: {
-    display: rn(tokens.type.display),
-    headline: rn(tokens.type.headline),
-    title: rn(tokens.type.title),
-    titleSm: rn(tokens.type.titleSm),
-    body: rn(tokens.type.body),
-    bodySm: rn(tokens.type.bodySm),
-    caption: rn(tokens.type.caption),
-    button: rn(tokens.type.button),
-    labelMono: rn(tokens.type.labelMono),
-    factsMono: rn(tokens.type.factsMono),
-    tabMono: rn(tokens.type.tabMono),
+    display: {
+      fontFamily: "Fraunces_400Regular",
+      fontSize: 34,
+      fontWeight: "400",
+      lineHeight: 37,
+      letterSpacing: -0.4,
+    },
+    headline: {
+      fontFamily: "Fraunces_400Regular",
+      fontSize: 28,
+      fontWeight: "400",
+      lineHeight: 32,
+      letterSpacing: -0.3,
+    },
+    title: { fontFamily: "Fraunces_400Regular", fontSize: 20, fontWeight: "400", lineHeight: 24, letterSpacing: 0 },
+    titleSm: { fontFamily: "Fraunces_400Regular", fontSize: 16, fontWeight: "400", lineHeight: 20, letterSpacing: 0 },
+    body: { fontFamily: "Geist_400Regular", fontSize: 17, fontWeight: "400", lineHeight: 25, letterSpacing: 0 },
+    bodySm: { fontFamily: "Geist_400Regular", fontSize: 15, fontWeight: "400", lineHeight: 21, letterSpacing: 0 },
+    caption: { fontFamily: "Geist_400Regular", fontSize: 13, fontWeight: "400", lineHeight: 18, letterSpacing: 0 },
+    button: { fontFamily: "Geist_500Medium", fontSize: 17, fontWeight: "500", lineHeight: 17, letterSpacing: 0 },
+    labelMono: {
+      fontFamily: "GeistMono_500Medium",
+      fontSize: 11,
+      fontWeight: "500",
+      lineHeight: 14,
+      letterSpacing: 1.5,
+    },
+    factsMono: {
+      fontFamily: "GeistMono_400Regular",
+      fontSize: 12,
+      fontWeight: "400",
+      lineHeight: 17,
+      letterSpacing: 1,
+    },
+    tabMono: { fontFamily: "GeistMono_500Medium", fontSize: 11, fontWeight: "500", lineHeight: 13, letterSpacing: 1 },
+  } satisfies Record<string, TextStyle>,
+  /** The entrance: each element fades in over 900 ms and rises 12 pt (design/motion.md 1.0). */
+  motion: {
+    entrance: 900,
+    rise: 12,
   },
 } as const;

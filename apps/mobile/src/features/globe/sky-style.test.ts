@@ -82,7 +82,7 @@ describe("cityLightsStyle", () => {
   });
 
   it("glows in its own colour, its size doubling at the closest zoom", () => {
-    expect(style.circleColor).toBe(tokens.colors.globeCityLights);
+    expect(style.circleColor).toBe(tokens.colors.surfaceCard);
     expect(style.circleBlur).toBe(1);
     const tokyo = lights[0]!.properties;
     expect(evaluate(style.circleRadius, tokyo, FIGMA_ZOOM)).toBeCloseTo(tokyo.r, 6);
@@ -97,7 +97,7 @@ describe("skyAt", () => {
     const sky = skyAt(date);
     expect(sky.night.features.length).toBeGreaterThan(10);
     expect(sky.lights).toEqual(cityLightsStyle(sunPosition(date)));
-    expect(NIGHT_STYLE.fillColor).toBe(tokens.colors.globeSpace);
+    expect(NIGHT_STYLE.fillColor).toBe(tokens.colors.globeNight);
     expect(NIGHT_STYLE.fillOpacity).toEqual(["get", "opacity"]);
   });
 });

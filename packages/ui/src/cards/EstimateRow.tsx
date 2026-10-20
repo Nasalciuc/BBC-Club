@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
     borderWidth: 1,
     borderColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.card,
+    borderRadius: tokens.radius.md,
     padding: tokens.space.sm,
     marginBottom: tokens.space.xs,
   },
@@ -62,15 +62,15 @@ const styles = StyleSheet.create({
   mark: {
     width: 32,
     height: 32,
-    borderRadius: tokens.radius.badge,
+    borderRadius: tokens.radius.xs,
     backgroundColor: tokens.colors.surfacePage,
     alignItems: "center",
     justifyContent: "center",
   },
-  markText: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary },
+  markText: { ...rn(tokens.type.label), color: tokens.colors.textPrimary },
   body: { flex: 1, gap: tokens.space.xxs },
   // Up to 1.3× font scale the row grows and nothing is cut (DESIGN.md): every line may wrap.
-  title: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
-  facts: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  title: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
+  facts: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
 });

@@ -57,10 +57,10 @@ const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-v9";
 const CITY_LIGHTS = cityLightFeatures();
 /** Mapbox's satellite-globe atmosphere: a pale horizon, a deep-blue sky, near-black space with stars. */
 const ATMOSPHERE = {
-  color: tokens.colors.globeAtmosphere,
-  highColor: tokens.colors.globeAtmosphereHigh,
+  color: tokens.colors.sky,
+  highColor: tokens.colors.sky,
   horizonBlend: 0.02,
-  spaceColor: tokens.colors.globeSpace,
+  spaceColor: tokens.colors.sky,
   starIntensity: 0.6,
 } as const;
 
@@ -273,7 +273,7 @@ export default function MapboxGlobe({
   const line = dest && home ? routeLine(home, dest) : null;
   // Mapbox's terms: logo and attribution always visible — just above wherever the sheet rests.
   const ornament = { bottom: homeSheetHeight(sheetIndex, size.height) + 8 };
-  const accent = tokens.colors.accentWarm;
+  const accent = tokens.colors.primary;
 
   return (
     <View
@@ -352,7 +352,7 @@ export default function MapboxGlobe({
             <LineLayer
               id="route-line"
               style={{
-                lineColor: tokens.colors.textOnDark,
+                lineColor: tokens.colors.textOnPhoto,
                 lineWidth: GLOBE_SPEC.arcStroke,
                 // Figma: 4 px dash, 4 px gap. Mapbox measures dashes in line widths.
                 lineDasharray: GLOBE_SPEC.arcDash.map((d) => d / GLOBE_SPEC.arcStroke),
@@ -373,7 +373,7 @@ export default function MapboxGlobe({
             filter={["all", ["!", ["get", "home"]], ["any", ["get", "hasOffer"], ["get", "selected"]]]}
             style={{
               circleRadius: GLOBE_SPEC.pin.halo / 2,
-              circleColor: ["case", ["get", "selected"], accent, tokens.colors.textOnDark],
+              circleColor: ["case", ["get", "selected"], accent, tokens.colors.textOnPhoto],
               circleOpacity: halo,
             }}
           />
@@ -391,11 +391,11 @@ export default function MapboxGlobe({
                 ["get", "selected"],
                 accent,
                 ["get", "hasOffer"],
-                tokens.colors.textOnDark,
-                tokens.colors.textOnDarkMuted,
+                tokens.colors.textOnPhoto,
+                tokens.colors.textSecondary,
               ],
               // Over bright imagery (desert, snow, cloud) a thin night ring keeps the dot readable.
-              circleStrokeColor: tokens.colors.surfaceNight,
+              circleStrokeColor: tokens.colors.primary,
               circleStrokeWidth: 1.5,
             }}
           />

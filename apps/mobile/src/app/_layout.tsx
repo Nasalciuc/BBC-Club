@@ -3,6 +3,7 @@ import { MaterialSymbols_400Regular } from "@expo-google-fonts/material-symbols"
 import { Fraunces_400Regular, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
 import { Geist_400Regular, Geist_500Medium } from "@expo-google-fonts/geist";
 import { GeistMono_400Regular, GeistMono_500Medium } from "@expo-google-fonts/geist-mono";
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
 import NetInfo from "@react-native-community/netinfo";
 import { useFonts } from "expo-font";
 import * as Linking from "expo-linking";
@@ -65,8 +66,13 @@ export default function RootLayout() {
   // (apiFetch 401) and explicit signOut navigate to /sign-in.
 
   // Fonts swap in when ready (RN 0.72+); do not block Stack on useFonts (Expo Router migrate).
-  // One type system (DESIGN.md, ADR-IMPL-041): Fraunces, Geist, Geist Mono on every screen, Entry included.
+  // Inside the club, Inter (DESIGN.md 3.0, ADR-IMPL-055); the entry keeps the 1.0 Fraunces, Geist and Geist Mono
+  // (constants/club.ts).
   useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
     Fraunces_400Regular,
     Fraunces_600SemiBold,
     Geist_400Regular,

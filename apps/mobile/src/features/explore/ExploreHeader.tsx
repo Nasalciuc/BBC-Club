@@ -36,9 +36,10 @@ export function ExploreHeader({ tone, action, topInset }: Props) {
           style={({ pressed }) => [styles.pill, dark ? styles.pillDark : styles.pillLight, pressed && styles.pressed]}
         >
           {action.initials ? (
-            <Text style={[styles.initials, dark ? styles.onDark : styles.onLight]}>{action.initials}</Text>
+            // The pill is light in both tones (`surface-tint` over the globe), so its glyphs are navy in both.
+            <Text style={[styles.initials, styles.onLight]}>{action.initials}</Text>
           ) : (
-            <Icon name="profile" size={24} color={dark ? tokens.colors.textOnDark : tokens.colors.textPrimary} />
+            <Icon name="profile" size={24} color={tokens.colors.textPrimary} />
           )}
         </Pressable>
       ) : action.kind === "cancel" ? (
@@ -82,11 +83,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  wordmark: { ...rn(tokens.type.labelMono) },
-  onDark: { color: tokens.colors.textOnDark },
+  wordmark: { ...rn(tokens.type.label) },
+  onDark: { color: tokens.colors.textOnPhoto },
   onLight: { color: tokens.colors.textPrimary },
   pill: { width: 48, height: 48, borderRadius: tokens.radius.pill, alignItems: "center", justifyContent: "center" },
-  pillDark: { backgroundColor: tokens.colors.surfaceMuted },
+  pillDark: { backgroundColor: tokens.colors.surfaceTint },
   pillLight: { backgroundColor: tokens.colors.borderDefault },
   initials: { ...rn(tokens.type.button) },
   // Figma 99:524 / 102:753: `Cancel` and `Done` are 80 × 48 text buttons at the gutter, their word centred.

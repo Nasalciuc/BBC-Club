@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Text } from "react-native";
-import { Icon, rn, tokens } from "@bbc/ui";
+
+import { ClubIcon } from "@/components/club-icon";
+import { Club } from "@/constants/club";
 
 type Props = {
   label: string;
@@ -15,7 +17,8 @@ type Props = {
 /**
  * The entry's button, exactly as the entry has it: the owner keeps the entry as it is (14 Oct, ADR-IMPL-046), so its
  * screens do not take Figma's `Button` (no arrow, no outlined button on navy). The light pill with its arrow on the
- * night screens; the outlined button for Create account; 45% while it cannot be pressed.
+ * night screens; the outlined button for Create account; 45% while it cannot be pressed. Its values are the entry's own
+ * (`Club`), never the club's tokens (ADR-IMPL-055).
  */
 export function ClubButton({ label, onPress, disabled = false, arrow = false, variant = "inverted", testID }: Props) {
   const outlined = variant === "secondary";
@@ -37,7 +40,7 @@ export function ClubButton({ label, onPress, disabled = false, arrow = false, va
     >
       <Text style={[styles.label, outlined && styles.outlinedLabel]}>{label}</Text>
       {arrow ? (
-        <Icon name="arrow" size={20} color={outlined ? tokens.colors.textOnDark : tokens.colors.textPrimary} />
+        <ClubIcon name="arrow" size={20} color={outlined ? Club.colors.textOnDark : Club.colors.textPrimary} />
       ) : null}
     </Pressable>
   );
@@ -47,22 +50,22 @@ const styles = StyleSheet.create({
   button: {
     width: "100%",
     minHeight: 56,
-    backgroundColor: tokens.colors.actionInverted,
-    borderRadius: tokens.radius.pill,
-    paddingVertical: tokens.space.md,
-    paddingHorizontal: tokens.space.lg,
+    backgroundColor: Club.colors.actionInverted,
+    borderRadius: Club.radius.pill,
+    paddingVertical: Club.space.md,
+    paddingHorizontal: Club.space.lg,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: tokens.space.xs,
+    gap: Club.space.xs,
   },
   outlined: {
     backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: tokens.colors.textOnDarkMuted,
+    borderColor: Club.colors.textOnDarkMuted,
   },
   pressed: { transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.45 },
-  label: { ...rn(tokens.type.button), color: tokens.colors.textPrimary },
-  outlinedLabel: { color: tokens.colors.textOnDark },
+  label: { ...Club.type.button, color: Club.colors.textPrimary },
+  outlinedLabel: { color: Club.colors.textOnDark },
 });

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { badgeOf, statusCopy } from "./status-copy";
 
-describe("status-copy — the words of a request's state (Figma 26:20)", () => {
-  it("names the four states in sentence case", () => {
+describe("status-copy — the words of a request's state (component sheet 41)", () => {
+  it("names the five states in sentence case", () => {
     expect(statusCopy("received")).toBe("Received");
     expect(statusCopy("quote_ready")).toBe("Quote ready");
     expect(statusCopy("booked")).toBe("Booked");
+    expect(statusCopy("closed")).toBe("Closed");
     expect(statusCopy("not_sent")).toBe("Not sent");
   });
 

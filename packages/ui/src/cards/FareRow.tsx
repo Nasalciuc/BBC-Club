@@ -56,7 +56,7 @@ export function FareRow({ fare, onPress, testID }: Props) {
         <PricePair
           price={{ offer: fare.price.offer, currency: fare.price.currency }}
           size="lg"
-          color={fare.hasOffer ? tokens.colors.accentWarm : undefined}
+          color={fare.hasOffer ? tokens.colors.primary : undefined}
         />
       </View>
     </Pressable>
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
     borderWidth: 1,
     borderColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.card,
+    borderRadius: tokens.radius.md,
     padding: tokens.space.sm,
     marginBottom: tokens.space.xs,
   },
@@ -96,24 +96,24 @@ const styles = StyleSheet.create({
   logo: {
     width: 32,
     height: 32,
-    borderRadius: tokens.radius.badge,
+    borderRadius: tokens.radius.xs,
     backgroundColor: tokens.colors.surfacePage,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   logoImage: { width: 24, height: 24, resizeMode: "contain" },
-  logoCode: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary },
+  logoCode: { ...rn(tokens.type.label), color: tokens.colors.textPrimary },
   body: { flex: 1, gap: tokens.space.xxs },
-  name: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
-  facts: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  name: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
+  facts: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   product: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   right: { alignItems: "flex-end", gap: tokens.space.xxs },
   badge: {
     backgroundColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.badge,
+    borderRadius: tokens.radius.xs,
     paddingHorizontal: tokens.space.xs,
     paddingVertical: 2,
   },
-  badgeText: { ...rn(tokens.type.labelMono), color: tokens.colors.primary },
+  badgeText: { ...rn(tokens.type.label), color: tokens.colors.primary },
 });

@@ -245,8 +245,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   fill: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   // 135:856: the photograph fills the screen down to the tab bar.
-  photo: { flex: 1, backgroundColor: tokens.colors.surfaceNight },
-  veil: { backgroundColor: tokens.colors.surfaceNight, opacity: 0.32 },
+  photo: { flex: 1, backgroundColor: tokens.colors.primary },
+  veil: { backgroundColor: tokens.colors.primary, opacity: 0.32 },
   // 476:8841: the success moment 104 pt down (56 under the status bar), its lines 16 apart.
   offerTop: { paddingHorizontal: tokens.space.lg, gap: tokens.space.md },
   // 476:8844: the destination 62 pt over the button (540 on the frame), its lines 12 apart; a photo's credit, when it
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   },
   offerBottomBare: { paddingBottom: 62 },
   // 476:8902: the night band behind the globe, the globe 32 pt above its top, centred.
-  globeBand: { height: GLOBE_BAND, overflow: "hidden", backgroundColor: tokens.colors.surfaceNight },
+  globeBand: { height: GLOBE_BAND, overflow: "hidden", backgroundColor: tokens.colors.primary },
   globe: { position: "absolute", top: -32, left: "50%", marginLeft: -GLOBE_SIZE / 2 },
   // 476:8944: 24 under the band, the success moment's lines 16 apart.
   search: { flex: 1, paddingHorizontal: tokens.space.lg, paddingTop: tokens.space.lg, gap: tokens.space.md },
@@ -275,6 +275,6 @@ const styles = StyleSheet.create({
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
   body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
   primary: { color: tokens.colors.textPrimary },
-  mono: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
-  onDark: { color: tokens.colors.textOnDark },
+  mono: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  onDark: { color: tokens.colors.textOnPhoto },
 });

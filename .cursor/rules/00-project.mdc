@@ -16,9 +16,10 @@ The repository is one Bun monorepo:
 - `isolated/` — frozen reference prototypes (`bbc-club-home-design`, the Home design in Next.js). Values are
   copied out by hand; nothing imports, builds or deploys it (`bun run arch:check` refuses an import).
 
-Screens and copy follow the Figma file `nYP9gogb6hnpKxfpKiCc4g`: where `DESIGN.md` contradicts Figma, Figma
-wins, except what the owner approved (ADR-IMPL-046). The entry (Welcome, Sign in, Join, Verify, Set password,
-Reset) stays as it is (ADR-IMPL-047).
+Screens and copy from onboarding on follow `DESIGN.md` 3.0 and the images in `isolated/bbc-club-3.0-design/final/`
+(ADR-IMPL-055): where an image and `DESIGN.md` differ, `DESIGN.md` wins. The Figma file `nYP9gogb6hnpKxfpKiCc4g`
+keeps 1.0. The entry (Welcome, Sign in, Join, Verify, Set password, Reset) stays as it is (ADR-IMPL-047), on
+`src/constants/club.ts`.
 
 Three rules with no exceptions:
 1. **The app never imports backend code.** It talks to the API over HTTPS; it never imports Drizzle, the

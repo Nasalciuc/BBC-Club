@@ -1,41 +1,34 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { Icon } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { STATUS_COPY, badgeOf, type BadgeStatus } from "./status-copy";
-
-/**
- * Figma's badges under a request's title are wider than their words — 88 pt (233:4275, 233:4415), 104 for Quote ready
- * (233:4198) — while Not sent hugs its own (325:8301). A minimum, so larger text still fits.
- */
-const SM_MIN_WIDTH: Partial<Record<BadgeStatus, number>> = { received: 88, booked: 88, quote_ready: 104 };
 
 export { statusCopy, type BadgeStatus } from "./status-copy";
 
 type Props = {
   /** A badge's state; the API's `quoted` is accepted as Quote ready. */
   status: BadgeStatus | "quoted";
-  /** Figma 26:20 is 32 pt high in a card; under a request's title (233:4198) it is 24 pt. */
+  /** 32 pt in a card (09), 28 beside a request's title (32, 33). */
   size?: "md" | "sm";
 };
 
 /**
- * Figma 26:20: the state named in words, sentence case. Only Quote ready is filled; Received, Booked and Not sent are a
- * hairline frame on `surface-card` — no semantic colour, no urgency. The fill keeps the words at 4.76:1 on the porcelain
- * page as on a card (DESIGN.md: 4.5:1); Figma draws the frame transparent (ADR-IMPL-041, A2c). The parent places it.
+ * The status badges of sheet 41, each named in words: `Quote ready` filled navy; `Received` light navy; `Booked` a navy
+ * outline with a check; `Closed` light tint; `Not sent` a light navy outline. Navy words on all but Quote ready. The
+ * parent places it.
  */
 export function StatusBadge({ status, size = "md" }: Props) {
   const { badge, known } = badgeOf(status);
   if (!known) console.warn(`[StatusBadge] unknown status "${status}"`);
   const filled = badge === "quote_ready";
-
   return (
-    <View
-      style={[
-        styles.badge,
-        size === "sm" ? [styles.sm, { minWidth: SM_MIN_WIDTH[badge] }] : styles.md,
-        filled ? styles.filled : styles.framed,
-      ]}
-    >
+    <View style={[styles.badge, size === "sm" ? styles.sm : styles.md, TONE[badge]]}>
+      {badge === "booked" ? (
+        <View style={styles.check}>
+          <Icon name="check" size={12} color={tokens.colors.textOnPhoto} strokeWidth={3} />
+        </View>
+      ) : null}
       <Text style={[styles.text, filled && styles.filledText]} numberOfLines={1}>
         {STATUS_COPY[badge]}
       </Text>
@@ -43,17 +36,33 @@ export function StatusBadge({ status, size = "md" }: Props) {
   );
 }
 
+const TONE: Record<BadgeStatus, ViewStyle> = {
+  quote_ready: { backgroundColor: tokens.colors.actionPrimary },
+  received: { backgroundColor: tokens.colors.borderDefault },
+  booked: { backgroundColor: tokens.colors.surfaceCard, borderWidth: 1.5, borderColor: tokens.colors.primary },
+  closed: { backgroundColor: tokens.colors.surfaceTint },
+  not_sent: { backgroundColor: tokens.colors.surfaceCard, borderWidth: 1.5, borderColor: tokens.colors.borderDefault },
+};
+
 const styles = StyleSheet.create({
   badge: {
-    justifyContent: "center",
-    borderRadius: tokens.radius.badge,
-    paddingHorizontal: tokens.space.xs,
-    paddingVertical: tokens.space.xxs,
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: tokens.space.xs - 2,
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.space.sm,
   },
   md: { minHeight: 32 },
-  sm: { minHeight: 24, paddingVertical: 0 },
-  filled: { backgroundColor: tokens.colors.actionPrimary },
-  framed: { borderWidth: 1, borderColor: tokens.colors.borderDefault, backgroundColor: tokens.colors.surfaceCard },
-  text: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  filledText: { color: tokens.colors.textOnDark },
+  sm: { minHeight: 28 },
+  check: {
+    width: 18,
+    height: 18,
+    borderRadius: tokens.radius.pill,
+    backgroundColor: tokens.colors.actionPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  text: { ...rn(tokens.type.labelStrong), color: tokens.colors.textPrimary },
+  filledText: { color: tokens.colors.textOnPhoto },
 });

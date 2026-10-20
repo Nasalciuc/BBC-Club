@@ -1,18 +1,34 @@
 import {
   AlertTriangle,
+  ArrowLeft,
+  ArrowLeftRight,
   ArrowRight,
   Armchair,
+  Bell,
+  Bookmark,
   Calendar,
+  ChartNoAxesColumn,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Circle,
+  CircleAlert,
   CircleCheck,
+  ClipboardList,
   Clock,
+  CloudSun,
+  Compass,
   Eye,
   EyeOff,
+  FileText,
   Globe,
-  Inbox,
+  Heart,
+  Info,
+  Lock,
+  Mail,
+  MapPin,
+  MessageSquare,
   Minus,
   Phone,
   Plane,
@@ -21,58 +37,132 @@ import {
   Plus,
   Search,
   Settings,
-  UserCircle,
+  Share,
+  Trash,
+  User,
+  UserPen,
   Users,
   X,
 } from "lucide-react-native";
+import Svg, { Circle as SvgCircle, Path } from "react-native-svg";
 import { tokens } from "./tokens";
 
-/** One icon family, identical on both platforms. Stroke 1.5 matches our 1-pt hairlines. */
+/** Line icons the club draws itself, where Lucide has none: the airline seat (side view) and a parent with a child. */
+type GlyphProps = { size?: number; color?: string; strokeWidth?: number };
+
+function Seat({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+  // A reclined seat seen from the side: the backrest, the cushion, the leg rest and the foot.
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M6.2 3.5 8.6 13a2 2 0 0 0 1.94 1.5H16a1.6 1.6 0 0 1 1.52 1.1l1.48 4.4M8.9 14.4 7.5 20.5M11 18h5.2M5 3.6l.9-.3a1 1 0 0 1 1.26.68"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function Family({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+  // An adult holding a child's hand: two heads, two bodies, the arms joined.
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgCircle cx={8} cy={4.2} r={2} stroke={color} strokeWidth={strokeWidth} />
+      <SvgCircle cx={17} cy={10.4} r={1.6} stroke={color} strokeWidth={strokeWidth} />
+      <Path
+        d="M6 21v-6.2H4.6V9.6A2 2 0 0 1 6.6 7.6h2.8a2 2 0 0 1 2 2v1.6l3 2.2M10 21v-6.2M8 21v-5M15 21v-3.6h-.8v-2.4a1.4 1.4 0 0 1 1.4-1.4h2.8a1.4 1.4 0 0 1 1.4 1.4v2.4h-.8V21M17 21v-2.6"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * One line family (Lucide), the same on both platforms, at a 1.75 stroke (DESIGN.md · Iconography). The names the 3.0
+ * screens use, and the 1.0 names screens still being moved to 3.0 read (`departure`, `inbox`, `explore` …).
+ */
 export const icons = {
+  // 3.0 (component sheet 43)
   search: Search,
-  settings: Settings,
-  departure: PlaneTakeoff,
-  arrival: PlaneLanding,
+  "map-pin": MapPin,
   plane: Plane,
-  dates: Calendar,
-  passengers: Users,
-  cabin: Armchair,
-  arrow: ArrowRight,
-  clear: X,
+  calendar: Calendar,
+  user: User,
+  users: Users,
+  family: Family,
+  seat: Seat,
+  armchair: Armchair,
+  globe: Globe,
+  compass: Compass,
+  clipboard: ClipboardList,
   chevron: ChevronRight,
-  call: Phone,
-  inbox: Inbox,
-  profile: UserCircle,
-  explore: Globe,
+  "chevron-down": ChevronDown,
+  "chevron-left": ChevronLeft,
+  "arrow-left": ArrowLeft,
+  "arrow-right": ArrowRight,
+  x: X,
+  share: Share,
+  heart: Heart,
+  bookmark: Bookmark,
+  phone: Phone,
+  bell: Bell,
+  lock: Lock,
+  trash: Trash,
+  "user-pen": UserPen,
   check: Check,
-  warning: AlertTriangle,
-  eye: Eye,
-  "eye-off": EyeOff,
+  info: Info,
+  "sun-cloud": CloudSun,
+  "bar-chart": ChartNoAxesColumn,
+  "file-text": FileText,
+  message: MessageSquare,
+  mail: Mail,
+  "round-trip": ArrowLeftRight,
+  alert: CircleAlert,
+  settings: Settings,
+  clock: Clock,
   minus: Minus,
   plus: Plus,
-  /** ClubIcon compat — entry screens and password rules. */
+  eye: Eye,
+  "eye-off": EyeOff,
+  circle: Circle,
+  "circle-check": CircleCheck,
+  // 1.0 names, kept while their screens move to 3.0
+  departure: PlaneTakeoff,
+  arrival: PlaneLanding,
+  dates: Calendar,
+  passengers: Users,
+  cabin: Seat,
+  arrow: ArrowRight,
+  clear: X,
+  call: Phone,
+  inbox: ClipboardList,
+  profile: User,
+  explore: Compass,
+  warning: AlertTriangle,
   back: ChevronLeft,
   eyeOff: EyeOff,
-  circle: Circle,
-  /** Timeline step done (Figma 46:114). */
-  "circle-check": CircleCheck,
   proposals: Plane,
-  /** AirportRow · Recent (Figma 28:58). */
-  clock: Clock,
 } as const;
 
 export type IconName = keyof typeof icons;
-export type IconSize = 14 | 16 | 18 | 20 | 24;
+export type IconSize = 12 | 14 | 16 | 18 | 20 | 22 | 24 | 28 | 30 | 32 | 44;
 
 export function Icon({
   name,
   size = 20,
   color = tokens.colors.textSecondary,
+  strokeWidth = 1.75,
 }: {
   name: IconName;
   size?: IconSize;
   color?: string;
+  strokeWidth?: number;
 }) {
   const Glyph = icons[name];
-  return <Glyph size={size} color={color} strokeWidth={1.5} />;
+  return <Glyph size={size} color={color} strokeWidth={strokeWidth} />;
 }

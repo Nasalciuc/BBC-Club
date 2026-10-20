@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.surfaceCard,
     borderWidth: 1,
     borderColor: tokens.colors.borderDefault,
-    borderRadius: tokens.radius.card,
+    borderRadius: tokens.radius.md,
     padding: tokens.space.lg,
   },
   // 80 pt a step, as the frame draws it; a step grows (never clips) at larger text sizes.

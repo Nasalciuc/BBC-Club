@@ -16,7 +16,7 @@ type Props = {
 const TARGET = 44;
 
 /**
- * The credit a photograph owes (ADR-IMPL-043): small type under it, `text-tertiary` — a non-essential line — opening
+ * The credit a photograph owes (ADR-IMPL-043): small type under it, slate `caption` — a non-essential line — opening
  * the photo's page. Not a button: it reads as a caption. Its row is the 44 pt a text link needs, link or not, so the
  * space under a photo is the same either way.
  */
@@ -46,6 +46,6 @@ export function PhotoCredit({ label, accessibilityLabel, onPress, testID }: Prop
 
 const styles = StyleSheet.create({
   row: { minHeight: TARGET, justifyContent: "center", alignSelf: "flex-start" },
-  text: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary },
+  text: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   pressed: { opacity: 0.6 },
 });

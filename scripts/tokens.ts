@@ -15,12 +15,22 @@ const y = parse(fm[1].replace(/\r/g, "")) as {
   colors: Record<string, string>;
   typography: Record<
     string,
-    { fontFamily: string; fontSize: string; fontWeight: number; lineHeight: number; letterSpacing?: string }
+    {
+      fontFamily: string;
+      fontSize: string;
+      fontWeight: number;
+      lineHeight: number;
+      letterSpacing?: string;
+      /** `'tnum'`: tabular figures — React Native's `fontVariant: ["tabular-nums"]`. */
+      fontFeature?: string;
+    }
   >;
   rounded: Record<string, string>;
   spacing: Record<string, string>;
   components: Record<string, Record<string, string>>;
   motion?: Record<string, number | string>;
+  /** The club's extension of the format (ADR-IMPL-055): shadows, generated as React Native `boxShadow` strings. */
+  elevation?: Record<string, { offsetY: string; blur: string; color: string; opacity: number }>;
 };
 
 const px = (v: string) => Number(String(v).replace("px", ""));
@@ -38,6 +48,7 @@ const type = Object.fromEntries(
       fontWeight: String(t.fontWeight),
       lineHeight: Math.round(px(t.fontSize) * t.lineHeight),
       letterSpacing: t.letterSpacing ? Number(String(t.letterSpacing).replace("px", "")) : 0,
+      ...(t.fontFeature?.includes("tnum") ? { fontVariant: ["tabular-nums"] } : {}),
     },
   ]),
 );
@@ -50,6 +61,26 @@ const motion = Object.fromEntries(
   ]),
 );
 
+/** `{colors.shadow}` → its value; anything else as written. */
+const color = (v: string) => {
+  const ref = /^\{colors\.([a-z0-9-]+)\}$/.exec(v);
+  const value = ref ? y.colors[ref[1]] : v;
+  if (!value) throw new Error(`DESIGN.md: unknown colour reference ${v}`);
+  return value;
+};
+/** `#1E293B` at 0.08 → `rgba(30, 41, 59, 0.08)`. */
+const rgba = (hex: string, opacity: number) => {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) throw new Error(`DESIGN.md: elevation needs a #RRGGBB colour, got ${hex}`);
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${opacity})`;
+};
+const elevation = Object.fromEntries(
+  Object.entries(y.elevation ?? {}).map(([k, e]) => [
+    camel(k),
+    { boxShadow: `0px ${px(e.offsetY)}px ${px(e.blur)}px 0px ${rgba(color(e.color), e.opacity)}` },
+  ]),
+);
+
 const ts = `// GENERATED from DESIGN.md — do not edit. Run \`bun run tokens\`.
 export const tokens = {
   colors: ${JSON.stringify(colors, null, 2)},
@@ -57,6 +88,7 @@ export const tokens = {
   radius: ${JSON.stringify(radius, null, 2)},
   space: ${JSON.stringify(space, null, 2)},
   motion: ${JSON.stringify(motion, null, 2)},
+  elevation: ${JSON.stringify(elevation, null, 2)},
 } as const;
 export type ColorToken = keyof typeof tokens.colors;
 export type TypeToken = keyof typeof tokens.type;

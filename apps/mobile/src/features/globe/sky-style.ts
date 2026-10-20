@@ -14,7 +14,7 @@ const DEG = Math.PI / 180;
  *  over one another: one layer of shade wherever it is night. No antialiasing — two bands share every edge, and a soft
  *  edge on each would draw the line between them. */
 export const NIGHT_STYLE: FillLayerStyle = {
-  fillColor: tokens.colors.globeSpace,
+  fillColor: tokens.colors.globeNight,
   fillOpacity: ["get", "opacity"],
   fillAntialias: false,
 };
@@ -31,7 +31,7 @@ export function cityLightsStyle(sun: SunPosition): CircleLayerStyle {
     ["*", ["get", "c"], Math.cos(sun.declination * DEG), ["cos", ["-", ["get", "l"], sun.subsolarLng * DEG]]],
   ];
   return {
-    circleColor: tokens.colors.globeCityLights,
+    circleColor: tokens.colors.surfaceCard,
     circleBlur: 1,
     circleRadius: [
       "interpolate",

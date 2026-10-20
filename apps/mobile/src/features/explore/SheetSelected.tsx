@@ -172,14 +172,14 @@ const styles = StyleSheet.create({
   countBox: { minHeight: COUNT_BOX, justifyContent: "center", marginVertical: tokens.space.xxs },
   // 100:712: one mono text of two lines, 17 pt apart — no gap between them.
   prefs: { marginTop: tokens.space.md },
-  prefsText: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary },
+  prefsText: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   // 89:390: the message's top at 344 on the frame, 94 pt under the preferences' last line.
   message: { marginTop: 94 },
   // The placeholders take the rows' own size and spacing, so the fares land where the skeleton stood.
   skeletons: { marginTop: tokens.space.xxs + COUNT_BOX + tokens.space.xxs, gap: tokens.space.xs },
   skeletonRow: {
     height: FARE_ROW_HEIGHT,
-    borderRadius: tokens.radius.card,
+    borderRadius: tokens.radius.md,
     backgroundColor: tokens.colors.borderDefault,
   },
   // 481:9097: the caption in the count's box — two lines, which stand 2 pt over the box at each edge.

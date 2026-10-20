@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   // Figma 240:5095: the wordmark and the message 24 pt apart in the gutters.
   content: { paddingHorizontal: tokens.space.lg, gap: tokens.space.lg },
-  wordmark: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary },
+  wordmark: { ...rn(tokens.type.label), color: tokens.colors.textPrimary },
   // Figma 240:5153: 48 pt above the message; `Call a specialist` 12 pt under it.
   message: { paddingTop: tokens.space.xxl, gap: tokens.space.sm },
 });
