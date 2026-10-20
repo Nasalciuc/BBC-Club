@@ -5,7 +5,7 @@ type Props = {
   value: boolean;
   onChange?: (next: boolean) => void;
   accessibilityLabel: string;
-  testID?: string;
+  testID: string;
   /** A switch the member cannot change (`Request updates`, always on): shown at 40%. */
   locked?: boolean;
   disabled?: boolean;

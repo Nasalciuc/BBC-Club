@@ -21,6 +21,7 @@ export const GLOBE_SPEC = {
   arcDash: [4, 4] as const, //        Figma: 4 px dash / 4 px gap
   rimOpacity: 0.16, //                Figma: Ocean stroke, text-on-dark-muted at 16 %, 1 px
   pin: { dot: 8, offerDot: 12, halo: 28, hit: 48 }, // Figma: Destination 8 / 12, Offer halo 28, Pin frame 48
+  pinRing: 1.5, //                    ours: the native globe's ring round a dot, so it reads over land and ocean
   idleResumeMs: 4_000, //             ours: Figma says "resume when idle" without a number
   returnTauMs: 180, //                ours: ease back to the opening position, ~95 % in 540 ms
   zoom: { min: 1, max: 3, detailAbove: 1.5 }, // ours: the owner asked for zoom; not in Figma

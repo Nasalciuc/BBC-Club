@@ -36,9 +36,10 @@ export function ExploreHeader({ tone, action, topInset }: Props) {
           style={({ pressed }) => [styles.pill, dark ? styles.pillDark : styles.pillLight, pressed && styles.pressed]}
         >
           {action.initials ? (
-            <Text style={[styles.initials, dark ? styles.onDark : styles.onLight]}>{action.initials}</Text>
+            // The pill is light in both tones (`surface-tint` over the globe), so its glyphs are navy in both.
+            <Text style={[styles.initials, styles.onLight]}>{action.initials}</Text>
           ) : (
-            <Icon name="profile" size={24} color={dark ? tokens.colors.textOnPhoto : tokens.colors.textPrimary} />
+            <Icon name="profile" size={24} color={tokens.colors.textPrimary} />
           )}
         </Pressable>
       ) : action.kind === "cancel" ? (

@@ -167,8 +167,13 @@ function GalleryScreen() {
         onChange={setAdults}
       />
       <View style={styles.row}>
-        <Toggle value accessibilityLabel="On" onChange={noop} />
-        <Toggle value={flexible} accessibilityLabel="Keep the dates flexible" onChange={setFlexible} />
+        <Toggle testID="gallery.toggle.on" value accessibilityLabel="On" onChange={noop} />
+        <Toggle
+          testID="gallery.toggle.flexible"
+          value={flexible}
+          accessibilityLabel="Keep the dates flexible"
+          onChange={setFlexible}
+        />
       </View>
       <View style={styles.row}>
         <Chip testID="gallery.chip.dates" icon="calendar" label="Nov 12 – 19, 2026" onPress={noop} />

@@ -22,7 +22,7 @@ export function Segmented<K extends string>({ options, value, onChange, disabled
             key={o.key}
             testID={o.testID}
             accessibilityRole="radio"
-            accessibilityState={{ selected: on, disabled }}
+            accessibilityState={{ checked: on, disabled }}
             accessibilityLabel={o.label}
             disabled={disabled}
             onPress={() => onChange(o.key)}

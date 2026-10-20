@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import type { AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
-import { CarouselRow, OfferCard, SectionLabel, tokens } from "@bbc/ui";
+import { CarouselRow, OfferCard, SectionLabel, Skeleton, tokens } from "@bbc/ui";
 
 import { NoOffers } from "@/features/explore/SheetExpanded";
 import { cardPicture } from "@/features/places/place-photo-logic";
@@ -123,11 +123,16 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll, onSearch }
   const photoFor = usePlacePhotos(inspire.map((item) => item.route.to));
 
   if (homeLoading) {
-    // The cards' places while Home loads: under the label's 32-pt box, two cards in the carousel's row.
+    // The cards' places while Home loads: under the label's 32-pt box, the offer cards' own size in the carousel's row,
+    // so the cards land where the skeletons stood.
     return (
-      <View style={[styles.content, styles.skeletons]}>
-        <View style={styles.skeletonCard} />
-        <View style={styles.skeletonCard} />
+      <View style={styles.content}>
+        <View style={styles.labelBox} />
+        <CarouselRow testID="explore.inspire.loading">
+          <Skeleton width={OFFER_CARD.width} height={OFFER_CARD.height} radius="lg" />
+          <Skeleton width={OFFER_CARD.width} height={OFFER_CARD.height} radius="lg" />
+          <Skeleton width={OFFER_CARD.width} height={OFFER_CARD.height} radius="lg" />
+        </CarouselRow>
       </View>
     );
   }
@@ -164,14 +169,15 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll, onSearch }
   );
 }
 
+/**
+ * The offer card as Explore shows it (`OfferCard`): 124 pt wide; the 144-pt photo over its words — the city's 25-pt
+ * line, `from` (22) and the price (28) — in 12 pt of padding, 2 pt apart, the price block 8 under the city and 12 over
+ * the foot: 265 tall.
+ */
+const OFFER_CARD = { width: 124, height: 265 } as const;
+
 const styles = StyleSheet.create({
-  // Figma 89:386: 12 pt under the field, the label's 32-pt box, 12 pt, the 120-pt carousel.
+  // 12 pt under the field, the label's 32-pt box, 12 pt, the carousel of offer cards.
   content: { marginTop: tokens.space.sm, gap: tokens.space.sm },
-  skeletons: { flexDirection: "row", overflow: "hidden", paddingTop: 32 + tokens.space.sm },
-  skeletonCard: {
-    width: 180,
-    height: 120,
-    borderRadius: tokens.radius.md,
-    backgroundColor: tokens.colors.borderDefault,
-  },
+  labelBox: { height: 32 },
 });

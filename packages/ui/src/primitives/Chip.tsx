@@ -43,9 +43,12 @@ export function Chip({
       accessibilityState={{ selected, disabled }}
       accessibilityLabel={label}
       disabled={disabled}
+      // 40 pt drawn, 44 to the finger: the slop's room is the chip's own margin, so no parent bounds clip it.
+      hitSlop={size === "lg" ? undefined : SLOP}
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,
+        size !== "lg" && styles.slopRoom,
         size === "lg" && styles.lg,
         filter && styles.filter,
         fill === "equal" && styles.equal,
@@ -66,6 +69,8 @@ export function Chip({
   );
 }
 
+const SLOP = { top: tokens.space.xxs / 2, bottom: tokens.space.xxs / 2 } as const;
+
 const styles = StyleSheet.create({
   chip: {
     minHeight: 40,
@@ -77,6 +82,7 @@ const styles = StyleSheet.create({
     gap: tokens.space.xs,
     backgroundColor: tokens.colors.surfaceTint,
   },
+  slopRoom: { marginVertical: tokens.space.xxs / 2 },
   lg: { minHeight: 52 },
   filter: { minHeight: 40, paddingHorizontal: tokens.space.lg },
   equal: { flex: 1 },

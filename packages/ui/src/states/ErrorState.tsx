@@ -101,7 +101,8 @@ export function NoticeCard({ tone, title, body, link, testID }: NoticeProps) {
             testID={link.testID}
             accessibilityRole="button"
             accessibilityLabel={link.label}
-            hitSlop={8}
+            // The 22-pt line reaches 44 pt to the finger.
+            hitSlop={{ top: tokens.space.sm, bottom: tokens.space.sm, left: tokens.space.xs, right: tokens.space.xs }}
             onPress={link.onPress}
             style={({ pressed }) => [styles.linkHit, pressed && styles.pressed]}
           >

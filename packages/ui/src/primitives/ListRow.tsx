@@ -25,7 +25,7 @@ type Props = {
   /** `Delete account`: the icon and the words in red. */
   danger?: boolean;
   disabled?: boolean;
-  toggle?: { value: boolean; onChange?: (next: boolean) => void; testID?: string; locked?: boolean };
+  toggle?: { value: boolean; onChange?: (next: boolean) => void; testID: string; locked?: boolean };
   /** 1.0 prop, kept while its screens move to 3.0. */
   size?: "md" | "sm";
   testID?: string;

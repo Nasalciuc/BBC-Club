@@ -112,7 +112,18 @@ export function GlobeFallback({ pins, home, selected, onSelect, size = 520, paus
                   ]}
                 />
               ) : null}
-              <View style={[styles.round, { width: dot, height: dot, backgroundColor: colour }]} />
+              <View
+                style={[
+                  styles.round,
+                  { width: dot, height: dot, backgroundColor: colour },
+                  // The navy chosen dot on the navy ocean, the white offer dot on the light land: a ring in the
+                  // other colour keeps each readable on both, as the native globe's ring does.
+                  big && {
+                    borderWidth: GLOBE_SPEC.pinRing,
+                    borderColor: isSel ? tokens.colors.surfaceTint : tokens.colors.primary,
+                  },
+                ]}
+              />
             </Pressable>
           );
         })}

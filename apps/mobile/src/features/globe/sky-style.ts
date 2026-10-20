@@ -14,7 +14,7 @@ const DEG = Math.PI / 180;
  *  over one another: one layer of shade wherever it is night. No antialiasing — two bands share every edge, and a soft
  *  edge on each would draw the line between them. */
 export const NIGHT_STYLE: FillLayerStyle = {
-  fillColor: tokens.colors.sky,
+  fillColor: tokens.colors.globeNight,
   fillOpacity: ["get", "opacity"],
   fillAntialias: false,
 };

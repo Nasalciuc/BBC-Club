@@ -114,6 +114,10 @@ export function SearchField({
   );
 }
 
+/** The clear circle, 22 across, and the 44-pt target it reaches to. */
+const CLEAR = 22;
+const TARGET = 44;
+
 /** The clear button of sheet 39: a slate circle with a white ×, in a 44-pt target. */
 function ClearButton({ testID, onPress }: { testID: string; onPress: () => void }) {
   return (
@@ -121,7 +125,7 @@ function ClearButton({ testID, onPress }: { testID: string; onPress: () => void 
       testID={`${testID}.clear`}
       accessibilityRole="button"
       accessibilityLabel="Clear"
-      hitSlop={10}
+      hitSlop={(TARGET - CLEAR) / 2}
       onPress={onPress}
       style={({ pressed }) => [styles.clear, pressed && styles.clearPressed]}
     >
@@ -163,8 +167,8 @@ const styles = StyleSheet.create({
   filled: { color: tokens.colors.textPrimary },
   input: { color: tokens.colors.textPrimary, minWidth: 0, padding: 0, margin: 0, outlineWidth: 0 },
   clear: {
-    width: 22,
-    height: 22,
+    width: CLEAR,
+    height: CLEAR,
     borderRadius: tokens.radius.pill,
     backgroundColor: tokens.colors.textSecondary,
     alignItems: "center",

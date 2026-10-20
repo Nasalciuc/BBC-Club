@@ -23,7 +23,8 @@ export const tokens = {
   "globeOceanDeep": "#0B3F73",
   "globeLand": "#8FA77A",
   "globeDesert": "#E5D3B0",
-  "globeIce": "#F4F7FA"
+  "globeIce": "#F4F7FA",
+  "globeNight": "#0B0B19"
 },
   type: {
   "display": {

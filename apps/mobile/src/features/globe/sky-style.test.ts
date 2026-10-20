@@ -97,7 +97,7 @@ describe("skyAt", () => {
     const sky = skyAt(date);
     expect(sky.night.features.length).toBeGreaterThan(10);
     expect(sky.lights).toEqual(cityLightsStyle(sunPosition(date)));
-    expect(NIGHT_STYLE.fillColor).toBe(tokens.colors.sky);
+    expect(NIGHT_STYLE.fillColor).toBe(tokens.colors.globeNight);
     expect(NIGHT_STYLE.fillOpacity).toEqual(["get", "opacity"]);
   });
 });
