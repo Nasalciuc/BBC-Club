@@ -73,12 +73,19 @@ export function TopBar({ title, onBack, backTestID = "topbar.back", right, look,
     return (
       <View style={[styles.measured, { height: DATES.height }]} testID={testID}>
         {onBack ? (
+          // The 44-pt target starts at the safe area's edge and the chevron is lifted to where 07 draws it, half in the
+          // status bar: Android gives a touch in the status bar to the system, so a target centred on that edge
+          // missed every tap at its middle.
           <BackButton
             testID={backTestID}
             onPress={onBack}
             variant="plain"
-            glyph={{ size: DATES.chevron.size, stroke: DATES.chevron.stroke }}
-            style={{ position: "absolute", left: DATES.chevron.x - 22, top: DATES.chevron.y - 22 }}
+            glyph={{
+              size: DATES.chevron.size,
+              stroke: DATES.chevron.stroke,
+              offset: { x: 0, y: DATES.chevron.y - 22 },
+            }}
+            style={{ position: "absolute", left: DATES.chevron.x - 22, top: 0 }}
           />
         ) : null}
         <View
