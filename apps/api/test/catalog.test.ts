@@ -162,6 +162,11 @@ describe("catalog routes", () => {
       return ((await r.json()) as { code: string }[]).map((a) => a.code);
     };
     expect((await codes("LHR"))[0]).toBe("LHR"); // the exact code comes first
+    // 18: a city's airports come together, the busiest city first — London's before Long Beach and Longview.
+    const lon = await codes("Lon");
+    expect(lon.slice(0, 3)).toEqual(["LHR", "LGW", "STN"]);
+    expect(lon).toContain("LCY");
+    expect(lon.indexOf("LCY")).toBeLessThan(lon.indexOf("LGB"));
     expect(await codes("lodon")).toContain("LHR"); // a typo
     expect(await codes("new yrok")).toContain("JFK");
     expect(await codes("Zürich")).toContain("ZRH"); // accents either way

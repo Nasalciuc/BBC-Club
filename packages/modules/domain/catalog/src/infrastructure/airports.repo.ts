@@ -43,7 +43,7 @@ export const airportsRepo = {
       );
   },
 
-  /** Prefix on code/city, then contains; popularity desc; max 8. */
+  /** Prefix on code/city, then contains; the busiest city first, its airports together; max 8. */
   /**
    * ADR-IMPL-036. Accent-blind and typo-tolerant, in tiers: a country nickname (UK, USA, UAE) means the country first;
    * then exact code, code prefix, exact city, city prefix, country, other names (LON, KIV, New York City), text
@@ -98,10 +98,13 @@ export const airportsRepo = {
         .select()
         .from(airports)
         .where(sql`${tier} < 7 OR ${fuzzy}`)
-        // Exact, prefix, country and other-name tiers: the busiest first. Text-anywhere and typo tiers: the closest
+        // Exact, prefix, country and other-name tiers: the busiest city first with its airports together (`Lon`: London's
+        // five before Long Beach — 18), each city's busiest first. Text-anywhere and typo tiers: the closest
         // spelling — similarity is computed only for those rows.
         .orderBy(
           tier,
+          sql`CASE WHEN ${tier} < 6 THEN max(${airports.popularity}) OVER (PARTITION BY ${city}, ${airports.countryCode}) END DESC NULLS LAST`,
+          sql`CASE WHEN ${tier} < 6 THEN ${city} END`,
           sql`CASE WHEN ${tier} < 6 THEN ${airports.popularity} END DESC NULLS LAST`,
           sql`CASE WHEN ${tier} >= 6 THEN similarity(${city}, ${t}) END DESC NULLS LAST`,
           desc(airports.popularity),
