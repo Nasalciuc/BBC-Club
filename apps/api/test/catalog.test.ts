@@ -167,6 +167,9 @@ describe("catalog routes", () => {
     expect(lon.slice(0, 3)).toEqual(["LHR", "LGW", "STN"]);
     expect(lon).toContain("LCY");
     expect(lon.indexOf("LCY")).toBeLessThan(lon.indexOf("LGB"));
+    // A city's weight counts only its airports in the same tier: `L` leads with London's by code, together — not with
+    // LaGuardia, lifted by JFK's looser match.
+    expect((await codes("L")).slice(0, 4)).toEqual(["LHR", "LGW", "LTN", "LCY"]);
     expect(await codes("lodon")).toContain("LHR"); // a typo
     expect(await codes("new yrok")).toContain("JFK");
     expect(await codes("Zürich")).toContain("ZRH"); // accents either way

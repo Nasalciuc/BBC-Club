@@ -2143,8 +2143,10 @@ their widths, so lines break where the images break them (ADR-IMPL-056 §2).
   `received-title` on 08, `delete-body` on 35).
 - **The reading scale (ADR-IMPL-057).** The images draw secondary lines at 7–13 pt, too small to read on a phone. Each
   role is the image's size raised along one curve: nothing under 12 pt (11 for tracked capitals such as
-  `INDICATIVE FARE`), small lines grow most (9 → 12.5, 10 → 13.2, 11 → 14, 12.3 → 14.8, 14.5 → 16.2, 16 → 17.2), and
-  titles and prices from 24 pt keep their size. The globe's labels stay compact (`pin` 12.75, `pin-detail` 12.25).
+  `INDICATIVE FARE`), small lines grow most (9 → 12.5, 10 → 13.2, 11 → 14, 12.3 → 14.8, 14.5 → 16.2, 16 → 17.2,
+  20 → 20.5), and roles from 28 pt keep their size. Lowercase words the images track like capitals (`from` on the
+  offer cards, the zone on 04) take the words' curve. The globe's labels stay compact (`pin` 12.75, `pin-detail` 12.25,
+  `route-pin` 12, `map-city` 11.5).
   Where a drawn column cannot hold a line at its reading size, the line wraps or the column moves; it is never cut.
   Dynamic Type still scales every role, up to 1.3×.
 - Prices and the calendar's days use tabular figures where the images align them.

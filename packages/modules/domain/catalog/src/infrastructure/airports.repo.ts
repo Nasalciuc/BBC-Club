@@ -99,11 +99,12 @@ export const airportsRepo = {
         .from(airports)
         .where(sql`${tier} < 7 OR ${fuzzy}`)
         // Exact, prefix, country and other-name tiers: the busiest city first with its airports together (`Lon`: London's
-        // five before Long Beach — 18), each city's busiest first. Text-anywhere and typo tiers: the closest
-        // spelling — similarity is computed only for those rows.
+        // five before Long Beach — 18), each city's busiest first. A city's weight counts only its airports in the
+        // same tier: `L` leads with London's, not with LaGuardia lifted by JFK's looser match. Text-anywhere and typo
+        // tiers: the closest spelling — similarity is computed only for those rows.
         .orderBy(
           tier,
-          sql`CASE WHEN ${tier} < 6 THEN max(${airports.popularity}) OVER (PARTITION BY ${city}, ${airports.countryCode}) END DESC NULLS LAST`,
+          sql`CASE WHEN ${tier} < 6 THEN max(${airports.popularity}) OVER (PARTITION BY ${tier}, ${city}, ${airports.countryCode}) END DESC NULLS LAST`,
           sql`CASE WHEN ${tier} < 6 THEN ${city} END`,
           sql`CASE WHEN ${tier} < 6 THEN ${airports.popularity} END DESC NULLS LAST`,
           sql`CASE WHEN ${tier} >= 6 THEN similarity(${city}, ${t}) END DESC NULLS LAST`,
