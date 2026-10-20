@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { geoDistance } from "d3-geo";
+import { geoCircle, geoDistance } from "d3-geo";
 import {
   GLOBE_SPEC,
   OPENING_VIEW,
@@ -72,6 +72,21 @@ describe("the opening view (image 02)", () => {
   it("hides New York on the far hemisphere", () => {
     expect(p.point(JFK)).toBeNull();
     expect(isOnNearSide(DXB, GLOBE_SPEC.opening)).toBe(true);
+  });
+});
+
+describe("projector.shows: a shape the globe can fill with a gradient sized to its box", () => {
+  const proj = projector(336, GLOBE_SPEC.opening);
+  const patch = (lng: number, lat: number) => geoCircle().center([lng, lat]).radius(6)();
+
+  it("shows the Sahara at the opening view, centred near Dubai", () => {
+    expect(proj.shows(patch(18, 23))).toBe(true);
+  });
+
+  it("does not show a patch on the far hemisphere: its path is empty and its box has no size", () => {
+    const farSide = patch(-120, 40); // the western United States, behind the globe at the opening
+    expect(proj.path(farSide)).toBe("");
+    expect(proj.shows(farSide)).toBe(false);
   });
 });
 
