@@ -104,6 +104,15 @@ export function projector(size: number, rotation: Rotation, zoom = 1) {
     },
     path: (geo: GeoPermissibleObjects): string => path(geo) ?? "",
     sphere: (): string => path({ type: "Sphere" }) ?? "",
+    /**
+     * Whether a shape shows on this side with an area of its own. A shape on the far side draws as an empty path, and
+     * a gradient sized to its box (objectBoundingBox) then gets a radius of 0, which Android's radial gradient refuses
+     * with a crash.
+     */
+    shows(geo: GeoPermissibleObjects): boolean {
+      const [[x0, y0], [x1, y1]] = path.bounds(geo);
+      return x1 - x0 > 0 && y1 - y0 > 0;
+    },
   };
 }
 
