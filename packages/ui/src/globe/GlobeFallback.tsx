@@ -191,13 +191,13 @@ export function GlobeFallback({
               <Stop offset={0.9} stopColor={tokens.colors.surfaceCard} stopOpacity={0.85} />
               <Stop offset={1} stopColor={tokens.colors.surfaceCard} stopOpacity={0} />
             </RadialGradient>
-            {/* Android crashes when a projected patch collapses to a zero box and a bbox radial gradient gets radius 0. */}
-            <RadialGradient id="globe-sand" cx={c} cy={c} r={r} gradientUnits="userSpaceOnUse">
+            {/* Each patch's own box (objectBoundingBox): the sand and the snow fade out toward their edges. */}
+            <RadialGradient id="globe-sand">
               <Stop offset={0} stopColor={tokens.colors.globeDesert} stopOpacity={0.85} />
               <Stop offset={0.5} stopColor={tokens.colors.globeDesert} stopOpacity={0.6} />
               <Stop offset={1} stopColor={tokens.colors.globeDesert} stopOpacity={0} />
             </RadialGradient>
-            <RadialGradient id="globe-snow" cx={c} cy={c} r={r} gradientUnits="userSpaceOnUse">
+            <RadialGradient id="globe-snow">
               <Stop offset={0} stopColor={tokens.colors.globeIce} stopOpacity={1} />
               <Stop offset={0.7} stopColor={tokens.colors.globeIce} stopOpacity={0.9} />
               <Stop offset={1} stopColor={tokens.colors.globeIce} stopOpacity={0} />
