@@ -280,6 +280,31 @@ describe("GET /v1/home", () => {
     await t.close();
   });
 
+  it("names the cities of the offers no pin lists, so their cards never print a title cut short (ADR-IMPL-057)", async () => {
+    const t = await testApp({ suite: "catalog-home-places" });
+    await t.seedCatalogBasics();
+    await t.seedBroadcastOffer({ routeTo: "LHR", title: "London calling" });
+    // Rome has no fare from JFK in the basics: no pin names it.
+    await t.seedBroadcastOffer({ routeTo: "FCO", title: "Easter in Rome" });
+    const r = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(200);
+    const body = HomeVM.parse(await r.json());
+    const listed = new Set(body.destinations.map((d) => d.code));
+    expect(listed.has("FCO")).toBe(false);
+    expect(body.places).toContainEqual({ code: "FCO", city: "Rome", countryCode: "IT" });
+    // Every offer's arrival is named once: by a pin, or by a place.
+    for (const code of ["LHR", "FCO"]) {
+      const named = listed.has(code) || (body.places ?? []).some((p) => p.code === code);
+      expect(named).toBe(true);
+    }
+    for (const p of body.places ?? []) {
+      expect(listed.has(p.code)).toBe(false);
+      expect(p.city.length).toBeGreaterThan(0);
+      expect(p.countryCode).toMatch(/^[A-Z]{2}$/);
+    }
+    await t.close();
+  });
+
   it("titles the regions as Figma 89:389 does: To Europe … To North America, which leaves Brazil out", async () => {
     const t = await testApp({ suite: "catalog-home-regions" });
     await t.seedCatalogBasics();

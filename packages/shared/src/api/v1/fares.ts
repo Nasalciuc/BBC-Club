@@ -140,6 +140,14 @@ export const SearchResultVM = z.object({
 });
 export type SearchResultVM = z.infer<typeof SearchResultVM>;
 
+/** A city an offer goes to that no pin lists (ADR-IMPL-057): its card names the city and country from here. */
+export const HomePlaceVM = z.object({
+  code: z.string().length(3),
+  city: z.string(),
+  countryCode: z.string().length(2),
+});
+export type HomePlaceVM = z.infer<typeof HomePlaceVM>;
+
 export const HomeVM = z.object({
   home: AirportVM.nullable(),
   destinations: z.array(DestinationPinVM),
@@ -150,5 +158,9 @@ export const HomeVM = z.object({
       items: z.array(ProposalCardVM),
     }),
   ),
+  /** The arrivals of the offers that `destinations` does not list — a broadcast offer from another airport, an offer
+   *  to a city with no fare from home — so a card names its city, never its title cut short (ADR-IMPL-057). Optional
+   *  both ways: a server without it sends none, and the card keeps the title as before. */
+  places: z.array(HomePlaceVM).optional(),
 });
 export type HomeVM = z.infer<typeof HomeVM>;

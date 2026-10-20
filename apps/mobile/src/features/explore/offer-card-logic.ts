@@ -1,4 +1,4 @@
-import type { DestinationPinVM } from "@bbc/shared/api/v1/fares";
+import type { DestinationPinVM, HomePlaceVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 
 import { countryName } from "../../lib/countries";
@@ -16,11 +16,15 @@ export type OfferCardModel = {
 
 /**
  * What an offer card shows (02, 16): the destination's city and country — from Home's destinations, by the route's
- * arrival; an offer whose city Home does not list keeps its own title — the price, and `Save 48%` only where the
- * published fare is on record.
+ * arrival, then from Home's places, the arrivals no pin lists (ADR-IMPL-057); only an offer whose city Home names
+ * nowhere keeps its own title — the price, and `Save 48%` only where the published fare is on record.
  */
-export function offerCardModel(item: ProposalCardVM, destinations: readonly DestinationPinVM[]): OfferCardModel {
-  const place = destinations.find((d) => d.code === item.route.to);
+export function offerCardModel(
+  item: ProposalCardVM,
+  destinations: readonly DestinationPinVM[],
+  places: readonly HomePlaceVM[] = [],
+): OfferCardModel {
+  const place = destinations.find((d) => d.code === item.route.to) ?? places.find((p) => p.code === item.route.to);
   return {
     city: place?.city ?? item.title,
     country: countryName(place?.countryCode),

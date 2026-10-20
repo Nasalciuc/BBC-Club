@@ -109,6 +109,11 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
           if (a?.region) placeByCode.set(code, { region: a.region, countryCode: a.countryCode });
         }
         const homeRow = byCode.get(homeCode) ?? null;
+        // ADR-IMPL-057: an offer to a city no pin lists still names its city and country on its card.
+        const places = missing.flatMap((code) => {
+          const a = byCode.get(code);
+          return a ? [{ code, city: a.city, countryCode: a.countryCode }] : [];
+        });
 
         const offerIds = offerRows.map((r) => r.id);
         const states = offerIds.length > 0 ? await ports.engagement.responsesFor(undefined, actor, offerIds) : {};
@@ -129,6 +134,7 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
           home: homeRow ? toAirportVM(homeRow) : null,
           destinations,
           sections,
+          places,
         };
 
         const etag = `"${createHash("sha1")
@@ -144,6 +150,8 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
               // A carousel's membership is in the tag too: an airport's region or country corrected moves an offer
               // between the regions with the same offers in the same states.
               sections: sections.map((s) => [s.key, s.items.map((i) => i.id)]),
+              // An airports import that renames a city the cards name is a new body too (ADR-IMPL-057).
+              places: places.map((p) => `${p.code}:${p.city}:${p.countryCode}`),
             }),
           )
           .digest("hex")
