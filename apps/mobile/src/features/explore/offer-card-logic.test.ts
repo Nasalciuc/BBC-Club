@@ -16,7 +16,7 @@ const PARIS: DestinationPinVM = {
   region: "europe",
 };
 
-const offer = (to: string, price: ProposalCardVM["price"]): ProposalCardVM => ({
+const offer = (to: string, price: ProposalCardVM["price"], rating?: number | null): ProposalCardVM => ({
   id: "da4947e7-7b1d-4042-8b4e-b62bc8c6c368",
   title: "Autumn in Paris",
   route: { from: "JFK", to },
@@ -25,6 +25,7 @@ const offer = (to: string, price: ProposalCardVM["price"]): ProposalCardVM => ({
   validUntil: "2026-10-31T23:59:59.000Z",
   state: "unseen",
   targeting: "broadcast",
+  rating,
 });
 
 describe("offerCardModel", () => {
@@ -34,7 +35,14 @@ describe("offerCardModel", () => {
       country: "France",
       fromPrice: "$3,850",
       savePercent: 44,
+      rating: null,
     });
+  });
+
+  it("prints the offer's rating as given, to one decimal (02: 4.8); none without one", () => {
+    expect(offerCardModel(offer("CDG", { offer: 3850, currency: "USD" }, 4.8), [PARIS]).rating).toBe("4.8");
+    expect(offerCardModel(offer("CDG", { offer: 3850, currency: "USD" }, 5), [PARIS]).rating).toBe("5.0");
+    expect(offerCardModel(offer("CDG", { offer: 3850, currency: "USD" }, null), [PARIS]).rating).toBeNull();
   });
 
   it("keeps the offer's own title where Home does not list its city, and says no saving without a published fare", () => {
@@ -43,6 +51,7 @@ describe("offerCardModel", () => {
       country: null,
       fromPrice: "$4,650",
       savePercent: null,
+      rating: null,
     });
   });
 });

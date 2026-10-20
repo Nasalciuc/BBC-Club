@@ -24,7 +24,7 @@ import { destinationHref } from "@/features/explore/destination-route";
 import { clearRecentSearches, readRecentSearches, rememberSearch } from "@/features/explore/recent-searches";
 import type { RecentDates } from "@/features/explore/recent-search-logic";
 import { datesChipLabel } from "@/features/explore/travel-preferences";
-import { clubPhoto } from "@/features/places/club-photos";
+import { clubPhoto, clubSearchPhotoHeight } from "@/features/places/club-photos";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { airportSearchState } from "@/lib/airport-search-state";
@@ -203,6 +203,7 @@ export default function SearchScreen() {
                       code={a.code}
                       fromPrice={priceOf(a.code)}
                       image={clubPhoto(a.code, "search") ?? cardPicture(undefined, photoFor(a.code), PICTURE_HEADERS)}
+                      photoHeight={clubSearchPhotoHeight(a.code)}
                       fallback={null}
                       onPress={() => choose(a)}
                     />

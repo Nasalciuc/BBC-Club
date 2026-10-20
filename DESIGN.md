@@ -17,6 +17,11 @@ colors:
   surface-notice: "#F1F5FA"
   surface-sheet: "#FCFCFC"
   surface-save: "#D2E2FB"
+  surface-save-soft: "#E0EBF5"
+  grabber: "#D5D9E4"
+  grabber-about: "#D9E1ED"
+  grabber-request: "#B8C1CC"
+  text-label: "#4E5E7B"
   notice-circle: "#E1E8F2"
   call-circle: "#E9EFF7"
   step-ring: "#C3D9FC"
@@ -25,6 +30,8 @@ colors:
   info-mark: "#364966"
   chevron-light: "#A4A9B8"
   skeleton: "#EBF0F5"
+  progress-track: "#E3E8EF"
+  text-greeting: "#4F6588"
   border-default: "#E8EAEF"
   border-faint: "#EDEEF2"
   border-strong: "#C5CBD8"
@@ -41,10 +48,27 @@ colors:
   status-danger-tint: "#FDEDEF"
   sky: "#C9E4FD"
   sky-light: "#E6F2FD"
-  scrim: "rgba(0,0,0,0.62)"
+  scrim: "rgba(12,15,22,0.61)"
   photo-veil: "rgba(5,12,28,0.55)"
+  photo-veil-clear: "rgba(5,12,28,0)"
   shadow: "#0F172A"
   art-sun: "#FDB20F"
+  surface-neutral: "#F8F8F8"
+  map-ocean: "#AFD8F7"
+  map-land: "#EEF2F6"
+  rule-line: "#DCDFE6"
+  day-band: "rgba(65,135,205,0.1)"
+  toggle-off: "#D6DBE1"
+  dates-mark: "#EBF3F9"
+  pill-disabled: "#EEF4F9"
+  text-pill-disabled: "#7B89A0"
+  text-subtle: "#3F4C65"
+  scrim-question: "rgba(12,15,22,0.685)"
+  grabber-question: "#E1E3E7"
+  surface-round: "#F3F3F3"
+  grabber-delete: "#BFC4CB"
+  scrim-delete: "rgba(10,13,15,0.74)"
+  text-field-label: "#243961"
   globe-ocean: "#1B5E9E"
   globe-ocean-deep: "#0B3F73"
   globe-land: "#8FA77A"
@@ -66,10 +90,16 @@ typography:
     letterSpacing: 0px
   question:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 32px
+    fontSize: 31.9px
     fontWeight: 700
     lineHeight: 1
-    letterSpacing: 0px
+    letterSpacing: -0.75px
+  question-sub:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.55px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.01px
   headline:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 28.3px
@@ -78,10 +108,10 @@ typography:
     letterSpacing: -0.05px
   title-lg:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 23.5px
+    fontSize: 22.94px
     fontWeight: 700
     lineHeight: 1.15
-    letterSpacing: 0px
+    letterSpacing: 0.06px
   title:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 21px
@@ -102,9 +132,15 @@ typography:
     letterSpacing: 0.1px
   greeting:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 24px
+    fontSize: 24.24px
     fontWeight: 400
     lineHeight: 1.15
+    letterSpacing: 0.65px
+  greeting-name:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 34.12px
+    fontWeight: 700
+    lineHeight: 1.1
     letterSpacing: 0px
   body-lg:
     fontFamily: "Inter Tight, system-ui, sans-serif"
@@ -547,10 +583,10 @@ typography:
     letterSpacing: 0px
   button-bold:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 14px
+    fontSize: 13.13px
     fontWeight: 700
-    lineHeight: 1.25
-    letterSpacing: 0px
+    lineHeight: 1.3
+    letterSpacing: 0.66px
   button-sm:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 13.5px
@@ -589,16 +625,16 @@ typography:
     letterSpacing: 0.2px
   empty-title-sm:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 18px
+    fontSize: 17.65px
     fontWeight: 700
     lineHeight: 1.2
-    letterSpacing: 0px
+    letterSpacing: 0.29px
   empty-body-sm:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 14.5px
+    fontSize: 14.15px
     fontWeight: 400
     lineHeight: 1.28
-    letterSpacing: 0px
+    letterSpacing: 0.2px
   tab:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 10.75px
@@ -613,22 +649,1050 @@ typography:
     letterSpacing: -0.4px
   wordmark:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 17px
-    fontWeight: 700
+    fontSize: 15.9px
+    fontWeight: 600
     lineHeight: 1.25
+    letterSpacing: -0.22px
+  wordmark-club:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.5px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: -0.61px
+  onboard-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.2px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.1px
+  onboard-place:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.38px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.32px
+  cabin-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.15px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: -0.04px
+  cabin-line:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.5px
+    fontWeight: 400
+    lineHeight: 1.28
+    letterSpacing: 0.05px
+  traveler-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.75px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: -0.37px
+  traveler-sub:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.19px
+  stepper-value:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.9px
+    fontWeight: 500
+    lineHeight: 1.3
     letterSpacing: 0px
+  family-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.94px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.27px
+  family-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.52px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: -0.12px
+  button-onboard:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.36px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.59px
+  skip:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.73px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.46px
+  onboard-field-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.94px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.44px
+  onboard-input:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.62px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: -0.46px
+  onboard-cancel:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: -0.55px
+  onboard-helper:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.79px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: -0.1px
+  onboard-row:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.45px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: -0.35px
+  onboard-code:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.63px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.3px
+  button-clear:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.38px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: -0.29px
   pin:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 11.5px
+    fontSize: 11.28px
+    fontWeight: 700
+    lineHeight: 1.23
+    letterSpacing: -0.19px
+  pin-detail:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.75px
+    fontWeight: 400
+    lineHeight: 1.23
+    letterSpacing: -0.14px
+  search-bar:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.17px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.87px
+  see-all:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: -0.08px
+  see-all-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.88px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.08px
+  offer-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.46px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.23px
+  offer-rating:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.63px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.23px
+  offer-country:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.43px
+  offer-from:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.76px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.46px
+  offer-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.13px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.4px
+  offer-save:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.13px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.13px
+  sheet-done:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.13px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.46px
+  sheet-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 18px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.3px
+  offer-sm-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.8px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.08px
+  offer-sm-rating:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.46px
+  offer-sm-country:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.37px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.64px
+  offer-sm-from:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.13px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.92px
+  offer-sm-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.44px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.5px
+  offer-sm-save:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.01px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: -0.05px
+  wide-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.04px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.38px
+  wide-country:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.5px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.42px
+  wide-from:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.13px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.85px
+  wide-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.6px
     fontWeight: 700
     lineHeight: 1.2
     letterSpacing: 0px
-  pin-detail:
+  wide-save:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.3px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.42px
+  wide-save-lg:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.01px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: -0.2px
+  route-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 37.5px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -0.65px
+  route-country:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.94px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.5px
+  route-chip:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.34px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.36px
+  route-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.17px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 1.68px
+  route-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 21.67px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.05px
+  route-basis:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.52px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.36px
+  route-note:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.8px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.5px
+  route-time-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.17px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.82px
+  route-clock:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20.63px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.58px
+  route-zone:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.81px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.63px
+  route-options:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.06px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.19px
+  route-pin:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.84px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.23px
+  button-route:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.72px
+  explore-empty-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 22.6px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.05px
+  explore-empty-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.6px
+    fontWeight: 400
+    lineHeight: 1.41
+    letterSpacing: 0.33px
+  button-explore:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.5px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.65px
+  route-message-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 19.5px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0px
+  route-message:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.9px
+    fontWeight: 400
+    lineHeight: 1.44
+    letterSpacing: 0.3px
+  route-link:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.5px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.3px
+  flight-cabin:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.7px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.33px
+  flight-code:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.3px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0px
+  flight-time:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.3px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0px
+  flight-plus:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.2px
+  flight-day:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.62px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.44px
+  flight-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.13px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.09px
+  flight-basis:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.7px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.51px
+  place-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 37.5px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -0.28px
+  place-about:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.04px
+    fontWeight: 400
+    lineHeight: 1.34
+    letterSpacing: 0.68px
+  place-chip:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.66px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.29px
+  place-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 7.5px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 1.98px
+  place-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 21.67px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.23px
+  place-basis:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.1px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.46px
+  place-note:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.43px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.48px
+  place-time-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 6.88px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.92px
+  place-clock:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.38px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0px
+  place-zone:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 7.06px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 1.17px
+  place-options:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20.61px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.25px
+  option-time:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.93px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.12px
+  option-code:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.53px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.23px
+  option-meta:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.34px
+  option-plus:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.39px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0px
+  option-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.44px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: -0.18px
+  option-basis:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.7px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.31px
+  fare-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 30px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -0.41px
+  fare-chip:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.15px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.26px
+  fare-small:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.2px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: -0.06px
+  fare-temp:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 21.7px
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: 0.13px
+  fare-weather:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.34px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.22px
+  fare-amount:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 25.2px
+    fontWeight: 700
+    lineHeight: 1.15
+    letterSpacing: -0.85px
+  fare-down:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.73px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.71px
+  fare-save:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.65px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.28px
+  fare-card-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.44px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.15px
+  fare-code:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 19.1px
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: -0.55px
+  fare-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.38px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.05px
+  fare-time:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.3px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.17px
+  fare-day:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.12px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.23px
+  fare-plus:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0px
+  fare-airline:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.3px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.33px
+  fare-row:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.18px
+  map-code:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.1px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.2px
+  map-city:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 7.85px
+    fontWeight: 500
+    lineHeight: 1.25
+    letterSpacing: 0.14px
+  button-fare:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.55px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: -0.12px
+  fare-fine:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.6px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.3px
+  about-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 26.6px
+    fontWeight: 700
+    lineHeight: 1.15
+    letterSpacing: 0.1px
+  about-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.32
+    letterSpacing: 0.18px
+  button-about:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.8px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.33px
+  gone-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 25.15px
+    fontWeight: 700
+    lineHeight: 1.15
+    letterSpacing: 0.38px
+  button-gone:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.8px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.25px
+  request-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 18.5px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.45px
+  summary-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.4px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: 0.4px
+  summary-cabin:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.95px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.4px
+  summary-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.8px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.5px
+  summary-route:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.4px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.6px
+  summary-price:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.7px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.1px
+  summary-published:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.6px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.12px
+  summary-save:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.6px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.12px
+  summary-source:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 6.9px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  segment-on:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.9px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  segment-off:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.65px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.12px
+  field-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.7px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.25px
+  field-value:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.65px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.4px
+  field-placeholder:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.1px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.55px
+  request-section:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.8px
+    fontWeight: 700
+    lineHeight: 1.2
+    letterSpacing: 0.33px
+  button-request:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.57px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.4px
+  request-promise:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.65px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  field-error:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 7.96px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.42px
+  wordmark-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.8px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.22px
+  wordmark-dates-club:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.88px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.28px
+  dates-eyebrow:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 7.84px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 2px
+  dates-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20.85px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.27px
+  dates-sub:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 10.5px
     fontWeight: 400
+    lineHeight: 1.381
+    letterSpacing: 0.31px
+  month-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.3px
+    fontWeight: 700
     lineHeight: 1.2
-    letterSpacing: 0px
+    letterSpacing: -0.3px
+  weekday:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.85px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: 0.38px
+  day:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.5px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: -0.35px
+    fontFeature: "'tnum'"
+  day-chosen:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.55px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.5px
+    fontFeature: "'tnum'"
+  dates-row-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.52px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.2px
+  dates-row-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.05px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.56px
+  button-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10.95px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.22px
+  wordmark-received:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.65px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.51px
+  wordmark-received-club:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: -0.32px
+  received-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 27.81px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.05px
+  received-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.05px
+    fontWeight: 400
+    lineHeight: 1.388
+    letterSpacing: 0.42px
+  received-phone:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.97px
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: 0.06px
+  received-next:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 19.37px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.3px
+  received-trip-label:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 7.43px
+    fontWeight: 500
+    lineHeight: 1.25
+    letterSpacing: 1.47px
+  received-trip-codes:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.95px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: 0.49px
+  received-trip-dates:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.48px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.26px
+  received-trip-facts:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 11.28px
+    fontWeight: 400
+    lineHeight: 1.25
+    letterSpacing: 0.5px
+  received-airline:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 8.53px
+    fontWeight: 500
+    lineHeight: 1.25
+    letterSpacing: -0.09px
+  button-received:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 12.9px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.02px
+  received-section:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.5px
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: -0.01px
+  received-see-all:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 9.9px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.13px
+  offer-city-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.24px
+  offer-price-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.63px
+  offer-from-sm:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 10px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: 0.24px
+  saved-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 27.7px
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: -0.42px
+  saved-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.86px
+    fontWeight: 400
+    lineHeight: 1.327
+    letterSpacing: 0.16px
+  button-saved:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 15.97px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.2px
+  limited-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 29px
+    fontWeight: 700
+    lineHeight: 1.13
+    letterSpacing: -1px
+  limited-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 17.95px
+    fontWeight: 400
+    lineHeight: 1.2
+    letterSpacing: -0.1px
+  button-limited:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 16.3px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: -0.16px
+  delete-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 23.24px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.06px
+  delete-body:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.8px
+    fontWeight: 400
+    lineHeight: 1.34
+    letterSpacing: 0.2px
+  delete-field:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.68px
+    fontWeight: 400
+    lineHeight: 1.3
+    letterSpacing: -0.06px
+  button-delete:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.72px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.12px
+  button-cancel:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 13.8px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.04px
+  question-title:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 20.63px
+    fontWeight: 700
+    lineHeight: 1.25
+    letterSpacing: -0.47px
+  button-question:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.67px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0.12px
+  button-not-now:
+    fontFamily: "Inter Tight, system-ui, sans-serif"
+    fontSize: 14.53px
+    fontWeight: 500
+    lineHeight: 1.3
+    letterSpacing: 0.3px
 
 rounded:
   xxs: 6px
@@ -667,6 +1731,21 @@ elevation:
     blur: 20px
     color: "{colors.shadow}"
     opacity: 0.12
+  soft:
+    offsetY: 2px
+    blur: 8px
+    color: "{colors.shadow}"
+    opacity: 0.04
+  knob:
+    offsetY: 1.5px
+    blur: 3px
+    color: "{colors.shadow}"
+    opacity: 0.3
+  lift:
+    offsetY: 1px
+    blur: 4px
+    color: "{colors.shadow}"
+    opacity: 0.08
 
 components:
   screen-page:
@@ -921,9 +2000,9 @@ components:
     size: 24px
   progress-line:
     backgroundColor: "{colors.action-primary}"
-    textColor: "{colors.border-default}"
+    textColor: "{colors.progress-track}"
     rounded: "{rounded.pill}"
-    height: 4px
+    height: 4.4px
   skeleton:
     backgroundColor: "{colors.surface-tint}"
     rounded: "{rounded.sm}"
@@ -997,18 +2076,20 @@ motion:
 ## Overview
 
 BuyBusinessClass Club is a private business-class travel club: members see fares from their home airport, request a
-quote, and a travel specialist arranges the trip by phone. 3.0 (ADR-IMPL-055) makes the inside a bright, modern 2026
-travel app — airy white space, daylight photography of the cities, white cards with soft shadows, sheets that overlap
-the photographs with 24 pt corners, round white buttons over photos, navy pills and chips, thin line icons, Apple-level
-clean UI with luxury travel branding.
+quote, and a travel specialist arranges the trip by phone. 3.0 (ADR-IMPL-055, as drawn since ADR-IMPL-056) makes the
+inside a bright, modern 2026 travel app — airy white space, daylight photography of the cities, white cards with soft
+shadows, sheets that overlap the photographs, round white buttons over photos, navy pills and chips, thin line icons,
+Apple-level clean UI with luxury travel branding.
 
 - **Two worlds.** The entry — Welcome, Sign in, Join, Verify, Set password, Reset — stays the 1.0 night cabin, exactly
   as it is: its values live in `apps/mobile/src/constants/club.ts`, written by hand and pinned by `club.test.ts`; none
   of the tokens below reaches it. Everything from onboarding on is 3.0.
 - **The reference.** The 46 images in `isolated/bbc-club-3.0-design/final/` — 13 screens, 23 states, 8 component
-  sheets — show every screen and element; this file holds their values. Where an image and this file differ, this file
-  wins (the images are generated and not always consistent with one another); where an image shows something the app
-  has no data for, the app leaves it out rather than invent it (ADR-IMPL-055).
+  sheets — show every screen and element; this file holds their values, measured from the pixels and not evened out
+  (ADR-IMPL-056): each image is read as a 393-pt phone on a 47-pt status bar, every line fitted to the app's face by
+  its glyph height, every box, gap, radius, colour and shadow taken from the image it belongs to. Where an image and
+  this file differ, this file wins (the images are generated and not always consistent with one another); where two
+  images draw the same component differently, the screen it appears on most wins and a state follows its screen.
 - **One accent.** Navy is the only strong colour: text, filled buttons, the selected chip and the active tab. Red only
   for Sign out, Delete account and errors.
 
@@ -1020,68 +2101,73 @@ and states, `design/motion.md` its motion. The generated `packages/ui/src/tokens
 
 ## Colors
 
-- **Navy** `primary` / `action-primary` (#1E293B): text, filled pills, selected chips and segments, the active tab, the
-  pins, the stepper's done steps. `action-pressed` (#0F172A) while a filled pill is pressed.
-- **White** `surface-card` (#FFFFFF): cards, sheets, fields, the tab bar. **Off-white** `surface-page` (#FAFAF8): pages.
-- **Light tint** `surface-tint` (#F1F5F9): chips, info cards, filled search fields, the stepper, a disabled pill,
-  skeletons, the Closed badge.
-- **Light navy** `border-default` (#E2E8F0): borders, dividers, the light badges (Received), the `Save 48%` pill, the
-  progress line's track.
-- **Slate** `text-secondary` (#64748B): secondary text, placeholders, inactive tabs, labels; `text-on-tint` (#475569)
-  for words on the light tint (an inactive filter chip), where slate would fall under 4.5:1.
-- **Pale sky** `sky` (#BAD2EB): only behind the globe. The `globe-*` colours are the drawn globe's imagery (ocean, land,
-  desert, ice) — never UI.
-- **Red** `status-danger` (#EF4444): the border and icon of `Sign out`, `Delete account` and a field at fault;
-  `status-danger-text` (#DC2626) for their words and the filled `Delete account` pill — the same red a step darker, so
-  the words keep 4.5:1 on white (#EF4444 gives 3.76:1); `status-danger-tint` behind an error card.
-- `text-on-photo` (#FFFFFF): words on photographs and on navy. `photo-veil` darkens the foot of a photograph that
-  carries words; `scrim` dims the page under a sheet; `shadow` is the colour of every shadow.
-- No gold, bronze, orange, yellow, green or azure anywhere in the UI.
+The images' own pixels (ADR-IMPL-056 §3); sheet 37's printed hex values are the generator's labels and no screen
+renders them.
+
+- **Navy**: `text-primary` (#0A1B37) for words; `action-primary` / `primary` (#1D2D46) for fills — filled pills, the
+  selected chip and segment, the active tab, the pins, the received check; `action-pressed` (#14223A) while a pill is
+  pressed.
+- **White** `surface-page` and `surface-card` (#FFFFFF): pages, cards, sheets, fields, the tab bar.
+- **Tints**: `surface-tint` (#F0F2F7) for chips, fields, the stepper and skeletons; `surface-tint-soft` (#F5F7FA) for
+  information cards; `surface-tint-blue` (#DBE8F9) for the light badges and the `Save` pill; `surface-neutral` and
+  `surface-round` for the round buttons drawn grey (07, 26).
+- **Lines**: `border-default` (#E8EAEF) for borders and dividers, `border-faint` for a card's hairline, `rule-line` for
+  the rules inside cards.
+- **Slate**: `text-secondary` (#5F6A7F) for secondary words, placeholders and inactive tabs; `text-on-tint` (#48546A)
+  on the tints, where slate would fall under 4.5:1; `text-label`, `text-muted`, `text-subtle` (#3F4C65: an airline's
+  name, 08's `See all`) and `text-link` (#0A1F6B: Search's `Cancel` and `Clear all`) where the images draw them.
+- **Red** `status-danger` / `status-danger-text` (#EC0017) everywhere — the border, icon and words of `Sign out`,
+  `Delete account` and a field at fault, and the filled pill that confirms a deletion: the images' brighter and lighter
+  reds leave red words, or white words on red, under 4.5:1. `status-danger-tint` behind an error card.
+- **Sky** `sky` and `sky-light` behind the globe; `map-*` the route card's map; the `globe-*` colours are the drawn
+  globe's imagery (ocean, land, desert, ice) — never UI.
+- **Scrims and veils**: `scrim` dims the page under a sheet (black at about 61%); 25's question and 35's deletion dim
+  it darker (`scrim-question`, `scrim-delete`). `photo-veil` darkens the foot of a photograph that carries words;
+  `shadow` is the colour of every shadow.
+- A few colours belong to one screen and are used only there: a sheet's grabber grey (`grabber-*`), 07's band and
+  toggle (`day-band`, `toggle-off`, `dates-mark`), 24's disabled pill (`pill-disabled`, `text-pill-disabled`), 35's
+  field label (`text-field-label`).
+- The weather mark's sun (`art-sun`) is the only yellow; no gold, bronze, orange or green anywhere in the UI.
 
 ## Typography
 
 One sans-serif, Inter Tight (the bundled `@expo-google-fonts/inter-tight` 400, 500, 600, 700), everywhere inside; no
-serif.
+serif. The images were drawn with a face about 8% narrower than Inter; at the images' glyph heights Inter Tight sets
+their widths, so lines break where the images break them (ADR-IMPL-056 §2).
 
-- `display` 36 Bold: screen titles (`Requests`, `London`, `New York to London`), the member's name in the greeting.
-- `headline` 30 Bold: the onboarding question, sheet titles, empty and confirmation titles (`No requests yet.`,
-  `Request received.`).
-- `title` 24 Bold: section titles (`Offers to inspire`, `To Europe`, `My trips`, `Request progress`).
-- `title-sm` 20 Bold: card titles (the city on a request), the smaller section titles (`Popular from New York`,
-  `Recent searches`, `Flight option`).
-- `subtitle` 17 Semibold: row and group titles (`Your home airport`, `Adults`), the city on an offer or a popular card.
-- `greeting` 26 Regular in slate: `Good morning,`.
-- `body-lg` 18: subtitles under a title, the search field's words. `body` 16 and `body-strong` 16 Semibold: text and
-  the titles of info cards. `body-sm` 14: secondary lines; `label-strong` 14 Semibold: badges, the `Save 48%` pill,
-  small titles in cards. `caption` 12: fine print (`No payment is taken in the app.`).
-- `label` 11 Semibold, uppercase, letter-spaced, slate: `INDICATIVE FARE`, `LOCAL TIME`, `BUSINESS CLASS`.
-- `price-display` 36, `price` 24, `price-sm` 18: Bold with tabular figures.
-- `button` 17 Semibold. `tab` 12 Medium, `tab-active` 12 Bold.
-- `wordmark`: `BuyBusinessClass` in Bold and ` Club` in Regular, on one line, navy (white over photos).
-- `pin` 13 Bold and `pin-detail` 13: the globe's labels — a city over its price, an airport's code at either end of a
-  route (02, 13).
-- Body never below 14; `caption` only for fine print, `pin` and `pin-detail` only on the globe. Titles wrap to two
-  lines at most.
+- **The roles are the screens' own.** A line takes the size, weight and tracking its image draws: the shared roles
+  (`display`, `headline`, `title`, `title-sm`, `subtitle`, `body-lg`, `body`, `body-sm`, `caption`, `label`, `button`,
+  `price*`, `tab`) hold the values most screens draw, and a screen that draws a line otherwise has a role of its own,
+  named for it (`summary-title` on 06, `month-title` on 07, `received-title` on 08, `delete-body` on 35).
+- Secondary lines are 10–13 pt, as drawn — under 3.0's first 14-pt floor; Dynamic Type still scales them, up to 1.3×.
+- Prices and the calendar's days use tabular figures where the images align them.
+- A line's baseline is where the image puts it on each platform (`lineBaseline`, ADR-IMPL-056): iOS keeps a shorter
+  line's descent at its foot, Android and the web centre it, and the screens place their words from the baseline.
+- `wordmark`: `BuyBusinessClass` in Semibold and ` Club` in Regular, on one line, navy — at the size each screen draws
+  it (01, 07, 08).
+- `pin` and `pin-detail`: only the globe's labels.
 
 ## Layout and Responsiveness
 
-- Single column, phones only; 20 pt gutters (`spacing.gutter`); horizontal carousels run to the screen's edge and
-  start at the gutter. Content capped at 430 pt on large phones, centred.
+- Single column, phones only; content sits where the images put it — their 15-pt gutter (`spacing.gutter`) where a
+  screen has no measure of its own — and moves down with a taller safe area than the images' 47 pt; what the images
+  pin to the foot keeps its distance from it. Horizontal carousels run to the screen's edge and start where drawn.
 - The primary action sits in the lower third: pinned over the tab bar on a page, at the foot of a sheet.
 - Font scale up to 1.3×: cards grow; nothing truncates but one-line titles in carousels.
 - Android edge-to-edge: the tab bar and the pinned actions respect the safe-area insets.
 
 ## Elevation and Depth
 
-- Cards and the search field: the card shadow `0 4 16` at 8% of `shadow`; sheets: `0 10 30` at 8%; round white buttons
-  over photos and the globe's labels: `float`. Shadows come from the `elevation` group (generated as `boxShadow`).
-- Sheets overlap photographs with 24 pt top corners; photographs run to the screen's edges under the status bar.
+- Shadows come from the `elevation` group (generated as `boxShadow`), as the images draw them: `card` under cards and
+  the search bar, `sheet` under sheets, `float` under round white buttons and the globe's labels, `soft` and `lift`
+  under the lighter cards of 06–08, `knob` under the toggle's knob.
+- Sheets overlap photographs with rounded top corners (the radius each sheet is drawn with); photographs run to the
+  screen's edges under the status bar.
 
 ## Shapes
 
-- `pill` for buttons, chips, badges, the stepper, the search field on a page; `xs` 8 for the segmented control and small
-  thumbnails; `sm` 12 for fields and cabin cards; `md` 16 for cards and rows; `lg` 20 for offer and request cards;
-  `xl` 24 for sheets and photo cards.
+- `pill` for buttons, chips, badges, the stepper and the search bar; `xs` 8, `sm` 10, `md` 11, `lg` 16 and `xl` 24
+  for the radii most screens share — the rest are each component's own, as measured (`design/components.md`).
 
 ## Components
 
@@ -1091,22 +2177,23 @@ Documented in `design/components.md`. The rules an agent most often gets wrong:
   (`Call your specialist`). A second action is an outline pill or a text button.
 - Destructive actions are red: the outline pill `Sign out`, the row `Delete account`, and the filled red pill only to
   confirm a deletion.
-- Badges: `Quote ready` navy, `Received` light navy, `Booked` navy outline with a check, `Closed` light tint,
-  `Not sent` light navy outline.
+- Badges: `Quote ready` navy, `Received` light blue, `Booked` navy outline with a check, `Closed` light grey,
+  `Not sent` light outline.
 - The tab bar: Explore (compass), Requests (clipboard), Profile (person); the active tab a filled navy icon and a bold
-  label, the others slate line icons; a 6 pt navy dot on Requests while a quote is ready.
+  label, the others slate line icons; a navy dot on Requests while a quote is ready.
 
 ## Interaction and States
 
-- Pressed: a filled pill turns `action-pressed`; cards and rows dim to 85%. Focus: a navy border. Disabled: light tint
-  with slate words. Error: a red border and red words under the field.
+- Pressed: a filled pill turns `action-pressed`; cards and rows dim to 85%. Focus: a navy border. Disabled: as each
+  screen draws it (24: a pale blue pill with blue-grey words). Error: a red border and red words under the field.
 - Loading lists show skeletons in light tint that shimmer; a pill that sends shows a small white spinner and `Sending…`.
 - Error, empty, offline and loading are separate states, never stacked on one screen.
 
 ## Accessibility
 
-- Tap targets ≥ 44 pt; contrast ≥ 4.5:1 for body text; `accessibilityLabel` on every interactive element; reading order
-  follows the visual order; nothing said by colour alone (badges have words, the selected chip is filled).
+- Tap targets ≥ 44 pt (a smaller drawn element reaches it by its hit slop); contrast ≥ 4.5:1 for words, which is why
+  the red stays #EC0017; `accessibilityLabel` on every interactive element; reading order follows the visual order;
+  nothing said by colour alone (badges have words, the selected chip is filled).
 
 ## Motion
 
@@ -1116,21 +2203,23 @@ Documented in `design/components.md`. The rules an agent most often gets wrong:
 
 ## Iconography
 
-- Lucide line icons, 1.75 stroke, 20 pt in rows and fields, 24 pt in the tab bar and on round buttons. The tab bar's
-  active icons are filled (drawn in `packages/ui`). No emoji.
+- Lucide line icons at the box and stroke each screen draws them (1.75 where none is measured). The glyphs that exist
+  only as raster crops — the cabins' seats, the family, the active tabs, the weather mark, the received check, 25's
+  bell — are traced from the design's pixels (`packages/ui/src/art-paths.ts`), never redrawn. No emoji.
 
 ## Product Content
 
 - Sentence case; buttons start with a verb (`Request a quote`, `Use these dates`, `Call your specialist`).
-- Facts are facts: a fare is one way and says so; `round trip` only on an indicative fare; `Save 48%` only where the
-  published fare is on record; no rating, saved count, weather, city description or member photo until the club has
-  them (ADR-IMPL-055). The specialist confirms availability and books by phone; no payment in the app.
+- Facts are facts: a fare says what its price covers (`one way` until the catalogue says `round trip`); a starting
+  fare says `from`; `Save 48%` only where the published fare is on record, its source beside it; a rating, a saved
+  count, the weather, a city's line and the member's photo only where the club has them (ADR-IMPL-056 §5). The
+  specialist confirms availability and books by phone; no payment in the app.
 - Errors say what happened and what to do next, calmly. No urgency, no scarcity, no exclamation marks.
 
 ## Do's and Don'ts
 
-- Do keep one filled pill per screen · Do let sheets overlap the photographs · Do use the city's own photograph
-  everywhere it appears · Do render states as separate frames.
+- Do keep one filled pill per screen · Do let sheets overlap the photographs · Do use the design's own photograph of
+  the city in each place it appears · Do render states as separate frames.
 - Don't add colours outside the palette · Don't use serif type inside · Don't print numbers the club does not have ·
   Don't touch the entry (its values are `club.ts`).
 

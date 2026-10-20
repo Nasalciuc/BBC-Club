@@ -1,10 +1,20 @@
-import { type Href, useIsFocused, useRouter } from "expo-router";
+import { type Href, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, type LayoutChangeEvent, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
-import { BackButton, Button, HOME_SHEET_HANDLE, HomeSheet, NoticeCard, SearchField, tokens } from "@bbc/ui";
+import {
+  BackButton,
+  Button,
+  HOME_SHEET_HANDLE,
+  HOME_SHEET_PILL,
+  HomeSheet,
+  NoticeCard,
+  RoundButton,
+  SearchField,
+  tokens,
+} from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
@@ -20,7 +30,7 @@ import {
   SearchTravelersSheet,
   type TravelersSheetHandle,
 } from "@/features/explore/SearchPreferenceSheets";
-import { SheetExpanded } from "@/features/explore/SheetExpanded";
+import { SheetDone, SheetExpanded } from "@/features/explore/SheetExpanded";
 import { SheetRest } from "@/features/explore/SheetRest";
 import { SkyBackdrop, SkyClouds } from "@/features/explore/SkyBackdrop";
 import { useExploreHome } from "@/features/explore/useExploreHome";
@@ -28,6 +38,7 @@ import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
 import { useDestinations } from "@/features/globe/useDestinations";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
+import { toggleSaved, useIsSaved } from "@/features/saved/saved";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
 import { fetchProfile, type Profile } from "@/lib/api";
@@ -35,10 +46,15 @@ import { monogram } from "@/lib/monogram";
 
 /** The sheet's stops: at rest (02), a chosen route (13), every offer (16). */
 const STOP = { rest: 0, route: 1, all: 2 } as const;
-/** 02: the labels stay under the greeting; 13: under the status bar, clear of the back button. */
+/** 02: the labels stay under the greeting; 13: under the status bar, clear of the round buttons. */
 const BAND_TOP = { rest: 76, route: 8 } as const;
-/** The back button over a chosen route (13): 44 pt, 8 pt under the status bar, at the gutter. */
-const BACK = 44;
+/**
+ * 13: the round buttons over a chosen route — back 36 across, 14.7 from the left; the bookmark 35.5, 15.2 from the
+ * right — their tops 3.7 above the status bar's foot; the chevron 24 at 1.6, the bookmark 16.5 at 2.2.
+ */
+const ROUND = { top: -3.7, back: { size: 36, left: 14.7 }, save: { size: 35.5, right: 15.2 } } as const;
+/** 13: `Request a quote`'s words 0.83 lower than centred in their pill. */
+const QUOTE_WORDS_DROP = 0.83;
 
 /**
  * Explore (02, 13, 16, 17, 19): the greeting over the globe on the pale sky, the search bar on the globe's foot and the
@@ -57,7 +73,10 @@ export default function ExploreScreen() {
   const travelersRef = useRef<TravelersSheetHandle>(null);
   const [size, setSize] = useState({ width: screen.width, height: screen.height });
   const height = size.height;
-  const [sheetIndex, setSheetIndex] = useState<number>(STOP.rest);
+  // `See all ›` under 08's `Other great fares` comes back to Explore with every offer raised (16): a fresh Explore
+  // opens raised, one already open beneath raises its sheet.
+  const { offers: offersParam } = useLocalSearchParams<{ offers?: string }>();
+  const [sheetIndex, setSheetIndex] = useState<number>(() => (offersParam === "all" ? STOP.all : STOP.rest));
   const [profile, setProfile] = useState<Profile | null>(null);
   const { offline, refresh } = useOffline();
   const { home, homeLoading, homeError, defaultFrom, retryHome } = useExploreHome();
@@ -89,9 +108,14 @@ export default function ExploreScreen() {
     if (state.to) setSheetIndex(STOP.route);
   }, [state.to, choices]);
 
+  // The destination chosen on the globe comes with the dates it was last searched for, as from Search's recent list
+  // (03, 04): Search and the globe keep one list.
   function selectDestination(airport: AirportVM) {
-    rememberSearch(airport);
+    const dates = rememberSearch(airport)[0]?.dates;
     dispatch({ type: "selectDestination", airport });
+    if (dates?.depart) {
+      dispatch({ type: "setDates", dates: { depart: dates.depart, return: dates.return, flexible: false } });
+    }
     setChoices((n) => n + 1);
   }
 
@@ -99,6 +123,13 @@ export default function ExploreScreen() {
     dispatch({ type: "clearDestination" });
     setSheetIndex(STOP.rest);
   }
+
+  useEffect(() => {
+    if (offersParam !== "all") return;
+    dispatch({ type: "clearDestination" });
+    setSheetIndex(STOP.all);
+    router.setParams({ offers: undefined });
+  }, [offersParam]);
 
   // Android's Back undoes Explore's own state before it leaves: a route goes back to rest, as the back button does, and
   // every offer comes down as Done brings it (ADR-IMPL-047). A modal sheet over Explore registers later and answers first.
@@ -175,29 +206,50 @@ export default function ExploreScreen() {
     if (width !== size.width || next !== size.height) setSize({ width, height: next });
   }
 
+  const saved = useIsSaved("destination", state.to?.code);
   const snaps = sheetSnaps(height, insets.top);
   const routeShown = mode === "route";
   const centreY = globeCentreY(routeShown, insets.top);
   const stopTop = sheetTop(routeShown ? STOP.route : STOP.rest, height, insets.top);
-  // The labels' band: under the greeting (or the back button) and over the search bar (or the sheet).
-  const backTop = insets.top + tokens.space.xs;
+  // The labels' band: under the greeting (or the round buttons) and over the search bar (or the sheet).
+  const roundTop = insets.top + ROUND.top;
+  const pad = tokens.space.xxs;
   const band = {
     top: insets.top + (routeShown ? BAND_TOP.route : BAND_TOP.rest),
     bottom: stopTop + (routeShown ? -tokens.space.xs : HOME_SHEET_HANDLE - tokens.space.xxs),
     avoid: routeShown
       ? [
           {
-            left: tokens.space.gutter - tokens.space.xxs,
-            top: backTop - tokens.space.xxs,
-            right: tokens.space.gutter + BACK + tokens.space.xxs,
-            bottom: backTop + BACK + tokens.space.xxs,
+            left: ROUND.back.left - pad,
+            top: roundTop - pad,
+            right: ROUND.back.left + ROUND.back.size + pad,
+            bottom: roundTop + ROUND.back.size + pad,
+          },
+          {
+            left: size.width - ROUND.save.right - ROUND.save.size - pad,
+            top: roundTop - pad,
+            right: size.width - ROUND.save.right + pad,
+            bottom: roundTop + ROUND.save.size + pad,
           },
         ]
       : [],
   };
 
+  // 13: the words centred, the chevron 4.7 after them — 18.4 at 1.8.
   const footer = routeShown ? (
-    <Button testID="explore.quote" label="Request a quote" variant="primary" trailing="chevron" onPress={openQuote} />
+    <Button
+      testID="explore.quote"
+      label="Request a quote"
+      variant="primary"
+      height={HOME_SHEET_PILL}
+      text="buttonRoute"
+      trailing="chevron"
+      trailingSize={18.4}
+      trailingGap={4.73}
+      centreWords
+      style={{ paddingTop: 2 * QUOTE_WORDS_DROP }}
+      onPress={openQuote}
+    />
   ) : undefined;
 
   return (
@@ -217,28 +269,65 @@ export default function ExploreScreen() {
       />
       <SkyClouds centreY={globeCentreY(false, insets.top)} shown={!routeShown} />
       {routeShown ? (
-        <BackButton
-          testID="explore.back"
-          variant="photo"
-          onPress={clearDestination}
-          style={StyleSheet.flatten([styles.back, { top: backTop }])}
-        />
+        <>
+          <BackButton
+            testID="explore.back"
+            variant="photo"
+            diameter={ROUND.back.size}
+            glyph={{ size: 24, stroke: 1.6 }}
+            onPress={clearDestination}
+            style={StyleSheet.flatten([styles.round, { top: roundTop, left: ROUND.back.left }])}
+          />
+          {state.to ? (
+            <RoundButton
+              testID="explore.save"
+              icon="bookmark"
+              selectedIcon="bookmark-fill"
+              selected={saved}
+              accessibilityLabel={saved ? `Saved: ${state.to.city}` : `Save ${state.to.city}`}
+              diameter={ROUND.save.size}
+              iconSize={16.5}
+              strokeWidth={2.2}
+              onPress={() => {
+                if (state.to) toggleSaved("destination", state.to.code);
+              }}
+              style={StyleSheet.flatten([styles.round, { top: roundTop, right: ROUND.save.right }])}
+            />
+          ) : null}
+        </>
       ) : (
         <GreetingHeader
           name={firstName(profile?.displayName)}
           initials={monogram(profile?.displayName)}
+          portrait={profile?.avatarUrl ? { uri: profile.avatarUrl } : null}
           onProfile={() => router.push("/(tabs)/profile" as Href)}
           topInset={insets.top}
         />
       )}
-      <HomeSheet index={sheetIndex} onChange={setSheetIndex} snapPoints={snaps} footer={footer} testID="explore.sheet">
+      <HomeSheet
+        index={sheetIndex}
+        onChange={setSheetIndex}
+        snapPoints={snaps}
+        footer={footer}
+        accessory={mode === "all" ? <SheetDone onDone={() => setSheetIndex(STOP.rest)} /> : undefined}
+        testID="explore.sheet"
+      >
         {routeShown ? (
           <DestinationDetails
+            look="route"
             testIDPrefix="explore"
             state={state}
             offline={offline}
             onRetry={retrySearch}
-            onOpenFare={(fare: FareVM) => router.push(fareHref(fare.id, fare.offerId))}
+            onOpenFare={(fare: FareVM) =>
+              router.push(
+                fareHref(fare.id, fare.offerId, {
+                  depart: state.dates.depart,
+                  return: state.dates.return,
+                  passengers: state.passengers,
+                }),
+              )
+            }
             onEditDates={() =>
               datesRef.current?.present(
                 {
@@ -282,17 +371,18 @@ export default function ExploreScreen() {
           <SheetExpanded
             home={home}
             onOpenOffer={(card) => void openOffer(card)}
-            onDone={() => setSheetIndex(STOP.rest)}
             onSearch={() => router.push("/search" as Href)}
           />
         ) : (
           <View>
-            <SearchField
-              testID="explore.search"
-              tone="bar"
-              placeholder="Where would you like to go?"
-              onPress={() => router.push("/search" as Href)}
-            />
+            <View style={styles.bar}>
+              <SearchField
+                testID="explore.search"
+                tone="bar"
+                placeholder="Where would you like to go?"
+                onPress={() => router.push("/search" as Href)}
+              />
+            </View>
             <SheetRest
               home={home}
               homeLoading={homeLoading}
@@ -328,6 +418,8 @@ export default function ExploreScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  back: { position: "absolute", left: tokens.space.gutter },
+  round: { position: "absolute" },
+  // 02: the bar 18.6 from the left and 18.7 from the right, a little inside the sheet's gutter.
+  bar: { marginLeft: 18.6 - tokens.space.gutter, marginRight: 18.7 - tokens.space.gutter },
   rest: { gap: tokens.space.lg },
 });

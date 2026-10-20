@@ -29,6 +29,16 @@ export function datesChipLabel(dates: Pick<SearchDates, "depart" | "return">): s
   return `${a.month} ${a.day} – ${b.day}, ${b.year}`;
 }
 
+/** 05's chip, without the year: `Nov 12–19`, `Oct 28–Nov 2`, `Nov 12` one way; null without a day. */
+export function datesShortLabel(dates: Pick<SearchDates, "depart" | "return">): string | null {
+  if (!dates.depart) return null;
+  const a = parts(dates.depart);
+  if (!dates.return) return `${a.month} ${a.day}`;
+  const b = parts(dates.return);
+  if (a.month === b.month && a.year === b.year) return `${a.month} ${a.day}–${b.day}`;
+  return `${a.month} ${a.day}–${b.month} ${b.day}`;
+}
+
 export function cabinLabel(cabin: Cabin): string {
   return cabin === "first" ? "First" : "Business";
 }

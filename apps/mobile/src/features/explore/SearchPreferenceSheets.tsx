@@ -48,17 +48,17 @@ export const SearchCabinSheet = forwardRef<CabinSheetHandle, { onPick: (cabin: C
         <View style={styles.cabins}>
           <CabinCard
             testID="explore.cabin.business"
-            icon="seat"
+            cabin="business"
             title="Business"
-            line="More space, a better journey"
+            line={"More space,\na better journey"}
             selected={cabin === "business"}
             onPress={() => pick("business")}
           />
           <CabinCard
             testID="explore.cabin.first"
-            icon="seat-first"
+            cabin="first"
             title="First"
-            line="The highest level of comfort"
+            line={"The highest\nlevel of comfort"}
             selected={cabin === "first"}
             onPress={() => pick("first")}
           />

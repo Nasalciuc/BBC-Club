@@ -9,7 +9,7 @@ import { Icon } from "../icons";
 import { tokens } from "../tokens";
 import { createGlobeEngine, type Route } from "./globe-engine";
 import { GLOBE_SPEC, greatCircle, planeOnRoute, projector, radiusFor } from "./globe-logic";
-import { GlobePin } from "./GlobePin";
+import { GlobePin, RouteEnd } from "./GlobePin";
 import { type PinToPlace, type Rect, labelScale, pinPriority, placeLabels } from "./pin-labels";
 
 /**
@@ -131,23 +131,16 @@ export function GlobeFallback({
   const routePath = route?.from ? proj.path(greatCircle(route.from, route.to)) : "";
   const plane = route?.from ? planeOnRoute(proj, route.from, route.to) : null;
 
-  // At rest every destination, each with its city and price (02); once a route is chosen, its two ends with their codes (13).
+  // At rest every destination, each with its city and price (02); once a route is chosen, its two ends with their codes
+  // (13), drawn apart below.
   const shown: (PinToPlace & { pin: Pin | null })[] = [];
+  const ends: { code: string; x: number; y: number; end: "origin" | "destination"; testID: string }[] = [];
   if (sel) {
     const at = proj.point([sel.lng, sel.lat]);
-    if (at) {
-      shown.push({ code: sel.code, x: at[0], y: at[1], lines: [sel.code], priority: 0, pin: sel });
-    }
+    if (at) ends.push({ code: sel.code, x: at[0], y: at[1], end: "destination", testID: `globe.pin.${sel.code}` });
     const homeAt = home ? proj.point([home.lng, home.lat]) : null;
-    if (home && homeAt) {
-      shown.push({
-        code: "home",
-        x: homeAt[0],
-        y: homeAt[1],
-        lines: home.code ? [home.code] : [],
-        priority: 1,
-        pin: null,
-      });
+    if (home && homeAt && home.code) {
+      ends.push({ code: home.code, x: homeAt[0], y: homeAt[1], end: "origin", testID: "globe.home" });
     }
   } else {
     for (const p of pins) {
@@ -252,6 +245,9 @@ export function GlobeFallback({
             <Icon name="plane-fill" size={18} color={tokens.colors.textOnPhoto} />
           </View>
         ) : null}
+        {ends.map((e) => (
+          <RouteEnd key={e.testID} testID={e.testID} x={e.x} y={e.y} code={e.code} end={e.end} />
+        ))}
         {placed.map((p) => {
           const pin = shown.find((s) => s.code === p.code)?.pin ?? null;
           const name = pin?.city ?? pin?.code ?? home?.code ?? "Home";

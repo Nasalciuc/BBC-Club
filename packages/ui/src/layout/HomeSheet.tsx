@@ -12,11 +12,25 @@ import Animated, { Extrapolation, interpolate, useAnimatedStyle } from "react-na
 
 import { tokens } from "../tokens";
 
-/** 13: the pill sits 12 pt above the sheet's bottom edge, inside the gutter. */
-const FOOTER_HEIGHT = 52 + tokens.space.sm;
+/** 13: `Request a quote`, 40.6 tall, 16.4 and 16.8 from the edges, its foot 13.9 over the sheet's bottom edge (the tab
+ *  bar's top, its hairline included). */
+const FOOTER = { pill: 40.6, left: 16.4, right: 16.8, bottom: 13.9 } as const;
+const FOOTER_HEIGHT = FOOTER.pill + FOOTER.bottom;
+/** The docked pill's height (13), for the screen's `Button`. */
+export const HOME_SHEET_PILL = FOOTER.pill;
 
-/** The grabber's band (13, 16): the grabber 11 pt from the sheet's top, 40 × 5; the content starts under it. */
+/** The grabber's band (13, 16): the content starts 16 pt under the sheet's top. */
 export const HOME_SHEET_HANDLE = 16;
+
+/**
+ * The raised sheet as each stop draws it: a chosen route (13) with 26-pt corners and its grabber 41.5 × 4.4, 9.1 under
+ * the top; every offer (16) with 22-pt corners and the grabber 48.4 × 4.2, 11.3 under it.
+ */
+const RAISED = {
+  route: { radius: 26, grabber: { width: 41.5, height: 4.4, top: 9.1 } },
+  all: { radius: 22, grabber: { width: 48.4, height: 4.2, top: 11.3 } },
+} as const;
+const LookContext = createContext<(typeof RAISED)[keyof typeof RAISED]>(RAISED.route);
 
 type Props = {
   index: number;
@@ -26,8 +40,14 @@ type Props = {
   children: ReactNode;
   /** Docked at the sheet's bottom edge, above the scrolling content (13: `Request a quote`). */
   footer?: ReactNode;
+  /**
+   * In the grabber's band, beside the grabber and over the content's top (16: `Done`, whose words stand partly above
+   * where the scrolling content starts). The screen places it; it does not scroll.
+   */
+  accessory?: ReactNode;
   testID?: string;
 };
+const AccessoryContext = createContext<ReactNode>(null);
 
 // gorhom mounts `footerComponent` as a component type: a function created per render would remount the footer on every
 // render. One module-level component reads the node from context instead.
@@ -54,29 +74,46 @@ function cardness(index: number) {
  */
 function SheetBackground({ animatedIndex, style, pointerEvents }: BottomSheetBackgroundProps) {
   const card = useAnimatedStyle(() => ({ opacity: cardness(animatedIndex.value) }));
+  const look = useContext(LookContext);
   return (
     <View style={style} pointerEvents={pointerEvents}>
       <View style={StyleSheet.absoluteFill}>
         <LinearGradient colors={[`${tokens.colors.surfacePage}00`, tokens.colors.surfacePage]} style={styles.haze} />
         <View style={styles.page} />
       </View>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.card, card]} />
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          styles.card,
+          { borderTopLeftRadius: look.radius, borderTopRightRadius: look.radius },
+          card,
+        ]}
+      />
     </View>
   );
 }
 
 function SheetHandle({ animatedIndex }: BottomSheetHandleProps) {
   const shown = useAnimatedStyle(() => ({ opacity: cardness(animatedIndex.value) }));
+  const { grabber } = useContext(LookContext);
+  const accessory = useContext(AccessoryContext);
   return (
     <View style={styles.handleArea}>
-      <Animated.View style={[styles.handle, shown]} />
+      <Animated.View
+        style={[
+          styles.handle,
+          { width: grabber.width, height: grabber.height, marginTop: grabber.top, borderRadius: grabber.height / 2 },
+          shown,
+        ]}
+      />
+      {accessory}
     </View>
   );
 }
 
 /** Explore's sheet over the globe, at three stops (02, 13, 16). BottomSheetScrollView, never ScrollView — the content's
  *  gesture must not fight the sheet's. */
-export function HomeSheet({ index, onChange, snapPoints, children, footer, testID }: Props) {
+export function HomeSheet({ index, onChange, snapPoints, children, footer, accessory, testID }: Props) {
   const sheet = useRef<BottomSheet>(null);
   // The sheet is never closed: three stops and no pan down to close. The library says -1 when a snap lands on none
   // of them — its target moved while it ran, as the screen's height settles after its first layout — and passing
@@ -87,52 +124,52 @@ export function HomeSheet({ index, onChange, snapPoints, children, footer, testI
     else sheet.current?.snapToIndex(index);
   }
   return (
-    <FooterContext.Provider value={footer ?? null}>
-      <BottomSheet
-        ref={sheet}
-        index={index}
-        snapPoints={[...snapPoints]}
-        // v5 sizes to content by default and inserts that height as an extra snap, shifting every index: keep exactly
-        // these three.
-        enableDynamicSizing={false}
-        onChange={settle}
-        // The index follows a snap as it starts, not only when it lands: a city chosen while a dragged sheet is still
-        // settling must find the index already down, or raising it again would change nothing.
-        onAnimate={(_from, to) => settle(to)}
-        enablePanDownToClose={false}
-        animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
-        handleComponent={SheetHandle}
-        backgroundComponent={SheetBackground}
-        footerComponent={footer ? DockedFooter : undefined}
-      >
-        <BottomSheetScrollView
-          testID={testID}
-          contentContainerStyle={[styles.content, footer ? styles.contentAboveFooter : null]}
-        >
-          {children}
-        </BottomSheetScrollView>
-      </BottomSheet>
-    </FooterContext.Provider>
+    <LookContext.Provider value={index >= 2 ? RAISED.all : RAISED.route}>
+      <AccessoryContext.Provider value={accessory ?? null}>
+        <FooterContext.Provider value={footer ?? null}>
+          <BottomSheet
+            ref={sheet}
+            index={index}
+            snapPoints={[...snapPoints]}
+            // v5 sizes to content by default and inserts that height as an extra snap, shifting every index: keep exactly
+            // these three.
+            enableDynamicSizing={false}
+            onChange={settle}
+            // The index follows a snap as it starts, not only when it lands: a city chosen while a dragged sheet is still
+            // settling must find the index already down, or raising it again would change nothing.
+            onAnimate={(_from, to) => settle(to)}
+            enablePanDownToClose={false}
+            animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
+            handleComponent={SheetHandle}
+            backgroundComponent={SheetBackground}
+            footerComponent={footer ? DockedFooter : undefined}
+          >
+            <BottomSheetScrollView
+              testID={testID}
+              contentContainerStyle={[styles.content, footer ? styles.contentAboveFooter : null]}
+            >
+              {children}
+            </BottomSheetScrollView>
+          </BottomSheet>
+        </FooterContext.Provider>
+      </AccessoryContext.Provider>
+    </LookContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
-  handleArea: { height: HOME_SHEET_HANDLE, alignItems: "center", paddingTop: 11 },
-  handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.colors.borderDefault },
+  handleArea: { height: HOME_SHEET_HANDLE, alignItems: "center", zIndex: 1 },
+  handle: { backgroundColor: tokens.colors.grabber },
   // 02: the sky fades into the page behind the search bar, then the page.
   haze: { height: 72 },
   page: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  card: {
-    backgroundColor: tokens.colors.surfaceCard,
-    borderTopLeftRadius: tokens.radius.xl,
-    borderTopRightRadius: tokens.radius.xl,
-    ...tokens.elevation.sheet,
-  },
+  card: { backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.sheet },
   content: { paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.xxxl },
   contentAboveFooter: { paddingBottom: FOOTER_HEIGHT + tokens.space.lg },
   footer: {
-    paddingHorizontal: tokens.space.gutter,
-    paddingBottom: tokens.space.sm,
+    paddingLeft: FOOTER.left,
+    paddingRight: FOOTER.right,
+    paddingBottom: FOOTER.bottom,
     backgroundColor: tokens.colors.surfaceCard,
   },
 });

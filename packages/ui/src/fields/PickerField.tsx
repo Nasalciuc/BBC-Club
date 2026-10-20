@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "../icons";
-import { rn } from "../rn-type";
+import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
+import { type FieldLook, PICKER_REQUEST } from "./field-looks";
 
 type Props = {
   label: string;
@@ -12,12 +13,15 @@ type Props = {
   onPress: () => void;
   error?: boolean;
   disabled?: boolean;
+  /** `request`: the request sheet's (06, 22, 23), as measured. Without one, sheet 39's. */
+  look?: "request";
   testID: string;
 };
 
 /**
  * A field that opens a picker (sheet 39, date and travelers fields; 06): the icon, a rule, the label over the value, the
- * chevron down. Error: a red border and a red label (22).
+ * chevron down. Error: a red border, the icon, the label and the chevron red (22). While the request sends, the light
+ * tint and slate words (23).
  */
 export function PickerField({
   label,
@@ -27,14 +31,38 @@ export function PickerField({
   onPress,
   error = false,
   disabled = false,
+  look,
   testID,
 }: Props) {
-  const tone = error ? tokens.colors.statusDanger : tokens.colors.textPrimary;
+  // 23: while the request sends, the icon and the chevron in a muted slate.
+  const tone = error
+    ? tokens.colors.statusDanger
+    : disabled && look
+      ? tokens.colors.fillMuted
+      : tokens.colors.textPrimary;
+  const spoken = value ? `${label}, ${value}` : `${label}, ${placeholder ?? "not chosen"}`;
+  if (look === "request") {
+    return (
+      <DrawnPicker
+        l={PICKER_REQUEST}
+        label={label}
+        value={value}
+        placeholder={placeholder}
+        icon={icon}
+        tone={tone}
+        error={error}
+        disabled={disabled}
+        spoken={spoken}
+        onPress={onPress}
+        testID={testID}
+      />
+    );
+  }
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={value ? `${label}, ${value}` : `${label}, ${placeholder ?? "not chosen"}`}
+      accessibilityLabel={spoken}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
@@ -66,6 +94,124 @@ export function PickerField({
     </Pressable>
   );
 }
+
+/** The measured picker (06): every part placed from the field's corner, the words on their baselines. */
+function DrawnPicker({
+  l,
+  label,
+  value,
+  placeholder,
+  icon,
+  tone,
+  error,
+  disabled,
+  spoken,
+  onPress,
+  testID,
+}: {
+  l: FieldLook;
+  label: string;
+  value: string | null;
+  placeholder?: string;
+  icon: IconName;
+  tone: string;
+  error: boolean;
+  disabled: boolean;
+  spoken: string;
+  onPress: () => void;
+  testID: string;
+}) {
+  const labelTop = l.label.baseline - baselineOffset(l.label.role);
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={spoken}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        drawn.field,
+        { minHeight: l.height, borderRadius: l.radius },
+        disabled && drawn.disabled,
+        pressed && !disabled && drawn.pressed,
+      ]}
+    >
+      <View
+        style={[
+          drawn.icon,
+          { left: l.icon.centre - l.icon.size / 2, top: l.height / 2 - l.icon.rise - l.icon.size / 2 },
+        ]}
+        importantForAccessibility="no-hide-descendants"
+      >
+        <Icon name={icon} size={l.icon.size} color={tone} strokeWidth={l.icon.stroke} />
+      </View>
+      <View style={[drawn.rule, { left: l.rule.left, top: l.rule.top, bottom: l.rule.bottom }]} />
+      <View style={{ marginLeft: l.label.left, marginRight: l.chevron.right + l.chevron.size / 2 + 6 }}>
+        <Text
+          style={[
+            l.label.role,
+            { color: error ? tokens.colors.statusDangerText : disabled ? tokens.colors.chevronLight : l.label.color },
+            { marginTop: labelTop },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <Text
+          style={[
+            l.value.role,
+            {
+              color: disabled
+                ? tokens.colors.fillMuted
+                : value === null
+                  ? tokens.colors.textSecondary
+                  : tokens.colors.textPrimary,
+            },
+            {
+              marginTop:
+                l.value.baseline - l.label.baseline - belowBaseline(l.label.role) - baselineOffset(l.value.role),
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {value ?? placeholder ?? " "}
+        </Text>
+      </View>
+      <View
+        style={[
+          drawn.icon,
+          { right: l.chevron.right - l.chevron.size / 2, top: l.height / 2 + l.chevron.drop - l.chevron.size / 2 },
+        ]}
+        importantForAccessibility="no-hide-descendants"
+      >
+        <Icon name="chevron-down" size={l.chevron.size} color={tone} strokeWidth={l.chevron.stroke} />
+      </View>
+      {disabled ? null : (
+        <View pointerEvents="none" style={[drawn.edge, { borderRadius: l.radius }, error && drawn.edgeError]} />
+      )}
+    </Pressable>
+  );
+}
+
+const drawn = StyleSheet.create({
+  field: { flex: 1, backgroundColor: tokens.colors.surfaceCard },
+  disabled: { backgroundColor: tokens.colors.surfaceTint },
+  pressed: { backgroundColor: tokens.colors.surfaceTintSoft },
+  icon: { position: "absolute" },
+  rule: { position: "absolute", width: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderDefault },
+  edge: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: tokens.colors.borderDefault,
+  },
+  // 22: the field at fault on a red line 0.7 pt wide.
+  edgeError: { borderWidth: 0.7, borderColor: tokens.colors.statusDanger },
+});
 
 const styles = StyleSheet.create({
   // Two to a row (06: Depart and Return): tight enough beside the icon and the chevron for `Nov 12, 2026`.

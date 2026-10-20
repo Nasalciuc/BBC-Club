@@ -31,12 +31,15 @@ beside them. The entry's components (`ClubButton`, `ClubField`, `ClubIcon`) stay
 - **Segmented** — `Round trip` / `One way`: two segments 44 pt, radius 8; the chosen navy with white `body-strong`.
 - **Stepper** — a white card on a hairline: the icon, the label over its caption (`Adults` / `Ages 18+`), the pill
   stepper `− 1 +` in light tint; a bound dims its button to 40%.
-- **Toggle** — 52 × 32; navy on with the white knob at the right, light navy off.
-- **Calendar** (07, 24) — two months at a time, each a white card: its name (`title-sm`) and the arrows that move both
-  cards by a month (from this month to the last that can be booked, 330 days out); `Mon … Sun`; the days 40 pt tall in
-  light tint squares, 4 apart; the departure and the return navy circles joined by a light navy band through the days
-  between, rounded where a week starts or ends; days that cannot be chosen keep their square with a slate number.
-  Weeks start on Monday as the images draw them (`WEEK_START`; 1.0 started on Sunday).
+- **Toggle** — 40.6 × 24 (07): navy on with the white knob (21 across, its own small shadow) at the right, light grey
+  off (`toggle-off`); the target reaches 44 pt.
+- **Calendar** (07, 24) — two months at a time, each a white card (radius 10, a soft shadow on a hairline), 6.4 apart:
+  its name (`month-title`) and the arrows at its right that move both cards by a month (from this month to the last
+  that can be booked, 330 days out; dimmed where they cannot go); `Mon … Sun` (`weekday`); the days 29.1 tall, 2.47
+  apart across and 1.92 down, in neutral squares (radius 4.8); the departure and the return navy circles (29.7) joined
+  by a light blue band (`day-band`) through the days between, rounded where a week starts or ends; days that cannot be
+  chosen keep their square with a slate number. Weeks start on Monday as the images draw them (`WEEK_START`; 1.0
+  started on Sunday).
 - **Chip** — `trip`: light tint pill, 40 pt, an icon and navy words (`Nov 12 – 19, 2026`, `Business`, `1 adult`);
   `filter`: the status filters (09), 40 pt, `body-sm` words in `text-on-tint` 16 pt from either side — four and a part
   to a phone's width, from the gutter to the screen's edge — navy with white `label-strong` words when chosen. A chip
@@ -76,9 +79,13 @@ Sep`) — a reference price always carries its source. The weather beside it in 
   over the cabin (the airline after it when it has no logo; its logo at the right when it has one); under a rule, the
   days as the sheet holds them and the flight's clocks, then a fare's price, `one way` and `Save 48%`. A quote shows
   the route in its codes and no price.
-- **TripCard** (08) — the request just received: the photograph, `BUSINESS CLASS`, `JFK → LHR` in `title-sm`, the days
-  and `Round trip · 1 adult`, the airline at the right.
-- **OfferCard · compact** (08, `Other great fares`) — the photo over the city and `from` its price.
+- **TripCard** (08) — the request just received: white, radius 9, on a hairline over a light shadow (`lift`); the
+  request's photograph (123.3 × 86.8, radius 8.2) at the left; `BUSINESS CLASS` over the codes with the arrow between
+  them, the days, then the trip and the travelers with a dot between; at the right the airline — British Airways'
+  ribbon over its name in capitals, a word to a line; else its mark, its logo or its name.
+- **OfferCard · compact** (08, `Other great fares`) — 114.2 × 117.2, radius 8.1, on a hairline over a light shadow:
+  the city's photograph across the top (77.6), the city over `from` and its price; three to the width, 8.55 apart. 08
+  draws the price without `from`; a starting fare says so.
 - **RequestCard** (09, 28; sheet 40 · 09) — a request on Requests: white, radius 20, the card shadow, 8 pt inside; the
   destination's photograph (128 pt wide, as tall as the words, radius 12) at the left; the city in `title-sm` with its
   badge at the right (a long city, or larger text, sends the badge to the next line); the route in navy over the days
@@ -117,7 +124,8 @@ online.`): title, words, the pill.
   the line runs from circle to circle. A request not sent has reached none; a closed one keeps the steps it reached
   and is at none (its badge and its message say it is closed).
 - **Skeleton / CardSkeleton / RowSkeleton** — light tint blocks that shimmer (opacity only; still under reduced motion).
-- **CheckCircle** — the large navy check in a white ring (a request received).
+- **CheckCircle** — the navy disc (58.3) in a white ring (67.6 across), no shadow, the check traced from 08 (a request
+  received).
 
 ## Navigation and surfaces (sheet 42)
 
@@ -132,10 +140,15 @@ online.`): title, words, the pill.
   from 1.0): tall, explain, medium, short. Actions pinned at the foot.
 - **PageModal** (07) — a whole page over the screen and its sheets: it rises like a sheet, covers the screen to its
   edges, has no grabber and no drag; its back button and Android's Back close it. The dates page is one: it opens over
-  the request sheet as over Explore. Its top bar is the back chevron with the wordmark centred; 07's profile button is
-  left out — leaving for Profile would strand the request under it.
-- **ModalSheet · question** (25) — a short question: its mark (the bell) centred over the centred title, no ×, the
-  pill and the slate `Not now` under it; the sheet as tall as that (`height`).
+  the request sheet as over Explore. Its top bar is the back chevron with the wordmark centred and 07's profile button
+  at the right, which closes the page and the sheets under it before it opens Profile.
+- **ModalSheet · question** (25) — a short question: its mark (the bell, traced from 25) centred over the centred
+  title, no ×, the pill and the slate `Not now` under it; the page dimmed darker (`scrim-question`); the sheet as tall
+  as 25 draws it, taller by a title that wraps or a taller home indicator.
+- **ModalSheet · delete** (35) — the deletion: the title at the left, the words in slate (what closes with the account
+  on a line of its own), the password field with the filled lock — `Password` alone in it, no eye (35 draws none) —
+  the red pill and `Cancel` (navy, as text buttons are; 35 draws it slate); the page dimmed darker still
+  (`scrim-delete`). The pill keeps the club's red: 35's lighter one leaves its white words at 3.6:1.
 - **HomeSheet** — Explore's sheet over the globe at three stops the screen sets (02, 13, 16). At rest it is no card: the
   search bar floats on the globe's foot and the offers sit on the page, the sky fading into it; raised, it is the white
   sheet with its grabber, 24-pt corners and the sheet shadow.
@@ -144,5 +157,6 @@ online.`): title, words, the pill.
   label beside the head — the city over its price (`pin`, `pin-detail`) — placed right of the pin or else left, and left
   out where it would cover another label, a pin or a button; a chosen route shows only its two ends with their codes, a
   white line arcing between them and the plane at its middle.
-- **Wordmark** — `BuyBusinessClass` Bold and ` Club` Regular, one line; white over photographs.
+- **Wordmark** — `BuyBusinessClass` Semibold and ` Club` Regular, one line, navy — over 08's daylight photograph too
+  (white only over a dark one).
 - **Avatar** — the member's portrait in a white ring; their initials on navy until the club keeps a photo.

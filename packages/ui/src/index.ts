@@ -6,11 +6,11 @@ export { Avatar } from "./primitives/Avatar";
 export { BackButton } from "./primitives/BackButton";
 export { Button } from "./primitives/Button";
 export { CabinCard } from "./primitives/CabinCard";
-export { CheckCircle } from "./primitives/CheckCircle";
+export { CHECK_CIRCLE_SIZE, CheckCircle } from "./primitives/CheckCircle";
 export { CloseButton } from "./primitives/CloseButton";
 export { Divider } from "./primitives/Divider";
 export { InfoCard } from "./primitives/InfoCard";
-export { ProgressLine } from "./primitives/ProgressLine";
+export { PROGRESS_HEIGHT, ProgressLine } from "./primitives/ProgressLine";
 export { Chip } from "./primitives/Chip";
 export { ListRow, RowGroup } from "./primitives/ListRow";
 export { Photo, type PhotoSource } from "./primitives/Photo";
@@ -41,25 +41,51 @@ export { SearchField } from "./fields/SearchField";
 export { SheetTextInput } from "./fields/SheetTextInput";
 export { FieldError, TextField } from "./fields/TextField";
 
-export { CarouselRow, OfferCard, OfferCardWide } from "./cards/OfferCard";
-export { FlightCard } from "./cards/FlightCard";
+export { CAROUSEL_PAD, CarouselRow, OfferCard, OfferCardWide } from "./cards/OfferCard";
+export { type AirlineMark, FlightCard } from "./cards/FlightCard";
+export {
+  type AirlineRibbon,
+  FareOverviewCard,
+  FareRouteCard,
+  FareSummaryCard,
+  type FareWeather,
+  PageDots,
+  PhotoThumbs,
+} from "./cards/FarePage";
 export { FlightOverview, QuoteFareCard, RouteCard, YourFareCard } from "./cards/FareCards";
 export { TripCard, TripPhotoCard, TripSummaryCard } from "./cards/TripCards";
-export { ONE_WAY, arriveYmd, cabinText, dayText, departYmd, durationText, flightFacts } from "./cards/flight-facts";
+export {
+  ONE_WAY,
+  arriveYmd,
+  cabinText,
+  dayText,
+  departYmd,
+  durationText,
+  fareBasis,
+  flightFacts,
+} from "./cards/flight-facts";
 export { PopularCard } from "./cards/PopularCard";
 export { RecentRow } from "./cards/RecentRow";
 export { ProfileHero, profileBandHeight } from "./cards/ProfileHero";
 export { RequestCard } from "./cards/RequestCard";
 
-export { HOME_SHEET_HANDLE, HomeSheet } from "./layout/HomeSheet";
+export { HOME_SHEET_HANDLE, HOME_SHEET_PILL, HomeSheet } from "./layout/HomeSheet";
 export { ModalSheet, type ModalSheetHandle, useKeyboardShown } from "./layout/ModalSheet";
 export { PageModal, type PageModalHandle } from "./layout/PageModal";
 export { MODAL_SHEET_TOP, modalSheetHeight, type ModalSheetSize } from "./layout/modal-sheet-sizes";
+export {
+  ABOUT_BODY,
+  DELETE_BODY,
+  DELETE_PARTS,
+  MODAL_SHEET_LOOKS,
+  QUESTION_ANSWERS,
+  type ModalSheetLookName,
+} from "./layout/modal-sheet-looks";
 export { TabBar } from "./layout/TabBar";
 export { TopBar } from "./layout/TopBar";
 
 export { GlobeFallback, type Pin } from "./globe/GlobeFallback";
-export { GlobePin, pinFrame } from "./globe/GlobePin";
+export { GlobePin, RouteEnd, pinFrame } from "./globe/GlobePin";
 export { RouteMap } from "./globe/RouteMap";
 export { GLOBE_SPEC, OPENING_VIEW, routeView, type RouteFrame } from "./globe/globe-logic";
 export {
@@ -67,9 +93,11 @@ export {
   labelScale,
   pinPriority,
   placeLabels,
+  routeEndFrame,
   type PinToPlace,
   type PlacedPin,
   type Rect,
+  type RouteEndKind,
 } from "./globe/pin-labels";
 export {
   OPENING_CENTER,

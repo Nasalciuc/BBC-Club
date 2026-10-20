@@ -38,10 +38,10 @@ test("a request whose details cannot go says what to fix, calmly — never zod's
 });
 
 test("the trip under the route (08): the trip and the travelers", () => {
-  expect(tripFacts("round", "1 adult")).toBe("Round trip · 1 adult");
-  expect(tripFacts("oneway", "2 adults")).toBe("One way · 2 adults");
-  expect(tripFacts("", "3 travelers")).toBe("3 travelers");
-  expect(tripFacts("", "")).toBeNull();
+  expect(tripFacts("round", "1 adult")).toEqual(["Round trip", "1 adult"]);
+  expect(tripFacts("oneway", "2 adults")).toEqual(["One way", "2 adults"]);
+  expect(tripFacts("", "3 travelers")).toEqual(["3 travelers"]);
+  expect(tripFacts("", "")).toEqual([]);
 });
 
 test("other great fares (08): Home's offers to other cities, one per city, six at most", () => {

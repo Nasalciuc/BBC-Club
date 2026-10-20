@@ -5,7 +5,14 @@ import { countryName } from "../../lib/countries";
 import { formatPrice } from "../../lib/format";
 import { savingPercent } from "../../lib/saving";
 
-export type OfferCardModel = { city: string; country: string | null; fromPrice: string; savePercent: number | null };
+export type OfferCardModel = {
+  city: string;
+  country: string | null;
+  fromPrice: string;
+  savePercent: number | null;
+  /** `4.8` beside the city (02, 16), as whoever made the offer gave it (ADR-IMPL-056); null — none is printed. */
+  rating: string | null;
+};
 
 /**
  * What an offer card shows (02, 16): the destination's city and country — from Home's destinations, by the route's
@@ -19,5 +26,6 @@ export function offerCardModel(item: ProposalCardVM, destinations: readonly Dest
     country: countryName(place?.countryCode),
     fromPrice: formatPrice(item.price.offer, item.price.currency),
     savePercent: savingPercent(item.price),
+    rating: item.rating != null ? item.rating.toFixed(1) : null,
   };
 }

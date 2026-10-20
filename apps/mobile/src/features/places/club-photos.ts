@@ -7,7 +7,6 @@ import londonRequest from "@/assets/images/club/photos/london-request.webp";
 import londonSearch from "@/assets/images/club/photos/london-search.webp";
 import london from "@/assets/images/club/photos/london.webp";
 import loungeThumb from "@/assets/images/club/photos/lounge-thumb.webp";
-import newYorkOnboarding from "@/assets/images/club/photos/new-york-onboarding.webp";
 import newYork from "@/assets/images/club/photos/new-york.webp";
 import parisOffer from "@/assets/images/club/photos/paris-offer.webp";
 import parisRequest from "@/assets/images/club/photos/paris-request.webp";
@@ -19,7 +18,7 @@ import tokyoOffer from "@/assets/images/club/photos/tokyo-offer.webp";
 import tokyoRequest from "@/assets/images/club/photos/tokyo-request.webp";
 import tokyoSearch from "@/assets/images/club/photos/tokyo-search.webp";
 import tokyo from "@/assets/images/club/photos/tokyo.webp";
-import towerBridgeReceived from "@/assets/images/club/photos/tower-bridge-received.webp";
+import towerBridge from "@/assets/images/club/photos/tower-bridge.webp";
 
 import { clubCityOf, type ClubCity, type PhotoContext } from "./club-photo-logic";
 
@@ -33,13 +32,24 @@ type Bundled = number;
  * none here and takes the server's place photo (ADR-IMPL-043).
  */
 const PHOTOS: Record<ClubCity, Partial<Record<PhotoContext, Bundled>> & { any: Bundled }> = {
-  london: { any: london, search: londonSearch, request: londonRequest, received: towerBridgeReceived },
+  london: { any: london, search: londonSearch, request: londonRequest, received: towerBridge },
   paris: { any: paris, offer: parisOffer, search: parisSearch, request: parisRequest },
   tokyo: { any: tokyo, offer: tokyoOffer, search: tokyoSearch, request: tokyoRequest },
   dubai: { any: dubai, offer: dubaiOffer, request: dubaiRequest },
   rome: { any: rome },
-  "new-york": { any: newYork, onboarding: newYorkOnboarding },
+  // 01's card: the package's crop of it (`photo-new-york-onboarding`) stops above the card's label, so the card shows
+  // the city's own photograph, framed as 01 frames it (`clubHomePhoto`).
+  "new-york": { any: newYork },
 };
+
+/** 03: each popular card's photograph as tall as the design draws it — Tokyo's shorter than London's and Paris's. */
+const SEARCH_PHOTO_HEIGHT: Partial<Record<ClubCity, number>> = { london: 118, paris: 118.2, tokyo: 113.4 };
+
+/** The height 03 draws this city's popular photograph at; undefined — the card's own. */
+export function clubSearchPhotoHeight(code: string | null | undefined): number | undefined {
+  const city = clubCityOf(code);
+  return city ? SEARCH_PHOTO_HEIGHT[city] : undefined;
+}
 
 /** The design's photo of this airport's city in this place of the app, or null when the design has none. */
 export function clubPhoto(code: string | null | undefined, context: PhotoContext): Bundled | null {
@@ -65,6 +75,34 @@ export function clubTripPhoto(code: string | null | undefined): { source: Bundle
   const city = clubCityOf(code);
   if (!city) return null;
   return { source: PHOTOS[city].any, left: TRIP_WINDOW[city] ?? "50%" };
+}
+
+/**
+ * 08's photograph behind `Request received.`: London's is Tower Bridge — the package's whole photo of it, since its cut
+ * of 08 (`photo-tower-bridge-clean`) stops under the wordmark and over the water the sheet starts on — drawn as 08 frames
+ * it, from 47 % of its width (cover fit). Another city the design draws: its photograph, centred.
+ */
+const RECEIVED_FRAME: Partial<Record<ClubCity, `${number}%`>> = { london: "47.1%" };
+
+export function clubReceivedPhoto(code: string | null | undefined): { source: Bundled; left: `${number}%` } | null {
+  const city = clubCityOf(code);
+  if (!city) return null;
+  const set = PHOTOS[city];
+  return { source: set.received ?? set.any, left: RECEIVED_FRAME[city] ?? "50%" };
+}
+
+/** 08's trip card: the request's photograph (09's, Westminster for London) from 35 % of its height (cover fit). */
+export const RECEIVED_TRIP_FRAME = { top: "35%" } as const;
+
+/** 01's home airport card: the city's photograph across the card, its top edge 50.5 % of the way down (cover fit). */
+const HOME_FRAME: Partial<Record<ClubCity, `${number}%`>> = { "new-york": "50.5%" };
+
+/** The home airport's photograph on onboarding (01) and how it is framed; null when the design has no photo of it. */
+export function clubHomePhoto(code: string | null | undefined): { source: Bundled; top: `${number}%` } | null {
+  const city = clubCityOf(code);
+  if (!city) return null;
+  const set = PHOTOS[city];
+  return { source: set.onboarding ?? set.any, top: HOME_FRAME[city] ?? "50%" };
 }
 
 /** The fare's photographs after the city's (05): the business-class seat and the lounge, as the carousel shows them;

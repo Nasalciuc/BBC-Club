@@ -21,6 +21,7 @@ import {
   GLOBE_SPEC,
   GlobePin,
   Icon,
+  RouteEnd,
   OPENING_CENTER,
   REST_ZOOM,
   ZOOM_RANGE,
@@ -31,6 +32,7 @@ import {
   pinPriority,
   placeLabels,
   routeCamera,
+  routeEndFrame,
   routeLine,
   routeMiddle,
   tokens,
@@ -38,6 +40,7 @@ import {
   type LngLat,
   type Pin,
   type PinToPlace,
+  type RouteEndKind,
   type Rect,
 } from "@bbc/ui";
 
@@ -227,22 +230,11 @@ export default function MapboxGlobe({
   const lift = dest && home ? routeCamera(home, dest).lift : 0;
   const centre = { x: size.width / 2, y: centreY + lift };
   const shown: (PinToPlace & { lng: number; lat: number; pin: Pin | null })[] = [];
+  // A chosen route's two ends with their codes (13), drawn apart: never hidden, never a target.
+  const ends: { code: string; lng: number; lat: number; end: RouteEndKind; testID: string }[] = [];
   if (dest) {
-    const at = mapPoint(dest, seen, centre);
-    if (at)
-      shown.push({ code: dest.code, ...at, lines: [dest.code], priority: 0, lng: dest.lng, lat: dest.lat, pin: dest });
-    const homeAt = home ? mapPoint(home, seen, centre) : null;
-    if (home && homeAt) {
-      shown.push({
-        code: "home",
-        ...homeAt,
-        lines: home.code ? [home.code] : [],
-        priority: 1,
-        lng: home.lng,
-        lat: home.lat,
-        pin: null,
-      });
-    }
+    ends.push({ code: dest.code, lng: dest.lng, lat: dest.lat, end: "destination", testID: `globe.pin.${dest.code}` });
+    if (home?.code) ends.push({ code: home.code, lng: home.lng, lat: home.lat, end: "origin", testID: "globe.home" });
   } else {
     for (const p of pins) {
       const at = mapPoint(p, seen, centre);
@@ -334,6 +326,19 @@ export default function MapboxGlobe({
             </View>
           </MarkerView>
         ) : null}
+        {ends.map((e) => {
+          const f = routeEndFrame(e.code, e.end);
+          return (
+            <MarkerView
+              key={e.testID}
+              coordinate={[e.lng, e.lat]}
+              anchor={{ x: f.tip.x / f.width, y: f.tip.y / f.height }}
+              allowOverlap
+            >
+              <RouteEnd inline testID={e.testID} x={0} y={0} code={e.code} end={e.end} />
+            </MarkerView>
+          );
+        })}
         {placed.map((p) => {
           const s = shown.find((x) => x.code === p.code);
           if (!s) return null;

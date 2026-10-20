@@ -325,17 +325,17 @@ function GalleryScreen() {
       <View style={styles.row}>
         <CabinCard
           testID="gallery.cabin.business"
-          icon="seat"
+          cabin="business"
           title="Business"
-          line="More space, a better journey"
+          line={"More space,\na better journey"}
           selected={cabin === "business"}
           onPress={() => setCabin("business")}
         />
         <CabinCard
           testID="gallery.cabin.first"
-          icon="seat-first"
+          cabin="first"
           title="First"
-          line="The highest level of comfort"
+          line={"The highest\nlevel of comfort"}
           selected={cabin === "first"}
           onPress={() => setCabin("first")}
         />
@@ -386,7 +386,7 @@ function GalleryScreen() {
         from="JFK"
         to="LHR"
         dates="Nov 12 – 19, 2026"
-        facts="Round trip · 1 adult"
+        facts={["Round trip", "1 adult"]}
         carrier={{ name: "British Airways", logoUrl: null }}
       />
       <RequestCard

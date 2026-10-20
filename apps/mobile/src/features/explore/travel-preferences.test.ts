@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  datesShortLabel,
   cabinLabel,
   datesChipLabel,
   flightOptionsTitle,
@@ -84,5 +85,14 @@ describe("noFareCopy", () => {
 
   it("falls back to no fares right now without an origin", () => {
     expect(noFareCopy(null, LHR).kind).toBe("no_fare_now");
+  });
+});
+
+describe("datesShortLabel (05)", () => {
+  it("writes the chip's days without the year", () => {
+    expect(datesShortLabel({ depart: "2026-11-12", return: "2026-11-19" })).toBe("Nov 12–19");
+    expect(datesShortLabel({ depart: "2026-10-28", return: "2026-11-02" })).toBe("Oct 28–Nov 2");
+    expect(datesShortLabel({ depart: "2026-11-12", return: null })).toBe("Nov 12");
+    expect(datesShortLabel({ depart: null, return: null })).toBeNull();
   });
 });

@@ -138,20 +138,73 @@ export function longDay(ymd: string | null | undefined): string | null {
   return `${MONTH_NAMES[Number(ymd.slice(5, 7)) - 1]} ${Number(ymd.slice(8, 10))}, ${ymd.slice(0, 4)}`;
 }
 
-type AboutFare = Pick<FareVM, "carrier" | "cabin" | "product" | "from" | "to"> & { day: string | null };
+type AboutFare = Pick<FareVM, "carrier" | "cabin" | "from" | "to" | "trip"> & {
+  /** The days it was searched for, else the fare's own day (`YYYY-MM-DD`). */
+  depart: string | null;
+  return: string | null;
+  passengers: { adult: number; child: number; infant: number } | null;
+};
+
+const SMALL_NUMBERS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"] as const;
+
+/** `one adult`, `two adults`, `3 travelers` with children (20). */
+export function travelersWords(p: { adult: number; child: number; infant: number }): string {
+  const word = (n: number) => SMALL_NUMBERS[n - 1] ?? String(n);
+  if (p.child + p.infant === 0) return `${word(p.adult)} ${p.adult === 1 ? "adult" : "adults"}`;
+  return `${p.adult + p.child + p.infant} travelers`;
+}
+
+/** `November 12–19, 2026`, `October 28 – November 2, 2026`, `November 12, 2026` one way (20). */
+export function longDays(depart: string | null, ret: string | null): string | null {
+  const a = longDay(depart);
+  if (!a) return null;
+  const b = ret && isCalendarDay(ret) ? ret : null;
+  if (!b || !depart) return a;
+  const [ay, am, ad] = [depart.slice(0, 4), Number(depart.slice(5, 7)), Number(depart.slice(8, 10))];
+  const [by, bm, bd] = [b.slice(0, 4), Number(b.slice(5, 7)), Number(b.slice(8, 10))];
+  if (ay !== by) return `${a} – ${longDay(b)}`;
+  if (am !== bm) return `${MONTH_NAMES[am - 1]} ${ad} – ${MONTH_NAMES[bm - 1]} ${bd}, ${by}`;
+  return `${MONTH_NAMES[am - 1]} ${ad}–${bd}, ${ay}`;
+}
 
 /**
- * `About this fare` (20), in what the club knows: the fare is one way, for one adult, the route by its cities and codes,
- * its day; then the cabin, the airline and its seat, and what the specialist does. 20's `indicative round-trip fare`
- * and `a spacious seat` are not this fare's facts (ADR-IMPL-055 §8).
+ * `About this fare` (20), in what the club knows: an indicative fare — round trip or one way as the catalogue sells it
+ * — for the travelers it was searched for, the route by its cities and codes, its days; then the cabin and the airline,
+ * and what the specialist does.
  */
 export function aboutFareLines(fare: AboutFare): [string, string] {
-  const day = longDay(fare.day);
+  const trip = fare.trip === "round_trip" ? "round-trip " : fare.trip === "one_way" ? "one-way " : "";
+  const who = travelersWords(fare.passengers ?? { adult: 1, child: 0, infant: 0 });
+  const days = longDays(fare.depart, fare.return);
   const route = `from ${fare.from.city} (${fare.from.code}) to ${fare.to.city} (${fare.to.code})`;
-  const first = `This fare is one way, for one adult flying ${route}${day ? ` on ${day}` : ""}. Your specialist confirms availability and the final fare.`;
-  const product = fare.product?.trim();
-  const second = `Travel in ${cabinWord(fare.cabin)} with ${fare.carrier.name}${product ? ` (${product})` : ""}. Your specialist confirms the cabin details and arranges the booking by phone.`;
+  const first = `This indicative ${trip}fare is for ${who} flying ${route}${days ? `, ${days}` : ""}. Your specialist confirms availability and the final fare.`;
+  const seat = fare.cabin === "business" ? ", with a spacious seat and a more comfortable journey" : "";
+  const second = `Travel in ${cabinWord(fare.cabin)} with ${fare.carrier.name}${seat}. Your specialist confirms the cabin details and arranges the booking by phone.`;
   return [first, second];
+}
+
+/** The search a fare's page was opened from (05), read from its route's words; null without days and travelers. */
+export function fareSearchFromParams(params: Record<string, string | string[] | undefined>): {
+  depart: string | null;
+  return: string | null;
+  passengers: { adult: number; child: number; infant: number } | null;
+} {
+  const one = (k: string) => {
+    const v = params[k];
+    return typeof v === "string" ? v : null;
+  };
+  const day = (v: string | null) => (v && isCalendarDay(v) ? v : null);
+  const count = (v: string | null, min: number) => {
+    const n = v == null ? NaN : Number(v);
+    return Number.isInteger(n) && n >= min && n <= 9 ? n : null;
+  };
+  const depart = day(one("depart"));
+  const adult = count(one("adults"), 1);
+  return {
+    depart,
+    return: depart ? day(one("ret")) : null,
+    passengers: adult ? { adult, child: count(one("children"), 0) ?? 0, infant: count(one("infants"), 0) ?? 0 } : null,
+  };
 }
 
 /** What the phone's share sheet carries (05's share): the route, the cabin, the fare one way, and the fare's link. */

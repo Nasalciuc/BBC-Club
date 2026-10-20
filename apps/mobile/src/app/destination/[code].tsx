@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Linking, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
-import { BackButton, Button, Photo, PhotoCredit, StateMessage, tokens } from "@bbc/ui";
+import { Button, Photo, PhotoCredit, StateMessage, tokens } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { RootTabBar } from "@/components/RootTabBar";
@@ -20,17 +20,26 @@ import {
 } from "@/features/explore/SearchPreferenceSheets";
 import { useExploreHome } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
+import { clubPhoto } from "@/features/places/club-photos";
 import { bandPicture } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
 import { fetchProfile, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
 
-/** 04: the city's photograph across the top, the sheet over its foot with 24-pt corners. */
-const HERO = 240;
-const OVERLAP = 24;
+/**
+ * 04, on a 47-pt status bar: the city's photograph from the screen's top, the sheet over its foot from 217.9 with
+ * 20-pt corners and no grabber; `Request a quote` 36.6 tall, 12.9 and 13.5 from the edges, its foot 59.8 over the tab
+ * bar. No button over the photograph: back is the swipe, Android's Back, or the Explore tab.
+ */
+const PAGE = {
+  sheetTop: 217.9 - 47,
+  corner: 20,
+  // Its foot 59.8 over the tab bar's top (59.3 over its hairline); its words 0.14 higher than centred.
+  pill: { height: 36.6, left: 12.9, right: 13.5, aboveTabs: 59.3, wordsLift: 0.14 },
+};
 
 /**
  * A destination chosen on Search (04): the city's photograph, then the same destination as Explore's sheet shows (13) —
@@ -97,12 +106,15 @@ export default function DestinationScreen() {
   }
 
   const search: SearchContext = { dates: state.dates, cabin: state.cabin, passengers: state.passengers };
+  const heroHeight = insets.top + PAGE.sheetTop + PAGE.corner;
+  // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo.
+  const bundled = clubPhoto(chosen.airport.code, "any");
   const band = bandPicture(undefined, photoFor(chosen.airport.code), {
     headers: PICTURE_HEADERS,
     mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
-    size: { width, height: HERO },
+    size: { width, height: heroHeight },
   });
-  const credit = band.credit;
+  const credit = bundled ? null : band.credit;
   const creditLink = credit?.link ?? null;
 
   function retrySearch() {
@@ -116,29 +128,32 @@ export default function DestinationScreen() {
     <View style={styles.root} testID="destination.root">
       <ScreenStatusBar on="dark" />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.hero}>
+        <View style={{ height: heroHeight }}>
           <Photo
-            source={band.source}
-            fallback={CLUB_PICTURE}
-            cachePolicy={band.cache}
+            source={bundled ?? band.source}
+            fallback={null}
+            cachePolicy={bundled ? "memory-disk" : band.cache}
+            position="top"
             style={StyleSheet.absoluteFill}
             testID="destination.photo"
-          />
-          <BackButton
-            testID="destination.back"
-            variant="photo"
-            onPress={() => router.back()}
-            style={StyleSheet.flatten([styles.back, { top: insets.top + tokens.space.xs }])}
           />
         </View>
         <View style={styles.sheet}>
           <DestinationDetails
-            framed
+            look="page"
             testIDPrefix="destination"
             state={state}
             offline={offline}
             onRetry={retrySearch}
-            onOpenFare={(fare: FareVM) => router.push(fareHref(fare.id, fare.offerId))}
+            onOpenFare={(fare: FareVM) =>
+              router.push(
+                fareHref(fare.id, fare.offerId, {
+                  depart: state.dates.depart,
+                  return: state.dates.return,
+                  passengers: state.passengers,
+                }),
+              )
+            }
             onEditDates={() =>
               datesRef.current?.present(
                 {
@@ -180,7 +195,9 @@ export default function DestinationScreen() {
           testID="destination.quote"
           label="Request a quote"
           variant="primary"
-          trailing="chevron"
+          height={PAGE.pill.height}
+          text="buttonBold"
+          style={{ paddingBottom: 2 * PAGE.pill.wordsLift }}
           onPress={() =>
             requestRef.current?.present({
               fare: null,
@@ -223,21 +240,18 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   missing: { justifyContent: "center", paddingHorizontal: tokens.space.gutter },
   scroll: { paddingBottom: tokens.space.lg },
-  hero: { height: HERO },
-  back: { position: "absolute", left: tokens.space.gutter },
   sheet: {
-    marginTop: -OVERLAP,
-    borderTopLeftRadius: tokens.radius.xl,
-    borderTopRightRadius: tokens.radius.xl,
-    backgroundColor: tokens.colors.surfacePage,
-    paddingTop: tokens.space.lg,
-    paddingHorizontal: tokens.space.gutter,
+    marginTop: -PAGE.corner,
+    borderTopLeftRadius: PAGE.corner,
+    borderTopRightRadius: PAGE.corner,
+    backgroundColor: tokens.colors.surfaceCard,
     gap: tokens.space.md,
   },
+  // The pill over the tab bar, the sheet's white around it (04): the page scrolls under it, the last card 9 pt above.
   footer: {
-    paddingHorizontal: tokens.space.gutter,
-    paddingTop: tokens.space.sm,
-    paddingBottom: tokens.space.sm,
-    backgroundColor: tokens.colors.surfacePage,
+    paddingLeft: PAGE.pill.left,
+    paddingRight: PAGE.pill.right,
+    paddingBottom: PAGE.pill.aboveTabs,
+    backgroundColor: tokens.colors.surfaceCard,
   },
 });

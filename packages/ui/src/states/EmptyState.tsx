@@ -29,7 +29,7 @@ type Props = {
   icon?: IconName;
   /**
    * The screen it stands in, as measured: `requests` (10: 33.5-pt title, 16.5-pt words, a 53.8-pt full-width pill),
-   * `explore` (17: 21.5 / 14, a 43.4-pt pill hugging its words), `search` (15: the magnifier, 18 / 14.5, a 33.2-pt
+   * `explore` (17: 22.6 / 13.6, a 43.4-pt pill hugging its words), `search` (15: the magnifier, 18 / 14.5, a 33.2-pt
    * outline pill).
    */
   look?: Look;
@@ -45,7 +45,7 @@ type Geometry = {
   toBody: number;
   /** From the last line's baseline to the pill. */
   toPill: number;
-  pill: { height: number; text: "button" | "buttonSm" | "buttonLg"; padding?: number };
+  pill: { height: number; text: keyof typeof tokens.type; padding?: number; border?: string };
   icon?: { size: number; stroke: number };
   bodyWidth?: number;
 };
@@ -60,22 +60,25 @@ const LOOK: Record<Look, Geometry> = {
     pill: { height: 53.8, text: "buttonLg" },
     bodyWidth: 290,
   },
+  // 17: the title's baseline where the state starts; the words 32.5 under it every 19.2, the pill 28.6 under them,
+  // 43.4 tall, 48 either side of its words.
   explore: {
-    title: rn(tokens.type.title) as Geometry["title"],
-    body: rn(tokens.type.body) as Geometry["body"],
+    title: rn(tokens.type.exploreEmptyTitle) as Geometry["title"],
+    body: rn(tokens.type.exploreEmptyBody) as Geometry["body"],
     toTitle: 0,
     toBody: 32.5,
     toPill: 28.6,
-    pill: { height: 43.4, text: "buttonSm", padding: 48.9 },
+    pill: { height: 43.4, text: "buttonExplore", padding: 48 },
     bodyWidth: 260,
   },
   search: {
     title: rn(tokens.type.emptyTitleSm) as Geometry["title"],
     body: rn(tokens.type.emptyBodySm) as Geometry["body"],
-    toTitle: 28.5,
+    toTitle: 26.95,
     toBody: 25.8,
     toPill: 18.1,
-    pill: { height: 33.2, text: "buttonSm", padding: 30.5 },
+    // 15's outline pill: its words Medium, its ring the deeper slate (not the light navy hairline).
+    pill: { height: 33.2, text: "buttonClear", padding: 29.3, border: tokens.colors.textMuted },
     icon: { size: 36, stroke: 1.3 },
     bodyWidth: 300,
   },
@@ -141,6 +144,7 @@ export function EmptyState({
           style={{
             marginTop: pillTop,
             ...(primaryFill ? {} : { paddingHorizontal: g.pill.padding ?? tokens.space.xxl }),
+            ...(g.pill.border && primaryVariant === "outline" ? { borderColor: g.pill.border } : {}),
           }}
         />
       ) : null}

@@ -1,13 +1,12 @@
 import {
   AlertTriangle,
   ArrowLeft,
-  ArrowLeftRight,
+  ArrowRightLeft,
   ArrowRight,
   Armchair,
   Bell,
   Bookmark,
   Calendar,
-  ChartNoAxesColumn,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -28,7 +27,7 @@ import {
   Lock,
   Mail,
   MapPin,
-  MessageSquare,
+  MessageSquareText,
   Minus,
   Phone,
   Plane,
@@ -44,7 +43,7 @@ import {
   Users,
   X,
 } from "lucide-react-native";
-import Svg, { Circle as SvgCircle, Path } from "react-native-svg";
+import Svg, { Circle as SvgCircle, Ellipse, Path, Rect } from "react-native-svg";
 import {
   CABIN_BUSINESS,
   CABIN_FIRST,
@@ -212,6 +211,134 @@ function UserPenFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProp
   );
 }
 
+/**
+ * 01's adult (`Adults`, who usually travels): the head — a little taller than wide — over a closed half-dome with a
+ * flat, rounded foot; not Lucide's open `user`. Measured on 01: 19.8 × 24.4 pt with a 1.38-pt line at a 24.4-pt box.
+ */
+function Adult({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Ellipse cx={12} cy={5.43} rx={4.08} ry={4.75} stroke={color} strokeWidth={strokeWidth} />
+      <Path
+        d="M2.94 21.97a9.06 9.06 0 0 1 18.12 0q0 1.35-1.35 1.35H4.29q-1.35 0-1.35-1.35Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** 02, 16: an offer's rating star, Lucide's `star` filled (10.3 pt across at 12.6). */
+function StarFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+/** 13: the destination saved — Lucide's `bookmark` filled, its outline kept so it stands as large as the line one. */
+function BookmarkFill({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"
+        fill={color}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * 05's two row marks, fitted to the screen's own pixels (`screens/05-fare-details.png`, ffe6eee44a4db897…) as stroked
+ * geometry — rendered at 8x and matched to the crop's ink — in the 20-pt box the row centres on its mark: `About this
+ * fare`'s document (a rounded rectangle and three lines, no folded corner) and `The comparison`'s three outlined bars.
+ * The handoff's pinned Lucide `file-text` and `chart-column-increasing` draw a fold and axes the screen does not.
+ */
+function DocumentLines({ size = 20, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Rect x={3.62} y={2.09} width={12.69} height={16.27} rx={1.41} stroke={color} strokeWidth={1.2} />
+      <Path d="M7.09 7.09H13M7.09 10.26H13M7.09 13.43H10.2" stroke={color} strokeWidth={1} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function BarsOutline({ size = 20, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      {[
+        [3.48, 9.86],
+        [8.35, 5.97],
+        [13.15, 2.21],
+      ].map(([x, y]) => (
+        <Rect key={x} x={x} y={y} width={3.05} height={16.71 - y!} rx={0.64} stroke={color} strokeWidth={1.19} />
+      ))}
+    </Svg>
+  );
+}
+
+/**
+ * 07's three marks, fitted to the screen's own pixels (`screens/07-travel-dates.png`) as stroked geometry — rendered at
+ * 8x with a round pen and matched to the crop's ink — in a 14-pt box centred on the ink, 1 unit to the point:
+ * the profile button's person (a ring over a half-ellipse, not Lucide's `user`, whose shoulders are a rounded
+ * rectangle), `Preferred dates`' calendar (a rectangle wider than tall, its rings standing above it) and the pill's
+ * arrow (its head a third of its shaft; Lucide's is half).
+ */
+function ProfileUser({ size = 14, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <SvgCircle cx={7} cy={3.81} r={2.93} stroke={color} strokeWidth={1.11} />
+      <Path d="M1.45 13.12A5.55 4.34 0 0 1 12.55 13.12" stroke={color} strokeWidth={1.11} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function CalendarRings({ size = 14, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <Rect x={1.25} y={2.4} width={11.5} height={10.42} rx={1.39} stroke={color} strokeWidth={1.09} />
+      <Path d="M1.25 5.86H12.75M4.16 1.18V3.43M9.7 1.18V3.43" stroke={color} strokeWidth={1.09} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function ArrowLong({ size = 14, color = tokens.colors.textOnPhoto }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <Path
+        d="M1.34 7H12.66M8.69 3.09 12.66 7 8.69 10.91"
+        stroke={color}
+        strokeWidth={0.97}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** 05: the fare saved — Lucide's `heart` filled, its outline kept so it stands as large as the line one. */
+function HeartFill({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"
+        fill={color}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 function PlaneFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
   // A plane seen from above, nose up, filled: the route's plane on the globe (13) and on a flight's line (sheet 40).
   return (
@@ -236,6 +363,7 @@ export const icons = {
   "plane-fill": PlaneFill,
   calendar: Calendar,
   user: User,
+  adult: Adult,
   users: Users,
   family: Family,
   seat: Seat,
@@ -252,7 +380,9 @@ export const icons = {
   x: X,
   share: Share,
   heart: Heart,
+  "heart-fill": HeartFill,
   bookmark: Bookmark,
+  "bookmark-fill": BookmarkFill,
   phone: Phone,
   "phone-fill": PhoneFill,
   "plane-right-fill": PlaneRightFill,
@@ -260,6 +390,7 @@ export const icons = {
   "lock-fill": LockFill,
   "user-pen-fill": UserPenFill,
   "info-fill": InfoFill,
+  "star-fill": StarFill,
   bell: Bell,
   lock: Lock,
   trash: Trash,
@@ -267,11 +398,15 @@ export const icons = {
   check: Check,
   info: Info,
   "sun-cloud": CloudSun,
-  "bar-chart": ChartNoAxesColumn,
+  "bar-chart": BarsOutline,
+  document: DocumentLines,
+  "profile-user": ProfileUser,
+  "calendar-rings": CalendarRings,
+  "arrow-long": ArrowLong,
   "file-text": FileText,
-  message: MessageSquare,
+  message: MessageSquareText,
   mail: Mail,
-  "round-trip": ArrowLeftRight,
+  "round-trip": ArrowRightLeft,
   alert: CircleAlert,
   settings: Settings,
   clock: Clock,

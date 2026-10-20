@@ -3,7 +3,7 @@ import { Icon } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 
-type Tone = "primary" | "secondary" | "link";
+type Tone = "primary" | "secondary" | "muted" | "link";
 
 type Props = {
   label: string;
@@ -16,14 +16,22 @@ type Props = {
    * `Cancel` and `Clear all` in (03, 18).
    */
   tone?: Tone;
-  /** The words' style: `link` 13.5 (`Cancel`), `linkSm` 12 Medium (`Clear all`, `See all`), `button` (`Skip`). */
+  /** The words' style: `link` 13.5 (`Cancel`), `linkSm` 12 Medium (`Clear all`, `See all`), `button`. */
   size?: "link" | "linkSm" | "button";
+  /** A type role of the screen's own, over `size` (01's `Skip`: `skip`). */
+  text?: keyof typeof tokens.type;
+  /** The chevron's box, line and space after the words' box, as the screen draws it (02: 17 at 2, 1.9 after). */
+  chevronSize?: number;
+  chevronStroke?: number;
+  chevronGap?: number;
   disabled?: boolean;
 };
 
 const COLOR: Record<Tone, string> = {
   primary: tokens.colors.textPrimary,
   secondary: tokens.colors.textSecondary,
+  // 01's `Skip`: the lighter slate the image draws it in.
+  muted: tokens.colors.textMuted,
   link: tokens.colors.textLink,
 };
 
@@ -38,6 +46,10 @@ export function TextButton({
   chevron = false,
   tone = "primary",
   size = "link",
+  text,
+  chevronSize = 16,
+  chevronStroke = 2,
+  chevronGap,
   disabled = false,
 }: Props) {
   const color = COLOR[tone];
@@ -52,9 +64,9 @@ export function TextButton({
       onPress={onPress}
       style={({ pressed }) => [styles.hit, (pressed || disabled) && styles.pressed]}
     >
-      <View style={styles.row}>
-        <Text style={[styles[size], { color }]}>{label}</Text>
-        {chevron ? <Icon name="chevron" size={16} color={color} strokeWidth={2} /> : null}
+      <View style={[styles.row, chevronGap != null && { gap: chevronGap }]}>
+        <Text style={[text ? rn(tokens.type[text]) : styles[size], { color }]}>{label}</Text>
+        {chevron ? <Icon name="chevron" size={chevronSize} color={color} strokeWidth={chevronStroke} /> : null}
       </View>
     </Pressable>
   );

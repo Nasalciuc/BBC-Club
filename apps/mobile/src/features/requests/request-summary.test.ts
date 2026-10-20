@@ -12,8 +12,8 @@ describe("requestSummary — the trip at the top of the request sheet (06)", () 
       title: "New York to London",
       cabin: "Business",
       route: "JFK 18:55 → LHR 07:00 +1",
-      carrier: { name: "British Airways", logoUrl: null },
-      price: { amount: "$4,200", percent: 46 },
+      carrier: { code: "BA", name: "British Airways", logoUrl: null },
+      price: { amount: "$4,200", percent: 46, published: "$7,850", source: "Sabre · 16 Sep" },
     });
   });
 
@@ -44,6 +44,12 @@ describe("requestSummary — the trip at the top of the request sheet (06)", () 
     });
     expect(summary.title).toBe("JFK → LHR");
     expect(summary.route).toBe("JFK → LHR");
-    expect(summary.price).toEqual({ amount: "$4,200", percent: null });
+    expect(summary.price).toEqual({ amount: "$4,200", percent: null, published: null, source: null });
+  });
+
+  it("strikes the published fare only with its source on record", () => {
+    const fare = { ...fixture.fares[0]!, price: { offer: 4200, published: 7850, currency: "USD" } };
+    const summary = requestSummary({ fare, from: "JFK", to: "LHR", cabin: "business" });
+    expect(summary.price).toEqual({ amount: "$4,200", percent: 46, published: null, source: null });
   });
 });

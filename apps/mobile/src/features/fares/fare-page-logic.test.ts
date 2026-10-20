@@ -4,6 +4,9 @@ import { fixture } from "@bbc/shared/fixture";
 import {
   aboutFareLines,
   aboutFareNote,
+  fareSearchFromParams,
+  longDays,
+  travelersWords,
   carrierLine,
   closedFareLines,
   comparisonLine,
@@ -110,24 +113,52 @@ describe("a closed fare (Figma 135:848)", () => {
 });
 
 describe("About this fare, 3.0 (20)", () => {
-  it("says what the fare is: one way, one adult, the route by its cities and codes, its day", () => {
-    const [first, second] = aboutFareLines({ ...ba, day: "2026-10-12" });
+  const search = { depart: "2026-11-12", return: "2026-11-19", passengers: { adult: 1, child: 0, infant: 0 } };
+
+  it("says what the fare is, as drawn: indicative, round trip as the catalogue sells it, one adult, the route, its days", () => {
+    const [first, second] = aboutFareLines({ ...ba, trip: "round_trip", ...search });
     expect(first).toBe(
-      "This fare is one way, for one adult flying from New York (JFK) to London (LHR) on October 12, 2026. Your specialist confirms availability and the final fare.",
+      "This indicative round-trip fare is for one adult flying from New York (JFK) to London (LHR), November 12–19, 2026. Your specialist confirms availability and the final fare.",
     );
     expect(second).toBe(
-      "Travel in Business with British Airways (Lie-flat suite). Your specialist confirms the cabin details and arranges the booking by phone.",
+      "Travel in Business with British Airways, with a spacious seat and a more comfortable journey. Your specialist confirms the cabin details and arranges the booking by phone.",
     );
   });
 
-  it("leaves out a day the calendar does not have, and a seat the fare does not name", () => {
-    const [first, second] = aboutFareLines({ ...ba, product: null, day: "2026-02-30" });
-    expect(first).toContain("to London (LHR). Your specialist");
+  it("names the trip only as the catalogue does, the travelers searched for, and no day the calendar does not have", () => {
+    const [first] = aboutFareLines({
+      ...ba,
+      trip: undefined,
+      depart: "2026-02-30",
+      return: null,
+      passengers: { adult: 2, child: 1, infant: 0 },
+    });
+    expect(first).toBe(
+      "This indicative fare is for 3 travelers flying from New York (JFK) to London (LHR). Your specialist confirms availability and the final fare.",
+    );
+    const [, second] = aboutFareLines({ ...ba, cabin: "first", trip: "one_way", ...search });
     expect(second).toBe(
-      "Travel in Business with British Airways. Your specialist confirms the cabin details and arranges the booking by phone.",
+      "Travel in First with British Airways. Your specialist confirms the cabin details and arranges the booking by phone.",
     );
     expect(longDay("2028-02-29")).toBe("February 29, 2028");
     expect(longDay(null)).toBeNull();
+  });
+
+  it("writes the days as 20 does, across a month and a year too", () => {
+    expect(longDays("2026-11-12", "2026-11-19")).toBe("November 12–19, 2026");
+    expect(longDays("2026-10-28", "2026-11-02")).toBe("October 28 – November 2, 2026");
+    expect(longDays("2026-12-28", "2027-01-04")).toBe("December 28, 2026 – January 4, 2027");
+    expect(longDays("2026-11-12", null)).toBe("November 12, 2026");
+    expect(travelersWords({ adult: 2, child: 0, infant: 0 })).toBe("two adults");
+  });
+
+  it("reads the search a fare was opened from, and nothing it cannot trust", () => {
+    expect(fareSearchFromParams({ depart: "2026-11-12", ret: "2026-11-19", adults: "1" })).toEqual(search);
+    expect(fareSearchFromParams({ depart: "2026-13-40", ret: "2026-11-19", adults: "0" })).toEqual({
+      depart: null,
+      return: null,
+      passengers: null,
+    });
   });
 
   it("shares the route, the cabin, the fare one way and its link", () => {

@@ -1,10 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Path } from "react-native-svg";
+import Svg, { Circle, Defs, Path, RadialGradient, Stop } from "react-native-svg";
 
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { GLOBE_SPEC } from "./globe-logic";
-import { LABEL, MAX_LABEL_SCALE, type Rect, pinBox } from "./pin-labels";
+import { LABEL, MAX_LABEL_SCALE, ROUTE_END, type Rect, type RouteEndKind, pinBox, routeEndFrame } from "./pin-labels";
 
 /** The pin and its label as one box, and where the tip sits in it — a MarkerView anchors on the tip. */
 export function pinFrame(x: number, y: number, label: Rect | null) {
@@ -94,13 +94,87 @@ export function GlobePin({ x, y, lines, label, accessibilityLabel, onPress, test
   );
 }
 
-/** 02: the drop pin, 18 × 25, a white hole in its head. */
+/**
+ * 13: one end of a chosen route — the small pin on the airport in its glow, and its code beside it. Not a target: the
+ * route is already chosen, and the back button leaves it.
+ */
+export function RouteEnd({
+  x,
+  y,
+  code,
+  end,
+  inline = false,
+  testID,
+}: {
+  /** The tip's place in the parent's points, or 0, 0 inside a MarkerView sized by `routeEndFrame`. */
+  x: number;
+  y: number;
+  code: string;
+  end: RouteEndKind;
+  inline?: boolean;
+  testID: string;
+}) {
+  const f = routeEndFrame(code, end);
+  const { pin, halo, label } = ROUTE_END;
+  const at = ROUTE_END[end];
+  const headY = f.tip.y - pin.height + pin.head;
+  const edge = 0.5;
+  return (
+    <View
+      testID={testID}
+      pointerEvents="none"
+      accessible
+      accessibilityLabel={end === "origin" ? `From ${code}` : `To ${code}`}
+      style={[
+        inline ? null : styles.absolute,
+        { width: f.width, height: f.height },
+        inline ? null : { left: x - f.tip.x, top: y - f.tip.y },
+      ]}
+    >
+      <Svg width={halo * 2} height={halo * 2} style={[styles.absolute, { left: f.tip.x - halo, top: headY - halo }]}>
+        <Defs>
+          <RadialGradient id="route-end-glow" cx={halo} cy={halo} r={halo} gradientUnits="userSpaceOnUse">
+            <Stop offset={0.35} stopColor={tokens.colors.surfaceCard} stopOpacity={0.75} />
+            <Stop offset={1} stopColor={tokens.colors.surfaceCard} stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={halo} cy={halo} r={halo} fill="url(#route-end-glow)" />
+      </Svg>
+      <Svg
+        width={pin.width + edge * 2}
+        height={pin.height + edge * 2}
+        viewBox={`${-edge} ${-edge} ${pin.width + edge * 2} ${pin.height + edge * 2}`}
+        style={[styles.absolute, { left: f.tip.x - pin.width / 2 - edge, top: f.tip.y - pin.height - edge }]}
+      >
+        <Path
+          d="M4.3 10.2Q2.3 8.4.67 6.6A4.3 4.3 0 1 1 7.93 6.6Q6.3 8.4 4.3 10.2Z"
+          fill={tokens.colors.primary}
+          stroke={tokens.colors.surfaceCard}
+          strokeWidth={edge}
+        />
+      </Svg>
+      <View
+        style={[
+          styles.absolute,
+          styles.routeLabel,
+          { left: f.tip.x + at.dx, top: f.tip.y + at.dy, height: label.height, paddingHorizontal: label.padX },
+        ]}
+      >
+        <Text style={styles.routeCode} numberOfLines={1} maxFontSizeMultiplier={MAX_LABEL_SCALE}>
+          {code}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** 02: the drop pin, 18 × 25, a white hole 6.5 across in its head. */
 function DropPin() {
   const { width, height } = GLOBE_SPEC.pin;
   return (
     <Svg width={width} height={height} viewBox="0 0 18 25">
       <Path d="M9 25Q4.6 19.4 1.56 14.06A9 9 0 1 1 16.44 14.06Q13.4 19.4 9 25Z" fill={tokens.colors.primary} />
-      <Circle cx={9} cy={9} r={3.5} fill={tokens.colors.surfaceCard} />
+      <Circle cx={9} cy={9} r={3.25} fill={tokens.colors.surfaceCard} />
     </Svg>
   );
 }
@@ -110,11 +184,20 @@ const styles = StyleSheet.create({
   label: {
     backgroundColor: tokens.colors.surfaceCard,
     borderRadius: LABEL.radius,
-    paddingHorizontal: LABEL.padX,
+    paddingLeft: LABEL.padLeft,
+    paddingRight: LABEL.padRight,
     paddingVertical: LABEL.padY,
     justifyContent: "center",
-    ...tokens.elevation.float,
+    ...tokens.elevation.soft,
   },
+  routeLabel: {
+    justifyContent: "center",
+    backgroundColor: tokens.colors.surfaceCard,
+    borderRadius: ROUTE_END.label.radius,
+    borderWidth: ROUTE_END.label.border,
+    borderColor: tokens.colors.textPrimary,
+  },
+  routeCode: { ...rn(tokens.type.routePin), color: tokens.colors.textPrimary },
   title: { ...rn(tokens.type.pin), color: tokens.colors.textPrimary },
   detail: { ...rn(tokens.type.pinDetail), color: tokens.colors.textPrimary },
 });

@@ -11,7 +11,13 @@ type Props = {
   disabled?: boolean;
 };
 
-/** The toggle of sheet 39: 52 × 32, navy on with the white knob at the right; light navy off. */
+/**
+ * 07 (`Keep the dates flexible`), as measured: a 40.6 × 24 track, the white knob 21 across 1.5 inside it with its
+ * shadow; off, the track a light grey with the knob at the left; on, navy with the knob at the right.
+ */
+const TOGGLE = { width: 40.6, height: 24, inset: 1.5 } as const;
+const KNOB = TOGGLE.height - 2 * TOGGLE.inset;
+
 export function Toggle({ value, onChange, accessibilityLabel, testID, locked = false, disabled = false }: Props) {
   const fixed = locked || disabled || onChange == null;
   return (
@@ -21,27 +27,32 @@ export function Toggle({ value, onChange, accessibilityLabel, testID, locked = f
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ checked: value, disabled: fixed }}
       disabled={fixed}
-      hitSlop={6}
+      // The target reaches 44 pt around the drawn track.
+      hitSlop={{ top: (44 - TOGGLE.height) / 2, bottom: (44 - TOGGLE.height) / 2, left: 4, right: 4 }}
       onPress={() => onChange?.(!value)}
       style={[styles.track, value ? styles.on : styles.off, (locked || disabled) && styles.locked]}
     >
-      <View style={[styles.knob, value ? styles.knobOn : styles.knobOff]} />
+      <View style={styles.knob} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  track: { width: 52, height: 32, borderRadius: tokens.radius.pill, padding: 3, justifyContent: "center" },
+  track: {
+    width: TOGGLE.width,
+    height: TOGGLE.height,
+    borderRadius: TOGGLE.height / 2,
+    padding: TOGGLE.inset,
+    justifyContent: "center",
+  },
   on: { backgroundColor: tokens.colors.actionPrimary, alignItems: "flex-end" },
-  off: { backgroundColor: tokens.colors.borderDefault, alignItems: "flex-start" },
+  off: { backgroundColor: tokens.colors.toggleOff, alignItems: "flex-start" },
   locked: { opacity: 0.4 },
   knob: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: KNOB,
+    height: KNOB,
+    borderRadius: KNOB / 2,
     backgroundColor: tokens.colors.surfaceCard,
-    ...tokens.elevation.card,
+    ...tokens.elevation.knob,
   },
-  knobOn: {},
-  knobOff: {},
 });

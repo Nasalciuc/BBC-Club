@@ -14,6 +14,8 @@ type Props = {
   fromPrice?: string | null;
   image: PhotoSource | null;
   fallback: PhotoSource | null;
+  /** The photograph's height where the design draws it otherwise (03: Tokyo's 113.4); 118 by default. */
+  photoHeight?: number;
   onPress: () => void;
   testID: string;
 };
@@ -29,7 +31,7 @@ const LINE_PITCH = 16.6;
 const TEXT_AREA = 47.7;
 const DOT = { size: 2.3, gap: 8.5 } as const;
 
-export function PopularCard({ city, airport, code, fromPrice, image, fallback, onPress, testID }: Props) {
+export function PopularCard({ city, airport, code, fromPrice, image, fallback, photoHeight, onPress, testID }: Props) {
   return (
     <Pressable
       testID={testID}
@@ -40,7 +42,7 @@ export function PopularCard({ city, airport, code, fromPrice, image, fallback, o
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
-      <Photo source={image} fallback={fallback} style={styles.photo} />
+      <Photo source={image} fallback={fallback} style={[styles.photo, photoHeight ? { height: photoHeight } : null]} />
       <View style={styles.body}>
         <View style={styles.text}>
           <Text style={styles.city} numberOfLines={1}>

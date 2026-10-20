@@ -12,13 +12,24 @@ export type RequestSummary = {
   cabin: string;
   /** `JFK 18:55 → LHR 07:00 +1` for a fare with its clocks; `JFK → LHR` otherwise. */
   route: string;
-  /** A fare's airline — its logo where it has one; a quote has none yet. */
-  carrier: { name: string; logoUrl: string | null } | null;
-  /** A fare's price (one way) and, where the published fare is on record, what it saves; a quote has no price yet. */
-  price: { amount: string; percent: number | null } | null;
+  /** A fare's airline — its code (the design's mark), its logo where it has one; a quote has none yet. */
+  carrier: { code: string | null; name: string; logoUrl: string | null } | null;
+  /**
+   * A fare's price and, where the published fare is on record, that fare struck with where it was published and what
+   * the club's saves (06: `$3,900` over `$7,550 Save 48%`); a quote has no price yet.
+   */
+  price: { amount: string; percent: number | null; published: string | null; source: string | null } | null;
 };
 
 type SummaryFare = Pick<FareVM, "carrier" | "price" | "departLocal" | "arriveLocal" | "arriveDayOffset">;
+
+/** The published fare only with its saving and its source — a struck price never stands without both (FTC). */
+function summaryPrice(price: FareVM["price"]): NonNullable<RequestSummary["price"]> {
+  const percent = savingPercent(price);
+  const source = price.publishedSource?.trim() || null;
+  const published = percent && price.published != null && source ? formatPrice(price.published, price.currency) : null;
+  return { amount: formatPrice(price.offer, price.currency), percent, published, source: published ? source : null };
+}
 
 export function requestSummary(input: {
   fare?: SummaryFare | null;
@@ -39,9 +50,7 @@ export function requestSummary(input: {
     title: named ?? `${input.from} → ${input.to}`,
     cabin: cabinLabel(input.cabin),
     route,
-    carrier: fare ? { name: fare.carrier.name, logoUrl: fare.carrier.logoUrl } : null,
-    price: fare
-      ? { amount: formatPrice(fare.price.offer, fare.price.currency), percent: savingPercent(fare.price) }
-      : null,
+    carrier: fare ? { code: fare.carrier.code, name: fare.carrier.name, logoUrl: fare.carrier.logoUrl } : null,
+    price: fare ? summaryPrice(fare.price) : null,
   };
 }

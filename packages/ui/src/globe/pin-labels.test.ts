@@ -4,23 +4,29 @@ import { GLOBE_SPEC, projector } from "./globe-logic";
 import {
   LABEL,
   MAX_LABEL_SCALE,
+  ROUTE_END,
   labelBox,
   labelScale,
   labelSize,
   pinBox,
   pinPriority,
   placeLabels,
+  routeEndFrame,
   type PinToPlace,
 } from "./pin-labels";
 
 const SCREEN = { left: 0, top: 0, right: 393, bottom: 400 };
 
 describe("labelSize", () => {
-  it("fits a city over its price in 13-pt lines (02)", () => {
+  it("fits a city over its price (02): the wider of the two lines, the words 8.3 in and 11.7 short of the edge", () => {
     expect(labelSize(["London", "$3,900"])).toEqual({
-      width: Math.ceil(LABEL.padX * 2 + 6 * LABEL.charWidth),
+      width: Math.ceil(LABEL.padLeft + LABEL.padRight + 6 * LABEL.charWidth),
       height: LABEL.padY * 2 + LABEL.line * 2,
     });
+    // a short city under a longer price: the price sets the width
+    expect(labelSize(["Rome", "$3,450"]).width).toBe(
+      Math.ceil(LABEL.padLeft + LABEL.padRight + 6 * LABEL.detailCharWidth),
+    );
     expect(labelSize(["LHR"]).height).toBe(LABEL.padY * 2 + LABEL.line);
   });
 
@@ -30,7 +36,7 @@ describe("labelSize", () => {
     expect(labelScale(Number.NaN)).toBe(1);
     const big = labelSize(["London", "$3,900"], labelScale(1.3));
     expect(big.height).toBe(Math.ceil(LABEL.padY * 2 + LABEL.line * 1.3 * 2));
-    expect(big.width).toBe(Math.ceil(LABEL.padX * 2 + 6 * LABEL.charWidth * 1.3));
+    expect(big.width).toBe(Math.ceil(LABEL.padLeft + LABEL.padRight + 6 * LABEL.charWidth * 1.3));
   });
 });
 
@@ -41,8 +47,8 @@ describe("labelBox", () => {
     expect(right.left).toBe(pin.right + LABEL.gap);
     const left = labelBox(100, 200, ["Paris"], "left");
     expect(left.right).toBe(pin.left - LABEL.gap);
-    // centred on the head, 9 pt under the pin's top
-    expect((right.top + right.bottom) / 2).toBe(pin.top + 9);
+    // centred a little under the head, 9 pt under the pin's top
+    expect((right.top + right.bottom) / 2).toBe(pin.top + 9 + LABEL.drop);
   });
 });
 
@@ -124,5 +130,18 @@ describe("pinPriority", () => {
     expect([sel, home, cheapOffer, dearOffer, plain]).toEqual(
       [...[sel, home, cheapOffer, dearOffer, plain]].sort((a, b) => a - b),
     );
+  });
+});
+
+describe("routeEndFrame (13)", () => {
+  it("holds the glow round the pin's head and the code's box, with the tip where the place is", () => {
+    const origin = routeEndFrame("JFK", "origin");
+    // The departure's box starts 2.3 right of the tip and 0.5 above it; the glow reaches 11 pt round the head.
+    expect(origin.tip.x).toBeCloseTo(ROUTE_END.halo, 6);
+    expect(origin.width).toBeCloseTo(ROUTE_END.halo + ROUTE_END.origin.dx + 2 * ROUTE_END.label.padX + 3 * 6, 6);
+    const dest = routeEndFrame("LHR", "destination");
+    // The arrival's box stands 5.1 above the tip: the glow, 5.9 + 11 above it, sets the frame's top.
+    expect(dest.tip.y).toBeCloseTo(ROUTE_END.pin.height - ROUTE_END.pin.head + ROUTE_END.halo, 6);
+    expect(dest.height).toBeGreaterThan(ROUTE_END.label.height);
   });
 });
