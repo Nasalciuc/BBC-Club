@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: BBC-Club
-description: Private business-class travel club, 3.0. The entry (Welcome, Sign in, Join, Verify, Set password, Reset) stays the 1.0 night cabin, frozen in apps/mobile/src/constants/club.ts. Inside, from onboarding on, the club is a bright 2026 travel app — off-white pages, white cards with soft shadows, daylight city photography, sheets with 24 pt corners that overlap the photographs, round white buttons over photos, navy pills and chips, thin line icons, one sans-serif (Inter). Navy is the only accent; red only for Sign out, Delete account and errors.
+description: Private business-class travel club, 3.0. The entry (Welcome, Sign in, Join, Verify, Set password, Reset) stays the 1.0 night cabin, frozen in apps/mobile/src/constants/club.ts. Inside, from onboarding on, the club is a bright 2026 travel app — off-white pages, white cards with soft shadows, daylight city photography, sheets with 24 pt corners that overlap the photographs, round white buttons over photos, navy pills and chips, thin line icons, one sans-serif (Inter Tight). Navy is the only accent; red only for Sign out, Delete account and errors.
 
 colors:
   primary: "#1E293B"
@@ -30,136 +30,136 @@ colors:
 
 typography:
   display:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 36px
     fontWeight: 700
     lineHeight: 1.12
     letterSpacing: -0.8px
   headline:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 30px
     fontWeight: 700
     lineHeight: 1.16
     letterSpacing: -0.6px
   title:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 24px
     fontWeight: 700
     lineHeight: 1.22
     letterSpacing: -0.4px
   title-sm:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 20px
     fontWeight: 700
     lineHeight: 1.25
     letterSpacing: -0.3px
   subtitle:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 17px
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: -0.2px
   greeting:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 26px
     fontWeight: 400
     lineHeight: 1.2
     letterSpacing: -0.4px
   body-lg:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 18px
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: -0.2px
   body:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 16px
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: -0.1px
   body-strong:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 16px
     fontWeight: 600
     lineHeight: 1.4
     letterSpacing: -0.1px
   body-sm:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 14px
     fontWeight: 400
     lineHeight: 1.4
     letterSpacing: 0px
   label-strong:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 14px
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: -0.1px
   caption:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 12px
     fontWeight: 400
     lineHeight: 1.35
     letterSpacing: 0px
   label:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 11px
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: 1.6px
   price-display:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 36px
     fontWeight: 700
     lineHeight: 1.12
     letterSpacing: -0.8px
     fontFeature: "'tnum'"
   price:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 24px
     fontWeight: 700
     lineHeight: 1.17
     letterSpacing: -0.4px
     fontFeature: "'tnum'"
   price-sm:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 18px
     fontWeight: 700
     lineHeight: 1.22
     letterSpacing: -0.2px
     fontFeature: "'tnum'"
   button:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 17px
     fontWeight: 600
     lineHeight: 1.3
     letterSpacing: -0.2px
   tab:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 12px
     fontWeight: 500
     lineHeight: 1.3
     letterSpacing: 0px
   tab-active:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 12px
     fontWeight: 700
     lineHeight: 1.3
     letterSpacing: 0px
   wordmark:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 17px
     fontWeight: 700
     lineHeight: 1.3
     letterSpacing: -0.4px
   pin:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 13px
     fontWeight: 700
     lineHeight: 1.15
     letterSpacing: -0.1px
   pin-detail:
-    fontFamily: "Inter, system-ui, sans-serif"
+    fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 13px
     fontWeight: 400
     lineHeight: 1.15
@@ -573,7 +573,8 @@ and states, `design/motion.md` its motion. The generated `packages/ui/src/tokens
 
 ## Typography
 
-One sans-serif, Inter (the bundled `@expo-google-fonts/inter` 400, 500, 600, 700), everywhere inside; no serif.
+One sans-serif, Inter Tight (the bundled `@expo-google-fonts/inter-tight` 400, 500, 600, 700), everywhere inside; no
+serif.
 
 - `display` 36 Bold: screen titles (`Requests`, `London`, `New York to London`), the member's name in the greeting.
 - `headline` 30 Bold: the onboarding question, sheet titles, empty and confirmation titles (`No requests yet.`,

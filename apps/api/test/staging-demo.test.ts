@@ -99,6 +99,12 @@ describe("staging demo", () => {
       amount: 6900,
       source: "Sabre · 16 Sep",
     });
+    // Each fare request names the airline its fare had (ADR-IMPL-056); the third was made without a fare.
+    expect(items.map((r) => r.carrier)).toEqual([
+      { code: "BA", name: "British Airways" },
+      { code: "AF", name: "Air France" },
+      null,
+    ]);
     expect(items.every((r) => r.dates.length > 0)).toBe(true);
 
     // Inbox: the quote and the personal offer unread, the two broadcasts read.

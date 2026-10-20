@@ -85,5 +85,5 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
 
 const styles = StyleSheet.create({
   help: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
 });

@@ -16,6 +16,8 @@ type Props = {
   primaryFill?: boolean;
   /** A picture above the words (10: the seat, the window, the boarding pass). */
   illustration?: PhotoSource;
+  /** The picture's width over its height; 1 by default. */
+  illustrationRatio?: number;
   /** An icon above the words (15: the magnifier). */
   icon?: IconName;
   testID: string;
@@ -32,6 +34,7 @@ export function EmptyState({
   primaryVariant = "primary",
   primaryFill = true,
   illustration,
+  illustrationRatio = 1,
   icon,
   testID,
 }: Props) {
@@ -40,7 +43,7 @@ export function EmptyState({
       {illustration ? (
         <Image
           source={illustration}
-          style={styles.illustration}
+          style={[styles.illustration, { aspectRatio: illustrationRatio }]}
           contentFit="contain"
           accessibilityIgnoresInvertColors
           accessible={false}
@@ -70,7 +73,7 @@ export function EmptyState({
 
 const styles = StyleSheet.create({
   wrap: { alignSelf: "stretch", alignItems: "center", gap: tokens.space.lg },
-  illustration: { width: "100%", aspectRatio: 1 },
+  illustration: { width: "100%" },
   message: { gap: tokens.space.sm, alignItems: "center" },
   title: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, textAlign: "center" },
   body: { ...rn(tokens.type.bodyLg), color: tokens.colors.textSecondary, textAlign: "center" },

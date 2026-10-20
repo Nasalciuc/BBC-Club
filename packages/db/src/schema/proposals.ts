@@ -39,6 +39,9 @@ export const offers = proposals.table(
     flightFacts: jsonb("flight_facts").$type<FlightFacts>(),
     mediaUrl: text("media_url"), // CDN only
     mediaBlurhash: text("media_blurhash"),
+    /** The offer's rating as its cards print it (02, 16: `★ 4.8`), given by whoever makes the offer — never computed
+     *  here (ADR-IMPL-056); null without one. Added by the named step 0032, not by a drizzle migration. */
+    rating: numeric("rating", { precision: 2, scale: 1 }),
     publishAt: tz("publish_at").notNull().defaultNow(),
     validUntil: tz("valid_until").notNull(),
     status: offerStatus("status").notNull().default("active"),
@@ -64,6 +67,8 @@ export const offers = proposals.table(
     ),
     // targeting ⇔ target_member_id (true XOR on the discriminator)
     check("offers_targeting_consistent", sql`(${t.targeting} = 'user') = (${t.targetMemberId} IS NOT NULL)`),
+    // One to five stars, to one decimal place (0032).
+    check("offers_rating", sql`${t.rating} IS NULL OR ${t.rating} BETWEEN 1.0 AND 5.0`),
   ],
 );
 

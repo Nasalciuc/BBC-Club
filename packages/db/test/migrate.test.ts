@@ -86,6 +86,10 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/journal sequence repair applied/);
     expect(second.out).not.toMatch(/auth.rate_limit.last_request → bigint/);
     expect(second.out).not.toMatch(/role idle_in_transaction timeout applied/);
+    expect(second.out).not.toMatch(/requests carrier at request applied/);
+    expect(second.out).not.toMatch(/catalog fare trip and airport description applied/);
+    expect(second.out).not.toMatch(/proposals offer rating applied/);
+    expect(second.out).not.toMatch(/members profile avatar url applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -119,6 +123,10 @@ describe("extras ledger", () => {
       "0027_platform_idle_in_transaction_timeout.sql",
       "0028_catalog_site_destinations.sql",
       "0029_requests_published_at_request.sql",
+      "0030_requests_carrier_at_request.sql",
+      "0031_catalog_fare_trip_and_airport_description.sql",
+      "0032_proposals_offer_rating.sql",
+      "0033_members_profile_avatar_url.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -181,6 +189,148 @@ describe("extras ledger", () => {
     // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
     const [validated] = (await db.execute(
       sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_published_at_request'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-056: the airline a request was made for — a code never without the name the member read.
+  it("requests_carrier_at_request takes a name alone or with its code, never a code alone or a blank name", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (code: string | null, name: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`
+          INSERT INTO requests.requests (id, reference, idempotency_key, trip_type, cabin, legs, passengers,
+            contact_name, contact_phone, contact_email, source, carrier_at_request, carrier_name_at_request)
+          VALUES (gen_random_uuid(), ${`R-CAR${n}`}, ${`carrier-${n}`}, 'round', 'business',
+            '[{"from":"JFK","to":"LHR","date":"2027-10-12"}]'::jsonb, '{"adult":1,"child":0,"infant":0}'::jsonb,
+            'Alex Morgan', '+12125550148', 'alex@test.dev', 'ios', ${code}, ${name})`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null, null)).toBe("ok");
+    expect(await insert("BA", "British Airways")).toBe("ok");
+    expect(await insert(null, "British Airways")).toBe("ok");
+    expect(await insert("BA", null)).toBe("23514");
+    expect(await insert("BA", "  ")).toBe("23514");
+    expect(await insert(null, "")).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_carrier_at_request'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-056: a fare is one way unless the catalogue says round trip; a destination's line says something, briefly.
+  it("catalog.fares.trip is one way by default and an enum; airports_description takes 1 to 160 characters", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    const code = async (q: ReturnType<typeof sql>) => {
+      try {
+        await db.execute(q);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    const fare = (carrier: string, trip: string | null) => sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, price, valid_until${trip === null ? sql`` : sql`, trip`})
+      VALUES ('JFK', 'LHR', 'business', ${carrier}, '4200.00', now() + interval '30 days'${
+        trip === null ? sql`` : sql`, ${trip}::catalog.fare_trip`
+      })`;
+    expect(await code(fare("BA", null))).toBe("ok");
+    expect(await code(fare("VS", "round_trip"))).toBe("ok");
+    expect(await code(fare("AA", "return"))).toBe("22P02"); // not a label of the enum
+    const trips = (await db.execute(
+      sql`SELECT carrier, trip FROM catalog.fares WHERE carrier IN ('BA', 'VS') ORDER BY carrier`,
+    )) as unknown as { carrier: string; trip: string }[];
+    expect(trips).toEqual([
+      { carrier: "BA", trip: "one_way" },
+      { carrier: "VS", trip: "round_trip" },
+    ]);
+
+    const line = (text: string | null) => sql`UPDATE catalog.airports SET description = ${text} WHERE code = 'LHR'`;
+    const [lhr] = (await db.execute(
+      sql`SELECT count(*)::int AS n FROM catalog.airports WHERE code = 'LHR'`,
+    )) as unknown as { n: number }[];
+    expect(lhr?.n).toBe(1); // the reference airports (migrate.ts) have it: each update below writes one row
+    expect(await code(line(null))).toBe("ok");
+    expect(await code(line("Iconic sights, world-class culture and unforgettable experiences."))).toBe("ok");
+    expect(await code(line("x".repeat(160)))).toBe("ok");
+    expect(await code(line(` ${"x".repeat(160)} `))).toBe("ok"); // counted once the spaces around it are left out
+    expect(await code(line("x".repeat(161)))).toBe("23514");
+    expect(await code(line(""))).toBe("23514");
+    expect(await code(line("   "))).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'airports_description'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-056: an offer's rating, one to five stars — on a table drizzle's own first migration creates.
+  it("offers_rating takes one to five, to one decimal place, or none", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (rating: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`
+          INSERT INTO proposals.offers (idempotency_key, source, targeting, route_from, route_to, cabin, price, title,
+            valid_until, rating)
+          VALUES (${`rating-${n}`}, 'marketing_campaign', 'broadcast', 'JFK', 'CDG', 'business', '3850.00',
+            'Autumn in Paris', now() + interval '7 days', ${rating}::numeric)`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null)).toBe("ok");
+    expect(await insert("4.8")).toBe("ok");
+    expect(await insert("1.0")).toBe("ok");
+    expect(await insert("5.0")).toBe("ok");
+    expect(await insert("5.1")).toBe("23514");
+    expect(await insert("0.9")).toBe("23514");
+    const [stored] = (await db.execute(
+      sql`SELECT rating FROM proposals.offers WHERE idempotency_key = 'rating-2'`,
+    )) as unknown as { rating: string }[];
+    expect(stored?.rating).toBe("4.8");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'offers_rating'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-056: the member's photo is only ever an https address — on a table drizzle's own first migration creates.
+  it("profile_avatar_url takes an https address or none", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (url: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`INSERT INTO members.profile (member_id, avatar_url) VALUES (${`avatar-${n}`}, ${url})`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null)).toBe("ok");
+    expect(await insert("https://cdn.example.com/members/daniel.webp")).toBe("ok");
+    expect(await insert("http://cdn.example.com/members/daniel.webp")).toBe("23514");
+    expect(await insert("javascript:alert(1)")).toBe("23514");
+    expect(await insert("data:image/png;base64,iVBORw0KGgo=")).toBe("23514");
+    expect(await insert(" https://cdn.example.com/members/daniel.webp")).toBe("23514");
+    expect(await insert("")).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'profile_avatar_url'`,
     )) as unknown as { convalidated: boolean }[];
     expect(validated?.convalidated).toBe(true);
   });

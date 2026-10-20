@@ -6,6 +6,8 @@ export type ProfileRow = {
   status: "active" | "waitlist" | "deleted";
   displayName: string | null;
   homeAirport: string | null;
+  /** The member's photo, an https address, or null (ADR-IMPL-056). No route sets it yet. */
+  avatarUrl: string | null;
   timezone: string;
   phone: string | null;
   preferences: {

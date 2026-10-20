@@ -17,6 +17,8 @@ export function toAirportVM(row: AirportRow): AirportVM {
     lat: typeof row.lat === "number" ? row.lat : parseFloat(String(row.lat)),
     lng: typeof row.lng === "number" ? row.lng : parseFloat(String(row.lng)),
     tz: row.tz,
+    // ADR-IMPL-056: the destination's one line (04), or none — a row cached before 0031 has no such field.
+    description: row.description ?? null,
   };
 }
 
@@ -57,6 +59,8 @@ export function toFareVM(
         : {}),
       currency: row.currency,
     },
+    // What the price is for, as the catalogue says (ADR-IMPL-056); one way unless it says round trip.
+    trip: row.trip,
     validUntil: row.validUntil.toISOString(),
     hasOffer,
     offerId,
@@ -73,6 +77,7 @@ export function toDestinationPin(
     lat: number;
     lng: number;
     fromPrice: number;
+    description?: string | null;
   },
   hasOffer: boolean,
 ): DestinationPinVM {
@@ -83,6 +88,7 @@ export function toDestinationPin(
     countryCode: row.countryCode,
     lat: row.lat,
     lng: row.lng,
+    description: row.description ?? null,
     fromPrice: row.fromPrice,
     hasOffer,
     region: row.region,

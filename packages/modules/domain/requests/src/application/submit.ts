@@ -5,7 +5,7 @@ import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
 import type { ShownEstimate } from "./estimate";
-import type { PublishedAtRequest } from "./published";
+import type { FareAtRequest } from "./published";
 import { parseMemberPhone } from "@bbc/shared/phone";
 import { effectiveIntent } from "./intent";
 import { requestRoute } from "./route";
@@ -45,9 +45,10 @@ export async function submit(
     };
     /** The indicative price the search shows for a route (catalog, ADR-IMPL-042). Never throws: null when unknown. */
     indicative: (q: { from: string; to: string; cabin: "business" | "first" }) => Promise<ShownEstimate | null>;
-    /** What a fare request records of its fare's published price, for the price the app sent (catalog, ADR-IMPL-046).
-     *  Never throws: null when there is none. Absent, a request records none. */
-    published?: (fareId: string, priceAtRequest: number) => Promise<PublishedAtRequest | null>;
+    /** What a fare request records of its fare, read once from the catalog: the published price, for the price the app
+     *  sent (ADR-IMPL-046), and the airline (ADR-IMPL-056). Never throws: nulls when there is nothing to record.
+     *  Absent, a request records neither. */
+    fare?: (fareId: string, priceAtRequest: number | undefined) => Promise<FareAtRequest>;
   },
 ) {
   const body = RequestBody.parse(raw);
@@ -84,13 +85,13 @@ export async function submit(
     quote && body.estimateShown === true && outbound
       ? await deps.indicative({ from: outbound.from, to: outbound.to, cabin: body.cabin })
       : null;
-  // A request made from a fare keeps the fare's published price and its source as they stood when the member asked:
-  // the detail strikes it beside the fare once the quote is ready (ADR-IMPL-046). Read from the catalog — the body has
-  // no such field — and only for the price the app sent: a fare re-priced since then records none.
-  const published =
-    body.fareId && body.priceAtRequest != null && deps.published
-      ? await deps.published(body.fareId, body.priceAtRequest)
-      : null;
+  // A request made from a fare keeps, as they stood when the member asked, the fare's published price and its source —
+  // the detail strikes it beside the fare once the quote is ready (ADR-IMPL-046) — and its airline, which the request
+  // received and its detail name (ADR-IMPL-056). One read from the catalog — the body has no such fields; the published
+  // price only for the price the app sent: a fare re-priced since then records none, its airline still.
+  const fare = body.fareId && deps.fare ? await deps.fare(body.fareId, body.priceAtRequest) : null;
+  const published = fare?.published ?? null;
+  const carrier = fare?.carrier ?? null;
 
   return withTx(exec, async (tx) => {
     const existing = await tx.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
@@ -125,6 +126,8 @@ export async function submit(
         priceAtRequest: body.priceAtRequest != null ? String(body.priceAtRequest) : null,
         publishedAtRequest: published ? published.amount.toFixed(2) : null,
         publishedSourceAtRequest: published ? published.source : null,
+        carrierAtRequest: carrier ? carrier.code : null,
+        carrierNameAtRequest: carrier ? carrier.name : null,
         contactName: body.contact.name,
         contactPhone: body.contact.phone,
         contactEmail: body.contact.email,

@@ -79,5 +79,5 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
 const styles = StyleSheet.create({
   help: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
   caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
 });

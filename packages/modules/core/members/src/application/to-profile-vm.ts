@@ -6,6 +6,7 @@ type ProfileSource = {
   status: "active" | "waitlist" | "deleted";
   displayName: string | null;
   homeAirport: string | null;
+  avatarUrl: string | null;
   timezone: string;
   phone: string | null;
   preferences: ProfileVM["preferences"];
@@ -36,6 +37,7 @@ export function toProfileVM(
       email,
       displayName: null,
       homeAirport: null,
+      avatarUrl: null,
       timezone: "America/New_York",
       phone: null,
       memberSince: null,
@@ -51,6 +53,8 @@ export function toProfileVM(
     email,
     displayName: row.displayName,
     homeAirport: row.homeAirport,
+    // The photo's address, or none — the app shows the member's initials (ADR-IMPL-056).
+    avatarUrl: row.avatarUrl ?? null,
     timezone: row.timezone,
     phone: row.phone,
     memberSince: row.memberSince.toISOString(),

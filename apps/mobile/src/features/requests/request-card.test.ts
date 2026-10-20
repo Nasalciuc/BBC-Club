@@ -2,13 +2,16 @@ import { describe, expect, it } from "bun:test";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 import {
   NOT_SENT_LINE,
-  cardLines,
-  detailFacts,
+  detailLines,
+  detailTitle,
   queuedView,
   requestCard,
   requestTitle,
-  spokenCard,
-  travelersLine,
+  routeCodes,
+  spacedDates,
+  spokenDates,
+  travelersText,
+  tripText,
 } from "./request-card";
 
 const round = [
@@ -16,13 +19,30 @@ const round = [
   { from: "LHR", to: "JFK", date: "2026-10-19" },
 ];
 
-describe("travelersLine", () => {
-  it("one adult, as the frames show it", () => {
-    expect(travelersLine({ adult: 1, child: 0, infant: 0 })).toBe("1 ADULT");
+describe("the card's facts (09)", () => {
+  it("travelers in words: one adult, and every kind of traveler there is", () => {
+    expect(travelersText({ adult: 1, child: 0, infant: 0 })).toBe("1 adult");
+    expect(travelersText({ adult: 2, child: 1, infant: 1 })).toBe("2 adults · 1 child · 1 infant");
+    expect(travelersText({ adult: 1, child: 2, infant: 0 })).toBe("1 adult · 2 children");
   });
-  it("names every kind of traveler there is", () => {
-    expect(travelersLine({ adult: 2, child: 1, infant: 1 })).toBe("2 ADULTS · 1 CHILD · 1 INFANT");
-    expect(travelersLine({ adult: 1, child: 2, infant: 0 })).toBe("1 ADULT · 2 CHILDREN");
+  it("the trip as the images name it; nothing when an older server did not say", () => {
+    expect([tripText("round"), tripText("oneway"), tripText("multi"), tripText(undefined)]).toEqual([
+      "Round trip",
+      "One way",
+      "Multi-city",
+      null,
+    ]);
+  });
+  it("the server's days with room around the dash — and no year made up", () => {
+    expect(spacedDates("Oct 12–19")).toBe("Oct 12 – 19");
+    expect(spacedDates("Oct 30–Nov 6")).toBe("Oct 30 – Nov 6");
+    expect(spacedDates("Nov 3")).toBe("Nov 3");
+    expect(spacedDates("  ")).toBeNull();
+  });
+  it("the route's airports, or nothing when it says nothing usable", () => {
+    expect(routeCodes("JFK → LHR")).toEqual({ from: "JFK", to: "LHR" });
+    expect(routeCodes("")).toBeNull();
+    expect(routeCodes("JFK")).toBeNull();
   });
 });
 
@@ -31,26 +51,11 @@ const london = {
   city: "London",
   cabin: "business" as const,
   dates: "Oct 12–19",
+  tripType: "round" as const,
   passengers: { adult: 1, child: 0, infant: 0 },
 };
 
-describe("cardLines — Figma 233:4069", () => {
-  it("London · JFK → LHR · BUSINESS · OCT 12–19 · 1 ADULT", () => {
-    expect(cardLines(london)).toEqual({
-      title: "London",
-      facts: "JFK → LHR · BUSINESS",
-      when: "OCT 12–19 · 1 ADULT",
-    });
-  });
-  it("first class says so", () => {
-    expect(cardLines({ ...london, cabin: "first" }).facts).toBe("JFK → LHR · FIRST");
-  });
-  it("waiting on the phone: the details are saved (240:5199)", () => {
-    expect(cardLines(london, { waiting: true }).when).toBe(NOT_SENT_LINE);
-  });
-  it("closed: when it closed", () => {
-    expect(cardLines(london, { closedLine: "Closed · Oct 3" }).when).toBe("CLOSED · OCT 3");
-  });
+describe("titles", () => {
   it("an older server sends no city: the route is the title", () => {
     expect(requestTitle({ route: "JFK → LHR" })).toBe("JFK → LHR");
     expect(requestTitle({ route: "JFK → LHR", city: null })).toBe("JFK → LHR");
@@ -61,24 +66,22 @@ describe("cardLines — Figma 233:4069", () => {
     expect(requestTitle({ route: "JFK → JFK" })).toBe("Your request");
     expect(requestTitle({ route: "JFK → JFK", city: "London" })).toBe("London");
   });
+  it("the detail (11): New York to London — the origin's code while its city is unknown", () => {
+    expect(detailTitle(london, "New York")).toBe("New York to London");
+    expect(detailTitle(london, null)).toBe("JFK to London");
+    expect(detailTitle({ ...london, city: null }, "New York")).toBe("JFK → LHR");
+  });
 });
 
-describe("detailFacts — Figma 233:4171 / 233:4248", () => {
-  it("a round trip says so", () => {
-    expect(detailFacts({ ...london, tripType: "round" })).toBe("JFK → LHR · OCT 12–19 · ROUND TRIP · 1 ADULT");
+describe("detailLines (11, 30–33)", () => {
+  it("the days and the trip, then the route, the cabin and the travelers", () => {
+    expect(detailLines(london)).toEqual(["Oct 12 – 19 · Round trip", "JFK → LHR · Business · 1 adult"]);
   });
-  it("one way names no trip type", () => {
-    expect(
-      detailFacts({
-        route: "JFK → CDG",
-        dates: "Nov 3",
-        tripType: "oneway",
-        passengers: { adult: 2, child: 0, infant: 0 },
-      }),
-    ).toBe("JFK → CDG · NOV 3 · 2 ADULTS");
-  });
-  it("an older server sends no trip type", () => {
-    expect(detailFacts(london)).toBe("JFK → LHR · OCT 12–19 · 1 ADULT");
+  it("first class says so; an older server's missing trip type is left out", () => {
+    expect(detailLines({ ...london, cabin: "first", tripType: undefined })).toEqual([
+      "Oct 12 – 19",
+      "JFK → LHR · First · 1 adult",
+    ]);
   });
 });
 
@@ -127,80 +130,67 @@ describe("queuedView", () => {
   });
 });
 
-describe("requestCard — the same card on Requests and Profile", () => {
+describe("requestCard — the card on Requests (09, 28)", () => {
   const base = {
     ...london,
     createdAt: "2026-09-18T12:00:00.000Z",
     timeline: [] as RequestVM["timeline"],
   };
-  it("received: its dates and travelers, its badge, and what a screen reader says", () => {
+  it("received: the city, its state, the route, the days, the trip and the travelers — and what is said", () => {
     expect(requestCard({ ...base, status: "received" })).toEqual({
-      title: "London",
-      facts: "JFK → LHR · BUSINESS",
-      when: "OCT 12–19 · 1 ADULT",
+      city: "London",
+      route: "JFK → LHR",
+      dates: "Oct 12 – 19",
+      trip: "Round trip",
+      travelers: "1 adult",
+      note: null,
       badge: "received",
-      spoken: "London, received, JFK to LHR, business, October 12 to 19, 1 adult",
+      spoken: "London, received, JFK to LHR, October 12 to 19, round trip, 1 adult",
+      to: "LHR",
     });
     expect(requestCard({ ...base, status: "quoted" }).badge).toBe("quote_ready");
+    expect(requestCard({ ...base, status: "booked" }).badge).toBe("booked");
   });
-  it("closed: when it closed, no badge — never mistaken for an open request", () => {
+  it("closed: the Closed badge and its days (09) — never mistaken for an open request", () => {
     const closed = requestCard(
-      {
-        ...base,
-        status: "closed",
-        timeline: [{ status: "closed", at: "2026-10-03T12:00:00.000Z", note: null }],
-      },
+      { ...base, status: "closed", timeline: [{ status: "closed", at: "2026-10-03T12:00:00.000Z", note: null }] },
       "UTC",
     );
-    expect([closed.when, closed.badge]).toEqual(["CLOSED · OCT 3", null]);
-    expect(closed.spoken).toBe("London, JFK to LHR, business, closed, October 3");
+    expect([closed.badge, closed.dates, closed.note]).toEqual(["closed", "Oct 12 – 19", null]);
+    expect(closed.spoken).toBe("London, closed, JFK to LHR, October 12 to 19, round trip, 1 adult");
   });
-  it("closed: the day it closed where the phone is", () => {
-    const late = {
-      ...base,
-      status: "closed" as const,
-      timeline: [{ status: "closed" as const, at: "2026-10-03T23:30:00.000Z", note: null }],
-    };
-    expect(requestCard(late, "America/New_York").when).toBe("CLOSED · OCT 3");
-    expect(requestCard(late, "Pacific/Auckland").when).toBe("CLOSED · OCT 4");
-  });
-  it("closed with no closing event: Closed, never the day it was made", () => {
-    expect(requestCard({ ...base, status: "closed" }).when).toBe("CLOSED");
-  });
-  it("waiting on the phone: the details are saved", () => {
+  it("waiting on the phone (28): Not sent, and the details are saved", () => {
     const waiting = requestCard({ ...base, status: "not_sent" }, undefined, "queued");
-    expect(waiting).toMatchObject({ when: NOT_SENT_LINE, badge: "not_sent" });
-    expect(waiting.spoken).toBe("London, not sent, JFK to LHR, business, your travel details are saved");
+    expect(waiting).toMatchObject({ note: NOT_SENT_LINE, badge: "not_sent" });
+    expect(waiting.spoken).toBe(
+      "London, not sent, JFK to LHR, October 12 to 19, your travel details are saved, round trip, 1 adult",
+    );
   });
-  it("one that will not go out by itself — refused for good, or given up by the server — keeps its dates", () => {
+  it("one that will not go out by itself — refused for good, or given up by the server — says nothing more", () => {
     // Its detail says "We couldn’t pass this on": the card never says it is saved and on its way.
     for (const card of [
       requestCard({ ...base, status: "not_sent" }, undefined, "rejected"),
       requestCard({ ...base, status: "not_sent" }),
     ]) {
-      expect(card).toMatchObject({ when: "OCT 12–19 · 1 ADULT", badge: "not_sent" });
-      expect(card.spoken).toBe("London, not sent, JFK to LHR, business, October 12 to 19, 1 adult");
+      expect(card).toMatchObject({ note: null, badge: "not_sent", dates: "Oct 12 – 19" });
     }
   });
-});
-
-describe("spokenCard — words, not the mono signs", () => {
-  it("names months, says to for the dash, and never reads an arrow or a middle dot", () => {
-    const spoken = spokenCard(
-      { ...london, dates: "Oct 30–Nov 6", passengers: { adult: 2, child: 1, infant: 0 } },
-      { badge: "quote_ready" },
+  it("words, never the signs: months named, to for the dash and the arrow, commas for the dots", () => {
+    const card = requestCard({
+      ...base,
+      dates: "Oct 30–Nov 6",
+      passengers: { adult: 2, child: 1, infant: 0 },
+      status: "quoted",
+    });
+    expect(card.spoken).toBe(
+      "London, quote ready, JFK to LHR, October 30 to November 6, round trip, 2 adults, 1 child",
     );
-    expect(spoken).toBe("London, quote ready, JFK to LHR, business, October 30 to November 6, 2 adults, 1 child");
-    expect(spoken).not.toMatch(/[→·–]/);
-  });
-  it("a request waiting on the phone says its details are saved", () => {
-    expect(spokenCard(london, { badge: "not_sent", waiting: true })).toBe(
-      "London, not sent, JFK to LHR, business, your travel details are saved",
-    );
+    expect(card.spoken).not.toMatch(/[→·–]/);
+    expect(spokenDates("Nov 12 – 19")).toBe("November 12 to 19");
   });
   it("a title that fell back to the route is read as words too", () => {
-    expect(spokenCard({ ...london, city: null }, { badge: "not_sent", waiting: true })).toBe(
-      "JFK to LHR, not sent, JFK to LHR, business, your travel details are saved",
+    expect(requestCard({ ...base, city: null, status: "received" }).spoken.startsWith("JFK to LHR, received")).toBe(
+      true,
     );
   });
 });

@@ -148,7 +148,7 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
 });
 
 const styles = StyleSheet.create({
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
   rule: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
   headline: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },
   body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },

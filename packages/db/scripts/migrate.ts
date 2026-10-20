@@ -238,6 +238,29 @@ try {
     }
   }
 
+  // After 0005 (requests schema): the airline a fare request was made for, as its fare named it. ADR-IMPL-056.
+  const requestsCarrierAtRequest = join(migrationsDir, "0030_requests_carrier_at_request.sql");
+  if (existsSync(requestsCarrierAtRequest)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0030_requests_carrier_at_request.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the columns and the CHECK as NOT VALID, then the scan that validates the rows.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(requestsCarrierAtRequest, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE requests.requests VALIDATE CONSTRAINT requests_carrier_at_request`);
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0030_requests_carrier_at_request.sql')`,
+        );
+      });
+      console.log("requests carrier at request applied");
+    }
+  }
+
   const notifRequestId = join(migrationsDir, "0009_notifications_request_id.sql");
   if (existsSync(notifRequestId)) {
     const done = (await db.execute(
@@ -487,6 +510,73 @@ try {
         await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0028_catalog_site_destinations.sql')`);
       });
       console.log("catalog site destinations applied");
+    }
+  }
+
+  // After 0006 (catalog schema): the trip a fare's price is for, and a destination's one line. ADR-IMPL-056.
+  const fareTripAndAirportDescription = join(migrationsDir, "0031_catalog_fare_trip_and_airport_description.sql");
+  if (existsSync(fareTripAndAirportDescription)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0031_catalog_fare_trip_and_airport_description.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the type, the columns and the CHECK as NOT VALID, then the scan that validates it.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(fareTripAndAirportDescription, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE catalog.airports VALIDATE CONSTRAINT airports_description`);
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0031_catalog_fare_trip_and_airport_description.sql')`,
+        );
+      });
+      console.log("catalog fare trip and airport description applied");
+    }
+  }
+
+  // proposals.offers comes from drizzle's first migration, which ran above: an offer's rating. ADR-IMPL-056.
+  const offerRating = join(migrationsDir, "0032_proposals_offer_rating.sql");
+  if (existsSync(offerRating)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0032_proposals_offer_rating.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the column and the CHECK as NOT VALID, then the scan that validates it.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(offerRating, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE proposals.offers VALIDATE CONSTRAINT offers_rating`);
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0032_proposals_offer_rating.sql')`);
+      });
+      console.log("proposals offer rating applied");
+    }
+  }
+
+  // members.profile comes from drizzle's first migration, which ran above: the member's photo. ADR-IMPL-056.
+  const profileAvatarUrl = join(migrationsDir, "0033_members_profile_avatar_url.sql");
+  if (existsSync(profileAvatarUrl)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0033_members_profile_avatar_url.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the column and the CHECK as NOT VALID, then the scan that validates it.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(profileAvatarUrl, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE members.profile VALIDATE CONSTRAINT profile_avatar_url`);
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0033_members_profile_avatar_url.sql')`,
+        );
+      });
+      console.log("members profile avatar url applied");
     }
   }
 

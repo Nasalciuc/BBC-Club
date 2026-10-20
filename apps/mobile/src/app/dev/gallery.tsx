@@ -40,8 +40,11 @@ import {
   FlightOverview,
   PopularCard,
   RecentRow,
+  RequestCard,
   RouteCard,
+  Timeline,
   TripCard,
+  TripPhotoCard,
   TripSummaryCard,
   YourFareCard,
   Toggle,
@@ -385,6 +388,51 @@ function GalleryScreen() {
         facts="Round trip · 1 adult"
         carrier={{ name: "British Airways", logoUrl: null }}
       />
+      <RequestCard
+        testID="gallery.request"
+        photo={null}
+        fallback={CLUB_PICTURE}
+        city="London"
+        route="JFK → LHR"
+        dates="Nov 12 – 19"
+        badgeStatus="quote_ready"
+        trip="Round trip"
+        travelers="1 adult"
+        onPress={noop}
+      />
+      <RequestCard
+        testID="gallery.request.notSent"
+        photo={null}
+        fallback={CLUB_PICTURE}
+        city="Rome"
+        route="JFK → FCO"
+        dates="Dec 3 – 10"
+        badgeStatus="not_sent"
+        note="Your travel details are saved"
+        trip="Round trip"
+        travelers="1 adult"
+        onPress={noop}
+      />
+      <CarouselRow testID="gallery.trips">
+        <TripPhotoCard
+          testID="gallery.tripPhoto"
+          photo={null}
+          fallback={CLUB_PICTURE}
+          city="London"
+          dates="Nov 12 – 19"
+          route="JFK → LHR"
+          onPress={noop}
+        />
+        <TripPhotoCard
+          testID="gallery.tripPhoto.2"
+          photo={null}
+          fallback={CLUB_PICTURE}
+          city="Tokyo"
+          dates="Jan 14 – 21"
+          route="JFK → HND"
+          onPress={noop}
+        />
+      </CarouselRow>
 
       <SectionHeader title="Status and feedback" size="subtitle" />
       <View style={styles.row}>
@@ -420,6 +468,22 @@ function GalleryScreen() {
         icon="phone"
         title="Your quote is ready."
         body="A specialist will call shortly to confirm the details."
+      />
+      <Timeline
+        testID="gallery.timeline"
+        steps={[
+          { key: "received", label: "Received", date: "Oct 16", state: "done" },
+          { key: "quoted", label: "Quote ready", date: "Oct 18", state: "current" },
+          { key: "booked", label: "Booked", date: null, state: "todo" },
+        ]}
+      />
+      <Timeline
+        testID="gallery.timeline.booked"
+        steps={[
+          { key: "received", label: "Received", date: "Oct 16", state: "done" },
+          { key: "quoted", label: "Quote ready", date: "Oct 18", state: "done" },
+          { key: "booked", label: "Booked", date: "Oct 20", state: "done" },
+        ]}
       />
       <CardSkeleton />
       <RowSkeleton />

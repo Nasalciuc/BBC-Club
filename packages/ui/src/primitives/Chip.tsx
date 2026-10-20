@@ -107,13 +107,14 @@ const styles = StyleSheet.create({
   },
   slopRoom: { marginVertical: tokens.space.xxs / 2 },
   lg: { minHeight: 52 },
-  filter: { minHeight: 40, paddingHorizontal: tokens.space.lg },
+  // 09: five filters to a phone's width, nearly — the words in `body-sm`, 16 pt either side.
+  filter: { minHeight: 40, paddingHorizontal: tokens.space.md },
   equal: { flex: 1 },
   content: { flexGrow: 1 },
   selected: { backgroundColor: tokens.colors.actionPrimary },
   disabled: { opacity: 0.4 },
   pressed: { opacity: 0.8 },
   label: { ...rn(tokens.type.bodySm) },
-  filterLabel: { ...rn(tokens.type.body) },
-  selectedLabel: { ...rn(tokens.type.bodyStrong) },
+  filterLabel: { ...rn(tokens.type.bodySm) },
+  selectedLabel: { ...rn(tokens.type.labelStrong) },
 });

@@ -35,6 +35,9 @@ export const IngestInput = z
     publishAt: z.string().datetime().optional(),
     flightFacts: FlightFactsInput.optional(),
     mediaUrl: z.string().url().optional(),
+    /** The rating the offer's cards print (02, 16: `★ 4.8`; ADR-IMPL-056): one to five, to one decimal place — given by
+     *  the sender, never computed here. Absent: the offer has none, and no star is shown. */
+    rating: z.number().min(1).max(5).multipleOf(0.1).optional(),
     createdBy: z.string().optional(),
   })
   .superRefine((v, ctx) => {
@@ -97,6 +100,7 @@ export async function ingest(
         body: input.body ?? null,
         flightFacts: input.flightFacts ?? null,
         mediaUrl: input.mediaUrl ?? null,
+        rating: input.rating != null ? input.rating.toFixed(1) : null,
         publishAt,
         validUntil,
         status: "active",
@@ -166,6 +170,7 @@ function replay(
     publishAtSame &&
     canonical(row.flightFacts ?? null) === canonical(input.flightFacts ?? null) &&
     (row.mediaUrl ?? null) === (input.mediaUrl ?? null) &&
+    num(row.rating) === (input.rating ?? null) &&
     (row.createdBy ?? null) === (input.createdBy ?? null);
   return same ? { ok: true, offerId: row.id } : { ok: false, code: "CONFLICT" };
 }

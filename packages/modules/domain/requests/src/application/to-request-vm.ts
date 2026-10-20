@@ -42,7 +42,8 @@ export function toRequestVM(
     city,
     tripType: row.tripType,
     phone: row.phoneE164 ?? (row.contactPhone || null),
-    dates: requestDates(row.legs),
+    // With the year, as the 3.0 images write a trip (`Nov 12–19, 2026`, ADR-IMPL-056).
+    dates: requestDates(row.legs, { year: true }),
     cabin: row.cabin,
     passengers: row.passengers,
     priceAtRequest: row.priceAtRequest != null ? parseFloat(row.priceAtRequest) : null,
@@ -51,6 +52,10 @@ export function toRequestVM(
       row.publishedAtRequest != null && row.publishedSourceAtRequest
         ? { amount: parseFloat(row.publishedAtRequest), source: row.publishedSourceAtRequest }
         : null,
+    // The airline the fare named when the member asked (0030, ADR-IMPL-056): a code never without its name.
+    carrier: row.carrierNameAtRequest
+      ? { code: row.carrierAtRequest?.trim() || null, name: row.carrierNameAtRequest }
+      : null,
     status,
     createdAt: row.createdAt.toISOString(),
     timeline: timeline.map((e) => ({

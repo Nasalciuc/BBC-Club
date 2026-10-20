@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { sql } from "drizzle-orm";
 import { ProfileVM } from "@bbc/shared/api/v1/profile";
 import { testApp } from "./helpers/test-app";
 
@@ -118,5 +119,60 @@ describe("GET /v1/profile — notifications (ADR-IMPL-025)", () => {
     });
     expect(ProfileVM.parse(await travel.json()).notifications).toEqual({ requestUpdates: true, offers: false });
     await t.close();
+  });
+});
+
+// ADR-IMPL-056: the member's photo (02, 12) — stored and read; no route writes it yet.
+describe("GET /v1/profile — the member's photo", () => {
+  const URL_A = "https://cdn.example.com/members/daniel.webp";
+
+  it("none until one is stored, then its address — only the caller's; a profile patch never writes it", async () => {
+    const t = await testApp({ suite: "profile-avatar" });
+    const profile = async (cookie: string) =>
+      ProfileVM.parse(await (await t.app.request("/v1/profile", { headers: { Cookie: cookie } })).json());
+    expect((await profile(t.memberA.cookie)).avatarUrl).toBeNull();
+
+    await t.db.execute(sql`UPDATE members.profile SET avatar_url = ${URL_A} WHERE member_id = ${t.memberA.id}`);
+    expect((await profile(t.memberA.cookie)).avatarUrl).toBe(URL_A);
+    expect((await profile(t.memberB.cookie)).avatarUrl).toBeNull();
+
+    // PATCH /v1/profile does not take it: the name changes, the photo stays; a photo alone is no patch at all.
+    const patch = (body: Record<string, unknown>) =>
+      t.app.request("/v1/profile", {
+        method: "PATCH",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    expect((await patch({ displayName: "Daniel", avatarUrl: "https://example.com/other.webp" })).status).toBe(200);
+    expect((await patch({ avatarUrl: "https://example.com/other.webp" })).status).toBe(400);
+    const after = await profile(t.memberA.cookie);
+    expect([after.displayName, after.avatarUrl]).toEqual(["Daniel", URL_A]);
+    await t.close();
+  });
+
+  it("both upgrade orders: an older app drops it, a newer one reads an older server's profile, an odd one is none", () => {
+    const vm = {
+      memberId: "member-1",
+      status: "active",
+      email: "daniel@test.dev",
+      displayName: "Daniel",
+      homeAirport: "JFK",
+      timezone: "America/New_York",
+      phone: null,
+      memberSince: new Date().toISOString(),
+      crmLinkedAt: null,
+      crmLinked: false,
+      preferences: {},
+      notifications: { requestUpdates: true, offers: true },
+    };
+    expect(ProfileVM.omit({ avatarUrl: true }).parse({ ...vm, avatarUrl: URL_A })).not.toHaveProperty("avatarUrl");
+    expect(ProfileVM.parse(vm).avatarUrl).toBeUndefined();
+    expect(ProfileVM.parse({ ...vm, avatarUrl: URL_A }).avatarUrl).toBe(URL_A);
+    expect(ProfileVM.parse({ ...vm, avatarUrl: null }).avatarUrl).toBeNull();
+    for (const odd of ["http://cdn.example.com/a.webp", "not a url", "", 7, { url: URL_A }]) {
+      const parsed = ProfileVM.parse({ ...vm, avatarUrl: odd });
+      expect(parsed.avatarUrl).toBeNull();
+      expect(parsed.displayName).toBe("Daniel");
+    }
   });
 });

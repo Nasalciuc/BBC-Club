@@ -26,9 +26,9 @@ export function chosenAirportLabel(airport: { city: string; code: string }): str
   return `${airport.city} · ${airport.code}`;
 }
 
-/** Figma 479:8296 / 238:4561: the home airport as `JFK · New York` — the code alone while its city is unknown. */
+/** 12, 36: the home airport as `New York (JFK)` — the code alone while its city is unknown. */
 export function homeAirportLabel(code: string, city: string | null | undefined): string {
-  return city ? `${code} · ${city}` : code;
+  return city ? `${city} (${code})` : code;
 }
 
 /**

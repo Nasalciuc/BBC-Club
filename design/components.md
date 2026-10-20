@@ -38,14 +38,17 @@ beside them. The entry's components (`ClubButton`, `ClubField`, `ClubIcon`) stay
   between, rounded where a week starts or ends; days that cannot be chosen keep their square with a slate number.
   Weeks start on Monday as the images draw them (`WEEK_START`; 1.0 started on Sunday).
 - **Chip** — `trip`: light tint pill, 40 pt, an icon and navy words (`Nov 12 – 19, 2026`, `Business`, `1 adult`);
-  `filter`: the status filters, slate words, navy with white bold words when chosen.
+  `filter`: the status filters (09), 40 pt, `body-sm` words in `text-on-tint` 16 pt from either side — four and a part
+  to a phone's width, from the gutter to the screen's edge — navy with white `label-strong` words when chosen. A chip
+  that acts reaches 44 pt to the finger (`hitSlop`).
 - **CabinCard** — two side by side (01): the seat icon, the cabin in `body-strong`, its line in `caption` slate on two
   lines at most, a check circle; chosen: a navy border on light tint and a filled navy check.
 
 ## Cards and rows (sheet 40)
 
 - **InfoCard** — light tint, radius 16: the icon (in a light navy circle, or bare), a `body-strong` title, the body in
-  slate; optionally a `Try again` link or a chevron when the whole card acts.
+  `text-on-tint` (slate falls under 4.5:1 on the tint); optionally a `Try again` link or a chevron when the whole card
+  acts.
 - **OfferCard** — 124 pt wide, white, radius 20, the card shadow: the photo 116 pt, then the city (`subtitle`), the
   country (`body-sm` slate), `from` and the price (`price`), the `Save 54%` pill across the foot — the whole card above
   the tab bar at rest (02). **OfferCardWide**: the same laid
@@ -76,6 +79,19 @@ Sep`) — a reference price always carries its source. The weather beside it in 
 - **TripCard** (08) — the request just received: the photograph, `BUSINESS CLASS`, `JFK → LHR` in `title-sm`, the days
   and `Round trip · 1 adult`, the airline at the right.
 - **OfferCard · compact** (08, `Other great fares`) — the photo over the city and `from` its price.
+- **RequestCard** (09, 28; sheet 40 · 09) — a request on Requests: white, radius 20, the card shadow, 8 pt inside; the
+  destination's photograph (128 pt wide, as tall as the words, radius 12) at the left; the city in `title-sm` with its
+  badge at the right (a long city, or larger text, sends the badge to the next line); the route in navy over the days
+  in slate, the chevron beside them; a rule; then the trip and the travelers in `body-sm` slate, each with its icon. A
+  request waiting on the phone says `Your travel details are saved` on a line of its own between two rules (28). The
+  whole card opens the request; its calls and retries live there. The days come as the server writes them, without a
+  year (`Nov 12 – 19`).
+- **TripPhotoCard** (12, `My trips`; sheet 40 · 12) — the city's photograph, 112 pt wide and at least 148 tall, radius
+  16, darkened at its foot (`photo-veil`): the city in `subtitle` over the days and the route in `body-sm`, all white.
+  The city keeps one line; larger text makes the card taller, never cut.
+- **ProfileHero** (12) — the home city's photograph from edge to edge under the status bar (96 pt below the safe area),
+  the member's portrait (`Avatar`, 120) over its foot — two thirds on the photograph — the name in `headline` and
+  `Flies from JFK` in `body-lg` slate under it, centred; the round settings button over the photograph at the right.
 - **ListRow / RowGroup** — rows of 56 pt in one white card (radius 16, the card shadow): the navy icon in a 24-pt
   column, the label, the value in slate, the chevron; a rule between rows from where the words start. `stacked`: the
   label small over the value. `danger`: the trash and the words in red.
@@ -86,11 +102,20 @@ Sep`) — a reference price always carries its source. The weather beside it in 
 ## Feedback (sheet 41)
 
 - **EmptyState** — centred: an illustration or an icon, the title in `headline`, the words in `body-lg` slate, then the
-  pill (full width, or hugging its words, or an outline).
+  pill (full width, or hugging its words, or an outline). 10's picture — the seat, the window over London, the globe and
+  the boarding pass — is `apps/mobile/assets/images/requests-empty.webp`, cut from the image with its edges faded into
+  the page.
 - **StateMessage** — a page that is only a message (`This fare is unavailable.`, `Saved. It goes out when you're back
 online.`): title, words, the pill.
 - **NoticeCard** — a message inside a page: `error` light red with the red mark; `offline` light tint with the phone in
-  a circle; `attention` light tint with the info mark; an underlined `Try again`.
+  a circle; `attention` light tint with the info mark; the words in `text-on-tint`; an underlined `Try again`. Over a list (28) the attention card is
+  the compact `InfoCard` with the bare info mark.
+- **Timeline** (11, 30–33; sheet 41, the horizontal stepper) — `Received → Quote ready → Booked`: a step reached is a
+  24-pt navy circle with a white check, its name in `label-strong` and its day in slate under it; the step the request
+  is at, a 22-pt navy dot in a 4-pt light navy ring; a step to come, a hollow circle on a light navy hairline, its name
+  in slate. The 2-pt line between two steps is navy once the second is reached. Each step is centred over its words;
+  the line runs from circle to circle. A request not sent has reached none; a closed one keeps the steps it reached
+  and is at none (its badge and its message say it is closed).
 - **Skeleton / CardSkeleton / RowSkeleton** — light tint blocks that shimmer (opacity only; still under reduced motion).
 - **CheckCircle** — the large navy check in a white ring (a request received).
 

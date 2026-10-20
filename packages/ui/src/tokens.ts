@@ -27,98 +27,98 @@ export const tokens = {
 },
   type: {
   "display": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 36,
     "fontWeight": "700",
     "lineHeight": 40,
     "letterSpacing": -0.8
   },
   "headline": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 30,
     "fontWeight": "700",
     "lineHeight": 35,
     "letterSpacing": -0.6
   },
   "title": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 24,
     "fontWeight": "700",
     "lineHeight": 29,
     "letterSpacing": -0.4
   },
   "titleSm": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 20,
     "fontWeight": "700",
     "lineHeight": 25,
     "letterSpacing": -0.3
   },
   "subtitle": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 17,
     "fontWeight": "600",
     "lineHeight": 22,
     "letterSpacing": -0.2
   },
   "greeting": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 26,
     "fontWeight": "400",
     "lineHeight": 31,
     "letterSpacing": -0.4
   },
   "bodyLg": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 18,
     "fontWeight": "400",
     "lineHeight": 25,
     "letterSpacing": -0.2
   },
   "body": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 16,
     "fontWeight": "400",
     "lineHeight": 22,
     "letterSpacing": -0.1
   },
   "bodyStrong": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 16,
     "fontWeight": "600",
     "lineHeight": 22,
     "letterSpacing": -0.1
   },
   "bodySm": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 14,
     "fontWeight": "400",
     "lineHeight": 20,
     "letterSpacing": 0
   },
   "labelStrong": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 14,
     "fontWeight": "600",
     "lineHeight": 18,
     "letterSpacing": -0.1
   },
   "caption": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 12,
     "fontWeight": "400",
     "lineHeight": 16,
     "letterSpacing": 0
   },
   "label": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 11,
     "fontWeight": "600",
     "lineHeight": 14,
     "letterSpacing": 1.6
   },
   "priceDisplay": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 36,
     "fontWeight": "700",
     "lineHeight": 40,
@@ -128,7 +128,7 @@ export const tokens = {
     ]
   },
   "price": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 24,
     "fontWeight": "700",
     "lineHeight": 28,
@@ -138,7 +138,7 @@ export const tokens = {
     ]
   },
   "priceSm": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 18,
     "fontWeight": "700",
     "lineHeight": 22,
@@ -148,42 +148,42 @@ export const tokens = {
     ]
   },
   "button": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 17,
     "fontWeight": "600",
     "lineHeight": 22,
     "letterSpacing": -0.2
   },
   "tab": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 12,
     "fontWeight": "500",
     "lineHeight": 16,
     "letterSpacing": 0
   },
   "tabActive": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 12,
     "fontWeight": "700",
     "lineHeight": 16,
     "letterSpacing": 0
   },
   "wordmark": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 17,
     "fontWeight": "700",
     "lineHeight": 22,
     "letterSpacing": -0.4
   },
   "pin": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 13,
     "fontWeight": "700",
     "lineHeight": 15,
     "letterSpacing": -0.1
   },
   "pinDetail": {
-    "fontFamily": "Inter",
+    "fontFamily": "Inter Tight",
     "fontSize": 13,
     "fontWeight": "400",
     "lineHeight": 15,

@@ -20,6 +20,8 @@ fi
 
 # shellcheck disable=SC1091
 source apps/mobile/e2e/launcher-guard.sh
+# shellcheck disable=SC1091
+source apps/mobile/e2e/failure-note.sh
 remove_launcher_from_test || exit 1
 
 echo "-- clocks"
@@ -67,6 +69,7 @@ for flow in register sign-in search-and-request delete-account; do
   if ! maestro test --format junit --output "$OUT/$flow.xml" --debug-output "$OUT/debug/$flow" \
     "apps/mobile/e2e/$flow.yaml"; then
     echo "::error::Maestro flow failed: $flow"
+    failure_note "$flow" "$OUT/$flow.xml" "$OUT/debug/$flow"
     flow_failed=1
     status=1
   fi

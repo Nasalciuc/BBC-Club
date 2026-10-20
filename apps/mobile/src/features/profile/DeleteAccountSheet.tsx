@@ -1,12 +1,17 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
+import { Button, ModalSheet, type ModalSheetHandle, TextButton, tokens, rn } from "@bbc/ui";
 
 import { deleteAccount } from "@/features/auth/flows";
 import { deleteFailureKind, stateCopy } from "@/lib/error-context";
 import { PasswordField } from "./PasswordField";
 import type { ProfileSheetHandle } from "./types";
+
+/** The headline, three lines of words, the field and the two answers, over the home indicator. */
+const SHEET_HEIGHT = 420;
+/** 35: the words 24 pt under the headline, not the medium sheet's 120 from its top. */
+const CONTENT_TOP = 100;
 
 type Props = {
   /** The member's requests still in progress: deleting the account closes them, and the sheet says so. */
@@ -17,8 +22,10 @@ type Props = {
 };
 
 /**
- * Figma 320:5810 / 325:8392: the deletion, confirmed with the password. A wrong password marks the field and says so
- * under it; any other failure says so in the sheet, which stays open to try again.
+ * 35: the deletion, confirmed with the password — what goes, how many open requests close, the password with its lock,
+ * the filled red `Delete account` and `Cancel` under it; no × (the sheet's own `Cancel`, its backdrop and a drag close
+ * it). A wrong password marks the field and says so under it; any other failure says so in the sheet, which stays open
+ * to try again.
  */
 export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function DeleteAccountSheet(
   { openRequests, onDeleted },
@@ -74,22 +81,27 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
       closeTestID="profile.deleteConfirm.close"
       testID="profile.deleteConfirm"
       dismissible={!busy}
+      showClose={false}
+      // 35: as tall as the question, its field and its two answers — not the medium sheet's 628 pt.
+      height={SHEET_HEIGHT + insets.bottom}
+      contentTop={CONTENT_TOP}
       insets={insets}
+      footerBottom={tokens.space.xs}
       footer={
         <>
           <Button
             testID="profile.deleteConfirm.confirm"
             label={busy ? "Deleting…" : "Delete account"}
-            variant="destructive"
+            variant="destructive-filled"
             busy={busy}
             onPress={() => void onDelete()}
           />
-          <Button
+          <TextButton
             testID="profile.deleteConfirm.cancel"
             label="Cancel"
-            variant="secondary"
+            tone="primary"
+            size="button"
             disabled={busy}
-            style={styles.cancel}
             onPress={() => modalRef.current?.dismiss()}
           />
         </>
@@ -109,6 +121,7 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
           testID="profile.deleteConfirm.password"
           label="Password"
           labelTone="caption"
+          icon="lock"
           value={password}
           onChangeText={(next) => {
             setPassword(next);
@@ -135,9 +148,7 @@ const styles = StyleSheet.create({
   body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
   password: { gap: tokens.space.xs },
   // The field at fault: its explanation right under it (319:202).
-  wrong: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  wrong: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
   failed: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  // 320:5966: Cancel is the 48-pt secondary button.
-  cancel: { minHeight: 48, paddingVertical: tokens.space.sm },
 });

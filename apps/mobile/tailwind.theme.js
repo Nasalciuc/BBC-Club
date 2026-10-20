@@ -26,8 +26,8 @@ module.exports = {
   "globe-ice": "#F4F7FA"
 },
   fontFamily: {
-  "inter": [
-    "Inter"
+  "inter-tight": [
+    "Inter Tight"
   ]
 },
   fontSize: {
