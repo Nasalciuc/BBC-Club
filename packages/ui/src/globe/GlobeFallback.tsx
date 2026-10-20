@@ -217,10 +217,12 @@ export function GlobeFallback({
           <Path d={proj.sphere()} fill="url(#globe-ocean)" />
           <Path d={frame.land} fill={tokens.colors.globeLand} />
           <G clipPath="url(#globe-land)">
-            {DESERTS.map((desert, i) => (
-              <Path key={i} d={proj.path(desert)} fill="url(#globe-sand)" />
-            ))}
-            <Path d={proj.path(GREENLAND)} fill="url(#globe-snow)" />
+            {/* Only the patches that show: one on the far side has an empty box, and the gradient sized to it would get
+                a radius of 0, which crashes Android. */}
+            {DESERTS.map((desert, i) =>
+              proj.shows(desert) ? <Path key={i} d={proj.path(desert)} fill="url(#globe-sand)" /> : null,
+            )}
+            {proj.shows(GREENLAND) ? <Path d={proj.path(GREENLAND)} fill="url(#globe-snow)" /> : null}
             <Path d={proj.path(POLES)} fill={tokens.colors.globeIce} />
           </G>
           <Path d={proj.sphere()} fill="url(#globe-light)" />
