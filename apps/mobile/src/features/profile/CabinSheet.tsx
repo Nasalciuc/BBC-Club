@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, Chip, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
+import { Button, CabinCard, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
 
 import { putTravelPreferences, type Profile } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
@@ -44,7 +44,7 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
   }
 
   return (
-    // Figma 238:4710: what the choice means, then the two cabins one under the other, 56 pt each, 24 apart.
+    // No image of its own: what the choice means, then onboarding's two cabin cards side by side (01).
     <ModalSheet
       ref={modalRef}
       title="Preferred cabin"
@@ -63,20 +63,24 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
       }
     >
       <Text style={styles.help}>Your starting preference. You can choose a different cabin for any request.</Text>
-      <Chip
-        testID="profile.cabin.business"
-        label="Business"
-        size="lg"
-        selected={cabin === "business"}
-        onPress={() => setCabin("business")}
-      />
-      <Chip
-        testID="profile.cabin.first"
-        label="First"
-        size="lg"
-        selected={cabin === "first"}
-        onPress={() => setCabin("first")}
-      />
+      <View style={styles.cabins}>
+        <CabinCard
+          testID="profile.cabin.business"
+          icon="seat"
+          title="Business"
+          line="More space, a better journey"
+          selected={cabin === "business"}
+          onPress={() => setCabin("business")}
+        />
+        <CabinCard
+          testID="profile.cabin.first"
+          icon="seat-first"
+          title="First"
+          line="The highest level of comfort"
+          selected={cabin === "first"}
+          onPress={() => setCabin("first")}
+        />
+      </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </ModalSheet>
@@ -85,5 +89,7 @@ export const CabinSheet = forwardRef<ProfileSheetHandle, Props>(function CabinSh
 
 const styles = StyleSheet.create({
   help: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  // 01: the two cards 7.7 pt apart.
+  cabins: { flexDirection: "row", gap: 7.7 },
   error: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
 });

@@ -29,3 +29,22 @@ export function rn(t: TokenType): TextStyle {
   if ("fontVariant" in t) style.fontVariant = [...t.fontVariant];
   return style;
 }
+
+/** Inter Tight's ascent and descent (hhea 1984 and 494 of 2048 units). */
+const ASCENT = 0.969;
+const DESCENT = 0.241;
+
+/**
+ * How far below the top of its box a line of this style sets its baseline: the line's extra height is split evenly
+ * above and below the glyphs (iOS, Android and the web all centre text in its line height). The screens are measured
+ * by their baselines (ADR-IMPL-056); a margin of `baseline − baselineOffset(style)` puts a text exactly where the
+ * image draws it.
+ */
+export function baselineOffset(t: { fontSize: number; lineHeight: number }): number {
+  return (t.lineHeight - (ASCENT + DESCENT) * t.fontSize) / 2 + ASCENT * t.fontSize;
+}
+
+/** The distance from a box's baseline to its bottom edge (the line's own room under the baseline). */
+export function belowBaseline(t: { fontSize: number; lineHeight: number }): number {
+  return t.lineHeight - baselineOffset(t);
+}

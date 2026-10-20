@@ -4,13 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import { FlatList, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
-import { CardSkeleton, Chip, EmptyState, InfoCard, NoticeCard, RequestCard, tokens, rn } from "@bbc/ui";
+import {
+  CardSkeleton,
+  Chip,
+  EmptyState,
+  InfoCard,
+  NoticeCard,
+  RequestCard,
+  baselineOffset,
+  belowBaseline,
+  rn,
+  tokens,
+} from "@bbc/ui";
 
-import emptyIllustration from "@/assets/images/requests-empty.webp";
+import emptyIllustration from "@/assets/images/club/illustrations/requests-empty.webp";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { isOffline } from "@/features/explore/offline-logic";
 import { cardPicture } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { clubPhoto } from "@/features/places/club-photos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { queuedView, requestCard, type RequestCardModel } from "@/features/requests/request-card";
 import {
   REQUEST_FILTERS,
@@ -23,9 +35,6 @@ import { askUnreadQuotes, noteUnreadQuotes } from "@/features/requests/unread-qu
 import { fetchRequests, submitRequest } from "@/lib/api";
 import { readFailureCopy, refreshFailedLine } from "@/lib/error-context";
 import { flushQueue, listQueued, subscribeQueue, type QueuedRequest } from "@/lib/queue";
-
-/** 10's picture: the seat, the window over London, the globe and the boarding pass — 853 by 810. */
-const ILLUSTRATION_RATIO = 853 / 810;
 
 type Row = { id: string; status: string; card: RequestCardModel };
 
@@ -133,14 +142,23 @@ export default function RequestsScreen() {
       <Text style={styles.subtitle}>Journeys in good hands.</Text>
     </View>
   );
+  // 10 draws the title larger over the empty page (43 pt, the line 19.5).
+  const emptyTitle = (
+    <View style={styles.emptyHeading}>
+      <Text style={styles.emptyTitle} accessibilityRole="header">
+        Requests
+      </Text>
+      <Text style={styles.emptySubtitle}>Journeys in good hands.</Text>
+    </View>
+  );
 
   // 10: a member with no request yet — the picture, the words and the way to Explore; no filters, nothing to filter.
   if (empty) {
     return (
       <View testID="requests.root" style={[styles.root, { paddingTop: insets.top }]}>
         <ScreenStatusBar on="light" />
-        <ScrollView contentContainerStyle={styles.page}>
-          {title}
+        <ScrollView contentContainerStyle={styles.emptyPage}>
+          {emptyTitle}
           {failure ? (
             // The list was empty when it last loaded; what is new since may be missing — said calmly.
             <Text testID="requests.reloadFailed" style={styles.line}>
@@ -150,8 +168,9 @@ export default function RequestsScreen() {
           <View style={styles.emptyState}>
             <EmptyState
               testID="requests.empty"
+              look="requests"
               illustration={emptyIllustration}
-              illustrationRatio={ILLUSTRATION_RATIO}
+              bleed={EMPTY_BLEED}
               title="No requests yet."
               body="Explore destinations and request a fare. Your requests will appear here."
               primary={{ label: "Explore", onPress: () => router.push("/(tabs)/explore" as Href) }}
@@ -211,6 +230,7 @@ export default function RequestsScreen() {
         <View style={styles.block}>
           <InfoCard
             testID="requests.attention"
+            look="attention"
             icon="info"
             iconStyle="bare"
             title={attention.title}
@@ -226,7 +246,7 @@ export default function RequestsScreen() {
           {refreshFailedLine(failure.code, items !== null)}
         </Text>
       ) : null}
-      <View style={styles.listTop} />
+      <View style={attention && filter === "all" && !firstLoad ? styles.listTopAfterNotice : styles.listTop} />
     </View>
   );
 
@@ -265,8 +285,8 @@ export default function RequestsScreen() {
           return (
             <RequestCard
               testID={`requests.row.${row.id}`}
-              photo={cardPicture(null, photoFor(card.to), PICTURE_HEADERS)}
-              fallback={CLUB_PICTURE}
+              photo={clubPhoto(card.to, "request") ?? cardPicture(null, photoFor(card.to), PICTURE_HEADERS)}
+              fallback={null}
               city={card.city}
               route={card.route}
               dates={card.dates}
@@ -288,20 +308,61 @@ function Separator() {
   return <View style={styles.separator} />;
 }
 
+/**
+ * 09 and 28, measured on a 47-pt status bar: `Requests` with its baseline 37.8 pt under it, its ink 20.3 pt in;
+ * `Journeys in good hands.` 28.1 pt lower; the filters 22.4 pt under that, 12.2 pt in, 5 apart; the first card 19.9 pt
+ * under the filters (28: the attention card 16.1 under them, the first card 12 under it); cards 10.8 pt from either
+ * edge, 9.5 apart.
+ */
+const TITLE_BASELINE = 37.8;
+const SUBTITLE_PITCH = 28.1;
+const FILTERS_TOP = 22.4;
+const CARDS_LEFT = 10.8;
+/** 10's picture runs from 7 pt in to the screen's edge, past the 20-pt gutter of the words under it. */
+const EMPTY_BLEED = { left: 7 - 20, right: -20 };
+const display = tokens.type.display;
+const bodyLg = tokens.type.bodyLg;
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  page: { paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.xl },
-  // 09: the title 12 pt under the safe area, the line under it, the filters 24 pt lower.
-  heading: { paddingTop: tokens.space.sm, gap: 2 },
-  title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  subtitle: { ...rn(tokens.type.bodyLg), color: tokens.colors.textSecondary },
-  filters: { marginTop: tokens.space.lg, marginHorizontal: -tokens.space.gutter },
-  filtersContent: { paddingHorizontal: tokens.space.gutter, gap: tokens.space.xs },
-  block: { marginTop: tokens.space.lg },
-  listTop: { height: tokens.space.lg },
-  cards: { gap: tokens.space.sm },
-  separator: { height: tokens.space.sm },
-  emptyState: { marginTop: tokens.space.lg },
+  page: { paddingHorizontal: CARDS_LEFT, paddingBottom: tokens.space.xl },
+  heading: { paddingLeft: 20.3 - 1.7 - CARDS_LEFT },
+  title: {
+    ...rn(display),
+    color: tokens.colors.textPrimary,
+    marginTop: TITLE_BASELINE - baselineOffset(display),
+  },
+  subtitle: {
+    ...rn(bodyLg),
+    color: tokens.colors.textSecondary,
+    marginTop: SUBTITLE_PITCH - belowBaseline(display) - baselineOffset(bodyLg),
+    marginLeft: 0.2,
+  },
+  filters: { marginTop: FILTERS_TOP - belowBaseline(bodyLg), marginHorizontal: -CARDS_LEFT },
+  filtersContent: { paddingHorizontal: 12.2, gap: 5 },
+  block: { marginTop: 16.1 },
+  listTop: { height: 19.9 },
+  listTopAfterNotice: { height: 12 },
+  cards: { gap: 9.5 },
+  separator: { height: 9.5 },
+  /**
+   * 10: the gutter 20; `Requests` 43 pt, its baseline 51.1 pt under the status bar, its ink 22.1 pt in; the line 30 pt
+   * lower; the illustration, the design's whole picture, a 386-pt square from x 7 at 13.9 pt under that line.
+   */
+  emptyPage: { paddingHorizontal: 20, paddingBottom: tokens.space.xl },
+  emptyHeading: { paddingLeft: 22.1 - 2.0 - 20 },
+  emptyTitle: {
+    ...rn(tokens.type.displayLg),
+    color: tokens.colors.textPrimary,
+    marginTop: 51.1 - baselineOffset(tokens.type.displayLg),
+  },
+  emptySubtitle: {
+    ...rn(tokens.type.subtitleLg),
+    color: tokens.colors.textSecondary,
+    marginTop: 30 - belowBaseline(tokens.type.displayLg) - baselineOffset(tokens.type.subtitleLg),
+    marginLeft: -1.3,
+  },
+  emptyState: { marginTop: 13.9 - belowBaseline(tokens.type.subtitleLg) },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
   line: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, marginTop: tokens.space.md },
   filterEmpty: {

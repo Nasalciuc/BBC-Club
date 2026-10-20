@@ -98,13 +98,13 @@ export function validatePhone(
 }
 
 /**
- * A stored number as a person reads it (Figma 233:4245: `+1 (212) 555-0148`): North American numbers in their national
- * shape after `+1`, the rest in international form. A number that does not parse is shown as it was stored.
+ * A stored number as a person reads it, in international form with spaces, as 3.0 prints it everywhere (11, 30, 34:
+ * `+1 212 555 0142`). A number that does not parse is shown as it was stored.
  */
 export function displayPhone(raw: string | null | undefined): string | null {
   const trimmed = raw?.trim();
   if (!trimmed) return null;
   const parsed = parsePhoneNumberFromString(trimmed);
   if (!parsed?.isValid()) return trimmed;
-  return parsed.countryCallingCode === "1" ? `+1 ${parsed.formatNational()}` : parsed.formatInternational();
+  return parsed.formatInternational();
 }

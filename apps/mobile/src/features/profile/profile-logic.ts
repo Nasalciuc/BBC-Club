@@ -19,17 +19,18 @@ export function travelersLabel(prefs: Preferences): string {
 }
 
 /**
- * Profile's two numbers (12), from the requests the club holds — those still on the phone are not the club's yet, and
- * deleting the account does not close them: `Trips`, every request; `Open requests`, those still in progress. The
- * server lists its first fifty, those in progress first (ADR-IMPL-042): past them `Trips` says `50+`, and `Open
- * requests` only when all fifty are open. The saved count the image draws is left out: nothing saves a fare yet
- * (ADR-IMPL-055 §7).
+ * Profile's numbers from the requests the club holds (12) — those still on the phone are not the club's yet, and
+ * deleting the account does not close them: `Trips`, every request that has not been closed (12: London, Tokyo and
+ * Dubai — Paris, closed, is no trip); `Open requests`, those still in progress. The server lists its first fifty, those
+ * in progress first (ADR-IMPL-042): past them `Trips` says `50+`, and `Open requests` only when all fifty are open.
+ * `Saved` is the phone's own count (features/saved).
  */
 export function profileStats(
   items: readonly { status: RequestVM["status"] }[],
   hasMore: boolean,
 ): { trips: string; open: string } {
   const open = items.filter((r) => isOpen(r.status)).length;
+  const trips = items.filter((r) => r.status !== "closed").length;
   const moreOpen = hasMore && open === items.length;
-  return { trips: hasMore ? `${items.length}+` : String(items.length), open: moreOpen ? `${open}+` : String(open) };
+  return { trips: hasMore ? `${trips}+` : String(trips), open: moreOpen ? `${open}+` : String(open) };
 }

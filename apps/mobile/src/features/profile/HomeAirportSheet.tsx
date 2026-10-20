@@ -201,9 +201,13 @@ export const HomeAirportSheet = forwardRef<ProfileSheetHandle, Props>(function H
       ) : search.phase === "empty" ? (
         <EmptyState
           testID="profile.homeAirport.empty"
+          look="search"
+          icon="search"
           title="No airports found"
           body="Try a city name or a three-letter airport code, such as JFK."
           primary={{ label: "Clear search", onPress: () => setQuery("") }}
+          primaryVariant="outline"
+          primaryFill={false}
         />
       ) : search.phase === "error" ? (
         <StateMessage

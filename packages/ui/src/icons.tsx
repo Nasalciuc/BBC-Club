@@ -45,38 +45,168 @@ import {
   X,
 } from "lucide-react-native";
 import Svg, { Circle as SvgCircle, Path } from "react-native-svg";
+import {
+  CABIN_BUSINESS,
+  CABIN_FIRST,
+  CHECK_MARK,
+  FAMILY,
+  TAB_EXPLORE,
+  TAB_PROFILE,
+  TAB_REQUESTS,
+  WEATHER_CLOUD,
+  WEATHER_SUN,
+  type ArtPath,
+} from "./art-paths";
 import { tokens } from "./tokens";
 
-/** Line icons the club draws itself, where Lucide has none: the airline seat (side view) and a parent with a child. */
 type GlyphProps = { size?: number; color?: string; strokeWidth?: number };
 
-function Seat({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
-  // A reclined seat seen from the side: the backrest, the cushion, the leg rest and the foot.
+/** The line weight of the traced line glyphs (the cabins, the family) in their own crop pixels: 3 px. */
+const ART_LINE = 3;
+
+function box(art: ArtPath): [number, number, number, number] {
+  const [x = 0, y = 0, w = 1, h = 1] = art.viewBox.split(" ").map(Number);
+  return [x, y, w, h];
+}
+
+/**
+ * A glyph traced from the design's pixels (art-paths.ts) at the size a screen measures it: `height` pt tall, its own
+ * proportions, its own line weight — the cabins of 01, the family, the active tabs.
+ */
+export function ArtGlyph({ art, height, color }: { art: ArtPath; height: number; color: string }) {
+  const [, , w, h] = box(art);
+  return (
+    <Svg width={(height * w) / h} height={height} viewBox={art.viewBox}>
+      <Path d={art.d} fill={color} fillRule="evenodd" />
+    </Svg>
+  );
+}
+
+/**
+ * A traced line glyph used as an icon of the set: fitted into a `size` box and centred. At another size than the
+ * image's a traced outline thins or thickens with it, so the outline is widened by a stroke of its own colour until
+ * the line weighs `strokeWidth` pt like the Lucide icons beside it (never thinner than the glyph's own line).
+ */
+function traced(art: ArtPath) {
+  return function TracedIcon({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
+    const [x, y, w, h] = box(art);
+    const side = Math.max(w, h);
+    const scale = size / side;
+    const extra = Math.max(0, strokeWidth - ART_LINE * scale) / scale;
+    const m = extra / 2;
+    const vb = `${x - (side - w) / 2 - m} ${y - (side - h) / 2 - m} ${side + extra} ${side + extra}`;
+    return (
+      <Svg width={size} height={size} viewBox={vb}>
+        <Path
+          d={art.d}
+          fill={color}
+          fillRule="evenodd"
+          stroke={extra > 0 ? color : "none"}
+          strokeWidth={extra}
+          strokeLinejoin="round"
+        />
+      </Svg>
+    );
+  };
+}
+
+/** Business's reclining seat and First's armchair (01) — never one for the other (the handoff keeps them distinct). */
+const Seat = traced(CABIN_BUSINESS);
+const FirstSeat = traced(CABIN_FIRST);
+/** An adult with a child (01, `Travelling with children?`) — not `users`, which is two adults. */
+const Family = traced(FAMILY);
+
+/** The weather mark of 05: the navy cloud and the sun, as drawn (its sun is the only yellow, `art-sun`). */
+export function WeatherMark({ height }: { height: number }) {
+  const [, , w, h] = box(WEATHER_CLOUD);
+  return (
+    <Svg width={(height * w) / h} height={height} viewBox={WEATHER_CLOUD.viewBox}>
+      <Path d={WEATHER_SUN.d} fill={tokens.colors.artSun} fillRule="evenodd" />
+      <Path d={WEATHER_CLOUD.d} fill={tokens.colors.textPrimary} fillRule="evenodd" />
+    </Svg>
+  );
+}
+
+/** The white check of `Request received.` (08), traced; the navy disc and its white ring are the caller's. */
+export function CheckMark({ height, color }: { height: number; color: string }) {
+  return <ArtGlyph art={CHECK_MARK} height={height} color={color} />;
+}
+
+/** The active tabs' filled glyphs (05, 11, 12), traced: a filled navy compass, clipboard and person. */
+export const TAB_ACTIVE = { explore: TAB_EXPLORE, requests: TAB_REQUESTS, profile: TAB_PROFILE } as const;
+
+/** Lucide's handset (the pinned `phone`, sheet 43), filled: 11 and 30–33 draw it solid in its circle and on the pill. */
+const PHONE_D =
+  "M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384";
+
+function PhoneFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d={PHONE_D} fill={color} stroke={color} strokeWidth={1.2} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+/** Lucide's `info` filled (33): the disc in the given colour, the `i` cut out in white. */
+function InfoFill({ size = 24, color = tokens.colors.infoMark }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgCircle cx={12} cy={12} r={10.6} fill={color} />
+      <Path d="M12 16.4v-4.6" stroke={tokens.colors.textOnPhoto} strokeWidth={2.3} strokeLinecap="round" />
+      <Path d="M12 7.8h.01" stroke={tokens.colors.textOnPhoto} strokeWidth={2.6} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** 12, 36: the home airport's plane, solid, nose to the right. */
+function PlaneRightFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M6.2 3.5 8.6 13a2 2 0 0 0 1.94 1.5H16a1.6 1.6 0 0 1 1.52 1.1l1.48 4.4M8.9 14.4 7.5 20.5M11 18h5.2M5 3.6l.9-.3a1 1 0 0 1 1.26.68"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M12 2c.8 0 1.3.9 1.3 2v5.2l7.7 4.6v2.1l-7.7-2.3v4.6l2.2 1.6V21l-3.5-1-3.5 1v-1.2l2.2-1.6v-4.6L3 15.9v-2.1l7.7-4.6V4c0-1.1.5-2 1.3-2Z"
+        fill={color}
+        transform="rotate(90 12 12)"
       />
     </Svg>
   );
 }
 
-function Family({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.75 }: GlyphProps) {
-  // An adult holding a child's hand: two heads, two bodies, the arms joined.
+/** 12, 36: the travelers, two people solid (Lucide `users`, filled). */
+function UsersFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <SvgCircle cx={8} cy={4.2} r={2} stroke={color} strokeWidth={strokeWidth} />
-      <SvgCircle cx={17} cy={10.4} r={1.6} stroke={color} strokeWidth={strokeWidth} />
+      <SvgCircle cx={16.4} cy={7.6} r={3.4} fill={color} />
+      <Path d="M17.2 13.6h.6a4.6 4.6 0 0 1 4.6 4.6V21h-4.3v-2.8a6.6 6.6 0 0 0-2.4-5.1 4 4 0 0 1 1.5-.5Z" fill={color} />
+      <SvgCircle cx={9} cy={7.2} r={4.1} fill={color} />
+      <Path d="M5.6 13.2h6.8a4.6 4.6 0 0 1 4.6 4.6V21H1v-3.2a4.6 4.6 0 0 1 4.6-4.6Z" fill={color} />
+    </Svg>
+  );
+}
+
+/** 12, 34: the password's lock, solid, its keyhole cut out (Lucide `lock`, filled). */
+function LockFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
       <Path
-        d="M6 21v-6.2H4.6V9.6A2 2 0 0 1 6.6 7.6h2.8a2 2 0 0 1 2 2v1.6l3 2.2M10 21v-6.2M8 21v-5M15 21v-3.6h-.8v-2.4a1.4 1.4 0 0 1 1.4-1.4h2.8a1.4 1.4 0 0 1 1.4 1.4v2.4h-.8V21M17 21v-2.6"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M5.5 10.5h13A2.5 2.5 0 0 1 21 13v6.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 19.5V13a2.5 2.5 0 0 1 2.5-2.5Z"
+        fill={color}
+      />
+      <SvgCircle cx={12} cy={15.6} r={1.6} fill={tokens.colors.surfaceCard} />
+      <Path d="M12 16.4v2.2" stroke={tokens.colors.surfaceCard} strokeWidth={1.4} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** 12: `Edit profile`'s mark, a person solid with a pen (Lucide `user-pen`, filled). */
+function UserPenFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgCircle cx={10} cy={7} r={4.4} fill={color} />
+      <Path d="M7 14h5.4l-1.9 1.9a3 3 0 0 0-.8 1.3L8.9 21H2.6v-2.4A4.6 4.6 0 0 1 7 14Z" fill={color} />
+      <Path
+        d="M21.4 16.6a1.4 1.4 0 0 0-2-2l-4.6 4.6a1.6 1.6 0 0 0-.4.7l-.7 2.4a.4.4 0 0 0 .5.5l2.4-.7a1.6 1.6 0 0 0 .7-.4Z"
+        fill={color}
       />
     </Svg>
   );
@@ -109,6 +239,7 @@ export const icons = {
   users: Users,
   family: Family,
   seat: Seat,
+  "seat-first": FirstSeat,
   armchair: Armchair,
   globe: Globe,
   compass: Compass,
@@ -123,6 +254,12 @@ export const icons = {
   heart: Heart,
   bookmark: Bookmark,
   phone: Phone,
+  "phone-fill": PhoneFill,
+  "plane-right-fill": PlaneRightFill,
+  "users-fill": UsersFill,
+  "lock-fill": LockFill,
+  "user-pen-fill": UserPenFill,
+  "info-fill": InfoFill,
   bell: Bell,
   lock: Lock,
   trash: Trash,
@@ -163,7 +300,8 @@ export const icons = {
 } as const;
 
 export type IconName = keyof typeof icons;
-export type IconSize = 12 | 14 | 16 | 18 | 20 | 22 | 24 | 28 | 30 | 32 | 44;
+/** Any size: the screens are measured to the half point (ADR-IMPL-056). */
+export type IconSize = number;
 
 export function Icon({
   name,

@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "../icons";
-import { rn } from "../rn-type";
+import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
 
 type Props = {
@@ -13,6 +13,11 @@ type Props = {
   link?: { label: string; onPress: () => void; testID: string };
   /** The whole card acts, with a chevron (sheet 40, 01 and 11). */
   onPress?: () => void;
+  /**
+   * `attention`: 28's card over the list, as measured — the bare info mark (27 pt, its stroke 2), a Bold title and
+   * one line under it, on the notice tint, radius 9. Without it, the 1.0 card (01, 11 until they are measured).
+   */
+  look?: "attention" | "detail";
   testID?: string;
 };
 
@@ -20,7 +25,45 @@ type Props = {
  * The info card in light tint (01, 11, 28, 30–33; sheets 40 and 41): the icon, a title in `body-strong`, the body in
  * slate; optionally a `Try again` link, or the whole card a tap with a chevron.
  */
-export function InfoCard({ title, body, icon, iconStyle = "circle", link, onPress, testID }: Props) {
+export function InfoCard({ title, body, icon, iconStyle = "circle", link, onPress, look, testID }: Props) {
+  if (look === "detail") {
+    // 11, 30–33: what is happening with the request. A title alone (33) is centred in its card.
+    const alone = !body;
+    return (
+      <View
+        testID={testID}
+        style={[styles.detail, alone && styles.detailAlone]}
+        accessible
+        accessibilityLabel={[title, body].filter(Boolean).join(". ")}
+      >
+        <View style={[styles.detailCircle, alone && styles.detailCircleAlone]}>
+          <Icon name={icon} size={DETAIL.icon} color={tokens.colors.textPrimary} />
+        </View>
+        <View style={styles.detailText}>
+          <Text style={[styles.detailTitle, alone && styles.detailTitleAlone]}>{title}</Text>
+          {body ? <Text style={styles.detailBody}>{body}</Text> : null}
+        </View>
+      </View>
+    );
+  }
+  if (look === "attention") {
+    return (
+      <View
+        testID={testID}
+        style={styles.attention}
+        accessible
+        accessibilityLabel={[title, body].filter(Boolean).join(". ")}
+      >
+        <View style={styles.attentionIcon}>
+          <Icon name={icon} size={ATTENTION.icon} color={tokens.colors.textPrimary} strokeWidth={ATTENTION.stroke} />
+        </View>
+        <View style={styles.attentionText}>
+          <Text style={styles.attentionTitle}>{title}</Text>
+          {body ? <Text style={styles.attentionBody}>{body}</Text> : null}
+        </View>
+      </View>
+    );
+  }
   const content = (
     <>
       {iconStyle === "circle" ? (
@@ -40,8 +83,13 @@ export function InfoCard({ title, body, icon, iconStyle = "circle", link, onPres
             testID={link.testID}
             accessibilityRole="button"
             accessibilityLabel={link.label}
-            // The 22-pt line reaches 44 pt to the finger.
-            hitSlop={{ top: tokens.space.sm, bottom: tokens.space.sm, left: tokens.space.xs, right: tokens.space.xs }}
+            // The link's line reaches 44 pt to the finger, whatever its role's height.
+            hitSlop={{
+              top: (44 - tokens.type.bodyStrong.lineHeight) / 2,
+              bottom: (44 - tokens.type.bodyStrong.lineHeight) / 2,
+              left: tokens.space.xs,
+              right: tokens.space.xs,
+            }}
             onPress={link.onPress}
             style={({ pressed }) => [styles.linkHit, pressed && styles.pressed]}
           >
@@ -77,7 +125,76 @@ export function InfoCard({ title, body, icon, iconStyle = "circle", link, onPres
   );
 }
 
+/**
+ * 28, measured (card top T, left L): the mark's 27-pt box 14.65 in and 13.45 down; the words 56.25 in; the title's
+ * baseline T+25.6, the line's 18 under it, the card's foot 15.4 under that; the line ends 27.8 pt from the right.
+ */
+const ATTENTION = { radius: 9, icon: 27, stroke: 1.96, iconLeft: 14.65, iconTop: 13.45, textLeft: 56.25 } as const;
+const noticeTitle = tokens.type.noticeTitleSm;
+const noticeBody = tokens.type.noticeBodySm;
+
+/**
+ * 11, measured (card top T, left L): radius 9.5 on the notice tint; a 35.5-pt circle 16.6 in, its centre T+33.5, the
+ * filled mark 17.5 pt in it; the words 66.1 in, 60 pt short of the right edge (where 11 wraps `…to confirm`); the
+ * title's baseline T+25.1, the words' first 18.9 pt under the title's last, 15.7 apart; the foot 15 pt under the last.
+ * A title alone (33): the card 62.4 tall with the circle and the title centred.
+ */
+const DETAIL = { radius: 9.5, circle: 35.5, circleLeft: 16.6, circleCentre: 33.5, icon: 17.5, textLeft: 66.1 } as const;
+const detailTitle = tokens.type.noticeTitle;
+const detailBody = tokens.type.noticeBody;
+
 const styles = StyleSheet.create({
+  detail: {
+    flexDirection: "row",
+    borderRadius: DETAIL.radius,
+    backgroundColor: tokens.colors.surfaceNotice,
+    paddingBottom: 15 - belowBaseline(detailBody),
+    // 11 and 30 draw the card 74 tall with one line of words or two, 32 at 70: the one height that suits all three.
+    minHeight: 72,
+  },
+  detailAlone: { minHeight: 62.4, paddingBottom: 0, alignItems: "center" },
+  detailCircle: {
+    position: "absolute",
+    left: DETAIL.circleLeft,
+    top: DETAIL.circleCentre - DETAIL.circle / 2,
+    width: DETAIL.circle,
+    height: DETAIL.circle,
+    borderRadius: DETAIL.circle / 2,
+    backgroundColor: tokens.colors.noticeCircle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailCircleAlone: { top: (62.4 - DETAIL.circle) / 2 },
+  detailText: { flex: 1, marginLeft: DETAIL.textLeft, paddingRight: 60 },
+  detailTitle: {
+    ...rn(detailTitle),
+    color: tokens.colors.textPrimary,
+    marginTop: 25.1 - baselineOffset(detailTitle),
+  },
+  detailTitleAlone: { marginTop: 0 },
+  detailBody: {
+    ...rn(detailBody),
+    color: tokens.colors.textOnTint,
+    marginTop: 18.9 - belowBaseline(detailTitle) - baselineOffset(detailBody),
+  },
+  attention: {
+    flexDirection: "row",
+    borderRadius: ATTENTION.radius,
+    backgroundColor: tokens.colors.surfaceNotice,
+    paddingBottom: 15.4 - belowBaseline(noticeBody),
+  },
+  attentionIcon: { position: "absolute", left: ATTENTION.iconLeft, top: ATTENTION.iconTop },
+  attentionText: { flex: 1, marginLeft: ATTENTION.textLeft, paddingRight: 12 },
+  attentionTitle: {
+    ...rn(noticeTitle),
+    color: tokens.colors.textPrimary,
+    marginTop: 25.6 - baselineOffset(noticeTitle),
+  },
+  attentionBody: {
+    ...rn(noticeBody),
+    color: tokens.colors.textOnTint,
+    marginTop: 18 - belowBaseline(noticeTitle) - baselineOffset(noticeBody),
+  },
   card: {
     flexDirection: "row",
     alignItems: "center",

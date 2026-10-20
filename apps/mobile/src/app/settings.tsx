@@ -73,7 +73,7 @@ export default function SettingsScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScreenStatusBar on="light" />
       {/* 34: the back chevron and the page's title beside it. */}
-      <TopBar title="Settings" onBack={() => router.back()} backTestID="settings.back" />
+      <TopBar title="Settings" look="settings" onBack={() => router.back()} backTestID="settings.back" />
       <ScrollView testID="settings.root" style={styles.grow} contentContainerStyle={styles.content}>
         {!profile && loadFailure ? (
           <StateMessage
@@ -92,10 +92,10 @@ export default function SettingsScreen() {
           />
         ) : (
           <>
-            <RowGroup testID="settings.account">
+            <RowGroup testID="settings.account" look="settings">
               <ListRow
                 testID="settings.phone"
-                icon="phone"
+                icon="phone-fill"
                 label="Phone"
                 value={profile ? (displayPhone(profile.phone) ?? "Add phone") : undefined}
                 disabled={!profile}
@@ -103,14 +103,14 @@ export default function SettingsScreen() {
               />
               <ListRow
                 testID="settings.password"
-                icon="lock"
+                icon="lock-fill"
                 label="Password"
                 value="Change"
                 disabled={!profile}
                 onPress={() => passwordRef.current?.present()}
               />
             </RowGroup>
-            <RowGroup>
+            <RowGroup look="settings">
               <ListRow
                 testID="settings.notifications"
                 icon="bell"
@@ -124,7 +124,7 @@ export default function SettingsScreen() {
           </>
         )}
         {legal.length > 0 ? (
-          <RowGroup testID="settings.legal">
+          <RowGroup testID="settings.legal" look="settings">
             {legal.map((row) => (
               <ListRow
                 key={row.key}
@@ -144,6 +144,8 @@ export default function SettingsScreen() {
           icon="trash"
           label="Delete account"
           danger
+          look="settings"
+          height={46.7}
           disabled={!profile && !loadFailure}
           onPress={() => deleteRef.current?.present()}
         />
@@ -152,6 +154,9 @@ export default function SettingsScreen() {
           label={signingOut ? "Signing out…" : "Sign out"}
           variant="destructive"
           busy={signingOut}
+          height={36}
+          text="settingsSignout"
+          style={styles.signOut}
           onPress={signOutNow}
         />
         {signOutFailure ? <Text style={styles.message}>{signOutFailure}</Text> : null}
@@ -176,13 +181,9 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   grow: { flex: 1 },
-  // 34: the groups 16 pt apart, from 16 pt under the top bar.
-  content: {
-    paddingTop: tokens.space.md,
-    paddingHorizontal: tokens.space.gutter,
-    paddingBottom: tokens.space.lg,
-    gap: tokens.space.md,
-  },
+  // 34: the cards 14.8 pt in, 11 apart (14.8 before Delete account, 13.2 before Sign out), from under the top bar.
+  content: { paddingHorizontal: 14.8, paddingBottom: tokens.space.lg, gap: 11.2 },
+  signOut: { alignSelf: "stretch", borderWidth: 0.6, marginTop: 13.2 - 11.2 },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
   message: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, textAlign: "center" },
 });

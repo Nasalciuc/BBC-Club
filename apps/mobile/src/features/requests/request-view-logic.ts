@@ -24,8 +24,8 @@ export type RequestView = {
   callback: boolean;
   /** `Your fare` — the fare the quote is for: a quote ready only (11). */
   fare: boolean;
-  /** The call, the screen's one filled pill. `specialist` — `Call your specialist`, once a quote is ready (11). `us` — a
-   *  request we could not pass on: the member calls us. A closed request offers none (ADR-IMPL-055 §9). */
+  /** The call, the screen's one filled pill. `specialist` — `Call your specialist`, on every request the club holds, as
+   *  11 and 30–33 draw it (ADR-IMPL-056 §7). `us` — a request we could not pass on: the member calls us. */
   call: "specialist" | "us" | null;
   /** `Send now` (32): a request still on the phone that may still go out. */
   sendNow: boolean;
@@ -86,25 +86,15 @@ export function serverState(r: { status: string; reference: string }): string {
 export function requestView(status: string, at?: string | null, timeZone?: string): RequestView {
   switch (status) {
     case "just_received":
-      // 30: the shorter line, the number we call under it.
+    case "received":
+      // 30: the message, the number we call and the call.
       return {
         ...NONE,
         badge: "received",
         notice: { title: "We have your request.", body: "A specialist will call shortly.", icon: "phone" },
         caption: "We have your travel details.",
         callback: true,
-      };
-    case "received":
-      return {
-        ...NONE,
-        badge: "received",
-        notice: {
-          title: "We have your request.",
-          body: "A specialist will call shortly to discuss your flight.",
-          icon: "phone",
-        },
-        caption: "We have your travel details.",
-        callback: true,
+        call: "specialist",
       };
     case "assigned":
       // A specialist has it: no number to call yet.
@@ -138,15 +128,19 @@ export function requestView(status: string, at?: string | null, timeZone?: strin
           icon: "phone",
         },
         caption: "Your specialist confirms your flights.",
+        callback: true,
+        call: "specialist",
       };
     case "closed":
-      // 33 without its call (ADR-IMPL-055 §9): the badge, the day it closed, the message.
+      // 33: the badge, the day it closed, the message, the number we call and the call.
       return {
         ...NONE,
         badge: "closed",
         titleBadge: true,
         notice: { title: "This request is closed.", body: null, icon: "info" },
         closedLine: closedLine(at, timeZone),
+        callback: true,
+        call: "specialist",
       };
     case "queued":
       return { ...NONE, badge: "not_sent", titleBadge: true, notice: NOT_SENT, sendNow: true };
@@ -261,7 +255,7 @@ export function listAttention(open: readonly { status: string }[]): { title: str
 /** `Closed · Oct 3`, in the phone's own zone — the day the member lived it, not the day in UTC. */
 export function closedLine(at?: string | null, timeZone?: string): string {
   const day = shortDay(at, timeZone);
-  return day ? `Closed · ${day}` : "Closed";
+  return day ? `Closed  ·  ${day}` : "Closed";
 }
 
 /** Requests whose quote is ready: the Requests tab's dot (DESIGN.md, a 6-pt navy dot). */

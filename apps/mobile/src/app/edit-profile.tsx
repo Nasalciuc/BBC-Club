@@ -68,7 +68,7 @@ export default function EditProfileScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScreenStatusBar on="light" />
       {/* 36: the back chevron and the page's title beside it. */}
-      <TopBar title="Edit profile" onBack={() => router.back()} backTestID="editProfile.back" />
+      <TopBar title="Edit profile" look="edit" onBack={() => router.back()} backTestID="editProfile.back" />
       <ScrollView testID="editProfile.root" style={styles.grow} contentContainerStyle={styles.content}>
         {!profile && loadFailure ? (
           <StateMessage
@@ -86,10 +86,10 @@ export default function EditProfileScreen() {
             }}
           />
         ) : (
-          <RowGroup testID="editProfile.rows">
+          <RowGroup testID="editProfile.rows" look="edit">
             <ListRow
               testID="editProfile.homeAirport"
-              icon="plane"
+              icon="plane-right-fill"
               label="Home airport"
               value={profile ? (homeAirport ? homeAirportLabel(homeAirport, city) : "Not set") : undefined}
               disabled={!profile}
@@ -105,7 +105,7 @@ export default function EditProfileScreen() {
             />
             <ListRow
               testID="editProfile.travelers"
-              icon="users"
+              icon="users-fill"
               label="Travelers"
               value={profile ? travelersLabel(profile.preferences) : undefined}
               disabled={!profile}
@@ -129,6 +129,6 @@ export default function EditProfileScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   grow: { flex: 1 },
-  // 36: the rows' card 16 pt under the top bar.
-  content: { paddingTop: tokens.space.md, paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.lg },
+  // 36: the rows' card 15 pt in, from under the top bar.
+  content: { paddingLeft: 15, paddingRight: 15.2, paddingBottom: tokens.space.lg },
 });

@@ -12,6 +12,8 @@ import {
   SectionHeader,
   Skeleton,
   StateMessage,
+  baselineOffset,
+  belowBaseline,
   rn,
   tokens,
 } from "@bbc/ui";
@@ -22,8 +24,9 @@ import { destinationHref } from "@/features/explore/destination-route";
 import { clearRecentSearches, readRecentSearches, rememberSearch } from "@/features/explore/recent-searches";
 import type { RecentDates } from "@/features/explore/recent-search-logic";
 import { datesChipLabel } from "@/features/explore/travel-preferences";
+import { clubPhoto } from "@/features/places/club-photos";
 import { cardPicture } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { airportSearchState } from "@/lib/airport-search-state";
 import { fetchAirports, fetchHome, fetchPopular } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
@@ -101,7 +104,7 @@ export default function SearchScreen() {
     lng: d.lng,
   }));
   const recentAirports = recent.map((r) => r.airport);
-  const shownPopular = popularRows(popular ?? suggestions, recentAirports, from);
+  const shownPopular = popularRows(popular ?? suggestions, from);
   const photoFor = usePlacePhotos([...shownPopular, ...recentAirports].map((a) => a.code));
   const priceOf = (code: string) => {
     const d = home?.destinations.find((x) => x.code === code);
@@ -115,13 +118,12 @@ export default function SearchScreen() {
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + tokens.space.xs }]} testID="search.root">
+    <View style={[styles.root, { paddingTop: Math.max(0, insets.top - STATUS_BAR + FIELD_TOP) }]} testID="search.root">
       <ScreenStatusBar on="light" />
       <View style={styles.field}>
         <SearchField
           testID="explore.airportQuery"
           editable
-          autoFocus
           tone="field"
           placeholder="Where would you like to go?"
           value={query ? { text: query } : null}
@@ -143,6 +145,7 @@ export default function SearchScreen() {
             <View style={styles.message}>
               <EmptyState
                 testID="search.empty"
+                look="search"
                 icon="search"
                 title="No airports found"
                 body="Try a city name or a three-letter airport code, such as JFK."
@@ -162,59 +165,67 @@ export default function SearchScreen() {
               />
             </View>
           ) : (
-            <View style={styles.section}>
-              <SectionHeader title="Airports" size="small" />
-              {result.phase === "loading" && result.airports.length === 0 ? (
-                <>
-                  <Skeleton height={72} radius="md" />
-                  <Skeleton height={72} radius="md" />
-                </>
-              ) : (
-                result.airports.map((a) => (
-                  <AirportRow
-                    key={a.code}
-                    testID={`explore.airport.${a.code}`}
-                    code={a.code}
-                    city={a.city}
-                    airport={airportName(a)}
-                    onPress={() => choose(a)}
-                  />
-                ))
-              )}
+            <View style={styles.airports}>
+              <SectionHeader title="Airports" size="title" />
+              <View style={styles.airportRows}>
+                {result.phase === "loading" && result.airports.length === 0 ? (
+                  <>
+                    <Skeleton height={55} radius="sm" />
+                    <Skeleton height={55} radius="sm" />
+                  </>
+                ) : (
+                  result.airports.map((a) => (
+                    <AirportRow
+                      key={a.code}
+                      testID={`explore.airport.${a.code}`}
+                      code={a.code}
+                      city={a.city}
+                      airport={airportName(a)}
+                      onPress={() => choose(a)}
+                    />
+                  ))
+                )}
+              </View>
             </View>
           )
         ) : (
           <>
             {shownPopular.length > 0 ? (
-              <View style={styles.section}>
-                <SectionHeader title={from ? popularLabel(from) : "Popular"} size="small" />
-                {shownPopular.map((a) => (
-                  <PopularCard
-                    key={a.code}
-                    testID={`search.popular.${a.code}`}
-                    city={a.city}
-                    airport={airportLine(a)}
-                    fromPrice={priceOf(a.code)}
-                    image={cardPicture(undefined, photoFor(a.code), PICTURE_HEADERS)}
-                    fallback={CLUB_PICTURE}
-                    onPress={() => choose(a)}
-                  />
-                ))}
+              <View style={styles.popular}>
+                <SectionHeader title={from ? popularLabel(from) : "Popular"} size="titleSm" />
+                <View style={styles.cards}>
+                  {shownPopular.map((a) => (
+                    <PopularCard
+                      key={a.code}
+                      testID={`search.popular.${a.code}`}
+                      city={a.city}
+                      airport={airportName(a)}
+                      code={a.code}
+                      fromPrice={priceOf(a.code)}
+                      image={clubPhoto(a.code, "search") ?? cardPicture(undefined, photoFor(a.code), PICTURE_HEADERS)}
+                      fallback={null}
+                      onPress={() => choose(a)}
+                    />
+                  ))}
+                </View>
               </View>
             ) : home === null ? (
-              <View style={styles.section}>
-                <Skeleton width={220} height={24} radius="pill" />
-                <Skeleton height={166} radius="md" />
-                <Skeleton height={166} radius="md" />
+              <View style={styles.popular}>
+                <Skeleton width={220} height={22} radius="pill" />
+                <View style={styles.cards}>
+                  <Skeleton height={166} radius="sm" />
+                  <Skeleton height={166} radius="sm" />
+                </View>
               </View>
             ) : null}
             {recent.length > 0 ? (
-              <View style={styles.section}>
+              <View style={shownPopular.length > 0 || home === null ? styles.recent : styles.popular}>
                 <SectionHeader
                   title="Recent searches"
-                  size="small"
+                  size="titleSm"
                   action={{
                     label: "Clear all",
+                    tone: "link",
                     testID: "search.recent.clear",
                     onPress: () => {
                       clearRecentSearches();
@@ -222,17 +233,22 @@ export default function SearchScreen() {
                     },
                   }}
                 />
-                {recent.map((r) => (
-                  <RecentRow
-                    key={r.airport.code}
-                    testID={`explore.airport.recent.${r.airport.code}`}
-                    city={r.airport.city}
-                    detail={r.dates?.depart ? datesChipLabel(r.dates) : airportLine(r.airport)}
-                    image={cardPicture(undefined, photoFor(r.airport.code), PICTURE_HEADERS)}
-                    fallback={CLUB_PICTURE}
-                    onPress={() => choose(r.airport, r.dates)}
-                  />
-                ))}
+                <View style={styles.rows}>
+                  {recent.map((r) => (
+                    <RecentRow
+                      key={r.airport.code}
+                      testID={`explore.airport.recent.${r.airport.code}`}
+                      city={r.airport.city}
+                      detail={r.dates?.depart ? datesChipLabel(r.dates) : airportLine(r.airport)}
+                      image={
+                        clubPhoto(r.airport.code, "any") ??
+                        cardPicture(undefined, photoFor(r.airport.code), PICTURE_HEADERS)
+                      }
+                      fallback={null}
+                      onPress={() => choose(r.airport, r.dates)}
+                    />
+                  ))}
+                </View>
               </View>
             ) : null}
             {shownPopular.length === 0 && recent.length === 0 && home !== null ? (
@@ -245,11 +261,28 @@ export default function SearchScreen() {
   );
 }
 
+/**
+ * 03 and 18, measured on a 47-pt status bar: the field's top 42.8 pt down (4.2 pt into the status bar's room), 15.2 pt
+ * from the left, `Cancel` ending 15.7 pt from the right; the first title's baseline 37 pt under the field; a card
+ * 12.7 pt under its title's baseline, 166 pt tall, 8.2 pt apart; `Recent searches` 28.8 pt under the last card; rows
+ * 13.4 pt under it, 5 pt apart. While typing (18): `Airports` 38.4 pt under the field, rows 15.3 pt under it, 6.5 apart.
+ */
+const STATUS_BAR = 47;
+const FIELD_TOP = 42.8;
+const GUTTER = { left: 15.2, right: 15.7 } as const;
+const titleSm = tokens.type.titleSm;
+const title = tokens.type.title;
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  field: { paddingHorizontal: tokens.space.gutter },
-  content: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.lg, gap: tokens.space.lg },
-  section: { gap: tokens.space.sm },
+  field: { paddingLeft: GUTTER.left, paddingRight: GUTTER.right },
+  content: { paddingLeft: GUTTER.left, paddingRight: GUTTER.right - 0.5 },
+  popular: { marginTop: 37.1 - baselineOffset(titleSm) },
+  cards: { marginTop: 12.7 - belowBaseline(titleSm), gap: 8.2 },
+  recent: { marginTop: 28.8 - baselineOffset(titleSm) },
+  rows: { marginTop: 13.4 - belowBaseline(titleSm), gap: 5 },
+  airports: { marginTop: 38.4 - baselineOffset(title) },
+  airportRows: { marginTop: 15.3 - belowBaseline(title), gap: 6.5 },
   message: { marginTop: tokens.space.xxl },
-  hint: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  hint: { ...rn(tokens.type.body), color: tokens.colors.textSecondary, marginTop: tokens.space.lg },
 });

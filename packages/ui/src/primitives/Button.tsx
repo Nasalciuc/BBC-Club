@@ -26,7 +26,15 @@ type Props = {
   trailing?: "arrow" | "chevron";
   /** The trailing glyph at the pill's right edge instead of beside the words (`Use these dates →`, `View request ›`). */
   trailingAtEdge?: boolean;
-  /** `md` is 44 pt (`Clear search`, `Search a destination`); otherwise 52. */
+  /** The pill's height as the screen draws it (01 `Continue` 44.2, 04 36.6, 10 53.8 …); 44 by default. */
+  height?: number;
+  /** The words' type role (`button` by default; 04's `buttonBold`, 10's `buttonLg`, 11's `buttonDetail`, 12's
+   *  `profilePill`, …): each screen's pills as it draws them. */
+  text?: keyof typeof tokens.type;
+  /** The icon's box (11: the filled handset at 21.4) and the space from it to the words (11: 14.75). */
+  iconSize?: number;
+  iconGap?: number;
+  /** 1.0 prop, kept while its screens move to 3.0: `md` 44 pt, `lg` the default height. */
   size?: "lg" | "md";
   /** False: the pill hugs its words instead of spanning its row. */
   fill?: boolean;
@@ -45,6 +53,10 @@ export function Button({
   trailing,
   trailingAtEdge = false,
   size = "lg",
+  height,
+  text = "button",
+  iconSize = 18,
+  iconGap,
   fill = true,
   style,
   testID,
@@ -66,8 +78,9 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        size === "md" && styles.md,
+        { minHeight: height ?? (size === "md" ? 44 : DEFAULT_HEIGHT) },
         fill ? styles.fill : styles.hug,
+        iconGap != null && { gap: iconGap },
         tone.frame,
         dimmed && (variant === "primary" ? styles.primaryDisabled : styles.dimmed),
         pressed && !blocked && tone.pressed,
@@ -75,13 +88,13 @@ export function Button({
       ]}
     >
       {busy ? <ActivityIndicator size="small" color={glyph} style={styles.spinner} /> : null}
-      {!busy && icon ? <Icon name={icon} size={22} color={glyph} strokeWidth={2} /> : null}
-      <Text style={[styles.label, tone.label, dimmed && { color: word }]} numberOfLines={1}>
+      {!busy && icon ? <Icon name={icon} size={iconSize} color={glyph} strokeWidth={2} /> : null}
+      <Text style={[styles.label, rn(tokens.type[text]), tone.label, dimmed && { color: word }]} numberOfLines={1}>
         {label}
       </Text>
       {trailing && !busy ? (
         <View style={trailingAtEdge ? styles.edge : styles.trailing}>
-          <Icon name={trailing === "arrow" ? "arrow-right" : "chevron"} size={20} color={glyph} strokeWidth={2} />
+          <Icon name={trailing === "arrow" ? "arrow-right" : "chevron"} size={18} color={glyph} strokeWidth={1.8} />
         </View>
       ) : null}
     </Pressable>
@@ -121,24 +134,23 @@ const TONE: Record<Variant, { frame: ViewStyle; pressed: ViewStyle; label: TextS
   },
 };
 
+const DEFAULT_HEIGHT = 44;
+
 const styles = StyleSheet.create({
   button: {
-    minHeight: 52,
     borderRadius: tokens.radius.pill,
     paddingHorizontal: tokens.space.lg,
-    paddingVertical: tokens.space.sm,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: tokens.space.sm,
+    gap: tokens.space.xs + 2,
   },
-  md: { minHeight: 44, paddingVertical: tokens.space.xs },
   fill: { alignSelf: "stretch" },
   hug: { alignSelf: "center" },
   primaryDisabled: { backgroundColor: tokens.colors.surfaceTint },
   dimmed: { opacity: 0.45 },
   spinner: { marginRight: tokens.space.xxs },
-  label: { ...rn(tokens.type.button), textAlign: "center", flexShrink: 1 },
+  label: { textAlign: "center", flexShrink: 1 },
   trailing: { marginLeft: tokens.space.xxs },
   edge: { position: "absolute", right: tokens.space.lg },
 });

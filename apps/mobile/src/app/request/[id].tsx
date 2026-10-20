@@ -21,10 +21,14 @@ import {
   InfoCard,
   Photo,
   PhotoCredit,
+  QuoteFareCard,
   Skeleton,
   StatusBadge,
+  TIMELINE_HEIGHT,
+  TIMELINE_LABEL_BASELINE,
   Timeline,
-  YourFareCard,
+  baselineOffset,
+  belowBaseline,
   tokens,
   rn,
 } from "@bbc/ui";
@@ -33,7 +37,8 @@ import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { isOffline } from "@/features/explore/offline-logic";
 import { bandPicture } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { clubPhoto } from "@/features/places/club-photos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { detailLines, detailTitle, queuedView, routeCodes } from "@/features/requests/request-card";
 import { closedAt, progressSteps, requestView, serverState, stepCaption } from "@/features/requests/request-view-logic";
@@ -46,7 +51,7 @@ import { getQueued, sendOne } from "@/lib/queue";
 import { savingPercent } from "@/lib/saving";
 
 /** 11: the line under the number we call. */
-const BOOKING_NOTE = "Your specialist confirms availability and books by phone. No payment is taken in the app.";
+const BOOKING_NOTE = "Your specialist confirms availability and books by phone.\nNo payment is taken in the app.";
 
 /** Under `Send now` when it did not go: still offline, or the server did not take it this time. */
 const SEND_OFFLINE = "You’re still offline. It goes out as soon as you’re back.";
@@ -54,9 +59,13 @@ const SEND_LATER = "It didn’t go through. We’ll try again in a few minutes."
 
 const REQUESTS = "/(tabs)/requests" as Href;
 
-/** 11: the city's photograph, the sheet over its foot with 24-pt corners. */
-const HERO = 248;
-const OVERLAP = 24;
+/**
+ * 11, measured on a 47-pt status bar: the photograph from the screen's top; the sheet's top 175.6 pt under the safe
+ * area, its corners 12.5 over the photograph; the 35-pt back button centred 5.1 pt under the safe area, 19.2 in.
+ */
+const SHEET_TOP = 175.6;
+const CORNER = 12.5;
+const BACK = { diameter: 35, left: 19.2, centre: 5.1 } as const;
 /** How long a first answer waits for the origin's city before the page shows its code instead (`JFK to London`). */
 const ORIGIN_WAIT_MS = 1200;
 
@@ -71,14 +80,18 @@ type Loaded =
   // A request still on the phone: waiting to go, or refused by the server for good.
   | { kind: "queued"; vm: RequestVM; rejected: boolean };
 
-/** 11, 30: `We will call` and the member's number, in a white card. */
+/**
+ * 11, 30, 31, 33: `We will call` and the member's number, measured (card top T): white, radius 11.5, the card shadow,
+ * 51.6 tall; the 36-pt circle 16.6 in with the filled handset; the words 69 pt in, `We will call` with its baseline
+ * T+20.9 and the number T+41.7.
+ */
 function CallbackCard({ phone }: { phone: string }) {
   return (
     <View style={styles.callbackCard} accessible accessibilityLabel={`We will call ${phone}`}>
       <View style={styles.callbackIcon}>
-        <Icon name="phone" size={22} color={tokens.colors.textPrimary} strokeWidth={2} />
+        <Icon name="phone-fill" size={17.7} color={tokens.colors.textPrimary} />
       </View>
-      <View style={styles.grow}>
+      <View style={styles.callbackText}>
         <Text style={styles.callbackLabel}>We will call</Text>
         <Text testID="request.callback.phone" style={styles.callbackPhone}>
           {phone}
@@ -235,7 +248,20 @@ export default function RequestDetailScreen() {
     }
   }
 
-  const backTop = insets.top + tokens.space.xs;
+  // The page's frame as 11 draws it, on this phone's status bar.
+  const sheetTop = insets.top + SHEET_TOP;
+  const heroHeight = sheetTop + CORNER;
+  const backTop = insets.top + BACK.centre - BACK.diameter / 2;
+  const back = (
+    <BackButton
+      testID="request.back"
+      variant="glass"
+      diameter={BACK.diameter}
+      glyph={{ size: 24, stroke: 1.6 }}
+      onPress={goBack}
+      style={StyleSheet.flatten([styles.back, { top: backTop }])}
+    />
+  );
 
   // While it loads, the page keeps its photograph's place, its way back and the tab bar (ADR-IMPL-047); the words'
   // shapes shimmer where they will be (29). A reload keeps the request on screen instead: the `Send now` that asked
@@ -244,19 +270,12 @@ export default function RequestDetailScreen() {
     return (
       <View style={styles.root}>
         <ScreenStatusBar on="light" />
-        <View style={styles.hero}>
-          <BackButton
-            testID="request.back"
-            variant="photo"
-            onPress={goBack}
-            style={StyleSheet.flatten([styles.back, { top: backTop }])}
-          />
-        </View>
-        <View style={[styles.sheet, styles.grow]} testID="request.loading">
-          <Skeleton width="80%" height={36} radius="pill" />
-          <Skeleton width="60%" height={18} radius="pill" />
-          <Skeleton width="45%" height={18} radius="pill" />
-          <Skeleton height={88} radius="md" />
+        <View style={[styles.hero, { height: heroHeight }]}>{back}</View>
+        <View style={[styles.sheet, styles.grow, styles.loadingSheet]} testID="request.loading">
+          <Skeleton width="80%" height={30} radius="pill" />
+          <Skeleton width="60%" height={16} radius="pill" />
+          <Skeleton width="45%" height={16} radius="pill" />
+          <Skeleton height={74} radius="md" />
         </View>
         <RootTabBar active="requests" />
       </View>
@@ -311,13 +330,48 @@ export default function RequestDetailScreen() {
   const dial = () => {
     if (call) Linking.openURL(call).catch(() => undefined);
   };
+  // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo.
+  const bundled = clubPhoto(to, "any");
   const picture = bandPicture(null, photoFor(to), {
     headers: PICTURE_HEADERS,
     mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
-    size: { width, height: HERO },
+    size: { width, height: heroHeight },
   });
-  const credit = picture.credit;
+  const credit = bundled ? null : picture.credit;
   const creditLink = credit?.link ?? null;
+  const notice = view.notice
+    ? { ...view.notice, glyph: view.notice.icon === "info" ? ("info-fill" as const) : ("phone-fill" as const) }
+    : null;
+  // What follows the notice: the line under it, then the fare, the number we call and the booking note, then the call.
+  const pill =
+    view.call === "specialist" && call ? (
+      <Button
+        testID="request.call"
+        label="Call your specialist"
+        icon="phone-fill"
+        iconSize={21.4}
+        iconGap={14.75}
+        variant="primary"
+        height={PILL_HEIGHT}
+        text="buttonDetail"
+        onPress={dial}
+        style={styles.pill}
+      />
+    ) : view.call === "us" && call ? (
+      // A request we could not pass on: the call is the one thing left.
+      <Button
+        testID="request.callUs"
+        label="Call us"
+        icon="phone-fill"
+        iconSize={21.4}
+        iconGap={14.75}
+        variant="primary"
+        height={PILL_HEIGHT}
+        text="buttonDetail"
+        onPress={dial}
+        style={styles.pill}
+      />
+    ) : null;
 
   return (
     <View testID="request.root" style={styles.root}>
@@ -327,100 +381,96 @@ export default function RequestDetailScreen() {
         contentContainerStyle={styles.scroll}
         scrollEventThrottle={16}
         onScroll={(e) => {
-          const past = e.nativeEvent.contentOffset.y > HERO - OVERLAP - insets.top;
+          const past = e.nativeEvent.contentOffset.y > sheetTop - insets.top;
           if (past !== pastHero) setPastHero(past);
         }}
       >
-        <View style={styles.hero}>
+        <View style={[styles.hero, { height: heroHeight }]}>
           <Photo
-            source={picture.source}
-            fallback={CLUB_PICTURE}
-            cachePolicy={picture.cache}
+            source={bundled ?? picture.source}
+            fallback={null}
+            cachePolicy={bundled ? "disk" : picture.cache}
             style={StyleSheet.absoluteFill}
             testID="request.photo"
           />
-          <BackButton
-            testID="request.back"
-            variant="photo"
-            onPress={goBack}
-            style={StyleSheet.flatten([styles.back, { top: backTop }])}
-          />
+          {back}
         </View>
 
         <View style={styles.sheet}>
           {/* 11: the route by its cities, the trip's facts under it; 32, 33: the badge beside the title. */}
-          <View style={styles.heading}>
-            <View style={styles.titleRow}>
-              <Text testID="request.title" accessibilityRole="header" style={styles.title} numberOfLines={2}>
-                {detailTitle(vm, originCity)}
+          <View style={styles.titleRow}>
+            <Text testID="request.title" accessibilityRole="header" style={styles.title} numberOfLines={2}>
+              {detailTitle(vm, originCity)}
+            </Text>
+            {view.titleBadge ? (
+              <View style={styles.titleBadge}>
+                <StatusBadge status={view.badge} size="title" />
+              </View>
+            ) : null}
+          </View>
+          <View testID="request.facts">
+            {lines.map((line, i) => (
+              <Text key={line} style={i === 0 ? styles.factsFirst : styles.factsLine}>
+                {line}
               </Text>
-              {view.titleBadge ? <StatusBadge status={view.badge} size="sm" /> : null}
-            </View>
-            <View testID="request.facts" style={styles.facts}>
-              {lines.map((line, i) => (
-                <Text key={line} style={i === 0 ? styles.factsFirst : styles.factsLine}>
-                  {line}
-                </Text>
-              ))}
-              {view.closedLine ? (
-                <Text testID="request.closed" style={styles.factsLine}>
-                  {view.closedLine}
-                </Text>
-              ) : null}
-            </View>
+            ))}
+            {view.closedLine ? (
+              <Text testID="request.closed" style={styles.factsLine}>
+                {view.closedLine}
+              </Text>
+            ) : null}
           </View>
 
-          <View style={styles.progress}>
-            <Text style={styles.section} accessibilityRole="header">
-              Request progress
-            </Text>
+          <Text style={styles.section} accessibilityRole="header">
+            Request progress
+          </Text>
+          <View style={styles.timeline}>
             <Timeline testID="request.timeline" steps={steps} />
           </View>
 
-          {view.notice || caption ? (
-            <View style={styles.group}>
-              {view.notice ? (
-                <InfoCard
-                  testID="request.notice"
-                  icon={view.notice.icon}
-                  title={view.notice.title}
-                  body={view.notice.body ?? undefined}
-                />
-              ) : null}
-              {caption ? (
-                // What comes next — or the specialist's note on where the request is (ADR-IMPL-041).
-                <Text testID="request.caption" style={styles.caption}>
-                  {caption}
-                </Text>
-              ) : null}
+          {notice ? (
+            <View style={styles.notice}>
+              <InfoCard
+                testID="request.notice"
+                look="detail"
+                icon={notice.glyph}
+                title={notice.title}
+                body={notice.body ?? undefined}
+              />
             </View>
+          ) : null}
+          {caption ? (
+            // What comes next — or the specialist's note on where the request is (ADR-IMPL-041).
+            <Text testID="request.caption" style={styles.caption}>
+              {caption}
+            </Text>
           ) : null}
 
           {fare || view.callback ? (
-            // 11: the fare, the number we call and the booking note, 8 pt apart.
-            <View testID="request.callback" style={styles.callback}>
-              {fare ? <YourFareCard testID="request.fare" price={fare} percent={savingPercent(fare)} /> : null}
-              {phone ? <CallbackCard phone={phone} /> : null}
+            // 11: the fare, the number we call and the booking note.
+            <View testID="request.callback" style={caption ? styles.callbackAfterCaption : styles.callbackAfterNotice}>
+              {fare ? <QuoteFareCard testID="request.fare" price={fare} percent={savingPercent(fare)} /> : null}
+              {phone ? (
+                <View style={fare ? styles.callAfterFare : null}>
+                  <CallbackCard phone={phone} />
+                </View>
+              ) : null}
               {view.callback ? <Text style={styles.note}>{BOOKING_NOTE}</Text> : null}
             </View>
           ) : null}
 
-          {view.call === "specialist" && call ? (
-            <Button testID="request.call" label="Call your specialist" icon="phone" variant="primary" onPress={dial} />
-          ) : null}
-
-          {view.call === "us" && call ? (
-            // A request we could not pass on: the call is the one thing left.
-            <Button testID="request.callUs" label="Call us" icon="phone" variant="primary" onPress={dial} />
-          ) : null}
+          {pill ? <View style={view.callback ? styles.pillAfterNote : styles.pillAfterNotice}>{pill}</View> : null}
 
           {view.sendNow ? (
-            <View>
+            <View style={styles.pillAfterNotice}>
               <Button
                 testID="request.send"
                 label={sending ? "Sending…" : "Send now"}
                 variant="primary"
                 busy={sending}
+                height={PILL_HEIGHT}
+                text="buttonDetail"
+                style={styles.pill}
                 onPress={() => {
                   void onSendNow().catch(() => {
                     if (here()) setSendNote(SEND_LATER);
@@ -470,65 +520,120 @@ export default function RequestDetailScreen() {
   );
 }
 
+/**
+ * 11, measured from the sheet's top T (pt): the cards and the pill 19.2 in, the words 23; the title's baseline T+44.2,
+ * the days' 23.3 under it, the route's 20.3 under those (a closed day 21.7 under that); `Request progress` 38.5 under
+ * the last; the marks' centre 27.7 under it; the notice 30.2 under the steps' names; its line 26.1 under the notice;
+ * the first card 13.2 under the line (18.5 under the notice when there is no line); the number's card 7.5 under the
+ * fare; the booking note's baselines 14.5 under the cards, 13.9 apart; the pill 40.2 tall, 10.3 under the note
+ * (10.2 under the notice for `Send now`, 32).
+ */
+const GUTTER = 19.2;
+const TEXT_IN = 23 - GUTTER;
+const PILL_HEIGHT = 40.2;
+const title = tokens.type.headline;
+const facts = tokens.type.detailFacts;
+const meta = tokens.type.detailMeta;
+const section = tokens.type.detailSection;
+const caption = tokens.type.detailCaption;
+const fine = tokens.type.finePrint;
+
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
+  root: { flex: 1, backgroundColor: tokens.colors.surfaceSheet },
   grow: { flex: 1 },
   centered: { alignItems: "center", justifyContent: "center", paddingHorizontal: tokens.space.gutter },
   scroll: { paddingBottom: tokens.space.lg },
-  hero: { height: HERO, backgroundColor: tokens.colors.surfaceTint },
-  back: { position: "absolute", left: tokens.space.gutter },
+  hero: { backgroundColor: tokens.colors.surfaceTint },
+  back: { position: "absolute", left: BACK.left },
   errorTop: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.xs },
-  // 11: the sheet over the photograph's foot, its corners 24 pt.
+  // 11: the sheet over the photograph's foot, its corners 12.5 pt, near-white.
   sheet: {
-    marginTop: -OVERLAP,
-    borderTopLeftRadius: tokens.radius.xl,
-    borderTopRightRadius: tokens.radius.xl,
-    backgroundColor: tokens.colors.surfacePage,
-    paddingHorizontal: tokens.space.gutter,
-    paddingTop: tokens.space.lg,
-    gap: tokens.space.lg,
+    marginTop: -CORNER,
+    borderTopLeftRadius: CORNER,
+    borderTopRightRadius: CORNER,
+    backgroundColor: tokens.colors.surfaceSheet,
+    paddingHorizontal: GUTTER,
   },
-  heading: { gap: tokens.space.xs },
-  // 32, 33: the badge at the right of the title; a title too long for both sends the badge under it rather than break
-  // the route in two.
-  titleRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    columnGap: tokens.space.sm,
-    rowGap: tokens.space.xs,
+  loadingSheet: { paddingTop: tokens.space.lg, gap: tokens.space.md },
+  // 32, 33: the badge at the right of the title, its middle on the title's capitals; a title too long for both sends
+  // the badge under it rather than break the route in two.
+  titleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between" },
+  title: {
+    ...rn(title),
+    color: tokens.colors.textPrimary,
+    flexShrink: 1,
+    marginLeft: TEXT_IN,
+    marginTop: 44.2 - baselineOffset(title),
   },
-  title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, flexShrink: 1 },
-  facts: { gap: 2 },
-  factsFirst: { ...rn(tokens.type.bodyLg), color: tokens.colors.textSecondary },
-  factsLine: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  progress: { gap: tokens.space.md },
-  section: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  group: { gap: tokens.space.md },
-  caption: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  callback: { gap: tokens.space.xs },
+  // 32: the badge's middle on the title's capitals (0.36 of the size above the baseline), its right edge 2.7 pt in.
+  titleBadge: { marginTop: 44.2 - 0.36 * title.fontSize - 26.7 / 2, marginRight: 2.7 },
+  factsFirst: {
+    ...rn(facts),
+    color: tokens.colors.textSecondary,
+    marginLeft: TEXT_IN,
+    marginTop: 23.3 - belowBaseline(title) - baselineOffset(facts),
+  },
+  factsLine: {
+    ...rn(meta),
+    color: tokens.colors.textSecondary,
+    marginLeft: TEXT_IN,
+    marginTop: 20.3 - belowBaseline(facts) - baselineOffset(meta),
+  },
+  section: {
+    ...rn(section),
+    color: tokens.colors.textPrimary,
+    marginLeft: TEXT_IN,
+    marginTop: 38.5 - belowBaseline(meta) - baselineOffset(section),
+  },
+  timeline: { marginTop: 27.7 - belowBaseline(section) - 13.75 },
+  notice: { marginTop: 30.2 - (TIMELINE_HEIGHT - TIMELINE_LABEL_BASELINE) },
+  caption: {
+    ...rn(caption),
+    color: tokens.colors.textSecondary,
+    marginLeft: TEXT_IN + 1.3,
+    marginTop: 26.1 - baselineOffset(caption),
+  },
+  callbackAfterCaption: { marginTop: 13.2 - belowBaseline(caption) },
+  callbackAfterNotice: { marginTop: 18.5 },
+  callAfterFare: { marginTop: 7.5 },
   callbackCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.space.md,
-    padding: tokens.space.md,
-    borderRadius: tokens.radius.md,
+    height: 51.6,
+    borderRadius: 11.5,
     backgroundColor: tokens.colors.surfaceCard,
     ...tokens.elevation.card,
   },
   callbackIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: tokens.radius.pill,
-    backgroundColor: tokens.colors.borderDefault,
+    position: "absolute",
+    left: 16.6,
+    top: (51.6 - 36) / 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: tokens.colors.callCircle,
     alignItems: "center",
     justifyContent: "center",
   },
-  callbackLabel: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  callbackPhone: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
-  note: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
+  callbackText: { marginLeft: 69 },
+  callbackLabel: {
+    ...rn(tokens.type.callLabel),
+    color: tokens.colors.textSecondary,
+    marginTop: 20.9 - baselineOffset(tokens.type.callLabel),
+  },
+  callbackPhone: {
+    ...rn(tokens.type.callPhone),
+    color: tokens.colors.textPrimary,
+    marginTop: 20.8 - belowBaseline(tokens.type.callLabel) - baselineOffset(tokens.type.callPhone),
+  },
+  note: {
+    ...rn(fine),
+    color: tokens.colors.textSecondary,
+    marginLeft: TEXT_IN + 1.7,
+    marginTop: 14.5 - baselineOffset(fine),
+  },
+  pillAfterNote: { marginTop: 10.3 - belowBaseline(fine) },
+  pillAfterNotice: { marginTop: 10.2 },
+  pill: { alignSelf: "stretch" },
   sendNote: { marginTop: tokens.space.xs },
-  footer: { gap: tokens.space.xs },
+  footer: { gap: tokens.space.xs, marginTop: tokens.space.lg },
   reference: { ...rn(tokens.type.label), color: tokens.colors.textSecondary },
 });

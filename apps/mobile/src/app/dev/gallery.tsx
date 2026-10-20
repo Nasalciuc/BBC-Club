@@ -333,7 +333,7 @@ function GalleryScreen() {
         />
         <CabinCard
           testID="gallery.cabin.first"
-          icon="armchair"
+          icon="seat-first"
           title="First"
           line="The highest level of comfort"
           selected={cabin === "first"}
@@ -343,7 +343,8 @@ function GalleryScreen() {
       <PopularCard
         testID="gallery.popular"
         city="London"
-        airport="Heathrow Airport  ·  LHR"
+        airport="Heathrow Airport"
+        code="LHR"
         fromPrice="$3,900"
         image={null}
         fallback={CLUB_PICTURE}
@@ -494,6 +495,7 @@ function GalleryScreen() {
       </View>
       <EmptyState
         testID="gallery.empty"
+        look="explore"
         title="No offers yet."
         body="Your specialist's offers will appear here. Search a destination to request a fare."
         primary={{ label: "Search a destination", onPress: noop }}
@@ -501,6 +503,7 @@ function GalleryScreen() {
       />
       <EmptyState
         testID="gallery.empty.airports"
+        look="search"
         icon="search"
         title="No airports found"
         body="Try a city name or a three-letter airport code, such as JFK."

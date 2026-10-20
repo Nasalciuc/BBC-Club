@@ -5,16 +5,10 @@ export function popularLabel(from: Pick<AirportVM, "city">): string {
   return `Popular from ${from.city}`;
 }
 
-/** 03 shows three popular destinations, none that already sits under Recent searches, never the origin itself. */
-export function popularRows(
-  popular: readonly AirportVM[],
-  recent: readonly Pick<AirportVM, "code">[],
-  from: Pick<AirportVM, "code"> | null,
-  max = 3,
-): AirportVM[] {
-  const taken = new Set(recent.map((a) => a.code));
-  if (from) taken.add(from.code);
-  return popular.filter((a) => !taken.has(a.code)).slice(0, max);
+/** 03 shows three popular destinations, never the origin itself — a city searched lately stays among them (03 lists
+ *  London and Paris under both titles). */
+export function popularRows(popular: readonly AirportVM[], from: Pick<AirportVM, "code"> | null, max = 3): AirportVM[] {
+  return popular.filter((a) => a.code !== from?.code).slice(0, max);
 }
 
 /** The phone's IANA zone for GET /v1/airports/home-suggestion — null when the runtime has none to give. */
@@ -33,12 +27,14 @@ function defaultResolve(): string | undefined {
 
 /**
  * `Heathrow Airport` (03, 18): the catalogue's name (`Heathrow`), called an airport where it does not say so already
- * (`John F Kennedy International`, `Leonardo da Vinci–Fiumicino Airport` stay as they are).
+ * (`John F Kennedy International`, `Leonardo da Vinci–Fiumicino Airport` stay as they are), without the city it sits
+ * under (18: `London` over `City Airport`, not `London City Airport`).
  */
-export function airportName(airport: Pick<AirportVM, "name">): string {
-  return /airport|international|aeroport|aeropuerto|aeroporto|flughafen/i.test(airport.name)
-    ? airport.name
-    : `${airport.name} Airport`;
+export function airportName(airport: Pick<AirportVM, "name"> & Partial<Pick<AirportVM, "city">>): string {
+  const city = airport.city?.trim();
+  const rest = city && airport.name.startsWith(`${city} `) ? airport.name.slice(city.length + 1).trim() : "";
+  const name = rest || airport.name;
+  return /airport|international|aeroport|aeropuerto|aeroporto|flughafen/i.test(name) ? name : `${name} Airport`;
 }
 
 /** `Heathrow Airport  ·  LHR` — the line under a city on Search (03). */

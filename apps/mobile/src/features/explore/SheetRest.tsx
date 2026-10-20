@@ -24,6 +24,7 @@ export function NoOffers({ onSearch }: { onSearch: () => void }) {
     <View style={styles.empty}>
       <EmptyState
         testID="explore.offers.empty"
+        look="explore"
         title="No offers yet."
         body="Your specialist’s offers will appear here. Search a destination to request a fare."
         primary={{ label: "Search a destination", onPress: onSearch }}

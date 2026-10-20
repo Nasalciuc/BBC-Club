@@ -222,6 +222,7 @@ export default function OnboardingScreen() {
             <View style={styles.message}>
               <EmptyState
                 testID="onboarding.airport.empty"
+                look="search"
                 icon="search"
                 title="No airports found"
                 body="Try a city name or a three-letter airport code, such as JFK."
@@ -293,7 +294,7 @@ export default function OnboardingScreen() {
             />
             <CabinCard
               testID="onboarding.cabin.first"
-              icon="armchair"
+              icon="seat-first"
               title="First"
               line="The highest level of comfort"
               selected={cabin === "first"}
