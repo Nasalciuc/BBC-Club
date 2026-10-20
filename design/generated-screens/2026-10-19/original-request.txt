@@ -1,0 +1,122 @@
+Generate 12 separate images, one for each screen below, in this order. Each image is one single mobile app screen of "BuyBusinessClass Club", a private business-class travel club app: members see fares from their home airport, request a quote, and a travel specialist arranges the trip by phone.
+If you can only make one image per answer, make Screen 1 now, then the next screen each time I write "next".
+
+Format for every image: a vertical iPhone screenshot, portrait 9:19.5 (if that size is not available, the tallest portrait size), with the screen filling the whole image edge to edge, the iOS status bar (9:41) at the top and the home indicator at the bottom. One phone screen per image: not an iPad or tablet layout, not landscape, not a presentation board, no device frame, no other screens, no captions around it.
+All 12 screens share one design system and the same data, so they look like one real app:
+Style: ultra modern 2026 travel startup app, light mode with airy white space, large bright daylight photography (blue skies, sunlit cities), soft rounded corners (16–20px), subtle premium shadows, floating cards, pill-shaped buttons and chips, thin line icons, Apple-level clean UI with luxury travel branding.
+Colors: white #FFFFFF and off-white #FAFAF8 backgrounds; our deep navy #1E293B for text and as the only accent (buttons, active chips, the active tab, links, toggles, badges, the timeline, globe pins); slate gray #64748B secondary text; light navy tint #E2E8F0 for light chips, badges and selected backgrounds; red only for "Sign out" and "Delete account"; no gold, bronze, orange, yellow, green or bright azure blue.
+Type: clean modern sans-serif (SF Pro / Inter style), bold headlines, medium subheads, crisp readable text.
+Data (the same on every screen): Daniel Reed flies from New York (JFK), Business, 1 adult, +1 212 555 0142, daniel@example.com. Trip: New York (JFK) to London (LHR), British Airways, Nov 12–19, 2026, round trip, 18:55 → 07:05 +1. Fares from New York: London $3,900 (published $7,550, save 48%), Paris $3,450, Tokyo $4,200, Dubai $4,100.
+
+Screen 1: Travel Preferences Onboarding
+A thin progress line at the top, completely filled, with no step dots
+Bold headline: "Where do you usually fly from?"
+Subheadline: "So we start with the right fares. You can change this later."
+Section "Home airport": a card with a sunny New York skyline photo, "New York · JFK"
+Section "Cabin": chips with icons, Business and First
+Section "Who usually travels": a stepper with a person icon, Adults 1
+Small text: "Travelling with children? Add their ages in a note when you request."
+Navy pill button "Continue" and "Skip"
+
+Screen 2: Home / Explore
+Greeting: "Good morning," / "Daniel", round avatar top right
+A bright daytime 3D globe on a soft pale-blue sky (#BAD2EB): blue oceans, white clouds, navy pins with white price tags for London, Paris, Tokyo and Dubai
+Large search bar: "Where would you like to go?"
+Offers carousel "Offers to inspire" with "See all": large cards for Paris, Tokyo and Dubai with a sunny destination photo, city, country, rating with a navy star ("★ 4.8"), fare ("from $3,450") and a save button
+Tab bar: Explore (active), Requests, Profile
+
+Screen 3: Search
+A search field at the top with the placeholder "Where would you like to go?" and "Cancel", with no title above it and no bookmark icon
+"Popular from New York": rows with a city photo, city, airport, code and fare: London Heathrow LHR from $3,900, Paris Charles de Gaulle CDG from $3,450, Tokyo Haneda HND from $4,200
+"Recent searches" with "Clear all": London · Nov 12–19, 2026; Paris · Oct 5–12, 2026; Dubai · Mar 3–10, 2027
+
+Screen 4: Destination
+The daytime globe turned to London, with a white flight arc from New York
+Chips with icons: "Nov 12–19", "Business", "1 adult"
+"Indicative fare" with London local time
+"From $3,900 · round trip"
+Small text: "Indicative · your specialist confirms the fare"
+Flight options with airline logo, times and price
+Large navy CTA: "Request a quote"
+
+Screen 5: Fare Details
+Large immersive image carousel: London in bright daylight, the business-class seat, the lounge
+Round white buttons over the photo: back, share, save
+Title: "New York to London"
+Pills with icons: "Business", "Round trip", "1 Adult", "Nov 12–19"
+Info card: weather in London and "Your fare $3,900, down from $7,550" with a light navy "Save 48%" pill
+Flight overview: JFK → LHR, airline, departure and arrival times
+Rows with chevrons: "About this fare" and "The comparison"
+Map preview titled "The route": a navy arc from New York (JFK) across the Atlantic to London (LHR)
+Large navy CTA: "Request this fare"
+Small text: "No payment is taken in the app."
+Tab bar: Explore (active), Requests, Profile
+
+Screen 6: Request a Quote
+Bottom sheet over the fare
+Trip summary card with a small London photo: "New York to London", Business
+Round trip / One way
+Travel dates with a calendar icon: Depart, Return
+Travelers selector
+Contact section "We will contact you": Name, Phone, Email, Note (optional)
+Large navy CTA: "Request a quote"
+Small text: "A specialist will call you shortly."
+
+Screen 7: Travel Dates
+Calendar months November and December 2026, stacked vertically, full width, large day cells
+A correct calendar: weeks start on Monday, November 2026 starts on a Sunday, Nov 12 and Nov 19 are Thursdays, December 2026 starts on a Tuesday, every day number appears once
+Departure and return dates as navy circles with a light navy band between them: Nov 12 – Nov 19
+"Keep the dates flexible" toggle
+Small text: "Preferred dates. Your specialist confirms availability."
+Large navy CTA: "Use these dates"
+
+Screen 8: Request Received
+London in bright daylight at the top
+A large navy check
+Bold headline: "Request received."
+"A specialist will call you shortly on +1 212 555 0142."
+"London is next."
+Trip details: JFK → LHR, Nov 12–19, round trip, 1 adult
+Navy pill button: "View request"
+Tab bar: Explore, Requests (active), Profile
+
+Screen 9: Requests
+Headline: "Requests", "Journeys in good hands."
+Filter chips: All (selected), Quote ready, Received, Booked, Closed
+Request cards with a destination photo, route, dates and a status badge: London (Quote ready), Tokyo (Received), Dubai (Booked), Paris (Closed)
+Cards: London, JFK → LHR, Nov 12–19, 2026, Quote ready; Tokyo, JFK → HND, Jan 14–21, 2027, Received; Dubai, JFK → DXB, Mar 3–10, 2027, Booked; Paris, JFK → CDG, Oct 5–12, 2026, Closed
+Status badges: Quote ready in solid navy with white text, Received in light navy tint, Booked in a navy outline with a check, Closed in light gray
+Tab bar: Explore, Requests (active), Profile
+
+Screen 10: Requests, No Requests Yet
+The same Requests screen for a new member who has not requested anything yet, as its own full screen
+Headline: "Requests", "Journeys in good hands."
+No filter chips and no cards
+A large, warm travel illustration in navy and pale blue: a business-class seat, a boarding pass and a small globe
+Title: "No requests yet."
+Text: "Explore destinations and request a fare. Your requests will appear here."
+Navy pill button: "Explore"
+Tab bar: Explore, Requests (active), Profile
+
+Screen 11: Request Details
+London photo at the top with a round back button
+Title: "New York to London"
+Beautiful navy timeline: "Request progress", Received · Oct 16, Quote ready · Oct 18 (current), Booked
+Current step: "Your quote is ready. A specialist will call shortly to confirm the details."
+"Review the quote with your specialist."
+Your fare card: "$3,900", down from "$7,550", with a light navy "Save 48%" pill
+"We will call +1 212 555 0142"
+Large navy CTA: "Call your specialist"
+Tab bar: Explore, Requests (active), Profile
+
+Screen 12: Profile
+Large circular avatar over a sunny New York skyline photo
+Name: "Daniel Reed", "Flies from JFK"
+Travel stats: 3 trips, 2 open requests, 8 saved
+"Edit profile" and "Call us"
+Grid of his trips: sunny photos of London, Paris, Tokyo, Dubai
+Rows with icons: home airport, cabin, travelers, phone
+Settings rows with icons: notifications, password
+"Delete account" as its own red row
+"Sign out" as an outlined red pill
+Tab bar: Explore, Requests, Profile (active)
