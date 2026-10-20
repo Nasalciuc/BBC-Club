@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, type ReactNode, useContext, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import BottomSheet, {
   type BottomSheetBackgroundProps,
@@ -115,20 +115,30 @@ function SheetHandle({ animatedIndex }: BottomSheetHandleProps) {
 /** Explore's sheet over the globe, at three stops (02, 13, 16). BottomSheetScrollView, never ScrollView — the content's
  *  gesture must not fight the sheet's. */
 export function HomeSheet({ index, onChange, snapPoints, children, footer, accessory, testID }: Props) {
+  const sheet = useRef<BottomSheet>(null);
+  // The sheet is never closed: three stops and no pan down to close. The library says -1 when a snap lands on none
+  // of them — its target moved while it ran, as the screen's height settles after its first layout — and passing
+  // that on closed the sheet for good: the screen's index became -1 and nothing raised it again (Android parity on
+  // #80: Explore without its search bar). The sheet goes back to the stop the screen asked for instead.
+  function settle(next: number) {
+    if (next >= 0) onChange(next);
+    else sheet.current?.snapToIndex(index);
+  }
   return (
     <LookContext.Provider value={index >= 2 ? RAISED.all : RAISED.route}>
       <AccessoryContext.Provider value={accessory ?? null}>
         <FooterContext.Provider value={footer ?? null}>
           <BottomSheet
+            ref={sheet}
             index={index}
             snapPoints={[...snapPoints]}
             // v5 sizes to content by default and inserts that height as an extra snap, shifting every index: keep exactly
             // these three.
             enableDynamicSizing={false}
-            onChange={onChange}
+            onChange={settle}
             // The index follows a snap as it starts, not only when it lands: a city chosen while a dragged sheet is still
             // settling must find the index already down, or raising it again would change nothing.
-            onAnimate={(_from, to) => onChange(to)}
+            onAnimate={(_from, to) => settle(to)}
             enablePanDownToClose={false}
             animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
             handleComponent={SheetHandle}
