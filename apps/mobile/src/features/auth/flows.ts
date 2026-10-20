@@ -8,6 +8,7 @@ import { clearQueue } from "@/lib/queue";
 import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
+import { otpSendResult } from "./otp-send-logic";
 
 /** Unregister push, drop pending queue, the Requests dot's number and what was saved, clear onboarded — then auth
  *  ends. */
@@ -67,11 +68,14 @@ export async function signIn(email: string, password: string): Promise<Result> {
 
 /**
  * Join Path A (ADR-PROD-001 / identity MODULE.md): email only → sign-in OTP.
- * Constant-shape outcome (no email oracle).
+ * Constant-shape outcome while the server answers (no email oracle); when nothing answers, the
+ * connection error stands instead of a code that never left (otp-send-logic.ts).
  */
 export async function join(email: string): Promise<Result> {
-  await withAuthTimeout(authClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" })).catch(() => undefined);
-  return { ok: true, message: CONSTANT_OTP_SENT };
+  return otpSendResult(
+    () => withAuthTimeout(authClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" })),
+    CONSTANT_OTP_SENT,
+  );
 }
 
 /** Consume join OTP — creates user + session when the email is new (Path A). */
@@ -102,12 +106,12 @@ export async function resendCode(email: string, purpose: AuthPurpose): Promise<R
   }
 }
 
-/** Forgot password: request a reset code. Constant-shape outcome. */
+/** Forgot password: request a reset code. Constant-shape while the server answers; no answer, no pretence. */
 export async function requestReset(email: string): Promise<Result> {
-  await withAuthTimeout(authClient.emailOtp.sendVerificationOtp({ email, type: "forget-password" })).catch(
-    () => undefined,
+  return otpSendResult(
+    () => withAuthTimeout(authClient.emailOtp.sendVerificationOtp({ email, type: "forget-password" })),
+    CONSTANT_RESET_SENT,
   );
-  return { ok: true, message: CONSTANT_RESET_SENT };
 }
 
 /** Reset with code + new password, then sign in so the member lands in the gate. */
