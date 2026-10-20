@@ -1119,10 +1119,10 @@ module.exports = {
     }
   ],
   "offer-sm-from": [
-    "11.5px",
+    "12.5px",
     {
-      "lineHeight": "15px",
-      "letterSpacing": "0.98px",
+      "lineHeight": "16px",
+      "letterSpacing": "1.26px",
       "fontWeight": "400"
     }
   ],
@@ -1159,10 +1159,10 @@ module.exports = {
     }
   ],
   "wide-from": [
-    "11.5px",
+    "12.5px",
     {
-      "lineHeight": "15px",
-      "letterSpacing": "0.91px",
+      "lineHeight": "16px",
+      "letterSpacing": "1.16px",
       "fontWeight": "400"
     }
   ],
@@ -1471,10 +1471,10 @@ module.exports = {
     }
   ],
   "place-zone": [
-    "11px",
+    "12px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "1.55px",
+      "lineHeight": "16px",
+      "letterSpacing": "0.7px",
       "fontWeight": "400"
     }
   ],

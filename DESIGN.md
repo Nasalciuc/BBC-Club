@@ -865,10 +865,10 @@ typography:
     letterSpacing: 0.87px
   offer-sm-from:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 11.5px
+    fontSize: 12.5px
     fontWeight: 400
     lineHeight: 1.3
-    letterSpacing: 0.98px
+    letterSpacing: 1.26px
   offer-sm-price:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 16.25px
@@ -895,10 +895,10 @@ typography:
     letterSpacing: 0.56px
   wide-from:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 11.5px
+    fontSize: 12.5px
     fontWeight: 400
     lineHeight: 1.3
-    letterSpacing: 0.91px
+    letterSpacing: 1.16px
   wide-price:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 16.25px
@@ -1129,10 +1129,10 @@ typography:
     letterSpacing: 0px
   place-zone:
     fontFamily: "Inter Tight, system-ui, sans-serif"
-    fontSize: 11px
+    fontSize: 12px
     fontWeight: 400
     lineHeight: 1.3
-    letterSpacing: 1.55px
+    letterSpacing: 0.7px
   place-options:
     fontFamily: "Inter Tight, system-ui, sans-serif"
     fontSize: 21px

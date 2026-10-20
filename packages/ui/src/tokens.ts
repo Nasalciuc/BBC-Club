@@ -1006,10 +1006,10 @@ export const tokens = {
   },
   "offerSmFrom": {
     "fontFamily": "Inter Tight",
-    "fontSize": 11.5,
+    "fontSize": 12.5,
     "fontWeight": "400",
-    "lineHeight": 15,
-    "letterSpacing": 0.98
+    "lineHeight": 16,
+    "letterSpacing": 1.26
   },
   "offerSmPrice": {
     "fontFamily": "Inter Tight",
@@ -1041,10 +1041,10 @@ export const tokens = {
   },
   "wideFrom": {
     "fontFamily": "Inter Tight",
-    "fontSize": 11.5,
+    "fontSize": 12.5,
     "fontWeight": "400",
-    "lineHeight": 15,
-    "letterSpacing": 0.91
+    "lineHeight": 16,
+    "letterSpacing": 1.16
   },
   "widePrice": {
     "fontFamily": "Inter Tight",
@@ -1314,10 +1314,10 @@ export const tokens = {
   },
   "placeZone": {
     "fontFamily": "Inter Tight",
-    "fontSize": 11,
+    "fontSize": 12,
     "fontWeight": "400",
-    "lineHeight": 14,
-    "letterSpacing": 1.55
+    "lineHeight": 16,
+    "letterSpacing": 0.7
   },
   "placeOptions": {
     "fontFamily": "Inter Tight",

@@ -30,10 +30,10 @@ type Props = {
 type Role = TextStyle & { fontSize: number; lineHeight: number };
 const r = (t: (typeof tokens.type)[keyof typeof tokens.type]) => rn(t) as Role;
 
-/** The margin that puts a line's baseline `pitch` under the one before it (or under the top of what holds it). */
 /** Between the summary's words and the clock's rule, and the clock's column and the card's edge (ADR-IMPL-057). */
 const SUMMARY_GAP = 10;
 
+/** The margin that puts a line's baseline `pitch` under the one before it (or under the top of what holds it). */
 const after = (pitch: number, prev: Role | null, next: Role) =>
   pitch - (prev ? belowBaseline(prev) : 0) - baselineOffset(next);
 
@@ -58,9 +58,8 @@ type Geometry = {
     /** What the price buys after a dot: its baseline `rise` over the price's; the dot `dotGap` after the price's box
      *  and the words `wordsGap` after the dot's. */
     basis: { role: Role; rise: number; dotGap: number; wordsGap: number; tone: "navy" | "slate" };
-    /** `Indicative · your specialist confirms the fare.`: the dot `gaps[0]` after `Indicative`, the words `gaps[1]` after
-     *  the dot (between the words' boxes). */
-    note: { role: Role; baseline: number; gaps: readonly [number, number] };
+    /** `Indicative · your specialist confirms the fare.`: one line in 13 and 04; at the reading sizes it wraps. */
+    note: { role: Role; baseline: number };
     clock: {
       left: number;
       label: Role;
@@ -99,7 +98,7 @@ const ROUTE: Geometry = {
     label: { role: r(tokens.type.routeLabel), baseline: 23.3 },
     price: { role: r(tokens.type.routePrice), baseline: 49.6 },
     basis: { role: r(tokens.type.routeBasis), rise: 1.65, dotGap: 7.41, wordsGap: 4.71, tone: "slate" },
-    note: { role: r(tokens.type.routeNote), baseline: 67.7, gaps: [4.13, 5.35] },
+    note: { role: r(tokens.type.routeNote), baseline: 67.7 },
     clock: {
       left: 275.1,
       label: r(tokens.type.routeTimeLabel),
@@ -136,7 +135,7 @@ const PAGE: Geometry = {
     label: { role: r(tokens.type.placeLabel), baseline: 19.9 },
     price: { role: r(tokens.type.placePrice), baseline: 44.4 },
     basis: { role: r(tokens.type.placeBasis), rise: 0, dotGap: 5, wordsGap: 6.1, tone: "navy" },
-    note: { role: r(tokens.type.placeNote), baseline: 63.7, gaps: [3.69, 4.15] },
+    note: { role: r(tokens.type.placeNote), baseline: 63.7 },
     clock: {
       // 04 draws the column 303.1 in; at the reading sizes it stands where 13's does from the edge (ADR-IMPL-057).
       left: 11.2 + 266,
@@ -154,23 +153,26 @@ const PAGE: Geometry = {
 };
 
 /**
- * 19: a message in the summary's place — its title on 30.9 from the summary's top, its words from 48.6 every 15.7 and
- * 205 wide, `Try again` on 81.6 — 21.6 in; the summary then 91.7 tall.
+ * 19: a message in the summary's place — its title on 30.9 from the summary's top, its words from 48.6 every 15.7 (205
+ * wide there; at the reading sizes they take the summary's column, ADR-IMPL-057), `Try again` on 81.6 — 21.6 in; the
+ * summary then 91.7 tall.
  */
 const MESSAGE = {
   left: 21.6,
-  width: 205,
   title: { role: r(tokens.type.routeMessageTitle), baseline: 30.9 },
   body: { role: r(tokens.type.routeMessage), baseline: 48.6 },
   link: { role: r(tokens.type.routeLink), after: 17.3 },
+  /** `Try again`'s baseline: the room 19 leaves under it is the message's foot. */
+  linkBaseline: 81.6,
   height: 91.7,
   /** The column's rule ends this far above the summary's foot when a message makes it taller. */
   ruleFoot: 12.9,
 } as const;
 
 const PAUSED = "Searching paused for a moment. Try again shortly.";
-/** The note under an indicative fare (13, 04), in its three parts. */
-const NOTE = ["Indicative", "·", "your specialist confirms the fare."] as const;
+/** The note under an indicative fare (13, 04), and how it is read aloud. */
+const NOTE = "Indicative · your specialist confirms the fare.";
+const NOTE_SPOKEN = "Indicative. Your specialist confirms the fare.";
 
 /**
  * A destination (13, 04, 19): the city and its country (13) or its line (04), the trip's three chips, the fare's
@@ -206,6 +208,17 @@ export function DestinationDetails({
   const message = isMessage(state, offline);
   const height = message ? MESSAGE.height : s.height;
   const rule = { top: s.rule.top, bottom: Math.max(s.rule.bottom, height - MESSAGE.ruleFoot) };
+  // The summary's frame: the card (04) or, between the rules (13), the sheet's content.
+  const frame = s.card ? x(s.card.left) : 0;
+  const wordsLeft = x(message ? MESSAGE.left : s.left);
+  // The room the images leave under the last line — the note (13, 04), `Try again` (19) — kept when the words or the
+  // clock's zone wrap and the summary grows.
+  const foot = Math.max(
+    0,
+    message
+      ? MESSAGE.height - MESSAGE.linkBaseline - belowBaseline(MESSAGE.link.role)
+      : s.height - s.note.baseline - belowBaseline(s.note.role),
+  );
 
   const optionsTop = g.options.baseline - baselineOffset(g.options.role);
 
@@ -285,6 +298,8 @@ export function DestinationDetails({
       {/* Everything from the summary's top down, measured from where the chips' row would end at its drawn height: a
           taller row (a larger text size) pushes the rest down with it. */}
       <View style={{ marginTop: s.top - g.chips.top - CHIP_HEIGHT[g.chips.look] }}>
+        {/* The words and the clock side by side in the flow: at the reading sizes either may wrap (ADR-IMPL-057), and
+            the card (04) or the rules (13) grow with the taller of the two, the column's rule with them. */}
         <View
           style={[
             s.card
@@ -293,7 +308,8 @@ export function DestinationDetails({
                   { marginLeft: x(s.card.left), marginRight: s.card.right - g.inset, borderRadius: s.card.radius },
                 ]
               : null,
-            { minHeight: height },
+            clock ? styles.columns : null,
+            { minHeight: height, paddingBottom: foot },
           ]}
           testID={`${testIDPrefix}.summary`}
         >
@@ -303,10 +319,11 @@ export function DestinationDetails({
           ) : null}
           <View
             style={{
-              marginLeft: x(message ? MESSAGE.left : s.left) - (s.card ? x(s.card.left) : 0),
+              marginLeft: wordsLeft - frame,
               // The words stop short of the clock's rule and wrap (ADR-IMPL-057: at the reading sizes the note no
-              // longer fits on the line 13 and 04 draw it on).
-              width: clock ? x(s.rule.left) - x(message ? MESSAGE.left : s.left) - SUMMARY_GAP : undefined,
+              // longer fits on the line 13 and 04 draw it on); without a clock, short of the card's edge.
+              width: clock ? x(s.rule.left) - wordsLeft - SUMMARY_GAP : undefined,
+              marginRight: !clock && s.card ? SUMMARY_GAP : 0,
             }}
           >
             {summary}
@@ -314,21 +331,15 @@ export function DestinationDetails({
           {clock ? (
             <>
               <View
-                style={[
-                  styles.vrule,
-                  {
-                    left: x(s.rule.left) - (s.card ? x(s.card.left) : 0),
-                    top: rule.top,
-                    height: rule.bottom - rule.top,
-                  },
-                ]}
+                style={[styles.vrule, { left: x(s.rule.left) - frame, top: rule.top, bottom: height - rule.bottom }]}
               />
               <View
                 style={[
                   styles.clock,
                   {
-                    left: x(s.clock.left) - (s.card ? x(s.card.left) : 0),
-                    right: s.card ? SUMMARY_GAP : g.cards.right,
+                    // From the words' column, which ends SUMMARY_GAP short of the rule, to where the image sets the clock.
+                    marginLeft: s.clock.left - s.rule.left + SUMMARY_GAP,
+                    marginRight: s.card ? SUMMARY_GAP : g.cards.right,
                   },
                 ]}
                 testID={`${testIDPrefix}.localTime`}
@@ -596,27 +607,17 @@ function Fare({
           </View>
         ) : null}
       </View>
-      {note ? (
-        <Text
-          style={[
-            s.note.role,
-            styles.slate,
-            { marginTop: after(s.note.baseline - s.price.baseline, s.price.role, s.note.role) },
-          ]}
-        >
-          {note}
-        </Text>
-      ) : (
-        <View
-          style={[styles.note, { marginTop: after(s.note.baseline - s.price.baseline, s.price.role, s.note.role) }]}
-          accessible
-          accessibilityLabel={`${NOTE[0]}. ${NOTE[2]}`}
-        >
-          <Text style={[s.note.role, styles.slate]}>{NOTE[0]}</Text>
-          <Text style={[s.note.role, styles.slate, { marginLeft: s.note.gaps[0] }]}>{NOTE[1]}</Text>
-          <Text style={[s.note.role, styles.slate, styles.noteWords, { marginLeft: s.note.gaps[1] }]}>{NOTE[2]}</Text>
-        </View>
-      )}
+      {/* One run of words, so that at the reading sizes it wraps between them (ADR-IMPL-057), never as a block. */}
+      <Text
+        style={[
+          s.note.role,
+          styles.slate,
+          { marginTop: after(s.note.baseline - s.price.baseline, s.price.role, s.note.role) },
+        ]}
+        accessibilityLabel={note ? undefined : NOTE_SPOKEN}
+      >
+        {note ?? NOTE}
+      </Text>
     </View>
   );
 }
@@ -635,7 +636,7 @@ function Message({
 }): ReactNode {
   const m = MESSAGE;
   return (
-    <View style={{ width: m.width }} testID={testID}>
+    <View testID={testID}>
       <Text style={[m.title.role, styles.navy, { marginTop: m.title.baseline - baselineOffset(m.title.role) }]}>
         {title}
       </Text>
@@ -703,11 +704,10 @@ const styles = StyleSheet.create({
   rule: { height: RULE, backgroundColor: tokens.colors.borderFaint },
   ruleTop: { position: "absolute", top: 0 },
   vrule: { position: "absolute", width: RULE, backgroundColor: tokens.colors.borderFaint },
-  clock: { position: "absolute", top: 0 },
+  columns: { flexDirection: "row", alignItems: "flex-start" },
+  clock: { flex: 1, minWidth: 0 },
   priceLine: { flexDirection: "row", alignItems: "flex-start" },
   basis: { flexDirection: "row", flexShrink: 1 },
-  note: { flexDirection: "row", flexWrap: "wrap" },
-  noteWords: { flexShrink: 1 },
   linkHit: { alignSelf: "flex-start" },
   link: { color: tokens.colors.textPrimary, textDecorationLine: "underline" },
   pressed: { opacity: 0.6 },

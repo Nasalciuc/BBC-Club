@@ -8,6 +8,7 @@ import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
 import type { AirlineRibbon } from "./FarePage";
 import type { AirlineMark } from "./FlightCard";
+import { keepEnds } from "./flight-facts";
 
 type Carrier = { name: string; logoUrl: string | null };
 
@@ -189,7 +190,7 @@ export function TripSummaryCard({
               {dates}
             </Text>
             <Text style={[g.route.role, summary.muted, summary.lineGap]} numberOfLines={2}>
-              {route}
+              {keepEnds(route)}
             </Text>
           </View>
           {price ? (

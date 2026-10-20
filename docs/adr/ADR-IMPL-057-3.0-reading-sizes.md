@@ -19,14 +19,19 @@ member's home airport lists printed its title cut short (`Autumn in P…`) inste
 1. **One reading scale for every 3.0 role.** Each typography role is the image's size raised along one monotonic curve
    (`DESIGN.md` · Typography): nothing under 12 pt (11 for tracked capitals), small lines grow most (9 → 12.5,
    10 → 13.2, 11 → 14, 12.3 → 14.8, 14.5 → 16.2, 16 → 17.2, 20 → 20.5), roles from 28 pt unchanged. Tracking keeps its
-   em value (tracked capitals 15% tighter); line heights are multipliers and follow. The globe's labels stay compact
+   em value (tracked capitals 15% tighter); line heights are multipliers and follow. Three roles hold lowercase words
+   the images track like capitals — `offer-sm-from` and `wide-from` (`from`), `place-zone` (`London (GMT)`): they take
+   the words' curve, and `place-zone` 13's zone tracking, as 04 draws it. The globe's labels stay compact
    (`pin` 12.75, `pin-detail` 12.25, `route-pin` 12, `map-city` 11.5) so more of them keep their room. The entry keeps
    `club.ts`; nothing here reaches it.
 2. **Columns give way, words are not cut.** Where a drawn column cannot hold a line at its reading size: the estimate's
-   note stops at the local time's rule and wraps, and the zone wraps inside the card (13, 04; 04's column moves to 266
-   pt in, as 13's sits); the flight overview's arrival moves to 282 pt in (05); the route map's labels get 76 pt and
-   their own line pitch (05); the request sheet's trip card flows under its rule — the days and clocks beside the
-   fare's own column — and grows with them (06); Profile's trips are three to the width (12) and a long range takes a
+   note stops at the local time's rule and wraps between its words, and the zone wraps beside it (13, 04; 04's column
+   moves to 266 pt in, as 13's sits) — the card or the rules grow with the taller column, keeping the room the images
+   leave under the last line (the note; `Try again` under a message, which takes the summary's column, 19), and the
+   column's rule grows with them; the flight overview's arrival moves to 282 pt in (05);
+   the route map's labels get 76 pt and their own line pitch (05); the request sheet's trip card flows under its rule —
+   the days and clocks beside the fare's own column — and grows with them, its route breaking only after the arrow so
+   `+1` stays with its clock (06); Profile's trips are three to the width (12) and a long range takes a
    second line, as does a long country on a wide offer card (16). The globe's label boxes are sized from the roles'
    sizes, not from 02's character widths.
 3. **A portrait for everyone.** The avatar shows the member's initials, and the person glyph when the club has no name
