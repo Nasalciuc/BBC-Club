@@ -6,6 +6,7 @@
  * right of its pin or else to the left, and a label that would cover another label, another pin or the screen's edge
  * is left out — the pin stays, and a pinch brings the label back.
  */
+import { tokens } from "../tokens";
 import { GLOBE_SPEC } from "./globe-logic";
 
 export type Rect = { left: number; top: number; right: number; bottom: number };
@@ -31,19 +32,22 @@ export type PlacedPin = {
   label: { side: LabelSide; box: Rect } | null;
 };
 
+/** The sizes 02's labels were measured at (`pin` Bold, `pin-detail`): the words' widths follow the roles from there. */
+const DRAWN = { pin: 11.28, detail: 10.75 } as const;
+
 /**
- * The label's frame (02): the words 8.3 pt in, 11.7 before its right edge; 2.5 above and below lines of 14 (`pin`); 4
- * from the pin, radius 9, centred 2.5 under the pin's head. The city runs up to 6.7 pt a character in `pin` Bold, the
- * price 5.4 in `pin-detail`.
+ * The label's frame (02): the words 8.3 pt in, 11.7 before its right edge; 2.5 above and below the lines (`pin`'s
+ * line height); 4 from the pin, radius 9, centred 2.5 under the pin's head. The city runs up to 6.7 pt a character in
+ * `pin` Bold at 02's size, the price 5.4 in `pin-detail` — both grow with their roles (ADR-IMPL-057).
  */
 export const LABEL = {
   padLeft: 8.3,
   padRight: 11.7,
   padY: 2.5,
-  line: 14,
+  line: tokens.type.pin.lineHeight,
   gap: 4,
-  charWidth: 6.7,
-  detailCharWidth: 5.4,
+  charWidth: (6.7 * tokens.type.pin.fontSize) / DRAWN.pin,
+  detailCharWidth: (5.4 * tokens.type.pinDetail.fontSize) / DRAWN.detail,
   radius: 9,
   drop: 2.5,
 } as const;
@@ -132,12 +136,13 @@ export function placeLabels(
  * 13: a chosen route's two ends — a small navy drop pin, 8.6 × 10.2 with its tip on the airport and a white edge, in a
  * soft white glow 11 pt round its head; the code in a white box on a navy hairline, 16.1 tall, 5.4 either side of the
  * words, radius 5. The departure's box stands right of its tip and just under it (the route leaves it upward), the
- * arrival's right of its head.
+ * arrival's right of its head. The box and the code's width grow with `route-pin` from 13's 9.84 pt (ADR-IMPL-057).
  */
+const routeGrow = tokens.type.routePin.fontSize / 9.84;
 export const ROUTE_END = {
   pin: { width: 8.6, height: 10.2, head: 4.3 },
   halo: 11,
-  label: { padX: 5.4, height: 16.1, radius: 5, border: 0.7, charWidth: 6 },
+  label: { padX: 5.4, height: 16.1 * routeGrow, radius: 5, border: 0.7, charWidth: 6 * routeGrow },
   origin: { dx: 2.3, dy: -0.5 },
   destination: { dx: 6.9, dy: -5.1 },
 } as const;

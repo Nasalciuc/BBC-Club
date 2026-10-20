@@ -60,9 +60,9 @@ const role = (t: (typeof tokens.type)[keyof typeof tokens.type]) => rn(t) as Rol
 /**
  * 06, from the card's top-left (pt; 359.5 × 90.1, radius 8.6, on a hairline): the photograph 9 in all round, 79.9 ×
  * 72.05, radius 5.5; the words from 100.35 — the route by its cities on 22.3, the cabin on 35.8; the airline's mark
- * 9.2 from the right, its middle on 19.8; the rule on 44.9 from 100 to 8.7 short of the right; the days on 63.7 and the
- * clocks on 78; the rule between them and the fare at 265.8, from the rule down to 9 over the foot; the price 280.7
- * in on 63, the published fare struck on 78.8 with the saving at the right, where it was published on 86.
+ * 9.2 from the right, its middle on 19.8; then a rule from 100 to 8.7 short of the right. Under it 06 draws the days
+ * and clocks beside the fare's column at fixed baselines; at the reading sizes (ADR-IMPL-057) that part flows, and the
+ * card grows with it.
  */
 const SUMMARY = {
   height: 90.06,
@@ -73,14 +73,13 @@ const SUMMARY = {
   cabin: { role: role(tokens.type.summaryCabin), baseline: 35.79 },
   // The mark's crop drawn 0.833 its size (06's British Airways), never taller than 24 pt.
   mark: { right: 5, centre: 19.84, scale: 0.833, maxHeight: 24 },
-  rule: { y: 44.65, left: 100, right: 8.74 },
-  dates: { role: role(tokens.type.summaryDates), baseline: 63.69 },
-  route: { role: role(tokens.type.summaryRoute), baseline: 78.04 },
-  vrule: { left: 265.79, bottom: 9 },
-  price: { left: 280.7, role: role(tokens.type.summaryPrice), baseline: 62.98 },
-  published: { role: role(tokens.type.summaryPublished), baseline: 78.4, gap: 5.4 },
+  rule: { right: 8.74 },
+  dates: { role: role(tokens.type.summaryDates) },
+  route: { role: role(tokens.type.summaryRoute) },
+  price: { role: role(tokens.type.summaryPrice) },
+  published: { role: role(tokens.type.summaryPublished) },
   save: { right: 9.24, role: role(tokens.type.summarySave) },
-  source: { role: role(tokens.type.summarySource), baseline: 86 },
+  source: { role: role(tokens.type.summarySource) },
 } as const;
 const topOf = (baseline: number, r: Role) => baseline - baselineOffset(r);
 
@@ -179,102 +178,44 @@ export function TripSummaryCard({
           <CarrierMark carrier={logo} />
         </View>
       ) : null}
-      <View style={[summary.rule, { top: g.rule.y, left: g.rule.left, right: g.rule.right }]} />
-      <View
-        style={[
-          summary.absolute,
-          { left: g.text, top: 0 },
-          price ? { width: g.vrule.left - g.text - 6 } : { right: g.rule.right },
-        ]}
-        pointerEvents="none"
-      >
-        <Text
-          style={[g.dates.role, summary.navy, { marginTop: topOf(g.dates.baseline, g.dates.role) }]}
-          numberOfLines={1}
-        >
-          {dates}
-        </Text>
-        <Text
-          style={[
-            g.route.role,
-            summary.muted,
-            {
-              marginTop:
-                g.route.baseline - g.dates.baseline - belowBaseline(g.dates.role) - baselineOffset(g.route.role),
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {route}
-        </Text>
-      </View>
-      {price ? (
-        <>
-          <View
-            style={[
-              summary.vrule,
-              { left: g.vrule.left, top: g.rule.y + StyleSheet.hairlineWidth, bottom: g.vrule.bottom },
-            ]}
-          />
-          <View style={[summary.absolute, { left: g.price.left, right: g.save.right, top: 0 }]}>
-            <Text
-              style={[g.price.role, summary.navy, { marginTop: topOf(g.price.baseline, g.price.role) }]}
-              numberOfLines={1}
-            >
-              {price.amount}
+      {/* ADR-IMPL-057: at the reading sizes the days, the clocks and the fare no longer fit the columns 06 draws them in:
+          under the rule they flow — the days and clocks beside the fare, which keeps its own column — and the card
+          grows with them instead of cutting them. */}
+      <View style={[summary.lower, { marginLeft: g.text, marginRight: g.rule.right }]}>
+        <View style={summary.rule} />
+        <View style={summary.lowerRow}>
+          <View style={summary.days}>
+            <Text style={[g.dates.role, summary.navy]} numberOfLines={1}>
+              {dates}
             </Text>
-            <View
-              style={[
-                summary.row,
-                {
-                  marginTop:
-                    g.published.baseline -
-                    g.price.baseline -
-                    belowBaseline(g.price.role) -
-                    baselineOffset(g.published.role),
-                },
-              ]}
-            >
+            <Text style={[g.route.role, summary.muted, summary.lineGap]} numberOfLines={2}>
+              {route}
+            </Text>
+          </View>
+          {price ? (
+            <View style={summary.fare}>
+              <Text style={[g.price.role, summary.navy]} numberOfLines={1}>
+                {price.amount}
+              </Text>
               {price.published ? (
-                <Text style={[g.published.role, summary.muted, summary.struck]} numberOfLines={1}>
+                <Text style={[g.published.role, summary.muted, summary.struck, summary.lineGap]} numberOfLines={1}>
                   {price.published}
                 </Text>
               ) : null}
-              <View style={summary.grow} />
               {price.percent ? (
-                <Text
-                  style={[
-                    g.save.role,
-                    summary.save,
-                    { marginTop: baselineOffset(g.published.role) - baselineOffset(g.save.role) },
-                  ]}
-                  numberOfLines={1}
-                >
+                <Text style={[g.save.role, summary.save, summary.lineGap]} numberOfLines={1}>
                   {`Save ${price.percent}%`}
                 </Text>
               ) : null}
+              {price.published && price.source ? (
+                <Text style={[g.source.role, summary.muted, summary.lineGap]} numberOfLines={1}>
+                  {price.source}
+                </Text>
+              ) : null}
             </View>
-            {price.published && price.source ? (
-              <Text
-                style={[
-                  g.source.role,
-                  summary.muted,
-                  {
-                    marginTop:
-                      g.source.baseline -
-                      g.published.baseline -
-                      belowBaseline(g.published.role) -
-                      baselineOffset(g.source.role),
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {price.source}
-              </Text>
-            ) : null}
-          </View>
-        </>
-      ) : null}
+          ) : null}
+        </View>
+      </View>
       <View pointerEvents="none" style={[summary.edge, { borderRadius: g.radius }]} />
     </View>
   );
@@ -292,8 +233,18 @@ const summary = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-start" },
   grow: { flex: 1 },
   mark: { position: "absolute" },
-  rule: { position: "absolute", height: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderDefault },
-  vrule: { position: "absolute", width: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderDefault },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderDefault },
+  lower: { marginTop: 8, paddingBottom: 9 },
+  lowerRow: { flexDirection: "row", marginTop: 7, gap: 10 },
+  days: { flex: 1, minWidth: 0 },
+  // The fare's own column on a hairline at its left, as 06 draws it beside the days.
+  fare: {
+    width: 92,
+    paddingLeft: 10,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: tokens.colors.borderDefault,
+  },
+  lineGap: { marginTop: 2 },
   edge: {
     position: "absolute",
     left: 0,
@@ -658,7 +609,8 @@ export function TripPhotoCard({
           {city}
         </Text>
         {dates ? (
-          <Text style={styles.photoDates} numberOfLines={1}>
+          // A long range (`Nov 10 – 17, 2026`) takes a second line at the reading sizes, never an ellipsis.
+          <Text style={styles.photoDates} numberOfLines={2}>
             {dates}
           </Text>
         ) : null}
@@ -671,9 +623,10 @@ export function TripPhotoCard({
 }
 
 const styles = StyleSheet.create({
-  // 12: four to the screen's width. Larger text makes the cards taller, never cut: the city alone keeps one line.
+  // 12 draws four to the screen's width; at the club's reading sizes (ADR-IMPL-057) three, so the days fit on their
+  // line. Larger text still makes the cards taller, never cut: the city alone keeps one line.
   photoCard: {
-    width: 89.4,
+    width: 112,
     minHeight: 135,
     borderRadius: 8,
     overflow: "hidden",

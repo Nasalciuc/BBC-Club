@@ -31,6 +31,9 @@ type Role = TextStyle & { fontSize: number; lineHeight: number };
 const r = (t: (typeof tokens.type)[keyof typeof tokens.type]) => rn(t) as Role;
 
 /** The margin that puts a line's baseline `pitch` under the one before it (or under the top of what holds it). */
+/** Between the summary's words and the clock's rule, and the clock's column and the card's edge (ADR-IMPL-057). */
+const SUMMARY_GAP = 10;
+
 const after = (pitch: number, prev: Role | null, next: Role) =>
   pitch - (prev ? belowBaseline(prev) : 0) - baselineOffset(next);
 
@@ -135,7 +138,8 @@ const PAGE: Geometry = {
     basis: { role: r(tokens.type.placeBasis), rise: 0, dotGap: 5, wordsGap: 6.1, tone: "navy" },
     note: { role: r(tokens.type.placeNote), baseline: 63.7, gaps: [3.69, 4.15] },
     clock: {
-      left: 11.2 + 303.1,
+      // 04 draws the column 303.1 in; at the reading sizes it stands where 13's does from the edge (ADR-IMPL-057).
+      left: 11.2 + 266,
       label: r(tokens.type.placeTimeLabel),
       labelBaseline: 19.9,
       time: r(tokens.type.placeClock),
@@ -143,7 +147,7 @@ const PAGE: Geometry = {
       zone: r(tokens.type.placeZone),
       zoneBaseline: 50.4,
     },
-    rule: { left: 11.2 + 289.1, top: 14.1, bottom: 64 },
+    rule: { left: 11.2 + 252, top: 14.1, bottom: 64 },
   },
   options: { role: r(tokens.type.placeOptions), baseline: 245.7, left: 17.93, minGap: 26.5 },
   cards: { top: 255.2, left: 11.2, right: 11.8, gap: 4.9 },
@@ -297,7 +301,14 @@ export function DestinationDetails({
           {s.rules ? (
             <View style={[styles.rule, styles.ruleTop, { left: x(s.rules.left), right: s.rules.right - g.inset }]} />
           ) : null}
-          <View style={{ marginLeft: x(message ? MESSAGE.left : s.left) - (s.card ? x(s.card.left) : 0) }}>
+          <View
+            style={{
+              marginLeft: x(message ? MESSAGE.left : s.left) - (s.card ? x(s.card.left) : 0),
+              // The words stop short of the clock's rule and wrap (ADR-IMPL-057: at the reading sizes the note no
+              // longer fits on the line 13 and 04 draw it on).
+              width: clock ? x(s.rule.left) - x(message ? MESSAGE.left : s.left) - SUMMARY_GAP : undefined,
+            }}
+          >
             {summary}
           </View>
           {clock ? (
@@ -313,7 +324,13 @@ export function DestinationDetails({
                 ]}
               />
               <View
-                style={[styles.clock, { left: x(s.clock.left) - (s.card ? x(s.card.left) : 0) }]}
+                style={[
+                  styles.clock,
+                  {
+                    left: x(s.clock.left) - (s.card ? x(s.card.left) : 0),
+                    right: s.card ? SUMMARY_GAP : g.cards.right,
+                  },
+                ]}
                 testID={`${testIDPrefix}.localTime`}
               >
                 <Text
@@ -340,7 +357,7 @@ export function DestinationDetails({
                     styles.slate,
                     { marginTop: after(s.clock.zoneBaseline - s.clock.timeBaseline, s.clock.time, s.clock.zone) },
                   ]}
-                  numberOfLines={1}
+                  numberOfLines={2}
                 >
                   {clock.zone}
                 </Text>
