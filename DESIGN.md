@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: BBC-Club
-description: Private business-class travel club, 3.0. The entry (Welcome, Sign in, Join, Verify, Set password, Reset) stays the 1.0 night cabin, frozen in apps/mobile/src/constants/club.ts. Inside, from onboarding on, the club is a bright 2026 travel app — off-white pages, white cards with soft shadows, daylight city photography, sheets with 24 pt corners that overlap the photographs, round white buttons over photos, navy pills and chips, thin line icons, one sans-serif (Inter). Navy is the only accent; red only for Sign out, Delete account and errors.
+description: Private business-class travel club, 3.0. The entry (Welcome, Sign in, Join, Verify, Set password, Reset) stays the 1.0 night cabin, frozen in apps/mobile/src/constants/club.ts. Inside, from onboarding on, the club is a bright 2026 travel app — off-white pages, white cards with soft shadows, daylight city photography, sheets with 24 pt corners that overlap the photographs, round white buttons over photos, navy pills and chips, thin line icons, one sans-serif (Inter Tight). Navy is the only accent; red only for Sign out, Delete account and errors.
 
 colors:
   primary: "#1D2D46"
