@@ -12,6 +12,8 @@ appId: com.buybusinessclass.club
 - hideKeyboard
 - tapOn: { id: "signIn.submit" }
 - assertVisible: { id: "explore.root" }
+# 02: Explore at rest shows its sheet, the search bar on the globe's foot — before the picture is taken.
+- assertVisible: { id: "explore.search" }
 - takeScreenshot: 89-386
 - tapOn: { id: "tab.profile" }
 - assertVisible: { id: "profile.root" }
