@@ -64,7 +64,7 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   `text-on-tint`; a bound dims its button to 40%. The default card (radius 11, at least 72) serves the profile's and the
   request's travelers sheets.
 - **Toggle** — 40.6 × 24 (07): navy on with the white knob (21 across, its own small shadow) at the right, light grey
-  off (`toggle-off`); the target reaches 44 pt.
+  off (`toggle-off`); the target reaches 44 pt (`TOGGLE_SLOP`), and a holder that hugs the track keeps that room.
 - **Calendar** (07, 24) — two months at a time, each a white card (radius 10, a soft shadow on a hairline), 6.4 apart:
   its name (`month-title`) and the arrows at its right that move both cards by a month (from this month to the last that
   can be booked, 330 days out; dimmed where they cannot go); `Mon … Sun` (`weekday`); the days 29.1 tall, 2.47 apart
@@ -76,7 +76,8 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   31.3 on 13 (`routeChip`); `place` 30 on 04 (`placeChip`); `fare` 26.8 on 05 (`fareChip`, not pressable). `filter`, the
   status filters (09): 31.7 tall, at least 55.5 wide, 14 from either side, `chip` words in `text-on-tint`; chosen, navy
   with white `chipSelected` words; the row starts 12.2 in, the chips 5 apart, running to the screen's edge. A chip that
-  acts reaches 44 pt to the finger (`hitSlop`).
+  acts reaches 44 pt to the finger (`CHIP_SLOP`); a row that scrolls keeps that room in its padding, its margins giving
+  it back (04, 09, 13), since a touch lands only inside the row.
 - **CabinCard** — two side by side (01): 72.8 tall, radius 10.5, the soft shadow; the seat (33.2, traced), the cabin in
   `cabinTitle`, its line in `cabinLine` slate, broken where 01 breaks it; a check circle (22.6 in a 23.5 ring). Chosen:
   a 1.1 navy border on `surface-selected` and a filled navy check.

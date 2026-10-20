@@ -5,6 +5,7 @@ import { FlatList, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RequestVM } from "@bbc/shared/api/v1/requests";
 import {
+  CHIP_SLOP,
   CardSkeleton,
   Chip,
   EmptyState,
@@ -338,8 +339,14 @@ const styles = StyleSheet.create({
     marginTop: SUBTITLE_PITCH - belowBaseline(display) - baselineOffset(bodyLg),
     marginLeft: 0.2,
   },
-  filters: { marginTop: FILTERS_TOP - belowBaseline(bodyLg), marginHorizontal: -CARDS_LEFT },
-  filtersContent: { paddingHorizontal: 12.2, gap: 5 },
+  // The row is the chips' slop taller above and below, its margins giving it back: the chips stay where 09 draws
+  // them, and their 44-pt targets fall inside the row, which clips touches at its edges.
+  filters: {
+    marginTop: FILTERS_TOP - belowBaseline(bodyLg) - CHIP_SLOP,
+    marginBottom: -CHIP_SLOP,
+    marginHorizontal: -CARDS_LEFT,
+  },
+  filtersContent: { paddingHorizontal: 12.2, paddingVertical: CHIP_SLOP, gap: 5 },
   block: { marginTop: 16.1 },
   listTop: { height: 19.9 },
   listTopAfterNotice: { height: 12 },

@@ -12,6 +12,7 @@ import {
   type PageModalHandle,
   Photo,
   RoundButton,
+  TOGGLE_SLOP,
   Toggle,
   TopBar,
   baselineOffset,
@@ -350,7 +351,16 @@ const styles = StyleSheet.create({
   rowBody: { ...rn(tokens.type.datesRowBody), position: "absolute", color: tokens.colors.textSecondary },
   flexibleTitle: { left: PAGE.flexible.title.left, right: 70, top: TOP.flexibleTitle },
   flexibleBody: { left: PAGE.flexible.body.left, right: 70, top: TOP.flexibleBody },
-  toggle: { position: "absolute", right: PAGE.flexible.toggle.right, top: 0, bottom: 0, justifyContent: "center" },
+  // The toggle's holder keeps the room for its slop at either side, so the 44-pt target falls inside it.
+  toggle: {
+    position: "absolute",
+    right: PAGE.flexible.toggle.right - TOGGLE_SLOP.right,
+    top: 0,
+    bottom: 0,
+    paddingLeft: TOGGLE_SLOP.left,
+    paddingRight: TOGGLE_SLOP.right,
+    justifyContent: "center",
+  },
   preferred: { height: PAGE.preferred.circle.size, marginTop: PAGE.preferred.top },
   preferredMark: {
     position: "absolute",
