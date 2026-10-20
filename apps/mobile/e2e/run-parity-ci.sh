@@ -15,6 +15,8 @@ fi
 
 # shellcheck disable=SC1091
 source apps/mobile/e2e/launcher-guard.sh
+# shellcheck disable=SC1091
+source apps/mobile/e2e/failure-note.sh
 remove_launcher_from_test || exit 1
 
 adb shell wm density 440
@@ -38,6 +40,7 @@ adb logcat -c || true
 if ! maestro test --format junit --output "$OUT/parity.xml" --debug-output "$OUT/debug" \
   "apps/mobile/e2e/parity.yaml"; then
   echo "::error::Maestro flow failed: parity"
+  failure_note parity "$OUT/parity.xml" "$OUT/debug"
   status=1
 fi
 errors=$(js_error_lines)
