@@ -82,6 +82,18 @@ function Family({ size = 24, color = tokens.colors.textPrimary, strokeWidth = 1.
   );
 }
 
+function PlaneFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  // A plane seen from above, nose up, filled: the route's plane on the globe (13) and on a flight's line (sheet 40).
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2c.8 0 1.3.9 1.3 2v5.2l7.7 4.6v2.1l-7.7-2.3v4.6l2.2 1.6V21l-3.5-1-3.5 1v-1.2l2.2-1.6v-4.6L3 15.9v-2.1l7.7-4.6V4c0-1.1.5-2 1.3-2Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
 /**
  * One line family (Lucide), the same on both platforms, at a 1.75 stroke (DESIGN.md · Iconography). The names the 3.0
  * screens use, and the 1.0 names screens still being moved to 3.0 read (`departure`, `inbox`, `explore` …).
@@ -91,6 +103,7 @@ export const icons = {
   search: Search,
   "map-pin": MapPin,
   plane: Plane,
+  "plane-fill": PlaneFill,
   calendar: Calendar,
   user: User,
   users: Users,

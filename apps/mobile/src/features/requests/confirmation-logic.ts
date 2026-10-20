@@ -1,4 +1,7 @@
-/** Which confirmation the member sees after a request. Frames: Offer 135:856 · Search 476:8871 · saved offline 135:855. */
+import type { HomeVM } from "@bbc/shared/api/v1/fares";
+import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
+
+/** Which confirmation the member sees after a request: an offer's or a search's (08), or the one saved offline (26). */
 export type RequestSource = "offer" | "search";
 export type ConfirmationKind = "offer" | "search" | "saved";
 export function confirmationKind(source: RequestSource, queuedOffline: boolean): ConfirmationKind {
@@ -42,4 +45,30 @@ export function bodyProblem(issues: readonly { path: readonly (string | number)[
   if (where === "note") return "Keep the note under 500 characters.";
   if (where.startsWith("legs")) return "Check your dates and try again.";
   return first.message;
+}
+
+/** `Round trip · 1 adult` (08): the trip and the travelers the request asked for; none when neither is known. */
+export function tripFacts(trip: string, travelers: string): string | null {
+  const kind = trip === "round" ? "Round trip" : trip === "oneway" ? "One way" : null;
+  const parts = [kind, travelers.trim() || null].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/**
+ * `Other great fares` (08): Home's offers to cities other than the one just requested, one per city, in Home's order —
+ * six at most.
+ */
+export function otherFares(home: Pick<HomeVM, "sections"> | null, requestedTo: string, max = 6): ProposalCardVM[] {
+  if (!home) return [];
+  const seen = new Set<string>([requestedTo]);
+  const out: ProposalCardVM[] = [];
+  for (const section of home.sections) {
+    for (const item of section.items) {
+      if (seen.has(item.route.to)) continue;
+      seen.add(item.route.to);
+      out.push(item);
+      if (out.length >= max) return out;
+    }
+  }
+  return out;
 }

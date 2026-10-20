@@ -15,6 +15,8 @@ export type SearchState = {
   route: { from: AirportVM; to: AirportVM } | null;
   status: "idle" | "searching" | "done" | "empty" | "error" | "paused";
   errorMessage: string | null;
+  /** The member chose the cabin or the travelers on a chip: the profile's usual ones no longer replace them. */
+  chosen: { cabin: boolean; passengers: boolean };
 };
 
 export type SearchAction =
@@ -24,7 +26,8 @@ export type SearchAction =
   | { type: "setDates"; dates: SearchState["dates"] }
   | { type: "setCabin"; cabin: SearchState["cabin"] }
   | { type: "setPassengers"; passengers: SearchState["passengers"] }
-  /** The profile's usual cabin and travelers, once loaded — taken only while no route has been chosen. */
+  /** The profile's usual cabin and travelers, once loaded — each taken unless the member already chose it on a chip, a
+   *  route chosen before the profile arrived included (a destination's page selects at once). */
   | { type: "seedPreferences"; cabin?: SearchState["cabin"]; passengers?: SearchState["passengers"] }
   | { type: "searchStarted" }
   | {
@@ -47,6 +50,7 @@ export const INITIAL_SEARCH: SearchState = {
   route: null,
   status: "idle",
   errorMessage: null,
+  chosen: { cabin: false, passengers: false },
 };
 
 export function searchReducer(state: SearchState, action: SearchAction): SearchState {
@@ -76,19 +80,18 @@ export function searchReducer(state: SearchState, action: SearchAction): SearchS
         errorMessage: null,
         dates: INITIAL_SEARCH.dates,
       };
-    case "seedPreferences":
-      if (state.to !== null) return state;
-      return {
-        ...state,
-        cabin: action.cabin ?? state.cabin,
-        passengers: action.passengers ?? state.passengers,
-      };
+    case "seedPreferences": {
+      const cabin = state.chosen.cabin ? state.cabin : (action.cabin ?? state.cabin);
+      const passengers = state.chosen.passengers ? state.passengers : (action.passengers ?? state.passengers);
+      if (cabin === state.cabin && passengers === state.passengers) return state;
+      return { ...state, cabin, passengers };
+    }
     case "setDates":
       return { ...state, dates: action.dates };
     case "setCabin":
-      return { ...state, cabin: action.cabin };
+      return { ...state, cabin: action.cabin, chosen: { ...state.chosen, cabin: true } };
     case "setPassengers":
-      return { ...state, passengers: action.passengers };
+      return { ...state, passengers: action.passengers, chosen: { ...state.chosen, passengers: true } };
     case "searchStarted":
       return { ...state, status: "searching", errorMessage: null };
     case "searchDone":

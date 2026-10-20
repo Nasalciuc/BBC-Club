@@ -1,29 +1,35 @@
 import NetInfo from "@react-native-community/netinfo";
 import { useRouter, type Href } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import { Keyboard, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
-import { requestRoute } from "@bbc/shared/requests/display";
 import {
   Button,
-  Chip,
+  Divider,
+  FieldError,
+  Icon,
   ModalSheet,
   type ModalSheetHandle,
-  SectionLabel,
-  StateMessage,
-  Stepper,
+  NoticeCard,
+  PickerField,
+  Segmented,
+  TextButton,
   TextField,
-  short,
-  tokens,
+  TripSummaryCard,
+  dayText,
   rn,
+  tokens,
   type Selection,
 } from "@bbc/ui";
 
-import { DatesSheet, type DatesSheetHandle } from "@/features/requests/DatesSheet";
+import { SearchTravelersSheet, type TravelersSheetHandle } from "@/features/explore/SearchPreferenceSheets";
+import { cabinLabel, datesChipLabel, travelersLabel } from "@/features/explore/travel-preferences";
+import { cardPicture } from "@/features/places/place-photo-logic";
+import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { bodyProblem, retryMinutes, type RequestSource } from "@/features/requests/confirmation-logic";
-import { detailFacts } from "@/features/requests/request-card";
 import { requestSummary, type RequestSummary } from "@/features/requests/request-summary";
 import {
   buildDraft,
@@ -56,10 +62,8 @@ export type RequestSheetHandle = {
     search?: SearchContext | null;
     /** Home showed the indicative fare for this route and cabin (ADR-IMPL-042): the quote says so, never a number. */
     estimateShown?: boolean;
-    /**
-     * Which confirmation follows (135:856 or 476:8871): an offer's — its photograph — or a search's — the globe. By
-     * default an offer's when the fare carries one.
-     */
+    /** Which confirmation follows: an offer's — its own picture — or a search's. By default an offer's when the fare
+     *  carries one. */
     confirmation?: RequestSource;
     /** The offer's own picture, for its confirmation; else the city's photograph (ADR-IMPL-043). */
     photo?: string | null;
@@ -67,17 +71,22 @@ export type RequestSheetHandle = {
   dismiss: () => void;
 };
 
-const NO_SUMMARY: RequestSummary = { title: "", facts: "", price: null };
+const NO_SUMMARY: RequestSummary = { title: "", cabin: "", route: "", carrier: null, price: null };
+
+/** `RequestBody.note` takes 500 characters; the field stops there instead of refusing the request. */
+const NOTE_MAX = 500;
 
 /**
- * Figma 135:849–135:854: the tall sheet over the page. The fare summary (the route, its airline and cabin, the price per
- * traveler), the trip type, the dates side by side, the travelers, `WE WILL CONTACT YOU` with the name, the phone in
- * one field and the e-mail, then `Add a note`; the blocks 24 pt apart; the button and its promise pinned at the bottom.
+ * The request (06, 22, 23): the tall sheet over the page — the trip (the city's photograph, the route, the cabin, the
+ * airline, the days and the fare), `Round trip` / `One way`, the dates and the travelers, then `We will contact you`
+ * with the name, the phone, the e-mail and a note; `Request a quote →` and its promise pinned at the foot. A missing
+ * return says so under its field (22); while it sends, the fields rest and the pill says `Sending…` (23).
  */
 export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet(_props, ref) {
   const modalRef = useRef<ModalSheetHandle>(null);
   const insets = useSafeAreaInsets();
-  const datesRef = useRef<DatesSheetHandle>(null);
+  const datesRef = useRef<DatesPageHandle>(null);
+  const travelersRef = useRef<TravelersSheetHandle>(null);
   const sourceRef = useRef<RequestSource>("offer");
   const cityRef = useRef("");
   // The destination's city by name only (never a code) — the title of the card while a request waits offline.
@@ -87,12 +96,20 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   const router = useRouter();
   const [idempotencyKey, setIdempotencyKey] = useState(() => newId());
   const [busy, setBusy] = useState(false);
-  const [noteOpen, setNoteOpen] = useState(false);
   const [summary, setSummary] = useState<RequestSummary>(NO_SUMMARY);
-  // The profile's number as a person reads it: `Use saved phone number` puts it back (Figma 135:852).
+  // The trip's cities and destination, for the dates page's heading and the summary's photograph — the offer's own
+  // picture first (ADR-IMPL-043).
+  const [trip, setTrip] = useState<{
+    fromCity: string | null;
+    toCity: string | null;
+    toCode: string | null;
+    media: string | null;
+  }>({ fromCity: null, toCity: null, toCode: null, media: null });
+  // The profile's number as a person reads it: `Use saved phone number` puts it back.
   const [savedPhone, setSavedPhone] = useState<string | null>(null);
   const [seed] = useState<RequestDraft>(() => buildDraft({}));
   const { state, dispatch } = useRequestDraft(seed);
+  const photoFor = usePlacePhotos([trip.toCode]);
   const keyRef = useRef(idempotencyKey);
   // Set at the first line of a submit, before anything is awaited: a second tap while the first is still checking the
   // network would otherwise send, or save, the request twice.
@@ -120,7 +137,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   useImperativeHandle(ref, () => ({
     present(opts) {
       const next = buildDraft(opts);
-      // A fare found in search confirms as a search does (476:8871); only an offer has its photograph (135:856).
+      // A fare found in search confirms as a search does; only an offer has a picture of its own.
       sourceRef.current = opts.confirmation ?? (opts.fare?.offerId ? "offer" : "search");
       photoRef.current = opts.photo ?? null;
       cityRef.current = opts.fare?.to.city ?? opts.city ?? opts.toCode ?? "";
@@ -128,24 +145,25 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       const named = opts.fare?.to.city ?? opts.city ?? null;
       cityNameRef.current = named && named !== opts.toCode ? named : null;
       const outbound = next.legs[0];
+      const fromCity = opts.fare?.from.city ?? opts.fromCity ?? null;
+      setTrip({ fromCity, toCity: cityNameRef.current, toCode: outbound?.to ?? null, media: opts.photo ?? null });
       setSummary(
         requestSummary({
           fare: opts.fare,
           from: outbound?.from ?? "",
           to: outbound?.to ?? "",
-          fromCity: opts.fare?.from.city ?? opts.fromCity ?? null,
+          fromCity,
           toCity: cityNameRef.current,
           cabin: next.cabin,
         }),
       );
-      // Figma 135:849: one field, the saved number as a person reads it (`+1 (212) 555-0148`).
+      // One field, the saved number as a person reads it (`+1 212 555 0142`).
       const saved = displayPhone(next.contact.phone);
       setSavedPhone(saved);
       dispatch({ type: "reset", draft: { ...next, contact: { ...next.contact, phone: saved ?? "" } } });
       setIdempotencyKey(newId());
       setBusy(false);
       submittingRef.current = false;
-      setNoteOpen(false);
       modalRef.current?.present();
     },
     dismiss() {
@@ -153,35 +171,41 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     },
   }));
 
-  /** `facts` is the request's line as the server read it (Figma 135:856: `JFK → LHR · OCT 12–19 · ROUND TRIP · 1 ADULT`);
-   *  `phone`, the number this request will be called on — the one in the sheet, which may differ from the profile's. */
-  function openConfirmation(input: { id: string; queued: boolean; route: string; facts: string; phone: string }) {
+  /**
+   * The confirmation (08) reads the trip from here: the route's codes, the cabin, the days, the trip and the travelers,
+   * the airline; `phone`, the number this request will be called on — the one in the sheet, which may differ from the
+   * profile's.
+   */
+  function openConfirmation(input: { id: string; queued: boolean; phone: string }) {
     modalRef.current?.dismiss();
     const outbound = state.legs[0];
+    const round = state.tripType === "round";
     const query = new URLSearchParams({
       id: input.id,
       source: sourceRef.current,
       queued: input.queued ? "1" : "0",
       city: cityRef.current,
-      route: input.route,
-      facts: input.facts,
       phone: input.phone,
-      // The globe of a search's confirmation draws this route; an offer's shows its photograph (476:8871, 135:856).
       from: outbound?.from ?? "",
       to: outbound?.to ?? "",
-      title: summary.title,
+      cabin: state.cabin,
+      trip: state.tripType,
+      dates: datesChipLabel({ depart: outbound?.date || null, return: round ? state.legs[1]?.date || null : null }),
+      travelers: travelersLabel(state.passengers),
+      carrier: summary.carrier?.name ?? "",
+      logo: summary.carrier?.logoUrl ?? "",
       media: photoRef.current ?? "",
     });
     router.push(`/request/confirmed?${query.toString()}` as Href);
   }
 
-  /** Save the request on the phone; it goes out when the phone is back online (Figma 135:855). */
+  /** Save the request on the phone; it goes out when the phone is back online (26). */
   function saveOnPhone(body: RequestBody) {
     if (!enqueueRequest(body, keyRef.current, cityNameRef.current)) {
       dispatch({ type: "setSubmitError", error: stateCopy("notSent").body });
       return;
     }
-    openConfirmation({ id: "", queued: true, route: requestRoute(body.legs, body.tripType), facts: "", phone: "" });
+    openConfirmation({ id: "", queued: true, phone: "" });
   }
 
   async function onSubmit() {
@@ -248,37 +272,40 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     openConfirmation({
       id: result.data.id,
       queued: false,
-      route: result.data.route,
-      facts: detailFacts(result.data),
       // The number this request will be called on: the server's reading of it, else the one the member just sent.
       phone: displayPhone(result.data.phone ?? body.contact.phone) ?? "",
     });
   }
 
   function presentDates(editing: Selection["editing"]) {
-    // The calendar opens over the sheet: the keyboard of a field being typed in would cover its button.
+    // The dates page opens over the sheet: the keyboard of a field being typed in would stay over it.
     Keyboard.dismiss();
-    datesRef.current?.present({
-      tripType: state.tripType,
-      depart: state.legs[0]?.date || null,
-      ret: state.tripType === "round" ? state.legs[1]?.date || null : null,
-      editing,
-    });
+    datesRef.current?.present(
+      {
+        tripType: state.tripType,
+        depart: state.legs[0]?.date || null,
+        ret: state.tripType === "round" ? state.legs[1]?.date || null : null,
+        editing,
+      },
+      { fromCity: trip.fromCity, toCity: trip.toCity, toCode: trip.toCode },
+    );
   }
 
   const round = state.tripType === "round";
   const canUseSaved = Boolean(state.phoneError && savedPhone && savedPhone !== state.contact.phone);
+  const outbound = state.legs[0];
+  const title = sheetTitle(state.mode);
 
   return (
     <>
-      {/* Figma 135:849: the tall sheet; the content from 96 pt, its blocks 24 apart; the button and its promise pinned. */}
       <ModalSheet
         ref={modalRef}
-        title={sheetTitle(state.mode)}
+        title={title}
         closeTestID="request.close"
         testID="request.sheet"
-        contentTop={96}
-        footerBottom={50}
+        contentGap={tokens.space.sm}
+        // 06: the pill and its promise just over the home indicator, leaving the form its room.
+        footerBottom={tokens.space.sm}
         dismissible={!busy}
         closable={!busy}
         insets={insets}
@@ -286,242 +313,185 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
           <View style={styles.footer}>
             <Button
               testID="request.submit"
-              label={busy ? "Sending…" : sheetTitle(state.mode)}
+              label={busy ? "Sending…" : title}
               variant="primary"
+              trailing="arrow"
               busy={busy}
               onPress={() => void onSubmit()}
             />
-            <Text style={styles.promise}>A specialist will call you shortly.</Text>
+            <View style={styles.promise}>
+              <Icon name="phone" size={16} color={tokens.colors.textPrimary} strokeWidth={1.75} />
+              <Text style={styles.promiseText}>A specialist will call you shortly.</Text>
+            </View>
           </View>
         }
       >
-        <View style={styles.summary} testID="request.summary">
-          <Text style={styles.summaryTitle}>{summary.title}</Text>
-          <Text style={styles.summaryFacts}>{summary.facts}</Text>
-          {summary.price ? <Text style={styles.summaryPrice}>{summary.price}</Text> : null}
-        </View>
+        <TripSummaryCard
+          testID="request.summary"
+          photo={cardPicture(trip.media, photoFor(trip.toCode), PICTURE_HEADERS)}
+          fallback={CLUB_PICTURE}
+          title={summary.title}
+          cabin={cabinLabel(state.cabin)}
+          dates={datesChipLabel({ depart: outbound?.date || null, return: round ? state.legs[1]?.date || null : null })}
+          route={summary.route}
+          carrier={summary.carrier}
+          price={summary.price}
+        />
 
-        <View style={styles.chips}>
-          <Chip
-            testID="request.tripType.round"
-            label="Round trip"
-            selected={round}
-            fill="equal"
-            onPress={() => dispatch({ type: "setTripType", tripType: "round" })}
-          />
-          <Chip
-            testID="request.tripType.oneway"
-            label="One way"
-            selected={!round}
-            fill="equal"
-            onPress={() => dispatch({ type: "setTripType", tripType: "oneway" })}
-          />
-        </View>
+        <Segmented
+          options={[
+            { key: "round", label: "Round trip", testID: "request.tripType.round" },
+            { key: "oneway", label: "One way", testID: "request.tripType.oneway" },
+          ]}
+          value={state.tripType}
+          disabled={busy}
+          onChange={(tripType) => dispatch({ type: "setTripType", tripType })}
+        />
 
-        <View ref={returnBlock} style={styles.block}>
+        <View ref={returnBlock}>
           <View style={styles.dates}>
-            <DateField
+            <PickerField
               testID="request.depart"
               label="Depart"
-              value={state.legs[0]?.date ? short(state.legs[0].date) : null}
+              icon="calendar"
+              value={outbound?.date ? dayText(outbound.date) : null}
+              placeholder="Select date"
+              disabled={busy}
               onPress={() => presentDates("depart")}
             />
             {round ? (
-              <DateField
+              <PickerField
                 testID="request.return"
                 label="Return"
-                value={state.legs[1]?.date ? short(state.legs[1].date) : null}
+                icon="calendar"
+                value={state.legs[1]?.date ? dayText(state.legs[1].date) : null}
+                placeholder="Select date"
                 error={Boolean(state.returnError)}
+                disabled={busy}
                 onPress={() => presentDates("return")}
               />
             ) : null}
           </View>
           {state.returnError ? (
-            <Text testID="request.returnError" style={styles.help}>
-              {state.returnError}
-            </Text>
+            <View style={round ? styles.returnErrorRound : undefined}>
+              <FieldError testID="request.returnError">{state.returnError}</FieldError>
+            </View>
           ) : null}
         </View>
 
-        <Stepper
-          testID="request.travelers"
-          label="Travelers"
-          value={state.passengers.adult}
-          min={1}
-          max={9}
-          onChange={(adult) => dispatch({ type: "setPassengers", passengers: { ...state.passengers, adult } })}
-        />
-
-        <View style={styles.contact}>
-          <SectionLabel box label="We will contact you" />
-          <TextField
-            testID="request.name"
-            label="Name"
-            value={state.contact.name}
-            onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
-            autoCapitalize="words"
-            autoComplete="name"
-          />
-          <View ref={phoneBlock} style={styles.contact}>
-            <TextField
-              testID="request.phone"
-              label="Phone"
-              value={state.contact.phone}
-              onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
-              error={Boolean(state.phoneError)}
-              keyboardType="phone-pad"
-              autoComplete="tel"
-            />
-            {state.phoneError ? (
-              <Text testID="request.phoneError" style={styles.help}>
-                {state.phoneError}
-              </Text>
-            ) : null}
-          </View>
-          <TextField
-            testID="request.email"
-            label="Email"
-            value={state.contact.email}
-            onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
+        <View style={styles.row}>
+          <PickerField
+            testID="request.travelers"
+            label="Travelers"
+            icon="user"
+            value={travelersLabel(state.passengers)}
+            disabled={busy}
+            onPress={() => {
+              Keyboard.dismiss();
+              travelersRef.current?.present(state.passengers);
+            }}
           />
         </View>
 
-        {noteOpen ? (
+        <Divider style={styles.divider} />
+        <Text style={styles.contactTitle} accessibilityRole="header">
+          We will contact you
+        </Text>
+        <TextField
+          testID="request.name"
+          label="Name"
+          icon="user"
+          value={state.contact.name}
+          editable={!busy}
+          onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
+          autoCapitalize="words"
+          autoComplete="name"
+        />
+        <View ref={phoneBlock}>
           <TextField
-            testID="request.note"
-            label="Note · optional"
-            value={state.note}
-            onChangeText={(v) => dispatch({ type: "setNote", note: v })}
-            multiline
-            maxLength={NOTE_MAX}
-            autoFocus
+            testID="request.phone"
+            label="Phone"
+            icon="phone"
+            value={state.contact.phone}
+            editable={!busy}
+            onChangeText={(v) => dispatch({ type: "setContact", field: "phone", value: v })}
+            error={Boolean(state.phoneError)}
+            keyboardType="phone-pad"
+            autoComplete="tel"
           />
-        ) : (
-          <TextAction testID="request.note" label="Add a note" onPress={() => setNoteOpen(true)} />
-        )}
-
-        {canUseSaved && savedPhone ? (
-          <TextAction
-            testID="request.useSavedPhone"
-            label="Use saved phone number"
-            onPress={() => dispatch({ type: "setContact", field: "phone", value: savedPhone })}
-          />
-        ) : null}
+          {state.phoneError ? <FieldError testID="request.phoneError">{state.phoneError}</FieldError> : null}
+          {canUseSaved && savedPhone ? (
+            <View style={styles.savedPhone}>
+              <TextButton
+                testID="request.useSavedPhone"
+                label="Use saved phone number"
+                onPress={() => dispatch({ type: "setContact", field: "phone", value: savedPhone })}
+              />
+            </View>
+          ) : null}
+        </View>
+        <TextField
+          testID="request.email"
+          label="Email"
+          icon="mail"
+          value={state.contact.email}
+          editable={!busy}
+          onChangeText={(v) => dispatch({ type: "setContact", field: "email", value: v })}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+        />
+        <TextField
+          testID="request.note"
+          label="Note (optional)"
+          icon="message"
+          value={state.note}
+          editable={!busy}
+          placeholder="Tell us about your travel plans or any special requests"
+          onChangeText={(v) => dispatch({ type: "setNote", note: v })}
+          multiline
+          maxLength={NOTE_MAX}
+        />
 
         {state.submitError ? (
           <View ref={notSent}>
-            <StateMessage
+            <NoticeCard
               testID="request.notSent"
-              variant="error"
+              tone="error"
               title={stateCopy("notSent").title}
               body={state.submitError || stateCopy("notSent").body}
-              primary={{ label: "Try again", onPress: () => void onSubmit() }}
+              link={{ label: "Try again", testID: "request.notSent.retry", onPress: () => void onSubmit() }}
             />
           </View>
         ) : null}
       </ModalSheet>
-      <DatesSheet
+      <DatesPage
         ref={datesRef}
         onUse={(s) => {
           if (s.depart) dispatch({ type: "setDepart", date: s.depart });
           if (s.tripType === "round") dispatch({ type: "setReturn", date: s.ret ?? "" });
         }}
       />
+      <SearchTravelersSheet
+        ref={travelersRef}
+        testIDPrefix="request.travelers"
+        stackBehavior="push"
+        onPick={(passengers) => dispatch({ type: "setPassengers", passengers })}
+      />
     </>
   );
 });
 
-/** Figma 135:849 `Depart input`: the label 8 pt over a white 56-pt field holding the day; a tap opens the calendar. */
-function DateField({
-  testID,
-  label,
-  value,
-  error = false,
-  onPress,
-}: {
-  testID: string;
-  label: string;
-  value: string | null;
-  error?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <View style={styles.dateField}>
-      <Text style={styles.dateLabel}>{label.toUpperCase()}</Text>
-      <Pressable
-        testID={testID}
-        accessibilityRole="button"
-        accessibilityLabel={value ? `${label}, ${value}` : `${label}, select date`}
-        onPress={onPress}
-        style={({ pressed }) => [styles.dateBox, error && styles.dateBoxError, pressed && styles.pressed]}
-      >
-        <Text style={value ? styles.dateValue : styles.datePlaceholder} numberOfLines={1}>
-          {value ?? "Select date"}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-/** Figma's text button in a form (`Add a note`, `Use saved phone number`): 48 pt, the button's words, at the left. */
-function TextAction({ testID, label, onPress }: { testID: string; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => [styles.textAction, pressed && styles.pressed]}
-    >
-      <Text style={styles.textActionLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
-/** `RequestBody.note` takes 500 characters; the field stops there instead of refusing the request. */
-const NOTE_MAX = 500;
-
 const styles = StyleSheet.create({
   footer: { gap: tokens.space.xs },
-  // Figma 138:1096: the promise under the button, left-aligned, in `text-secondary`.
-  promise: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  summary: { gap: tokens.space.xs },
-  summaryTitle: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  summaryFacts: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  summaryPrice: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  chips: { flexDirection: "row", gap: tokens.space.xs },
-  block: { gap: tokens.space.lg },
-  // 138:1046: Depart and Return side by side, 16 pt apart.
-  dates: { flexDirection: "row", gap: tokens.space.md },
-  dateField: { flex: 1, gap: tokens.space.xs },
-  dateLabel: { ...rn(tokens.type.label), color: tokens.colors.textSecondary },
-  dateBox: {
-    minHeight: 56,
-    justifyContent: "center",
-    paddingHorizontal: tokens.space.md,
-    borderRadius: tokens.radius.sm,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    backgroundColor: tokens.colors.surfaceCard,
-  },
-  dateBoxError: { borderColor: tokens.colors.statusDanger },
-  dateValue: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  datePlaceholder: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  // 138:1069: the label's box and the fields 16 pt apart; a field's explanation under it in the same rhythm.
-  contact: { gap: tokens.space.md },
-  // 138:1341 / 138:1232: what a field at fault needs, in `body-sm`, under the field.
-  help: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  textAction: {
-    alignSelf: "flex-start",
-    minHeight: 48,
-    minWidth: 144,
-    paddingHorizontal: tokens.space.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textActionLabel: { ...rn(tokens.type.button), color: tokens.colors.textPrimary },
-  pressed: { opacity: 0.7 },
+  promise: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: tokens.space.xs },
+  promiseText: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  // 06: Depart and Return side by side, 12 pt apart.
+  dates: { flexDirection: "row", gap: tokens.space.sm },
+  // 22: the return's line under the return's field, in the right half.
+  returnErrorRound: { marginLeft: "50%", paddingLeft: tokens.space.xs },
+  row: { flexDirection: "row" },
+  divider: { marginTop: tokens.space.xs },
+  contactTitle: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, marginTop: tokens.space.xs },
+  savedPhone: { alignItems: "flex-start" },
 });

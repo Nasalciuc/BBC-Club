@@ -32,10 +32,10 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "explore.search" }
 - assertVisible: { id: "explore.airportQuery" }
 - takeScreenshot: 104-838
-# ADR-IMPL-041 — Home as Figma draws it: Cancel leaves typing, a pin opens the route with its preference chips.
+# ADR-IMPL-041, ADR-IMPL-055 — Search's Cancel goes back to Explore, a pin opens the route with its trip chips (13).
 # No hideKeyboard after Cancel: Cancel closes the keyboard itself, and on Android Maestro's hideKeyboard is the Back
 # key — with no keyboard open, Back can leave Explore, and the next step then fails.
-- tapOn: { id: "explore.cancel" }
+- tapOn: { id: "explore.airportQuery.cancel" }
 - assertVisible: { id: "explore.search" }
 - tapOn: { id: "globe.pin.LHR" }
 - assertVisible: { id: "explore.chips" }
@@ -45,5 +45,7 @@ appId: com.buybusinessclass.club
 - assertVisible: { id: "dates.root" }
 - takeScreenshot: 325-5878
 - tapOn: { id: "dates.close" }
+# 3.0 (13): a chosen route hides the greeting; its back button returns to rest, where the portrait opens Profile.
+- tapOn: { id: "explore.back" }
 - tapOn: { id: "explore.profile" }
 - assertVisible: { id: "profile.root" }

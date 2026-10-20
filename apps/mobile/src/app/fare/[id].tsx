@@ -1,61 +1,72 @@
-import type { FareVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { type ForwardedRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Linking, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   BackButton,
   Button,
-  ErrorState,
+  Chip,
+  FlightOverview,
   ListRow,
   ModalSheet,
   type ModalSheetHandle,
   Photo,
   PhotoCredit,
   PricePair,
-  SectionLabel,
+  RoundButton,
+  RouteCard,
+  RowGroup,
+  Skeleton,
   StateMessage,
-  tokens,
+  YourFareCard,
+  cabinText,
+  dayText,
+  departYmd,
   rn,
+  tokens,
 } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import {
+  aboutFareLines,
   aboutFareNote,
-  carrierLine,
-  closedFareLines,
   comparisonLine,
-  factsLine,
   savings as savingsOf,
+  shareFareText,
 } from "@/features/fares/fare-page-logic";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { airportByCode } from "@/lib/airport-by-code";
 import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
-import { formatPrice } from "@/lib/format";
+import { savingPercent } from "@/lib/saving";
 
-/** Figma 135:846: the offer's photo band, 340 pt, square at the bottom. No space token equals 340. */
-const HERO_BAND = 340;
+/** 05: the city's photograph across the top, fading into the page at its foot. */
+const HERO = 252;
+const FADE = 72;
+/** 21: the closed fare's page — the photograph, then the message in the middle of what is left. */
+const GONE_TITLE = "This fare is unavailable.";
 
-function placeLine(code: string, city: string): string {
-  return `${code} · ${city.toUpperCase()}`;
-}
-
-function clock(local: string | null, offset: number, code: string): string {
-  if (!local) return code;
-  return offset > 0 ? `${local} +${offset}` : local;
-}
-
+/**
+ * A fare (05, 20, 21): the city's photograph with back and share; the route as its title and the fare's facts as chips;
+ * `Your fare` with what it saves; the flight; `About this fare` and `The comparison`; the route on the map; `Request
+ * this fare` and `No payment is taken in the app.` over the tab bar. A fare that has closed says so and offers an
+ * alternative (21).
+ */
 export default function FareDetailScreen() {
   const { id, offerId: offerIdParam } = useLocalSearchParams<{ id: string; offerId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const sheetRef = useRef<RequestSheetHandle>(null);
   const aboutRef = useRef<ModalSheetHandle>(null);
+  const comparisonRef = useRef<ModalSheetHandle>(null);
   const [fare, setFare] = useState<FareVM | null>(null);
   const [offer, setOffer] = useState<ProposalDetailVM | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -65,16 +76,17 @@ export default function FareDetailScreen() {
   const [error, setError] = useState<{ title: string; body: string; retry?: false } | null>(null);
   // `Try again` loads the fare again, here — it never leaves the page (ADR-IMPL-047).
   const [reloadToken, setReloadToken] = useState(0);
-  // An offer's photo band carries the status bar until the page scrolls it away; the porcelain under it then needs
-  // the dark glyphs.
-  const [pastBand, setPastBand] = useState(false);
-  const { width } = useWindowDimensions();
-  // ADR-IMPL-043: only an offer's page has a photo band, so only it asks for the city's photo.
-  const photoFor = usePlacePhotos(offer ? [fare?.to.code] : []);
+  // The photograph carries the status bar until the page scrolls it away; the page under it then needs dark glyphs.
+  const [pastHero, setPastHero] = useState(false);
+  // The route's map needs both airports where they are: asked once the fare is known.
+  const [airports, setAirports] = useState<{ from: AirportVM; to: AirportVM } | null>(null);
+  const closed = gone && gone !== true ? gone : null;
+  const city = fare?.to.code ?? closed?.to;
+  const photoFor = usePlacePhotos([city]);
 
   useEffect(() => {
     if (!id || typeof id !== "string") {
-      setError({ title: stateCopy("route").title, body: "This fare is unavailable.", retry: false });
+      setError({ title: stateCopy("route").title, body: GONE_TITLE, retry: false });
       setLoading(false);
       return;
     }
@@ -88,7 +100,7 @@ export default function FareDetailScreen() {
           setGone(fareResult.gone ?? true);
         } else if (fareResult.status === 404) {
           // An unknown id (a link): the same words as no id at all, and no `Try again` (ADR-IMPL-047).
-          setError({ title: stateCopy("route").title, body: "This fare is unavailable.", retry: false });
+          setError({ title: stateCopy("route").title, body: GONE_TITLE, retry: false });
         } else {
           setError(readFailureCopy(fareResult.code, "fare"));
         }
@@ -106,65 +118,127 @@ export default function FareDetailScreen() {
     })();
   }, [id, offerIdParam, reloadToken]);
 
-  // While it loads, and when it did not, the page keeps its way back and the tab bar (ADR-IMPL-047).
+  const fromCode = fare?.from.code;
+  const toCode = fare?.to.code;
+  useEffect(() => {
+    if (!fromCode || !toCode) return;
+    let cancelled = false;
+    void (async () => {
+      const [a, b] = await Promise.all([airportByCode(fromCode), airportByCode(toCode)]);
+      if (!cancelled && a && b) setAirports({ from: a, to: b });
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [fromCode, toCode]);
+
+  // The offer's own picture, else the city's photograph or satellite view with their credit, else the club's image
+  // (ADR-IMPL-043).
+  const band = bandPicture(offer?.mediaUrl, photoFor(city), {
+    headers: PICTURE_HEADERS,
+    mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
+    size: { width, height: HERO },
+  });
+  const credit = band.credit;
+  const creditLink = credit?.link ?? null;
+  const backTop = insets.top + tokens.space.xs;
+
+  const hero = (
+    <View style={styles.hero}>
+      <Photo
+        source={loading ? null : band.source}
+        fallback={loading ? null : CLUB_PICTURE}
+        cachePolicy={band.cache}
+        style={StyleSheet.absoluteFill}
+        testID="fare.media"
+      />
+      <LinearGradient
+        colors={[`${tokens.colors.surfacePage}00`, tokens.colors.surfacePage]}
+        style={styles.fade}
+        pointerEvents="none"
+      />
+      <BackButton
+        testID="fare.back"
+        variant="photo"
+        onPress={() => router.back()}
+        style={StyleSheet.flatten([styles.back, { top: backTop }])}
+      />
+      {fare ? (
+        <RoundButton
+          testID="fare.share"
+          icon="share"
+          accessibilityLabel="Share this fare"
+          onPress={() => {
+            Share.share({ message: shareFareText(fare) }).catch(() => undefined);
+          }}
+          style={StyleSheet.flatten([styles.share, { top: backTop }])}
+        />
+      ) : null}
+    </View>
+  );
+
+  const creditRow = credit ? (
+    // The credit the photograph owes (ADR-IMPL-043).
+    <PhotoCredit
+      testID="fare.photoCredit"
+      label={credit.label}
+      accessibilityLabel={credit.spoken}
+      onPress={
+        creditLink
+          ? () => {
+              Linking.openURL(creditLink).catch(() => undefined);
+            }
+          : undefined
+      }
+    />
+  ) : null;
+
+  // While it loads, and when it did not, the page keeps its photograph's place, its way back and the tab bar.
   if (loading) {
     return (
-      <View style={[styles.root, { paddingTop: insets.top }]}>
+      <View style={styles.root}>
         <ScreenStatusBar on="light" />
-        <View style={styles.goneNav}>
-          <BackButton testID="fare.back" onPress={() => router.back()} />
+        {hero}
+        <View style={styles.content}>
+          <Skeleton width="80%" height={36} radius="pill" />
+          <Skeleton width={220} height={40} radius="pill" />
+          <Skeleton height={104} radius="md" />
+          <Skeleton height={120} radius="md" />
         </View>
-        <View style={[styles.waiting, styles.centered]}>
-          <ActivityIndicator color={tokens.colors.primary} />
-        </View>
+        <View style={styles.grow} />
         <RootTabBar active="explore" />
       </View>
     );
   }
 
   if (gone) {
-    // Figma 135:848: `Flight details` beside the back button; what closed — its day, its route, its airline; the
-    // message; the way on pinned at the bottom.
-    const closed = gone === true ? null : gone;
-    const lines = closed ? closedFareLines(closed) : null;
-    const copy = stateCopy("gone");
     return (
-      <View testID="fare.root" style={[styles.root, { paddingTop: insets.top }]}>
-        <ScreenStatusBar on="light" />
-        <View style={styles.goneNav}>
-          <BackButton testID="fare.back" onPress={() => router.back()} />
-          <Text style={styles.goneNavTitle} accessibilityRole="header">
-            Flight details
-          </Text>
-        </View>
-        <ScrollView contentContainerStyle={styles.goneContent}>
-          {lines ? (
-            <View style={styles.goneRoute} testID="fare.gone.route">
-              <SectionLabel box label={lines.day} />
-              <Text style={styles.goneRouteTitle}>{lines.route}</Text>
-              {lines.carrier ? <Text style={styles.carrier}>{lines.carrier}</Text> : null}
-            </View>
-          ) : null}
-          <StateMessage testID="fare.gone" variant="gone" title={copy.title} body={copy.body} />
-        </ScrollView>
-        <View style={[styles.footer, styles.goneFooter]}>
-          <Button
-            testID="fare.alternative"
-            label="Request an alternative"
-            variant="primary"
-            onPress={() =>
-              sheetRef.current?.present({
-                profile,
-                mode: "alternative",
-                replacesFareId: typeof id === "string" ? id : undefined,
-                fromCode: closed?.from,
-                toCode: closed?.to,
-                fromCity: closed?.fromCity ?? undefined,
-                city: closed?.toCity ?? closed?.to,
-              })
-            }
-          />
-          <Text style={styles.caption}>A specialist will call you shortly.</Text>
+      <View testID="fare.root" style={styles.root}>
+        <ScreenStatusBar on="dark" />
+        {hero}
+        <View style={styles.goneBody}>
+          {creditRow ? <View style={styles.gutter}>{creditRow}</View> : null}
+          <View style={styles.goneMessage}>
+            <StateMessage
+              testID="fare.gone"
+              align="center"
+              title={GONE_TITLE}
+              primary={{
+                label: "Request an alternative",
+                testID: "fare.alternative",
+                onPress: () =>
+                  sheetRef.current?.present({
+                    profile,
+                    mode: "alternative",
+                    replacesFareId: typeof id === "string" ? id : undefined,
+                    fromCode: closed?.from,
+                    toCode: closed?.to,
+                    fromCity: closed?.fromCity ?? undefined,
+                    city: closed?.toCity ?? closed?.to,
+                  }),
+              }}
+            />
+          </View>
         </View>
         <RootTabBar active="explore" />
         <RequestSheet ref={sheetRef} />
@@ -175,15 +249,13 @@ export default function FareDetailScreen() {
   if (error || !fare) {
     const copy = error ?? stateCopy("route");
     return (
-      <View testID="fare.root" style={[styles.root, { paddingTop: insets.top }]}>
+      <View testID="fare.root" style={styles.root}>
         <ScreenStatusBar on="light" />
-        <View style={styles.goneNav}>
-          <BackButton testID="fare.back" onPress={() => router.back()} />
-        </View>
-        <View style={[styles.waiting, styles.centered]}>
-          <ErrorState
+        {hero}
+        <View style={[styles.goneMessage, styles.grow]}>
+          <StateMessage
             testID="fare.error"
-            variant="error"
+            align="center"
             title={copy.title}
             body={copy.body}
             primary={
@@ -198,107 +270,62 @@ export default function FareDetailScreen() {
     );
   }
 
-  const savings = savingsOf(fare.price);
-  // An offer's page has its photo band (Figma 135:846): the offer's picture, else its city's photo or satellite view
-  // with their credit, else the club's image (ADR-IMPL-043). A search fare's page has none (135:845).
-  const band = offer
-    ? bandPicture(offer.mediaUrl, photoFor(fare.to.code), {
-        headers: PICTURE_HEADERS,
-        mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
-        size: { width, height: HERO_BAND },
-      })
-    : null;
-  const credit = band?.credit ?? null;
-  const creditLink = credit?.link ?? null;
-  const route = `${fare.from.city}\nto ${fare.to.city}`;
+  const percent = savingPercent(fare.price);
+  const saved = savingsOf(fare.price);
+  const day = dayText(departYmd(fare));
 
   return (
     <View testID="fare.root" style={styles.root}>
-      <ScreenStatusBar on={band && !pastBand ? "dark" : "light"} />
+      <ScreenStatusBar on={pastHero ? "light" : "dark"} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         scrollEventThrottle={16}
-        onScroll={
-          band
-            ? (e) => {
-                const past = e.nativeEvent.contentOffset.y > HERO_BAND - insets.top;
-                if (past !== pastBand) setPastBand(past);
-              }
-            : undefined
-        }
+        onScroll={(e) => {
+          const past = e.nativeEvent.contentOffset.y > HERO - insets.top - FADE;
+          if (past !== pastHero) setPastHero(past);
+        }}
       >
-        {band ? (
-          <View style={styles.hero}>
-            <Photo
-              source={band.source}
-              fallback={CLUB_PICTURE}
-              cachePolicy={band.cache}
-              style={StyleSheet.absoluteFill}
-              testID="fare.media"
-            />
-            {/* 436:1220: the photograph under a flat night veil, so the words on it keep their contrast. */}
-            <View style={styles.bandVeil} />
-            <View style={[styles.heroTop, { paddingTop: insets.top }]}>
-              <BackButton testID="fare.back" onPress={() => router.back()} style={styles.backPlate} />
-            </View>
-            <View style={styles.heroCopy}>
-              <Text style={styles.displayOnDark}>{route}</Text>
-              <Text style={styles.factsOnDark}>{fare.cabin === "first" ? "FIRST CLASS" : "BUSINESS CLASS"}</Text>
-            </View>
-          </View>
-        ) : (
-          <View style={[styles.plain, { paddingTop: insets.top }]}>
-            <BackButton testID="fare.back" onPress={() => router.back()} style={styles.back} />
-          </View>
-        )}
-
-        {credit ? (
-          // The credit the photo owes, under it (ADR-IMPL-043).
-          <View style={styles.credit}>
-            <PhotoCredit
-              testID="fare.photoCredit"
-              label={credit.label}
-              accessibilityLabel={credit.spoken}
-              onPress={
-                creditLink
-                  ? () => {
-                      Linking.openURL(creditLink).catch(() => undefined);
-                    }
-                  : undefined
-              }
-            />
-          </View>
-        ) : null}
-        <View
-          style={[
-            styles.details,
-            band ? styles.detailsOffer : styles.detailsSearch,
-            credit && styles.detailsAfterCredit,
-          ]}
-        >
-          {band ? null : <Text style={styles.display}>{route}</Text>}
-          <View style={styles.times}>
-            <Text style={styles.carrier}>{carrierLine(fare)}</Text>
-            <View style={styles.timeBlock}>
-              <View style={styles.timeCol}>
-                <Text style={styles.factsMono}>{placeLine(fare.from.code, fare.from.city)}</Text>
-                <Text style={styles.timeDisplay}>{clock(fare.departLocal, 0, fare.from.code)}</Text>
-              </View>
-              <View style={styles.timeCol}>
-                <Text style={styles.factsMono}>{placeLine(fare.to.code, fare.to.city)}</Text>
-                <Text style={styles.timeDisplay}>{clock(fare.arriveLocal, fare.arriveDayOffset, fare.to.code)}</Text>
-              </View>
-            </View>
-            <Text style={styles.factsMono}>{factsLine(fare)}</Text>
-          </View>
-          {band ? null : <Text style={styles.editorial}>{"Your next journey,\nthoughtfully arranged."}</Text>}
-          <PricePair price={fare.price} layout="editorial" />
-          {savings != null && savings > 0 ? (
+        {hero}
+        <View style={styles.content}>
+          {creditRow}
+          <Text style={styles.title} accessibilityRole="header">
+            {`${fare.from.city} to ${fare.to.city}`}
+          </Text>
+          {/* The fare's facts, not choices (05): its cabin, one way, its day — one row that scrolls once it is full. */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
+            contentContainerStyle={styles.chips}
+            testID="fare.chips"
+          >
+            <Chip testID="fare.chip.cabin" icon="seat" label={cabinText(fare.cabin)} />
+            <Chip testID="fare.chip.trip" icon="arrow-right" label="One way" />
+            {day ? <Chip testID="fare.chip.day" icon="calendar" label={day} /> : null}
+          </ScrollView>
+          <YourFareCard testID="fare.price" price={fare.price} percent={percent} />
+          <FlightOverview testID="fare.flight" fare={fare} />
+          <RowGroup testID="fare.rows">
             <ListRow
-              testID="fare.whyLower"
-              size="sm"
-              label={`Why it’s ${formatPrice(savings, fare.price.currency)} lower`}
+              testID="fare.about"
+              icon="file-text"
+              label="About this fare"
               onPress={() => aboutRef.current?.present()}
+            />
+            {saved != null && saved > 0 ? (
+              <ListRow
+                testID="fare.comparison"
+                icon="bar-chart"
+                label="The comparison"
+                onPress={() => comparisonRef.current?.present()}
+              />
+            ) : null}
+          </RowGroup>
+          {airports ? (
+            <RouteCard
+              testID="fare.route"
+              from={{ code: airports.from.code, city: fare.from.city, lat: airports.from.lat, lng: airports.from.lng }}
+              to={{ code: airports.to.code, city: fare.to.city, lat: airports.to.lat, lng: airports.to.lng }}
             />
           ) : null}
         </View>
@@ -318,137 +345,108 @@ export default function FareDetailScreen() {
             })
           }
         />
-        <Text style={styles.caption}>
-          {band ? "A specialist arranges everything by phone." : "No payment is taken in the app."}
-        </Text>
+        <Text style={styles.caption}>No payment is taken in the app.</Text>
       </View>
       <RootTabBar active="explore" />
 
-      {savings != null && savings > 0 ? <AboutFareSheet ref={aboutRef} fare={fare} savings={savings} /> : null}
+      <AboutFareSheet ref={aboutRef} fare={fare} />
+      {saved != null && saved > 0 ? <ComparisonSheet ref={comparisonRef} fare={fare} /> : null}
       <RequestSheet ref={sheetRef} />
     </View>
   );
 }
 
-/**
- * Figma 135:847, `About this fare`: why the club's fare is lower — the two fares side by side, the sum written out, when
- * the published fare was recorded and the specialist's promise; `Got it` closes it.
- */
-const AboutFareSheet = forwardRef<ModalSheetHandle, { fare: FareVM; savings: number }>(function AboutFareSheet(
-  { fare, savings },
-  ref,
-) {
+/** A sheet of the page's own, opened by its row and closed by `Got it` (20). */
+function useSheetHandle(ref: ForwardedRef<ModalSheetHandle>) {
   const modalRef = useRef<ModalSheetHandle>(null);
-  const insets = useSafeAreaInsets();
   useImperativeHandle(ref, () => ({
     present: () => modalRef.current?.present(),
     dismiss: () => modalRef.current?.dismiss(),
     reveal: (target) => modalRef.current?.reveal(target),
   }));
-  const comparison = comparisonLine(fare.price);
+  return modalRef;
+}
+
+/** `About this fare` (20): what the fare is, and what the specialist does — in the club's own facts. */
+const AboutFareSheet = forwardRef<ModalSheetHandle, { fare: FareVM }>(function AboutFareSheet({ fare }, ref) {
+  const modalRef = useSheetHandle(ref);
+  const insets = useSafeAreaInsets();
+  const [first, second] = aboutFareLines({ ...fare, day: departYmd(fare) });
   return (
     <ModalSheet
       ref={modalRef}
       title="About this fare"
       size="explain"
-      closeTestID="fare.whyClose"
-      testID="fare.whySheet"
+      closeTestID="fare.aboutClose"
+      testID="fare.aboutSheet"
       insets={insets}
+      footer={
+        <Button testID="fare.aboutGotIt" label="Got it" variant="primary" onPress={() => modalRef.current?.dismiss()} />
+      }
     >
-      <Text style={styles.headline} accessibilityRole="header">
-        {`Why it’s ${formatPrice(savings, fare.price.currency)} lower`}
-      </Text>
+      <Text style={styles.sheetBody}>{first}</Text>
+      <Text style={styles.sheetBody}>{second}</Text>
+    </ModalSheet>
+  );
+});
+
+/**
+ * `The comparison`: the club's fare beside the published one with its source, the sum written out, and when the
+ * published fare was recorded — only where it is on record.
+ */
+const ComparisonSheet = forwardRef<ModalSheetHandle, { fare: FareVM }>(function ComparisonSheet({ fare }, ref) {
+  const modalRef = useSheetHandle(ref);
+  const insets = useSafeAreaInsets();
+  const comparison = comparisonLine(fare.price);
+  return (
+    <ModalSheet
+      ref={modalRef}
+      title="The comparison"
+      size="explain"
+      closeTestID="fare.comparisonClose"
+      testID="fare.comparisonSheet"
+      insets={insets}
+      footer={
+        <Button
+          testID="fare.comparisonGotIt"
+          label="Got it"
+          variant="primary"
+          onPress={() => modalRef.current?.dismiss()}
+        />
+      }
+    >
       <PricePair price={fare.price} layout="detail" />
-      <Text style={styles.title}>The comparison</Text>
-      {comparison ? <Text style={styles.bodyPrimary}>{comparison}</Text> : null}
+      {comparison ? <Text style={styles.sheetBody}>{comparison}</Text> : null}
       <Text style={styles.note}>{aboutFareNote(fare)}</Text>
-      <Button testID="fare.whyGotIt" label="Got it" variant="primary" onPress={() => modalRef.current?.dismiss()} />
     </ModalSheet>
   );
 });
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
-  // Loading and the error: the space between the back button and the tab bar.
-  waiting: { flex: 1 },
+  grow: { flex: 1 },
   scroll: { paddingBottom: tokens.space.lg },
-  // 135:845: the back button at the top, the route 36 pt under it (128 on the frame).
-  back: { marginBottom: 36 },
-  // The chevron centred in its white plate (the bare BackButton keeps it 6 pt from its edge, as Figma draws it).
-  backPlate: {
-    backgroundColor: tokens.colors.surfaceCard,
-    borderRadius: tokens.radius.pill,
-    alignItems: "center",
-    paddingLeft: 0,
-  },
-  hero: {
-    height: HERO_BAND,
-    justifyContent: "space-between",
-    backgroundColor: tokens.colors.surfaceTint,
-    overflow: "hidden",
-  },
-  bandVeil: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: tokens.colors.primary,
-    opacity: 0.32,
-  },
-  heroTop: { paddingHorizontal: tokens.space.lg },
-  heroCopy: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.lg, gap: tokens.space.xs },
-  plain: { paddingHorizontal: tokens.space.lg },
-  display: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  displayOnDark: { ...rn(tokens.type.display), color: tokens.colors.textOnPhoto },
-  factsOnDark: { ...rn(tokens.type.bodySm), color: tokens.colors.textOnPhoto },
-  details: { paddingHorizontal: tokens.space.lg },
-  // 135:845: the route, the flight, the line, the fares and the comparison 32 pt apart.
-  detailsSearch: { gap: tokens.space.xl },
-  // 135:846: under the band, 24 pt down; the flight, the fares and the comparison 16 pt apart.
-  detailsOffer: { paddingTop: tokens.space.lg, gap: tokens.space.md },
-  // Under the credit's 44 pt row (its line in the middle) the details start at once: 13 pt either side of the line.
-  detailsAfterCredit: { paddingTop: 0 },
-  credit: { paddingHorizontal: tokens.space.lg },
-  // 475:8542: the airline, the clocks and the facts 12 pt apart.
-  times: { gap: tokens.space.sm },
-  carrier: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  timeBlock: { flexDirection: "row", gap: tokens.space.lg },
-  timeCol: { flex: 1, gap: tokens.space.xxs },
-  timeDisplay: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  factsMono: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
-  editorial: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  // 135:845: the button and its line pinned over the tab bar, 6 pt above it.
+  hero: { height: HERO, backgroundColor: tokens.colors.surfaceTint },
+  fade: { position: "absolute", left: 0, right: 0, bottom: 0, height: FADE },
+  back: { position: "absolute", left: tokens.space.gutter },
+  share: { position: "absolute", right: tokens.space.gutter },
+  content: { paddingHorizontal: tokens.space.gutter, gap: tokens.space.sm },
+  title: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
+  chipsScroll: { marginHorizontal: -tokens.space.gutter, flexGrow: 0 },
+  chips: { flexDirection: "row", gap: tokens.space.xs, paddingHorizontal: tokens.space.gutter },
+  // 05: the pill and its line pinned over the tab bar.
   footer: {
-    paddingHorizontal: tokens.space.lg,
+    paddingHorizontal: tokens.space.gutter,
     paddingTop: tokens.space.sm,
-    paddingBottom: 6,
+    paddingBottom: tokens.space.xs,
     gap: tokens.space.xs,
     backgroundColor: tokens.colors.surfacePage,
   },
-  // 137:997: the closed fare's footer stands 30 pt over the tab bar.
-  goneFooter: { paddingBottom: 30 },
-  caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  // 137:975: the back button, 16 pt, `Flight details`.
-  goneNav: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.space.md,
-    paddingHorizontal: tokens.space.lg,
-  },
-  goneNavTitle: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
-  // 137:980: the content 44 pt under the navigation (136 on the frame), its blocks 24 apart.
-  goneContent: {
-    paddingHorizontal: tokens.space.lg,
-    paddingTop: 44,
-    paddingBottom: tokens.space.lg,
-    gap: tokens.space.lg,
-  },
-  goneRoute: { gap: tokens.space.sm },
-  goneRouteTitle: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },
-  headline: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  bodyPrimary: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
+  caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, textAlign: "center" },
+  gutter: { paddingHorizontal: tokens.space.gutter },
+  // 21: the message 40 pt under the photograph, centred.
+  goneBody: { flex: 1 },
+  goneMessage: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.xxl },
+  sheetBody: { ...rn(tokens.type.bodyLg), color: tokens.colors.textPrimary },
   note: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
 });

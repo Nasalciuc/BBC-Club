@@ -190,10 +190,12 @@ export function missingReturn(tripType: TripType, returnDate?: string): boolean 
   return tripType === "round" && (returnDate == null || returnDate.length === 0);
 }
 
+/**
+ * The sheet's title and its pill (06): `Request a quote` — a fare, an offer or a route alike, the specialist quotes the
+ * trip; `Request an alternative` in place of a fare that has closed (21).
+ */
 export function sheetTitle(mode: RequestMode): string {
-  if (mode === "quote") return "Request a quote";
-  if (mode === "alternative") return "Request an alternative";
-  return "Request this fare";
+  return mode === "alternative" ? "Request an alternative" : "Request a quote";
 }
 
 /** The member saw an estimate for exactly what this quote asks about: the outbound route and the cabin. */

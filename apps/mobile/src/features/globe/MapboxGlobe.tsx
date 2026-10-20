@@ -1,100 +1,90 @@
 /**
- * The Explore globe on Mapbox (ADR-IMPL-035). Loaded only by Globe.tsx, and only on a build that has the native module:
- * importing @rnmapbox/maps without it throws.
+ * The Explore globe on Mapbox (ADR-IMPL-035, ADR-IMPL-055). Loaded only by Globe.tsx, and only on a build that has the
+ * native module: importing @rnmapbox/maps without it throws.
  *
- * Mapbox's satellite imagery without names (the owner's reference, 13 Oct 2026), downloaded the first time a region is
- * seen, then served from Mapbox's cache; the night in twilight steps with the cities' lights on it. Our pins and route
- * sit above. Figma: P3.1 Home · Rest (89:386), P3.2 London selected (89:387), Globe · Map style (482:1115),
- * page 06 · Motion, 07 · Additions A6 (536:11212).
+ * The Earth by day, as Mapbox's satellite imagery shows it, without names — downloaded the first time a region is seen,
+ * then served from Mapbox's cache — on the pale sky (02). Our pins and their labels are React views on the map
+ * (MarkerView); a chosen route is a white line with its plane, framed over the sheet (13).
  */
-import Mapbox, {
-  Atmosphere,
-  Camera,
-  CircleLayer,
-  FillLayer,
-  LineLayer,
-  MapView,
-  ShapeSource,
-  type MapState,
-} from "@rnmapbox/maps";
-import { type ComponentProps, type ComponentRef, useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, AppState, type LayoutChangeEvent, StyleSheet, View } from "react-native";
+import Mapbox, { Atmosphere, Camera, LineLayer, MapView, MarkerView, ShapeSource, type MapState } from "@rnmapbox/maps";
+import { type ComponentRef, useEffect, useRef, useState } from "react";
+import {
+  AccessibilityInfo,
+  AppState,
+  type LayoutChangeEvent,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 import {
-  FIGMA_ZOOM,
   GLOBE_SPEC,
+  GlobePin,
+  Icon,
   OPENING_CENTER,
+  REST_ZOOM,
   ZOOM_RANGE,
-  cityLightFeatures,
   globePadding,
-  haloOpacity,
-  homeSheetHeight,
-  pickPin,
-  pinFeatures,
+  labelScale,
+  mapPoint,
+  pinFrame,
+  pinPriority,
+  placeLabels,
   routeCamera,
   routeLine,
+  routeMiddle,
   tokens,
+  type GlobeCamera,
   type LngLat,
   type Pin,
+  type PinToPlace,
+  type Rect,
 } from "@bbc/ui";
 
 import { env } from "@/lib/env";
-
-import { NIGHT_STYLE, skyAt } from "./sky-style";
 
 void Mapbox.setAccessToken(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "");
 // No usage telemetry. Mapbox still counts one anonymous monthly active user for billing (docs/store/data-safety.md).
 Mapbox.setTelemetryEnabled(false);
 
-/**
- * The Earth as photographed, under an atmosphere and stars — Mapbox's globe example (the owner's choice, 7 Oct 2026 —
- * ADR-IMPL-035, amended). No names since 13 Oct 2026: the owner's reference globe has none, and the country and city
- * names ran under the header and the pins. Imagery needs the network the first time; Mapbox caches what was seen. A map
- * that cannot load falls back to the drawn globe.
- */
+/** The Earth as photographed, without names (the owner's reference, 13 Oct 2026). A map that cannot load falls back to
+ *  the drawn globe. */
 const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-v9";
-/** The cities' lights, built once: the same object on every render, so the map gets the points a single time. */
-const CITY_LIGHTS = cityLightFeatures();
-/** Mapbox's satellite-globe atmosphere: a pale horizon, a deep-blue sky, near-black space with stars. */
+/** 02: the globe on the pale sky, a white haze at its rim, no stars. */
 const ATMOSPHERE = {
-  color: tokens.colors.sky,
+  color: tokens.colors.surfaceCard,
   highColor: tokens.colors.sky,
-  horizonBlend: 0.02,
+  horizonBlend: 0.06,
   spaceColor: tokens.colors.sky,
-  starIntensity: 0.6,
+  starIntensity: 0,
 } as const;
 
-/** The library does not export its press-event type; the one ShapeSource hands its onPress is the same. */
-type OnPressEvent = Parameters<NonNullable<ComponentProps<typeof ShapeSource>["onPress"]>>[0];
-
-/** Figma Motion: one turn in 120 s is 3° a second, west; resume 4 s after the last touch (GLOBE_SPEC). */
+/** One turn in 120 s is 3° a second, west; resume 4 s after the last touch (GLOBE_SPEC). */
 const TURN_DEG_PER_S = 360 / (GLOBE_SPEC.periodMs / 1000);
-const HALO_TICK_MS = 200;
-/** A6 · CINEMATIC FLIGHT: the camera flies the great circle to a chosen destination in under a second; Motion spec 4:
- *  the route then draws itself in 600 ms, home to destination. Back to Rest is the old ease. */
-const MOVE_MS = { frame: 900, flight: 950, arc: 600, zoom: 500 } as const;
+/** The camera flies the great circle to a chosen destination in under a second; the route then draws itself in 600 ms,
+ *  home to destination. Back to rest is an ease. */
+const MOVE_MS = { frame: 900, flight: 950, arc: 600 } as const;
 const ARC_TICK_MS = 30;
-/** A6 · DAY AND NIGHT: the dark side, shaded from the real time, updated every minute. */
-const NIGHT_TICK_MS = 60_000;
 
 export type MapboxGlobeProps = {
   pins: Pin[];
-  home: { lat: number; lng: number } | null;
+  home: { lat: number; lng: number; code?: string } | null;
   selected: string | null;
   onSelect: (code: string) => void;
-  state: "rest" | "selected";
-  /** The sheet's snap index: Mapbox's logo and attribution must stay visible just above it. */
-  sheetIndex: number;
-  /** The sheet covers the globe (searching, expanded): keep the map mounted, stop the motion. */
-  hidden: boolean;
+  /** Where the globe's centre stands on screen (explore-layout). */
+  centreY: number;
+  /** The band the labels may use, on screen: under the greeting, over the sheet — and what they must not cover. */
+  band: { top: number; bottom: number; avoid?: readonly Rect[] };
+  /** The sheet's top: Mapbox's logo and attribution must stay visible just above it. */
+  sheetTop: number;
   /**
-   * Explore is not on screen — another tab, or a fare or a request pushed over it: the globe stays drawn (a screen
-   * sliding over it still shows it) but nothing ticks, so it no longer re-renders five times a second unseen.
+   * Explore is not on screen — another tab, or a screen pushed over it — or the sheet covers the globe: the globe stays
+   * drawn but nothing turns.
    */
   paused?: boolean;
   /** The map could not load (a bad token, a style error): Globe draws the fallback instead of a blank screen. */
   onFailed: () => void;
-  /** The map has loaded and drawn: Globe fades it in over the drawn globe (A6 · INSTANT GLOBE). */
+  /** The map has loaded and drawn: Globe fades it in over the drawn globe. */
   onReady: () => void;
 };
 
@@ -103,32 +93,30 @@ export default function MapboxGlobe({
   home,
   selected,
   onSelect,
-  state,
-  sheetIndex,
-  hidden,
+  centreY,
+  band,
+  sheetTop,
   paused = false,
   onFailed,
   onReady,
 }: MapboxGlobeProps) {
   const camera = useRef<ComponentRef<typeof Camera>>(null);
-  const view = useRef({ center: [...OPENING_CENTER] as LngLat, zoom: FIGMA_ZOOM, touchedAt: 0 });
+  const view = useRef({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM, touchedAt: 0 });
   const [size, setSize] = useState({ width: 393, height: 768 });
+  const { fontScale } = useWindowDimensions();
   const [reducedMotion, setReducedMotion] = useState(false);
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
-  const [clock, setClock] = useState(0);
-  const [a11yIndex, setA11yIndex] = useState(0);
   // The Camera mounts only after the map has its layout: framing waits for the map to finish loading.
   const [mapReady, setMapReady] = useState(false);
   // Once the style is in, a failing tile, glyph or sprite is a blemish, not a dead map: only an error before the style
   // loaded hands Explore back to the drawn globe (onMapLoadingError fires for any of them, repeatedly).
   const styleLoaded = useRef(false);
-  // How much of the route is drawn, 0..1 — Motion spec 4 reveals it in route order once the flight has landed.
+  // How much of the route is drawn, 0..1 — revealed in route order once the flight has landed.
   const [arc, setArc] = useState(1);
-  // The night — its twilight bands and the lights' style — recomputed on the minute while the globe is visible (one
-  // state: the halo and arc ticks re-render without rebuilding either).
-  const [sky, setSky] = useState(() => skyAt(new Date()));
+  // Where the camera stands, for the labels: which pins are on the near side, and on which side each label fits.
+  const [seen, setSeen] = useState<GlobeCamera>({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM });
 
-  const moving = appActive && !hidden && !paused && !reducedMotion;
+  const moving = appActive && !paused && !reducedMotion;
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -140,15 +128,8 @@ export default function MapboxGlobe({
     };
   }, []);
 
-  // Offer halos pulse (Figma Motion, 2 s); reduced motion, background or a covered globe holds them still.
-  useEffect(() => {
-    if (!moving) return;
-    const t = setInterval(() => setClock(Date.now()), HALO_TICK_MS);
-    return () => clearInterval(t);
-  }, [moving]);
-
-  // The slow turn, while nothing is chosen and nobody has touched the globe for 4 s. It eases back to Figma's zoom
-  // and latitude as it turns, as the drawn globe does.
+  // The slow turn, while nothing is chosen and nobody has touched the globe for 4 s. It eases back to the rest zoom and
+  // latitude as it turns, as the drawn globe does.
   useEffect(() => {
     if (!moving || selected !== null) return;
     const t = setInterval(() => {
@@ -157,7 +138,7 @@ export default function MapboxGlobe({
       const [lng, lat] = v.center;
       camera.current?.setCamera({
         centerCoordinate: [lng - TURN_DEG_PER_S, lat + (OPENING_CENTER[1] - lat) * 0.2],
-        zoomLevel: v.zoom + (FIGMA_ZOOM - v.zoom) * 0.2,
+        zoomLevel: v.zoom + (REST_ZOOM - v.zoom) * 0.2,
         animationDuration: 1000,
         animationMode: "linearTo",
       });
@@ -165,16 +146,8 @@ export default function MapboxGlobe({
     return () => clearInterval(t);
   }, [moving, selected]);
 
-  // The night side follows the clock while the globe is on screen; a globe coming back from the background catches up.
-  useEffect(() => {
-    if (!appActive || hidden || paused) return;
-    setSky(skyAt(new Date()));
-    const t = setInterval(() => setSky(skyAt(new Date())), NIGHT_TICK_MS);
-    return () => clearInterval(t);
-  }, [appActive, hidden, paused]);
-
-  // A chosen destination flies the camera along the great circle and frames the route above the sheet; clearing it
-  // eases the globe back to the rest position.
+  // A chosen destination flies the camera along the great circle and frames the route over the sheet (13); clearing it
+  // eases the globe back to the rest view (02).
   const dest = pins.find((p) => p.code === selected) ?? null;
   const destLat = dest?.lat;
   const destLng = dest?.lng;
@@ -186,28 +159,27 @@ export default function MapboxGlobe({
     view.current.touchedAt = Date.now();
     if (destLat === undefined || destLng === undefined) {
       camera.current?.setCamera({
-        // Back to Figma's opening view: the idle turn resumes from there, not from the last route.
         centerCoordinate: [...OPENING_CENTER],
-        zoomLevel: FIGMA_ZOOM,
-        padding: globePadding("rest", size.height),
+        zoomLevel: REST_ZOOM,
+        padding: globePadding(centreY, size.height),
         animationDuration: reducedMotion ? 0 : MOVE_MS.frame,
         animationMode: "easeTo",
       });
       return;
     }
     const from = homeLat === undefined || homeLng === undefined ? null : { lat: homeLat, lng: homeLng };
-    const cam = routeCamera(from, { lat: destLat, lng: destLng }, size.width);
+    const cam = routeCamera(from, { lat: destLat, lng: destLng });
     camera.current?.setCamera({
       centerCoordinate: cam.center,
       zoomLevel: cam.zoom,
-      padding: globePadding("selected", size.height),
+      // The arc rises above the camera's centre: the centre stands `lift` lower, so the arc lands mid-band (13).
+      padding: globePadding(centreY + cam.lift, size.height),
       animationDuration: reducedMotion ? 0 : MOVE_MS.flight,
       animationMode: reducedMotion ? "easeTo" : "flyTo",
     });
-  }, [mapReady, destLat, destLng, homeLat, homeLng, size.width, size.height, reducedMotion]);
+  }, [mapReady, destLat, destLng, homeLat, homeLng, centreY, size.height, reducedMotion]);
 
-  // The route draws itself, home to destination, in 600 ms once the flight has landed (Motion spec 4). Reduce motion
-  // shows it whole at once, as the Figma RM frames do.
+  // The route draws itself, home to destination, in 600 ms once the flight has landed. Reduced motion shows it whole.
   useEffect(() => {
     if (destLat === undefined || destLng === undefined || homeLat === undefined || homeLng === undefined) return;
     if (reducedMotion || !mapReady) {
@@ -235,26 +207,13 @@ export default function MapboxGlobe({
     view.current.center = [lng, lat];
     view.current.zoom = s.properties.zoom;
     if (s.gestures.isGestureActive) view.current.touchedAt = Date.now();
-  }
-
-  function onPinPress(e: OnPressEvent) {
-    view.current.touchedAt = Date.now();
-    const candidates = e.features.flatMap((f) => {
-      const p = f.properties as { code?: unknown; home?: unknown } | null;
-      if (f.geometry.type !== "Point" || p?.home === true || typeof p?.code !== "string") return [];
-      const [lng = 0, lat = 0] = f.geometry.coordinates;
-      return [{ code: p.code, lng, lat }];
-    });
-    const pick = pickPin([e.coordinates.longitude, e.coordinates.latitude], candidates, view.current.zoom);
-    if (pick.kind === "pin") onSelect(pick.code);
-    if (pick.kind === "zoom") {
-      camera.current?.setCamera({
-        centerCoordinate: pick.center,
-        zoomLevel: Math.min(ZOOM_RANGE.max, view.current.zoom + 1),
-        padding: globePadding(state, size.height),
-        animationDuration: reducedMotion ? 0 : MOVE_MS.zoom,
-        animationMode: "easeTo",
-      });
+    // The labels follow the camera in steps: a re-render only when the view has moved enough to change them.
+    if (
+      Math.abs(lng - seen.center[0]) > 0.5 ||
+      Math.abs(lat - seen.center[1]) > 0.5 ||
+      Math.abs(s.properties.zoom - seen.zoom) > 0.03
+    ) {
+      setSeen({ center: [lng, lat], zoom: s.properties.zoom });
     }
   }
 
@@ -263,33 +222,50 @@ export default function MapboxGlobe({
     if (width !== size.width || height !== size.height) setSize({ width, height });
   }
 
-  // Screen readers cannot see a map: swiping up and down walks the destinations, a double tap chooses one.
-  const focus = pins.length ? pins[((a11yIndex % pins.length) + pins.length) % pins.length] : undefined;
-  const focusText = focus
-    ? [focus.city ?? focus.code, focus.fromPrice ? `from ${focus.fromPrice}` : ""].filter(Boolean).join(", ")
-    : "No destinations";
+  // The pins: every destination at rest (02), the route's two ends once one is chosen (13) — each where the camera
+  // shows it, with its label where it fits.
+  const lift = dest && home ? routeCamera(home, dest).lift : 0;
+  const centre = { x: size.width / 2, y: centreY + lift };
+  const shown: (PinToPlace & { lng: number; lat: number; pin: Pin | null })[] = [];
+  if (dest) {
+    const at = mapPoint(dest, seen, centre);
+    if (at)
+      shown.push({ code: dest.code, ...at, lines: [dest.code], priority: 0, lng: dest.lng, lat: dest.lat, pin: dest });
+    const homeAt = home ? mapPoint(home, seen, centre) : null;
+    if (home && homeAt) {
+      shown.push({
+        code: "home",
+        ...homeAt,
+        lines: home.code ? [home.code] : [],
+        priority: 1,
+        lng: home.lng,
+        lat: home.lat,
+        pin: null,
+      });
+    }
+  } else {
+    for (const p of pins) {
+      const at = mapPoint(p, seen, centre);
+      if (!at) continue;
+      const lines = [p.city ?? p.code, p.fromPrice].filter((l) => l.length > 0);
+      const priority = pinPriority({ selected: false, home: false, hasOffer: p.hasOffer, price: p.price ?? 0 });
+      shown.push({ code: p.code, ...at, lines, priority, lng: p.lng, lat: p.lat, pin: p });
+    }
+  }
+  const placed = placeLabels(
+    shown,
+    { left: 8, top: band.top, right: size.width - 8, bottom: band.bottom },
+    band.avoid ?? [],
+    labelScale(fontScale),
+  );
 
-  const halo = haloOpacity(clock, !moving);
   const line = dest && home ? routeLine(home, dest) : null;
-  // Mapbox's terms: logo and attribution always visible — just above wherever the sheet rests.
-  const ornament = { bottom: homeSheetHeight(sheetIndex, size.height) + 8 };
-  const accent = tokens.colors.primary;
+  const middle = dest && home ? routeMiddle(home, dest) : null;
+  // Mapbox's terms: logo and attribution always visible — just above the sheet.
+  const ornament = { bottom: Math.max(8, size.height - sheetTop + 8) };
 
   return (
-    <View
-      style={StyleSheet.absoluteFill}
-      onLayout={onLayout}
-      accessible
-      accessibilityRole="adjustable"
-      accessibilityLabel="Globe of destinations"
-      accessibilityValue={{ text: focusText }}
-      accessibilityActions={[{ name: "increment" }, { name: "decrement" }, { name: "activate" }]}
-      onAccessibilityAction={(e) => {
-        if (e.nativeEvent.actionName === "increment") setA11yIndex((i) => i + 1);
-        if (e.nativeEvent.actionName === "decrement") setA11yIndex((i) => i - 1);
-        if (e.nativeEvent.actionName === "activate" && focus) onSelect(focus.code);
-      }}
-    >
+    <View style={StyleSheet.absoluteFill} onLayout={onLayout}>
       <MapView
         style={StyleSheet.absoluteFill}
         styleURL={SATELLITE_STYLE}
@@ -309,8 +285,7 @@ export default function MapboxGlobe({
         }}
         // Loaded (Mapbox's MapLoaded: the style in and every visible tile rendered), or idle with what could be loaded
         // (a tile may have failed): either way there is a globe to show. Not onDidFinishRenderingMapFully:
-        // @rnmapbox/maps 10.3.7 never emits it (iOS does not export it, Android declares it and never sends it) — the
-        // satellite would never fade in.
+        // @rnmapbox/maps 10.3.7 never emits it.
         onDidFinishLoadingMap={() => {
           setMapReady(true);
           onReady();
@@ -330,22 +305,13 @@ export default function MapboxGlobe({
           ref={camera}
           defaultSettings={{
             centerCoordinate: [...OPENING_CENTER],
-            zoomLevel: FIGMA_ZOOM,
-            padding: globePadding("rest", size.height),
+            zoomLevel: REST_ZOOM,
+            padding: globePadding(centreY, size.height),
           }}
-          // Members pinch from Figma's 1× to 3×; only a long route's framing may go below 1×.
-          minZoomLevel={selected === null ? FIGMA_ZOOM : ZOOM_RANGE.min}
+          // Members pinch from the rest size to 3×; only a long route's framing may go below it.
+          minZoomLevel={selected === null ? REST_ZOOM : ZOOM_RANGE.min}
           maxZoomLevel={ZOOM_RANGE.max}
         />
-        {/* The night in twilight bands (sky-style.ts), then the cities' lights on it; the route and pins above both.
-            tolerance 0: no simplifying, so two neighbouring bands keep the very same edge and no seam opens between. */}
-        <ShapeSource id="night" shape={sky.night} tolerance={0}>
-          <FillLayer id="night-shade" style={NIGHT_STYLE} />
-        </ShapeSource>
-        {/* The lights' source has no child and props that never change, so it is serialised once; their layer beside it
-            takes the minute's new style without touching the 3,089 points. */}
-        <ShapeSource id="city-lights" shape={CITY_LIGHTS} />
-        <CircleLayer id="city-lights" sourceID="city-lights" style={sky.lights} />
         {line ? (
           // lineMetrics: line-trim-offset is measured along the line and needs the source to carry those metrics.
           <ShapeSource id="route" shape={line} lineMetrics>
@@ -353,54 +319,60 @@ export default function MapboxGlobe({
               id="route-line"
               style={{
                 lineColor: tokens.colors.textOnPhoto,
-                lineWidth: GLOBE_SPEC.arcStroke,
-                // Figma: 4 px dash, 4 px gap. Mapbox measures dashes in line widths.
-                lineDasharray: GLOBE_SPEC.arcDash.map((d) => d / GLOBE_SPEC.arcStroke),
+                lineWidth: GLOBE_SPEC.routeStroke,
+                lineCap: "round",
                 // The undrawn part of the route is transparent: [drawn so far, end].
                 lineTrimOffset: [arc, 1],
               }}
             />
           </ShapeSource>
         ) : null}
-        <ShapeSource
-          id="pins"
-          shape={pinFeatures(pins, selected, home)}
-          onPress={onPinPress}
-          hitbox={{ width: GLOBE_SPEC.pin.hit, height: GLOBE_SPEC.pin.hit }}
-        >
-          <CircleLayer
-            id="pin-halo"
-            filter={["all", ["!", ["get", "home"]], ["any", ["get", "hasOffer"], ["get", "selected"]]]}
-            style={{
-              circleRadius: GLOBE_SPEC.pin.halo / 2,
-              circleColor: ["case", ["get", "selected"], accent, tokens.colors.textOnPhoto],
-              circleOpacity: halo,
-            }}
-          />
-          <CircleLayer
-            id="pin-dot"
-            style={{
-              circleRadius: [
-                "case",
-                ["any", ["get", "hasOffer"], ["get", "selected"]],
-                GLOBE_SPEC.pin.offerDot / 2,
-                GLOBE_SPEC.pin.dot / 2,
-              ],
-              circleColor: [
-                "case",
-                ["get", "selected"],
-                accent,
-                ["get", "hasOffer"],
-                tokens.colors.textOnPhoto,
-                tokens.colors.textSecondary,
-              ],
-              // Over bright imagery (desert, snow, cloud) a thin night ring keeps the dot readable.
-              circleStrokeColor: tokens.colors.primary,
-              circleStrokeWidth: 1.5,
-            }}
-          />
-        </ShapeSource>
+        {middle && arc >= 1 ? (
+          <MarkerView coordinate={middle.at} allowOverlap>
+            <View style={[styles.plane, { transform: [{ rotate: `${middle.bearing}deg` }] }]} pointerEvents="none">
+              <Icon name="plane-fill" size={18} color={tokens.colors.textOnPhoto} />
+            </View>
+          </MarkerView>
+        ) : null}
+        {placed.map((p) => {
+          const s = shown.find((x) => x.code === p.code);
+          if (!s) return null;
+          const label = p.label?.box ?? null;
+          const f = pinFrame(p.x, p.y, label);
+          const pin = s.pin;
+          const name = pin?.city ?? pin?.code ?? home?.code ?? "Home";
+          return (
+            <MarkerView
+              key={p.code}
+              coordinate={[s.lng, s.lat]}
+              anchor={{ x: f.tip.x / f.width, y: f.tip.y / f.height }}
+              allowOverlap
+            >
+              <GlobePin
+                inline
+                testID={pin ? `globe.pin.${pin.code}` : "globe.home"}
+                x={p.x}
+                y={p.y}
+                lines={p.lines}
+                label={label}
+                accessibilityLabel={pin ? (pin.fromPrice ? `${name}, from ${pin.fromPrice}` : name) : `Home, ${name}`}
+                onPress={
+                  pin && pin.code !== selected
+                    ? () => {
+                        view.current.touchedAt = Date.now();
+                        onSelect(pin.code);
+                      }
+                    : undefined
+                }
+              />
+            </MarkerView>
+          );
+        })}
       </MapView>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  plane: { width: GLOBE_SPEC.plane, height: GLOBE_SPEC.plane, alignItems: "center", justifyContent: "center" },
+});

@@ -1,34 +1,29 @@
 import { describe, expect, it } from "bun:test";
 
-import { localTimeLabel, msToNextMinute } from "./local-time";
+import { localTime, msToNextMinute } from "./local-time";
 
 // 2026-10-08 12:42 UTC: 13:42 in London (BST), 08:42 in New York (EDT), 21:42 in Tokyo.
 const NOON = new Date("2026-10-08T12:42:00Z");
 
-describe("localTimeLabel", () => {
-  it("writes the Figma label — city in mono caps, 12-hour clock with AM/PM", () => {
-    expect(localTimeLabel("London", "Europe/London", NOON)).toBe("LONDON · 1:42 PM");
-    expect(localTimeLabel("Tokyo", "Asia/Tokyo", NOON)).toBe("TOKYO · 9:42 PM");
-    expect(localTimeLabel("New York", "America/New_York", NOON)).toBe("NEW YORK · 8:42 AM");
-  });
-
-  it("keeps a leading zero out of the hour and a plain space before AM/PM", () => {
-    const label = localTimeLabel("Lisbon", "Europe/Lisbon", new Date("2026-10-08T15:42:00Z"));
-    expect(label).toBe("LISBON · 4:42 PM");
-    expect(label).not.toMatch(/\u202f|\u00a0/);
+describe("localTime", () => {
+  it("writes the destination's 24-hour clock and its zone, as 13 does", () => {
+    expect(localTime("London", "Europe/London", new Date("2026-11-12T14:32:00Z"))).toEqual({
+      clock: "14:32",
+      zone: "London (GMT)",
+    });
+    expect(localTime("New York", "America/New_York", NOON)).toEqual({ clock: "08:42", zone: "New York (EDT)" });
+    expect(localTime("Tokyo", "Asia/Tokyo", NOON)?.clock).toBe("21:42");
   });
 
   it("is null without a zone or with one this runtime cannot format", () => {
-    expect(localTimeLabel("Lisbon", undefined, NOON)).toBeNull();
-    expect(localTimeLabel("Lisbon", "", NOON)).toBeNull();
-    expect(localTimeLabel("Lisbon", "not/a_zone", NOON)).toBeNull();
+    expect(localTime("Lisbon", undefined, NOON)).toBeNull();
+    expect(localTime("Lisbon", "", NOON)).toBeNull();
+    expect(localTime("Lisbon", "not/a_zone", NOON)).toBeNull();
   });
 
   it("follows daylight saving — the same instant reads differently across the change", () => {
-    const beforeChange = new Date("2026-10-24T12:00:00Z"); // BST
-    const afterChange = new Date("2026-10-26T12:00:00Z"); // GMT
-    expect(localTimeLabel("London", "Europe/London", beforeChange)).toBe("LONDON · 1:00 PM");
-    expect(localTimeLabel("London", "Europe/London", afterChange)).toBe("LONDON · 12:00 PM");
+    expect(localTime("London", "Europe/London", new Date("2026-10-24T12:00:00Z"))?.clock).toBe("13:00");
+    expect(localTime("London", "Europe/London", new Date("2026-10-26T12:00:00Z"))?.clock).toBe("12:00");
   });
 });
 

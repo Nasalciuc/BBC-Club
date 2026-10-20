@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { Icon, type IconName } from "../icons";
 import { CloseButton } from "../primitives/CloseButton";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
@@ -82,6 +83,13 @@ type Props = {
   showClose?: boolean;
   /** `centre` for a question with an icon above it (25); otherwise the title at the left. */
   titleAlign?: "start" | "centre";
+  /** Above a centred title: the question's own mark (25: the bell). */
+  icon?: IconName;
+  /**
+   * The sheet's height, in points, where its size's would leave a short question floating in empty space (25: the
+   * notifications question under its bell); never taller than the size's own.
+   */
+  height?: number;
   stackBehavior?: "push" | "replace" | "switch";
   onDismiss?: () => void;
 };
@@ -114,6 +122,8 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     closable = true,
     showClose = true,
     titleAlign = "start",
+    icon,
+    height,
     stackBehavior,
     onDismiss,
   },
@@ -164,13 +174,15 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
 
   const headline = modalSheetHeadline(size);
   const titleAlone = !closable && !headline;
-  const headerBottom = HANDLE_AREA + (headline ? HEADER_HEADLINE : titleAlone ? TITLE_LINE : HEADER_TITLE);
+  const headerBottom =
+    HANDLE_AREA + (icon ? ICON_AREA : 0) + (headline ? HEADER_HEADLINE : titleAlone ? TITLE_LINE : HEADER_TITLE);
   const contentOffset = Math.max(0, (contentTop ?? modalSheetContentTop(size)) - headerBottom);
+  const sheetHeight = Math.min(modalSheetHeight(size, windowHeight), height ?? Number.POSITIVE_INFINITY);
 
   return (
     <BottomSheetModal
       ref={modal}
-      snapPoints={[modalSheetHeight(size, windowHeight)]}
+      snapPoints={[sheetHeight]}
       enableDynamicSizing={false}
       enablePanDownToClose={dismissible}
       topInset={insets.top}
@@ -185,10 +197,16 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     >
       <InModalSheet.Provider value>
         <View style={styles.sheet}>
+          {icon ? (
+            <View style={styles.icon} importantForAccessibility="no-hide-descendants">
+              <Icon name={icon} size={32} color={tokens.colors.textPrimary} strokeWidth={1.75} />
+            </View>
+          ) : null}
           <View
             style={[
               styles.header,
               headline ? styles.headerHeadline : titleAlone ? styles.headerTitleAlone : styles.headerTitle,
+              titleAlign === "centre" && !(closable && showClose) && styles.headerCentred,
             ]}
           >
             <Text
@@ -244,6 +262,8 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
 const HANDLE_AREA = 24;
 const HEADER_TITLE = 44;
 const HEADER_HEADLINE = 64;
+/** The question's mark over its title (25): 32 pt, 12 above and under it. */
+const ICON_AREA = 56;
 /** A title's line (`title`, 20/24): its header while the × is hidden (Figma 135:854). */
 const TITLE_LINE = 24;
 const NO_INSETS = { top: 0, bottom: 0 };
@@ -328,12 +348,15 @@ const styles = StyleSheet.create({
   handleArea: { height: HANDLE_AREA, paddingTop: 10, alignItems: "center" },
   handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: tokens.colors.borderDefault },
   sheet: { flex: 1 },
+  icon: { height: ICON_AREA, alignItems: "center", justifyContent: "center" },
   header: { flexDirection: "row", alignItems: "center", gap: tokens.space.xs, paddingLeft: tokens.space.gutter },
   headerTitle: { minHeight: HEADER_TITLE, paddingRight: tokens.space.sm },
   // The title keeps its box without the ×: it wraps where it did.
   headerTitleAlone: { minHeight: TITLE_LINE, paddingRight: tokens.space.sm + tokens.space.xs + 44 },
   headerHeadline: { minHeight: HEADER_HEADLINE, paddingRight: tokens.space.sm },
   centred: { textAlign: "center" },
+  // A centred title with no × beside it: the same room on both sides.
+  headerCentred: { paddingRight: tokens.space.gutter },
   title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, flex: 1 },
   headline: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary, flex: 1 },
   // The ×'s 44-pt target, kept beside a headline while it is hidden.

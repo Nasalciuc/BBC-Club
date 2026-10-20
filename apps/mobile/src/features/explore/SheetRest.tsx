@@ -1,183 +1,120 @@
-import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import type { AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
+import type { HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
-import { CarouselRow, OfferCard, SectionLabel, Skeleton, tokens } from "@bbc/ui";
+import { CarouselRow, EmptyState, OfferCard, SectionHeader, Skeleton, tokens } from "@bbc/ui";
 
-import { NoOffers } from "@/features/explore/SheetExpanded";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
-import { fetchHome, fetchProfile } from "@/lib/api";
-import { readFailureCopy, stateCopy } from "@/lib/error-context";
-import { formatPrice } from "@/lib/format";
 
-const JFK: AirportVM = {
-  code: "JFK",
-  city: "New York",
-  name: "John F Kennedy International",
-  countryCode: "US",
-  lat: 40.6413,
-  lng: -73.7781,
-};
-
-export function useExploreHome() {
-  const [home, setHome] = useState<HomeVM | null>(null);
-  const [homeEtag, setHomeEtag] = useState<string | null>(null);
-  const [homeLoading, setHomeLoading] = useState(true);
-  // The words of a failed load, never the network layer's own line (ADR-IMPL-047): offline says when it will load.
-  const [homeError, setHomeError] = useState<{ title: string; body: string } | null>(null);
-  const [defaultFrom, setDefaultFrom] = useState<AirportVM | null>(null);
-
-  async function loadHome() {
-    setHomeLoading(true);
-    setHomeError(null);
-    const result = await fetchHome(homeEtag);
-    setHomeLoading(false);
-    if (!result.ok) {
-      setHomeError(readFailureCopy(result.code, "explore"));
-      return;
-    }
-    if (!result.data.notModified) {
-      setHome(result.data.home);
-      setHomeEtag(result.data.etag);
-    }
-  }
-
-  function retryHome() {
-    void loadHome().catch(() => {
-      setHomeLoading(false);
-      setHomeError(stateCopy("route"));
-    });
-  }
-
-  useEffect(() => {
-    retryHome();
-  }, []);
-
-  useEffect(() => {
-    void (async () => {
-      const profile = await fetchProfile();
-      if (profile.ok && profile.data.homeAirport && home) {
-        const match = home.destinations.find((d) => d.code === profile.data.homeAirport);
-        if (home.home) setDefaultFrom(home.home);
-        else if (match) {
-          setDefaultFrom({
-            code: match.code,
-            city: match.city,
-            name: match.name,
-            countryCode: match.countryCode,
-            lat: match.lat,
-            lng: match.lng,
-          });
-        }
-      } else if (home?.home) {
-        setDefaultFrom(home.home);
-      } else {
-        setDefaultFrom(JFK);
-      }
-    })();
-  }, [home]);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      void (async () => {
-        const profile = await fetchProfile();
-        if (!profile.ok || !profile.data.homeAirport) return;
-        const code = profile.data.homeAirport;
-        if (home?.home?.code === code) {
-          setDefaultFrom(home.home);
-          return;
-        }
-        const match = home?.destinations.find((d) => d.code === code);
-        if (match) {
-          setDefaultFrom({
-            code: match.code,
-            city: match.city,
-            name: match.name,
-            countryCode: match.countryCode,
-            lat: match.lat,
-            lng: match.lng,
-          });
-        }
-      })();
-    }, 2000);
-    return () => clearTimeout(t);
-  }, [home]);
-
-  return { home, homeLoading, homeError, defaultFrom, retryHome };
-}
+import { offerCardModel } from "./offer-card-logic";
 
 type Props = {
   home: HomeVM | null;
   homeLoading: boolean;
   onOpenOffer: (card: ProposalCardVM) => void;
-  /** Figma 89:386: `See all` beside OFFERS TO INSPIRE expands the sheet to every section (89:389). */
+  /** `See all ›` raises the sheet to every offer (16). */
   onSeeAll: () => void;
-  /** With no offer at all, the sheet offers the search instead of a heading over nothing (`NoOffers`). */
+  /** With no offer at all, the sheet offers the search instead (17). */
   onSearch: () => void;
 };
 
-export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll, onSearch }: Props) {
-  const inspire = home?.sections.find((s) => s.key === "inspire")?.items ?? [];
-  // ADR-IMPL-043: an offer without its own picture shows its city's photo; the club's image until there is one.
-  const photoFor = usePlacePhotos(inspire.map((item) => item.route.to));
-
-  if (homeLoading) {
-    // The cards' places while Home loads: under the label's 32-pt box, the offer cards' own size in the carousel's row,
-    // so the cards land where the skeletons stood.
-    return (
-      <View style={styles.content}>
-        <View style={styles.labelBox} />
-        <CarouselRow testID="explore.inspire.loading">
-          <Skeleton width={OFFER_CARD.width} height={OFFER_CARD.height} radius="lg" />
-          <Skeleton width={OFFER_CARD.width} height={OFFER_CARD.height} radius="lg" />
-          <Skeleton width={OFFER_CARD.width} height={OFFER_CARD.height} radius="lg" />
-        </CarouselRow>
-      </View>
-    );
-  }
-
-  if (home && inspire.length === 0) {
-    return (
-      <View style={styles.content}>
-        <NoOffers onSearch={onSearch} />
-      </View>
-    );
-  }
-
+/** The club has no offer for the member yet (17): the search instead, its pill hugging its words. */
+export function NoOffers({ onSearch }: { onSearch: () => void }) {
   return (
-    <View style={styles.content}>
-      <SectionLabel
-        box
-        label="Offers to inspire"
-        action={{ label: "See all", onPress: onSeeAll, testID: "explore.seeAll" }}
+    <View style={styles.empty}>
+      <EmptyState
+        testID="explore.offers.empty"
+        title="No offers yet."
+        body="Your specialist’s offers will appear here. Search a destination to request a fare."
+        primary={{ label: "Search a destination", onPress: onSearch }}
+        primaryFill={false}
       />
-      <CarouselRow testID="explore.inspire">
-        {inspire.map((item) => (
-          <OfferCard
-            key={item.id}
-            testID={`explore.offer.${item.id}`}
-            city={item.title}
-            fromPrice={formatPrice(item.price.offer, item.price.currency)}
-            image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
-            fallback={CLUB_PICTURE}
-            onPress={() => onOpenOffer(item)}
-          />
-        ))}
-      </CarouselRow>
     </View>
   );
 }
 
-/**
- * The offer card as Explore shows it (`OfferCard`): 124 pt wide; the 144-pt photo over its words — the city's 25-pt
- * line, `from` (22) and the price (28) — in 12 pt of padding, 2 pt apart, the price block 8 under the city and 12 over
- * the foot: 265 tall.
- */
-const OFFER_CARD = { width: 124, height: 265 } as const;
+/** 02: an offer card in an offers' row — the city and its country, the price, `Save 54%`, the city's photograph. */
+export function OfferCards({
+  items,
+  home,
+  onOpenOffer,
+  testID,
+  cardTestID,
+  compact = false,
+}: {
+  items: readonly ProposalCardVM[];
+  home: HomeVM | null;
+  onOpenOffer: (card: ProposalCardVM) => void;
+  testID: string;
+  /** The cards' testID before each offer's id (`explore.offer`). */
+  cardTestID: string;
+  /** `Other great fares` (08): the smaller cards. */
+  compact?: boolean;
+}) {
+  // ADR-IMPL-043: an offer without its own picture shows its city's photo; the club's image until there is one.
+  const photoFor = usePlacePhotos(items.map((item) => item.route.to));
+  return (
+    <CarouselRow testID={testID}>
+      {items.map((item) => {
+        const model = offerCardModel(item, home?.destinations ?? []);
+        return (
+          <OfferCard
+            key={item.id}
+            testID={`${cardTestID}.${item.id}`}
+            city={model.city}
+            country={model.country}
+            fromPrice={model.fromPrice}
+            savePercent={model.savePercent}
+            image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
+            fallback={CLUB_PICTURE}
+            onPress={() => onOpenOffer(item)}
+            compact={compact}
+          />
+        );
+      })}
+    </CarouselRow>
+  );
+}
+
+/** Explore at rest (02): `Offers to inspire` and its row of offer cards under the search bar; none — 17. */
+export function SheetRest({ home, homeLoading, onOpenOffer, onSeeAll, onSearch }: Props) {
+  const inspire = home?.sections.find((s) => s.key === "inspire")?.items ?? [];
+  const loading = homeLoading && !home;
+  return (
+    <View style={styles.content}>
+      <SectionHeader
+        title="Offers to inspire"
+        action={
+          inspire.length > 0
+            ? { label: "See all", chevron: true, onPress: onSeeAll, testID: "explore.seeAll" }
+            : undefined
+        }
+      />
+      {loading ? (
+        // The cards' places while Home loads: the cards' own size, so they land where the skeletons stood.
+        <CarouselRow testID="explore.inspire.loading">
+          <Skeleton width={124} height={264} radius="lg" />
+          <Skeleton width={124} height={264} radius="lg" />
+          <Skeleton width={124} height={264} radius="lg" />
+        </CarouselRow>
+      ) : inspire.length === 0 ? (
+        <NoOffers onSearch={onSearch} />
+      ) : (
+        <OfferCards
+          items={inspire}
+          home={home}
+          onOpenOffer={onOpenOffer}
+          testID="explore.inspire"
+          cardTestID="explore.offer"
+        />
+      )}
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  // 12 pt under the field, the label's 32-pt box, 12 pt, the carousel of offer cards.
-  content: { marginTop: tokens.space.sm, gap: tokens.space.sm },
-  labelBox: { height: 32 },
+  // 02: the title 20 pt under the search bar; the carousel's own 12-pt padding sets the cards under it.
+  content: { marginTop: tokens.space.gutter },
+  // 17: the message 40 pt under the title.
+  empty: { marginTop: tokens.space.xxl - tokens.space.sm },
 });

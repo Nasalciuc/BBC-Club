@@ -1,24 +1,30 @@
 import { useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { BackHandler, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Keyboard, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AirportRow,
   Button,
-  Chip,
+  CabinCard,
   EmptyState,
+  FieldError,
+  InfoCard,
   ProgressLine,
   SearchField,
+  SectionHeader,
   StateMessage,
   Stepper,
-  tokens,
+  TextButton,
+  Wordmark,
   rn,
+  tokens,
 } from "@bbc/ui";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { deviceTimeZone } from "@/features/explore/discovery-logic";
-import { airportSearchState, chosenAirportLabel, wantsAirportSearch } from "@/lib/airport-search-state";
+import { HomeAirportCard } from "@/features/onboarding/HomeAirportCard";
+import { airportSearchState, wantsAirportSearch } from "@/lib/airport-search-state";
 import { fetchAirports, fetchHomeSuggestion, patchProfile, putTravelPreferences } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
 import { appStorage, ONBOARDED_KEY } from "@/lib/storage-keys";
@@ -30,8 +36,9 @@ function markOnboarded() {
 }
 
 /**
- * Figma 63:7 and 72:222: two steps on one screen — the form (the home airport, the cabin, who usually travels) and,
- * from its airport field, the airport search. The search step keeps the time zone's suggestion (A5, 536:11191).
+ * Onboarding (01, 14, 15): one question — where the member usually flies from — with the cabin and who usually
+ * travels, on one screen; the home airport opens its search in place (14), which keeps the time zone's suggestion
+ * (ADR-IMPL-039). The line at the top fills as the three are answered.
  */
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -44,10 +51,12 @@ export default function OnboardingScreen() {
   // chosen or cancelled by the time it comes.
   const [attempt, setAttempt] = useState(0);
   const [cabin, setCabin] = useState<"business" | "first">("business");
+  const [cabinTouched, setCabinTouched] = useState(false);
   const [adult, setAdult] = useState(1);
+  const [travelersTouched, setTravelersTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // ADR-IMPL-039 / Figma 536:11191: the busiest airport in the phone's time zone, offered — never chosen — for the member.
+  // ADR-IMPL-039: the busiest airport in the phone's time zone, offered — never chosen — for the member.
   const [suggested, setSuggested] = useState<AirportVM | null>(null);
 
   useEffect(() => {
@@ -97,7 +106,7 @@ export default function OnboardingScreen() {
 
   async function onContinue() {
     if (!selected) {
-      // The field only opens the search: there is nothing to type here.
+      // The card only opens the search: there is nothing to type here.
       setError("Choose your home airport to continue.");
       return;
     }
@@ -139,8 +148,13 @@ export default function OnboardingScreen() {
     setStep("airport");
   }
 
+  function closeAirportStep() {
+    Keyboard.dismiss();
+    setStep("form");
+  }
+
   function choose(airport: AirportVM) {
-    // The choice ends the typing: the keyboard goes, and the form shows the airport in its field.
+    // The choice ends the typing: the keyboard goes, and the form shows the airport's card.
     Keyboard.dismiss();
     setSelected(airport);
     setQuery("");
@@ -148,64 +162,91 @@ export default function OnboardingScreen() {
     setStep("form");
   }
 
-  // Figma draws the actions 40 pt above the frame's bottom (the form) and 48 (the search): the home indicator's 34
-  // and 6 or 14 more — never closer than 16 to the edge on a phone without one.
-  const footerBottom = (above: number) => Math.max(insets.bottom + above, tokens.space.md);
+  // The line fills as the three questions are answered (the owner's direction for 01): the airport, the cabin, the party.
+  const answered = (selected ? 1 : 0) + (cabinTouched ? 1 : 0) + (travelersTouched ? 1 : 0);
+
+  const header = (
+    <View style={styles.header}>
+      <ProgressLine fraction={answered / 3} />
+      <View style={styles.wordmark}>
+        <Wordmark />
+      </View>
+      <View style={styles.question}>
+        {/* 01 breaks the question after `usually`. */}
+        <Text style={styles.title} accessibilityRole="header">
+          {"Where do you usually\nfly from?"}
+        </Text>
+        <Text style={styles.body}>So we start with the right fares. You can change this later.</Text>
+      </View>
+    </View>
+  );
 
   if (step === "airport") {
     const typing = query.trim().length >= 2;
     return (
-      <View style={[styles.root, { paddingTop: insets.top + TOP }]} testID="onboarding.root">
+      <View style={[styles.root, { paddingTop: insets.top + tokens.space.md }]} testID="onboarding.root">
         <ScreenStatusBar on="light" />
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <Text style={styles.title} accessibilityRole="header">
-              Where do you fly from?
-            </Text>
-            <Text style={styles.body}>
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + tokens.space.lg }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {header}
+          <View style={styles.group}>
+            <Text style={styles.label}>City or airport code</Text>
+            <SearchField
+              testID="onboarding.airport.query"
+              placeholder="City or airport code"
+              editable
+              autoFocus
+              tone="field"
+              value={query ? { text: query } : null}
+              onChangeText={setQuery}
+              onClear={() => setQuery("")}
+              onCancel={closeAirportStep}
+            />
+            <Text style={styles.helper}>
               {suggested ? "City, airport or code — suggested from your time zone." : "City, airport or code."}
             </Text>
           </View>
 
-          {/* Figma 72:222 draws no Clear in this field: `Clear search` comes with No airports found (75:269). */}
-          <SearchField
-            testID="onboarding.airport.query"
-            placeholder="City or airport code"
-            editable
-            autoFocus
-            value={query ? { text: query } : null}
-            onChangeText={setQuery}
-          />
-
           {suggested && !typing ? (
             <AirportRow
               testID={`onboarding.airport.suggested.${suggested.code}`}
+              layout="code"
               code={suggested.code}
               city={suggested.city}
               airport={suggested.name}
               onPress={() => choose(suggested)}
             />
           ) : search.phase === "empty" ? (
-            <EmptyState
-              testID="onboarding.airport.empty"
-              title="No airports found"
-              body="Try a city name or a three-letter airport code, such as JFK."
-              primary={{ label: "Clear search", onPress: () => setQuery("") }}
-            />
+            <View style={styles.message}>
+              <EmptyState
+                testID="onboarding.airport.empty"
+                icon="search"
+                title="No airports found"
+                body="Try a city name or a three-letter airport code, such as JFK."
+                primary={{ label: "Clear search", onPress: () => setQuery("") }}
+                primaryVariant="outline"
+                primaryFill={false}
+              />
+            </View>
           ) : search.phase === "error" ? (
-            <StateMessage
-              testID="onboarding.airport.error"
-              variant="error"
-              title={stateCopy("generic").title}
-              body={stateCopy("generic").body}
-              primary={{ label: "Try again", onPress: () => setAttempt((n) => n + 1) }}
-            />
+            <View style={styles.message}>
+              <StateMessage
+                testID="onboarding.airport.error"
+                variant="error"
+                title={stateCopy("generic").title}
+                body={stateCopy("generic").body}
+                primary={{ label: "Try again", onPress: () => setAttempt((n) => n + 1) }}
+              />
+            </View>
           ) : search.airports.length > 0 ? (
             <View style={styles.rows}>
               {search.airports.map((a) => (
                 <AirportRow
                   key={a.code}
                   testID={`onboarding.airport.hit.${a.code}`}
+                  layout="code"
                   code={a.code}
                   city={a.city}
                   airport={a.name}
@@ -215,195 +256,128 @@ export default function OnboardingScreen() {
             </View>
           ) : null}
         </ScrollView>
-
-        <View style={[styles.actions, { paddingBottom: footerBottom(14) }]}>
-          <TextButton
-            testID="onboarding.airport.cancel"
-            label="Cancel"
-            onPress={() => {
-              Keyboard.dismiss();
-              setStep("form");
-            }}
-          />
-        </View>
       </View>
     );
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + LINE_TOP }]} testID="onboarding.root">
+    <View style={[styles.root, { paddingTop: insets.top + tokens.space.md }]} testID="onboarding.root">
       <ScreenStatusBar on="light" />
-      <ProgressLine fraction={1} />
-      <ScrollView contentContainerStyle={[styles.content, styles.formContent]} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Text style={styles.title} accessibilityRole="header">
-            Where do you usually fly from?
-          </Text>
-          <Text style={styles.body}>So we start with the right fares. You can change this later.</Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {header}
 
         <View style={styles.group}>
-          <Text style={styles.label}>Home airport</Text>
-          <SearchField
+          <SectionHeader title="Your home airport" size="subtitle" />
+          <HomeAirportCard
             testID="onboarding.airport"
-            placeholder="City or airport code"
-            value={selected ? { text: chosenAirportLabel(selected) } : null}
+            airport={selected}
             error={Boolean(error) && !selected}
             onPress={openAirportStep}
           />
-          {error ? (
-            <Text testID="onboarding.error" style={styles.error}>
-              {error}
-            </Text>
-          ) : null}
+          {error ? <FieldError testID="onboarding.error">{error}</FieldError> : null}
         </View>
 
         <View style={styles.group}>
-          <Text style={styles.label}>Cabin</Text>
-          <View style={styles.chips}>
-            <Chip
+          <SectionHeader title="Preferred cabin" size="subtitle" />
+          <View style={styles.cabins}>
+            <CabinCard
               testID="onboarding.cabin.business"
-              label="Business"
+              icon="seat"
+              title="Business"
+              line="More space, a better journey"
               selected={cabin === "business"}
-              fill="equal"
-              onPress={() => setCabin("business")}
+              onPress={() => {
+                setCabin("business");
+                setCabinTouched(true);
+              }}
             />
-            <Chip
+            <CabinCard
               testID="onboarding.cabin.first"
-              label="First"
+              icon="armchair"
+              title="First"
+              line="The highest level of comfort"
               selected={cabin === "first"}
-              fill="equal"
-              onPress={() => setCabin("first")}
+              onPress={() => {
+                setCabin("first");
+                setCabinTouched(true);
+              }}
             />
           </View>
         </View>
 
         <View style={styles.group}>
-          <Text style={styles.label}>Who usually travels</Text>
+          <SectionHeader title="Who usually travels" size="subtitle" />
           <Stepper
             testID="onboarding.travelers.adult"
+            icon="user"
             label="Adults"
+            caption="Ages 18+"
             value={adult}
             min={1}
             max={9}
-            onChange={setAdult}
+            onChange={(n) => {
+              setAdult(n);
+              setTravelersTouched(true);
+            }}
           />
-          <Text style={styles.caption}>Travelling with children? Add their ages in a note when you request.</Text>
+          <InfoCard
+            testID="onboarding.children"
+            icon="family"
+            iconStyle="bare"
+            title="Travelling with children?"
+            body="Add their ages in a note when you request."
+          />
         </View>
       </ScrollView>
 
-      <View style={[styles.actions, { paddingBottom: footerBottom(6) }]}>
+      <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, tokens.space.md) }]}>
         <Button
           testID="onboarding.continue"
           label={busy ? "Saving…" : "Continue"}
+          trailing={busy ? undefined : "arrow"}
           busy={busy}
           variant="primary"
           onPress={() => void onContinue()}
         />
-        <TextButton testID="onboarding.skip" label="Skip" disabled={busy} onPress={onSkip} />
+        <TextButton
+          testID="onboarding.skip"
+          label="Skip"
+          tone="secondary"
+          size="button"
+          disabled={busy}
+          onPress={onSkip}
+        />
       </View>
     </View>
   );
 }
 
-/** Figma's quiet action under the button (Skip, Cancel): the button's words alone, 56 pt high, centred. */
-function TextButton({
-  testID,
-  label,
-  disabled = false,
-  onPress,
-}: {
-  testID: string;
-  label: string;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.textButton, pressed && styles.pressed]}
-    >
-      <Text style={styles.textButtonLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
-/**
- * Figma 63:7: the progress line 14 pt under the status bar (62 on the frame), 2 pt high, the content 16 pt under it (80).
- * The search step (72:222) has no line; its title starts at the same place.
- */
-const LINE_TOP = 14;
-const TOP = LINE_TOP + 2 + tokens.space.md;
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: tokens.colors.surfacePage,
-    paddingHorizontal: tokens.space.lg,
   },
   content: {
-    gap: tokens.space.lg,
+    paddingHorizontal: tokens.space.gutter,
     paddingBottom: tokens.space.lg,
-  },
-  formContent: {
-    paddingTop: tokens.space.md,
-  },
-  header: {
-    gap: tokens.space.sm,
-  },
-  title: {
-    ...rn(tokens.type.headline),
-    color: tokens.colors.textPrimary,
-  },
-  body: {
-    ...rn(tokens.type.bodySm),
-    color: tokens.colors.textSecondary,
-  },
-  // Figma 69:42: a field group — its label 8 pt over the control.
-  group: {
-    gap: tokens.space.xs,
-  },
-  label: {
-    ...rn(tokens.type.caption),
-    color: tokens.colors.textSecondary,
-  },
-  // Figma 69:50: two 164-pt cabins, 16 pt apart.
-  chips: {
-    flexDirection: "row",
     gap: tokens.space.md,
   },
-  // Figma 72:222: the airport rows stand 8 pt apart.
-  rows: {
-    gap: tokens.space.xs,
-  },
-  caption: {
-    ...rn(tokens.type.caption),
-    color: tokens.colors.textSecondary,
-  },
-  error: {
-    ...rn(tokens.type.caption),
-    color: tokens.colors.statusDanger,
-  },
-  // Figma 69:77: the actions 8 pt apart, pinned at the bottom.
+  // 01: the line, 12 pt, the wordmark, 12 pt, the question and its words under it.
+  header: { gap: tokens.space.sm },
+  wordmark: { marginBottom: tokens.space.xxs },
+  question: { gap: tokens.space.xs },
+  title: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },
+  body: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  group: { gap: 10 },
+  label: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  helper: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  cabins: { flexDirection: "row", gap: tokens.space.xs },
+  rows: { gap: tokens.space.xs },
+  message: { marginTop: tokens.space.lg },
   actions: {
-    gap: tokens.space.xs,
-    paddingTop: tokens.space.md,
-  },
-  textButton: {
-    minHeight: 56,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-  textButtonLabel: {
-    ...rn(tokens.type.button),
-    color: tokens.colors.textPrimary,
+    paddingHorizontal: tokens.space.gutter,
+    paddingTop: tokens.space.sm,
+    gap: tokens.space.xxs,
+    alignItems: "stretch",
   },
 });

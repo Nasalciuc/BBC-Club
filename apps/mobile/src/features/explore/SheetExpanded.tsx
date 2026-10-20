@@ -1,93 +1,98 @@
 import { StyleSheet, View } from "react-native";
 import type { HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
-import { CarouselRow, EmptyState, OfferCard, SectionLabel, tokens } from "@bbc/ui";
+import { OfferCardWide, SectionHeader, TextButton, tokens } from "@bbc/ui";
 
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
-import { formatPrice } from "@/lib/format";
+
+import { offerCardModel } from "./offer-card-logic";
+import { NoOffers, OfferCards } from "./SheetRest";
 
 type Section = HomeVM["sections"][number];
 
 type Props = {
-  sections: HomeVM["sections"];
+  home: HomeVM | null;
   onOpenOffer: (card: ProposalCardVM) => void;
-  /** With no offer at all, the page offers the search instead (`NoOffers`). */
+  /** `Done` lowers the sheet back to rest (02). */
+  onDone: () => void;
   onSearch: () => void;
 };
 
-/** The club has no offer for the member yet — Figma draws none of this page without cards, so the page says so. */
-export function NoOffers({ onSearch }: { onSearch: () => void }) {
-  return (
-    <EmptyState
-      testID="explore.offers.empty"
-      title="No offers yet."
-      body="Your specialist’s offers will appear here. Search a destination to request a fare."
-      primary={{ label: "Search a destination", onPress: onSearch }}
-    />
-  );
-}
-
 /**
- * Figma 89:389 (Expanded): `OFFERS TO INSPIRE` heads the page, then one carousel per region in the server's order and
- * words (`TO EUROPE`, `TO ASIA`, `TO THE MIDDLE EAST`, `TO NORTH AMERICA`), 32 pt apart. Without a region to show, the
- * inspiring offers stand under the heading, so the page is never a label alone — and without an offer at all, the
- * page says so instead of a heading over nothing.
+ * Every offer (16): `Done` at the sheet's top, `Offers to inspire` and its row, then each region in the server's order
+ * and words (`To Europe`, `To Asia`, `To the Middle East`) with its cards laid sideways — two to a row, one across the
+ * row when it stands alone. Everything is on the page already, so no `See all` here.
  */
-export function SheetExpanded({ sections, onOpenOffer, onSearch }: Props) {
+export function SheetExpanded({ home, onOpenOffer, onDone, onSearch }: Props) {
+  const sections = home?.sections ?? [];
+  const inspire = sections.find((s) => s.key === "inspire")?.items ?? [];
   const regions = sections.filter((s) => s.key !== "inspire" && s.items.length > 0);
-  const inspire = sections.find((s) => s.key === "inspire");
-  const shown = regions.length > 0 ? regions : inspire && inspire.items.length > 0 ? [inspire] : [];
-  const photoFor = usePlacePhotos(shown.flatMap((s) => s.items.map((item) => item.route.to)));
+  const photoFor = usePlacePhotos(regions.flatMap((s) => s.items.map((item) => item.route.to)));
 
-  const carousel = (section: Section) => (
-    <CarouselRow testID={`explore.section.${section.key}`}>
-      {section.items.map((item) => (
-        <OfferCard
-          key={`${section.key}-${item.id}`}
-          testID={`explore.offer.${section.key}.${item.id}`}
-          city={item.title}
-          fromPrice={formatPrice(item.price.offer, item.price.currency)}
-          image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
-          fallback={CLUB_PICTURE}
-          onPress={() => onOpenOffer(item)}
-        />
-      ))}
-    </CarouselRow>
-  );
-
-  if (shown.length === 0) {
+  const region = (section: Section) => {
+    const rows: ProposalCardVM[][] = [];
+    for (let i = 0; i < section.items.length; i += 2) rows.push(section.items.slice(i, i + 2));
     return (
-      <View style={styles.content}>
-        <NoOffers onSearch={onSearch} />
+      <View key={section.key} style={styles.section} testID={`explore.section.${section.key}`}>
+        <SectionHeader title={section.title} />
+        {rows.map((row) => (
+          <View key={row.map((item) => item.id).join(".")} style={styles.row}>
+            {row.map((item) => {
+              const model = offerCardModel(item, home?.destinations ?? []);
+              return (
+                <OfferCardWide
+                  key={item.id}
+                  testID={`explore.offer.${section.key}.${item.id}`}
+                  span={row.length === 2 ? "half" : "full"}
+                  city={model.city}
+                  country={model.country}
+                  fromPrice={model.fromPrice}
+                  savePercent={model.savePercent}
+                  image={cardPicture(item.mediaUrl, photoFor(item.route.to), PICTURE_HEADERS)}
+                  fallback={CLUB_PICTURE}
+                  onPress={() => onOpenOffer(item)}
+                />
+              );
+            })}
+          </View>
+        ))}
       </View>
     );
-  }
-
-  if (regions.length === 0) {
-    return (
-      <View style={[styles.content, styles.section]}>
-        <SectionLabel box label="Offers to inspire" />
-        {carousel(shown[0]!)}
-      </View>
-    );
-  }
+  };
 
   return (
-    <View style={styles.content}>
-      <SectionLabel box label="Offers to inspire" />
-      {regions.map((section) => (
-        <View key={section.key} style={styles.section}>
-          <SectionLabel box label={section.title} />
-          {carousel(section)}
+    <View>
+      <View style={styles.done}>
+        <TextButton testID="explore.done" label="Done" size="button" onPress={onDone} />
+      </View>
+      {inspire.length === 0 && regions.length === 0 ? (
+        <NoOffers onSearch={onSearch} />
+      ) : (
+        <View style={styles.content}>
+          {inspire.length > 0 ? (
+            <View style={styles.section}>
+              <SectionHeader title="Offers to inspire" />
+              <OfferCards
+                items={inspire}
+                home={home}
+                onOpenOffer={onOpenOffer}
+                testID="explore.inspire"
+                cardTestID="explore.offer"
+              />
+            </View>
+          ) : null}
+          {regions.map(region)}
         </View>
-      ))}
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // 12 pt under the field; the heading and the regions 32 pt apart; in a region, its label's box 12 pt over the cards.
-  content: { marginTop: tokens.space.sm, gap: tokens.space.xl },
+  // 16: `Done` at the right, level with the grabber's band.
+  done: { alignItems: "flex-end", height: 20, justifyContent: "center", marginBottom: tokens.space.xs },
+  content: { gap: tokens.space.lg },
   section: { gap: tokens.space.sm },
+  row: { flexDirection: "row", gap: tokens.space.sm },
 });

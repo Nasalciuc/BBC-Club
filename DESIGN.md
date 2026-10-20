@@ -27,7 +27,6 @@ colors:
   globe-land: "#8FA77A"
   globe-desert: "#E5D3B0"
   globe-ice: "#F4F7FA"
-  globe-night: "#0B0B19"
 
 typography:
   display:
@@ -511,8 +510,6 @@ components:
     backgroundColor: "{colors.globe-desert}"
   globe-ice:
     backgroundColor: "{colors.globe-ice}"
-  globe-night:
-    backgroundColor: "{colors.globe-night}"
   elevation-shadow:
     backgroundColor: "{colors.shadow}"
   error-text:
@@ -566,7 +563,7 @@ and states, `design/motion.md` its motion. The generated `packages/ui/src/tokens
 - **Slate** `text-secondary` (#64748B): secondary text, placeholders, inactive tabs, labels; `text-on-tint` (#475569)
   for words on the light tint (an inactive filter chip), where slate would fall under 4.5:1.
 - **Pale sky** `sky` (#BAD2EB): only behind the globe. The `globe-*` colours are the drawn globe's imagery (ocean, land,
-  desert, ice, and `globe-night`, the near-black of the night's shade) — never UI.
+  desert, ice) — never UI.
 - **Red** `status-danger` (#EF4444): the border and icon of `Sign out`, `Delete account` and a field at fault;
   `status-danger-text` (#DC2626) for their words and the filled `Delete account` pill — the same red a step darker, so
   the words keep 4.5:1 on white (#EF4444 gives 3.76:1); `status-danger-tint` behind an error card.

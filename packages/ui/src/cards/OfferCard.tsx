@@ -19,13 +19,49 @@ type Props = {
   fallback: PhotoSource | null;
   onPress: () => void;
   testID: string;
+  /** `Other great fares` (08): a smaller card — the photo, the city and the price only. */
+  compact?: boolean;
 };
 
 /**
  * The offer card (02; sheet 40): a tall daylight photo, then the city in `title-sm`, the country in slate, `from` and the
  * price in `price`, and the `Save 54%` pill across the foot. White, radius 20, the card shadow. 124 pt wide.
  */
-export function OfferCard({ city, country, fromPrice, savePercent, image, fallback, onPress, testID }: Props) {
+export function OfferCard({
+  city,
+  country,
+  fromPrice,
+  savePercent,
+  image,
+  fallback,
+  onPress,
+  testID,
+  compact = false,
+}: Props) {
+  if (compact) {
+    return (
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={[city, fromPrice ? `from ${fromPrice}` : null].filter(Boolean).join(", ")}
+        onPress={onPress}
+        style={({ pressed }) => [styles.card, styles.compactCard, pressed && styles.pressed]}
+      >
+        <Photo source={image} fallback={fallback} style={styles.compactPhoto} />
+        <View style={styles.compactBody}>
+          <Text style={styles.compactCity} numberOfLines={1}>
+            {city}
+          </Text>
+          {fromPrice ? (
+            <Text style={styles.compactPrice} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              <Text style={styles.from}>{"from "}</Text>
+              {fromPrice}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       testID={testID}
@@ -105,7 +141,7 @@ export function OfferCardWide({
       <Photo
         source={image}
         fallback={fallback}
-        style={[styles.widePhoto, { width: (full ? "42%" : 64) as DimensionValue }]}
+        style={[styles.widePhoto, { width: (full ? "42%" : 52) as DimensionValue }]}
       />
       <View style={[styles.wideBody, full && styles.wideBodyFull]}>
         <View style={styles.wideText}>
@@ -172,12 +208,18 @@ const styles = StyleSheet.create({
     ...tokens.elevation.card,
   },
   pressed: { opacity: 0.9 },
-  photo: { height: 144, borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg },
-  body: { padding: tokens.space.sm, gap: 2 },
-  city: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary },
-  country: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
-  priceBlock: { marginTop: tokens.space.xs, marginBottom: tokens.space.sm },
-  from: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  photo: { height: 116, borderTopLeftRadius: tokens.radius.lg, borderTopRightRadius: tokens.radius.lg },
+  // 08: three to the screen's width, the photo over the city and its price.
+  compactCard: { borderRadius: tokens.radius.md },
+  compactPhoto: { height: 80, borderTopLeftRadius: tokens.radius.md, borderTopRightRadius: tokens.radius.md },
+  compactBody: { paddingHorizontal: 10, paddingVertical: tokens.space.xs },
+  compactCity: { ...rn(tokens.type.labelStrong), color: tokens.colors.textPrimary },
+  compactPrice: { ...rn(tokens.type.priceSm), color: tokens.colors.textPrimary },
+  body: { padding: 10, gap: 2 },
+  city: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },
+  country: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
+  priceBlock: { marginTop: tokens.space.xxs, marginBottom: 6 },
+  from: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary },
   price: { ...rn(tokens.type.price), color: tokens.colors.textPrimary },
   wide: {
     flexDirection: "row",
@@ -189,7 +231,7 @@ const styles = StyleSheet.create({
   wideHalf: { flex: 1, minHeight: 104 },
   wideFull: { alignSelf: "stretch", minHeight: 84 },
   widePhoto: { alignSelf: "stretch" },
-  wideBody: { flex: 1, padding: tokens.space.sm, gap: tokens.space.xs, justifyContent: "space-between" },
+  wideBody: { flex: 1, padding: 10, gap: tokens.space.xs, justifyContent: "space-between" },
   wideBodyFull: { flexDirection: "row", alignItems: "flex-end" },
   wideText: { flex: 1, gap: 0, minWidth: 72 },
   wideCity: { ...rn(tokens.type.subtitle), color: tokens.colors.textPrimary },

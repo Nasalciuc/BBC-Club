@@ -1,6 +1,5 @@
 /**
- * The three travel-preference chips on Home (Figma 89:387: `Oct · flexible` · `Business` · `1 traveler`), the one-line
- * mono summary the empty states show instead (89:390: `OCT · FLEXIBLE   ·   BUSINESS` / `1 TRAVELER`), and the rule
+ * The trip's three chips (13, 04: `Nov 12 – 19, 2026` · `Business` · `1 adult`), the title over the fares, and the rule
  * that picks the copy for a route with neither a fare nor an estimate (A4 on 536:11155 vs 89:390).
  */
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
@@ -11,52 +10,44 @@ export type Passengers = { adult: number; child: number; infant: number };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-function parts(iso: string): { month: string; day: number } {
+function parts(iso: string): { year: string; month: string; day: number } {
   const m = Number(iso.slice(5, 7));
-  return { month: MONTHS[m - 1] ?? iso.slice(0, 7), day: Number(iso.slice(8, 10)) };
+  return { year: iso.slice(0, 4), month: MONTHS[m - 1] ?? iso.slice(0, 7), day: Number(iso.slice(8, 10)) };
 }
 
-/** `Oct · flexible` with no date (the current month), `Oct 12 – 19` for a round trip, `Oct 12` for one way. */
-export function datesChipLabel(dates: SearchDates, now: Date = new Date()): string {
-  if (!dates.depart) return `${MONTHS[now.getMonth()]} · flexible`;
+/**
+ * `Nov 12 – 19, 2026` for a round trip (13), `Oct 28 – Nov 2, 2026` across a month, `Dec 28, 2026 – Jan 4, 2027`
+ * across a year, `Nov 12, 2026` one way; `Flexible dates` while none is chosen.
+ */
+export function datesChipLabel(dates: Pick<SearchDates, "depart" | "return">): string {
+  if (!dates.depart) return "Flexible dates";
   const a = parts(dates.depart);
-  if (!dates.return) return `${a.month} ${a.day}`;
+  if (!dates.return) return `${a.month} ${a.day}, ${a.year}`;
   const b = parts(dates.return);
-  return a.month === b.month ? `${a.month} ${a.day} – ${b.day}` : `${a.month} ${a.day} – ${b.month} ${b.day}`;
+  if (a.year !== b.year) return `${a.month} ${a.day}, ${a.year} – ${b.month} ${b.day}, ${b.year}`;
+  if (a.month !== b.month) return `${a.month} ${a.day} – ${b.month} ${b.day}, ${b.year}`;
+  return `${a.month} ${a.day} – ${b.day}, ${b.year}`;
 }
 
 export function cabinLabel(cabin: Cabin): string {
   return cabin === "first" ? "First" : "Business";
 }
 
-/** Figma says traveler, not adult: `1 traveler`, `2 travelers`. Children and infants count. */
+/** 13: `1 adult`, `2 adults`; a party with children counts everyone — `3 travelers`. */
 export function travelersLabel(p: Passengers): string {
-  const n = p.adult + p.child + p.infant;
-  return `${n} ${n === 1 ? "traveler" : "travelers"}`;
+  if (p.child + p.infant === 0) return `${p.adult} ${p.adult === 1 ? "adult" : "adults"}`;
+  return `${p.adult + p.child + p.infant} travelers`;
 }
 
-/** The label over the fares (Figma 89:387: `3 FARES · LOWEST FIRST`). One fare has no order to state: `1 FARE`. */
-export function faresLabel(count: number): string {
-  return count === 1 ? "1 fare" : `${count} fares · lowest first`;
+/** The title over the fares: `Flight option` over one (13), `Flight options` over several (04). */
+export function flightOptionsTitle(count: number): string {
+  return count === 1 ? "Flight option" : "Flight options";
 }
 
 /** The travelers sheets edit adults only: children and infants already in the party stay, never reset to 0. One adult
  *  at least (the request's minimum). */
 export function withAdults(party: Passengers | undefined, adult: number): Passengers {
   return { adult: Math.max(1, adult), child: party?.child ?? 0, infant: party?.infant ?? 0 };
-}
-
-/** The two mono lines of the empty states (89:390, 89:391, 536:11155). */
-export function preferencesLines(
-  dates: SearchDates,
-  cabin: Cabin,
-  p: Passengers,
-  now: Date = new Date(),
-): [string, string] {
-  return [
-    `${datesChipLabel(dates, now).toUpperCase()}   ·   ${cabinLabel(cabin).toUpperCase()}`,
-    travelersLabel(p).toUpperCase(),
-  ];
 }
 
 /** `when` for GET /v1/search: noon UTC of the chosen departure day; none while the dates are flexible (ADR-IMPL-037 —

@@ -280,6 +280,20 @@ export default function RootLayout() {
                 />
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen
+                  name="search"
+                  options={{
+                    animation: "fade",
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="destination/[code]"
+                  options={{
+                    animation: "slide_from_right",
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
                   name="fare/[id]"
                   options={{
                     animation: "slide_from_right",
