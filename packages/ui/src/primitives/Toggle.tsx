@@ -17,6 +17,16 @@ type Props = {
  */
 const TOGGLE = { width: 40.6, height: 24, inset: 1.5 } as const;
 const KNOB = TOGGLE.height - 2 * TOGGLE.inset;
+/**
+ * How far the target reaches past the drawn track, 44 pt and more each way. A touch lands only inside the
+ * toggle's parent, so a parent that hugs the track leaves this room.
+ */
+export const TOGGLE_SLOP = {
+  top: (44 - TOGGLE.height) / 2,
+  bottom: (44 - TOGGLE.height) / 2,
+  left: 4,
+  right: 4,
+} as const;
 
 export function Toggle({ value, onChange, accessibilityLabel, testID, locked = false, disabled = false }: Props) {
   const fixed = locked || disabled || onChange == null;
@@ -28,7 +38,7 @@ export function Toggle({ value, onChange, accessibilityLabel, testID, locked = f
       accessibilityState={{ checked: value, disabled: fixed }}
       disabled={fixed}
       // The target reaches 44 pt around the drawn track.
-      hitSlop={{ top: (44 - TOGGLE.height) / 2, bottom: (44 - TOGGLE.height) / 2, left: 4, right: 4 }}
+      hitSlop={TOGGLE_SLOP}
       onPress={() => onChange?.(!value)}
       style={[styles.track, value ? styles.on : styles.off, (locked || disabled) && styles.locked]}
     >

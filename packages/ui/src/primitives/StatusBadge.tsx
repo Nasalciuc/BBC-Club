@@ -16,7 +16,7 @@ type Props = {
 /**
  * The status badges, measured on 09 (sheet 41): `Quote ready` filled navy with white Semibold words; `Received` light
  * blue; `Booked` white on a navy hairline with a 15-pt navy check; `Closed` light grey with slate words; `Not sent`
- * white on a light navy outline (28, 32). 12.5-pt words, 12.5 pt either side, fully round.
+ * white on a light navy outline (28, 32). 11.7-pt words, 12.5 pt either side, fully round.
  */
 export function StatusBadge({ status, size = "md" }: Props) {
   const { badge, known } = badgeOf(status);

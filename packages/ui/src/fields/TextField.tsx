@@ -25,7 +25,7 @@ type Props = Omit<TextInputProps, "style" | "placeholderTextColor"> & {
 };
 
 /**
- * A text field (sheet 39; 06): white, a light navy hairline, radius 12 — the icon in its column and a rule, then the
+ * A text field (sheet 39; 06): white, a light navy hairline, radius 10 — the icon in its column and a rule, then the
  * label in slate over the words. Focus: a navy border. Error: a red border. Not editable: light tint.
  */
 export function TextField({

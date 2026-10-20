@@ -11,7 +11,7 @@ export { CloseButton } from "./primitives/CloseButton";
 export { Divider } from "./primitives/Divider";
 export { InfoCard } from "./primitives/InfoCard";
 export { PROGRESS_HEIGHT, ProgressLine } from "./primitives/ProgressLine";
-export { Chip } from "./primitives/Chip";
+export { CHIP_SLOP, Chip } from "./primitives/Chip";
 export { ListRow, RowGroup } from "./primitives/ListRow";
 export { Photo, type PhotoSource } from "./primitives/Photo";
 export { PhotoCredit } from "./primitives/PhotoCredit";
@@ -32,7 +32,7 @@ export {
   type StepState,
   type TimelineStep,
 } from "./primitives/Timeline";
-export { Toggle } from "./primitives/Toggle";
+export { TOGGLE_SLOP, Toggle } from "./primitives/Toggle";
 export { Wordmark } from "./primitives/Wordmark";
 
 export { AirportRow } from "./fields/AirportRow";

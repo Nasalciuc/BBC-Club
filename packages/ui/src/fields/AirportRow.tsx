@@ -19,7 +19,7 @@ type Props = {
 };
 
 /**
- * 18, measured: a white row 55 pt tall, radius 8, a hairline and a soft shadow; the 20-pt pin 11.2 pt in; the city's
+ * 18, measured: a white row 55 pt tall, radius 8, a hairline and the card shadow; the 20-pt pin 11.2 pt in; the city's
  * baseline 23.4 pt down, 43 pt from the left, the airport's 17.1 pt under it; an 18-pt chevron 14 pt from the right.
  */
 const DETAIL = { height: 55, radius: 8, pinLeft: 11.2, pin: 20, textLeft: 43, chevron: 18, chevronRight: 5 } as const;

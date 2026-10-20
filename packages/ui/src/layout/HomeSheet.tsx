@@ -70,7 +70,8 @@ function cardness(index: number) {
 
 /**
  * At rest (02) the sheet is no card: the search bar floats over the globe's foot and the offers sit on the page, the
- * sky fading into it behind the bar. Raised (13, 16) it is the white sheet with its 24-pt corners and its shadow.
+ * sky fading into it behind the bar. Raised it is the white sheet with its shadow: 26-pt corners on a route (13), 22
+ * over every offer (16).
  */
 function SheetBackground({ animatedIndex, style, pointerEvents }: BottomSheetBackgroundProps) {
   const card = useAnimatedStyle(() => ({ opacity: cardness(animatedIndex.value) }));

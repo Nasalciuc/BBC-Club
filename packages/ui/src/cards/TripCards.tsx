@@ -535,16 +535,19 @@ function ReceivedAirline({
     );
   }
   if (mark) {
+    // Never wider than the airline's column: a logo in the British Airways mark's box comes down to it.
+    const k = Math.min(1, g.airline.width / mark.width);
     return (
       <Image
         source={mark.source}
+        resizeMode="contain"
         style={[
           received.absolute,
           {
-            left: g.airline.centre - mark.width / 2,
-            top: g.airline.mark.middle - mark.height / 2,
-            width: mark.width,
-            height: mark.height,
+            left: g.airline.centre - (mark.width * k) / 2,
+            top: g.airline.mark.middle - (mark.height * k) / 2,
+            width: mark.width * k,
+            height: mark.height * k,
           },
         ]}
         accessibilityIgnoresInvertColors

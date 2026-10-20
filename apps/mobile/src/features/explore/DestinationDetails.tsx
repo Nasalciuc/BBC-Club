@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, type TextStyle, View } from "react-native";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
-import { Chip, FlightCard, Skeleton, baselineOffset, belowBaseline, fareBasis, rn, tokens } from "@bbc/ui";
+import { CHIP_SLOP, Chip, FlightCard, Skeleton, baselineOffset, belowBaseline, fareBasis, rn, tokens } from "@bbc/ui";
 
 import { airlineMark } from "@/features/fares/airline-marks";
 import type { SearchState } from "@/features/search/useSearch";
@@ -234,21 +234,24 @@ export function DestinationDetails({
         </Text>
       ) : null}
 
-      {/* One row that scrolls sideways to the screen's edges, should dated chips at a larger text size not fit (13). */}
+      {/* One row that scrolls sideways to the screen's edges, should dated chips at a larger text size not fit (13).
+          It is the chips' slop taller above and below, its margins giving it back, so their 44-pt targets fall
+          inside it: a row that scrolls clips touches at its edges. */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={[
           styles.chipsScroll,
           {
-            marginTop: g.chips.afterLine - belowBaseline(line ? g.sub.role : g.city.role),
+            marginTop: g.chips.afterLine - belowBaseline(line ? g.sub.role : g.city.role) - CHIP_SLOP,
+            marginBottom: -CHIP_SLOP,
             marginLeft: -g.inset,
             marginRight: -g.inset,
           },
         ]}
         contentContainerStyle={[
           styles.chips,
-          { gap: g.chips.gap, paddingLeft: g.chips.left, paddingRight: g.chips.left },
+          { gap: g.chips.gap, paddingLeft: g.chips.left, paddingRight: g.chips.left, paddingVertical: CHIP_SLOP },
         ]}
         testID={`${testIDPrefix}.chips`}
       >

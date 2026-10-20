@@ -2108,8 +2108,9 @@ renders them.
   selected chip and segment, the active tab, the pins, the received check; `action-pressed` (#14223A) while a pill is
   pressed.
 - **White** `surface-page` and `surface-card` (#FFFFFF): pages, cards, sheets, fields, the tab bar.
-- **Tints**: `surface-tint` (#F0F2F7) for chips, fields, the stepper and skeletons; `surface-tint-soft` (#F5F7FA) for
-  information cards; `surface-tint-blue` (#DBE8F9) for the light badges and the `Save` pill; `surface-neutral` and
+- **Tints**: `surface-tint` (#F0F2F7) for chips, fields and the stepper; `skeleton` (#EBF0F5) for skeletons;
+  `surface-tint-soft` (#F5F7FA) for information cards; `surface-tint-blue` (#DBE8F9) for the light badges and 05's
+  `Save` pill — an offer's in `surface-save-soft`, a quote's in `surface-save`; `surface-neutral` and
   `surface-round` for the round buttons drawn grey (07, 26).
 - **Lines**: `border-default` (#E8EAEF) for borders and dividers, `border-faint` for a card's hairline, `rule-line` for
   the rules inside cards.
@@ -2186,7 +2187,7 @@ Documented in `design/components.md`. The rules an agent most often gets wrong:
 
 - Pressed: a filled pill turns `action-pressed`; cards and rows dim to 85%. Focus: a navy border. Disabled: as each
   screen draws it (24: a pale blue pill with blue-grey words). Error: a red border and red words under the field.
-- Loading lists show skeletons in light tint that shimmer; a pill that sends shows a small white spinner and `Sending…`.
+- Loading lists show skeletons (`skeleton`) that shimmer; a pill that sends shows a small white spinner and `Sending…`.
 - Error, empty, offline and loading are separate states, never stacked on one screen.
 
 ## Accessibility
