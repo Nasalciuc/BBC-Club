@@ -110,7 +110,7 @@ export function OfferCards({
       gap={row?.gap}
     >
       {items.map((item) => {
-        const model = offerCardModel(item, home?.destinations ?? []);
+        const model = offerCardModel(item, home?.destinations ?? [], home?.places ?? []);
         return (
           <OfferCard
             key={item.id}

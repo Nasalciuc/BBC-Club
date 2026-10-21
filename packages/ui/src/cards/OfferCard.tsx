@@ -406,7 +406,8 @@ export function OfferCardWide({
         </Text>
         <Text
           style={[R.country, styles.slate, { marginTop: after(g.country - g.city, R.city, R.country) }]}
-          numberOfLines={1}
+          // A long country (`United Kingdom`) takes a second line at the reading sizes, never an ellipsis (ADR-IMPL-057).
+          numberOfLines={2}
         >
           {country ?? " "}
         </Text>

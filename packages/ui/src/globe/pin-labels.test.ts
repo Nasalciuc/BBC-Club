@@ -138,7 +138,11 @@ describe("routeEndFrame (13)", () => {
     const origin = routeEndFrame("JFK", "origin");
     // The departure's box starts 2.3 right of the tip and 0.5 above it; the glow reaches 11 pt round the head.
     expect(origin.tip.x).toBeCloseTo(ROUTE_END.halo, 6);
-    expect(origin.width).toBeCloseTo(ROUTE_END.halo + ROUTE_END.origin.dx + 2 * ROUTE_END.label.padX + 3 * 6, 6);
+    // Three letters at the code's width for `route-pin` (ADR-IMPL-057).
+    expect(origin.width).toBeCloseTo(
+      ROUTE_END.halo + ROUTE_END.origin.dx + 2 * ROUTE_END.label.padX + 3 * ROUTE_END.label.charWidth,
+      6,
+    );
     const dest = routeEndFrame("LHR", "destination");
     // The arrival's box stands 5.1 above the tip: the glow, 5.9 + 11 above it, sets the frame's top.
     expect(dest.tip.y).toBeCloseTo(ROUTE_END.pin.height - ROUTE_END.pin.head + ROUTE_END.halo, 6);

@@ -170,13 +170,14 @@ const OVERVIEW = {
   // The ribbon drawn 1.25 times its crop (04's logo, where it is smaller).
   airline: { centre: 48.1, mark: 45.2, name: 66.8, role: r(tokens.type.fareAirline), width: 70, ribbonScale: 1.25 },
   depart: 138.5,
-  arrive: 299.85,
+  // 05 draws the arrival 299.85 in; at the reading sizes its day (`Nov 11, 2026`) needs ~72 pt (ADR-IMPL-057).
+  arrive: 282,
   code: { role: r(tokens.type.fareCode), baseline: 36.6 },
   city: { role: r(tokens.type.fareCity), baseline: 50.1 },
   time: { role: r(tokens.type.fareTime), baseline: 66.2 },
   day: { role: r(tokens.type.fareDay), baseline: 78.2 },
   plus: { role: r(tokens.type.farePlus), gap: 3.8, rise: 1.3 },
-  line: { y: 32.6, a: [185.2, 220.7], b: [245.6, 281.6], plane: 233.4, size: 20.3 },
+  line: { y: 32.6, a: [185.2, 220.7], b: [245.6, 274], plane: 233.4, size: 20.3 },
 } as const;
 
 /** The speedmarque alone (05): the British Airways crop's ribbon, its wordmark left outside the window. */
@@ -396,9 +397,10 @@ const ROUTE = {
   code: { role: r(tokens.type.mapCode), rise: 2.55 },
   city: { role: r(tokens.type.mapCity), drop: 7.35 },
   plane: 16.5,
-  pad: { x: 62, top: 24, bottom: 20 },
+  // The labels' room at the map's edges, for the reading sizes (ADR-IMPL-057; 05 drew 62 and 20).
+  pad: { x: 70, top: 24, bottom: 26 },
 } as const;
-const LABEL_WIDTH = 64;
+const LABEL_WIDTH = 76;
 
 type Place = { code: string; city: string; lat: number; lng: number };
 
@@ -496,7 +498,12 @@ function End({ place, at, side }: { place: Place; at: readonly [number, number];
     >
       <Text style={[g.code.role, styles.navy]}>{place.code}</Text>
       <Text
-        style={[g.city.role, styles.navy, { marginTop: after(g.code.rise + g.city.drop, g.code.role, g.city.role) }]}
+        style={[
+          g.city.role,
+          styles.navy,
+          // 05's 9.9-pt pitch, or the city's own size where the reading sizes make that more (ADR-IMPL-057).
+          { marginTop: after(Math.max(g.code.rise + g.city.drop, g.city.role.fontSize + 1), g.code.role, g.city.role) },
+        ]}
         numberOfLines={1}
       >
         {place.city}

@@ -45,6 +45,14 @@ describe("offerCardModel", () => {
     expect(offerCardModel(offer("CDG", { offer: 3850, currency: "USD" }, null), [PARIS]).rating).toBeNull();
   });
 
+  it("names the city from Home's places when no pin lists it — a broadcast offer seen from another airport (ADR-IMPL-057)", () => {
+    const tokyo = { code: "HND", city: "Tokyo", countryCode: "JP" };
+    expect(offerCardModel(offer("HND", { offer: 4650, currency: "USD" }), [PARIS], [tokyo])).toMatchObject({
+      city: "Tokyo",
+      country: "Japan",
+    });
+  });
+
   it("keeps the offer's own title where Home does not list its city, and says no saving without a published fare", () => {
     expect(offerCardModel(offer("NRT", { offer: 4650, currency: "USD" }), [PARIS])).toEqual({
       city: "Autumn in Paris",

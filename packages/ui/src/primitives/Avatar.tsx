@@ -1,10 +1,12 @@
 import { StyleSheet, Text, View } from "react-native";
+import { Icon } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { Photo, type PhotoSource } from "./Photo";
 
 type Props = {
-  /** The member's initials (`DR`), shown while the club has no photo of them. */
+  /** The member's initials (`DR`), shown while the club has no photo of them; empty — the club has no name for them
+   *  either, and the portrait shows the person glyph. */
   initials: string;
   /** The member's photo, where the club keeps one (`ProfileVM.avatarUrl`, ADR-IMPL-056). */
   photo?: PhotoSource | null;
@@ -19,7 +21,8 @@ type Props = {
 
 /**
  * The member's round portrait (02, 12): their photo — or, until the club keeps one, their initials on navy — in a white
- * ring.
+ * ring. A member the club has no name for (one who joined by email) gets the person glyph, never an empty disc. The
+ * monogram stays under the photo: while the photo loads, and if it cannot load, the portrait still shows who it is.
  */
 export function Avatar({ initials, photo, size, ring = size >= 100 ? 3.8 : 1, shadow = size >= 100, testID }: Props) {
   const inner = size - ring * 2;
@@ -31,13 +34,14 @@ export function Avatar({ initials, photo, size, ring = size >= 100 ? 3.8 : 1, sh
       accessibilityRole="image"
       accessibilityLabel={initials ? `Your profile, ${initials}` : "Your profile"}
     >
-      {photo ? (
-        <Photo source={photo} fallback={null} style={[styles.inner, { width: inner, height: inner }]} />
-      ) : (
-        <View style={[styles.inner, styles.monogram, { width: inner, height: inner }]}>
+      <View style={[styles.inner, styles.monogram, { width: inner, height: inner }]}>
+        {initials ? (
           <Text style={[size >= 100 ? styles.big : styles.small]}>{initials}</Text>
-        </View>
-      )}
+        ) : (
+          <Icon name="user" size={Math.round(inner * 0.46)} color={tokens.colors.textOnPhoto} />
+        )}
+        {photo ? <Photo source={photo} fallback={null} style={[StyleSheet.absoluteFill, styles.photo]} /> : null}
+      </View>
     </View>
   );
 }
@@ -48,6 +52,8 @@ const styles = StyleSheet.create({
   shadow: { ...tokens.elevation.card },
   inner: { borderRadius: tokens.radius.pill, overflow: "hidden" },
   monogram: { backgroundColor: tokens.colors.actionPrimary, alignItems: "center", justifyContent: "center" },
+  // The photo's slot is light tint while it loads and empty when it fails: here the monogram under it shows instead.
+  photo: { backgroundColor: "transparent" },
   small: { ...rn(tokens.type.subtitle), color: tokens.colors.textOnPhoto },
   big: { ...rn(tokens.type.display), color: tokens.colors.textOnPhoto },
 });

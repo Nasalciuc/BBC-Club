@@ -98,7 +98,7 @@ export function SheetExpanded({ home, onOpenOffer, onSearch }: Props) {
           {rows.map((row) => (
             <View key={row.map((item) => item.id).join(".")} style={styles.row}>
               {row.map((item) => {
-                const model = offerCardModel(item, home?.destinations ?? []);
+                const model = offerCardModel(item, home?.destinations ?? [], home?.places ?? []);
                 return (
                   <OfferCardWide
                     key={item.id}

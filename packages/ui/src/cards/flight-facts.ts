@@ -22,6 +22,16 @@ export function cabinText(cabin: Fare["cabin"]): string {
   return cabin === "first" ? "First" : "Business";
 }
 
+/**
+ * `JFK 18:55 → LHR 07:00 +1` that breaks only after its arrow: each end keeps its code, its clock and its `+1` together
+ * (no-break spaces), so a narrow column never leaves `+1` alone on the next line (06, ADR-IMPL-057).
+ */
+export function keepEnds(route: string): string {
+  const ends = route.split(" → ");
+  if (ends.length < 2) return route;
+  return ends.map((end) => end.replace(/ /g, "\u00A0")).join("\u00A0→ ");
+}
+
 /** `Nov 12, 2026` for a day the calendar has; null for anything else. */
 export function dayText(ymd: string | null | undefined): string | null {
   if (!ymd || !isCalendarDay(ymd)) return null;

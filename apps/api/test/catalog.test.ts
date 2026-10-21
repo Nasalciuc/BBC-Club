@@ -162,6 +162,14 @@ describe("catalog routes", () => {
       return ((await r.json()) as { code: string }[]).map((a) => a.code);
     };
     expect((await codes("LHR"))[0]).toBe("LHR"); // the exact code comes first
+    // 18: a city's airports come together, the busiest city first — London's before Long Beach and Longview.
+    const lon = await codes("Lon");
+    expect(lon.slice(0, 3)).toEqual(["LHR", "LGW", "STN"]);
+    expect(lon).toContain("LCY");
+    expect(lon.indexOf("LCY")).toBeLessThan(lon.indexOf("LGB"));
+    // A city's weight counts only its airports in the same tier: `L` leads with London's by code, together — not with
+    // LaGuardia, lifted by JFK's looser match.
+    expect((await codes("L")).slice(0, 4)).toEqual(["LHR", "LGW", "LTN", "LCY"]);
     expect(await codes("lodon")).toContain("LHR"); // a typo
     expect(await codes("new yrok")).toContain("JFK");
     expect(await codes("Zürich")).toContain("ZRH"); // accents either way
@@ -277,6 +285,31 @@ describe("GET /v1/home", () => {
     expect(one).toBe(0);
     const body = HomeVM.parse(await r.json());
     expect(body.home?.code).toBe("JFK");
+    await t.close();
+  });
+
+  it("names the cities of the offers no pin lists, so their cards never print a title cut short (ADR-IMPL-057)", async () => {
+    const t = await testApp({ suite: "catalog-home-places" });
+    await t.seedCatalogBasics();
+    await t.seedBroadcastOffer({ routeTo: "LHR", title: "London calling" });
+    // Rome has no fare from JFK in the basics: no pin names it.
+    await t.seedBroadcastOffer({ routeTo: "FCO", title: "Easter in Rome" });
+    const r = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(200);
+    const body = HomeVM.parse(await r.json());
+    const listed = new Set(body.destinations.map((d) => d.code));
+    expect(listed.has("FCO")).toBe(false);
+    expect(body.places).toContainEqual({ code: "FCO", city: "Rome", countryCode: "IT" });
+    // Every offer's arrival is named once: by a pin, or by a place.
+    for (const code of ["LHR", "FCO"]) {
+      const named = listed.has(code) || (body.places ?? []).some((p) => p.code === code);
+      expect(named).toBe(true);
+    }
+    for (const p of body.places ?? []) {
+      expect(listed.has(p.code)).toBe(false);
+      expect(p.city.length).toBeGreaterThan(0);
+      expect(p.countryCode).toMatch(/^[A-Z]{2}$/);
+    }
     await t.close();
   });
 

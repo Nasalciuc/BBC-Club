@@ -2,7 +2,8 @@
 
 Status: accepted · Date: 2026-10-19 · Scope: P1 (`DESIGN.md`, the tokens, `@bbc/ui`, every 3.0 screen, the catalog,
 proposals, requests and members contracts) · Amends ADR-IMPL-055 §1, §3, §4, §7 and §8; keeps the rest of it (the
-entry frozen in `club.ts`, the delivery in four pull requests).
+entry frozen in `club.ts`, the delivery in four pull requests). §2's type scale is amended by ADR-IMPL-057 (reading
+sizes).
 
 **Context.** ADR-IMPL-055 rebuilt the inside of the club from the 3.0 images but evened them out: one value per role
 from the component sheets (a 20-pt gutter, a 52-pt pill, 16-pt body), sheet 37's eight hex colours, Inter, and the

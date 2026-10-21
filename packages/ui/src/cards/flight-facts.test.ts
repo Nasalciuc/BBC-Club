@@ -1,6 +1,15 @@
 import { describe, expect, it } from "bun:test";
 
-import { arriveYmd, cabinText, dayText, departYmd, durationText, fareBasis, flightFacts } from "./flight-facts";
+import {
+  arriveYmd,
+  cabinText,
+  dayText,
+  departYmd,
+  durationText,
+  fareBasis,
+  flightFacts,
+  keepEnds,
+} from "./flight-facts";
 
 const fare = {
   nonstop: true,
@@ -34,6 +43,12 @@ describe("flight facts (sheet 40 · 04)", () => {
     expect(fareBasis("round_trip")).toBe("round trip");
     expect(fareBasis("one_way")).toBe("one way");
     expect(fareBasis(undefined)).toBeNull();
+  });
+
+  it("lets a route break only after its arrow, each end whole (06)", () => {
+    expect(keepEnds("JFK 18:55 → LHR 07:00 +1")).toBe("JFK\u00A018:55\u00A0→ LHR\u00A007:00\u00A0+1");
+    expect(keepEnds("JFK → LHR")).toBe("JFK\u00A0→ LHR");
+    expect(keepEnds("New York to London")).toBe("New York to London");
   });
 });
 
