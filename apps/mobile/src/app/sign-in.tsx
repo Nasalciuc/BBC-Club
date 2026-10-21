@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useKeyboardShown } from "@bbc/ui";
 
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
@@ -18,6 +19,7 @@ export default function SignInScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const keyboard = useKeyboardShown();
 
   const canSubmit = Email.safeParse(email).success && password.length > 0 && !busy;
 
@@ -58,17 +60,23 @@ export default function SignInScreen() {
             disabled={!canSubmit}
             onPress={() => void onSubmit()}
           />
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerLabel}>New to the club</Text>
-            <View style={styles.dividerLine} />
-          </View>
-          <ClubButton
-            testID="signIn.createAccount"
-            label="Create account"
-            variant="secondary"
-            onPress={() => router.push("/join")}
-          />
+          {/* With the keys up only Sign in stands on them (ADR-IMPL-047): the divider and Create account took the
+              password field's room. They come back with the keys down; the screen without the keys is unchanged. */}
+          {keyboard ? null : (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerLabel}>New to the club</Text>
+                <View style={styles.dividerLine} />
+              </View>
+              <ClubButton
+                testID="signIn.createAccount"
+                label="Create account"
+                variant="secondary"
+                onPress={() => router.push("/join")}
+              />
+            </>
+          )}
         </>
       }
     >

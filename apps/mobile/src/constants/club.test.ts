@@ -46,6 +46,7 @@ describe("the entry's own values (Club)", () => {
     expect(Club.type).toEqual({
       display: role("Fraunces_400Regular", 34, "400", 37, -0.4),
       headline: role("Fraunces_400Regular", 28, "400", 32, -0.3),
+      welcome: role("Fraunces_400Regular", 26, "400", 30, -0.3),
       title: role("Fraunces_400Regular", 20, "400", 24, 0),
       titleSm: role("Fraunces_400Regular", 16, "400", 20, 0),
       body: role("Geist_400Regular", 17, "400", 25, 0),
