@@ -57,16 +57,13 @@ export function CinematicWelcome() {
             <AnimatedEntrance delay={800}>
               <Text style={styles.label}>Private Travel Club</Text>
             </AnimatedEntrance>
-            <View>
-              <AnimatedEntrance delay={1000}>
-                <Text style={styles.headline}>Eight hours in a lie-flat suite.</Text>
-              </AnimatedEntrance>
-              <AnimatedEntrance delay={1200}>
-                <Text style={styles.headline}>Land rested.</Text>
-              </AnimatedEntrance>
-            </View>
+            {/* One run of words (the owner, 21 Oct): no-break spaces hold `suite. Land rested.` and `around you.` together,
+                so neither ends a line alone, on any phone and at any text size. */}
+            <AnimatedEntrance delay={1000}>
+              <Text style={styles.headline}>{"Eight hours in a lie-flat suite.\u00A0Land\u00A0rested."}</Text>
+            </AnimatedEntrance>
             <AnimatedEntrance delay={1400}>
-              <Text style={styles.subline}>Thoughtful travel, arranged around you.</Text>
+              <Text style={styles.subline}>{"Thoughtful travel, arranged around\u00A0you."}</Text>
             </AnimatedEntrance>
           </View>
 
@@ -127,10 +124,10 @@ const styles = StyleSheet.create({
     ...Club.type.headline,
     color: Club.colors.textOnDark,
   },
+  // The column's full width (the owner, 21 Oct): `around you.` fits on the line it starts.
   subline: {
     ...Club.type.body,
     color: Club.colors.textOnDarkMuted,
-    maxWidth: 280,
   },
   actions: {
     marginTop: Club.space.lg,

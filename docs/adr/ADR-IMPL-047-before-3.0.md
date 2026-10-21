@@ -34,6 +34,8 @@ come first because each would otherwise be carried into 3.0, or stop it.
   keyboard before `signIn.submit`: CI's emulator checks it. Amended 21 Oct: on the owner's phone the keyboard's row of
   saved addresses still cut the password field under Sign in's footer, so while the keys are up that footer keeps its
   button alone; the divider and `Create account` come back with the keys down, and the screen without them is unchanged.
+  The same day, on Welcome: its two sentences run as one headline (`suite. Land rested.` share a line) and the subline
+  takes the column's full width (`around you.`), so no word stands alone on a line.
 - **The entry's errors.** The entry stays as it is, but its error line was `#B42318` on the navy panel, 2.23:1, and
   `DESIGN.md` keeps `status-danger` off messages (`design/components.md`: the message in the secondary text colour).
   The line now takes the entry's muted text, `textOnDarkMuted` (`#94A3B8`, 5.71:1) — no colour outside the palette
