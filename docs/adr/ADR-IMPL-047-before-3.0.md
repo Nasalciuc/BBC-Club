@@ -34,8 +34,12 @@ come first because each would otherwise be carried into 3.0, or stop it.
   keyboard before `signIn.submit`: CI's emulator checks it. Amended 21 Oct: on the owner's phone the keyboard's row of
   saved addresses still cut the password field under Sign in's footer, so while the keys are up that footer keeps its
   button alone; the divider and `Create account` come back with the keys down, and the screen without them is unchanged.
-  The same day, on Welcome: its two sentences run as one headline (`suite. Land rested.` share a line) and the subline
-  takes the column's full width (`around you.`), so no word stands alone on a line.
+  The same day, on Welcome: one sentence a line, `suite.` after `lie-flat` and `you.` after `around`. The first sentence
+  measures 366 pt in Fraunces at 28 and 339 at 26, so Welcome's headline takes a role of its own at 26
+  (`welcome` in `club.ts`; Verify keeps `headline` at 28) and the subline the column's full width: on a 393-pt phone
+  (the owner's) and on 411 (CI's Pixel 6) each sentence holds one line. Where a line cannot — a narrower phone, a larger
+  text size — a word joiner and no-break spaces move `lie-flat suite.` and `around you.` down whole, so no word stands
+  alone on a line.
 - **The entry's errors.** The entry stays as it is, but its error line was `#B42318` on the navy panel, 2.23:1, and
   `DESIGN.md` keeps `status-danger` off messages (`design/components.md`: the message in the secondary text colour).
   The line now takes the entry's muted text, `textOnDarkMuted` (`#94A3B8`, 5.71:1) — no colour outside the palette

@@ -64,6 +64,15 @@ export const Club = {
       lineHeight: 32,
       letterSpacing: -0.3,
     },
+    // Welcome's headline, one sentence a line on a 393-pt phone (the owner, 21 Oct; ADR-IMPL-047): `Eight hours in a
+    // lie-flat suite.` measures 366 pt at 28 and 339 at 26. Verify keeps `headline`.
+    welcome: {
+      fontFamily: "Fraunces_400Regular",
+      fontSize: 26,
+      fontWeight: "400",
+      lineHeight: 30,
+      letterSpacing: -0.3,
+    },
     title: { fontFamily: "Fraunces_400Regular", fontSize: 20, fontWeight: "400", lineHeight: 24, letterSpacing: 0 },
     titleSm: { fontFamily: "Fraunces_400Regular", fontSize: 16, fontWeight: "400", lineHeight: 20, letterSpacing: 0 },
     body: { fontFamily: "Geist_400Regular", fontSize: 17, fontWeight: "400", lineHeight: 25, letterSpacing: 0 },

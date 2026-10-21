@@ -57,11 +57,18 @@ export function CinematicWelcome() {
             <AnimatedEntrance delay={800}>
               <Text style={styles.label}>Private Travel Club</Text>
             </AnimatedEntrance>
-            {/* One run of words (the owner, 21 Oct): no-break spaces hold `suite. Land rested.` and `around you.` together,
-                so neither ends a line alone, on any phone and at any text size. */}
-            <AnimatedEntrance delay={1000}>
-              <Text style={styles.headline}>{"Eight hours in a lie-flat suite.\u00A0Land\u00A0rested."}</Text>
-            </AnimatedEntrance>
+            {/* One sentence a line (the owner, 21 Oct): `suite.` after `lie-flat`, `you.` after `around`. A word joiner
+                keeps `lie-flat` whole and no-break spaces hold `flat suite.` and `around you.`: where a line cannot hold
+                them (a narrower phone, a larger text size) it breaks before `lie-flat` and `around`, and no word stands
+                alone. */}
+            <View>
+              <AnimatedEntrance delay={1000}>
+                <Text style={styles.headline}>{"Eight hours in a lie-\u2060flat\u00A0suite."}</Text>
+              </AnimatedEntrance>
+              <AnimatedEntrance delay={1200}>
+                <Text style={styles.headline}>Land rested.</Text>
+              </AnimatedEntrance>
+            </View>
             <AnimatedEntrance delay={1400}>
               <Text style={styles.subline}>{"Thoughtful travel, arranged around\u00A0you."}</Text>
             </AnimatedEntrance>
@@ -121,7 +128,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   headline: {
-    ...Club.type.headline,
+    ...Club.type.welcome,
     color: Club.colors.textOnDark,
   },
   // The column's full width (the owner, 21 Oct): `around you.` fits on the line it starts.
