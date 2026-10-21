@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
-import { NetworkError, OFFLINE_MESSAGE } from "@/lib/timeout";
+import { NetworkError, OFFLINE_MESSAGE } from "../../lib/timeout";
 import { otpSendResult, type OtpSendAnswer } from "./otp-send-logic";
 
 const answered = (error: OtpSendAnswer["error"]) => async (): Promise<OtpSendAnswer> => ({ error });

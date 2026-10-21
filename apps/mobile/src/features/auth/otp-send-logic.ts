@@ -1,4 +1,4 @@
-import { NetworkError, networkFail } from "@/lib/timeout";
+import { NetworkError, networkFail } from "../../lib/timeout";
 
 /** What Join / Forgot password may say after asking the server to mail a code. */
 export type OtpSendResult = { ok: true; message: string } | { ok: false; message: string; code: "OFFLINE" | "TIMEOUT" };
