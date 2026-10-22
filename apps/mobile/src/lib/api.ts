@@ -375,7 +375,7 @@ export async function fetchLastOtpForTest(email: string): Promise<string | null>
 
 export type HomeResult = { home: HomeVMType; etag: string | null; notModified: boolean };
 
-/** GET /v1/home — ETag, 5-minute private cache. */
+/** GET /v1/home — ETag revalidation (`private, no-cache`): a 304 keeps the member's stored copy. */
 export async function fetchHome(etag?: string | null): Promise<ApiResult<HomeResult>> {
   return asResult<HomeResult>(async () => {
     const res = await apiFetch("/v1/home", {

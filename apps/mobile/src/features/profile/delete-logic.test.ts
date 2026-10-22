@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { stateCopy } from "../../lib/error-context";
 import { OFFLINE_MESSAGE } from "../../lib/timeout";
 import { refuseEmptyPassword } from "../auth/flows-logic";
-import { canConfirmDelete, DELETE_ENTER_PASSWORD, deleteFailureCopy } from "./delete-logic";
+import { canConfirmDelete, DELETE_ENTER_PASSWORD, DELETE_SET_PASSWORD_FIRST, deleteFailureCopy } from "./delete-logic";
 
 describe("deleteFailureCopy — why the account was not deleted, where the member can act on it", () => {
   it("the hourly limit (3 tries per hour per address) says when to try again, not just `Try again`", () => {
@@ -14,6 +14,11 @@ describe("deleteFailureCopy — why the account was not deleted, where the membe
   it("a session older than a day, or an empty field, asks for the password on the field", () => {
     expect(deleteFailureCopy("SESSION_EXPIRED")).toEqual({ at: "field", text: DELETE_ENTER_PASSWORD });
     expect(deleteFailureCopy("INVALID_PASSWORD", true)).toEqual({ at: "field", text: DELETE_ENTER_PASSWORD });
+  });
+
+  it("a member with no password yet is told how to set one, not 'could not be deleted'", () => {
+    expect(deleteFailureCopy("CREDENTIAL_ACCOUNT_NOT_FOUND")).toEqual({ at: "sheet", text: DELETE_SET_PASSWORD_FIRST });
+    expect(DELETE_SET_PASSWORD_FIRST).toContain("Forgot password?");
   });
 
   it("a wrong password marks the field, as before", () => {

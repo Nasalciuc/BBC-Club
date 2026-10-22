@@ -54,12 +54,17 @@ export function clearConfirmations(): void {
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
-/** All the page reads from its params: the request's id (or queued key) and whether it was saved offline. */
+/**
+ * All the page reads from its params: the request's id (or queued key), whether it was saved on the phone, and — saved —
+ * whether the club's server did not answer while the phone was online (`why=unreachable`), never worded "offline" (F110).
+ */
 export function confirmationRoute(params: Record<string, string | string[] | undefined>): {
   id: string;
   queued: boolean;
+  unreachable: boolean;
 } {
-  return { id: one(params.id) ?? "", queued: one(params.queued) === "1" };
+  const queued = one(params.queued) === "1";
+  return { id: one(params.id) ?? "", queued, unreachable: queued && one(params.why) === "unreachable" };
 }
 
 /** A request's id on the server; a request saved offline is keyed by its queued key instead. */

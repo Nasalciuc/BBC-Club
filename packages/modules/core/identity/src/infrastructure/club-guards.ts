@@ -1,5 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
+// "At least one number or symbol": one rule for the app, /v1/account/password (PasswordBody) and these routes.
+import { PASSWORD_RULE, PASSWORD_RULE_MESSAGE } from "@bbc/shared/api/v1/proposals";
 import { BREACH_CHECK_UNAVAILABLE_MESSAGE, BREACHED_PASSWORD_MESSAGE } from "./breach";
 import { otpSendFailure } from "./otp-send-outcome";
 
@@ -9,11 +11,6 @@ export const EMAIL_UNDELIVERABLE_MESSAGE =
 
 /** What the delete sheet says when the password field is empty (the app maps INVALID_PASSWORD to the field). */
 export const DELETE_NEEDS_PASSWORD = "Enter your password to delete your account.";
-
-/** "At least one number or symbol" — the app's rule (apps/mobile/src/features/auth/schemas.ts). Defined here until the
- *  shared PASSWORD_RULE (packages/shared/src/api/v1/proposals.ts) lands; then import that one, so there is one rule. */
-export const PASSWORD_RULE = /[\d\W]/;
-export const PASSWORD_TOO_WEAK_MESSAGE = "Use at least one number or symbol.";
 
 export type ClubGuardDeps = {
   /** breach.ts breachCheck(): the list, or the test predicate. Throws when the list cannot be read. */
@@ -55,7 +52,7 @@ export function clubGuards({ isBreached }: ClubGuardDeps) {
             // Too short or too long: the route says so itself, before it touches the code.
             if (password.length < minPasswordLength || password.length > maxPasswordLength) return;
             if (!PASSWORD_RULE.test(password)) {
-              throw APIError.from("BAD_REQUEST", { code: "PASSWORD_TOO_WEAK", message: PASSWORD_TOO_WEAK_MESSAGE });
+              throw APIError.from("BAD_REQUEST", { code: "PASSWORD_TOO_WEAK", message: PASSWORD_RULE_MESSAGE });
             }
             let breached: boolean;
             try {

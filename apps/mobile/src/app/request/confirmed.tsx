@@ -40,7 +40,13 @@ import {
   readConfirmation,
   sentRequestId,
 } from "@/features/requests/confirmation-handoff";
-import { confirmationKind, otherFares, tripFacts, type RequestSource } from "@/features/requests/confirmation-logic";
+import {
+  confirmationKind,
+  otherFares,
+  savedCopy,
+  tripFacts,
+  type RequestSource,
+} from "@/features/requests/confirmation-logic";
 import { useProfile } from "@/features/profile/useProfile";
 import { fetchRequest } from "@/lib/api";
 import { env } from "@/lib/env";
@@ -208,6 +214,7 @@ export default function RequestConfirmedScreen() {
   }
 
   if (kind === "saved") {
+    const copy = savedCopy(route.unreachable);
     const s = SAVED;
     return (
       <View style={styles.root} testID="confirmation.root">
@@ -231,7 +238,7 @@ export default function RequestConfirmedScreen() {
             style={[savedTitle, styles.navy, { marginTop: insets.top + s.title.baseline - baselineOffset(savedTitle) }]}
             accessibilityRole="header"
           >
-            Saved. It goes out when you’re back online.
+            {copy.title}
           </Text>
           <Text
             style={[
@@ -249,7 +256,7 @@ export default function RequestConfirmedScreen() {
               },
             ]}
           >
-            You’re offline right now. Nothing more to do — a specialist will call you shortly after it arrives.
+            {copy.body}
           </Text>
         </View>
         <View style={[styles.savedPill, { paddingBottom: s.pill.bottom }]}>

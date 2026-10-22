@@ -11,6 +11,7 @@ import {
   limitedCopy,
   otherFares,
   retryMinutes,
+  savedCopy,
   telHref,
   tripFacts,
 } from "./confirmation-logic";
@@ -19,6 +20,15 @@ test("the confirmation follows the source; offline always wins", () => {
   expect(confirmationKind("search", false)).toBe("search");
   expect(confirmationKind("search", true)).toBe("saved");
   expect(confirmationKind("offer", true)).toBe("saved");
+});
+test("saved on the phone: offline says so; a club that did not answer never says 'offline' (F110)", () => {
+  expect(savedCopy(false).title).toBe("Saved. It goes out when you’re back online.");
+  expect(savedCopy(false).body).toContain("You’re offline right now.");
+  const unreachable = savedCopy(true);
+  expect(`${unreachable.title} ${unreachable.body}`.toLowerCase()).not.toContain("offline");
+  expect(unreachable.body).toContain("a specialist will call you");
+  // 26 draws the title on two lines: never longer than the offline one.
+  expect(unreachable.title.length).toBeLessThanOrEqual(savedCopy(false).title.length);
 });
 test("retry minutes: whole minutes, at least one", () => {
   expect(retryMinutes(360)).toBe(6); // requests.submit: 1 h / 10 = 6 min

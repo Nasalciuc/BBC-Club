@@ -10,6 +10,10 @@ export function canConfirmDelete(password: string, busy: boolean): boolean {
 export const DELETE_RATE_LIMITED = "Too many attempts. Try again in an hour, or call your specialist.";
 /** The deletion is confirmed with the password: a session older than a day, or an empty field, needs it typed. */
 export const DELETE_ENTER_PASSWORD = "Enter your password to delete your account.";
+/** A member who joined by code and never set a password: the server has none to check (Better Auth answers
+ *  CREDENTIAL_ACCOUNT_NOT_FOUND). The Password sheet asks for the current one, so the way to set one is the reset. */
+export const DELETE_SET_PASSWORD_FIRST =
+  "Your account has no password yet. Sign out, choose “Forgot password?” to set one, then delete your account here.";
 
 /** Why the account was not deleted, and where: under the field when the password is what to change, else in the sheet. */
 export type DeleteFailureCopy = { at: "field" | "sheet"; text: string };
@@ -20,6 +24,7 @@ export type DeleteFailureCopy = { at: "field" | "sheet"; text: string };
  */
 export function deleteFailureCopy(code: string | undefined, emptyField = false): DeleteFailureCopy {
   if (code === "RATE_LIMITED") return { at: "sheet", text: DELETE_RATE_LIMITED };
+  if (code === "CREDENTIAL_ACCOUNT_NOT_FOUND") return { at: "sheet", text: DELETE_SET_PASSWORD_FIRST };
   if (code === "SESSION_EXPIRED" || (code === "INVALID_PASSWORD" && emptyField)) {
     return { at: "field", text: DELETE_ENTER_PASSWORD };
   }

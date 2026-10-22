@@ -8,6 +8,17 @@ export function confirmationKind(source: RequestSource, queuedOffline: boolean):
   return queuedOffline ? "saved" : source;
 }
 
+/**
+ * The saved page's words (26). Offline, it says so; kept because the club's server did not answer while the phone is
+ * online (a timeout, DNS, the server down), it never says "offline" (F110). The title stays within 26's two lines.
+ */
+export function savedCopy(unreachable: boolean): { title: string; body: string } {
+  const after = "Nothing more to do — a specialist will call you shortly after it arrives.";
+  return unreachable
+    ? { title: "Saved. It goes out when the club answers.", body: `We can’t reach the club right now. ${after}` }
+    : { title: "Saved. It goes out when you’re back online.", body: `You’re offline right now. ${after}` };
+}
+
 /** Minutes to show on the "too many requests" screen (frame 481:9061). Retry-After is seconds; never show 0 or a fraction. */
 export function retryMinutes(retryAfterS: number | undefined): number {
   if (retryAfterS === undefined || !Number.isFinite(retryAfterS) || retryAfterS <= 0) return 1;

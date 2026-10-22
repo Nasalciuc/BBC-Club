@@ -200,7 +200,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
    * the airline; `phone`, the number this request will be called on — the one in the sheet, which may differ from the
    * profile's.
    */
-  function openConfirmation(input: { id: string; queued: boolean; phone: string }) {
+  function openConfirmation(input: { id: string; queued: boolean; unreachable?: boolean; phone: string }) {
     modalRef.current?.dismiss();
     const outbound = state.legs[0];
     const round = state.tripType === "round";
@@ -223,16 +223,17 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       media: photoRef.current,
     });
     const query = new URLSearchParams({ id: key, queued: input.queued ? "1" : "0" });
+    if (input.queued && input.unreachable) query.set("why", "unreachable");
     router.push(`/request/confirmed?${query.toString()}` as Href);
   }
 
-  /** Save the request on the phone; it goes out when the phone is back online (26). */
-  function saveOnPhone(body: RequestBody) {
+  /** Save the request on the phone; it goes out when the phone is back online, or when the club answers (26). */
+  function saveOnPhone(body: RequestBody, unreachable: boolean) {
     if (!enqueueRequest(body, keyRef.current, cityNameRef.current)) {
       dispatch({ type: "setSubmitError", error: stateCopy("notSent").body });
       return;
     }
-    openConfirmation({ id: "", queued: true, phone: "" });
+    openConfirmation({ id: "", queued: true, unreachable, phone: "" });
   }
 
   async function onSubmit() {
@@ -278,7 +279,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
 
     if (!online) {
       setBusy(false);
-      saveOnPhone(body);
+      saveOnPhone(body, false);
       return;
     }
 
@@ -295,7 +296,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
         return;
       }
       if (kind === "queued") {
-        saveOnPhone(body);
+        // A timeout or a server that did not answer while the phone is online is not "offline" (F110).
+        saveOnPhone(body, result.code !== "OFFLINE");
         return;
       }
       dispatch({ type: "setSubmitError", error: result.message });

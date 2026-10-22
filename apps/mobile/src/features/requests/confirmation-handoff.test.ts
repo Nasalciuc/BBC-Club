@@ -55,9 +55,15 @@ describe("the confirmation is handed over in memory, never in the URL (F014)", (
       logo: "https://evil.example/l.png",
       carrier: "Club",
     });
-    expect(route).toEqual({ id: ID, queued: false });
-    expect(confirmationRoute({ id: ["a", "b"], queued: "1" })).toEqual({ id: "a", queued: true });
-    expect(confirmationRoute({})).toEqual({ id: "", queued: false });
+    expect(route).toEqual({ id: ID, queued: false, unreachable: false });
+    expect(confirmationRoute({ id: ["a", "b"], queued: "1" })).toEqual({ id: "a", queued: true, unreachable: false });
+    expect(confirmationRoute({})).toEqual({ id: "", queued: false, unreachable: false });
+  });
+
+  it("reads why a request was saved: the club not answering, only on a saved one", () => {
+    expect(confirmationRoute({ id: "k", queued: "1", why: "unreachable" }).unreachable).toBe(true);
+    expect(confirmationRoute({ id: "k", queued: "1", why: "offline" }).unreachable).toBe(false);
+    expect(confirmationRoute({ id: ID, queued: "0", why: "unreachable" }).unreachable).toBe(false);
   });
 
   it("reads and opens only a request that was sent, by an id shaped as the server's — never a made-up one", () => {

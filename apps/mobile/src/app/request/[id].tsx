@@ -54,8 +54,10 @@ import { savingPercent } from "@/lib/saving";
 /** 11: the line under the number we call. */
 const BOOKING_NOTE = "Your specialist confirms availability and books by phone.\nNo payment is taken in the app.";
 
-/** Under `Send now` when it did not go: still offline, or the server did not take it this time. */
+/** Under `Send now` when it did not go: still offline; the club's server not answering while the phone is online (never
+ *  "offline", F110); or the server did not take it this time. */
 const SEND_OFFLINE = "You’re still offline. It goes out as soon as you’re back.";
+const SEND_UNREACHABLE = "We can’t reach the club right now. It goes out as soon as it answers.";
 const SEND_LATER = "It didn’t go through. We’ll try again in a few minutes.";
 
 const REQUESTS = "/(tabs)/requests" as Href;
@@ -255,7 +257,8 @@ export default function RequestDetailScreen() {
         router.dismissTo(REQUESTS);
         return;
       }
-      if (outcome === "offline") setSendNote(SEND_OFFLINE);
+      // The platform said online a moment ago: no answer now is the club's server, not this phone.
+      if (outcome === "offline") setSendNote(SEND_UNREACHABLE);
       else if (outcome === "failed") setSendNote(SEND_LATER);
       // Refused for good: the reload shows what is left to do.
       setReloadToken((n) => n + 1);
