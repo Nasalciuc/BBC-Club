@@ -109,7 +109,8 @@ const IATA = /^[A-Za-z]{3}$/;
 
 export const ProfilePatchBody = z
   .object({
-    displayName: z.string().min(1).max(120).optional(),
+    // Trimmed, never blank. 120 for CRM names; the request sheet's 2-80 is the app's rule.
+    displayName: z.string().trim().min(1, { message: "Tell us your name." }).max(120).optional(),
     homeAirport: z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase().optional(),
     // Read by Intl for quiet hours: a zone it cannot read stopped every broadcast campaign (ADR-IMPL-058).
     timezone: z.string().min(1).max(80).refine(isIanaZone, { message: "Choose a time zone from the list." }).optional(),

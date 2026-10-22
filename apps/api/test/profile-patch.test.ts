@@ -129,6 +129,27 @@ describe("PATCH /v1/profile", () => {
     await t.close();
   });
 
+  it("a name is trimmed, and a blank one is refused", async () => {
+    const t = await testApp({ suite: "profile-name" });
+    const patch = (displayName: string) =>
+      t.app.request("/v1/profile", {
+        method: "PATCH",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName }),
+      });
+    const stored = async () =>
+      (
+        (await t.db.execute(sql`SELECT display_name FROM members.profile WHERE member_id = ${t.memberA.id}`)) as {
+          display_name: string | null;
+        }[]
+      )[0]?.display_name;
+    expect((await patch("   ")).status).toBe(400);
+    expect(await stored()).toBe("Alex Morgan");
+    expect((await patch("  Ana  ")).status).toBe(200);
+    expect(await stored()).toBe("Ana");
+    await t.close();
+  });
+
   it("401 without session", async () => {
     const t = await testApp({ suite: "profile-unauth" });
     const r = await t.app.request("/v1/profile", {
