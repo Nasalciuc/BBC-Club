@@ -41,11 +41,12 @@ import { clubPhoto } from "@/features/places/club-photos";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { detailLines, detailTitle, queuedView, routeCodes } from "@/features/requests/request-card";
+import { requestFailureFrame, type RequestFailureAction } from "@/features/requests/request-failure";
 import { closedAt, progressSteps, requestView, serverState, stepCaption } from "@/features/requests/request-view-logic";
 import { airportByCode } from "@/lib/airport-by-code";
 import { fetchRequest, submitRequest } from "@/lib/api";
 import { env } from "@/lib/env";
-import { readFailureCopy, stateCopy } from "@/lib/error-context";
+import { stateCopy } from "@/lib/error-context";
 import { displayPhone } from "@/lib/phone";
 import { getQueued, sendOne } from "@/lib/queue";
 import { savingPercent } from "@/lib/saving";
@@ -117,7 +118,9 @@ export default function RequestDetailScreen() {
   // The request on screen: a reload (after `Send now`, `Try again`) keeps it while it asks, and waits for nothing.
   const shown = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<{ title: string; body: string } | null>(null);
+  // What the failure frame says, and what it offers: `Try again`, or only the way back to Requests for a request that
+  // is not there to load (F015).
+  const [error, setError] = useState<{ title: string; body: string; actions: RequestFailureAction[] } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendNote, setSendNoteState] = useState<string | null>(null);
   const [pastHero, setPastHero] = useState(false);
@@ -153,7 +156,7 @@ export default function RequestDetailScreen() {
 
   useEffect(() => {
     if (!id || typeof id !== "string") {
-      setError({ ...stateCopy("route"), body: "This request could not be found." });
+      setError(requestFailureFrame({ status: 404 }));
       setLoading(false);
       return;
     }
@@ -175,7 +178,12 @@ export default function RequestDetailScreen() {
         if (cancelled) return;
         if (!item) {
           // Sent meanwhile (a flush from elsewhere), or removed: the queue no longer holds it.
-          setError({ ...stateCopy("route"), body: "This request is no longer waiting on your phone." });
+          // Asking again cannot bring it back: the way out is Requests, where a request sent meanwhile is listed.
+          setError({
+            ...stateCopy("route"),
+            body: "This request is no longer waiting on your phone.",
+            actions: ["backToRequests"],
+          });
           setLoaded(null);
           setLoading(false);
           return;
@@ -193,7 +201,7 @@ export default function RequestDetailScreen() {
       const result = await fetchRequest(id);
       if (cancelled) return;
       if (!result.ok) {
-        setError(readFailureCopy(result.code, "request"));
+        setError(requestFailureFrame(result));
         setLoaded(null);
         setLoading(false);
         return;
@@ -208,7 +216,7 @@ export default function RequestDetailScreen() {
       setLoading(false);
     })().catch(() => {
       if (!cancelled) {
-        setError(stateCopy("route"));
+        setError({ ...stateCopy("route"), actions: ["retry"] });
         setLoaded(null);
         setLoading(false);
       }
@@ -283,7 +291,8 @@ export default function RequestDetailScreen() {
   }
 
   if (error || !current) {
-    const copy = error ?? stateCopy("route");
+    const copy = error ?? { ...stateCopy("route"), actions: ["retry"] };
+    const retry = copy.actions.includes("retry");
     return (
       <View testID="request.root" style={[styles.root, { paddingTop: insets.top }]}>
         <ScreenStatusBar on="light" />
@@ -296,8 +305,16 @@ export default function RequestDetailScreen() {
             title={copy.title}
             body={copy.body}
             align="center"
-            primary={{ label: "Try again", testID: "request.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
-            secondary={{ label: "Back", testID: "request.error.back", onPress: goBack }}
+            primary={
+              retry
+                ? { label: "Try again", testID: "request.error.retry", onPress: () => setReloadToken((n) => n + 1) }
+                : {
+                    label: "Back to Requests",
+                    testID: "request.error.requests",
+                    onPress: () => router.replace(REQUESTS),
+                  }
+            }
+            secondary={retry ? { label: "Back", testID: "request.error.back", onPress: goBack } : undefined}
           />
         </View>
         <RootTabBar active="requests" />
