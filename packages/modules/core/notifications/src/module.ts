@@ -165,7 +165,10 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
       async (c) => {
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const ok = await devicesRepo.deactivate(conn, actor, c.req.param("deviceId"));
+        const deviceId = c.req.param("deviceId");
+        // An id POST /v1/devices refuses was never stored (U+0000 as %00 in the path answered 500): not found.
+        if (!DeviceBody.shape.deviceId.safeParse(deviceId).success) return c.json(apiError("NOT_FOUND"), 404);
+        const ok = await devicesRepo.deactivate(conn, actor, deviceId);
         if (!ok) return c.json(apiError("NOT_FOUND"), 404);
         return c.json({ ok: true });
       },

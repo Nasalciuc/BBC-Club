@@ -207,12 +207,16 @@ export type NotificationPreferencesBody = z.infer<typeof NotificationPreferences
 
 // -- Devices -----------------------------------------------------------------
 
-/** Bounded well under the 2 704-byte btree row of UNIQUE device_native_token (a 10 000-character token answered 500);
- *  APNs (64 hex) and FCM (~160) tokens fit many times over. */
+/** A push token is printable ASCII, at most 1 024 characters — so at most 1 024 bytes, well under the 2 704-byte btree
+ *  row of UNIQUE device_native_token. A 10 000-character token answered 500, and so did 1 024 characters outside ASCII
+ *  (three bytes each in UTF-8): max() counts UTF-16 units, the index counts bytes. APNs (64 hex) and FCM (~160: letters,
+ *  digits, `_:-`) tokens fit many times over. deviceId (UNIQUE with member_id) stays far under the row at 200. */
+const PUSH_TOKEN = /^[\x21-\x7E]+$/;
+
 export const DeviceBody = z.object({
   deviceId: z.string().min(1).max(200).refine(storable, NOT_STORABLE),
   platform: z.enum(["ios", "android"]),
-  nativeToken: z.string().min(1).max(1024).refine(storable, NOT_STORABLE),
+  nativeToken: z.string().min(1).max(1024).regex(PUSH_TOKEN, NOT_STORABLE),
   expoToken: z.string().max(1024).refine(storable, NOT_STORABLE).optional(),
   appVersion: z.string().max(32).refine(storable, NOT_STORABLE).optional(),
 });

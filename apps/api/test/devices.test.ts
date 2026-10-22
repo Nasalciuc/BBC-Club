@@ -99,6 +99,26 @@ describe("POST /v1/devices", () => {
     await t.close();
   });
 
+  it("a push token is printable ASCII: 1 024 characters outside it overflow the index row (a 500)", async () => {
+    const t = await testApp({ suite: "devices-ascii" });
+    const post = (nativeToken: string) =>
+      t.app.request("/v1/devices", {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: "dev-ascii-" + crypto.randomUUID(), platform: "android", nativeToken }),
+      });
+    // 1 024 random CJK characters: inside max(1024), 3 072 bytes in UTF-8 — over UNIQUE device_native_token's 2 704.
+    const cjk = Array.from({ length: 1024 }, () =>
+      String.fromCharCode(0x4e00 + Math.floor(Math.random() * 20_000)),
+    ).join("");
+    for (const token of [cjk, "tok en", "tok\u00e9"]) {
+      expect([token.slice(0, 8), (await post(token)).status]).toEqual([token.slice(0, 8), 400]);
+    }
+    // FCM's alphabet (letters, digits, `_:-`) still registers.
+    expect((await post("cK3x_9:APA91b-" + "Q".repeat(140) + crypto.randomUUID())).status).toBe(201);
+    await t.close();
+  });
+
   it("401 without session", async () => {
     const t = await testApp({ suite: "devices-unauth" });
     const r = await t.app.request("/v1/devices", {
@@ -135,6 +155,14 @@ describe("DELETE /v1/devices/:deviceId", () => {
       headers: { Cookie: t.memberA.cookie },
     });
     expect(rA.status).toBe(200);
+    await t.close();
+  });
+
+  it("an id POST refuses (U+0000 as %00 in the path) is 404, never 500", async () => {
+    const t = await testApp({ suite: "devices-del-nul" });
+    const r = await t.app.request("/v1/devices/dev%00x", { method: "DELETE", headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(404);
+    expect(((await r.json()) as { error: { code: string } }).error.code).toBe("NOT_FOUND");
     await t.close();
   });
 
