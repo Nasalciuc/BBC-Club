@@ -3,6 +3,7 @@ import {
   UNREACHABLE_MESSAGE,
   classifyFetchFailure,
   deleteFailureKind,
+  errorFrameActions,
   passwordChangedNotice,
   readFailureCopy,
   refreshFailedLine,
@@ -116,6 +117,15 @@ describe("a call that reached no server while the phone is online is not 'offlin
     expect(refreshFailedLine("UNREACHABLE")).toBe("We couldn’t refresh your requests just now.");
     expect(refreshFailedLine("UNREACHABLE", false)).toBe("We couldn’t load your other requests just now.");
   });
+});
+
+test("Profile's failure frame offers Call us beside Try again when the club's number is known (F114)", () => {
+  expect(errorFrameActions("profile", "+1 212 555 0142")).toEqual(["retry", "call"]);
+  expect(errorFrameActions("profile", undefined)).toEqual(["retry"]);
+  // A number too short to dial is no number (telHref).
+  expect(errorFrameActions("profile", "123")).toEqual(["retry"]);
+  // The other pages keep their own frames.
+  expect(errorFrameActions("fare", "+1 212 555 0142")).toEqual(["retry"]);
 });
 
 test("a password change made with the other sessions still alive is a notice; any other failure is not (ADR-IMPL-047)", () => {

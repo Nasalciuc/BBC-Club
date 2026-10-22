@@ -50,7 +50,7 @@ import { airportByCode } from "@/lib/airport-by-code";
 import { homeAirportLabel } from "@/lib/airport-search-state";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
-import { readFailureCopy, stateCopy } from "@/lib/error-context";
+import { errorFrameActions, readFailureCopy, stateCopy } from "@/lib/error-context";
 import { monogram } from "@/lib/monogram";
 import { displayPhone } from "@/lib/phone";
 
@@ -178,7 +178,10 @@ export default function ProfileScreen() {
 
   if (!profile && error) {
     // The settings button stays: Settings keeps Sign out and Delete account, and a profile that keeps failing must not
-    // take them away (ADR-IMPL-047).
+    // take them away (ADR-IMPL-047). `Call us` beside `Try again` when the club's number is known (F114).
+    const callUs = errorFrameActions("profile", env.EXPO_PUBLIC_SUPPORT_PHONE).includes("call")
+      ? telHref(env.EXPO_PUBLIC_SUPPORT_PHONE)
+      : null;
     return (
       <View testID="profile.root" style={styles.root}>
         <ScreenStatusBar on="light" />
@@ -200,6 +203,17 @@ export default function ProfileScreen() {
                 setReloadToken((n) => n + 1);
               },
             }}
+            secondary={
+              callUs
+                ? {
+                    label: "Call us",
+                    testID: "profile.error.call",
+                    onPress: () => {
+                      Linking.openURL(callUs).catch(() => undefined);
+                    },
+                  }
+                : undefined
+            }
           />
         </View>
       </View>

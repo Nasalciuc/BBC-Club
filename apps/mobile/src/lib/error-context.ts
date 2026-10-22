@@ -1,3 +1,5 @@
+import { telHref } from "../features/requests/confirmation-logic";
+
 export type MessageKind =
   "gone" | "notSent" | "route" | "update" | "maintenance" | "generic" | "wrongPassword" | "deleteFailed";
 
@@ -92,6 +94,17 @@ export function readFailureCopy(code: string | undefined, what: ReadSubject): { 
     title: "You’re offline.",
     body: what === "requests" ? "Your requests load when you’re back online." : "Try again when you’re back online.",
   };
+}
+
+/** The pages whose failure frame offers the club's number beside `Try again`: Profile, where `Call us` lives (12). */
+const CALL_ON_FAILURE: ReadonlySet<ReadSubject> = new Set(["profile"]);
+
+/**
+ * What a page's failure frame offers (F114): `Try again`, and on Profile `Call us` too when the club's verified number
+ * is known (EXPO_PUBLIC_SUPPORT_PHONE, `telHref`) — as the app gate's pages offer it.
+ */
+export function errorFrameActions(what: ReadSubject, supportPhone: string | undefined): ("retry" | "call")[] {
+  return CALL_ON_FAILURE.has(what) && telHref(supportPhone) ? ["retry", "call"] : ["retry"];
 }
 
 /** Over a list already on screen, when a reload did not answer: what is shown may be out of date — never "This screen
