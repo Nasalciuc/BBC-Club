@@ -18,6 +18,19 @@ export function nextAfterResetFailure(code: string | undefined): "stay" | "verif
   return code !== undefined && CODE_PROBLEMS.has(code) ? "verify" : "stay";
 }
 
+/** set-password's word to Verify when the reset found the code expired and it asked for a new one, which did not go. */
+export const OTP_EXPIRED_UNSENT = "OTP_EXPIRED_UNSENT";
+
+/**
+ * The `notice` set-password hands Verify after a reset that refused the code. An expired code is replaced by
+ * set-password itself, on the member's Continue (`sent`: whether that send went) — Verify never mails on its own because
+ * of what its params say, since a link can open it with any.
+ */
+export function noticeForVerify(code: string, sent: boolean): string {
+  if (code !== "OTP_EXPIRED") return code;
+  return sent ? "OTP_EXPIRED" : OTP_EXPIRED_UNSENT;
+}
+
 /** Sign in's `notice` param: only one value has words. */
 export function signInNotice(notice: string | undefined): string | null {
   return notice === "reset" ? RESET_DONE_NOTICE : null;

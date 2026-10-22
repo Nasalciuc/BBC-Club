@@ -35,7 +35,8 @@ export default function VerifyCodeScreen() {
   }>();
   const purpose = parseAuthPurpose(purposeParam);
   const inputRef = useRef<TextInput>(null);
-  // Back from set-password, whose reset refused the code: `notice` names why, never the code (verify-code-logic.ts).
+  // Back from set-password, whose reset refused the code: `notice` names why, never the code — words and when Resend
+  // opens, never a send of its own (verify-code-logic.ts afterResetNotice).
   const [noticePlan] = useState(() => afterResetNotice(notice));
   const [code, setCode] = useState("");
   // Resend opens at a wall-clock deadline (verify-code-logic.ts): a timer chain stops while the app is in the background.
@@ -43,9 +44,7 @@ export default function VerifyCodeScreen() {
   const [deadline, setDeadline] = useState(() => (noticePlan?.resendNow ? Date.now() : resendDeadline(Date.now())));
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(() =>
-    noticePlan && !noticePlan.resend ? noticePlan.message : null,
-  );
+  const [error, setError] = useState<string | null>(() => noticePlan?.message ?? null);
   const seconds = secondsLeft(deadline, now);
 
   useEffect(() => {
@@ -86,20 +85,6 @@ export default function VerifyCodeScreen() {
     }
     setError(plan.message ?? fallback);
   }
-
-  // Back from set-password with an expired code: a new one is sent at once, as on Verify itself — once. Resend's 30 s
-  // started with the screen.
-  const noticeSent = useRef(false);
-  useEffect(() => {
-    const normalizedEmail = email?.trim().toLowerCase() ?? "";
-    if (!noticePlan?.resend || !normalizedEmail || noticeSent.current) return;
-    noticeSent.current = true;
-    setBusy(true);
-    void resendCode(normalizedEmail, purpose).then((sent) => {
-      setError(sent.ok ? noticePlan.message : sent.message);
-      setBusy(false);
-    });
-  }, [noticePlan, email, purpose]);
 
   async function onVerify() {
     const otpResult = Otp.safeParse(code);

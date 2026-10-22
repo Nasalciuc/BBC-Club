@@ -4,9 +4,9 @@ import { BackHandler, StyleSheet, Text, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { clearPendingOtp, peekPendingOtp } from "@/features/auth/otp-holder";
-import { resetPassword, setPassword, signOut } from "@/features/auth/flows";
+import { resendCode, resetPassword, setPassword, signOut } from "@/features/auth/flows";
 import { leaveTo } from "@/features/auth/leave";
-import { nextAfterResetFailure } from "@/features/auth/reset-flow-logic";
+import { nextAfterResetFailure, noticeForVerify } from "@/features/auth/reset-flow-logic";
 import { Password } from "@/features/auth/schemas";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { AuthShell } from "@/components/auth-shell";
@@ -83,23 +83,28 @@ export default function SetPasswordScreen() {
       }
       const result = await resetPassword(normalizedEmail, otp, parsed.data);
       if (!result.ok) {
-        setBusy(false);
         const next = nextAfterResetFailure(result.code);
         if (next === "signIn") {
           // The password is set and the code spent; only the sign-in after it did not go through.
+          setBusy(false);
           clearPendingOtp();
           leaveTo(router, { pathname: "/sign-in", params: { notice: "reset" } });
           return;
         }
-        if (next === "verify") {
-          // The code itself no longer works: Verify, with Resend open and why — the code never goes in the params.
+        if (next === "verify" && result.code) {
+          // The code itself no longer works: Verify, with Resend open and why — the code never goes in the params. An
+          // expired one is replaced here, on this Continue ("We'll send you a new one"): Verify never mails because of
+          // its params, which a link can set (reset-flow-logic.ts noticeForVerify).
           clearPendingOtp();
+          const sent = result.code === "OTP_EXPIRED" ? (await resendCode(normalizedEmail, "reset")).ok : false;
+          setBusy(false);
           router.replace({
             pathname: "/verify-code",
-            params: { purpose: "reset", email: normalizedEmail, notice: result.code },
+            params: { purpose: "reset", email: normalizedEmail, notice: noticeForVerify(result.code, sent) },
           });
           return;
         }
+        setBusy(false);
         setError(result.message);
         return;
       }

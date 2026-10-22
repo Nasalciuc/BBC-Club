@@ -1,4 +1,5 @@
 import { authMessage } from "@bbc/shared/auth-messages";
+import { OTP_EXPIRED_UNSENT } from "./reset-flow-logic";
 
 /**
  * Resend waits as long as the server does before it mails again: identity `otp-cooldown.ts` OTP_COOLDOWN_SECONDS (30;
@@ -43,14 +44,21 @@ export function afterVerifyError(code: string | undefined): VerifyErrorPlan {
 
 /** Back from set-password: the code passed Verify's check but the reset refused it (it was replaced, or used up). */
 export const CODE_NO_LONGER_WORKS = "That code no longer works. Ask for a new one below.";
+/** Back from set-password: the code expired and the new one set-password asked for did not go (Resend says why). */
+export const CODE_EXPIRED_ASK = "That code has expired. Ask for a new one below.";
 
 /**
  * Verify opened by set-password after a reset refused the code (reset-flow-logic.ts): the `notice` param names why —
- * a code, never the OTP itself. Each known one is handled as on Verify itself; any other value changes nothing.
+ * a code, never the OTP itself. Words, emptied boxes and when Resend opens; never a send (`resend` is always false):
+ * Verify mails only on the member's own tap. Any other value changes nothing.
  */
 export function afterResetNotice(notice: string | undefined): VerifyErrorPlan | null {
   if (notice === "INVALID_OTP") return { resend: false, resendNow: true, clear: true, message: CODE_NO_LONGER_WORKS };
-  if (notice === "OTP_EXPIRED") return { ...afterVerifyError(notice), message: authMessage("OTP_EXPIRED") };
+  // set-password already asked for the new code (reset-flow-logic.ts noticeForVerify): the shared words are true, and
+  // Resend waits its 30 s from now. Verify itself never sends because of a param — a link can carry any.
+  if (notice === "OTP_EXPIRED")
+    return { resend: false, resendNow: false, clear: true, message: authMessage("OTP_EXPIRED") };
+  if (notice === OTP_EXPIRED_UNSENT) return { resend: false, resendNow: true, clear: true, message: CODE_EXPIRED_ASK };
   if (notice === "TOO_MANY_ATTEMPTS") return afterVerifyError(notice);
   return null;
 }

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { authMessage } from "@bbc/shared/auth-messages";
+import { OTP_EXPIRED_UNSENT } from "./reset-flow-logic";
 import {
   afterResetNotice,
   afterVerifyError,
+  CODE_EXPIRED_ASK,
   CODE_NO_LONGER_WORKS,
   formatResendCountdown,
   RESEND_SECONDS,
@@ -42,13 +44,29 @@ describe("afterResetNotice — back on Verify because set-password's reset refus
     });
   });
 
-  it("an expired code is replaced at once, as on Verify", () => {
+  it("an expired code set-password already replaced: the shared words, Resend waits its 30 s, nothing sent here", () => {
     expect(afterResetNotice("OTP_EXPIRED")).toEqual({
-      resend: true,
+      resend: false,
       resendNow: false,
       clear: true,
       message: authMessage("OTP_EXPIRED"),
     });
+  });
+
+  it("an expired code whose replacement did not go: Resend open at once, which says why when tapped", () => {
+    expect(afterResetNotice(OTP_EXPIRED_UNSENT)).toEqual({
+      resend: false,
+      resendNow: true,
+      clear: true,
+      message: CODE_EXPIRED_ASK,
+    });
+    expect(CODE_EXPIRED_ASK).toBe("That code has expired. Ask for a new one below.");
+  });
+
+  it("no notice makes Verify mail on its own: a link can open it with any params", () => {
+    for (const notice of ["INVALID_OTP", "OTP_EXPIRED", OTP_EXPIRED_UNSENT, "TOO_MANY_ATTEMPTS"]) {
+      expect(afterResetNotice(notice)?.resend).toBe(false);
+    }
   });
 
   it("a code tried too many times opens Resend, as on Verify", () => {
