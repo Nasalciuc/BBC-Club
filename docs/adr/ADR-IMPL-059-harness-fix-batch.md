@@ -65,7 +65,12 @@ or an operator will notice.
    - New facade method `registeredEmail(memberId)`.
 9. **Members create the profile they are asked about.** `MembersFacade.ensureProfile` creates a missing profile on
    first use. `member.linked_to_crm` is published from the stored row, so the event and the row always agree.
-10. **`packages/ui`.**
+10. **An unreadable price-rules row is not a missing one (`module-contract.ts`, catalog).** The flags port gains
+    `readStrict(key)`, platform's `read` without its fallback (ADR-IMPL-058). Catalog reads `catalog.pricing_rules`
+    with it, so a database or Redis failure counts `bbc_*_estimates_unavailable{reason="error"}` and logs
+    `pricing rules unreadable`. Before, it counted `missing`, and the runbook's answer to `missing` is to load the
+    rules again.
+11. **`packages/ui`.**
     - New subpath `./flight-facts`, pure, so app logic can be tested under bun without React Native.
     - `MIN_TARGET` / `hitSlopFor` / `buttonHitSlop`: a Button reaches 44 pt by default. All new props are optional.
 
@@ -92,6 +97,11 @@ or an operator will notice.
 
 **Left to the owner (not decided here).**
 
+- Estimates for more countries. Almaty shows no price because Kazakhstan is one of the countries the formula refuses
+  until one route there is checked against the company's site (ADR-IMPL-037: AM, AZ, CY, GE, GL, KZ, RU). The app
+  cannot tell a member why a city has no estimate. It infers "outside North America" from three country codes (US,
+  CA, MX), while the formula's North America also takes Puerto Rico, the Caribbean and Central America. A reason sent
+  with the search (`noEstimate`) and its copy are a contract and copy decision.
 - Offers to regions with no Home section (Oceania, Africa, South America, the Caribbean) appear only among the six
   newest. A new section is a product and design decision.
 - Home shows broadcast offers that leave from another city without saying so (ADR-IMPL-057 "Not in this ADR").
@@ -104,5 +114,5 @@ or an operator will notice.
 - Store listing URLs for the forced-update page; the Mapbox token on the preview build; `@rnmapbox/maps` 10.3.8
   (a native build).
 
-**Not in this ADR.** `/api/auth/*` has no body limit of its own (Bun's default applies). Test bodies hard-code
-2027-10-12/19 and will fail after that date until they are made relative to today.
+**Not in this ADR.** `/api/auth/*` has no body limit of its own (Bun's default applies). The tests that submit a
+request send days relative to today (the month after next), since the server refuses a day already over.

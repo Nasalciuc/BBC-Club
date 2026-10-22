@@ -160,9 +160,10 @@ stops Explore but not the estimate a queued request may still ask for.
 Which rules are live: `SELECT value->>'fingerprint', value->>'loadedAt' FROM platform.flags WHERE key = 'catalog.pricing_rules';`.
 `bbc_search_estimates_unavailable{reason}`, `bbc_request_estimates_unavailable{reason}` and (with `catalog.site_pins` on,
 ADR-IMPL-045) `bbc_home_estimates_unavailable{reason}` rising while estimates are on:
-`missing` — load the rules; `invalid` — they were edited by hand, load them again; for requests also `error` (the catalog
-read failed: look for `request estimate unavailable` in the API log), `timeout` (it took over a second) — those quotes
-went through without the estimate. `bbc_request_estimates_stored{cabin}` counts the estimates that reached a request.
+`missing` — load the rules; `invalid` — they were edited by hand, load them again; `error` — the rules row could not be
+read (the database or Redis, not the rules: look for `pricing rules unreadable` in the API log, and do not reload them);
+for requests `error` also counts a failed catalog read (`request estimate unavailable` in the API log), and `timeout` one
+that took over a second — those quotes went through without the estimate. `bbc_request_estimates_stored{cabin}` counts the estimates that reached a request.
 Never edit that row by hand; never paste the file into a chat, an issue or a log.
 
 ## A request that was never sent (ADR-IMPL-042)

@@ -66,9 +66,9 @@ export type RulesLookup =
 const checked = new WeakMap<object, RulesLookup>();
 
 /**
- * The rules a search may use, from the flag row's value. "missing": no row (or an unreadable one — the flag read never
- * throws). "invalid": the shape is wrong, or the fingerprint is not the rules' own — the row was edited by hand instead
- * of through the loader. Either way the search shows no estimate; it never fails.
+ * The rules a search may use, from the flag row's value. "missing": no row (a row that could not be read is the
+ * caller's `error`, estimate-rules.ts). "invalid": the shape is wrong, or the fingerprint is not the rules' own — the
+ * row was edited by hand instead of through the loader. Either way the search shows no estimate; it never fails.
  */
 export function readStoredRules(value: unknown): RulesLookup {
   if (value === null || value === undefined) return { ok: false, reason: "missing" };

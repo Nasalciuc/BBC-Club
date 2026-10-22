@@ -5,16 +5,9 @@ import { loadProfile } from "@/features/profile/profile-store";
 import { airportByCode } from "@/lib/airport-by-code";
 import { fetchHome, fetchProfile } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
+import { DEFAULT_ORIGIN } from "./default-origin";
 
-/** Where a search starts when neither Home nor the profile names the member's airport. */
-export const DEFAULT_ORIGIN: AirportVM = {
-  code: "JFK",
-  city: "New York",
-  name: "John F Kennedy International",
-  countryCode: "US",
-  lat: 40.6413,
-  lng: -73.7781,
-};
+export { DEFAULT_ORIGIN };
 
 /** A destination pin as the airport the search starts from. */
 function airportOf(pin: HomeVM["destinations"][number]): AirportVM {

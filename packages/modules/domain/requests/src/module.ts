@@ -78,8 +78,9 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       askEstimate(() => ports.catalog.indicativeFor(undefined, q), {
         unavailable: (reason, err) => {
           platform.metrics.inc("request_estimates_unavailable", { reason });
+          // errorForLog (AGENTS.md rule 6): a failed query's message holds its parameters.
           platform.logger.warn(
-            { reason, err: err instanceof Error ? err.message : err === undefined ? undefined : String(err) },
+            { reason, err: err === undefined ? undefined : errorForLog(err) },
             "request estimate unavailable",
           );
         },
@@ -92,7 +93,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         unavailable: (reason, err) => {
           platform.metrics.inc("request_published_unavailable", { reason });
           platform.logger.warn(
-            { reason, err: err instanceof Error ? err.message : err === undefined ? undefined : String(err) },
+            { reason, err: err === undefined ? undefined : errorForLog(err) },
             "request published fare unavailable",
           );
         },

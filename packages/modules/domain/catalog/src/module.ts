@@ -24,7 +24,7 @@ import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } fr
 import type { Fetch } from "./application/place-photo-sources";
 import { syncSite } from "./application/site-sync";
 import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
-import { readStoredRules } from "./pricing/rules";
+import { estimateRules as readEstimateRules } from "./pricing/estimate-rules";
 import type { CatalogFacade, DestinationPin } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
@@ -67,18 +67,7 @@ export const catalogModule = (
       await platform.cache.bump("catalog:dest:gen");
       await platform.cache.bump("catalog:airports:gen");
     };
-    /** One rule for the search and for the quote request that follows it (ADR-IMPL-037, ADR-IMPL-042): the company's
-     *  formula, when estimates are on and this environment holds valid rules. Both flag rows are cached (~35 s to reach
-     *  every replica) and a failed read counts as off; without valid rules there is no estimate, never an error. */
-    async function estimateRules(metric: "search" | "request" | "home") {
-      if (!(await platform.flags.isEnabled("catalog.estimates", false))) return null;
-      const stored = readStoredRules(await platform.flags.read("catalog.pricing_rules"));
-      if (!stored.ok) {
-        platform.metrics.inc(`${metric}_estimates_unavailable`, { reason: stored.reason });
-        return null;
-      }
-      return stored;
-    }
+    const estimateRules = (metric: "search" | "request" | "home") => readEstimateRules(platform, metric);
 
     async function indicativeEstimate(
       from: Parameters<typeof toEstimateVM>[1],
