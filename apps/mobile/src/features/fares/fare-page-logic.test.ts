@@ -11,6 +11,7 @@ import {
   closedFareLines,
   comparisonLine,
   departDayLabel,
+  errorFrameActions,
   factsLine,
   fareDates,
   longDay,
@@ -112,6 +113,18 @@ describe("a closed fare (Figma 135:848)", () => {
   it("names no day the calendar does not have", () => {
     expect(closedFareLines({ from: "JFK", to: "LHR", departDate: "2026-02-30" }).day).toBe("ONE WAY");
     expect(closedFareLines({ from: "JFK", to: "LHR", departDate: "2028-02-29" }).day).toBe("FEB 29 · ONE WAY");
+  });
+});
+
+describe("the fare page's error frame (F114)", () => {
+  it("a fare that does not exist offers the way back — asking again cannot bring it", () => {
+    expect(errorFrameActions({ status: 404 })).toEqual(["back"]);
+  });
+
+  it("anything else may pass: Try again", () => {
+    expect(errorFrameActions({ status: 500 })).toEqual(["retry"]);
+    expect(errorFrameActions({ status: 0 })).toEqual(["retry"]);
+    expect(errorFrameActions({})).toEqual(["retry"]);
   });
 });
 

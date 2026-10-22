@@ -1,6 +1,6 @@
 import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { type ForwardedRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Linking, ScrollView, Share, StyleSheet, Text, type TextStyle, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,6 +37,7 @@ import {
   aboutFareLines,
   aboutFareNote,
   comparisonLine,
+  errorFrameActions,
   fareDates,
   fareSearchFromParams,
   savings as savingsOf,
@@ -107,8 +108,8 @@ export default function FareDetailScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [gone, setGone] = useState<FareGoneContext | true | null>(null);
-  // `retry: false` — a fare that does not exist: asking again cannot bring it, so the page offers no `Try again`.
-  const [error, setError] = useState<{ title: string; body: string; retry?: false } | null>(null);
+  // `status: 404` — a fare that does not exist: asking again cannot bring it, so the page offers the way back instead.
+  const [error, setError] = useState<{ title: string; body: string; status?: number } | null>(null);
   // `Try again` loads the fare again, here — it never leaves the page (ADR-IMPL-047).
   const [reloadToken, setReloadToken] = useState(0);
   // The photograph carries the status bar until the page scrolls it away; the page under it then needs dark glyphs.
@@ -125,7 +126,7 @@ export default function FareDetailScreen() {
 
   useEffect(() => {
     if (!id) {
-      setError({ title: stateCopy("route").title, body: GONE_TITLE, retry: false });
+      setError({ title: stateCopy("route").title, body: GONE_TITLE, status: 404 });
       setLoading(false);
       return;
     }
@@ -138,8 +139,8 @@ export default function FareDetailScreen() {
         if (fareResult.status === 410) {
           setGone(fareResult.gone ?? true);
         } else if (fareResult.status === 404) {
-          // An unknown id (a link): the same words as no id at all, and no `Try again` (ADR-IMPL-047).
-          setError({ title: stateCopy("route").title, body: GONE_TITLE, retry: false });
+          // An unknown id (a link): the same words as no id at all, and the way back, not `Try again` (ADR-IMPL-047).
+          setError({ title: stateCopy("route").title, body: GONE_TITLE, status: 404 });
         } else {
           setError(readFailureCopy(fareResult.code, "fare"));
         }
@@ -347,8 +348,15 @@ export default function FareDetailScreen() {
             title={copy.title}
             body={copy.body}
             primary={
-              error?.retry === false
-                ? undefined
+              errorFrameActions({ status: error?.status }).includes("back")
+                ? {
+                    label: "Back to Explore",
+                    testID: "fare.notFound.back",
+                    onPress: () => {
+                      if (router.canGoBack()) router.back();
+                      else router.replace("/(tabs)/explore" as Href);
+                    },
+                  }
                 : { label: "Try again", testID: "fare.error.retry", onPress: () => setReloadToken((n) => n + 1) }
             }
           />

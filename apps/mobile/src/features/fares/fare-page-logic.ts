@@ -206,6 +206,14 @@ export function fareDates(
   return { depart, return: fare.trip === "round_trip" && searched && searched > depart ? searched : null };
 }
 
+/**
+ * What the fare page's error frame offers (ADR-IMPL-047): a fare that does not exist (404, or a link without an id)
+ * cannot come back by asking again — the way back to Explore instead (F114); anything else may pass — `Try again`.
+ */
+export function errorFrameActions(error: { status?: number }): ("back" | "retry")[] {
+  return error.status === 404 ? ["back"] : ["retry"];
+}
+
 /** The search a fare's page was opened from (05), read from its route's words; null without days and travelers. */
 export function fareSearchFromParams(params: Record<string, string | string[] | undefined>): {
   depart: string | null;
