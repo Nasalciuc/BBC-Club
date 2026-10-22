@@ -439,12 +439,14 @@ test("a quote push waiting to go is never sent once the request is closed or boo
     const requestId = crypto.randomUUID();
     await insertToken(memberId, `tok-quote-${requestId}`);
     await statusChanged(requestId, memberId, "received", "quoted");
-    const [queued] = rowList(
+    await statusChanged(requestId, memberId, "received", "quoted"); // re-delivered: still one row
+    const [queued, again] = rowList(
       await iso.db.execute(
         sql`SELECT id, status FROM notifications.notifications WHERE request_id = ${requestId}::uuid`,
       ),
     ) as { id: string; status: string }[];
     expect(queued?.status).toBe("pending");
+    expect(again).toBeUndefined();
 
     // Before the next tick, the operator closes it (or the member booked on the call).
     await statusChanged(requestId, memberId, "quoted", to);

@@ -29,12 +29,20 @@ export async function onRequestStatusChanged(
   if (evt.to !== "quoted" || !evt.memberId) return;
   const body = `${evt.route ?? "Your trip"} — tap to call your specialist`;
   const deepLink = `bbcclub://requests/${evt.requestId}`;
-  await deps.tx.execute(sql`
-    INSERT INTO notifications.notifications
-      (member_id, category, title, body, deep_link, request_id, source_event_id, status, scheduled_for)
-    VALUES
-      (${evt.memberId}, 'transactional', 'Your quote is ready', ${body}, ${deepLink},
-       ${evt.requestId}::uuid, ${deps.sourceEventId}, 'pending', now())
-    ON CONFLICT (member_id, request_id, category) WHERE request_id IS NOT NULL
-    DO NOTHING`);
+  const n = notificationsTable;
+  // The partial unique index notif_member_request_cat: ON CONFLICT names its columns and its WHERE.
+  await deps.tx
+    .insert(n)
+    .values({
+      memberId: evt.memberId,
+      category: "transactional",
+      title: "Your quote is ready",
+      body,
+      deepLink,
+      requestId: evt.requestId,
+      sourceEventId: deps.sourceEventId,
+      status: "pending",
+      scheduledFor: sql`now()`,
+    })
+    .onConflictDoNothing({ target: [n.memberId, n.requestId, n.category], where: sql`${n.requestId} IS NOT NULL` });
 }
