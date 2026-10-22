@@ -34,7 +34,7 @@ import { RECEIVED_TRIP_FRAME, clubPhoto, clubReceivedPhoto } from "@/features/pl
 import { bandPicture, cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { confirmationKind, otherFares, tripFacts, type RequestSource } from "@/features/requests/confirmation-logic";
-import { fetchProfile } from "@/lib/api";
+import { useProfile } from "@/features/profile/useProfile";
 import { env } from "@/lib/env";
 import { displayPhone } from "@/lib/phone";
 import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
@@ -145,27 +145,17 @@ export default function RequestConfirmedScreen() {
   const kind = confirmationKind(source, params.queued === "1");
   // The number this request will be called on, as the sheet sent it; the profile's only when the sheet passed none.
   const requestPhone = text(params.phone) || null;
-  const [profilePhone, setProfilePhone] = useState<string | null>(null);
-  const phone = requestPhone ?? profilePhone;
+  // The profile from the one store every screen shares (F104) — asked only when the sheet passed no number. Saved on
+  // the phone (offline): this screen names no number, and there is no network to ask.
+  const profile = useProfile({ load: !requestPhone && kind !== "saved" });
+  const phone = requestPhone ?? (kind === "saved" ? null : displayPhone(profile?.phone ?? null));
   const from = text(params.from);
   const to = text(params.to);
   const city = text(params.city);
-  const { home } = useExploreHome();
+  // Home's offers for `Other great fares` — no origin to resolve here.
+  const { home } = useExploreHome({ origin: false });
   const others = otherFares(home, to);
   const photoFor = usePlacePhotos(kind === "saved" ? [] : [to]);
-
-  useEffect(() => {
-    // Saved on the phone (offline): this screen names no number, and there is no network to ask.
-    if (requestPhone || kind === "saved") return;
-    let cancelled = false;
-    void (async () => {
-      const profile = await fetchProfile();
-      if (!cancelled && profile.ok) setProfilePhone(displayPhone(profile.data.phone));
-    })().catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [requestPhone, kind]);
 
   useEffect(() => {
     let cancelled = false;

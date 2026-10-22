@@ -143,7 +143,8 @@ export default function SearchScreen() {
   function choose(airport: AirportVM, dates: RecentDates | null = null) {
     Keyboard.dismiss();
     rememberSearch(airport, dates);
-    router.replace(destinationHref(airport, dates));
+    // The origin rides along: the destination page never loads all of Home to learn it (F104).
+    router.replace(destinationHref(airport, dates, from));
   }
 
   return (

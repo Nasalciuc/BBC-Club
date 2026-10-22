@@ -41,7 +41,7 @@ import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
-import { fetchProfile, type Profile } from "@/lib/api";
+import { useProfile } from "@/features/profile/useProfile";
 import { monogram } from "@/lib/monogram";
 
 /** The sheet's stops: at rest (02), a chosen route (13), every offer (16). */
@@ -77,18 +77,13 @@ export default function ExploreScreen() {
   // opens raised, one already open beneath raises its sheet.
   const { offers: offersParam } = useLocalSearchParams<{ offers?: string }>();
   const [sheetIndex, setSheetIndex] = useState<number>(() => (offersParam === "all" ? STOP.all : STOP.rest));
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // The one profile every screen shares (F104), asked again each time Explore comes into view: the name, the portrait
+  // and the usual cabin may have changed on Profile.
+  const profile = useProfile();
   const { offline, refresh } = useOffline();
   const { home, homeLoading, homeError, defaultFrom, retryHome } = useExploreHome();
   const { state, dispatch, retry } = useSearch({ defaultFrom });
   const { pins, homeCoord, pinToAirport } = useDestinations(home, state.to);
-
-  useEffect(() => {
-    void (async () => {
-      const result = await fetchProfile();
-      if (result.ok) setProfile(result.data);
-    })();
-  }, []);
 
   // The member's usual cabin and travelers (Profile → Edit profile) are where a search starts, until a chip is touched.
   const usualCabin = profile?.preferences.cabin;

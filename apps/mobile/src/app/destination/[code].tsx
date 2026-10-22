@@ -2,7 +2,7 @@ import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Linking, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { FareVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
 import { Button, Photo, PhotoCredit, StateMessage, tokens } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
@@ -19,7 +19,7 @@ import {
   SearchTravelersSheet,
   type TravelersSheetHandle,
 } from "@/features/explore/SearchPreferenceSheets";
-import { useExploreHome } from "@/features/explore/useExploreHome";
+import { DEFAULT_ORIGIN, profileOrigin } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { clubPhoto } from "@/features/places/club-photos";
 import { bandPicture } from "@/features/places/place-photo-logic";
@@ -27,7 +27,7 @@ import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhoto
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
-import { fetchProfile, type Profile } from "@/lib/api";
+import { useProfile } from "@/features/profile/useProfile";
 import { env } from "@/lib/env";
 import { statusBarOn } from "@/lib/status-bar-logic";
 
@@ -58,18 +58,28 @@ export default function DestinationScreen() {
   const datesRef = useRef<DatesPageHandle>(null);
   const cabinRef = useRef<CabinSheetHandle>(null);
   const travelersRef = useRef<TravelersSheetHandle>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // The one profile every screen shares (F104): read, or asked once.
+  const profile = useProfile();
   const { offline, refresh } = useOffline();
-  const { defaultFrom } = useExploreHome();
-  const { state, dispatch, retry } = useSearch({ defaultFrom });
-  const photoFor = usePlacePhotos([chosen?.airport.code]);
-
+  // The search's origin comes with the page (Search passes it); without it (a link, an older list) the profile's
+  // airport — never all of Home just to learn it (F104).
+  const given = chosen?.origin ?? null;
+  const [found, setFound] = useState<AirportVM | null>(null);
   useEffect(() => {
+    if (given) return;
+    let cancelled = false;
     void (async () => {
-      const result = await fetchProfile();
-      if (result.ok) setProfile(result.data);
-    })();
-  }, []);
+      const airport = await profileOrigin();
+      if (!cancelled) setFound(airport);
+    })().catch(() => {
+      if (!cancelled) setFound(DEFAULT_ORIGIN);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [given?.code]);
+  const { state, dispatch, retry } = useSearch({ defaultFrom: given ?? found });
+  const photoFor = usePlacePhotos([chosen?.airport.code]);
 
   // The member's usual cabin and travelers first, then the destination with the dates it was last searched for.
   const usualCabin = profile?.preferences.cabin;

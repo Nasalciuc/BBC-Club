@@ -48,12 +48,13 @@ import { knownCarrier } from "@/features/fares/known-carrier";
 import { offerFare } from "@/features/fares/offer-page-logic";
 import { routeFareFor } from "@/features/fares/route-fare";
 import { useFareWeather } from "@/features/fares/weather";
+import { useProfile } from "@/features/profile/useProfile";
 import { CABIN_PHOTOS, clubPhoto } from "@/features/places/club-photos";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
 import { airportByCode } from "@/lib/airport-by-code";
-import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
+import { fetchFare, fetchProposal, type FareGoneContext } from "@/lib/api";
 import { env } from "@/lib/env";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { savingPercent } from "@/lib/saving";
@@ -115,7 +116,8 @@ export default function FareDetailScreen() {
   const [offer, setOffer] = useState<ProposalDetailVM | null>(null);
   // An offer's page: a catalogue fare on its route, for the flight facts the offer does not state — never its price.
   const [routeFare, setRouteFare] = useState<FareVM | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // The one profile every screen shares (F104): read, or asked once.
+  const profile = useProfile();
   const [loading, setLoading] = useState(true);
   const [gone, setGone] = useState<FareGoneContext | true | null>(null);
   // `status: 404` — a fare that does not exist: asking again cannot bring it, so the page offers the way back instead.
@@ -150,8 +152,7 @@ export default function FareDetailScreen() {
     setError(null);
     if (offerMode) {
       void (async () => {
-        const [offerResult, profileResult] = await Promise.all([fetchProposal(id), fetchProfile()]);
-        if (profileResult.ok) setProfile(profileResult.data);
+        const offerResult = await fetchProposal(id);
         if (!offerResult.ok) {
           // An offer that has closed (410) or is not there for this member (404): the closed frame, with an
           // alternative on the same route.
@@ -167,8 +168,7 @@ export default function FareDetailScreen() {
       return;
     }
     void (async () => {
-      const [fareResult, profileResult] = await Promise.all([fetchFare(id), fetchProfile()]);
-      if (profileResult.ok) setProfile(profileResult.data);
+      const fareResult = await fetchFare(id);
       if (!fareResult.ok) {
         if (fareResult.status === 410) {
           setGone(fareResult.gone ?? true);

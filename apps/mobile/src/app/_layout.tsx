@@ -28,6 +28,7 @@ import { signOut } from "@/features/auth/flows";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
 import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { isOffline } from "@/features/explore/offline-logic";
+import { resetProfile } from "@/features/profile/profile-store";
 import { submitRequest } from "@/lib/api";
 import { linkCanOpen, linkFromNotification } from "@/lib/deeplink-logic";
 import { routeFromDeepLink } from "@/lib/deeplinks";
@@ -89,6 +90,17 @@ export default function RootLayout() {
     Geist: Geist_400Regular,
     "Geist Mono": GeistMono_400Regular,
   });
+
+  // Another member signed in (after a sign-out or a deleted account) empties the one profile every screen shares
+  // (F104): a member never sees the name or the phone of the member signed in before. A session that reads null for a
+  // moment (a 429 on get-session) is no change of member.
+  const sessionUserId = session?.user?.id ?? null;
+  const lastMember = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessionUserId) return;
+    if (lastMember.current !== null && lastMember.current !== sessionUserId) resetProfile();
+    lastMember.current = sessionUserId;
+  }, [sessionUserId]);
 
   // Hide splash on first paint — never wait for get-session (Better Auth has no client timeout).
   useEffect(() => {
