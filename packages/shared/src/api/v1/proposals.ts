@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isMemberPhone } from "../../phone";
+import { isIanaZone } from "../../time-zone";
 import { Passengers } from "./requests";
 
 // -- Price -------------------------------------------------------------------
@@ -105,7 +106,8 @@ export const ProfilePatchBody = z
   .object({
     displayName: z.string().min(1).max(120).optional(),
     homeAirport: z.string().length(3).optional(),
-    timezone: z.string().min(1).max(80).optional(),
+    // Read by Intl for quiet hours: a zone it cannot read stopped every broadcast campaign (ADR-IMPL-058).
+    timezone: z.string().min(1).max(80).refine(isIanaZone, { message: "Choose a time zone from the list." }).optional(),
     // Same E.164 rule as requests contact.phone — client sends E.164; refuse bare digit junk.
     phone: z
       .string()

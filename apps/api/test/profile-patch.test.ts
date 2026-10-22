@@ -47,6 +47,34 @@ describe("PATCH /v1/profile", () => {
     await t.close();
   });
 
+  it("takes a time zone the clocks can read, never any string (one bad zone stopped every campaign)", async () => {
+    const t = await testApp({ suite: "profile-tz" });
+    const patch = (timezone: string) =>
+      t.app.request("/v1/profile", {
+        method: "PATCH",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ timezone }),
+      });
+    const bad = await patch("Not/AZone");
+    expect(bad.status).toBe(400);
+    const body = (await bad.json()) as { error: { code: string; details: { path: string; message: string }[] } };
+    expect(body.error.code).toBe("VALIDATION");
+    expect(body.error.details).toContainEqual({ path: "timezone", message: "Choose a time zone from the list." });
+    const stored = async () =>
+      (
+        (await t.db.execute(sql`SELECT timezone FROM members.profile WHERE member_id = ${t.memberA.id}`)) as {
+          timezone: string;
+        }[]
+      )[0]?.timezone;
+    expect(await stored()).not.toBe("Not/AZone");
+
+    expect((await patch("Asia/Tokyo")).status).toBe(200);
+    expect(await stored()).toBe("Asia/Tokyo");
+    expect((await patch("UTC")).status).toBe(200);
+    expect(await stored()).toBe("UTC");
+    await t.close();
+  });
+
   it("401 without session", async () => {
     const t = await testApp({ suite: "profile-unauth" });
     const r = await t.app.request("/v1/profile", {
