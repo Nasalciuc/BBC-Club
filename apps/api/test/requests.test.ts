@@ -134,6 +134,170 @@ describe("POST /v1/requests", () => {
   });
 });
 
+describe("POST /v1/requests — only a trip that can be flown, and the fare or offer it names", () => {
+  /** A UTC calendar day `n` days from today. */
+  const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+  const P = (adult = 1, child = 0, infant = 0) => ({ adult, child, infant });
+  type Problem = { status: number; paths: string[]; message?: string };
+  async function problem(t: Awaited<ReturnType<typeof testApp>>, over: Record<string, unknown>): Promise<Problem> {
+    const r = await t.submitRequestAs(t.memberA, t.sampleRequestBody({ priceAtRequest: undefined, ...over }));
+    const body = (await r.json()) as { error?: { code: string; message: string; details?: { path: string }[] } };
+    if (r.status !== 400) return { status: r.status, paths: [] };
+    expect(body.error?.code).toBe("VALIDATION");
+    return { status: 400, paths: (body.error?.details ?? []).map((d) => d.path), message: body.error?.message };
+  }
+
+  it("refuses trips that cannot be flown, naming the field", async () => {
+    const t = await testApp({ suite: "requests-impossible" });
+    const oneway = (legs: unknown[], extra: Record<string, unknown> = {}) => ({ tripType: "oneway", legs, ...extra });
+    const cases: [string, Record<string, unknown>, string][] = [
+      ["an outbound in 2020", oneway([{ from: "JFK", to: "LHR", date: "2020-01-01" }]), "legs.0.date"],
+      ["an outbound over everywhere", oneway([{ from: "JFK", to: "LHR", date: day(-2) }]), "legs.0.date"],
+      [
+        "a return before the outbound",
+        {
+          tripType: "round",
+          legs: [
+            { from: "JFK", to: "LHR", date: day(50) },
+            { from: "LHR", to: "JFK", date: day(43) },
+          ],
+        },
+        "legs.1.date",
+      ],
+      ["a round trip with one leg", { tripType: "round", legs: [{ from: "JFK", to: "LHR", date: day(40) }] }, "legs"],
+      [
+        "a round trip that does not come back",
+        {
+          tripType: "round",
+          legs: [
+            { from: "JFK", to: "LHR", date: day(40) },
+            { from: "LHR", to: "CDG", date: day(47) },
+          ],
+        },
+        "legs.1",
+      ],
+      [
+        "a one-way trip with two legs",
+        oneway([
+          { from: "JFK", to: "LHR", date: day(40) },
+          { from: "LHR", to: "JFK", date: day(47) },
+        ]),
+        "legs",
+      ],
+      [
+        "a multi-city trip with one leg",
+        { tripType: "multi", legs: [{ from: "JFK", to: "LHR", date: day(40) }] },
+        "legs",
+      ],
+      ["JFK → JFK", oneway([{ from: "JFK", to: "JFK", date: day(40) }]), "legs.0.to"],
+      [
+        "one adult with four infants",
+        oneway([{ from: "JFK", to: "LHR", date: day(40) }], { passengers: P(1, 0, 4) }),
+        "passengers.infant",
+      ],
+      [
+        "a NUL in the name",
+        oneway([{ from: "JFK", to: "LHR", date: day(40) }], {
+          contact: { name: "Alex\u0000Morgan", phone: "+12125550148", email: "alex@test.dev" },
+        }),
+        "contact.name",
+      ],
+      ["a NUL in the note", oneway([{ from: "JFK", to: "LHR", date: day(40) }], { note: "Window\u0000seat" }), "note"],
+    ];
+    for (const [label, over, path] of cases) {
+      const p = await problem(t, over);
+      expect([label, p.status, p.paths.includes(path)]).toEqual([label, 400, true]);
+    }
+    const [{ n }]: any = await t.db.execute(sql`SELECT count(*)::int n FROM requests.requests`);
+    expect(n).toBe(0);
+
+    // What can be flown goes through: today, a one-way trip, a round trip, two adults with two infants.
+    expect((await problem(t, oneway([{ from: "JFK", to: "LHR", date: day(0) }]))).status).toBe(201);
+    expect(
+      (
+        await problem(t, {
+          tripType: "round",
+          legs: [
+            { from: "JFK", to: "LHR", date: day(30) },
+            { from: "LHR", to: "JFK", date: day(30) },
+          ],
+          passengers: P(2, 0, 2),
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await problem(t, {
+          tripType: "multi",
+          legs: [
+            { from: "JFK", to: "LHR", date: day(30) },
+            { from: "LHR", to: "CDG", date: day(33) },
+            { from: "CDG", to: "JFK", date: day(40) },
+          ],
+        })
+      ).status,
+    ).toBe(201);
+    await t.close();
+  });
+
+  it("a fare request is for the fare's own trip; an unknown fare is refused, a closed one is not", async () => {
+    const t = await testApp({ suite: "requests-fare-match" });
+    await t.seedCatalogBasics();
+    const [ba]: any = await t.db.execute(
+      sql`SELECT id FROM catalog.fares WHERE carrier = 'BA' AND route_from = 'JFK' AND route_to = 'LHR'`,
+    );
+    const closed = await t.seedExpiredFare();
+    const oneway = (fareId: string, from: string, to: string, cabin = "business") => ({
+      fareId,
+      tripType: "oneway",
+      cabin,
+      legs: [{ from, to, date: day(30) }],
+      priceAtRequest: 4200,
+    });
+
+    const unknown = await problem(t, oneway(crypto.randomUUID(), "JFK", "LHR"));
+    expect(unknown).toMatchObject({ status: 400, message: "This fare is no longer available." });
+    expect(unknown.paths).toContain("fareId");
+    const elsewhere = await problem(t, oneway(ba.id, "KEF", "MAD", "first"));
+    expect(elsewhere.status).toBe(400);
+    expect(elsewhere.paths).toContain("legs.0");
+    const otherCabin = await problem(t, oneway(ba.id, "JFK", "LHR", "first"));
+    expect(otherCabin.status).toBe(400);
+    expect(otherCabin.paths).toContain("cabin");
+    const [{ n }]: any = await t.db.execute(sql`SELECT count(*)::int n FROM requests.requests`);
+    expect(n).toBe(0);
+
+    expect((await problem(t, oneway(ba.id, "JFK", "LHR"))).status).toBe(201);
+    // A fare that closed since the member asked (an offline-queued request) is still taken.
+    expect((await problem(t, { ...oneway(closed, "JFK", "LHR"), priceAtRequest: 5000 })).status).toBe(201);
+    await t.close();
+  });
+
+  it("an offer request names an offer the member could see; a withdrawn one still goes", async () => {
+    const t = await testApp({ suite: "requests-offer-match" });
+    const trip = { tripType: "oneway", legs: [{ from: "JFK", to: "LHR", date: day(30) }] };
+    const unknown = await problem(t, { ...trip, offerId: crypto.randomUUID() });
+    expect(unknown).toMatchObject({ status: 400, message: "This offer is no longer available." });
+    expect(unknown.paths).toContain("offerId");
+    const bobs = await t.seedTargetedOffer(t.memberB.id);
+    const notMine = await problem(t, { ...trip, offerId: bobs });
+    expect(notMine.status).toBe(400);
+    expect(notMine.paths).toContain("offerId");
+
+    const mine = await t.seedTargetedOffer(t.memberA.id);
+    expect((await problem(t, { ...trip, offerId: mine })).status).toBe(201);
+    const broadcast = await t.seedBroadcastOffer();
+    const withdrawn = await t.app.request(`/v1/internal/offers/${broadcast}/withdraw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+      body: JSON.stringify({ reason: "sold out" }),
+    });
+    expect(withdrawn.status).toBe(200);
+    expect((await problem(t, { ...trip, offerId: broadcast })).status).toBe(201);
+    await t.close();
+  });
+});
+
 describe("GET /v1/requests", () => {
   it("lists only the caller's requests", async () => {
     const t = await testApp({ suite: "requests-list" });

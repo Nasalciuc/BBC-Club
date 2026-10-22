@@ -17,11 +17,13 @@ import { toRequestVM } from "./application/to-request-vm";
 import { destinationCities, routeEnds } from "./application/route";
 import { askEstimate } from "./application/estimate";
 import { askFare } from "./application/published";
+import { askOffer } from "./application/offer";
 import { createSendRequestsJob } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
 import type { CrmFacade } from "@bbc/crm";
 import type { CatalogFacade } from "@bbc/catalog";
+import type { ProposalsFacade } from "@bbc/proposals";
 
 const RequestId = z.string().uuid();
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,200}$/;
@@ -30,12 +32,14 @@ type Ports = {
   crm: CrmFacade;
   /** The estimate a quote's search showed (ADR-IMPL-042) — a question, asked through the catalog's facade. */
   catalog: CatalogFacade;
+  /** Whether the offer a request names is one the member could see (same layer). */
+  proposals: ProposalsFacade;
 };
 
 export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
   name: "requests",
   layer: "domain",
-  needs: ["crm", "catalog"],
+  needs: ["crm", "catalog", "proposals"],
   init: ({ db, platform, ports, env }) => {
     const conn = db as unknown as Executor;
     const repo = createRequestsRepo(conn);
@@ -92,6 +96,25 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           );
         },
       });
+    // Whether the member could have seen the offer a request names: two reads by key from proposals, never fatal — a
+    // failed or slow read checks nothing (counted and logged), and the request goes through.
+    const offer = (offerId: string, memberId: string | null) =>
+      askOffer(
+        {
+          visible: () => (memberId ? ports.proposals.getVisible(undefined, memberId, offerId) : Promise.resolve(null)),
+          any: () => ports.proposals.getAny(undefined, offerId),
+          memberId,
+        },
+        {
+          unavailable: (reason, err) => {
+            platform.metrics.inc("request_offer_unavailable", { reason });
+            platform.logger.warn(
+              { reason, err: err === undefined ? undefined : errorForLog(err) },
+              "request offer unavailable",
+            );
+          },
+        },
+      );
     // One line to the ops channel (OPS_WEBHOOK, as the worker's DB alerts); a failed post is logged, never thrown.
     const notifyOps = async (text: string) => {
       const hook = env.OPS_WEBHOOK;
@@ -150,6 +173,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
             rateLimit: platform.rateLimit,
             indicative,
             fare,
+            offer,
           });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
@@ -163,6 +187,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
             return c.json(apiError("RATE_LIMITED", { context: { scope: result.scope } }), 429);
           }
           if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
+          // The fare or offer it names, with the field: `fareId`, `legs.0`, `cabin`, `offerId`.
+          if ("details" in result) {
+            return c.json(apiError("VALIDATION", { message: result.message, details: result.details }), 400);
+          }
           return c.json(apiError("VALIDATION"), 400);
         }
         const created = result.request;

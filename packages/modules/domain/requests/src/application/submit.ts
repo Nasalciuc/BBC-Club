@@ -3,9 +3,10 @@ import { eq, sql } from "drizzle-orm";
 import { withTx, type Executor } from "@bbc/db";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
-import { RequestBody } from "@bbc/shared/api/v1/requests";
+import { SubmittedRequestBody } from "@bbc/shared/api/v1/requests";
 import type { ShownEstimate } from "./estimate";
 import type { FareAtRequest } from "./published";
+import type { OfferCheck } from "./offer";
 import { parseMemberPhone } from "@bbc/shared/phone";
 import { effectiveIntent } from "./intent";
 import { requestRoute } from "./route";
@@ -51,9 +52,13 @@ export async function submit(
      *  sent (ADR-IMPL-046), and the airline (ADR-IMPL-056). Never throws: nulls when there is nothing to record.
      *  Absent, a request records neither. */
     fare?: (fareId: string, priceAtRequest: number | undefined) => Promise<FareAtRequest>;
+    /** Whether the member could have seen the offer a request names (proposals). Null when it could not be read. Absent,
+     *  the offer is not checked. */
+    offer?: (offerId: string, memberId: string | null) => Promise<OfferCheck>;
   },
 ) {
-  const body = RequestBody.parse(raw);
+  // A trip that can be flown, on a day not yet over everywhere (SubmittedRequestBody).
+  const body = SubmittedRequestBody.parse(raw);
   const phone = parseMemberPhone(body.contact.phone);
   if (!phone.valid) return { ok: false as const, code: "VALIDATION" as const };
   const route = requestRoute(body.legs, body.tripType);
@@ -63,7 +68,16 @@ export async function submit(
   const committed = await byKey(exec, idempotencyKey);
   if (committed) return replayOf(committed, actor);
 
-  return withTx(exec, async (tx) => {
+  try {
+    return await withTx(exec, (tx) => write(tx));
+  } catch (err) {
+    // Refused after the quota was counted: the transaction rolled back, so the refusal spent nothing — neither the
+    // address's unit when the member's own limit refused, nor either when the request did not pass.
+    if (err instanceof RolledBack) return err.result;
+    throw err;
+  }
+
+  async function write(tx: Executor) {
     // Idempotency first, under a lock on the key: a replay is not a new request and must not cost quota. Calls racing
     // with one key (a double tap, a retry racing the first) wait here; the first spends one unit and inserts, and the
     // others then find its row — before any rate check or catalog read. Held until this transaction ends.
@@ -76,24 +90,13 @@ export async function submit(
     // a carrier's NAT — shared with others) or the member's own; the app words them differently.
     if (actor.ip) {
       const ip = await deps.rateLimit.check("requests.submit.ip", `ip:${actor.ip}`, tx);
-      if (!ip.allowed) {
-        return {
-          ok: false as const,
-          code: "RATE_LIMITED" as const,
-          scope: "ip" as const,
-          retryAfterMs: ip.retryAfterMs,
-        };
-      }
+      if (!ip.allowed)
+        throw new RolledBack({ ok: false, code: "RATE_LIMITED", scope: "ip", retryAfterMs: ip.retryAfterMs });
     }
     if (actor.memberId) {
       const member = await deps.rateLimit.check("requests.submit", `m:${actor.memberId}`, tx);
       if (!member.allowed) {
-        return {
-          ok: false as const,
-          code: "RATE_LIMITED" as const,
-          scope: "member" as const,
-          retryAfterMs: member.retryAfterMs,
-        };
+        throw new RolledBack({ ok: false, code: "RATE_LIMITED", scope: "member", retryAfterMs: member.retryAfterMs });
       }
     }
 
@@ -118,6 +121,20 @@ export async function submit(
     const fare = body.fareId && deps.fare ? await deps.fare(body.fareId, body.priceAtRequest) : null;
     const published = fare?.published ?? null;
     const carrier = fare?.carrier ?? null;
+    // The fare a request names must exist and be this trip's — its outbound leg and cabin; one that has closed since is
+    // still taken (an offline-queued request must not be lost). A read that failed checks nothing.
+    if (fare?.trip === "missing") refuse("fareId", "This fare is no longer available.");
+    if (fare?.trip && outbound) {
+      if (outbound.from !== fare.trip.from || outbound.to !== fare.trip.to) {
+        refuse("legs.0", `This fare is for ${fare.trip.from} → ${fare.trip.to}.`);
+      }
+      if (body.cabin !== fare.trip.cabin) refuse("cabin", `This fare is for ${fare.trip.cabin} class.`);
+    }
+    // The offer a request names must be one the member could see; a withdrawn or expired one is still taken.
+    if (body.offerId && deps.offer) {
+      const offer = await deps.offer(body.offerId, actor.memberId);
+      if (offer === "missing" || offer === "not_yours") refuse("offerId", "This offer is no longer available.");
+    }
 
     const id = randomUUID();
     const reference = `R-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
@@ -194,7 +211,23 @@ export async function submit(
     });
 
     return { ok: true as const, request: row, created: true as const };
-  });
+  }
+}
+
+type Refusal =
+  | { ok: false; code: "VALIDATION"; message: string; details: { path: string; message: string }[] }
+  | { ok: false; code: "RATE_LIMITED"; scope: "ip" | "member"; retryAfterMs?: number };
+
+/** Thrown inside the transaction so it rolls back — the quota counted in it with it — and answered with `result`. */
+class RolledBack extends Error {
+  constructor(public readonly result: Refusal) {
+    super(result.code);
+    this.name = "RolledBack";
+  }
+}
+
+function refuse(path: string, message: string): never {
+  throw new RolledBack({ ok: false, code: "VALIDATION", message, details: [{ path, message }] });
 }
 
 type RequestRow = typeof requests.$inferSelect;

@@ -25,6 +25,60 @@ export const Passengers = z.object({
 });
 export type Passengers = z.infer<typeof Passengers>;
 
+/** A character a database text column cannot hold, and no name, phone, address or note needs. */
+const NUL = "\u0000";
+
+/**
+ * A trip that can be flown: a round trip is two legs, the second the first reversed; one way is one leg; multi-city two
+ * to six; no leg ends where it starts; each leg on or after the one before; an infant travels on an adult's lap, so no
+ * more infants than adults (here, not on `Passengers`, which views parse too); and no NUL in what the member typed.
+ * Each issue names its field (`legs.1.date`, `passengers.infant`), so the app can point at it. Nothing here depends on
+ * today: a request kept on the phone (the offline queue parses `RequestBody`) stays readable as its day passes — the
+ * server refuses a past day (`SubmittedRequestBody`), and the app asks the member to call.
+ */
+function tripIssues(
+  b: {
+    tripType: "round" | "oneway" | "multi";
+    legs: { from: string; to: string; date: string }[];
+    passengers: { adult: number; infant: number };
+    contact: { name: string; phone: string; email: string };
+    note?: string;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  const issue = (path: (string | number)[], message: string) =>
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+  const legs = b.legs;
+  if (b.tripType === "round") {
+    const [out, back] = legs;
+    if (legs.length !== 2 || !out || !back) issue(["legs"], "A round trip has two flights: there and back.");
+    else if (back.from !== out.to || back.to !== out.from) {
+      issue(["legs", 1], "A round trip comes back the way it went.");
+    }
+  }
+  if (b.tripType === "oneway" && legs.length !== 1) issue(["legs"], "A one-way trip has one flight.");
+  if (b.tripType === "multi" && (legs.length < 2 || legs.length > 6)) {
+    issue(["legs"], "A multi-city trip has two to six flights.");
+  }
+  legs.forEach((leg, i) => {
+    if (leg.from === leg.to) issue(["legs", i, "to"], "Choose a destination other than where the flight leaves from.");
+    const before = legs[i - 1];
+    if (before && leg.date < before.date) issue(["legs", i, "date"], "Choose a date on or after the flight before.");
+  });
+  if (b.passengers.infant > b.passengers.adult) {
+    issue(["passengers", "infant"], "Each infant travels on an adult's lap: add an adult, or an infant less.");
+  }
+  for (const key of ["name", "phone", "email"] as const) {
+    if (b.contact[key].includes(NUL)) issue(["contact", key], "Remove the hidden character, then try again.");
+  }
+  if (b.note?.includes(NUL)) issue(["note"], "Remove the hidden character, then try again.");
+}
+
+/** The first day a leg may be on: yesterday in UTC — today, or later, somewhere every member may be. */
+export function earliestLegDay(now: Date = new Date()): string {
+  return new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
+}
+
 export const RequestBody = z
   .object({
     fareId: z.string().uuid().optional(),
@@ -52,6 +106,7 @@ export const RequestBody = z
     estimateShown: z.boolean().optional(),
   })
   .superRefine((b, ctx) => {
+    tripIssues(b, ctx);
     if (b.fareId && b.offerId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -78,6 +133,22 @@ export const RequestBody = z
     }
   });
 export type RequestBody = z.infer<typeof RequestBody>;
+
+/** What the server takes: `RequestBody`, and no leg on a day already over everywhere (before `earliestLegDay`). Kept
+ *  out of `RequestBody` itself: that one is parsed again from the phone's storage, where a request must stay readable
+ *  after its day so the server can refuse it and the app ask the member to call. */
+export const SubmittedRequestBody = RequestBody.superRefine((b, ctx) => {
+  const earliest = earliestLegDay();
+  b.legs.forEach((leg, i) => {
+    if (leg.date < earliest) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["legs", i, "date"],
+        message: "That day has passed. Choose a date from today on.",
+      });
+    }
+  });
+});
 
 export const RequestVM = z.object({
   id: z.string().uuid(),
