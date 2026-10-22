@@ -72,9 +72,11 @@ export type ModulePlatform = {
   };
   jobs: { register: (name: string, spec: JobSpec) => void };
   rateLimit: {
+    /** `exec`: the caller's transaction, for a rule counted inside it (postgres store only). */
     check(
       rule: string,
       subject: string,
+      exec?: unknown,
     ): Promise<{ allowed: boolean; remaining: number; resetMs: number; retryAfterMs?: number; limit: number }>;
   };
   cache: {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 
 describe("POST /v1/requests rate limits", () => {
@@ -44,6 +45,28 @@ describe("POST /v1/requests rate limits", () => {
     });
     expect(replay.status).toBe(200);
     expect(((await replay.json()) as { id: string }).id).toBe(fifthId);
+    await t.close();
+  });
+
+  it("five concurrent replays of one Idempotency-Key cost one unit: the member's next request is still 201", async () => {
+    const t = await testApp({ suite: "requests-rate-race", poolMax: 10 });
+    const key = crypto.randomUUID();
+    const ip = "198.51.100.22";
+    const answers = await Promise.all(
+      Array.from({ length: 5 }, () => t.submitRequestAs(t.memberA, t.sampleRequestBody(), { idempotencyKey: key, ip })),
+    );
+    expect(answers.map((r) => r.status).sort()).toEqual([200, 200, 200, 200, 201]);
+    const ids = new Set(await Promise.all(answers.map(async (r) => ((await r.json()) as { id: string }).id)));
+    expect(ids.size).toBe(1);
+    const [{ n }]: any = await t.db.execute(
+      sql`SELECT count(*)::int n FROM requests.requests WHERE idempotency_key = ${key}`,
+    );
+    expect(n).toBe(1);
+    // The member's burst is five: one unit spent, four left — a replay is not a new request.
+    for (let i = 0; i < 4; i++) {
+      const next = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { ip });
+      expect(next.status).toBe(201);
+    }
     await t.close();
   });
 });

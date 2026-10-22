@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTx, type Executor } from "@bbc/db";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
@@ -38,9 +38,11 @@ export async function submit(
   deps: {
     publish: Publish;
     rateLimit: {
+      /** `exec`: the submit's transaction — the quota is counted on its connection, under its idempotency lock. */
       check: (
         rule: "requests.submit" | "requests.submit.ip",
         subject: string,
+        exec?: Executor,
       ) => Promise<{ allowed: boolean; retryAfterMs?: number }>;
     };
     /** The indicative price the search shows for a route (catalog, ADR-IMPL-042). Never throws: null when unknown. */
@@ -54,57 +56,57 @@ export async function submit(
   const body = RequestBody.parse(raw);
   const phone = parseMemberPhone(body.contact.phone);
   if (!phone.valid) return { ok: false as const, code: "VALIDATION" as const };
+  const route = requestRoute(body.legs, body.tripType);
+  if (!route) return { ok: false as const, code: "VALIDATION" as const };
 
-  // Idempotency first: a replay is not a new request and must not cost quota.
-  const existing = await exec.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
-  const replay = existing[0];
-  if (replay) {
-    if (replay.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
-    return { ok: true as const, request: replay, created: false as const };
-  }
-
-  if (actor.ip) {
-    const ip = await deps.rateLimit.check("requests.submit.ip", `ip:${actor.ip}`);
-    if (!ip.allowed) return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: ip.retryAfterMs };
-  }
-  if (actor.memberId) {
-    const member = await deps.rateLimit.check("requests.submit", `m:${actor.memberId}`);
-    if (!member.allowed)
-      return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: member.retryAfterMs };
-  }
-
-  // A quote (no fare, no offer) whose app showed the indicative fare carries that estimate for its outbound route —
-  // recomputed here, never taken from the app: the app says only that it showed one (`estimateShown`), and a price
-  // sent with the body is not in RequestBody and is dropped by the parse (ADR-IMPL-042). Read before the transaction:
-  // two cached flag rows and, with estimates on and valid rules, two indexed reads.
-  const outbound = body.legs[0];
-  const quote =
-    effectiveIntent({ intent: body.intent ?? null, fareId: body.fareId ?? null, offerId: body.offerId ?? null }) ===
-    "quote";
-  const shown =
-    quote && body.estimateShown === true && outbound
-      ? await deps.indicative({ from: outbound.from, to: outbound.to, cabin: body.cabin })
-      : null;
-  // A request made from a fare keeps, as they stood when the member asked, the fare's published price and its source —
-  // the detail strikes it beside the fare once the quote is ready (ADR-IMPL-046) — and its airline, which the request
-  // received and its detail name (ADR-IMPL-056). One read from the catalog — the body has no such fields; the published
-  // price only for the price the app sent: a fare re-priced since then records none, its airline still.
-  const fare = body.fareId && deps.fare ? await deps.fare(body.fareId, body.priceAtRequest) : null;
-  const published = fare?.published ?? null;
-  const carrier = fare?.carrier ?? null;
+  // A replay already committed is answered at once: no lock, no quota, no catalog read.
+  const committed = await byKey(exec, idempotencyKey);
+  if (committed) return replayOf(committed, actor);
 
   return withTx(exec, async (tx) => {
-    const existing = await tx.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
-    const replay = existing[0];
-    if (replay) {
-      if (replay.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
-      return { ok: true as const, request: replay, created: false as const };
+    // Idempotency first, under a lock on the key: a replay is not a new request and must not cost quota. Calls racing
+    // with one key (a double tap, a retry racing the first) wait here; the first spends one unit and inserts, and the
+    // others then find its row — before any rate check or catalog read. Held until this transaction ends.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`req:${idempotencyKey}`}, 0))`);
+    const replay = await byKey(tx, idempotencyKey);
+    if (replay) return replayOf(replay, actor);
+
+    // Counted on this transaction's connection, so nothing here waits for a second one while holding the lock; a unit
+    // is spent only if the request is written.
+    if (actor.ip) {
+      const ip = await deps.rateLimit.check("requests.submit.ip", `ip:${actor.ip}`, tx);
+      if (!ip.allowed) return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: ip.retryAfterMs };
     }
+    if (actor.memberId) {
+      const member = await deps.rateLimit.check("requests.submit", `m:${actor.memberId}`, tx);
+      if (!member.allowed)
+        return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: member.retryAfterMs };
+    }
+
+    // A quote (no fare, no offer) whose app showed the indicative fare carries that estimate for its outbound route —
+    // recomputed here, never taken from the app: the app says only that it showed one (`estimateShown`), and a price
+    // sent with the body is not in RequestBody and is dropped by the parse (ADR-IMPL-042). Asked after the idempotency
+    // and rate checks — a replay or a refused request never asks: two cached flag rows and, with estimates on and valid
+    // rules, two indexed reads, each bounded by its own timeout (askWithin), so a busy pool delays a request by at most
+    // that and records no estimate.
+    const outbound = body.legs[0];
+    const quote =
+      effectiveIntent({ intent: body.intent ?? null, fareId: body.fareId ?? null, offerId: body.offerId ?? null }) ===
+      "quote";
+    const shown =
+      quote && body.estimateShown === true && outbound
+        ? await deps.indicative({ from: outbound.from, to: outbound.to, cabin: body.cabin })
+        : null;
+    // A request made from a fare keeps, as they stood when the member asked, the fare's published price and its source
+    // — the detail strikes it beside the fare once the quote is ready (ADR-IMPL-046) — and its airline, which the
+    // request received and its detail name (ADR-IMPL-056). One read from the catalog — the body has no such fields; the
+    // published price only for the price the app sent: a fare re-priced since then records none, its airline still.
+    const fare = body.fareId && deps.fare ? await deps.fare(body.fareId, body.priceAtRequest) : null;
+    const published = fare?.published ?? null;
+    const carrier = fare?.carrier ?? null;
 
     const id = randomUUID();
     const reference = `R-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
-    const route = requestRoute(body.legs, body.tripType);
-    if (!route) return { ok: false as const, code: "VALIDATION" as const };
 
     const [row] = await tx
       .insert(requests)
@@ -140,12 +142,11 @@ export async function submit(
       .onConflictDoNothing({ target: requests.idempotencyKey })
       .returning();
     if (!row) {
-      // The same key arrived twice at once (a double tap, a retry racing the first) and the other call committed
-      // first: ON CONFLICT waited for it, and this statement sees its row. Replay it, as a later retry would.
-      const [first] = await tx.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
+      // Not reached while the key's lock holds; kept as the backstop: ON CONFLICT waited for the other call, and this
+      // statement sees its row. Replay it, as a later retry would.
+      const first = await byKey(tx, idempotencyKey);
       if (!first) throw new Error("request insert returned no row");
-      if (first.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
-      return { ok: true as const, request: first, created: false as const };
+      return replayOf(first, actor);
     }
 
     await tx.insert(requestEvents).values({ requestId: id, status: "received", actor: "system" });
@@ -180,4 +181,17 @@ export async function submit(
 
     return { ok: true as const, request: row, created: true as const };
   });
+}
+
+type RequestRow = typeof requests.$inferSelect;
+
+async function byKey(exec: Executor, idempotencyKey: string): Promise<RequestRow | undefined> {
+  const [row] = await exec.select().from(requests).where(eq(requests.idempotencyKey, idempotencyKey)).limit(1);
+  return row;
+}
+
+/** A key seen before: the same member gets the first request back; another member's reuse of it is a conflict. */
+function replayOf(row: RequestRow, actor: SubmitActor) {
+  if (row.memberId !== actor.memberId) return { ok: false as const, code: "CONFLICT" as const };
+  return { ok: true as const, request: row, created: false as const };
 }
