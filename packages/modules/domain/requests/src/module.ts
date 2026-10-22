@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
@@ -325,10 +325,27 @@ function opsRoutes(
   secret: string,
 ) {
   const ops = new Hono<AppEnv>();
-  const limit = rateLimit(platform.rateLimit, "ops.link", (c) => `ip:${c.get("clientIp") ?? "unknown"}`);
+  // Per address, as it protects the tokens; answered as the rest of these pages are, in HTML — an operator opens them
+  // in a browser, never the app. Null when the link may be opened.
+  const limited = async (c: Context<AppEnv>): Promise<Response | null> => {
+    let r;
+    try {
+      r = await platform.rateLimit.check("ops.link", `ip:${c.get("clientIp") ?? "unknown"}`);
+    } catch {
+      return c.html(page("This page is briefly unavailable — open the link again in a minute."), 503);
+    }
+    c.header("RateLimit-Limit", String(r.limit));
+    c.header("RateLimit-Remaining", String(r.remaining));
+    c.header("RateLimit-Reset", String(Math.ceil(r.resetMs / 1000)));
+    if (r.allowed) return null;
+    c.header("Retry-After", String(Math.max(1, Math.ceil((r.retryAfterMs ?? r.resetMs) / 1000))));
+    return c.html(page("Too many links at once — wait a minute and open it again."), 429);
+  };
 
   registerRoute("GET", "/ops/requests/:token", "public", "ops.link");
-  ops.get("/requests/:token", limit, async (c) => {
+  ops.get("/requests/:token", async (c) => {
+    const refused = await limited(c);
+    if (refused) return refused;
     const v = verifyAction(secret, c.req.param("token"));
     if (!v.ok) {
       return c.html(
@@ -359,7 +376,9 @@ function opsRoutes(
   });
 
   registerRoute("POST", "/ops/requests/:token", "public", "ops.link");
-  ops.post("/requests/:token", limit, async (c) => {
+  ops.post("/requests/:token", async (c) => {
+    const refused = await limited(c);
+    if (refused) return refused;
     const v = verifyAction(secret, c.req.param("token"));
     if (!v.ok) return c.html(page("This link is not valid or has expired."), 403);
     const r = await setStatus(conn, { requestId: v.requestId, status: v.action, agentId: "ops" }, { repo, publish });

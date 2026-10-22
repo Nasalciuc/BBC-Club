@@ -117,4 +117,36 @@ describe("operator action links", () => {
     expect(timeline.map((e) => e.status)).toEqual(["received", "quoted", "booked", "closed"]);
     await t.close();
   });
+
+  it("too many links from one address: an HTML page with Retry-After, never a JSON error", async () => {
+    const t = await testApp({ suite: "ops-links-429", env: { OPS_LINK_SECRET: SECRET } });
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const { id } = (await created.json()) as { id: string };
+    const token = signAction(SECRET, id, "quoted");
+    const from = { "X-Forwarded-For": "10.74.14.1, 173.245.48.1" };
+    const answers: Response[] = [];
+    for (let i = 0; i < 14; i++) answers.push(await t.app.request(`/ops/requests/${token}`, { headers: from }));
+    const limited = answers.filter((r) => r.status === 429);
+    expect(limited.length).toBeGreaterThan(0);
+    for (const r of limited) {
+      expect(r.headers.get("content-type")).toContain("text/html");
+      expect(Number(r.headers.get("retry-after"))).toBeGreaterThanOrEqual(1);
+      expect(await r.text()).toContain("Too many links at once — wait a minute and open it again.");
+    }
+    // The confirm button is limited the same way, and writes nothing while it is.
+    const post = await t.app.request(`/ops/requests/${token}`, { method: "POST", headers: from });
+    expect(post.status).toBe(429);
+    expect(post.headers.get("content-type")).toContain("text/html");
+    expect(await post.text()).toContain("Too many links at once");
+    const rows = (await t.db.execute(sql`SELECT status FROM requests.requests WHERE id = ${id}`)) as {
+      status: string;
+    }[];
+    expect(rows[0]?.status).toBe("received");
+    // Another address is not held up.
+    const other = await t.app.request(`/ops/requests/${token}`, {
+      headers: { "X-Forwarded-For": "10.74.14.2, 173.245.48.1" },
+    });
+    expect(other.status).toBe(200);
+    await t.close();
+  });
 });
