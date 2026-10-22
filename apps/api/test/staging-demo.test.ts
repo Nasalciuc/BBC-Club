@@ -10,14 +10,13 @@ import { fixture } from "@bbc/shared/fixture";
 import type { IdentityFacade } from "@bbc/identity";
 import { ensureReviewAccount } from "../../../scripts/seed-review-account";
 import { DEMO_PERSONA, seedStagingDemo } from "../../../scripts/seed-staging-demo";
-import type { WithdrawDeps } from "../../../packages/modules/domain/proposals/src/application/withdraw";
 import { testApp } from "./helpers/test-app";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 /** The app's publisher, as the script's own run builds it: its registry knows every consumer. */
-const appEvents = (t: Awaited<ReturnType<typeof testApp>>): WithdrawDeps["events"] => ({
+const appEvents = (t: Awaited<ReturnType<typeof testApp>>): Parameters<typeof seedStagingDemo>[3] => ({
   publish: (tx, e) => t.platform.events.publish(tx, { ...e, publishedBy: "proposals" }),
 });
 
