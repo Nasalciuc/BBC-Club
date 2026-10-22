@@ -21,7 +21,7 @@ import {
   rn,
 } from "@bbc/ui";
 
-import { ScreenStatusBar } from "@/components/screen-status-bar";
+import { ScreenStatusBar, heroImageKey, statusBarOn } from "@/components/screen-status-bar";
 import { Club } from "@/constants/club";
 import { clubPhoto, clubTripPhoto } from "@/features/places/club-photos";
 import { bandPicture, cardPicture } from "@/features/places/place-photo-logic";
@@ -80,6 +80,8 @@ export default function ProfileScreen() {
   // 12 names the home airport's city: `New York (JFK)`.
   const [homeCity, setHomeCity] = useState<{ code: string; city: string } | null>(null);
   const [pastHero, setPastHero] = useState(false);
+  // The band's photograph as last drawn (or not), by which one it was: the status bar's glyphs follow it (F022).
+  const [heroDrawn, setHeroDrawn] = useState<{ key: string | null; ok: boolean } | null>(null);
   const focused = useIsFocused();
   const { signingOut, failure: signOutFailure, signOutNow } = useSignOut();
   const saved = useSaved();
@@ -214,6 +216,9 @@ export default function ProfileScreen() {
     size: { width: Math.min(width, Club.layout.phoneMaxWidth), height: band },
   });
   const homePhoto = clubPhoto(home, "any");
+  const heroImage = homePhoto ?? picture.source;
+  const heroKey = heroImageKey(heroImage);
+  const heroLoaded = heroDrawn !== null && heroDrawn.key === heroKey && heroDrawn.ok;
   const credit = homePhoto ? null : picture.credit;
   const creditLink = credit?.link ?? null;
   const stats = requests ? profileStats(requests.items, requests.hasMore) : null;
@@ -230,8 +235,9 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Light glyphs over the photograph; dark ones once the page has scrolled past it. */}
-      <ScreenStatusBar on={pastHero ? "light" : "dark"} />
+      {/* Light glyphs over the photograph once it is drawn; dark ones over the tint band without one (no home airport,
+          a city without a photograph, loading or failed), and once the page has scrolled past it (F022). */}
+      <ScreenStatusBar on={statusBarOn({ hasImage: heroKey !== null, loaded: heroLoaded, pastHero })} />
       <ScrollView
         testID="profile.root"
         contentContainerStyle={styles.scroll}
@@ -247,9 +253,11 @@ export default function ProfileScreen() {
           initials={monogram(profile?.displayName)}
           portrait={profile?.avatarUrl ? { uri: profile.avatarUrl } : null}
           home={home ? `Flies from ${home}` : null}
-          image={homePhoto ?? picture.source}
+          image={heroImage}
           fallback={null}
           cachePolicy={homePhoto ? "disk" : picture.cache}
+          onImageLoad={() => setHeroDrawn({ key: heroKey, ok: true })}
+          onImageError={() => setHeroDrawn({ key: heroKey, ok: false })}
           topInset={insets.top}
           action={settingsButton}
         />

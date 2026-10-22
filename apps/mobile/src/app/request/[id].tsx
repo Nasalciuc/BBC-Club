@@ -34,7 +34,7 @@ import {
 } from "@bbc/ui";
 
 import { RootTabBar } from "@/components/RootTabBar";
-import { ScreenStatusBar } from "@/components/screen-status-bar";
+import { ScreenStatusBar, heroImageKey, statusBarOn } from "@/components/screen-status-bar";
 import { isOffline } from "@/features/explore/offline-logic";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { clubPhoto } from "@/features/places/club-photos";
@@ -124,6 +124,8 @@ export default function RequestDetailScreen() {
   const [sending, setSending] = useState(false);
   const [sendNote, setSendNoteState] = useState<string | null>(null);
   const [pastHero, setPastHero] = useState(false);
+  // The photograph as last drawn (or not), by which one it was: the status bar's glyphs follow it (F028).
+  const [heroDrawn, setHeroDrawn] = useState<{ key: string | null; ok: boolean } | null>(null);
   // Said aloud too: a screen reader would otherwise not hear that the request did not go. iOS queues it behind what
   // VoiceOver is saying (the button coming back from busy); Android reads the live region the note sits in.
   const setSendNote = (note: string | null) => {
@@ -354,6 +356,9 @@ export default function RequestDetailScreen() {
     mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
     size: { width, height: heroHeight },
   });
+  const heroImage = bundled ?? picture.source;
+  const heroKey = heroImageKey(heroImage);
+  const heroLoaded = heroDrawn !== null && heroDrawn.key === heroKey && heroDrawn.ok;
   const credit = bundled ? null : picture.credit;
   const creditLink = credit?.link ?? null;
   const notice = view.notice
@@ -392,8 +397,9 @@ export default function RequestDetailScreen() {
 
   return (
     <View testID="request.root" style={styles.root}>
-      {/* Light glyphs over the photograph; dark ones once the page has scrolled past it. */}
-      <ScreenStatusBar on={pastHero ? "light" : "dark"} />
+      {/* Light glyphs over the photograph once it is drawn; dark ones over the tint without one (a city without a
+          photograph, loading or failed), and once the page has scrolled past it (F028). */}
+      <ScreenStatusBar on={statusBarOn({ hasImage: heroKey !== null, loaded: heroLoaded, pastHero })} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         scrollEventThrottle={16}
@@ -404,10 +410,12 @@ export default function RequestDetailScreen() {
       >
         <View style={[styles.hero, { height: heroHeight }]}>
           <Photo
-            source={bundled ?? picture.source}
+            source={heroImage}
             fallback={null}
             cachePolicy={bundled ? "disk" : picture.cache}
             style={StyleSheet.absoluteFill}
+            onLoad={() => setHeroDrawn({ key: heroKey, ok: true })}
+            onError={() => setHeroDrawn({ key: heroKey, ok: false })}
             testID="request.photo"
           />
           {back}

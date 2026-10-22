@@ -15,6 +15,10 @@ type Props = {
   style?: StyleProp<ViewStyle>;
   /** Which part of a photograph wider or taller than its slot shows (12's trips: each city's own window). */
   position?: ImageContentPosition;
+  /** A picture was drawn in the slot (the source, or the fallback after it), and one could not be — the last call says
+   *  what the slot shows: a screen picks its status bar from it (ADR-IMPL-047). */
+  onLoad?: () => void;
+  onError?: () => void;
   testID?: string;
 };
 
@@ -25,7 +29,7 @@ const keyOf = (source: PhotoSource | null) =>
  * A photograph in its slot (design/components.md): light tint while it loads — never a spinner —
  * and the fallback when it cannot load. Decorative: what the photograph shows is said by the text beside it.
  */
-export function Photo({ source, fallback, cachePolicy = "disk", style, position, testID }: Props) {
+export function Photo({ source, fallback, cachePolicy = "disk", style, position, onLoad, onError, testID }: Props) {
   const [failed, setFailed] = useState<string | null>(null);
   const key = keyOf(source);
   const useFallback = key === null || failed === key;
@@ -46,8 +50,10 @@ export function Photo({ source, fallback, cachePolicy = "disk", style, position,
           transition={tokens.motion.fade}
           cachePolicy={useFallback ? "memory-disk" : cachePolicy}
           recyclingKey={keyOf(shown)}
+          onLoad={onLoad}
           onError={() => {
             if (!useFallback) setFailed(key);
+            onError?.();
           }}
           accessibilityIgnoresInvertColors
         />
