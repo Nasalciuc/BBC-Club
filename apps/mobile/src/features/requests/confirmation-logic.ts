@@ -78,11 +78,10 @@ export function bodyProblem(
   if (/^legs\.\d+\.(from|to)$/.test(where)) return "Choose a destination other than where the flight leaves from.";
   if (where.startsWith("legs"))
     return "Check your dates: a day from today on, and the return on or after the departure.";
-  if (where === "passengers.infant") return "Each infant travels on an adult's lap: add an adult, or an infant less.";
+  if (where === "passengers.infant") return "Each infant travels on an adult’s lap. Add an adult, or remove an infant.";
   if (where.startsWith("passengers")) return "Check the travelers and try again.";
-  if (where === "fareId" || where === "offerId") {
-    return "This fare can't be requested any more. Ask for a quote on the route instead.";
-  }
+  if (where === "fareId") return "This fare can’t be requested any more. Ask for a quote on the route instead.";
+  if (where === "offerId") return "This offer can’t be requested any more. Ask for a quote on the route instead.";
   return first.message;
 }
 

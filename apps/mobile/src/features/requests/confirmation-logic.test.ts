@@ -103,10 +103,14 @@ test("an impossible trip says what to change, calmly — the dates, the route, t
     "Choose a destination other than where the flight leaves from.",
   );
   expect(bodyProblem(issue(["passengers", "infant"], "x"))).toBe(
-    "Each infant travels on an adult's lap: add an adult, or an infant less.",
+    "Each infant travels on an adult’s lap. Add an adult, or remove an infant.",
   );
   expect(bodyProblem(issue(["fareId"], "x"))).toBe(
-    "This fare can't be requested any more. Ask for a quote on the route instead.",
+    "This fare can’t be requested any more. Ask for a quote on the route instead.",
+  );
+  // An offer's request names the offer, never a fare.
+  expect(bodyProblem(issue(["offerId"], "x"))).toBe(
+    "This offer can’t be requested any more. Ask for a quote on the route instead.",
   );
 });
 
