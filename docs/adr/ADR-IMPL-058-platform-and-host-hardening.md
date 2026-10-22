@@ -52,8 +52,9 @@ platform and the host:
    jobs whose last finished run failed — and is 503 while it is not empty. The next run that succeeds clears it. `/ready`
    is unchanged and stays the deploy gate.
 5. **One body limit per request, answered in the API's shape.** `/v1/internal/*` takes 1 MB; the 256 KB member limit
-   skips paths under `/v1/internal/`. Over the limit: 413 `{ code: VALIDATION, message: "This request is too large." }`
-   (no new error code; `packages/shared` untouched), counted in `http_errors` as a client error. The error contract maps
+   skips paths under `/v1/internal/`. Over the limit: 413 `{ error: { code: "VALIDATION", message: "This request is
+too large.", requestId: … } }` (the `apiError` shape; no new error code; `packages/shared` untouched), counted in
+   `http_errors` as a client error. The error contract maps
    any Hono `HTTPException` below 500 to its own status (401/403/429 as for Better Auth, anything else VALIDATION) with
    the code's own message, and never logs it as `unhandled`.
 6. **An error reaches a log line or a stored text only through `errorForLog`/`errorLine` (`@bbc/db`).** A query error
