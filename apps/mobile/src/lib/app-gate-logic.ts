@@ -11,12 +11,74 @@ export function compareSemver(a: string, b: string): number {
   return 0;
 }
 
-/** What the gate puts in front of the navigator: the forced update, the maintenance page, or nothing (null). */
-export type Gate = { kind: "update" } | { kind: "maintenance"; value: string } | null;
+/** The store listings /v1/app-config names for the update, per platform. */
+export type StoreUrl = { ios?: string; android?: string };
 
-/** What an answer of /v1/app-config makes of this app (`current`, its version): too old, under maintenance, or open. */
-export function gateFor(config: { minSupportedVersion: string; maintenance: string | null }, current: string): Gate {
-  if (compareSemver(config.minSupportedVersion, current) > 0) return { kind: "update" };
+/** Where `Update app` goes when the server names no store listing for this platform. */
+export const UPDATE_WEBSITE = "https://buybusinessclass.com";
+
+/** A store link (`itms-apps://`, `market://`) or a web page (`https://`): nothing else is opened from the server. */
+const STORE_LINK = /^(itms-apps|market|https):\/\/\S+$/i;
+
+/** `storeUrl` as the server sent it, keeping only a platform's link the app may open; anything else is none. */
+export function storeUrlValue(raw: unknown): StoreUrl {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: StoreUrl = {};
+  for (const os of ["ios", "android"] as const) {
+    const value = (raw as Record<string, unknown>)[os];
+    if (typeof value === "string" && STORE_LINK.test(value.trim())) out[os] = value.trim();
+  }
+  return out;
+}
+
+/** The store's own web page for a store link (`itms-apps://apps.apple.com/…`, `market://details?id=…`), or null. */
+function storeWebPage(url: string): string | null {
+  if (/^itms-apps:\/\//i.test(url)) return url.replace(/^itms-apps:\/\//i, "https://");
+  const market = /^market:\/\/details\?(.+)$/i.exec(url);
+  return market ? `https://play.google.com/store/apps/details?${market[1]}` : null;
+}
+
+/**
+ * What `Update app` tries, in turn (F039): this platform's store listing as the server names it, then that store's own
+ * web page (a phone without the store app), then the website — which alone is left when the server names none.
+ */
+export function updateTargets(config: { storeUrl?: unknown }, os: string): string[] {
+  const listings = storeUrlValue(config.storeUrl);
+  const store = os === "ios" || os === "android" ? listings[os] : undefined;
+  const web = store ? storeWebPage(store) : null;
+  return [...new Set([store, web, UPDATE_WEBSITE].filter((url): url is string => Boolean(url)))];
+}
+
+export function updateTarget(config: { storeUrl?: unknown }, os: string): string {
+  return updateTargets(config, os)[0] ?? UPDATE_WEBSITE;
+}
+
+/** Opens the first of `urls` the phone can open; when none opens, nothing more happens. */
+export async function openFirst(urls: readonly string[], open: (url: string) => Promise<unknown>): Promise<void> {
+  for (const url of urls) {
+    try {
+      await open(url);
+      return;
+    } catch {
+      // This one cannot be opened here: the next.
+    }
+  }
+}
+
+/** What the gate puts in front of the navigator: the forced update (with the links `Update app` tries), the
+ *  maintenance page, or nothing (null). */
+export type Gate = { kind: "update"; targets: string[] } | { kind: "maintenance"; value: string } | null;
+
+/** What an answer of /v1/app-config makes of this app (`current`, its version, on `os`): too old, under maintenance, or
+ *  open. */
+export function gateFor(
+  config: { minSupportedVersion: string; maintenance: string | null; storeUrl?: unknown },
+  current: string,
+  os: string,
+): Gate {
+  if (compareSemver(config.minSupportedVersion, current) > 0) {
+    return { kind: "update", targets: updateTargets(config, os) };
+  }
   if (config.maintenance) return { kind: "maintenance", value: config.maintenance };
   return null;
 }

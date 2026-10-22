@@ -43,7 +43,7 @@ import {
 
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
-import { maintenanceValue } from "@/lib/app-gate-logic";
+import { maintenanceValue, storeUrlValue, type StoreUrl } from "@/lib/app-gate-logic";
 import { UNREACHABLE_MESSAGE, classifyFetchFailure, passwordChangedNotice } from "@/lib/error-context";
 import { appPlatform, appVersion } from "@/lib/app-meta";
 import { emitSessionRevoked } from "@/lib/session-events";
@@ -622,7 +622,12 @@ export async function fetchRequest(id: string): Promise<ApiResult<RequestVMType>
   });
 }
 
-export type AppConfig = { minSupportedVersion: string; maintenance: string | null };
+export type AppConfig = {
+  minSupportedVersion: string;
+  maintenance: string | null;
+  /** The store listings that hold the update, per platform, when the server names them (F039). */
+  storeUrl?: StoreUrl;
+};
 
 /** GET /v1/app-config — cold start, public. */
 export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
@@ -631,13 +636,19 @@ export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
     if (!res.ok) {
       return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
     }
-    const raw = (await parseJson(res)) as { minSupportedVersion?: unknown; maintenance?: unknown } | null;
+    const raw = (await parseJson(res)) as {
+      minSupportedVersion?: unknown;
+      maintenance?: unknown;
+      storeUrl?: unknown;
+    } | null;
     return {
       ok: true,
       data: {
         minSupportedVersion: typeof raw?.minSupportedVersion === "string" ? raw.minSupportedVersion : "0.1.0",
         // Only a non-blank string is maintenance: anything else never reaches the screen as `[object Object]`.
         maintenance: maintenanceValue(raw?.maintenance),
+        // Only a store or https link per platform; none named, `Update app` opens the website.
+        storeUrl: storeUrlValue(raw?.storeUrl),
       },
     };
   });

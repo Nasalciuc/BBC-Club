@@ -1,12 +1,12 @@
 import Constants from "expo-constants";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState, Linking } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
 
 import { SystemScreen } from "@/components/system-screen";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { fetchAppConfig } from "@/lib/api";
-import { gateFor, gateRetryDelayMs, maintenanceBody, shouldRecheck, type Gate } from "@/lib/app-gate-logic";
+import { gateFor, gateRetryDelayMs, maintenanceBody, openFirst, shouldRecheck, type Gate } from "@/lib/app-gate-logic";
 import { env } from "@/lib/env";
 import { stateCopy } from "@/lib/error-context";
 
@@ -66,7 +66,7 @@ export function AppGate({ children }: { children: ReactNode }) {
         seen.lastOkAt = Date.now();
         seen.attempts = 0;
         // `Try again` after the maintenance, or a minimum lowered again: the app opens where it was.
-        setGate(gateFor(result.data, current));
+        setGate(gateFor(result.data, current, Platform.OS));
       } finally {
         asking = false;
       }
@@ -91,8 +91,10 @@ export function AppGate({ children }: { children: ReactNode }) {
     tel ? { testID, onPress: () => void Linking.openURL(tel).catch(() => undefined) } : null;
 
   if (gate?.kind === "update") {
-    // Figma 240:5129: no way past it but the update.
+    // Figma 240:5129: no way past it but the update — from this platform's store listing when the server names one,
+    // else its web page, else the website (F039).
     const copy = stateCopy("update");
+    const targets = gate.targets;
     // The page replaces the navigator, the root's light bar with it: its porcelain takes the dark glyphs.
     return (
       <>
@@ -104,7 +106,7 @@ export function AppGate({ children }: { children: ReactNode }) {
           primary={{
             label: "Update app",
             testID: "appGate.update.cta",
-            onPress: () => void Linking.openURL("https://buybusinessclass.com").catch(() => undefined),
+            onPress: () => void openFirst(targets, (url) => Linking.openURL(url)),
           }}
           call={call("appGate.update.call")}
         />

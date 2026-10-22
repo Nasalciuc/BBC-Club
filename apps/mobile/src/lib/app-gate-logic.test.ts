@@ -5,7 +5,11 @@ import {
   gateRetryDelayMs,
   maintenanceBody,
   maintenanceValue,
+  openFirst,
   shouldRecheck,
+  storeUrlValue,
+  updateTarget,
+  updateTargets,
 } from "./app-gate-logic";
 
 describe("compareSemver", () => {
@@ -92,11 +96,80 @@ describe("shouldRecheck — the gate asks again, not once per process (F033)", (
 describe("gateFor — what an answer makes of the app", () => {
   test("older than the oldest supported: update; else maintenance; else open", () => {
     const config = { minSupportedVersion: "0.3.0", maintenance: null };
-    expect(gateFor(config, "0.2.0")?.kind).toBe("update");
-    expect(gateFor({ ...config, maintenance: "Back soon." }, "0.3.0")).toEqual({
+    expect(gateFor(config, "0.2.0", "ios")?.kind).toBe("update");
+    expect(gateFor({ ...config, maintenance: "Back soon." }, "0.3.0", "ios")).toEqual({
       kind: "maintenance",
       value: "Back soon.",
     });
-    expect(gateFor(config, "0.3.0")).toBeNull();
+    expect(gateFor(config, "0.3.0", "ios")).toBeNull();
+  });
+});
+
+describe("updateTarget — `Update app` opens the store that holds the update (F039)", () => {
+  const WEBSITE = "https://buybusinessclass.com";
+
+  test("the platform's store listing when the server names one; the website otherwise", () => {
+    expect(updateTarget({ storeUrl: { ios: "itms-apps://apps.apple.com/app/id1" } }, "ios")).toBe(
+      "itms-apps://apps.apple.com/app/id1",
+    );
+    expect(updateTarget({ storeUrl: { android: "market://details?id=com.bbc.club" } }, "android")).toBe(
+      "market://details?id=com.bbc.club",
+    );
+    expect(updateTarget({ storeUrl: { ios: "itms-apps://apps.apple.com/app/id1" } }, "android")).toBe(WEBSITE);
+    expect(updateTarget({}, "ios")).toBe(WEBSITE);
+    expect(updateTarget({ storeUrl: {} }, "web")).toBe(WEBSITE);
+  });
+
+  test("a store link the phone cannot open falls back to the store's web page, then the website", () => {
+    expect(updateTargets({ storeUrl: { ios: "itms-apps://apps.apple.com/app/id1" } }, "ios")).toEqual([
+      "itms-apps://apps.apple.com/app/id1",
+      "https://apps.apple.com/app/id1",
+      WEBSITE,
+    ]);
+    expect(updateTargets({ storeUrl: { android: "market://details?id=com.bbc.club" } }, "android")).toEqual([
+      "market://details?id=com.bbc.club",
+      "https://play.google.com/store/apps/details?id=com.bbc.club",
+      WEBSITE,
+    ]);
+    const https = "https://play.google.com/store/apps/details?id=com.bbc.club";
+    expect(updateTargets({ storeUrl: { android: https } }, "android")).toEqual([https, WEBSITE]);
+  });
+
+  test("only a store or https link is taken from the server: anything else is no store link", () => {
+    expect(storeUrlValue({ ios: "javascript:alert(1)", android: "http://example.com" })).toEqual({});
+    expect(storeUrlValue({ ios: "  itms-apps://apps.apple.com/app/id1 ", android: 7 })).toEqual({
+      ios: "itms-apps://apps.apple.com/app/id1",
+    });
+    expect(storeUrlValue("itms-apps://apps.apple.com/app/id1")).toEqual({});
+    expect(storeUrlValue(null)).toEqual({});
+  });
+
+  test("an older app's update page carries the links to try", () => {
+    const config = {
+      minSupportedVersion: "0.3.0",
+      maintenance: null,
+      storeUrl: { ios: "itms-apps://apps.apple.com/app/id1" },
+    };
+    expect(gateFor(config, "0.2.0", "ios")).toEqual({
+      kind: "update",
+      targets: ["itms-apps://apps.apple.com/app/id1", "https://apps.apple.com/app/id1", WEBSITE],
+    });
+    expect(gateFor({ minSupportedVersion: "0.3.0", maintenance: null }, "0.2.0", "android")).toEqual({
+      kind: "update",
+      targets: [WEBSITE],
+    });
+  });
+
+  test("each link is tried in turn until one opens; none opening throws nothing at the page", async () => {
+    const tried: string[] = [];
+    const open = async (url: string) => {
+      tried.push(url);
+      if (!url.startsWith("https://apps.apple.com")) throw new Error("cannot open");
+    };
+    await openFirst(["itms-apps://apps.apple.com/app/id1", "https://apps.apple.com/app/id1", WEBSITE], open);
+    expect(tried).toEqual(["itms-apps://apps.apple.com/app/id1", "https://apps.apple.com/app/id1"]);
+    await openFirst(["market://details?id=x"], async () => {
+      throw new Error("no");
+    });
   });
 });
