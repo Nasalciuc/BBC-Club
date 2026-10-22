@@ -56,14 +56,38 @@ const MAX_LOCKED_SENDS = 3;
  */
 export function otpSendLock(db: Executor) {
   const slots = semaphore(MAX_LOCKED_SENDS);
+  const inLine = queuePerKey();
   return function withOtpSendLock<T>(target: OtpSendTarget, fn: () => Promise<T>): Promise<T> {
     const key = `otp:${target.type}:${target.email}`;
-    return slots(() =>
-      db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
-        return fn();
-      }),
+    // Requests for one address wait for each other here first, in memory: only the first of them holds a slot at a time.
+    // Otherwise a burst for one address (during a Postmark outage, each send takes its 4 s) would fill every slot with
+    // requests waiting on that address's lock, and no other address in the process could get a code meanwhile.
+    return inLine(key, () =>
+      slots(() =>
+        db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+          return fn();
+        }),
+      ),
     );
+  };
+}
+
+/** Runs the calls for one key one after the other, in arrival order; calls for different keys do not wait. A call that
+ *  fails does not stop the next one. A key is forgotten once its last call has settled. */
+function queuePerKey() {
+  const tails = new Map<string, Promise<void>>();
+  return function inLine<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const result = (tails.get(key) ?? Promise.resolve()).then(fn);
+    const tail: Promise<void> = result.then(
+      () => forget(),
+      () => forget(),
+    );
+    function forget() {
+      if (tails.get(key) === tail) tails.delete(key);
+    }
+    tails.set(key, tail);
+    return result;
   };
 }
 

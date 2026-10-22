@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { isOtpSendRequest, otpSendTarget } from "../src/infrastructure/otp-send-lock";
+import type { Executor } from "@bbc/db";
+import { isOtpSendRequest, otpSendLock, otpSendTarget } from "../src/infrastructure/otp-send-lock";
 
 const post = (path: string, body: string) =>
   new Request(`http://localhost:8000/api/auth${path}`, {
@@ -56,5 +57,61 @@ describe("which requests take the per-address send lock", () => {
     ).toEqual({ type: "sign-in", email: "a@b.dev" });
     expect(isOtpSendRequest(post("/sign-in/email-otp", "{}"))).toBe(false);
     expect(isOtpSendRequest(new Request("http://localhost:8000/api/auth/email-otp/send-verification-otp"))).toBe(false);
+  });
+});
+
+describe("the per-address send lock", () => {
+  /** Counts open transactions; the advisory lock statement itself does nothing here. */
+  function fakeDb() {
+    const open = { now: 0, most: 0 };
+    const db = {
+      async transaction<T>(fn: (tx: { execute: () => Promise<void> }) => Promise<T>): Promise<T> {
+        open.now++;
+        open.most = Math.max(open.most, open.now);
+        try {
+          return await fn({ execute: async () => {} });
+        } finally {
+          open.now--;
+        }
+      },
+    } as unknown as Executor;
+    return { db, open };
+  }
+
+  it("a burst for one address holds one transaction at a time, and another address is not kept waiting", async () => {
+    const { db, open } = fakeDb();
+    const withLock = otpSendLock(db);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const order: string[] = [];
+    const burst = Array.from({ length: 5 }, (_, n) =>
+      withLock({ type: "sign-in", email: "a@b.dev" }, async () => {
+        order.push(`a${n}`);
+        await gate;
+      }),
+    );
+    let otherStarted = false;
+    const other = withLock({ type: "sign-in", email: "c@d.dev" }, async () => {
+      otherStarted = true;
+    });
+    await other;
+    expect(otherStarted).toBe(true);
+    expect(order).toEqual(["a0"]);
+    release();
+    await Promise.all(burst);
+    expect(order).toEqual(["a0", "a1", "a2", "a3", "a4"]);
+    expect(open.most).toBeLessThanOrEqual(2);
+  });
+
+  it("a send that fails does not stop the next one for that address", async () => {
+    const { db } = fakeDb();
+    const withLock = otpSendLock(db);
+    const target = { type: "forget-password", email: "a@b.dev" };
+    const failed = withLock(target, async () => {
+      throw new Error("Postmark 503");
+    });
+    const next = withLock(target, async () => "sent");
+    await expect(failed).rejects.toThrow("Postmark 503");
+    expect(await next).toBe("sent");
   });
 });
