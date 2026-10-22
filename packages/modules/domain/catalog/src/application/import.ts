@@ -58,10 +58,18 @@ const FareCsvRow = z
         ctx.addIssue({ code: "custom", message: "yes or no (true/false, yes/no, y/n, 1/0)" });
         return z.NEVER;
       }),
-    duration_minutes: z
-      .string()
-      .optional()
-      .transform((v) => (v && v.length ? Number(v) : null)),
+    /** Whole minutes above zero (FareVM's rule: a fare at 0 made the route's whole search fail to parse in the app);
+     *  an empty cell, or no such column, is none. Five digits at most: an integer column, and no flight is longer. */
+    duration_minutes: z.preprocess(
+      blankToNull,
+      z
+        .string()
+        .regex(/^\d{1,5}$/, "whole minutes")
+        .refine((v) => Number(v) > 0, "must be above 0")
+        .transform(Number)
+        .nullable()
+        .optional(),
+    ),
     price: Amount,
     published_price: z.preprocess(blankToNull, Amount.nullable().optional()),
     published_source: OptionalText,
@@ -348,7 +356,7 @@ export async function importCatalog(deps: { db: Db }, input: ImportBody): Promis
           carrierName: r.carrier_name ?? null,
           product: r.product ?? null,
           nonstop: r.nonstop,
-          durationMinutes: r.duration_minutes,
+          durationMinutes: r.duration_minutes ?? null,
           price: r.price,
           publishedPrice: r.published_price ?? null,
           publishedSource: r.published_source ?? null,

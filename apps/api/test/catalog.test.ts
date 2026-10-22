@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
-import { FareVM, AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
+import { FareVM, AirportVM, HomeVM, SearchResultVM } from "@bbc/shared/api/v1/fares";
 import { toFareVM, type CatalogFacade } from "@bbc/catalog";
 import { fixture } from "@bbc/shared/fixture";
 import { storedPricingRules } from "../../../packages/modules/domain/catalog/src/pricing/rules";
@@ -576,6 +576,47 @@ describe("catalogue import — what it refuses, and where", () => {
     expect(nope.status).toBe(400);
     const body = (await nope.json()) as { error?: { details?: { path: string }[] } };
     expect(body.error?.details?.[0]?.path).toBe("row 3.nonstop");
+    await t.close();
+  }, 60_000);
+
+  // FareVM requires a positive duration: one fare at 0 minutes made the route's whole SearchResultVM fail to parse in
+  // the app — 'Something went wrong', and Try again never succeeded.
+  it("refuses a duration that is not whole minutes above zero; an empty one is none", async () => {
+    const t = await testApp({ suite: "catalog-import-duration" });
+    await t.seedCatalogBasics();
+    const post = async (csv: string) => {
+      const r = await t.app.request("/v1/internal/catalog/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+        body: JSON.stringify({ kind: "fares", csv }),
+      });
+      const body = (await r.json()) as { error?: { details?: { path: string }[] } };
+      return { status: r.status, path: body.error?.details?.[0]?.path ?? null };
+    };
+    for (const duration of ["0", "-5", "1.5", "abc", "999999"]) {
+      expect({ duration, ...(await post([FARES, fare({ duration_minutes: duration })].join("\n"))) }).toEqual({
+        duration,
+        status: 400,
+        path: "row 2.duration_minutes",
+      });
+    }
+    expect(
+      (await post([FARES, fare({ carrier: "DL", carrier_name: "Delta", duration_minutes: "" })].join("\n"))).status,
+    ).toBe(200);
+    expect((await post([FARES, fare({ duration_minutes: "430" })].join("\n"))).status).toBe(200);
+    const search = SearchResultVM.safeParse(
+      await (
+        await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business", { headers: { Cookie: t.memberA.cookie } })
+      ).json(),
+    );
+    expect(search.success).toBe(true);
+    expect(search.data?.items.find((i) => i.carrier.code === "DL")?.durationMinutes).toBeNull();
+    // The table refuses one written past the import too (0035).
+    const zero = await t.db
+      .execute(sql`UPDATE catalog.fares SET duration_minutes = 0 WHERE carrier = 'UA'`)
+      .then(() => "ok")
+      .catch((err: { code?: string; cause?: { code?: string } }) => err.code ?? err.cause?.code);
+    expect(zero).toBe("23514");
     await t.close();
   }, 60_000);
 

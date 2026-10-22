@@ -63,6 +63,8 @@ export const fares = catalog.table(
       sql`length(${t.routeFrom}) = 3 AND length(${t.routeTo}) = 3 AND ${t.routeFrom} <> ${t.routeTo}`,
     ),
     check("fares_published_has_source", sql`${t.publishedPrice} IS NULL OR ${t.publishedSource} IS NOT NULL`),
+    // Whole minutes above zero or none, as FareVM reads it (0035).
+    check("fares_duration_pos", sql`${t.durationMinutes} IS NULL OR ${t.durationMinutes} > 0`),
   ],
 );
 
@@ -115,6 +117,8 @@ export const airports = catalog.table(
     index("airports_city").on(t.city),
     index("airports_region").on(t.region),
     check("airports_description", sql`${t.description} IS NULL OR length(btrim(${t.description})) BETWEEN 1 AND 160`),
+    // On the globe (0035).
+    check("airports_coordinates", sql`${t.lat} BETWEEN -90 AND 90 AND ${t.lng} BETWEEN -180 AND 180`),
   ],
 );
 
