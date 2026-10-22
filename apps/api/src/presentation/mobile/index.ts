@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createHash } from "node:crypto";
+import { z } from "zod";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute, type PrincipalVars } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
@@ -12,6 +12,7 @@ import type { EngagementFacade } from "@bbc/engagement";
 import type { CatalogFacade } from "@bbc/catalog";
 import { toAirportVM } from "@bbc/catalog";
 import { toCard, toDetail, toDestinationPin, toProfileVM } from "./view-models";
+import { PER_MEMBER_CACHE, etagOf, ifNoneMatchHits } from "./http-cache";
 
 type Ports = {
   members: MembersFacade;
@@ -137,32 +138,15 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
           places,
         };
 
-        const etag = `"${createHash("sha1")
-          .update(
-            JSON.stringify({
-              homeCode,
-              // A pin's price is in the tag: a new night's prices are new pins (ADR-IMPL-045).
-              destinations: destinations.map((d) => `${d.code}:${d.fromPrice}`),
-              // So are the destinations' lines (ADR-IMPL-056): an airports import that writes one is a new body.
-              descriptions: [body.home?.description ?? null, ...destinations.map((d) => d.description ?? null)],
-              offerIds,
-              states,
-              // A carousel's membership is in the tag too: an airport's region or country corrected moves an offer
-              // between the regions with the same offers in the same states.
-              sections: sections.map((s) => [s.key, s.items.map((i) => i.id)]),
-              // An airports import that renames a city the cards name is a new body too (ADR-IMPL-057).
-              places: places.map((p) => `${p.code}:${p.city}:${p.countryCode}`),
-            }),
-          )
-          .digest("hex")
-          .slice(0, 16)}"`;
-        const ifNoneMatch = c.req.header("If-None-Match");
-        if (ifNoneMatch === etag) return c.body(null, 304);
+        // The tag is the body's, whole: a pin's price, city, name or place (ADR-IMPL-045), a destination's line
+        // (ADR-IMPL-056), a carousel's offers and their states, a place's name (ADR-IMPL-057) — whatever Home shows. The
+        // home code too, for a home airport the catalog does not know (no `home` in the body).
+        const etag = etagOf({ homeCode, states, body });
+        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+          return c.body(null, 304, { ETag: etag, ...PER_MEMBER_CACHE });
+        }
 
-        return c.json(body, 200, {
-          ETag: etag,
-          "Cache-Control": "private, max-age=300",
-        });
+        return c.json(body, 200, { ETag: etag, ...PER_MEMBER_CACHE });
       },
     );
 
@@ -188,10 +172,10 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const items = rows.map((r) => toCard(r, states[r.id]));
         const personal = items.filter((i) => i.targeting === "personal").length;
 
-        const etag = `"${createHash("sha1").update(JSON.stringify({ offerIds, states })).digest("hex").slice(0, 16)}"`;
-
-        const ifNoneMatch = c.req.header("If-None-Match");
-        if (ifNoneMatch === etag) return c.body(null, 304);
+        const etag = etagOf({ offerIds, states });
+        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+          return c.body(null, 304, { ETag: etag, ...PER_MEMBER_CACHE });
+        }
 
         const lastRow = rows[rows.length - 1];
         const cursor =
@@ -199,6 +183,7 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
 
         return c.json({ items, summary: { total: items.length, personal }, ...(cursor ? { cursor } : {}) }, 200, {
           ETag: etag,
+          ...PER_MEMBER_CACHE,
         });
       },
     );
@@ -218,6 +203,9 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
         const id = c.req.param("id");
+        // An offer's id is a UUID (a bbcclub:// link can carry anything): anything else is no offer, never a cast
+        // Postgres refuses.
+        if (!z.string().uuid().safeParse(id).success) return c.json(apiError("NOT_FOUND"), 404);
 
         const row = await ports.proposals.getVisible(undefined, actor, id);
         if (!row) {

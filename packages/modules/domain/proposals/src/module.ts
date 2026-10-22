@@ -11,6 +11,16 @@ import { withdraw } from "./application/withdraw";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { ProposalsFacade } from "./api";
 
+/** The SQLSTATE and constraint of a failed query: on drizzle's wrapper's cause, or on postgres-js's error itself. */
+function pgError(err: unknown): { code?: string; constraint?: string } {
+  const e = err as { code?: unknown; constraint_name?: unknown; cause?: { code?: unknown; constraint_name?: unknown } };
+  const src = e?.cause && typeof e.cause === "object" ? e.cause : e;
+  return {
+    code: typeof src?.code === "string" ? src.code : undefined,
+    constraint: typeof src?.constraint_name === "string" ? src.constraint_name : undefined,
+  };
+}
+
 export const proposalsModule = (): ModuleDescriptor<Record<string, never>, ProposalsFacade> => ({
   name: "proposals",
   layer: "domain",
@@ -60,9 +70,26 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Propo
             400,
           );
         }
-        const r = await expose.ingest(parsed.data, key);
+        let r: Awaited<ReturnType<typeof expose.ingest>>;
+        try {
+          r = await expose.ingest(parsed.data, key);
+        } catch (err) {
+          // A rule of the offers table the schema above does not mirror yet: the payload is at fault, and a 500 would
+          // have the at-least-once CRM retry it for ever. The constraint's name, never the query's values.
+          const pg = pgError(err);
+          if (pg.code === "23514" || pg.code === "22003") {
+            return c.json(
+              apiError("VALIDATION", {
+                message: pg.constraint ? `refused by ${pg.constraint}` : "a value is out of range",
+              }),
+              400,
+            );
+          }
+          throw err;
+        }
         if (!r.ok) {
           if (r.code === "BAD_KEY") return c.json(apiError("VALIDATION", { message: "Idempotency-Key required" }), 400);
+          if (r.code === "VALIDATION") return c.json(apiError("VALIDATION", { message: r.message }), 400);
           return c.json(apiError("CONFLICT"), 409);
         }
         return c.json({ offerId: r.offerId });

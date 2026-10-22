@@ -10,9 +10,16 @@ import { fixture } from "@bbc/shared/fixture";
 import type { IdentityFacade } from "@bbc/identity";
 import { ensureReviewAccount } from "../../../scripts/seed-review-account";
 import { DEMO_PERSONA, seedStagingDemo } from "../../../scripts/seed-staging-demo";
+import type { WithdrawDeps } from "../../../packages/modules/domain/proposals/src/application/withdraw";
 import { testApp } from "./helpers/test-app";
 
-const DAY = 86_400_000;
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
+/** The app's publisher, as the script's own run builds it: its registry knows every consumer. */
+const appEvents = (t: Awaited<ReturnType<typeof testApp>>): WithdrawDeps["events"] => ({
+  publish: (tx, e) => t.platform.events.publish(tx, { ...e, publishedBy: "proposals" }),
+});
 
 describe("staging demo", () => {
   it("gives the review account Figma's situations, dated from today, and does it again without a trace", async () => {
@@ -43,7 +50,7 @@ describe("staging demo", () => {
 
     const now = new Date();
     const member = { id: first.memberId, email };
-    const counts = await seedStagingDemo(t.db, member, now);
+    const counts = await seedStagingDemo(t.db, member, now, appEvents(t));
     expect(counts).toEqual({ fares: 6, pins: 5, offers: 3, requests: 3, inbox: 4 });
     const total = async () =>
       (
@@ -141,7 +148,9 @@ describe("staging demo", () => {
     // of another member's touched.
     expect(await total()).not.toBe(clean);
     await ensureReviewAccount({ auth, db: t.db, email, password, persona: DEMO_PERSONA });
-    expect(await seedStagingDemo(t.db, member, new Date(now.getTime() + 3 * DAY))).toEqual(counts);
+    // A deploy later the same day: a run dated days ahead would put London's publishAt (a day before the run) after
+    // the real clock, and the feed shows no offer before its publishAt.
+    expect(await seedStagingDemo(t.db, member, new Date(now.getTime() + 3 * HOUR), appEvents(t))).toEqual(counts);
     expect(await total()).toBe(clean);
     expect(InboxVM.parse(await (await t.app.request("/v1/inbox", cookie)).json()).unreadCount).toBe(2);
     const reset = ProfileVM.parse(await (await t.app.request("/v1/profile", cookie)).json());
@@ -156,7 +165,7 @@ describe("staging demo", () => {
     const renewed = await ensureReviewAccount({ auth, db: t.db, email, password, persona: DEMO_PERSONA });
     expect(renewed.created).toBe(true);
     expect(renewed.memberId).not.toBe(first.memberId);
-    expect(await seedStagingDemo(t.db, { id: renewed.memberId, email }, now)).toEqual(counts);
+    expect(await seedStagingDemo(t.db, { id: renewed.memberId, email }, now, appEvents(t))).toEqual(counts);
     const renewedCookie = { headers: { Cookie: await t.auth.cookieFor(email, password) } };
     expect(FeedVM.parse(await (await t.app.request("/v1/proposals", renewedCookie)).json()).items.length).toBe(3);
     expect(
@@ -174,6 +183,63 @@ describe("staging demo", () => {
       await (await t.app.request("/v1/inbox", { headers: { Cookie: t.memberB.cookie } })).json(),
     );
     expect(other.items).toEqual([]);
+    await t.close();
+  }, 60_000);
+
+  // ADR-IMPL-040: the fixture seed is not meant for staging, yet staging held its offers beside the demo's — Paris and
+  // Tokyo twice on Explore. The demo withdraws them, as the internal withdraw route does: status and offer.withdrawn.
+  it("withdraws the fixture seed's offers, once, as the withdraw route does", async () => {
+    const t = await testApp({ suite: "staging-demo-fixture" });
+    await t.seedCatalogBasics();
+    const auth = t.registry.facade<IdentityFacade>("identity").auth;
+    const email = "review.staging-fixture@test.dev";
+    const password = "review-demo-password-1";
+    const account = await ensureReviewAccount({ auth, db: t.db, email, password, persona: DEMO_PERSONA });
+    await t.drainAll();
+    const cookie = { headers: { Cookie: await t.auth.cookieFor(email, password) } };
+    const member = { id: account.memberId, email };
+
+    // The fixture seed's offers, as packages/db/scripts/seed-fixture.ts writes them (keys `fixture:<key>`).
+    for (const o of fixture.offers) {
+      await t.db.execute(sql`
+        INSERT INTO proposals.offers (idempotency_key, source, targeting, target_member_id, route_from, route_to, cabin,
+          price, published_price, currency, title, valid_until, status)
+        VALUES (${`fixture:${o.key}`}, ${o.targeting === "user" ? "crm_agent" : "marketing_campaign"}, ${o.targeting},
+          ${o.targeting === "user" ? fixture.member.id : null}, ${o.from}, ${o.to}, 'business', ${String(o.price)},
+          ${String(o.published)}, 'USD', ${o.title}, now() + interval '30 days', 'active')`);
+    }
+    const fixtureActive = async () =>
+      Number(
+        (
+          (await t.db.execute(
+            sql`SELECT count(*)::int AS n FROM proposals.offers WHERE idempotency_key LIKE 'fixture:%' AND status = 'active'`,
+          )) as unknown as { n: number }[]
+        )[0]?.n,
+      );
+    const withdrawnEvents = async () => (await t.journal.byType("offer.withdrawn")).length;
+    expect(await fixtureActive()).toBe(fixture.offers.length);
+
+    const events = appEvents(t);
+    await seedStagingDemo(t.db, member, new Date(), events);
+    expect(await fixtureActive()).toBe(0);
+    expect(await withdrawnEvents()).toBe(fixture.offers.length);
+    const deliveries = (await t.db.execute(sql`
+      SELECT count(*)::int AS n FROM platform.event_deliveries d JOIN platform.domain_events e ON e.id = d.event_id
+      WHERE e.type = 'offer.withdrawn' AND d.consumer = 'notifications.onOfferWithdrawn'`)) as unknown as {
+      n: number;
+    }[];
+    expect(deliveries[0]?.n).toBe(fixture.offers.length); // pending pushes are suppressed by its consumer
+
+    // Explore shows each demo offer once.
+    const home = HomeVM.parse(await (await t.app.request("/v1/home", cookie)).json());
+    const titles = home.sections.find((s) => s.key === "inspire")!.items.map((i) => i.title);
+    expect(titles.length).toBe(new Set(titles).size);
+    expect(titles.length).toBe(3);
+
+    // A second run withdraws nothing more and publishes nothing.
+    await seedStagingDemo(t.db, member, new Date(), events);
+    expect(await withdrawnEvents()).toBe(fixture.offers.length);
+    expect(await fixtureActive()).toBe(0);
     await t.close();
   }, 60_000);
 });

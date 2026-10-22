@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { POPULAR, ZONE_ALIASES, homeZones, pickPopular } from "../../src/application/discovery";
+import { POPULAR, ZONE_ALIASES, homeZones, pickPopular, zoneCity } from "../../src/application/discovery";
 import type { AirportRow } from "../../src/application/to-fare-vm";
 
 const apt = (code: string, lat: number, lng: number) =>
@@ -61,5 +61,15 @@ describe("homeZones — the phone's time zone, as the airport data names it", ()
       expect(homeZones(old)).toEqual([old, current]);
       expect(homeZones(current)).toEqual([current]);
     }
+  });
+});
+
+describe("zoneCity — the city a zone is named after, as city_norm spells it", () => {
+  it("takes the last part, spaces for underscores, lower-case, no accents", () => {
+    expect(zoneCity("America/Lima")).toBe("lima");
+    expect(zoneCity("Asia/Ho_Chi_Minh")).toBe("ho chi minh");
+    expect(zoneCity("America/Argentina/Buenos_Aires")).toBe("buenos aires");
+    expect(zoneCity("America/Bogotá")).toBe("bogota");
+    expect(zoneCity("GB")).toBe("gb");
   });
 });

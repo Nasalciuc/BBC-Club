@@ -182,7 +182,7 @@ try {
         .insert(fares)
         .values(f)
         .onConflictDoNothing({
-          target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom],
+          target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom, fares.trip],
         });
     }
 
@@ -197,7 +197,7 @@ try {
                timestamptz '2026-01-01 00:00:00+00' + (g || ' seconds')::interval,
                timestamptz '2028-01-01 00:00:00+00', true
         FROM generate_series(1, 10000) g
-        ON CONFLICT (route_from, route_to, cabin, carrier, valid_from) DO NOTHING
+        ON CONFLICT (route_from, route_to, cabin, carrier, valid_from, trip) DO NOTHING
       `);
       console.log("bench fares seeded (10000 JFK→LHR)");
     }

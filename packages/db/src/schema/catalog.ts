@@ -1,15 +1,4 @@
-import {
-  pgSchema,
-  text,
-  char,
-  numeric,
-  integer,
-  boolean,
-  index,
-  uniqueIndex,
-  check,
-  primaryKey,
-} from "drizzle-orm/pg-core";
+import { pgSchema, text, char, numeric, integer, boolean, index, unique, check, primaryKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { id, createdAt, updatedAt, tz } from "./_helpers";
 
@@ -49,7 +38,11 @@ export const fares = catalog.table(
     updatedAt: updatedAt(),
   },
   (t) => [
-    uniqueIndex("fares_route_cabin_carrier").on(t.routeFrom, t.routeTo, t.cabin, t.carrier, t.validFrom),
+    /** One fare per route, cabin, carrier, valid_from and trip; a fare without a carrier is one too (NULLS NOT
+     *  DISTINCT) — the import's ON CONFLICT target. A constraint since 0034 (0006 made it an index without the trip). */
+    unique("fares_route_cabin_carrier")
+      .on(t.routeFrom, t.routeTo, t.cabin, t.carrier, t.validFrom, t.trip)
+      .nullsNotDistinct(),
     index("fares_search")
       .on(t.routeFrom, t.routeTo, t.cabin)
       .where(sql`${t.published} = true`),
@@ -70,6 +63,8 @@ export const fares = catalog.table(
       sql`length(${t.routeFrom}) = 3 AND length(${t.routeTo}) = 3 AND ${t.routeFrom} <> ${t.routeTo}`,
     ),
     check("fares_published_has_source", sql`${t.publishedPrice} IS NULL OR ${t.publishedSource} IS NOT NULL`),
+    // Whole minutes above zero or none, as FareVM reads it (0035).
+    check("fares_duration_pos", sql`${t.durationMinutes} IS NULL OR ${t.durationMinutes} > 0`),
   ],
 );
 
@@ -122,6 +117,8 @@ export const airports = catalog.table(
     index("airports_city").on(t.city),
     index("airports_region").on(t.region),
     check("airports_description", sql`${t.description} IS NULL OR length(btrim(${t.description})) BETWEEN 1 AND 160`),
+    // On the globe (0035).
+    check("airports_coordinates", sql`${t.lat} BETWEEN -90 AND 90 AND ${t.lng} BETWEEN -180 AND 180`),
   ],
 );
 

@@ -61,6 +61,16 @@ describe("discovery", () => {
     expect((await get("Europe/Chisinau")).body?.airport?.code).toBe("RMO");
     expect((await get("Asia/Calcutta")).body?.airport?.code).toBe("DEL"); // an old name some phones still report
     expect((await get("Etc/UTC")).body).toEqual({ airport: null }); // UTC is not a place
+    // The reference set gives every international airport the same popularity: a tie goes to the zone's own city,
+    // never to the first code (Lima was Arequipa, Moscow Sochi, Bogotá San Andrés, Taipei Kaohsiung).
+    expect((await get("America/Lima")).body?.airport?.code).toBe("LIM");
+    expect((await get("Asia/Taipei")).body?.airport?.code).toBe("TPE");
+    expect((await get("America/Bogota")).body?.airport?.code).toBe("BOG");
+    expect((await get("Europe/Moscow")).body?.airport?.city).toBe("Moscow");
+    expect((await get("Europe/London")).body?.airport?.code).toBe("LHR"); // the curated hub, as before
+    expect((await get("Asia/Tokyo")).body?.airport?.code).toBe("HND");
+    // A tie between other cities, none the zone's own (Larnaca or Paphos for Nicosia): no suggestion — onboarding asks.
+    expect((await get("Asia/Nicosia")).body).toEqual({ airport: null });
     expect((await get("not/a_zone")).status).toBe(400);
     expect((await get("")).status).toBe(400);
     expect((await t.app.request("/v1/airports/home-suggestion?tz=UTC")).status).toBe(401);

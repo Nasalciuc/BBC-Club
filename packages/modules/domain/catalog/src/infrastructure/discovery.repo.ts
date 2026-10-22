@@ -23,14 +23,18 @@ export const discoveryRepo = {
     return exec.select().from(airports).orderBy(desc(airports.popularity), asc(airports.code)).limit(limit);
   },
 
-  /** The busiest airport in one of these time zones, or null. */
+  /** The busiest airports in these time zones: every one with the top popularity among them, by code. The reference set
+   *  gives each international airport the same popularity, so a zone's top is often several cities. */
   async busiestIn(exec: Executor, zones: string[]) {
-    const [row] = await exec
+    const top = exec
+      .select({ popularity: sql`max(${airports.popularity})` })
+      .from(airports)
+      .where(inArray(airports.tz, zones));
+    return exec
       .select()
       .from(airports)
-      .where(inArray(airports.tz, zones))
-      .orderBy(desc(airports.popularity), asc(airports.code))
-      .limit(1);
-    return row ?? null;
+      .where(and(inArray(airports.tz, zones), eq(airports.popularity, sql`(${top})`)))
+      .orderBy(asc(airports.code))
+      .limit(50);
   },
 };

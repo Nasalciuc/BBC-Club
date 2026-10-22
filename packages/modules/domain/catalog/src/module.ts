@@ -1,6 +1,7 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { desc, gte, sql } from "drizzle-orm";
-import type { Db, Executor } from "@bbc/db";
+import { errorForLog, type Db, type Executor } from "@bbc/db";
 import { demandDaily } from "@bbc/db/schema/catalog";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
@@ -10,7 +11,6 @@ import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { airportsRepo } from "./infrastructure/airports.repo";
-import { discoveryRepo } from "./infrastructure/discovery.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { placePhotosRepo } from "./infrastructure/place-photos.repo";
 import { siteRepo } from "./infrastructure/site.repo";
@@ -18,8 +18,8 @@ import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
 import { formatInZone } from "./application/flight-local";
-import { homeZones, popularFrom } from "./application/discovery";
-import { importCatalog, ImportBody } from "./application/import";
+import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
+import { importCatalog, ImportBody, ImportError } from "./application/import";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
 import { syncSite } from "./application/site-sync";
@@ -29,6 +29,21 @@ import type { CatalogFacade, DestinationPin } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
   return row.published && row.validFrom <= now && row.validUntil > now;
+}
+
+/** A route's IATA code as a member's request may carry it (upper-cased first). */
+const IATA = /^[A-Z]{3}$/;
+/** A fare's id is a UUID: anything else is no fare (404), never a cast Postgres refuses (500). */
+const isUuid = (v: string) => z.string().uuid().safeParse(v).success;
+
+/** The travel days fares are sold for: from yesterday (a member a day behind UTC still means today) to two years ahead.
+ *  A day outside them has no fare — the search answers an empty list without asking Postgres (a year it cannot store
+ *  was a 500). Never an error: the app's recent searches keep their dates, and a day gone by is still sent. */
+function searchWhenInRange(when: Date, now = new Date()): boolean {
+  const earliest = new Date(now.getTime() - 86_400_000);
+  const latest = new Date(now);
+  latest.setUTCFullYear(latest.getUTCFullYear() + 2);
+  return when >= earliest && when <= latest;
 }
 
 /** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
@@ -195,31 +210,36 @@ export const catalogModule = (
         const to = (c.req.query("to") ?? "").toUpperCase();
         const cabin = c.req.query("cabin") as "business" | "first" | undefined;
         const whenRaw = c.req.query("when");
-        if (!from || from.length !== 3 || !to || to.length !== 3 || (cabin !== "business" && cabin !== "first")) {
+        if (!IATA.test(from) || !IATA.test(to) || (cabin !== "business" && cabin !== "first")) {
           return c.json(apiError("VALIDATION", { message: "from, to (IATA), cabin required" }), 400);
         }
         const when = whenRaw ? new Date(whenRaw) : undefined;
         if (when && Number.isNaN(when.getTime())) {
           return c.json(apiError("VALIDATION", { message: "when must be ISO datetime" }), 400);
         }
+        // A day gone by (a recent search's remembered date) or further out than anything is sold: no fare flies then.
+        // An empty list, as for any day without one — an error would come back on every Try again.
+        const sold = !when || searchWhenInRange(when);
 
         const [fromApt, toApt, rows] = await Promise.all([
           airportsRepo.get(conn, from),
           airportsRepo.get(conn, to),
-          faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }),
+          sold ? faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }) : Promise.resolve([]),
         ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
 
         const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
-        const month = (when ?? new Date()).toISOString().slice(0, 7);
-        platform.search.note({
-          from,
-          to,
-          cabin,
-          month,
-          hadFares: items.length > 0,
-          results: items.length,
-        });
+        // Demand counts the days fares are sold for; a day outside them is no route's demand.
+        if (sold) {
+          platform.search.note({
+            from,
+            to,
+            cabin,
+            month: (when ?? new Date()).toISOString().slice(0, 7),
+            hadFares: items.length > 0,
+            results: items.length,
+          });
+        }
         // No fare in this cabin: the company's formula, as an indicative price (ADR-IMPL-037). Undated searches only —
         // with a date, the route may have fares on other days, and published fares always win. The flag rows are read
         // only then, so searches with fares cost nothing extra. The rules are not in the repository: each environment
@@ -246,6 +266,7 @@ export const catalogModule = (
       }),
       async (c) => {
         const id = c.req.param("id");
+        if (!isUuid(id)) return c.json(apiError("NOT_FOUND"), 404);
         const row = await faresRepo.getAny(conn, id);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
 
@@ -290,7 +311,10 @@ export const catalogModule = (
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const q = (c.req.query("q") ?? "").slice(0, 64);
+        const raw = c.req.query("q") ?? "";
+        // Postgres text cannot hold a NUL: no airport has one, and the query would fail.
+        if (raw.includes("\u0000")) return c.json(apiError("VALIDATION", { message: "q has a NUL character" }), 400);
+        const q = raw.slice(0, 64);
         const gen = await platform.cache.generation("catalog:airports:gen");
         const rows =
           gen == null
@@ -346,7 +370,7 @@ export const catalogModule = (
       async (c) => {
         const zones = homeZones(c.req.query("tz") ?? "");
         if (!zones) return c.json(apiError("VALIDATION", { message: "tz must be an IANA time zone" }), 400);
-        const airport = zones.length > 0 ? await discoveryRepo.busiestIn(conn, zones) : null;
+        const airport = await homeSuggestion(conn, zones);
         return c.json({ airport: airport ? toAirportVM(airport) : null });
       },
     );
@@ -467,7 +491,11 @@ export const catalogModule = (
           await invalidateMaps();
           return c.json(r);
         } catch (e: unknown) {
-          return c.json(apiError("VALIDATION", { message: e instanceof Error ? e.message : "import failed" }), 400);
+          // The file's fault, row by row; anything else is ours (the error contract logs it without the query's values).
+          if (e instanceof ImportError) {
+            return c.json(apiError("VALIDATION", { message: "The file was not imported.", details: e.details }), 400);
+          }
+          throw e;
         }
       },
     );
@@ -521,7 +549,7 @@ export const catalogModule = (
           },
         })
         .catch((err: unknown) => {
-          platform.logger.error({ err: String(err) }, "demand consumer stopped");
+          platform.logger.error({ err: errorForLog(err) }, "demand consumer stopped");
         });
       platform.lifecycle.onClose(async () => {
         await loop;

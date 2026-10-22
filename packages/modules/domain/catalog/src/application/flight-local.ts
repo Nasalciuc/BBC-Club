@@ -22,6 +22,17 @@ export function calendarDayOffset(departYmd: string, arriveYmd: string): number 
   return Math.round((b - a) / 86_400_000);
 }
 
+/** The same check, as a yes or no (the import names the row of a zone that is none). */
+export function isIanaZone(tz: string): boolean {
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat("en-GB", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function assertIanaZone(tz: string): void {
   try {
     new Intl.DateTimeFormat("en-GB", { timeZone: tz });
