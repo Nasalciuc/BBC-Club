@@ -90,6 +90,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog fare trip and airport description applied/);
     expect(second.out).not.toMatch(/proposals offer rating applied/);
     expect(second.out).not.toMatch(/members profile avatar url applied/);
+    expect(second.out).not.toMatch(/catalog fares key applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -127,6 +128,7 @@ describe("extras ledger", () => {
       "0031_catalog_fare_trip_and_airport_description.sql",
       "0032_proposals_offer_rating.sql",
       "0033_members_profile_avatar_url.sql",
+      "0034_catalog_fares_key.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -305,6 +307,57 @@ describe("extras ledger", () => {
       sql`SELECT convalidated FROM pg_constraint WHERE conname = 'offers_rating'`,
     )) as unknown as { convalidated: boolean }[];
     expect(validated?.convalidated).toBe(true);
+  });
+
+  // 0034: a fare is one per route, cabin, carrier, valid_from and trip — a fare without a carrier included (NULLS NOT
+  // DISTINCT). The duplicates an import left behind are collapsed to the most recently updated row.
+  it("fares_route_cabin_carrier: trip in the key, a NULL carrier not distinct, older duplicates collapsed", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    const code = async (q: ReturnType<typeof sql>) => {
+      try {
+        await db.execute(q);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    // The key as 0006 had it, and what three imports of a carrier-less fare left under it.
+    await db.execute(sql`ALTER TABLE catalog.fares DROP CONSTRAINT fares_route_cabin_carrier`);
+    await db.execute(sql`CREATE UNIQUE INDEX fares_route_cabin_carrier
+      ON catalog.fares (route_from, route_to, cabin, carrier, valid_from)`);
+    const fare = (price: string, updated: string, carrier: string | null = null) => sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, price, valid_from, valid_until, updated_at)
+      VALUES ('KEF', 'AMS', 'business', ${carrier}, ${price}, '2026-10-01T00:00:00Z', now() + interval '30 days',
+        ${updated}::timestamptz)`;
+    expect(await code(fare("2100.00", "2026-10-02T00:00:00Z"))).toBe("ok");
+    expect(await code(fare("2100.00", "2026-10-03T00:00:00Z"))).toBe("ok");
+    expect(await code(fare("1999.00", "2026-10-04T00:00:00Z"))).toBe("ok");
+    expect(await code(fare("2500.00", "2026-10-01T00:00:00Z", "FI"))).toBe("ok");
+    await db.execute(sql`DELETE FROM platform.extras_applied WHERE name = '0034_catalog_fares_key.sql'`);
+
+    const again = await runMigrate();
+    expect(again.code).toBe(0);
+    expect(again.out).toMatch(/catalog fares key applied/);
+    const kept = (await db.execute(
+      sql`SELECT coalesce(carrier, '-') AS carrier, price::text FROM catalog.fares WHERE route_from = 'KEF' AND route_to = 'AMS' ORDER BY carrier NULLS FIRST`,
+    )) as unknown as { carrier: string; price: string }[];
+    expect(kept).toEqual([
+      { carrier: "-", price: "1999.00" },
+      { carrier: "FI", price: "2500.00" },
+    ]);
+    // Now a constraint, NULLS NOT DISTINCT, with the trip in it.
+    const [def] = (await db.execute(sql`
+      SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'fares_route_cabin_carrier'`)) as unknown as {
+      def: string;
+    }[];
+    expect(def?.def).toBe("UNIQUE NULLS NOT DISTINCT (route_from, route_to, cabin, carrier, valid_from, trip)");
+    expect(await code(fare("1800.00", "2026-10-05T00:00:00Z"))).toBe("23505");
+    const roundTrip = sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, price, valid_from, valid_until, trip)
+      VALUES ('KEF', 'AMS', 'business', NULL, '3500.00', '2026-10-01T00:00:00Z', now() + interval '30 days',
+        'round_trip')`;
+    expect(await code(roundTrip)).toBe("ok");
   });
 
   // ADR-IMPL-056: the member's photo is only ever an https address — on a table drizzle's own first migration creates.

@@ -9,7 +9,7 @@ import { testApp } from "./helpers/test-app";
 const LINE = "Iconic sights, world-class culture and unforgettable experiences.";
 
 describe("a fare's trip", () => {
-  it("is one way unless its import row says round trip; a re-import restates it, an unknown one refuses the file", async () => {
+  it("is one way unless its import row says round trip; each trip is its own fare, an unknown one refuses the file", async () => {
     const t = await testApp({ suite: "catalog-trip" });
     await t.seedCatalogBasics();
     const cookie = { headers: { Cookie: t.memberA.cookie } };
@@ -44,18 +44,62 @@ describe("a fare's trip", () => {
     const fare = FareVM.parse(await (await t.app.request(`/v1/fares/${ua!.id}`, cookie)).json());
     expect(fare.trip).toBe("round_trip");
 
-    // The same fare from a file without the column: its price restated, and with it one way.
+    // A file without the column says one way: the trip is part of a fare's identity (0034), so that is a one-way fare
+    // beside the round-trip one, which stays as it was.
     expect(
       (await importFares([head, `JFK,LHR,business,UA,United,true,430,4650.00,USD,${from},${until}`].join("\n"))).status,
     ).toBe(200);
-    expect(await tripOf("UA")).toBe("one_way");
+    const united = async () =>
+      (await search()).items.filter((f) => f.carrier.code === "UA").map((f) => [f.trip, f.price.offer]);
+    expect(await united()).toEqual([
+      ["round_trip", 4600],
+      ["one_way", 4650],
+    ]);
 
     // A trip the catalogue does not know refuses the whole file: nothing of it is written.
     const odd = await importFares(
       [`${head},trip`, `JFK,LHR,business,UA,United,true,430,4999.00,USD,${from},${until},return`].join("\n"),
     );
     expect(odd.status).toBe(400);
-    expect((await search()).items.find((f) => f.carrier.code === "UA")?.price.offer).toBe(4650);
+    expect(await united()).toEqual([
+      ["round_trip", 4600],
+      ["one_way", 4650],
+    ]);
+    await t.close();
+  }, 60_000);
+
+  // The trip is part of a fare's identity: the same route sold one way and round trip in one file is two fares. The
+  // second row used to overwrite the first in place — same id, the other trip and price — while the import said 2.
+  it("one route sold one way and round trip is two fares, each kept by a re-import", async () => {
+    const t = await testApp({ suite: "catalog-trip-key" });
+    await t.seedCatalogBasics();
+    const cookie = { headers: { Cookie: t.memberA.cookie } };
+    const until = new Date(Date.now() + 14 * 86_400_000).toISOString();
+    const from = new Date(Date.now() - 86_400_000).toISOString();
+    const csv = [
+      "route_from,route_to,cabin,carrier,carrier_name,nonstop,duration_minutes,price,currency,valid_from,valid_until,trip",
+      `JFK,LHR,business,LX,Swiss,true,430,2100.00,USD,${from},${until},one_way`,
+      `JFK,LHR,business,LX,Swiss,true,430,3900.00,USD,${from},${until},round_trip`,
+    ].join("\n");
+    const post = () =>
+      t.app.request("/v1/internal/catalog/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+        body: JSON.stringify({ kind: "fares", csv }),
+      });
+    const swiss = async () =>
+      SearchResultVM.parse(await (await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business", cookie)).json())
+        .items.filter((f) => f.carrier.code === "LX")
+        .map((f) => ({ id: f.id, trip: f.trip, price: f.price.offer }));
+    expect((await post()).status).toBe(200);
+    const first = await swiss();
+    expect(first.map(({ trip, price }) => [trip, price])).toEqual([
+      ["one_way", 2100],
+      ["round_trip", 3900],
+    ]);
+    expect(new Set(first.map((f) => f.id)).size).toBe(2);
+    expect((await post()).status).toBe(200);
+    expect(await swiss()).toEqual(first); // the same two fares, the same ids
     await t.close();
   }, 60_000);
 });

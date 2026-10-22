@@ -129,7 +129,8 @@ export const faresRepo = {
       publishedPrice: string | null;
       publishedSource: string | null;
       currency: string;
-      /** What the price is for (ADR-IMPL-056). A re-import restates it with the price: the row says it, or one way. */
+      /** What the price is for (ADR-IMPL-056): the row says it, or one way. Part of the fare's identity (0034): the same
+       *  route sold one way and round trip is two fares. */
       trip: "round_trip" | "one_way";
       validFrom: Date;
       validUntil: Date;
@@ -143,7 +144,9 @@ export const faresRepo = {
         published: true,
       })
       .onConflictDoUpdate({
-        target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom],
+        // fares_route_cabin_carrier (0034): the trip in it, a NULL carrier not distinct — a carrier-less fare re-imported
+        // is the same fare, and one route sold one way and round trip is two.
+        target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom, fares.trip],
         set: {
           carrierName: row.carrierName,
           product: row.product,
@@ -153,7 +156,6 @@ export const faresRepo = {
           publishedPrice: row.publishedPrice,
           publishedSource: row.publishedSource,
           currency: row.currency,
-          trip: row.trip,
           validUntil: row.validUntil,
           published: true,
           updatedAt: sql`now()`,

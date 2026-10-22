@@ -34,7 +34,16 @@ const FareCsvRow = z
     route_from: Iata,
     route_to: Iata,
     cabin: z.enum(["business", "first"]),
-    carrier: z.string().length(2).nullable().optional(),
+    /** The airline's IATA code, upper-cased; an empty cell, or no such column, is none — still one fare (0034). */
+    carrier: z.preprocess(
+      blankToNull,
+      z
+        .string()
+        .regex(/^[A-Za-z0-9]{2}$/, "two letters or digits (an IATA airline code)")
+        .transform((v) => v.toUpperCase())
+        .nullable()
+        .optional(),
+    ),
     carrier_name: OptionalText,
     product: OptionalText,
     /** Yes or no, as a spreadsheet or a person writes it (TRUE, yes, y, 1 / FALSE, no, n, 0), any case; an empty cell

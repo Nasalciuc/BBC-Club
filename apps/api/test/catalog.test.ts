@@ -365,6 +365,43 @@ describe("catalog routes", () => {
     expect(items.filter((i) => i.carrier.code === "UA").length).toBe(1);
     await t.close();
   });
+
+  // The fares key treated a NULL carrier as distinct from every other, so ON CONFLICT never fired for a fare without
+  // one: three imports were three rows, the stale price still listed. And an empty carrier cell refused the file.
+  it("import fares is idempotent for a fare without a carrier, and an empty carrier cell imports", async () => {
+    const t = await testApp({ suite: "catalog-import-no-carrier" });
+    await t.seedCatalogBasics();
+    const until = new Date(Date.now() + 14 * 86_400_000).toISOString();
+    const from = new Date(Date.now() - 86_400_000).toISOString();
+    const post = (csv: string) =>
+      t.app.request("/v1/internal/catalog/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+        body: JSON.stringify({ kind: "fares", csv }),
+      });
+    const noCarrier = (price: string) =>
+      [
+        "route_from,route_to,cabin,nonstop,price,currency,valid_from,valid_until",
+        `JFK,HND,business,true,${price},USD,${from},${until}`,
+      ].join("\n");
+    for (const price of ["2100.00", "2100.00", "1999.00"]) expect((await post(noCarrier(price))).status).toBe(200);
+    const search = async () =>
+      (
+        (await (
+          await t.app.request("/v1/search?from=JFK&to=HND&cabin=business", { headers: { Cookie: t.memberA.cookie } })
+        ).json()) as { items: { carrier: { code: string | null }; price: { offer: number } }[] }
+      ).items;
+    expect((await search()).map((i) => [i.carrier.code, i.price.offer])).toEqual([[null, 1999]]);
+
+    // The same fare from a file whose carrier cell is empty: the same fare, restated.
+    const emptyCell = [
+      "route_from,route_to,cabin,carrier,carrier_name,nonstop,price,currency,valid_from,valid_until",
+      `JFK,HND,business,,,true,1950.00,USD,${from},${until}`,
+    ].join("\n");
+    expect((await post(emptyCell)).status).toBe(200);
+    expect((await search()).map((i) => [i.carrier.code, i.price.offer])).toEqual([[null, 1950]]);
+    await t.close();
+  });
 });
 
 // The catalogue import refuses what no screen can show, before writing anything, and says where: `row N.<field>`, N

@@ -100,7 +100,7 @@ try {
       sql.raw(`
       INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, nonstop, price, currency, source, valid_from, valid_until, published)
       VALUES ${rows.join(",")}
-      ON CONFLICT (route_from, route_to, cabin, carrier, valid_from) DO NOTHING`),
+      ON CONFLICT (route_from, route_to, cabin, carrier, valid_from, trip) DO NOTHING`),
     );
   });
 
