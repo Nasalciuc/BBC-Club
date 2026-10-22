@@ -1,6 +1,37 @@
 import { describe, expect, it } from "bun:test";
 import { authMessage } from "@bbc/shared/auth-messages";
-import { afterResetSignIn, fail, RESET_DONE_SIGN_IN } from "./flows-logic";
+import { afterResetSignIn, clearOnExit, exitPlan, fail, RESET_DONE_SIGN_IN, type ExitStores } from "./flows-logic";
+
+/** Stores that record what a session's end cleared. */
+function recordingStores() {
+  const cleared: string[] = [];
+  const stores: ExitStores = {
+    clearQueue: () => void cleared.push("queue"),
+    resetUnreadQuotes: () => void cleared.push("unreadQuotes"),
+    clearMemberData: () => void cleared.push("memberData"),
+    forgetLocalOwner: () => void cleared.push("localOwner"),
+    clearPendingPassword: () => void cleared.push("pendingPassword"),
+  };
+  return { stores, cleared };
+}
+
+describe("exitPlan / clearOnExit — what a session's end clears on the phone", () => {
+  it("the member's own Sign out or Delete account: everything of theirs goes", () => {
+    for (const kind of ["signOut", "deleted"] as const) {
+      expect(exitPlan(kind)).toEqual({ clearQueue: true, clearMemberData: true, forgetOwner: true });
+      const { stores, cleared } = recordingStores();
+      clearOnExit(kind, stores);
+      expect(cleared).toEqual(["queue", "unreadQuotes", "memberData", "localOwner", "pendingPassword"]);
+    }
+  });
+
+  it("a session the server ended (401): requests saved offline, saved items, recent searches and the owner stay", () => {
+    expect(exitPlan("revoked")).toEqual({ clearQueue: false, clearMemberData: false, forgetOwner: false });
+    const { stores, cleared } = recordingStores();
+    clearOnExit("revoked", stores);
+    expect(cleared).toEqual(["unreadQuotes", "pendingPassword"]);
+  });
+});
 
 describe("afterResetSignIn — the reset succeeded; the sign-in with the new password may not", () => {
   it("signed in: on to the gate", () => {

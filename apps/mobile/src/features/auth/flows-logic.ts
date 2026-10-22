@@ -18,6 +18,40 @@ export function fail(err: { code?: string; message?: string; status?: number } |
 }
 
 /**
+ * How a session ends on this phone. `signOut` / `deleted`: the member chose to leave — what was theirs goes with them.
+ * `revoked`: the server ended it (a 401: a password changed or reset elsewhere, an expiry) — the member did not leave and
+ * usually signs in again, so the requests saved offline stay with their owner (lib/queue.ts adoptQueue gives them back
+ * to that member and sets them aside for any other), as do the saved items, recent searches, onboarded flag and their
+ * owner marker (local-owner.ts adoptLocalData clears them if another member signs in).
+ */
+export type ExitKind = "signOut" | "deleted" | "revoked";
+export type ExitPlan = { clearQueue: boolean; clearMemberData: boolean; forgetOwner: boolean };
+
+export function exitPlan(kind: ExitKind): ExitPlan {
+  const chosen = kind !== "revoked";
+  return { clearQueue: chosen, clearMemberData: chosen, forgetOwner: chosen };
+}
+
+/** The phone's stores a session's end may clear (flows.ts passes the real ones). */
+export type ExitStores = {
+  clearQueue: () => void;
+  resetUnreadQuotes: () => void;
+  clearMemberData: () => void;
+  forgetLocalOwner: () => void;
+  clearPendingPassword: () => void;
+};
+
+/** Clear what `kind` says. The Requests dot's number and a pending password never outlive any session. */
+export function clearOnExit(kind: ExitKind, stores: ExitStores): void {
+  const plan = exitPlan(kind);
+  if (plan.clearQueue) stores.clearQueue();
+  stores.resetUnreadQuotes();
+  if (plan.clearMemberData) stores.clearMemberData();
+  if (plan.forgetOwner) stores.forgetLocalOwner();
+  stores.clearPendingPassword();
+}
+
+/**
  * After a reset that succeeded, the sign-in with the new password. Its failure — 429 because the wrong sign-ins before
  * the reset used /sign-in/email's 5 per 10 min, another refusal, no connection (`"network"`) — is never the reset's:
  * the password is set and the code spent, so the member is sent to Sign in with RESET_DONE_NOTICE, never offered

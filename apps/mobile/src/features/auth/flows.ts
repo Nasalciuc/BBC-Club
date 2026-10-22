@@ -7,19 +7,32 @@ import { clearQueue } from "@/lib/queue";
 import { appStorage, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
-import { afterResetSignIn, fail, refuseEmptyPassword, type FlowResult } from "./flows-logic";
+import {
+  afterResetSignIn,
+  clearOnExit,
+  fail,
+  refuseEmptyPassword,
+  type ExitKind,
+  type ExitStores,
+  type FlowResult,
+} from "./flows-logic";
 import { adoptLocalData, clearMemberData, forgetLocalOwner } from "./local-owner";
 import { otpSendResult } from "./otp-send-logic";
 
-/** Unregister push, drop pending queue, the Requests dot's number and the member's data on the phone (saved items,
- *  recent searches, onboarded — local-owner.ts) with its owner — then auth ends. */
-async function clearLocalSession(): Promise<void> {
+const PHONE_STORES: ExitStores = {
+  clearQueue,
+  resetUnreadQuotes,
+  clearMemberData,
+  forgetLocalOwner,
+  clearPendingPassword: () => appStorage.remove(PENDING_PASSWORD_KEY),
+};
+
+/** Unregister push, then clear what this kind of end clears (flows-logic.ts exitPlan): on the member's own Sign out or
+ *  Delete account the queue, the Requests dot's number and their data on the phone (saved items, recent searches,
+ *  onboarded — local-owner.ts) with its owner; when the server ended the session, the dot and a pending password only. */
+async function clearLocalSession(kind: ExitKind): Promise<void> {
   await unregisterPushDevice().catch(() => undefined);
-  clearQueue();
-  resetUnreadQuotes();
-  clearMemberData();
-  forgetLocalOwner();
-  appStorage.remove(PENDING_PASSWORD_KEY);
+  clearOnExit(kind, PHONE_STORES);
 }
 
 type Result = FlowResult;
@@ -175,7 +188,17 @@ export async function setPassword(newPassword: string): Promise<Result> {
 }
 
 export async function signOut(): Promise<void> {
-  await clearLocalSession();
+  await clearLocalSession("signOut");
+  await withAuthTimeout(authClient.signOut()).catch(() => undefined);
+}
+
+/**
+ * The server ended the session (a 401 on a /v1 call: a password changed or reset elsewhere, an expiry). Not the member's
+ * sign-out: a request saved offline — whose confirmation promised "Nothing more to do" — stays on the phone with its
+ * owner and goes out when that member signs in again; another member's sign-in sets it aside (lib/queue.ts).
+ */
+export async function endRevokedSession(): Promise<void> {
+  await clearLocalSession("revoked");
   await withAuthTimeout(authClient.signOut()).catch(() => undefined);
 }
 
@@ -187,7 +210,7 @@ export async function deleteAccount(password: string): Promise<Result> {
   try {
     const { error } = await withAuthTimeout(authClient.deleteUser({ password }));
     if (error) return fail(error);
-    await clearLocalSession();
+    await clearLocalSession("deleted");
     return { ok: true };
   } catch (e) {
     return fromNetwork(e);

@@ -24,7 +24,7 @@ import { tokens } from "@bbc/ui";
 import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
-import { signOut } from "@/features/auth/flows";
+import { endRevokedSession } from "@/features/auth/flows";
 import { leaveTo } from "@/features/auth/leave";
 import { adoptLocalData } from "@/features/auth/local-owner";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
@@ -99,7 +99,8 @@ export default function RootLayout() {
 
   useEffect(() => () => clearPendingOtp(), []);
 
-  // Revoked session (apiFetch 401 on non-auth routes) → same clear as profile sign-out, and Sign in alone on the stack:
+  // Revoked session (apiFetch 401 on non-auth routes) → the session ends on the phone, but not as a sign-out: requests
+  // saved offline stay for their member (features/auth/flows.ts endRevokedSession). Then Sign in alone on the stack:
   // Back must not reopen the screens of the session that ended (features/auth/leave.ts).
   useEffect(() => {
     let active = true;
@@ -109,7 +110,7 @@ export default function RootLayout() {
       handling = true;
       void (async () => {
         try {
-          await signOut();
+          await endRevokedSession();
           if (active) leaveTo(router, "/sign-in");
         } finally {
           handling = false;
