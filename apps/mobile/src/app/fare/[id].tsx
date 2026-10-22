@@ -23,7 +23,6 @@ import {
   baselineOffset,
   belowBaseline,
   cabinText,
-  departYmd,
   rn,
   tokens,
 } from "@bbc/ui";
@@ -38,6 +37,7 @@ import {
   aboutFareLines,
   aboutFareNote,
   comparisonLine,
+  fareDates,
   fareSearchFromParams,
   savings as savingsOf,
   shareFareText,
@@ -118,7 +118,8 @@ export default function FareDetailScreen() {
   const closed = gone && gone !== true ? gone : null;
   const city = fare?.to.code ?? closed?.to;
   const photoFor = usePlacePhotos([city]);
-  const dates = { depart: search.depart ?? (fare ? departYmd(fare) : null), return: search.return };
+  // The fare's own day when it has one; a searched range never stands over the flight shown (fareDates).
+  const dates = fare ? fareDates(fare, search) : { depart: search.depart, return: null };
   const weather = useFareWeather();
 
   useEffect(() => {
@@ -509,8 +510,8 @@ export default function FareDetailScreen() {
       <AboutFareSheet
         ref={aboutRef}
         fare={fare}
-        depart={search.depart ?? departYmd(fare)}
-        ret={search.depart ? search.return : null}
+        depart={dates.depart}
+        ret={dates.return}
         passengers={search.passengers}
       />
       {comparable ? <ComparisonSheet ref={comparisonRef} fare={fare} /> : null}

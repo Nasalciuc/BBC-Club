@@ -12,11 +12,13 @@ import {
   comparisonLine,
   departDayLabel,
   factsLine,
+  fareDates,
   longDay,
   savings,
   shareFareText,
 } from "./fare-page-logic";
 import { knownCarrier } from "./known-carrier";
+import { datesShortLabel } from "../explore/travel-preferences";
 
 const ba = fixture.fares[0]!;
 
@@ -163,6 +165,38 @@ describe("About this fare, 3.0 (20)", () => {
       name: "Unknown",
       logoUrl: null,
     });
+  });
+
+  it("prints the fare's own day, never a searched range over it, and no range for a one-way fare (F007)", () => {
+    const nov21 = { ...ba, departDate: "2026-11-21", trip: "one_way" as const };
+    const dates = fareDates(nov21, { depart: "2026-11-12", return: "2026-11-19" });
+    expect(dates).toEqual({ depart: "2026-11-21", return: null });
+    expect(datesShortLabel(dates)).toBe("Nov 21");
+    const [first] = aboutFareLines({ ...nov21, ...dates, passengers: null });
+    expect(first).toBe(
+      "This indicative one-way fare is for one adult flying from New York (JFK) to London (LHR), November 21, 2026. Your specialist confirms availability and the final fare.",
+    );
+    // A round-trip fare keeps the searched return after its own day; one before it is not a return.
+    const round = { ...nov21, trip: "round_trip" as const };
+    expect(fareDates(round, { depart: "2026-11-20", return: "2026-11-28" })).toEqual({
+      depart: "2026-11-21",
+      return: "2026-11-28",
+    });
+    expect(fareDates(round, { depart: "2026-11-12", return: "2026-11-19" })).toEqual({
+      depart: "2026-11-21",
+      return: null,
+    });
+    // A fare without a day of its own shows the member's searched dates; a one-way one, the day alone.
+    const undated = { ...ba, departAt: null, departLocal: null, departDate: null };
+    expect(fareDates({ ...undated, trip: "round_trip" }, { depart: "2026-11-12", return: "2026-11-19" })).toEqual({
+      depart: "2026-11-12",
+      return: "2026-11-19",
+    });
+    expect(fareDates({ ...undated, trip: "one_way" }, { depart: "2026-11-12", return: "2026-11-19" })).toEqual({
+      depart: "2026-11-12",
+      return: null,
+    });
+    expect(fareDates(undated, { depart: null, return: null })).toEqual({ depart: null, return: null });
   });
 
   it("writes the days as 20 does, across a month and a year too", () => {

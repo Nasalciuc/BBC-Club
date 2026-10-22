@@ -1,6 +1,6 @@
 import { type FareVM, isCalendarDay } from "@bbc/shared/api/v1/fares";
 // The pure helpers, not the component index: this module is imported by tests that run without React Native.
-import { fareBasis } from "@bbc/ui/flight-facts";
+import { departYmd, fareBasis } from "@bbc/ui/flight-facts";
 
 import { formatPrice } from "../../lib/format";
 
@@ -144,7 +144,7 @@ export function longDay(ymd: string | null | undefined): string | null {
 }
 
 type AboutFare = Pick<FareVM, "carrier" | "cabin" | "from" | "to" | "trip"> & {
-  /** The days it was searched for, else the fare's own day (`YYYY-MM-DD`). */
+  /** The fare's own day, else the day it was searched for, and a round-trip fare's searched return (`fareDates`). */
   depart: string | null;
   return: string | null;
   passengers: { adult: number; child: number; infant: number } | null;
@@ -188,6 +188,22 @@ export function aboutFareLines(fare: AboutFare): [string, string] {
   const airline = knownCarrier(fare.carrier);
   const second = `Travel in ${cabinWord(fare.cabin)}${airline ? ` with ${airline.name}` : ""}${seat}. Your specialist confirms the cabin details and arranges the booking by phone.`;
   return [first, second];
+}
+
+/**
+ * The days a fare's page prints (05's chip, 20's `About this fare`): the fare's own departure day when it has one — a
+ * searched range never stands over the flight shown (a dated search only filters by validity) — else the day the
+ * member searched for. A return only for a fare sold round trip, only the one searched for, and only after the
+ * departure; a one-way fare (or one whose trip is not known) never prints a range.
+ */
+export function fareDates(
+  fare: Pick<FareVM, "departAt" | "departLocal" | "departDate" | "trip">,
+  search: { depart: string | null; return: string | null },
+): { depart: string | null; return: string | null } {
+  const depart = departYmd(fare) ?? search.depart;
+  if (!depart) return { depart: null, return: null };
+  const searched = search.depart ? search.return : null;
+  return { depart, return: fare.trip === "round_trip" && searched && searched > depart ? searched : null };
 }
 
 /** The search a fare's page was opened from (05), read from its route's words; null without days and travelers. */
