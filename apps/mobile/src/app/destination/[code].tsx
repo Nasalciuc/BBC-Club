@@ -216,7 +216,11 @@ export default function DestinationScreen() {
       <RequestSheet ref={requestRef} />
       <DatesPage
         ref={datesRef}
-        onFlexible={() => dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } })}
+        onFlexible={() => {
+          dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } });
+          // Flexible: the dates remembered for the destination are forgotten, so Search brings none back.
+          rememberDates(chosen.airport.code, null);
+        }}
         onUse={(sel) => {
           const dates = {
             depart: sel.depart,

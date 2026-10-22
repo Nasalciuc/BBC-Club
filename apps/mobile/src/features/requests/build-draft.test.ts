@@ -47,6 +47,29 @@ describe("buildDraft — dates", () => {
   });
 });
 
+describe("buildDraft — never a day that has passed (F006)", () => {
+  it("a remembered departure before today gives way to the suggestion", () => {
+    const draft = buildDraft({
+      mode: "quote",
+      fromCode: "JFK",
+      toCode: "LHR",
+      today: "2026-10-20",
+      search: {
+        dates: { depart: "2026-10-05", return: "2026-10-12", flexible: false },
+        cabin: "business",
+        passengers: { adult: 1, child: 0, infant: 0 },
+      },
+    });
+    expect(draft.tripType).toBe("round");
+    expect(draft.legs.map((l) => l.date)).toEqual(["2026-11-03", "2026-11-10"]);
+  });
+
+  it("a fare's own day that has passed gives way too", () => {
+    const fare = { ...fixture.fares[0]!, departDate: "2026-10-05", trip: "one_way" as const };
+    expect(buildDraft({ fare, today: "2026-10-20" }).legs[0]?.date).toBe("2026-11-03");
+  });
+});
+
 describe("buildDraft — a fare's own day and trip (F097)", () => {
   const fa01 = {
     ...fixture.fares[0]!,

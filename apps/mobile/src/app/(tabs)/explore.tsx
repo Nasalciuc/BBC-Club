@@ -396,7 +396,11 @@ export default function ExploreScreen() {
       <RequestSheet ref={requestRef} />
       <DatesPage
         ref={datesRef}
-        onFlexible={() => dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } })}
+        onFlexible={() => {
+          dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } });
+          // Flexible: the dates remembered for the destination are forgotten, so Search and the globe bring none back.
+          if (state.to) rememberDates(state.to.code, null);
+        }}
         onUse={(sel) => {
           const dates = {
             depart: sel.depart,

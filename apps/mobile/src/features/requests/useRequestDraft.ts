@@ -138,17 +138,20 @@ export function defaultDates(today: string = todayLocal()): { depart: string; re
  * prints it), one way or round trip as the catalogue sells it — a round trip's return the one searched for when it
  * comes after that day, else a week later, still the member's to change. A fare without a day of its own takes the
  * searched day, else the suggestion, and still its trip. Without a fare: the dates chosen for this search, else the
- * suggestion (two weeks out, a week long).
+ * suggestion (two weeks out, a week long). A day before today is never proposed.
  */
 function draftDates(
   fare: Pick<FareVM, "departAt" | "departLocal" | "departDate" | "trip"> | null,
   search: SearchContext | null,
   today: string | undefined,
 ): { depart: string; ret: string | null; tripType: TripType } {
-  const suggested = defaultDates(today);
-  const searched = search?.dates.depart ? search.dates : null;
+  const day = today ?? todayLocal();
+  const suggested = defaultDates(day);
+  // A day that has passed is no day to ask for (F006): a remembered search, or a fare that has already left.
+  const searched = search?.dates.depart && search.dates.depart >= day ? search.dates : null;
   if (fare) {
-    const depart = departYmd(fare) ?? searched?.depart ?? suggested.depart;
+    const own = departYmd(fare);
+    const depart = (own && own >= day ? own : null) ?? searched?.depart ?? suggested.depart;
     const trip = fare.trip ?? (searched && !searched.return ? "one_way" : "round_trip");
     if (trip === "one_way") return { depart, ret: null, tripType: "oneway" };
     const back = searched?.return && searched.return > depart ? searched.return : null;

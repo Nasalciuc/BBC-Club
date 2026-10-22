@@ -1,7 +1,7 @@
 import type { Href } from "expo-router";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
-import type { RecentDates } from "./recent-search-logic";
+import { type RecentDates, upcomingDates } from "./recent-search-logic";
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -23,8 +23,12 @@ export function destinationHref(airport: AirportVM, dates: RecentDates | null): 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The airport and dates back from the page's params; null when they do not name an airport (a link typed by hand). */
-export function destinationFromParams(p: Params): { airport: AirportVM; dates: RecentDates | null } | null {
+/** The airport and dates back from the page's params; null when they do not name an airport (a link typed by hand).
+ *  Dates whose departure has passed are dropped: the destination opens with flexible dates (F006). */
+export function destinationFromParams(
+  p: Params,
+  today?: string,
+): { airport: AirportVM; dates: RecentDates | null } | null {
   const code = one(p.code)?.toUpperCase();
   const city = one(p.city);
   const lat = Number(one(p.lat));
@@ -36,6 +40,7 @@ export function destinationFromParams(p: Params): { airport: AirportVM; dates: R
   const ret = one(p.ret);
   return {
     airport: { code, city, name: one(p.name) ?? city, countryCode: country, lat, lng },
-    dates: depart && DAY.test(depart) ? { depart, return: ret && DAY.test(ret) ? ret : null } : null,
+    dates:
+      depart && DAY.test(depart) ? upcomingDates({ depart, return: ret && DAY.test(ret) ? ret : null }, today) : null,
   };
 }
