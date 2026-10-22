@@ -370,6 +370,7 @@ export default function ExploreScreen() {
         ) : mode === "all" ? (
           <SheetExpanded
             home={home}
+            homeLoading={homeLoading}
             onOpenOffer={(card) => void openOffer(card)}
             onSearch={() => router.push("/search" as Href)}
           />
