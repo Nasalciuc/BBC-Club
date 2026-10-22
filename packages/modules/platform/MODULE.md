@@ -24,3 +24,5 @@ Pinned: **drizzle-orm / drizzle-kit 1.0.0-rc.4**, **postgres.js 3.4.x**, **pino 
 | Top-K / CMS             | `client.topK` and `client.cms` on the same package                                           | used by catalog demand             |
 
 Read and search rate limits use Redis GCRA when `REDIS_URL` is set and fall back to the in-process store on error. Postgres rules are unchanged. Kill switches and consumer pause read Postgres and are not cached.
+
+Strict reads throw where the ordinary ones fall back: `flags.killState(module)` (the host's boot, which must not take an unreadable flag for a killed module; `isKilled` keeps failing closed per request) and `flags.readStrict(key)` (`/v1/app-config`, which keeps its own last good answer). `jobs.lastFinishedRuns()` is the last succeeded-or-failed run per job, for `/status`'s `failingJobs`.
