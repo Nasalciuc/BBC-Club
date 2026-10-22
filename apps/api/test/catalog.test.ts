@@ -289,6 +289,29 @@ describe("catalog routes", () => {
     await t.close();
   });
 
+  // ADR-IMPL-036's typo tolerance: two letters swapped in a short city drop its trigram similarity under the typo tier's
+  // threshold, so `Pairs`, `Toyko` and `Lodnon` found nothing.
+  it("GET /v1/airports forgives two letters swapped", async () => {
+    const t = await testApp({ suite: "catalog-airport-swaps" });
+    const codes = async (q: string) => {
+      const r = await t.app.request(`/v1/airports?q=${encodeURIComponent(q)}`, {
+        headers: { Cookie: t.memberA.cookie },
+      });
+      expect(r.status).toBe(200);
+      return ((await r.json()) as { code: string; city: string }[]).map((a) => a.code);
+    };
+    expect((await codes("Pairs"))[0]).toBe("CDG"); // Paris's group, the busiest first
+    expect((await codes("Toyko")).slice(0, 2)).toEqual(["HND", "NRT"]);
+    expect((await codes("Lodnon")).slice(0, 2)).toEqual(["LHR", "LGW"]);
+    expect((await codes("Pairs")).slice(0, 2)).toEqual(["CDG", "ORY"]);
+    // What already worked still does: a letter missing, two at the end swapped, the city itself.
+    expect(await codes("Lodon")).toContain("LHR");
+    expect(await codes("Londno")).toContain("LHR");
+    expect((await codes("Paris"))[0]).toBe("CDG");
+    expect((await codes("Tokyo"))[0]).toBe("HND");
+    await t.close();
+  });
+
   it("unauthenticated search → 401; import requires internal secret", async () => {
     const t = await testApp({ suite: "catalog-authz" });
     expect((await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business")).status).toBe(401);

@@ -24,6 +24,29 @@ export const COUNTRY_ALIASES: Readonly<Record<string, string>> = {
   turkiye: "turkey",
 };
 
+/**
+ * The spellings one swap of two neighbouring letters away (`pairs` → `apirs`, `piars`, `paris`, `paisr`): a short
+ * city typed with two letters crossed falls under the trigram tier's threshold. Only for a query of letters and
+ * spaces, four letters or more, and only swaps of two different letters.
+ */
+export function adjacentSwaps(q: string): string[] {
+  const letters = q.replace(/ /g, "");
+  if (!/^[\p{L} ]+$/u.test(q) || [...letters].length < 4) return [];
+  const chars = [...q];
+  const out = new Set<string>();
+  for (let i = 0; i + 1 < chars.length; i++) {
+    const a = chars[i];
+    const b = chars[i + 1];
+    if (a === undefined || b === undefined || a === b || a === " " || b === " ") continue;
+    const swapped = [...chars];
+    swapped[i] = b;
+    swapped[i + 1] = a;
+    out.add(swapped.join(""));
+  }
+  out.delete(q);
+  return [...out];
+}
+
 export const airportsRepo = {
   async get(exec: Executor, code: string) {
     const [row] = await exec.select().from(airports).where(eq(airports.code, code.toUpperCase())).limit(1);
@@ -46,10 +69,11 @@ export const airportsRepo = {
   /** Prefix on code/city, then contains; the busiest city first, its airports together; max 8. */
   /**
    * ADR-IMPL-036. Accent-blind and typo-tolerant, in tiers: a country nickname (UK, USA, UAE) means the country first;
-   * then exact code, code prefix, exact city, city prefix, country, other names (LON, KIV, New York City), text
-   * anywhere, and — from four letters — a close spelling. In the first six tiers the busiest airport leads; in the last
-   * two, the closest spelling. The *_norm columns are lower-case and accent-free, kept by the airports_normalize
-   * trigger (0023); the typed text is normalised once per query, in scalar subqueries.
+   * then exact code, code prefix, exact city, city prefix, country, other names (LON, KIV, New York City), a city
+   * spelled with two neighbouring letters swapped (from four letters: `Pairs`, `Toyko`, `Lodnon`), text anywhere, and
+   * — from four letters — a close spelling. Up to the swapped city the busiest airport leads; in the last two tiers,
+   * the closest spelling. The *_norm columns are lower-case and accent-free, kept by the airports_normalize trigger
+   * (0023); the typed text is normalised once per query, in scalar subqueries.
    */
   async search(exec: Executor, q: string) {
     const raw = q.trim().toLowerCase();
@@ -82,6 +106,16 @@ export const airportsRepo = {
               ),
           )
         : sql`false`;
+    // Two neighbouring letters swapped, from four letters: the city itself or its start, for any one swap. The
+    // variants are letters and spaces only (adjacentSwaps), so LIKE reads them literally; unaccent as the typed text.
+    const swaps = adjacentSwaps(raw);
+    const swapped =
+      swaps.length > 0
+        ? sql`EXISTS (SELECT 1 FROM unnest(ARRAY[${sql.join(
+            swaps.map((s) => sql`${s}`),
+            sql`, `,
+          )}]::text[]) AS v(s) WHERE ${city} = unaccent(v.s) OR ${city} LIKE unaccent(v.s) || '%')`
+        : sql`false`;
     // A known country nickname (UK, USA, UAE) means the country — before any code that happens to spell it (USA).
     const tier = sql`CASE
       WHEN ${nickname !== undefined} AND ${ctry} = ${country} THEN -1
@@ -91,23 +125,24 @@ export const airportsRepo = {
       WHEN ${city} LIKE ${tl} || '%' THEN 3
       WHEN ${ctry} = ${country} OR (length(${raw}) >= 3 AND ${ctry} LIKE ${countryLike} || '%') THEN 4
       WHEN ${terms} LIKE '%' || ${tl} || '%' THEN 5
-      WHEN ${city} LIKE '%' || ${tl} || '%' OR ${name} LIKE '%' || ${tl} || '%' THEN 6
-      ELSE 7 END`;
+      WHEN ${swapped} THEN 6
+      WHEN ${city} LIKE '%' || ${tl} || '%' OR ${name} LIKE '%' || ${tl} || '%' THEN 7
+      ELSE 8 END`;
     return (
       exec
         .select()
         .from(airports)
-        .where(sql`${tier} < 7 OR ${fuzzy}`)
-        // Exact, prefix, country and other-name tiers: the busiest city first with its airports together (`Lon`: London's
-        // five before Long Beach — 18), each city's busiest first. A city's weight counts only its airports in the
-        // same tier: `L` leads with London's, not with LaGuardia lifted by JFK's looser match. Text-anywhere and typo
-        // tiers: the closest spelling — similarity is computed only for those rows.
+        .where(sql`${tier} < 8 OR ${fuzzy}`)
+        // Exact, prefix, country, other-name and swapped-letters tiers: the busiest city first with its airports
+        // together (`Lon`: London's five before Long Beach — 18), each city's busiest first. A city's weight counts only
+        // its airports in the same tier: `L` leads with London's, not with LaGuardia lifted by JFK's looser match.
+        // Text-anywhere and typo tiers: the closest spelling — similarity is computed only for those rows.
         .orderBy(
           tier,
-          sql`CASE WHEN ${tier} < 6 THEN max(${airports.popularity}) OVER (PARTITION BY ${tier}, ${city}, ${airports.countryCode}) END DESC NULLS LAST`,
-          sql`CASE WHEN ${tier} < 6 THEN ${city} END`,
-          sql`CASE WHEN ${tier} < 6 THEN ${airports.popularity} END DESC NULLS LAST`,
-          sql`CASE WHEN ${tier} >= 6 THEN similarity(${city}, ${t}) END DESC NULLS LAST`,
+          sql`CASE WHEN ${tier} < 7 THEN max(${airports.popularity}) OVER (PARTITION BY ${tier}, ${city}, ${airports.countryCode}) END DESC NULLS LAST`,
+          sql`CASE WHEN ${tier} < 7 THEN ${city} END`,
+          sql`CASE WHEN ${tier} < 7 THEN ${airports.popularity} END DESC NULLS LAST`,
+          sql`CASE WHEN ${tier} >= 7 THEN similarity(${city}, ${t}) END DESC NULLS LAST`,
           desc(airports.popularity),
           asc(airports.code),
         )
