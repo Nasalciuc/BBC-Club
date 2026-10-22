@@ -1,4 +1,6 @@
 import { type FareVM, isCalendarDay } from "@bbc/shared/api/v1/fares";
+// The pure helpers, not the component index: this module is imported by tests that run without React Native.
+import { fareBasis } from "@bbc/ui/flight-facts";
 
 import { formatPrice } from "../../lib/format";
 
@@ -207,8 +209,12 @@ export function fareSearchFromParams(params: Record<string, string | string[] | 
   };
 }
 
-/** What the phone's share sheet carries (05's share): the route, the cabin, the fare one way, and the fare's link. */
-export function shareFareText(fare: Pick<FareVM, "id" | "cabin" | "from" | "to" | "price">): string {
+/**
+ * What the phone's share sheet carries (05's share): the route, the cabin, the fare with what it buys as the catalogue
+ * says (`round trip`, `one way`; nothing from an older server that names no trip — ADR-IMPL-056), and the fare's link.
+ */
+export function shareFareText(fare: Pick<FareVM, "id" | "cabin" | "from" | "to" | "price" | "trip">): string {
   const price = formatPrice(fare.price.offer, fare.price.currency);
-  return `${fare.from.city} to ${fare.to.city} in ${cabinWord(fare.cabin)}, ${price} one way, with BuyBusinessClass Club: bbcclub://fare/${fare.id}`;
+  const basis = fareBasis(fare.trip);
+  return `${fare.from.city} to ${fare.to.city} in ${cabinWord(fare.cabin)}, ${price}${basis ? ` ${basis}` : ""}, with BuyBusinessClass Club: bbcclub://fare/${fare.id}`;
 }

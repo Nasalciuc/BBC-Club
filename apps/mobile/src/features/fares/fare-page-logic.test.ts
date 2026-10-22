@@ -161,9 +161,17 @@ describe("About this fare, 3.0 (20)", () => {
     });
   });
 
-  it("shares the route, the cabin, the fare one way and its link", () => {
-    expect(shareFareText(ba)).toBe(
+  it("shares the route, the cabin, the fare with what it buys as the catalogue says, and its link", () => {
+    expect(shareFareText({ ...ba, trip: "one_way" })).toBe(
       "New York to London in Business, $4,200 one way, with BuyBusinessClass Club: bbcclub://fare/00000000-0000-4000-8000-00000000fa01",
+    );
+    // ADR-IMPL-056: a round-trip fare is never shared as one way.
+    expect(shareFareText({ ...ba, price: { offer: 3900, currency: "USD" }, trip: "round_trip" })).toBe(
+      "New York to London in Business, $3,900 round trip, with BuyBusinessClass Club: bbcclub://fare/00000000-0000-4000-8000-00000000fa01",
+    );
+    // An older server names no trip: the price is not described as more than is known.
+    expect(shareFareText({ ...ba, trip: undefined })).toBe(
+      "New York to London in Business, $4,200, with BuyBusinessClass Club: bbcclub://fare/00000000-0000-4000-8000-00000000fa01",
     );
   });
 });
