@@ -16,6 +16,7 @@ import {
   TripPhotoCard,
   baselineOffset,
   belowBaseline,
+  hitSlopFor,
   profileBandHeight,
   tokens,
   rn,
@@ -421,6 +422,9 @@ export default function ProfileScreen() {
               />
             </RowGroup>
           </View>
+          {/* Each holder keeps its target's room in its padding (a touch lands only inside it), its margins giving the
+              drawn gaps back: Delete account reaches toward 44 pt as far as its neighbours allow, Sign out has its own
+              44-pt target 16 pt under it (F024). */}
           <View style={styles.deleteGap}>
             <ListRow
               testID="profile.delete"
@@ -428,7 +432,9 @@ export default function ProfileScreen() {
               label="Delete account"
               danger
               look="profile"
-              height={33.4}
+              height={DELETE.height}
+              gapAbove={DELETE.gap}
+              gapBelow={SIGN_OUT.gap}
               onPress={() => deleteRef.current?.present()}
             />
           </View>
@@ -438,7 +444,8 @@ export default function ProfileScreen() {
               label={signingOut ? "Signing out…" : "Sign out"}
               variant="destructive"
               busy={signingOut}
-              height={29.3}
+              height={SIGN_OUT.height}
+              hitSlop={SIGN_OUT_SLOP}
               text="profileSignout"
               style={styles.signOut}
               onPress={signOutNow}
@@ -501,10 +508,17 @@ function Stat({ value, label, at }: { value: string; label: string; at: number }
  * 16.3 to 16.1 pt in, 8.1 apart. `My trips` 37.2 under the pills (its ink 17.1 in), `See all ›` ending 18.9 pt from the
  * edge, 2.3 above its baseline. The trips 10.8 under the title, from 12.5 in, 4.9 apart. The row cards 13.1 under the
  * trips, 15 in from the left and 16 from the right, 9.5 apart (8.8 before Delete account); Sign out 7.6 under, 29.3
- * tall, 15.6 in.
+ * tall, 15.6 in — drawn here 16 under (F024): DESIGN.md's 44-pt targets need room the image does not leave between
+ * two red actions, and a slip on Delete account must not sign the member out (`useSignOut` asks nothing).
  */
 const STAT_W = 110;
 const PILL = 33.9;
+/** The pills reach 44 pt above and below (`Button`'s slop): their holders keep that room. */
+const PILL_SLOP = hitSlopFor(PILL);
+const DELETE = { height: 33.4, gap: 8.8 } as const;
+const SIGN_OUT = { height: 29.3, gap: 16 } as const;
+const DELETE_SLOP = hitSlopFor(DELETE.height, DELETE.gap, SIGN_OUT.gap);
+const SIGN_OUT_SLOP = hitSlopFor(SIGN_OUT.height, SIGN_OUT.gap);
 const statValue = tokens.type.statValue;
 const statLabel = tokens.type.statLabel;
 const homeType = tokens.type.profileHome;
@@ -544,10 +558,11 @@ const styles = StyleSheet.create({
     gap: 8.1,
     paddingLeft: 16.3,
     paddingRight: 16.1,
-    marginTop: 14.7 - belowBaseline(statLabel),
+    marginTop: 14.7 - belowBaseline(statLabel) - PILL_SLOP.top,
+    marginBottom: -PILL_SLOP.bottom,
   },
-  actionsAlone: { marginTop: tokens.space.lg },
-  action: { flex: 1 },
+  actionsAlone: { marginTop: tokens.space.lg - PILL_SLOP.top },
+  action: { flex: 1, paddingTop: PILL_SLOP.top, paddingBottom: PILL_SLOP.bottom },
   pill: { alignSelf: "stretch", ...tokens.elevation.card },
   tripsHead: {
     flexDirection: "row",
@@ -569,8 +584,19 @@ const styles = StyleSheet.create({
   tripsRow: { paddingLeft: 12.5, paddingRight: 8.3, gap: 4.9, marginTop: 10.8 - belowBaseline(tripsTitle) },
   rows: { paddingLeft: 15, paddingRight: 16, marginTop: 13.1 },
   cardGap: { marginTop: 9.5 },
-  deleteGap: { marginTop: 8.8 },
-  signOutGap: { marginTop: 7.6, marginLeft: 0.6, marginRight: -0.4 },
+  deleteGap: {
+    marginTop: DELETE.gap - DELETE_SLOP.top,
+    paddingTop: DELETE_SLOP.top,
+    paddingBottom: DELETE_SLOP.bottom,
+  },
+  // What follows (a failed sign-out's line, the photograph's credit) starts under Sign out's target, not over it.
+  signOutGap: {
+    marginTop: SIGN_OUT.gap - DELETE_SLOP.bottom - SIGN_OUT_SLOP.top,
+    paddingTop: SIGN_OUT_SLOP.top,
+    paddingBottom: SIGN_OUT_SLOP.bottom,
+    marginLeft: 0.6,
+    marginRight: -0.4,
+  },
   signOut: { alignSelf: "stretch", borderWidth: 0.6 },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
   message: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, textAlign: "center", marginTop: 8 },
