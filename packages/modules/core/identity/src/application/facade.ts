@@ -7,10 +7,15 @@ import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
 
 export type { Member, AuthVars, SessionInfo, IdentityFacade };
 
+/** Methods that change nothing: they may answer from the cookie cache. Every other method reads the session fresh. */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
 /** Implementation — imported by module.ts, not by other packages via api/index.ts. */
 export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFacade, "auth"> {
-  async function getSession(headers: Headers): Promise<SessionInfo | null> {
-    const s = await auth.api.getSession({ headers });
+  /** `fresh` reads the session row and its user from the database instead of the signed cookie cache
+   *  (SESSION_COOKIE_CACHE_SECONDS): a deleted member or an ended session is anonymous at once, not a minute later. */
+  async function getSession(headers: Headers, opts: { fresh?: boolean } = {}): Promise<SessionInfo | null> {
+    const s = await auth.api.getSession({ headers, query: opts.fresh ? { disableCookieCache: true } : undefined });
     if (!s?.user) return null;
     if (!s.user.emailVerified) return null;
     return {
@@ -25,7 +30,7 @@ export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFac
   }
 
   const requireMember: MiddlewareHandler<AuthVars> = async (c, next) => {
-    const s = await getSession(c.req.raw.headers);
+    const s = await getSession(c.req.raw.headers, { fresh: !SAFE_METHODS.has(c.req.method) });
     if (!s) return c.json({ error: { code: "UNAUTHORIZED", message: "Please sign in." } }, 401);
     c.set("member", s.member);
     c.set("sessionId", s.sessionId);

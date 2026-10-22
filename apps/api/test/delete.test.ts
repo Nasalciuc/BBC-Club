@@ -125,6 +125,51 @@ describe("account deletion needs the password", () => {
     await t.close();
   });
 
+  it("another device's cached session cannot write for a deleted member (cookie cache)", async () => {
+    // Writes read the session from the database; reads may keep the cached cookie for SESSION_COOKIE_CACHE_SECONDS.
+    const t = await testApp({ suite: "delete-other-device", env: { SESSION_COOKIE_CACHE_SECONDS: "10" } });
+    const memberId = t.memberA.id;
+    const here = t.memberA.cookie;
+    const elsewhere = await t.auth.cookieFor(t.memberA.email, t.memberA.password);
+    // The other phone was in use before the deletion: its cookie cache is warm.
+    expect((await t.app.request("/v1/profile", { headers: { Cookie: elsewhere } })).status).toBe(200);
+
+    const del = await t.app.request("/api/auth/delete-user", {
+      method: "POST",
+      headers: { Cookie: here, "Content-Type": "application/json", Origin: t.appOrigin },
+      body: JSON.stringify({ password: t.memberA.password }),
+    });
+    expect(del.status).toBe(200);
+    await t.drainAll();
+
+    const request = await t.submitRequestAs({ cookie: elsewhere }, t.sampleRequestBody());
+    expect(request.status).toBe(401);
+    const device = await t.app.request("/v1/devices", {
+      method: "POST",
+      headers: { Cookie: elsewhere, "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId: `ghost-${crypto.randomUUID()}`, platform: "ios", nativeToken: "ghost-token" }),
+    });
+    expect(device.status).toBe(401);
+    const prefs = await t.app.request("/v1/profile/preferences", {
+      method: "PUT",
+      headers: { Cookie: elsewhere, "Content-Type": "application/json" },
+      body: JSON.stringify({ preferences: [{ category: "offers_broadcast", enabled: false }] }),
+    });
+    expect(prefs.status).toBe(401);
+    await t.drainAll();
+
+    const count = async (table: string) => {
+      const rows: any[] = await t.db.execute(
+        sql`SELECT count(*)::int AS n FROM ${sql.raw(table)} WHERE member_id = ${memberId}`,
+      );
+      return Number(rows[0]?.n ?? 0);
+    };
+    expect(await count("requests.requests")).toBe(0);
+    expect(await count("notifications.device_tokens")).toBe(0);
+    expect(await count("members.notification_preferences")).toBe(0);
+    await t.close();
+  });
+
   it("the facade asks for the password too: in-process calls run the same hook", async () => {
     const t = await testApp({ suite: "delete-facade" });
     const identity = t.registry.facade<any>("identity");

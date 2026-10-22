@@ -9,7 +9,9 @@ export type AuthVars = { Variables: { member: Member; sessionId: string } };
 export type IdentityFacade = {
   auth: Auth;
   handler: Auth["handler"];
-  getSession(headers: Headers): Promise<SessionInfo | null>;
+  /** `fresh: true` skips the session cookie cache (one database read): callers pass it on writes, so a deleted member
+   *  or an ended session cannot write during the cache window. */
+  getSession(headers: Headers, opts?: { fresh?: boolean }): Promise<SessionInfo | null>;
   requireMember: MiddlewareHandler<AuthVars>;
   requireRole(...allowed: string[]): MiddlewareHandler<AuthVars>;
   /** Deletes the signed-in member's account; refused without the right password (INVALID_PASSWORD). */
