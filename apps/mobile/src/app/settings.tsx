@@ -16,9 +16,9 @@ import {
 import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
+import { openRequestsFor } from "@/features/profile/profile-logic";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { useSignOut } from "@/features/profile/useSignOut";
-import { isOpen } from "@/features/requests/status";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
@@ -37,8 +37,8 @@ export default function SettingsScreen() {
   const [loadFailure, setLoadFailure] = useState<{ title: string; body: string } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const { signingOut, failure: signOutFailure, signOutNow } = useSignOut();
-  // null until the requests load: a count that did not load is never shown as none.
-  const [openRequests, setOpenRequests] = useState<number | null>(null);
+  // null until the requests load: a count that did not load is never shown as none; `more` past the first page (F106).
+  const [openRequests, setOpenRequests] = useState<{ count: number; more: boolean } | null>(null);
   const phoneRef = useRef<ProfileSheetHandle>(null);
   const passwordRef = useRef<ProfileSheetHandle>(null);
   const notificationsRef = useRef<ProfileSheetHandle>(null);
@@ -54,7 +54,7 @@ export default function SettingsScreen() {
       setLoadFailure(null);
       setProfile(profileResult.data);
       if (requestsResult.ok) {
-        setOpenRequests(requestsResult.data.items.filter((r) => isOpen(r.status)).length);
+        setOpenRequests(openRequestsFor(requestsResult.data.items, requestsResult.data.hasMore));
       }
     })().catch(() => setLoadFailure(stateCopy("route")));
   }, [reloadToken]);

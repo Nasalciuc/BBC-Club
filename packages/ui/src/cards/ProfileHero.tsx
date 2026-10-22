@@ -19,6 +19,9 @@ type Props = {
   fallback: PhotoSource | null;
   /** `memory` for a satellite view (its terms ask that it not be kept). */
   cachePolicy?: "memory" | "disk";
+  /** The photograph was drawn, or could not be (`Photo`): Profile picks its status bar from it. */
+  onImageLoad?: () => void;
+  onImageError?: () => void;
   /** The safe area's top: the photograph runs under the status bar. */
   topInset: number;
   /** Over the photograph at the right, under the status bar: the round settings button (ADR-IMPL-055 §9). */
@@ -57,6 +60,8 @@ export function ProfileHero({
   image,
   fallback,
   cachePolicy = "disk",
+  onImageLoad,
+  onImageError,
   topInset,
   action,
   testID,
@@ -64,7 +69,14 @@ export function ProfileHero({
   return (
     <View testID={testID}>
       <View style={[styles.band, { height: profileBandHeight(topInset) }]}>
-        <Photo source={image} fallback={fallback} cachePolicy={cachePolicy} style={StyleSheet.absoluteFill} />
+        <Photo
+          source={image}
+          fallback={fallback}
+          cachePolicy={cachePolicy}
+          style={StyleSheet.absoluteFill}
+          onLoad={onImageLoad}
+          onError={onImageError}
+        />
         {action ? <View style={[styles.action, { top: topInset + 5.1 - 35 / 2 }]}>{action}</View> : null}
       </View>
       <View style={styles.identity}>

@@ -33,7 +33,8 @@ export const QueuedRequestSchema = z.object({
 export const QueuedRequestList = z.array(QueuedRequestSchema);
 export type QueuedRequest = z.infer<typeof QueuedRequestSchema>;
 
-/** What `submitRequest` answers: `status` 0 is no network (offline or a timeout). */
+/** What `submitRequest` answers: `status` 0 is no answer from the club (offline, a timeout, or its server unreachable
+ *  while the phone is online — F110). */
 export type SubmitResult = { ok: boolean; status?: number; retryAfterS?: number };
 
 /** What happened to one request in a flush. `skipped`: not tried (it waits, or the server refused it before). */

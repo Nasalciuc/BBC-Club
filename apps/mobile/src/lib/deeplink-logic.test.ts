@@ -93,9 +93,37 @@ describe("systemPathFor — Expo Router leaves the club's links to the root layo
     expect(systemPathFor("bbcclub://inbox")).toBeNull();
   });
 
-  it("anything else passes through unchanged", () => {
-    expect(systemPathFor("bbcclub:///")).toBe("bbcclub:///");
-    expect(systemPathFor("/settings")).toBe("/settings");
+  it("a club link without its scheme, as Expo Router may hand it over, is the root layout's too", () => {
+    const id = "00000000-0000-4000-8000-0000000000a1";
+    expect(systemPathFor(`requests/${id}`)).toBeNull();
+    expect(systemPathFor(`fare/${id}`)).toBeNull();
+  });
+
+  it("any other link at launch opens the app's start, never the screen it names with the params it carries", () => {
+    // A forged `Request received` page: the attacker's phone number, city and pictures (F014).
+    const spoof =
+      "bbcclub://request/confirmed?id=x&source=offer&queued=0&phone=%2B15550100&city=London&from=JFK&to=XXX" +
+      "&media=https://evil.example/a.png&carrier=Club&logo=https://evil.example/l.png";
+    expect(systemPathFor(spoof)).toBe("/");
+    expect(systemPathFor("request/confirmed?id=x&phone=%2B1555")).toBe("/");
+    expect(systemPathFor("request/limited?minutes=1")).toBe("/");
+    expect(systemPathFor("onboarding")).toBe("/");
+    expect(systemPathFor("bbcclub://settings")).toBe("/");
+    expect(systemPathFor("/settings")).toBe("/");
+    // The app opened from its icon: Expo Router asks with the root URL.
+    expect(systemPathFor("bbcclub:///")).toBe("/");
+  });
+
+  it("while the app runs, any other link only brings it forward: the member stays where they are", () => {
+    expect(systemPathFor("bbcclub://request/confirmed?id=x&phone=%2B1555", false)).toBeNull();
+    expect(systemPathFor("bbcclub://onboarding", false)).toBeNull();
+    expect(systemPathFor("bbcclub://requests/00000000-0000-4000-8000-0000000000a1", false)).toBeNull();
+  });
+
+  it("only a development build opens the component gallery by its link", () => {
+    expect(systemPathFor("bbcclub://dev/gallery", true, true)).toBe("/dev/gallery");
+    expect(systemPathFor("bbcclub://dev/gallery")).toBe("/");
+    expect(systemPathFor("bbcclub://dev/other", true, true)).toBe("/");
   });
 });
 

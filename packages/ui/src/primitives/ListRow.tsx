@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View, type TextStyle } from "react-native"
 import { Icon, type IconName } from "../icons";
 import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
+import { hitSlopFor } from "./hit-slop";
 import { Toggle } from "./Toggle";
 
 /**
@@ -128,6 +129,12 @@ type Props = {
   /** A row alone in its card (`Delete account`): the look and height of its screen's rows. */
   look?: RowLookName;
   height?: number;
+  /**
+   * A row alone, drawn under 44 pt: the space to the target above and below it (pt). Its target reaches 44 by its slop,
+   * never past half of either (`hitSlopFor`); the holder keeps that room. Unknown, or rows that touch: none.
+   */
+  gapAbove?: number;
+  gapBelow?: number;
   testID?: string;
 };
 
@@ -149,6 +156,8 @@ export function ListRow({
   toggle,
   look: ownLook,
   height: ownHeight,
+  gapAbove = 0,
+  gapBelow = 0,
   testID,
 }: Props) {
   const group = useContext(InGroup);
@@ -168,6 +177,8 @@ export function ListRow({
         disabled={disabled}
         onPress={onPress}
         toggle={toggle}
+        gapAbove={inGroup ? 0 : gapAbove}
+        gapBelow={inGroup ? 0 : gapBelow}
         testID={testID}
       />
     );
@@ -273,6 +284,8 @@ function LookRow({
   disabled,
   onPress,
   toggle,
+  gapAbove,
+  gapBelow,
   testID,
 }: {
   look: RowLook;
@@ -286,12 +299,16 @@ function LookRow({
   disabled: boolean;
   onPress?: () => void;
   toggle?: Props["toggle"];
+  gapAbove: number;
+  gapBelow: number;
   testID?: string;
 }) {
   const pressable = onPress != null && !disabled;
   const tint = danger ? tokens.colors.statusDanger : tokens.colors.textPrimary;
   const a11yLabel = [label, value, subtitle].filter(Boolean).join(", ");
   const rowHeight = height ?? look.height;
+  // Rows in a card touch: their drawn pitch is the target. A row alone reaches 44 pt where its neighbours leave room.
+  const slop = hitSlopFor(rowHeight, gapAbove, gapBelow);
   const chevronBoxRight = look.chevron.right - ((9 - look.chevron.stroke / 2) * look.chevron.size) / 24;
   const body = (
     <>
@@ -372,6 +389,7 @@ function LookRow({
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       onPress={onPress}
+      hitSlop={slop.top > 0 || slop.bottom > 0 ? slop : undefined}
       style={({ pressed }) => [...frame, pressed && styles.pressed]}
     >
       {body}

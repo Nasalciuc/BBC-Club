@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, type TextStyle, View, t
 import { Icon, type IconName } from "../icons";
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
+import { buttonHitSlop, type Slop } from "./hit-slop";
 
 /**
  * The 3.0 pills (component sheet 38). `primary`: navy, one per screen. `outline`: white on a light-navy hairline
@@ -57,6 +58,9 @@ type Props = {
    *  and down) — a translation, so the pill's size and its target do not change. */
   labelOffset?: { x: number; y: number };
   trailingOffset?: { x: number; y: number };
+  /** How far the target reaches past the drawn pill: to 44 pt tall by default (`buttonHitSlop`); a screen whose
+   *  neighbours sit closer passes its own. The holder keeps that room (a touch lands only inside it). */
+  hitSlop?: Slop;
   style?: ViewStyle;
   testID?: string;
   accessibilityLabel?: string;
@@ -87,11 +91,13 @@ export function Button({
   trailingInset,
   labelOffset,
   trailingOffset,
+  hitSlop,
   style,
   testID,
   accessibilityLabel,
 }: Props) {
   const tone = TONE[variant];
+  const drawnHeight = height ?? (size === "md" ? 44 : DEFAULT_HEIGHT);
   const blocked = disabled || busy;
   const dimmed = disabled && !busy;
   const word = dimmed
@@ -114,9 +120,11 @@ export function Button({
       accessibilityState={{ disabled: blocked, busy }}
       disabled={blocked}
       onPress={onPress}
+      // Tap targets ≥ 44 pt: a pill drawn smaller reaches it by its slop (DESIGN.md · Accessibility, F029).
+      hitSlop={buttonHitSlop(drawnHeight, hitSlop)}
       style={({ pressed }) => [
         styles.button,
-        { minHeight: height ?? (size === "md" ? 44 : DEFAULT_HEIGHT) },
+        { minHeight: drawnHeight },
         fill ? styles.fill : styles.hug,
         iconGap != null && { gap: iconGap },
         radius != null && { borderRadius: radius },

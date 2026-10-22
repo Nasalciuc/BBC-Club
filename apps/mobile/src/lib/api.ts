@@ -1,3 +1,4 @@
+import NetInfo from "@react-native-community/netinfo";
 import { hc } from "hono/client";
 import type { Hono } from "hono";
 import { authMessage } from "@bbc/shared/auth-messages";
@@ -42,8 +43,8 @@ import {
 
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
-import { maintenanceValue } from "@/lib/app-gate-logic";
-import { passwordChangedNotice } from "@/lib/error-context";
+import { maintenanceValue, storeUrlValue, type StoreUrl } from "@/lib/app-gate-logic";
+import { UNREACHABLE_MESSAGE, classifyFetchFailure, passwordChangedNotice } from "@/lib/error-context";
 import { appPlatform, appVersion } from "@/lib/app-meta";
 import { emitSessionRevoked } from "@/lib/session-events";
 import { API_TIMEOUT_MS, NetworkError, networkFail, timeoutSignal } from "@/lib/timeout";
@@ -69,7 +70,16 @@ export type { Profile };
 
 export type ApiResult<T> =
   | { ok: true; data: T }
-  | { ok: false; message: string; code?: string; status: number; gone?: FareGoneContext; retryAfterS?: number };
+  | {
+      ok: false;
+      message: string;
+      code?: string;
+      status: number;
+      gone?: FareGoneContext;
+      retryAfterS?: number;
+      /** The server's `error.context`, as it sent it (the facts a screen words its message from). */
+      context?: Record<string, unknown>;
+    };
 
 export type { FareGoneContext };
 
@@ -77,7 +87,18 @@ async function parseJson(res: Response): Promise<unknown> {
   return res.json().catch(() => null);
 }
 
-function failFromBody(res: Response, body: { error?: { code?: string; message?: string } } | null): ApiResult<never> {
+/** The server's `error.context` when it is an object; anything else is none. */
+function errorContext(body: { error?: { context?: unknown } } | null): { context?: Record<string, unknown> } {
+  const context = body?.error?.context;
+  return context && typeof context === "object" && !Array.isArray(context)
+    ? { context: context as Record<string, unknown> }
+    : {};
+}
+
+function failFromBody(
+  res: Response,
+  body: { error?: { code?: string; message?: string; context?: unknown } } | null,
+): ApiResult<never> {
   if (res.status === 429) {
     const header = Number(res.headers.get("Retry-After"));
     const retryAfterS = Number.isFinite(header) && header >= 0 ? Math.ceil(header) : undefined;
@@ -87,6 +108,7 @@ function failFromBody(res: Response, body: { error?: { code?: string; message?: 
       code: "RATE_LIMITED",
       status: 429,
       ...(retryAfterS !== undefined ? { retryAfterS } : {}),
+      ...errorContext(body),
     };
   }
   return {
@@ -94,13 +116,24 @@ function failFromBody(res: Response, body: { error?: { code?: string; message?: 
     message: body?.error?.message ?? authMessage(body?.error?.code),
     code: body?.error?.code,
     status: res.status,
+    ...errorContext(body),
   };
+}
+
+/** A call that reached no server while the phone is online: DNS, TLS, the club's server down (F110). */
+class ServerUnreachable extends Error {
+  constructor() {
+    super("UNREACHABLE");
+    this.name = "ServerUnreachable";
+  }
 }
 
 async function asResult<T>(run: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> {
   try {
     return await run();
   } catch (e) {
+    if (e instanceof ServerUnreachable)
+      return { ok: false, status: 0, code: "UNREACHABLE", message: UNREACHABLE_MESSAGE };
     if (e instanceof NetworkError) return networkFail(e);
     throw e;
   }
@@ -133,7 +166,11 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     return res;
   } catch (e) {
     const timeout = e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError");
-    throw new NetworkError(timeout ? "TIMEOUT" : "OFFLINE");
+    if (timeout) throw new NetworkError("TIMEOUT");
+    // `fetch` fails the same way offline and when the club's server does not answer: the platform tells them apart.
+    const network = await NetInfo.fetch().catch(() => null);
+    if (classifyFetchFailure(network) === "OFFLINE") throw new NetworkError("OFFLINE");
+    throw new ServerUnreachable();
   } finally {
     cancel();
   }
@@ -585,7 +622,12 @@ export async function fetchRequest(id: string): Promise<ApiResult<RequestVMType>
   });
 }
 
-export type AppConfig = { minSupportedVersion: string; maintenance: string | null };
+export type AppConfig = {
+  minSupportedVersion: string;
+  maintenance: string | null;
+  /** The store listings that hold the update, per platform, when the server names them (F039). */
+  storeUrl?: StoreUrl;
+};
 
 /** GET /v1/app-config — cold start, public. */
 export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
@@ -594,13 +636,19 @@ export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
     if (!res.ok) {
       return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
     }
-    const raw = (await parseJson(res)) as { minSupportedVersion?: unknown; maintenance?: unknown } | null;
+    const raw = (await parseJson(res)) as {
+      minSupportedVersion?: unknown;
+      maintenance?: unknown;
+      storeUrl?: unknown;
+    } | null;
     return {
       ok: true,
       data: {
         minSupportedVersion: typeof raw?.minSupportedVersion === "string" ? raw.minSupportedVersion : "0.1.0",
         // Only a non-blank string is maintenance: anything else never reaches the screen as `[object Object]`.
         maintenance: maintenanceValue(raw?.maintenance),
+        // Only a store or https link per platform; none named, `Update app` opens the website.
+        storeUrl: storeUrlValue(raw?.storeUrl),
       },
     };
   });

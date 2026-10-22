@@ -16,12 +16,13 @@ import {
   TripPhotoCard,
   baselineOffset,
   belowBaseline,
+  hitSlopFor,
   profileBandHeight,
   tokens,
   rn,
 } from "@bbc/ui";
 
-import { ScreenStatusBar } from "@/components/screen-status-bar";
+import { ScreenStatusBar, heroImageKey, statusBarOn } from "@/components/screen-status-bar";
 import { Club } from "@/constants/club";
 import { clubPhoto, clubTripPhoto } from "@/features/places/club-photos";
 import { bandPicture, cardPicture } from "@/features/places/place-photo-logic";
@@ -38,7 +39,7 @@ import {
 import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
-import { cabinLabel, profileStats, travelersLabel } from "@/features/profile/profile-logic";
+import { cabinLabel, openRequestsFor, profileStats, travelersLabel } from "@/features/profile/profile-logic";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { useSignOut } from "@/features/profile/useSignOut";
@@ -46,12 +47,11 @@ import { useSaved } from "@/features/saved/saved";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { requestCard } from "@/features/requests/request-card";
 import { recentRequests } from "@/features/requests/request-view-logic";
-import { isOpen } from "@/features/requests/status";
 import { airportByCode } from "@/lib/airport-by-code";
 import { homeAirportLabel } from "@/lib/airport-search-state";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
-import { readFailureCopy, stateCopy } from "@/lib/error-context";
+import { errorFrameActions, readFailureCopy, stateCopy } from "@/lib/error-context";
 import { monogram } from "@/lib/monogram";
 import { displayPhone } from "@/lib/phone";
 
@@ -81,6 +81,8 @@ export default function ProfileScreen() {
   // 12 names the home airport's city: `New York (JFK)`.
   const [homeCity, setHomeCity] = useState<{ code: string; city: string } | null>(null);
   const [pastHero, setPastHero] = useState(false);
+  // The band's photograph as last drawn (or not), by which one it was: the status bar's glyphs follow it (F022).
+  const [heroDrawn, setHeroDrawn] = useState<{ key: string | null; ok: boolean } | null>(null);
   const focused = useIsFocused();
   const { signingOut, failure: signOutFailure, signOutNow } = useSignOut();
   const saved = useSaved();
@@ -177,7 +179,10 @@ export default function ProfileScreen() {
 
   if (!profile && error) {
     // The settings button stays: Settings keeps Sign out and Delete account, and a profile that keeps failing must not
-    // take them away (ADR-IMPL-047).
+    // take them away (ADR-IMPL-047). `Call us` beside `Try again` when the club's number is known (F114).
+    const callUs = errorFrameActions("profile", env.EXPO_PUBLIC_SUPPORT_PHONE).includes("call")
+      ? telHref(env.EXPO_PUBLIC_SUPPORT_PHONE)
+      : null;
     return (
       <View testID="profile.root" style={styles.root}>
         <ScreenStatusBar on="light" />
@@ -199,6 +204,17 @@ export default function ProfileScreen() {
                 setReloadToken((n) => n + 1);
               },
             }}
+            secondary={
+              callUs
+                ? {
+                    label: "Call us",
+                    testID: "profile.error.call",
+                    onPress: () => {
+                      Linking.openURL(callUs).catch(() => undefined);
+                    },
+                  }
+                : undefined
+            }
           />
         </View>
       </View>
@@ -215,12 +231,16 @@ export default function ProfileScreen() {
     size: { width: Math.min(width, Club.layout.phoneMaxWidth), height: band },
   });
   const homePhoto = clubPhoto(home, "any");
+  const heroImage = homePhoto ?? picture.source;
+  const heroKey = heroImageKey(heroImage);
+  const heroLoaded = heroDrawn !== null && heroDrawn.key === heroKey && heroDrawn.ok;
   const credit = homePhoto ? null : picture.credit;
   const creditLink = credit?.link ?? null;
   const stats = requests ? profileStats(requests.items, requests.hasMore) : null;
   // 12's third number: what the member saved on this phone (ADR-IMPL-056).
   const savedCount = saved.length;
-  const openRequests = requests ? requests.items.filter((r) => isOpen(r.status)).length : null;
+  // What Delete account says it closes: `more` when the server's first page did not hold them all (F106).
+  const openRequests = requests ? openRequestsFor(requests.items, requests.hasMore) : null;
   const ready = profile !== null;
 
   function onSheetSaved(next: SavedProfile) {
@@ -230,8 +250,9 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Light glyphs over the photograph; dark ones once the page has scrolled past it. */}
-      <ScreenStatusBar on={pastHero ? "light" : "dark"} />
+      {/* Light glyphs over the photograph once it is drawn; dark ones over the tint band without one (no home airport,
+          a city without a photograph, loading or failed), and once the page has scrolled past it (F022). */}
+      <ScreenStatusBar on={statusBarOn({ hasImage: heroKey !== null, loaded: heroLoaded, pastHero })} />
       <ScrollView
         testID="profile.root"
         contentContainerStyle={styles.scroll}
@@ -247,9 +268,11 @@ export default function ProfileScreen() {
           initials={monogram(profile?.displayName)}
           portrait={profile?.avatarUrl ? { uri: profile.avatarUrl } : null}
           home={home ? `Flies from ${home}` : null}
-          image={homePhoto ?? picture.source}
+          image={heroImage}
           fallback={null}
           cachePolicy={homePhoto ? "disk" : picture.cache}
+          onImageLoad={() => setHeroDrawn({ key: heroKey, ok: true })}
+          onImageError={() => setHeroDrawn({ key: heroKey, ok: false })}
           topInset={insets.top}
           action={settingsButton}
         />
@@ -399,6 +422,9 @@ export default function ProfileScreen() {
               />
             </RowGroup>
           </View>
+          {/* Each holder keeps its target's room in its padding (a touch lands only inside it), its margins giving the
+              drawn gaps back: Delete account reaches toward 44 pt as far as its neighbours allow, Sign out has its own
+              44-pt target 16 pt under it (F024). */}
           <View style={styles.deleteGap}>
             <ListRow
               testID="profile.delete"
@@ -406,7 +432,9 @@ export default function ProfileScreen() {
               label="Delete account"
               danger
               look="profile"
-              height={33.4}
+              height={DELETE.height}
+              gapAbove={DELETE.gap}
+              gapBelow={SIGN_OUT.gap}
               onPress={() => deleteRef.current?.present()}
             />
           </View>
@@ -416,7 +444,8 @@ export default function ProfileScreen() {
               label={signingOut ? "Signing out…" : "Sign out"}
               variant="destructive"
               busy={signingOut}
-              height={29.3}
+              height={SIGN_OUT.height}
+              hitSlop={SIGN_OUT_SLOP}
               text="profileSignout"
               style={styles.signOut}
               onPress={signOutNow}
@@ -479,10 +508,17 @@ function Stat({ value, label, at }: { value: string; label: string; at: number }
  * 16.3 to 16.1 pt in, 8.1 apart. `My trips` 37.2 under the pills (its ink 17.1 in), `See all ›` ending 18.9 pt from the
  * edge, 2.3 above its baseline. The trips 10.8 under the title, from 12.5 in, 4.9 apart. The row cards 13.1 under the
  * trips, 15 in from the left and 16 from the right, 9.5 apart (8.8 before Delete account); Sign out 7.6 under, 29.3
- * tall, 15.6 in.
+ * tall, 15.6 in — drawn here 16 under (F024): DESIGN.md's 44-pt targets need room the image does not leave between
+ * two red actions, and a slip on Delete account must not sign the member out (`useSignOut` asks nothing).
  */
 const STAT_W = 110;
 const PILL = 33.9;
+/** The pills reach 44 pt above and below (`Button`'s slop): their holders keep that room. */
+const PILL_SLOP = hitSlopFor(PILL);
+const DELETE = { height: 33.4, gap: 8.8 } as const;
+const SIGN_OUT = { height: 29.3, gap: tokens.space.md } as const;
+const DELETE_SLOP = hitSlopFor(DELETE.height, DELETE.gap, SIGN_OUT.gap);
+const SIGN_OUT_SLOP = hitSlopFor(SIGN_OUT.height, SIGN_OUT.gap);
 const statValue = tokens.type.statValue;
 const statLabel = tokens.type.statLabel;
 const homeType = tokens.type.profileHome;
@@ -522,10 +558,11 @@ const styles = StyleSheet.create({
     gap: 8.1,
     paddingLeft: 16.3,
     paddingRight: 16.1,
-    marginTop: 14.7 - belowBaseline(statLabel),
+    marginTop: 14.7 - belowBaseline(statLabel) - PILL_SLOP.top,
+    marginBottom: -PILL_SLOP.bottom,
   },
-  actionsAlone: { marginTop: tokens.space.lg },
-  action: { flex: 1 },
+  actionsAlone: { marginTop: tokens.space.lg - PILL_SLOP.top },
+  action: { flex: 1, paddingTop: PILL_SLOP.top, paddingBottom: PILL_SLOP.bottom },
   pill: { alignSelf: "stretch", ...tokens.elevation.card },
   tripsHead: {
     flexDirection: "row",
@@ -547,8 +584,19 @@ const styles = StyleSheet.create({
   tripsRow: { paddingLeft: 12.5, paddingRight: 8.3, gap: 4.9, marginTop: 10.8 - belowBaseline(tripsTitle) },
   rows: { paddingLeft: 15, paddingRight: 16, marginTop: 13.1 },
   cardGap: { marginTop: 9.5 },
-  deleteGap: { marginTop: 8.8 },
-  signOutGap: { marginTop: 7.6, marginLeft: 0.6, marginRight: -0.4 },
+  deleteGap: {
+    marginTop: DELETE.gap - DELETE_SLOP.top,
+    paddingTop: DELETE_SLOP.top,
+    paddingBottom: DELETE_SLOP.bottom,
+  },
+  // What follows (a failed sign-out's line, the photograph's credit) starts under Sign out's target, not over it.
+  signOutGap: {
+    marginTop: SIGN_OUT.gap - DELETE_SLOP.bottom - SIGN_OUT_SLOP.top,
+    paddingTop: SIGN_OUT_SLOP.top,
+    paddingBottom: SIGN_OUT_SLOP.bottom,
+    marginLeft: 0.6,
+    marginRight: -0.4,
+  },
   signOut: { alignSelf: "stretch", borderWidth: 0.6 },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
   message: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, textAlign: "center", marginTop: 8 },

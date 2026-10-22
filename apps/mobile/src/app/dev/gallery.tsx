@@ -54,6 +54,7 @@ import {
   rn,
 } from "@bbc/ui";
 
+import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { CLUB_PICTURE } from "@/features/places/usePlacePhotos";
 
 /**
@@ -85,6 +86,8 @@ function GalleryScreen() {
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 48 }]}
     >
+      {/* The gallery is on the porcelain page: dark glyphs, not the entry's light bar the root keeps (F114). */}
+      <ScreenStatusBar on="light" />
       <Wordmark />
       <Text style={styles.h1}>Components</Text>
 
