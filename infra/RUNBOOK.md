@@ -112,9 +112,10 @@ docker compose ... exec -T postgres psql -U bbc -d bbc \
 
 Modules: `proposals`, `engagement`, `notifications`, `personalization`, `members`. The app reads them from `/v1/app-config`; the API stops mounting the routes on next boot and pauses the consumers.
 
-Boot unmounts a module only for a flag the database answered with. An api that starts before postgres/pgbouncer (a host
-reboot: restart policies ignore `depends_on`) waits for the database for about 16 s (retries after 0.5, 1, 2, 4 and
-8 s), then logs `boot: database unreachable, exiting` and exits non-zero; Docker's `unless-stopped` starts it again.
+Boot unmounts a module only for a flag the database answered with. An api or worker that starts before
+postgres/pgbouncer (a host reboot: restart policies ignore `depends_on`) waits for the database for about 16 s (retries
+after 0.5, 1, 2, 4 and 8 s), then logs `boot: database unreachable, exiting` and exits non-zero; Docker's
+`unless-stopped` starts it again (ADR-IMPL-058).
 
 ## Pause one event consumer (e.g. a handler writing bad data)
 
