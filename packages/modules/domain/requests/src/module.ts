@@ -6,7 +6,7 @@ import { apiError, zodFieldErrors } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { RequestSubmittedV1 } from "@bbc/shared/events/request";
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import { createRequestsRepo } from "./infrastructure/requests.repo";
 import { submit } from "./application/submit";
 import { setStatus } from "./application/set-status";
@@ -56,7 +56,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         (codes) => ports.catalog.getAirports(undefined, codes),
         (err) => {
           platform.metrics.inc("request_cities_unavailable");
-          platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "request cities unavailable");
+          platform.logger.warn({ err: errorForLog(err) }, "request cities unavailable");
         },
       );
     const cityOf = (cities: Map<string, string>, row: { legs: unknown; tripType: string }) => {
@@ -104,7 +104,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         });
         if (!res.ok) platform.logger.warn({ status: res.status }, "ops alert not posted");
       } catch (err) {
-        platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "ops alert not posted");
+        platform.logger.warn({ err: errorForLog(err) }, "ops alert not posted");
       }
     };
 

@@ -6,7 +6,7 @@ import { rateLimit } from "@bbc/platform/ratelimit";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
 import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
@@ -65,7 +65,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
           ).then(() => undefined),
         )
         .catch((err: unknown) => {
-          platform.logger.error({ err: String(err) }, "push stream worker stopped");
+          platform.logger.error({ err: errorForLog(err) }, "push stream worker stopped");
         });
       platform.lifecycle.onClose(async () => {
         await loop;

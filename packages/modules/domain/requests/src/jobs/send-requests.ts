@@ -1,4 +1,4 @@
-import { withTx, type Executor } from "@bbc/db";
+import { errorLine, withTx, type Executor } from "@bbc/db";
 import { MAX_SEND_ATTEMPTS, type RequestsRepo } from "../infrastructure/requests.repo";
 import { effectiveIntent } from "../application/intent";
 import { signAction, type OperatorAction } from "../application/operator-links";
@@ -79,7 +79,8 @@ export function createSendRequestsJob(deps: {
         await withTx(deps.db, (tx) => deps.repo.markSent(tx, row.id, crmRequestId));
         sent++;
       } catch (err) {
-        const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
+        // One line without a failed query's parameters: it is stored on the request and logged (AGENTS.md rule 6).
+        const message = errorLine(err).slice(0, 500);
         const attempts = await withTx(deps.db, (tx) => deps.repo.markFailed(tx, row.id, message));
         deps.logger.warn({ requestId: row.id, err: message }, "request send failed");
         if (attempts >= MAX_SEND_ATTEMPTS) await gaveUp(row.id, row.reference, message);
