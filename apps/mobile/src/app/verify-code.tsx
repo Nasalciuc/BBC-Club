@@ -45,14 +45,32 @@ export default function VerifyCodeScreen() {
   const canVerify = code.length === CODE_LENGTH && !busy;
   const destination = email?.trim() || "your email";
 
-  /** A code the server refused (verify-code-logic.ts): a dead one empties the boxes and opens Resend at once. */
-  function showVerifyError(result: { code?: string; message: string }) {
+  /** Ask the server to mail a code again; Resend waits its 30 s from now. */
+  async function sendNewCode(normalizedEmail: string) {
+    const sentAt = Date.now();
+    setDeadline(resendDeadline(sentAt));
+    setNow(sentAt);
+    return resendCode(normalizedEmail, purpose);
+  }
+
+  /**
+   * A code the server refused (verify-code-logic.ts): a dead one empties the boxes and opens Resend at once; an expired
+   * one is replaced at once — the words promise it — and if that send fails, its own error is shown instead.
+   */
+  async function showVerifyError(result: { code?: string; message: string }, normalizedEmail: string) {
     const plan = afterVerifyError(result.code);
     if (plan.clear) setCode("");
     if (plan.resendNow) {
       const at = Date.now();
       setDeadline(at);
       setNow(at);
+    }
+    if (plan.resend) {
+      const sent = await sendNewCode(normalizedEmail);
+      if (!sent.ok) {
+        setError(sent.message);
+        return;
+      }
     }
     setError(plan.message ?? result.message);
   }
@@ -82,8 +100,8 @@ export default function VerifyCodeScreen() {
     setError(null);
     const result = await verifyJoin(normalizedEmail, otpResult.data);
     if (!result.ok) {
+      await showVerifyError(result, normalizedEmail);
       setBusy(false);
-      showVerifyError(result);
       return;
     }
     // A member who already has a password goes straight in; only a new member chooses one.
@@ -103,12 +121,9 @@ export default function VerifyCodeScreen() {
   async function onResend() {
     const normalizedEmail = email?.trim().toLowerCase() ?? "";
     if (!normalizedEmail || seconds > 0) return;
-    const sentAt = Date.now();
-    setDeadline(resendDeadline(sentAt));
-    setNow(sentAt);
     setCode("");
     setError(null);
-    const result = await resendCode(normalizedEmail, purpose);
+    const result = await sendNewCode(normalizedEmail);
     if (!result.ok) setError(result.message);
   }
 

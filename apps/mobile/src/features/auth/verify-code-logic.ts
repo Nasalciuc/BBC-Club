@@ -34,6 +34,8 @@ export type VerifyErrorPlan = {
 export function afterVerifyError(code: string | undefined): VerifyErrorPlan {
   if (code === "TOO_MANY_ATTEMPTS")
     return { resend: false, resendNow: true, clear: true, message: TOO_MANY_ATTEMPTS_COPY };
+  // "That code has expired. We'll send you a new one." (shared AUTH_MESSAGES): Verify sends it, so the words are true.
+  if (code === "OTP_EXPIRED") return { resend: true, resendNow: false, clear: true, message: null };
   return { resend: false, resendNow: false, clear: false, message: null };
 }
 

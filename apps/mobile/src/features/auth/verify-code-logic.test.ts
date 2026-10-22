@@ -19,6 +19,11 @@ describe("afterVerifyError — what Verify does with a code the server refused",
     expect(TOO_MANY_ATTEMPTS_COPY).toBe("That code was tried too many times. Ask for a new one below.");
   });
 
+  it("an expired code makes the shared words true: a new one is sent at once, the boxes emptied", () => {
+    // "That code has expired. We'll send you a new one." (packages/shared/auth-messages.ts)
+    expect(afterVerifyError("OTP_EXPIRED")).toEqual({ resend: true, resendNow: false, clear: true, message: null });
+  });
+
   it("a wrong code stays to be corrected, with the server's words", () => {
     expect(afterVerifyError("INVALID_OTP")).toEqual({ resend: false, resendNow: false, clear: false, message: null });
   });
