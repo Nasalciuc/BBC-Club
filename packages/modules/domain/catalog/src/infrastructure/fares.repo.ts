@@ -1,5 +1,6 @@
 import type { Executor } from "@bbc/db";
 import { and, asc, eq, gt, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { airports, fares } from "@bbc/db/schema/catalog";
 
 export type SearchQuery = {
@@ -12,6 +13,9 @@ export type SearchQuery = {
   now?: Date;
 };
 
+/** The fare's origin airport, for the zone its departure day is read in. */
+const origin = alias(airports, "origin");
+
 export const SEARCH_LIMIT = 30; // the same page the future FT.SEARCH … LIMIT 0 30 returns — one contract for both paths
 
 export const faresRepo = {
@@ -22,11 +26,12 @@ export const faresRepo = {
    */
   searchSelect(exec: Executor, q: SearchQuery) {
     const now = q.now ?? new Date();
+    const originTz = exec.select({ tz: origin.tz }).from(origin).where(eq(origin.code, fares.routeFrom));
     const onDay = q.when
       ? or(
           and(
             isNotNull(fares.departAt),
-            sql`(${fares.departAt} AT TIME ZONE coalesce((SELECT a.tz FROM ${airports} a WHERE a.code = ${fares.routeFrom}), 'UTC'))::date = ${q.when.toISOString().slice(0, 10)}::date`,
+            sql`(${fares.departAt} AT TIME ZONE coalesce((${originTz}), 'UTC'))::date = ${q.when.toISOString().slice(0, 10)}::date`,
           ),
           and(isNull(fares.departAt), gt(fares.validUntil, q.when)),
         )
