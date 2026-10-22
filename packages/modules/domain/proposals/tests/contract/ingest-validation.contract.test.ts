@@ -114,6 +114,19 @@ describe("ingest refuses what the offers table refuses, and unsafe values", () =
     expect(row).toEqual({ currency: "USD", route_from: "KEF", route_to: "CDG" });
   });
 
+  it("a retry of an offer stored with a lower-case currency, before the ingest upper-cased it, still replays", async () => {
+    const key = `validation:${crypto.randomUUID()}`;
+    const payload = { ...good(), currency: "usd" };
+    const first = await post(payload, key);
+    expect(first.status).toBe(200);
+    const { offerId } = (await first.json()) as { offerId: string };
+    // As the ingest stored it before: the currency as sent.
+    await iso.db.execute(sql`UPDATE proposals.offers SET currency = 'usd' WHERE idempotency_key = ${key}`);
+    const retry = await post(payload, key);
+    expect(retry.status).toBe(200);
+    expect(((await retry.json()) as { offerId: string }).offerId).toBe(offerId);
+  });
+
   it("a CHECK the database still refuses is a 400 VALIDATION, not a 500", async () => {
     // Past the schema (the facade's own callers, a CHECK added later): the route maps 23514 and 22003 to 400.
     const ok = await ingest(deps, { ...(good() as never), price: "1700.00" }, `validation:${crypto.randomUUID()}`);

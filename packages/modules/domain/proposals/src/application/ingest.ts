@@ -201,7 +201,8 @@ function replay(
     row.cabin === input.cabin &&
     num(row.price) === num(input.price) &&
     num(row.publishedPrice) === num(input.publishedPrice) &&
-    row.currency === (input.currency ?? "USD") &&
+    // An offer stored before the ingest upper-cased the currency ('usd') is the same offer when its retry says 'usd'.
+    row.currency.toUpperCase() === (input.currency ?? "USD") &&
     row.title === input.title &&
     (row.body ?? null) === (input.body ?? null) &&
     instant(row.validUntil) === instant(input.validUntil) &&
