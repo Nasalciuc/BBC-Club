@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { desc, gte, sql } from "drizzle-orm";
-import type { Db, Executor } from "@bbc/db";
+import { errorForLog, type Db, type Executor } from "@bbc/db";
 import { demandDaily } from "@bbc/db/schema/catalog";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
@@ -521,7 +521,7 @@ export const catalogModule = (
           },
         })
         .catch((err: unknown) => {
-          platform.logger.error({ err: String(err) }, "demand consumer stopped");
+          platform.logger.error({ err: errorForLog(err) }, "demand consumer stopped");
         });
       platform.lifecycle.onClose(async () => {
         await loop;
