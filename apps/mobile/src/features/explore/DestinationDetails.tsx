@@ -8,6 +8,7 @@ import type { SearchState } from "@/features/search/useSearch";
 import { countryName } from "@/lib/countries";
 import { formatPrice } from "@/lib/format";
 
+import { summaryIsMessage, summaryKind } from "./destination-summary-logic";
 import { localTime, msToNextMinute } from "./local-time";
 import { cabinLabel, datesChipLabel, flightOptionsTitle, noFareCopy, travelersLabel } from "./travel-preferences";
 
@@ -466,12 +467,7 @@ function Options({
 }
 
 function isMessage(state: SearchState, offline: boolean): boolean {
-  if (offline) return true;
-  if (state.status === "error") return true;
-  const fares = state.results ?? [];
-  if (state.status === "paused" && fares.length === 0) return true;
-  if (state.status === "searching" || state.status === "idle") return false;
-  return fares.length === 0 && !state.estimate;
+  return summaryIsMessage(summaryKind(state, offline));
 }
 
 /** The fare's summary, or what stands in its place: offline (19), searching, paused, an error, no fare. */
@@ -525,8 +521,16 @@ function Summary({
     );
   }
   const fares = state.results ?? [];
-  if (state.status === "paused" && fares.length === 0) {
-    return <Message testID="search.paused" title="Searching paused." body={PAUSED} />;
+  if (summaryKind(state, offline) === "paused") {
+    // The search reruns only when the route, the cabin or the dates change: `Try again` asks once more (F102).
+    return (
+      <Message
+        testID={`${testIDPrefix}.paused`}
+        title="Searching paused."
+        body={PAUSED}
+        link={{ label: "Try again", onPress: onRetry, testID: `${testIDPrefix}.paused.retry` }}
+      />
+    );
   }
   if (fares.length > 0) {
     const lowest = fares.reduce((best, fare) => (fare.price.offer < best.price.offer ? fare : best));
