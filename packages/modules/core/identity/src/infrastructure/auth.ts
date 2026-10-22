@@ -10,6 +10,7 @@ import type { EventPublisher } from "../ports/events";
 import type { Executor } from "@bbc/db";
 import { ac, roles } from "./access";
 import { claimOtpSend, releaseOtpClaim } from "./otp-cooldown";
+import { classifyOtpSendError, recordOtpSendFailure } from "./otp-send-outcome";
 import { clubGuards } from "./club-guards";
 import { BREACHED_PASSWORD_MESSAGE, breachCheck, breachListStandIn } from "./breach";
 import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
@@ -168,12 +169,14 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
         // set this to the send window so an accidental customRules removal still allows colleagues.
         rateLimit: { window: FIFTEEN_MINUTES, max: 10 },
         // Recipient = the user's email; send is awaited inside our callback. Better Auth 1.6.31's
-        // runInBackgroundOrAwait may still return HTTP 200 if Postmark throws — we release the claim
-        // so a retry inside the 30s UI window can mail again.
+        // runInBackgroundOrAwait swallows what this throws and the route answers 200: a failure releases the claim (a
+        // retry inside the 30 s window mails again) and is recorded for the request, so club-guards answers a sign-in
+        // send 503 EMAIL_UNDELIVERABLE. A reset or verification code keeps its constant 200 (anti-enumeration).
         sendVerificationOTP: async ({ email: to, otp, type }) => {
           // Same answer either way (no enumeration). resendStrategy "reuse" keeps the earlier code valid.
           // BA resolveOTP may have already stored a *replacement* OTP before this runs — claim by otp HMAC
-          // so a new code still mails inside the 30s UI window.
+          // so a new code still mails inside the 30s UI window. No claim: the code mailed moments ago is still valid,
+          // and the answer stays a silent 200.
           const claim = await claimOtpSend(db, to, type, otp, env.BETTER_AUTH_SECRET);
           if (!claim) {
             logger.info({ type }, "otp: resend inside cooldown, not sent"); // never log the address
@@ -182,7 +185,12 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
           try {
             await email.sendOtp({ to, otp, purpose: type });
           } catch (e) {
-            await releaseOtpClaim(db, claim);
+            const failure = classifyOtpSendError(e);
+            try {
+              await releaseOtpClaim(db, claim);
+            } finally {
+              await recordOtpSendFailure(failure);
+            }
             throw e;
           }
           logger.info({ to: mask(to), purpose: type }, "otp sent");

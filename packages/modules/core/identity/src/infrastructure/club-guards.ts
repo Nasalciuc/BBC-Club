@@ -1,6 +1,11 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { BREACH_CHECK_UNAVAILABLE_MESSAGE, BREACHED_PASSWORD_MESSAGE } from "./breach";
+import { otpSendFailure } from "./otp-send-outcome";
+
+/** A sign-in code that could not be mailed (503 EMAIL_UNDELIVERABLE; `reason` says why). */
+export const EMAIL_UNDELIVERABLE_MESSAGE =
+  "We couldn't send a code to that address. Check it, or try again in a moment.";
 
 /** What the delete sheet says when the password field is empty (the app maps INVALID_PASSWORD to the field). */
 export const DELETE_NEEDS_PASSWORD = "Enter your password to delete your account.";
@@ -65,6 +70,25 @@ export function clubGuards({ isBreached }: ClubGuardDeps) {
             if (breached) {
               throw APIError.from("BAD_REQUEST", { code: "PASSWORD_COMPROMISED", message: BREACHED_PASSWORD_MESSAGE });
             }
+          }),
+        },
+      ],
+      after: [
+        {
+          // The route answers 200 even when the code could not be mailed (runInBackgroundOrAwait swallows the error), and
+          // Join then waits for a code that never comes. A sign-in code goes to any address (path A), so the answer can
+          // say so without telling anyone whether the address has an account. Reset and verification codes keep their
+          // one answer; their failures are logged and counted (the send callback).
+          matcher: (ctx: { path?: string }) => ctx.path === "/email-otp/send-verification-otp",
+          handler: createAuthMiddleware(async (ctx) => {
+            if ((ctx.body as { type?: unknown } | undefined)?.type !== "sign-in") return;
+            const failure = await otpSendFailure();
+            if (!failure) return;
+            throw new APIError("SERVICE_UNAVAILABLE", {
+              code: "EMAIL_UNDELIVERABLE",
+              message: EMAIL_UNDELIVERABLE_MESSAGE,
+              reason: failure.reason,
+            });
           }),
         },
       ],

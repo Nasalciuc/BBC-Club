@@ -42,13 +42,13 @@ describe("OTP colleagues + per-email cooldown", () => {
     await t.close();
   });
 
-  it("failed send releases the claim so a retry inside 30s can mail", async () => {
+  it("a sign-in code that could not be mailed is answered 503 EMAIL_UNDELIVERABLE; the retry mails it", async () => {
     const t = await testApp({ suite: "otp-fail-retry" });
     await t.db.execute(sql`DELETE FROM auth.rate_limit`);
     await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
 
     const email = "fail.retry.otp@test.dev";
-    const send = () =>
+    const send = (type = "sign-in", to = email) =>
       t.app.request("/api/auth/email-otp/send-verification-otp", {
         method: "POST",
         headers: {
@@ -56,16 +56,34 @@ describe("OTP colleagues + per-email cooldown", () => {
           "X-Forwarded-For": "203.0.113.60, 173.245.48.1",
           Origin: t.appOrigin,
         },
-        body: JSON.stringify({ email, type: "sign-in" }),
+        body: JSON.stringify({ email: to, type }),
       });
+    const inactive = new Error(
+      'Postmark 422: {"ErrorCode":406,"Message":"You tried to send to recipient(s) that have been marked as inactive."}',
+    );
 
-    t.email.failNext(1);
-    // Better Auth 1.6.31 runInBackgroundOrAwait swallows send errors → still HTTP 200.
-    expect((await send()).status).toBe(200);
+    // Better Auth's runInBackgroundOrAwait swallows the error; the club reads the outcome and says so (Path A sends to
+    // any address, so there is nothing to hide for sign-in).
+    t.email.failNext(1, inactive);
+    const failed = await send();
+    expect(failed.status).toBe(503);
+    const body = (await failed.json()) as { code?: string; message?: string; reason?: string };
+    expect(body.code).toBe("EMAIL_UNDELIVERABLE");
+    expect(body.message).toBe("We couldn't send a code to that address. Check it, or try again in a moment.");
+    expect(body.reason).toBe("inactive_recipient");
     expect(t.email.sent.filter((s) => s.to.toLowerCase() === email).length).toBe(0);
 
-    expect((await send()).status).toBe(200);
-    expect(t.email.lastOtp(email)).toBeTruthy();
+    // The claim was released: a retry inside the 30 s window mails the same code, once.
+    const retry = await send();
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toEqual({ success: true });
+    expect(t.email.sent.filter((s) => s.to.toLowerCase() === email).length).toBe(1);
+
+    // A reset code keeps one answer whatever happened (anti-enumeration, ADR-PROD-001).
+    t.email.failNext(1, inactive);
+    const reset = await send("forget-password", t.memberA.email);
+    expect(reset.status).toBe(200);
+    expect(await reset.json()).toEqual({ success: true });
 
     await t.close();
   });
