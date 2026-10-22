@@ -7,19 +7,12 @@ import { setPendingOtp } from "@/features/auth/otp-holder";
 import { resendCode, verifyJoin } from "@/features/auth/flows";
 import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { Otp } from "@/features/auth/schemas";
+import { formatResendCountdown, resendDeadline, secondsLeft } from "@/features/auth/verify-code-logic";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { Club } from "@/constants/club";
 
 const CODE_LENGTH = 6;
-/** Matches identity OTP expiresIn / send window (one live code). */
-const RESEND_SECONDS = 15 * 60;
-
-function formatResendCountdown(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 export default function VerifyCodeScreen() {
   const router = useRouter();
@@ -30,15 +23,18 @@ export default function VerifyCodeScreen() {
   const purpose = parseAuthPurpose(purposeParam);
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState("");
-  const [seconds, setSeconds] = useState(RESEND_SECONDS);
+  // Resend opens at a wall-clock deadline (verify-code-logic.ts): a timer chain stops while the app is in the background.
+  const [deadline, setDeadline] = useState(() => resendDeadline(Date.now()));
+  const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const seconds = secondsLeft(deadline, now);
 
   useEffect(() => {
     if (seconds <= 0) return;
-    const id = setTimeout(() => setSeconds((value) => value - 1), 1000);
+    const id = setTimeout(() => setNow(Date.now()), 1000);
     return () => clearTimeout(id);
-  }, [seconds]);
+  }, [seconds, now]);
 
   const digits = Array.from({ length: CODE_LENGTH }, (_, index) => code[index] ?? "");
   const canVerify = code.length === CODE_LENGTH && !busy;
@@ -90,7 +86,9 @@ export default function VerifyCodeScreen() {
   async function onResend() {
     const normalizedEmail = email?.trim().toLowerCase() ?? "";
     if (!normalizedEmail || seconds > 0) return;
-    setSeconds(RESEND_SECONDS);
+    const sentAt = Date.now();
+    setDeadline(resendDeadline(sentAt));
+    setNow(sentAt);
     setCode("");
     setError(null);
     const result = await resendCode(normalizedEmail, purpose);
