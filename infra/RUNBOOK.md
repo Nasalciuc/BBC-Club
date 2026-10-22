@@ -493,7 +493,7 @@ The job returns `{ campaigns, pages, inserted, capped }` in `platform.job_runs.m
 
 1. `inactive_recipient` (Postmark 422 with `ErrorCode` 406): Postmark has suppressed that address after a hard bounce or a spam complaint. Find it in Postmark → the server → Activity (search by address when the member names it) and reactivate it under Suppressions only if the member confirms the address is right.
 2. `timeout` (no answer within 4 s) or `provider_error` with status 5xx: Postmark is slow or down — check status.postmarkapp.com. Members can retry; a failed send releases the 30-second resend lock.
-3. `provider_error` with status 401: `POSTMARK_TOKEN` is wrong or was rotated — every code fails. Fix the token in the env file and restart the API. Other 422 codes (sender signature, message stream) are configuration: read `postmarkErrorCode` against Postmark's API error codes.
+3. `provider_error` with status 401: `POSTMARK_SERVER_TOKEN` is wrong or was rotated — every code fails. Fix the token in the env file and restart the API. Other 422 codes (sender signature, message stream) are configuration: read `postmarkErrorCode` against Postmark's API error codes.
 
 There is no second email provider: nothing reads `EMAIL_ADAPTER` and no SES sender exists. Existing sessions (30 days) keep working; only Join, sign-in by code and resets are blocked while Postmark refuses.
 
