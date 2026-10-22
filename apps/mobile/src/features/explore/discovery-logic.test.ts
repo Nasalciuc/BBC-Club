@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
-import { airportLine, airportName, deviceTimeZone, popularLabel, popularRows } from "./discovery-logic";
+import { airportLine, airportName, deviceTimeZone, popularLabel, popularRows, popularState } from "./discovery-logic";
 
 const a = (code: string, city: string): AirportVM => ({ code, city, name: city, countryCode: "XX", lat: 0, lng: 0 });
 const POPULAR = [a("LHR", "London"), a("CDG", "Paris"), a("HND", "Tokyo"), a("DXB", "Dubai"), a("SIN", "Singapore")];
@@ -15,6 +15,25 @@ describe("popular from", () => {
     expect(popularRows(POPULAR, null).map((x) => x.code)).toEqual(["LHR", "CDG", "HND"]);
     expect(popularRows(POPULAR, a("LHR", "London")).map((x) => x.code)).toEqual(["CDG", "HND", "DXB"]);
     expect(popularRows([], null)).toEqual([]);
+  });
+});
+
+describe("popularState — what stands under Search's field before typing (F011)", () => {
+  it("a Home that failed shows its message with Try again, never skeletons for ever", () => {
+    expect(popularState({ popular: 0, recent: 0, load: "failed" })).toBe("error");
+    expect(popularState({ popular: 0, recent: 2, load: "failed" })).toBe("error");
+  });
+
+  it("skeletons only while Home loads; the cards once there are some", () => {
+    expect(popularState({ popular: 0, recent: 0, load: "loading" })).toBe("skeleton");
+    expect(popularState({ popular: 3, recent: 0, load: "ok" })).toBe("cards");
+    // The popular list can come from the server's own list while Home is still on its way.
+    expect(popularState({ popular: 3, recent: 0, load: "loading" })).toBe("cards");
+  });
+
+  it("Home answered without a popular destination: the hint, or the recent searches alone", () => {
+    expect(popularState({ popular: 0, recent: 0, load: "ok" })).toBe("hint");
+    expect(popularState({ popular: 0, recent: 1, load: "ok" })).toBe("none");
   });
 });
 

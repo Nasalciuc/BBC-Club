@@ -11,6 +11,25 @@ export function popularRows(popular: readonly AirportVM[], from: Pick<AirportVM,
   return popular.filter((a) => a.code !== from?.code).slice(0, max);
 }
 
+/** Where Search's GET /v1/home stands: still on its way, answered, or failed. */
+export type HomeLoad = "loading" | "ok" | "failed";
+
+/**
+ * What stands under Search's field before typing (03): the popular cards once there are some; skeletons while Home is
+ * on its way; Home's failure message with `Try again` once it failed (F011); `Type a city or an airport code.` when Home
+ * answered without a popular destination and nothing was searched lately; else the recent searches alone.
+ */
+export function popularState(s: {
+  popular: number;
+  recent: number;
+  load: HomeLoad;
+}): "cards" | "skeleton" | "error" | "hint" | "none" {
+  if (s.popular > 0) return "cards";
+  if (s.load === "loading") return "skeleton";
+  if (s.load === "failed") return "error";
+  return s.recent === 0 ? "hint" : "none";
+}
+
 /** The phone's IANA zone for GET /v1/airports/home-suggestion — null when the runtime has none to give. */
 export function deviceTimeZone(resolve: () => string | undefined = defaultResolve): string | null {
   try {
