@@ -3,6 +3,7 @@ import { desc, lt } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import type { Auth } from "../infrastructure/auth";
 import { user } from "../infrastructure/schema";
+import { otpSendLock, otpSendTarget } from "../infrastructure/otp-send-lock";
 import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
 
 export type { Member, AuthVars, SessionInfo, IdentityFacade };
@@ -69,5 +70,14 @@ export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFac
     return rows;
   }
 
-  return { handler: auth.handler, getSession, requireMember, requireRole, deleteAccount, listUsersCreatedBefore };
+  const withOtpSendLock = otpSendLock(db);
+  /** Better Auth at /api/auth/*. A request that mails a code runs under its address's lock (otp-send-lock.ts), so two
+   *  at the same moment mail one code; everything else goes straight through. */
+  const handler: Auth["handler"] = async (req) => {
+    const target = await otpSendTarget(req);
+    if (!target) return auth.handler(req);
+    return withOtpSendLock(target, () => auth.handler(req));
+  };
+
+  return { handler, getSession, requireMember, requireRole, deleteAccount, listUsersCreatedBefore };
 }

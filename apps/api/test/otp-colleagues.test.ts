@@ -93,6 +93,37 @@ describe("OTP colleagues + per-email cooldown", () => {
     await t.close();
   });
 
+  it("two code requests for one address at the same moment mail one code, and it works", async () => {
+    const t = await testApp({ suite: "otp-concurrent" });
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
+    // Two phones (two addresses), one Join each, for three new addresses.
+    for (let n = 0; n < 3; n++) {
+      const email = `concurrent.${n}.${crypto.randomUUID().slice(0, 8)}@test.dev`;
+      const send = (ip: string) =>
+        t.app.request("/api/auth/email-otp/send-verification-otp", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Forwarded-For": `${ip}, 173.245.48.1`,
+            Origin: t.appOrigin,
+          },
+          body: JSON.stringify({ email, type: "sign-in" }),
+        });
+      const [a, b] = await Promise.all([send(`198.51.100.${10 + n}`), send(`198.51.100.${20 + n}`)]);
+      expect([a.status, b.status]).toEqual([200, 200]);
+      const mailed = new Set(t.email.sent.filter((s) => s.to.toLowerCase() === email).map((s) => s.otp));
+      expect(mailed.size).toBe(1);
+      const verify = await t.app.request("/api/auth/sign-in/email-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: t.appOrigin },
+        body: JSON.stringify({ email, otp: [...mailed][0] }),
+      });
+      expect(verify.status).toBe(200);
+    }
+    await t.close();
+  });
+
   it("after five bad verifies, resend inside 30s still delivers the replacement OTP", async () => {
     const t = await testApp({ suite: "otp-replace" });
     await t.db.execute(sql`DELETE FROM auth.rate_limit`);
