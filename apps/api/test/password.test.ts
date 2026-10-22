@@ -284,6 +284,29 @@ describe("POST /v1/account/password", () => {
     await t.close();
   });
 
+  it("a change while the breach list cannot be reached: 503, as for a first password, and nothing changes", async () => {
+    const t = await testApp({
+      suite: "pw-change-hibp-down",
+      identity: {
+        breachedPassword: (p) => {
+          if (p === "unchecked-pass-2026x") throw new Error("api.pwnedpasswords.com unreachable");
+          return false;
+        },
+      },
+    });
+    const r = await t.app.request("/v1/account/password", {
+      method: "POST",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ newPassword: "unchecked-pass-2026x", currentPassword: t.memberA.password }),
+    });
+    expect(r.status).toBe(503);
+    const body = (await r.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("SERVICE_DISABLED");
+    expect(body.error?.message).toBe("We couldn't check this password just now. Try again in a moment.");
+    expect(await t.auth.cookieFor(t.memberA.email, t.memberA.password)).toBeTruthy();
+    await t.close();
+  });
+
   it("nor around it: Better Auth's own change-password and verify-password are not served (ADR-IMPL-047)", async () => {
     const t = await testApp({ suite: "pw-auth-route" });
     const post = (path: string, body: Record<string, string>) =>

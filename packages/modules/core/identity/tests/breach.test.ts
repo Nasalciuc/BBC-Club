@@ -1,6 +1,12 @@
 import { describe, it, expect } from "bun:test";
 import { createHash } from "node:crypto";
-import { BreachCheckUnavailable, breachCheck, isPasswordBreached } from "../src/infrastructure/breach";
+import { APIError } from "better-auth/api";
+import {
+  BreachCheckUnavailable,
+  breachCheck,
+  isBreachListFailure,
+  isPasswordBreached,
+} from "../src/infrastructure/breach";
 
 const sha1 = (p: string) => createHash("sha1").update(p).digest("hex").toUpperCase();
 
@@ -45,5 +51,22 @@ describe("breached-password check (k-anonymity range query)", () => {
   it("tests use a predicate, or find nothing breached without one; never the network", async () => {
     expect(await breachCheck({ env: { NODE_ENV: "test" } })("password123456")).toBe(false);
     expect(await breachCheck({ env: { NODE_ENV: "production" }, breachedPassword: (p) => p === "x" })("x")).toBe(true);
+  });
+});
+
+describe("Better Auth's breach plugin failing to read the list", () => {
+  it("is told apart from every other error (the plugin's 500s carry no code, only these words)", () => {
+    // As better-auth 1.6.31's haveIBeenPwned throws them (plugins/haveibeenpwned checkPasswordCompromise).
+    expect(
+      isBreachListFailure(new APIError("INTERNAL_SERVER_ERROR", { message: "Failed to check password. Status: 403" })),
+    ).toBe(true);
+    expect(
+      isBreachListFailure(
+        new APIError("INTERNAL_SERVER_ERROR", { message: "Failed to check password. Please try again later." }),
+      ),
+    ).toBe(true);
+    expect(isBreachListFailure(new APIError("INTERNAL_SERVER_ERROR", { message: "Something else" }))).toBe(false);
+    expect(isBreachListFailure(new APIError("BAD_REQUEST", { message: "Failed to check password." }))).toBe(false);
+    expect(isBreachListFailure(new Error("Failed to check password."))).toBe(false);
   });
 });

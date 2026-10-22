@@ -47,6 +47,17 @@ export async function isPasswordBreached(password: string, fetchImpl: typeof fet
   });
 }
 
+/** What Better Auth's haveIBeenPwned plugin (1.6.31) throws, as a 500, when it cannot read the list: "Failed to check
+ *  password. Status: …" or "… Please try again later.". It has no code of its own. */
+const PLUGIN_CHECK_FAILED = "Failed to check password";
+
+/** The plugin (or its test stand-in) could not read the breach list: the password was neither accepted nor refused. */
+export function isBreachListFailure(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const { statusCode, body } = err as { statusCode?: unknown; body?: { message?: unknown } };
+  return statusCode === 500 && typeof body?.message === "string" && body.message.startsWith(PLUGIN_CHECK_FAILED);
+}
+
 /** Better Auth's haveIBeenPwned default paths: the plugin checks a password only while hashing it on one of these. */
 const PLUGIN_PATHS = [
   "/sign-up/email",
@@ -61,7 +72,8 @@ const PLUGIN_PATHS = [
 /**
  * Test stand-in for Better Auth's haveIBeenPwned plugin, built the way the plugin is: it wraps `password.hash` and
  * refuses on the plugin's paths only, at hash time — so after a reset's code is used, and never for the path-less
- * `setPassword` — with the plugin's error (400 PASSWORD_COMPROMISED). Tests then meet what production meets.
+ * `setPassword` — with the plugin's errors (400 PASSWORD_COMPROMISED; a 500 "Failed to check password" when the
+ * predicate throws, as for an unreachable list). Tests then meet what production meets.
  */
 export function breachListStandIn(isBreached: (password: string) => Promise<boolean>) {
   return {
@@ -74,7 +86,17 @@ export function breachListStandIn(isBreached: (password: string) => Promise<bool
             ...ctx.password,
             async hash(password: string) {
               const c = await getCurrentAuthContext();
-              if (c.path && PLUGIN_PATHS.includes(c.path) && (await isBreached(password))) {
+              if (!c.path || !PLUGIN_PATHS.includes(c.path)) return originalHash(password);
+              let breached: boolean;
+              try {
+                breached = await isBreached(password);
+              } catch {
+                // As the plugin does when the list cannot be read.
+                throw new APIError("INTERNAL_SERVER_ERROR", {
+                  message: `${PLUGIN_CHECK_FAILED}. Please try again later.`,
+                });
+              }
+              if (breached) {
                 throw APIError.from("BAD_REQUEST", {
                   code: "PASSWORD_COMPROMISED",
                   message: BREACHED_PASSWORD_MESSAGE,

@@ -14,7 +14,12 @@ import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
 import { rateLimit, subjectOf } from "@bbc/platform/ratelimit";
 import { account } from "./infrastructure/schema";
-import { BREACH_CHECK_UNAVAILABLE_MESSAGE, BREACHED_PASSWORD_MESSAGE, breachCheck } from "./infrastructure/breach";
+import {
+  BREACH_CHECK_UNAVAILABLE_MESSAGE,
+  BREACHED_PASSWORD_MESSAGE,
+  breachCheck,
+  isBreachListFailure,
+} from "./infrastructure/breach";
 
 /** better-auth's own rule (setPassword, changePassword, deleteUser): a credential account *with* a stored password.
  *  A credential row can exist with a null password — that is not a password. */
@@ -206,6 +211,11 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
                 500)
               : 500;
           if (status === 400) return c.json(passwordRefusal(err), 400);
+          // A change: Better Auth's breach plugin could not read the list and stored nothing. The same answer as for a
+          // first password (above), not a 500.
+          if (isBreachListFailure(err)) {
+            return c.json(apiError("SERVICE_DISABLED", { message: BREACH_CHECK_UNAVAILABLE_MESSAGE }), 503);
+          }
           if (
             status === 401 ||
             (err && typeof err === "object" && (err as { status?: string }).status === "UNAUTHORIZED")
