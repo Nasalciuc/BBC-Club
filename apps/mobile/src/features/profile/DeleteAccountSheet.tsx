@@ -17,15 +17,17 @@ import {
 import { deleteAccount } from "@/features/auth/flows";
 import { deleteFailureKind, stateCopy } from "@/lib/error-context";
 import { PasswordField } from "./PasswordField";
+import { openRequestsLine } from "./profile-logic";
 import type { ProfileSheetHandle } from "./types";
 
 /** 35 is drawn over a 34-pt home indicator: a taller inset makes the sheet taller by the difference. */
 const IMAGE_INSET = 34;
 
 type Props = {
-  /** The member's requests still in progress: deleting the account closes them, and the sheet says so. */
+  /** The member's requests still in progress: deleting the account closes them, and the sheet says so — `more` when the
+   *  server's first page did not hold them all (`openRequestsFor`, F106). */
   /** null: the count did not load — the sheet says open requests are closed, without a number. */
-  openRequests: number | null;
+  openRequests: { count: number; more: boolean } | null;
   /** The account is gone and the session with it. */
   onDeleted: () => void;
 };
@@ -118,11 +120,7 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
       <Text style={styles.body}>
         Your profile, preferences and request history are removed from the app. This can’t be undone.
         {/* 35: what closes with the account on a line of its own. */}
-        {openRequests === null
-          ? "\nAny open requests are closed."
-          : openRequests > 0
-            ? `\nThis closes ${openRequests} open request${openRequests === 1 ? "" : "s"}.`
-            : ""}
+        {openRequestsLine(openRequests) ? `\n${openRequestsLine(openRequests)}` : ""}
       </Text>
       <View style={styles.password}>
         <PasswordField

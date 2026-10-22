@@ -38,7 +38,7 @@ import {
 import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
-import { cabinLabel, profileStats, travelersLabel } from "@/features/profile/profile-logic";
+import { cabinLabel, openRequestsFor, profileStats, travelersLabel } from "@/features/profile/profile-logic";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { useSignOut } from "@/features/profile/useSignOut";
@@ -46,7 +46,6 @@ import { useSaved } from "@/features/saved/saved";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { requestCard } from "@/features/requests/request-card";
 import { recentRequests } from "@/features/requests/request-view-logic";
-import { isOpen } from "@/features/requests/status";
 import { airportByCode } from "@/lib/airport-by-code";
 import { homeAirportLabel } from "@/lib/airport-search-state";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
@@ -220,7 +219,8 @@ export default function ProfileScreen() {
   const stats = requests ? profileStats(requests.items, requests.hasMore) : null;
   // 12's third number: what the member saved on this phone (ADR-IMPL-056).
   const savedCount = saved.length;
-  const openRequests = requests ? requests.items.filter((r) => isOpen(r.status)).length : null;
+  // What Delete account says it closes: `more` when the server's first page did not hold them all (F106).
+  const openRequests = requests ? openRequestsFor(requests.items, requests.hasMore) : null;
   const ready = profile !== null;
 
   function onSheetSaved(next: SavedProfile) {
