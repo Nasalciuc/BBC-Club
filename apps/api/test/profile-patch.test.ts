@@ -150,6 +150,23 @@ describe("PATCH /v1/profile", () => {
     await t.close();
   });
 
+  it("text Postgres cannot hold (U+0000) is 400, never 500", async () => {
+    const t = await testApp({ suite: "profile-nul" });
+    const name = await t.app.request("/v1/profile", {
+      method: "PATCH",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: "a\u0000b" }),
+    });
+    expect(name.status).toBe(400);
+    const notes = await t.app.request("/v1/profile/travel", {
+      method: "PUT",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: "window seat\u0000" }),
+    });
+    expect(notes.status).toBe(400);
+    await t.close();
+  });
+
   it("401 without session", async () => {
     const t = await testApp({ suite: "profile-unauth" });
     const r = await t.app.request("/v1/profile", {
