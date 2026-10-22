@@ -1,9 +1,23 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
 import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
 import { timing } from "hono/timing";
+import { apiError } from "@bbc/shared/errors";
+
+const KB = 1024;
+/** A catalogue import of a few thousand fares; member bodies never come near their own limit. */
+export const INTERNAL_BODY_LIMIT = 1024 * KB;
+export const MEMBER_BODY_LIMIT = 256 * KB;
+
+/** Over the limit: the API's own shape and a 413, never Hono's bare HTTPException (which the error contract would turn
+ *  into 500 INTERNAL). No new error code: the app reads VALIDATION. */
+const tooLarge = (c: Context) =>
+  c.json(
+    apiError("VALIDATION", { message: "This request is too large.", requestId: c.get("requestId") as string }),
+    413,
+  );
 
 /** Order is a security property: id → headers → cors(auth only) → body limit → (principal, added by the host). */
 export function installBaseMiddleware(
@@ -29,8 +43,11 @@ export function installBaseMiddleware(
       credentials: true,
     }),
   );
-  app.use("/v1/internal/*", bodyLimit({ maxSize: 1024 * 1024 }));
-  app.use("/v1/*", bodyLimit({ maxSize: 256 * 1024 }));
+  // One limit per request: /v1/* also matches /v1/internal/*, so the member limit skips the internal paths.
+  const internalLimit = bodyLimit({ maxSize: INTERNAL_BODY_LIMIT, onError: tooLarge });
+  const memberLimit = bodyLimit({ maxSize: MEMBER_BODY_LIMIT, onError: tooLarge });
+  app.use("/v1/internal/*", internalLimit);
+  app.use("/v1/*", (c, next) => (c.req.path.startsWith("/v1/internal/") ? next() : memberLimit(c, next)));
   // RED metrics: one line per request, labels bounded (route template, not raw path)
   app.use("*", async (c, next) => {
     const started = Date.now();
