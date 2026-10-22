@@ -280,7 +280,8 @@ describe("send-requests job", () => {
     await t.drainAll();
     await t.platform.jobs.run("send-requests");
     const [row]: any = await t.db.execute(sql`SELECT last_error FROM requests.requests WHERE id = ${id}`);
-    expect(row.last_error).toBe("boom");
+    // errorLine: the error's name and message, nothing it carries (AGENTS.md rule 6).
+    expect(row.last_error).toBe("Error: boom");
     expect(String(row.last_error)).not.toContain("hidden@");
     await t.close();
   });
