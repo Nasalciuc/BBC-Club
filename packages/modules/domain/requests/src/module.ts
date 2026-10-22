@@ -24,6 +24,7 @@ import type { CrmFacade } from "@bbc/crm";
 import type { CatalogFacade } from "@bbc/catalog";
 
 const RequestId = z.string().uuid();
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,200}$/;
 
 type Ports = {
   crm: CrmFacade;
@@ -124,6 +125,13 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       async (c) => {
         const key = c.req.header("Idempotency-Key");
         if (!key) return c.json(apiError("VALIDATION", { message: "Idempotency-Key is required" }), 400);
+        // The app sends a UUID. A key past ~2 700 bytes cannot enter the requests_idempotency index (a 500).
+        if (!IDEMPOTENCY_KEY.test(key)) {
+          return c.json(
+            apiError("VALIDATION", { message: "Idempotency-Key must be 8-200 letters, digits, - or _." }),
+            400,
+          );
+        }
 
         const principal = c.get("principal");
         const platformHdr = (c.req.header("X-App-Platform") ?? "ios").toLowerCase();

@@ -114,6 +114,24 @@ describe("POST /v1/requests", () => {
     expect(r.status).toBe(400);
     await t.close();
   });
+
+  it("an Idempotency-Key must be 8-200 letters, digits, - or _ (a 3 000-character key is 400, never a 500)", async () => {
+    const t = await testApp({ suite: "requests-key-shape" });
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const random = Array.from(crypto.getRandomValues(new Uint8Array(3000)), (b) => chars[b % chars.length]).join("");
+    for (const key of [random, "k".repeat(3000), "short", "has space here", "dots.are.not.allowed"]) {
+      const r = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { idempotencyKey: key });
+      expect(r.status).toBe(400);
+      const body = (await r.json()) as { error: { code: string; message: string } };
+      expect(body.error.code).toBe("VALIDATION");
+      expect(body.error.message).toBe("Idempotency-Key must be 8-200 letters, digits, - or _.");
+    }
+    const [{ n }]: any = await t.db.execute(sql`SELECT count(*)::int n FROM requests.requests`);
+    expect(n).toBe(0);
+    const ok = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { idempotencyKey: crypto.randomUUID() });
+    expect(ok.status).toBe(201);
+    await t.close();
+  });
 });
 
 describe("GET /v1/requests", () => {
