@@ -666,6 +666,19 @@ describe("catalogue import — what it refuses, and where", () => {
     } finally {
       await t.db.execute(sql`ALTER TABLE catalog.fares DROP CONSTRAINT fares_test_no_zz`);
     }
+    // A failure that is not the row's (a serialization failure, a deadlock, a timeout) is ours: a 500 the importer may
+    // send again, never a 400 that blames the file.
+    await t.db.execute(sql`CREATE FUNCTION catalog.fares_test_busy() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'busy' USING ERRCODE = '40001'; END $$`);
+    await t.db.execute(sql`CREATE TRIGGER fares_test_busy BEFORE INSERT ON catalog.fares FOR EACH ROW
+      WHEN (NEW.carrier = 'ZY') EXECUTE FUNCTION catalog.fares_test_busy()`);
+    try {
+      const busy = await post([FARES, fare(), fare({ carrier: "ZY", carrier_name: "Zy" })].join("\n"));
+      expect(busy.status).toBe(500);
+    } finally {
+      await t.db.execute(sql`DROP TRIGGER fares_test_busy ON catalog.fares`);
+      await t.db.execute(sql`DROP FUNCTION catalog.fares_test_busy()`);
+    }
     // The first row went with the second: nothing of the file is written.
     const ua = (await t.db.execute(
       sql`SELECT count(*)::int AS n FROM catalog.fares WHERE carrier = 'UA'`,

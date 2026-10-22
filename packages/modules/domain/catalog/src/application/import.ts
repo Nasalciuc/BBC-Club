@@ -170,14 +170,18 @@ function parseRows<T extends z.ZodTypeAny>(schema: T, raw: string): { line: numb
   return rows;
 }
 
+/** The SQLSTATE classes that are the row's fault: a data exception (22) or an integrity constraint (23). */
+const ROW_REFUSED = /^2[23]/;
+
 /** A row the database refuses all the same (a rule the schema above does not mirror): named by its line, with the
- *  constraint — never the query or its values. */
+ *  constraint — never the query or its values. Any other failure — a deadlock, a lock or statement timeout, a lost
+ *  connection — is not the file's: it stays an error of ours (500), which the importer may send again. */
 async function writeRow<T>(line: number, write: () => Promise<T>): Promise<T> {
   try {
     return await write();
   } catch (e) {
     const err = errorForLog(e);
-    if (err.sqlstate === undefined) throw e;
+    if (!err.sqlstate || !ROW_REFUSED.test(err.sqlstate)) throw e;
     const why = err.constraint ?? err.sqlstate;
     throw new ImportError([{ path: `row ${line}`, message: `the database refused it (${why})` }]);
   }
