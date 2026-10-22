@@ -72,6 +72,8 @@ describe("flags", () => {
     };
     const p = createPlatform(broken as any, { level: "silent" });
     expect(await p.flags.isKilled("engagement")).toBe(true);
+    // Boot reads killState: an unreadable flag is an error there, never a killed module.
+    await expect(p.flags.killState("engagement")).rejects.toThrow("db down");
     expect(await p.flags.isConsumerPaused("x.onY")).toBe(true);
     expect(await p.flags.isEnabled("x", false)).toBe(false);
   });

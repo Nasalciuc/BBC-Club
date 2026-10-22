@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { authOrigins, loadEnv } from "@bbc/shared/env";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { apiError } from "@bbc/shared/errors";
-import { createDb } from "@bbc/db";
+import { createDb, errorForLog } from "@bbc/db";
 import {
   createPlatform,
   registerPlatformJobs,
@@ -19,7 +19,7 @@ import { resolvePrincipal, type PrincipalVars } from "./middleware/principal";
 import { clientIp } from "./middleware/client-ip";
 import { authorize, registerRoute } from "./middleware/authorize";
 import { rateLimit } from "./middleware/rate-limit";
-import { ModuleRegistry } from "./registry";
+import { DatabaseUnreachable, ModuleRegistry } from "./registry";
 import { appConfig } from "./presentation/mobile/app-config";
 import { staleJobs } from "./cron/stale";
 import { modules } from "./modules"; // the ordered list of ModuleDescriptors (identity, members, proposals, …)
@@ -84,7 +84,14 @@ export async function buildApp(opts: BuildOptions = {}) {
   const registry = new ModuleRegistry();
   for (const m of modules(opts.overrides ?? {})) registry.add(m);
   const mounted: { basePath: string; app: Hono<any> }[] = [];
-  await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
+  try {
+    await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
+  } catch (e) {
+    // The process entry exits non-zero on it; the container's restart policy starts the api again.
+    if (e instanceof DatabaseUnreachable)
+      platform.logger.fatal({ err: errorForLog(e) }, "boot: database unreachable, exiting");
+    throw e;
+  }
   const identity = registry.facade<IdentityFacade>("identity");
 
   let draining = false;
@@ -211,7 +218,12 @@ export async function buildApp(opts: BuildOptions = {}) {
 
 /** Process entry: builds, serves, dies cleanly on SIGTERM (compose drain then stop). */
 if (import.meta.main) {
-  const { app, shutdown, env, platform, setDraining } = await buildApp();
+  // A database still unreachable after boot's retries: buildApp logged it; exit non-zero so the restart policy starts
+  // the process again, rather than serve with every module unmounted. Anything else surfaces as before.
+  const { app, shutdown, env, platform, setDraining } = await buildApp().catch((e: unknown) => {
+    if (e instanceof DatabaseUnreachable) process.exit(1);
+    throw e;
+  });
   const server = Bun.serve({ port: env.PORT, fetch: app.fetch, idleTimeout: 30 });
   platform.logger.info({ port: server.port, env: env.NODE_ENV, role: env.APP_ROLE }, "api up");
   for (const sig of ["SIGTERM", "SIGINT"] as const) {

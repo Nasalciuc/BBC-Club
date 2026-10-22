@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
-import type { Db } from "@bbc/db";
+import { sql } from "drizzle-orm";
+import { errorForLog, type Db } from "@bbc/db";
 import type { Platform } from "@bbc/platform";
 import type { ServerEnv } from "@bbc/shared/env";
 import type { Layer, ModuleDescriptor, ModuleOutput } from "@bbc/shared/module-contract";
@@ -8,6 +9,35 @@ export type { ModuleDescriptor, ModuleOutput, Layer } from "@bbc/shared/module-c
 
 const LAYER_ORDER: Layer[] = ["integration", "core", "domain", "intelligence", "presentation"];
 // integration first: adapters (email, push, crm) are pure implementations of ports the others need.
+
+/** Boot's patience with a database that is not up yet — a host reboot starts the api before postgres/pgbouncer, since
+ *  restart policies ignore depends_on: the first try and five more after 0.5, 1, 2, 4 and 8 s, about 16 s in all. */
+export const BOOT_RETRY_MS: readonly number[] = [500, 1_000, 2_000, 4_000, 8_000];
+
+/** Boot could not read the database (SELECT 1, or a module's kill flag) after every retry. The process exits non-zero
+ *  and the container's restart policy starts it again; it never runs with modules unmounted by an unread flag. */
+export class DatabaseUnreachable extends Error {
+  override name = "DatabaseUnreachable";
+}
+
+async function withRetry<T>(
+  what: string,
+  read: () => Promise<T>,
+  delaysMs: readonly number[],
+  logger: { warn: (o: object, m?: string) => void },
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await read();
+    } catch (e) {
+      const delay = delaysMs[attempt - 1];
+      if (delay === undefined)
+        throw new DatabaseUnreachable(`database unreachable: ${what} failed ${attempt} times`, { cause: e });
+      logger.warn({ what, attempt, retryInMs: delay, err: errorForLog(e) }, "boot: database not answering, retrying");
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
 
 export class ModuleRegistry {
   private modules: ModuleDescriptor<any, any>[] = [];
@@ -23,8 +53,20 @@ export class ModuleRegistry {
   /** Initialise in dependency order within layer order; satisfy ports from earlier facades; mount; register
    *  consumers and jobs. Same-layer dependencies (engagement → proposals) resolve topologically, not by the order
    *  in modules.ts. A killed module still inits its facade so dependents can boot, but routes/consumers/jobs
-   *  are not registered (HTTP → 404; its pending deliveries pause via flags). */
-  async boot(deps: { db: Db; platform: Platform; env: ServerEnv; mount: (basePath: string, app: Hono<any>) => void }) {
+   *  are not registered (HTTP → 404; its pending deliveries pause via flags).
+   *
+   *  Killed means a kill flag the database answered with. Boot first waits for the database, then reads every kill
+   *  flag with killState, which throws instead of failing closed; a database still unreachable after the retries
+   *  rejects with DatabaseUnreachable before anything is mounted. Failing closed here would unmount every module for
+   *  the life of the process while /health, /ready and /status stay green. */
+  async boot(deps: {
+    db: Db;
+    platform: Platform;
+    env: ServerEnv;
+    mount: (basePath: string, app: Hono<any>) => void;
+    /** Waits between attempts; tests pass short ones. */
+    retryDelaysMs?: readonly number[];
+  }) {
     const layerOf = new Map(this.modules.map((m) => [m.name, m.layer] as const));
     for (const m of this.modules)
       for (const need of m.needs ?? []) {
@@ -33,6 +75,16 @@ export class ModuleRegistry {
         if (LAYER_ORDER.indexOf(needLayer) > LAYER_ORDER.indexOf(m.layer))
           throw new Error(`module ${m.name} (${m.layer}) needs "${need}" from a higher layer (${needLayer})`);
       }
+
+    const delays = deps.retryDelaysMs ?? BOOT_RETRY_MS;
+    const logger = deps.platform.logger;
+    await withRetry("SELECT 1", () => deps.db.execute(sql`SELECT 1`), delays, logger);
+    const killed = new Map<string, boolean>();
+    for (const m of this.modules)
+      killed.set(
+        m.name,
+        await withRetry(`kill flag of ${m.name}`, () => deps.platform.flags.killState(m.name), delays, logger),
+      );
 
     const byLayer = [...this.modules].sort((a, b) => LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer));
     const pending = new Set(byLayer);
@@ -55,7 +107,7 @@ export class ModuleRegistry {
       }
       const out = await m.init({ db: deps.db, platform: deps.platform, env: deps.env, ports });
       if (out.exposes !== undefined) this.facades.set(m.name, out.exposes);
-      if (await deps.platform.flags.isKilled(m.name)) {
+      if (killed.get(m.name) === true) {
         deps.platform.logger.warn({ module: m.name }, "module killed by flag: facade only, not mounted");
         initialised.add(m.name);
         continue;

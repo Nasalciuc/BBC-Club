@@ -20,7 +20,9 @@ function parseValue(raw: unknown): FlagValue | null {
 }
 
 /** Feature flags cache 30s. Kill/pause skip the cache. A read error on kill/pause is fail-closed (treat as killed).
- *  A missing row is not killed. isEnabled/variant still fall back to the caller default. */
+ *  A missing row is not killed. isEnabled/variant still fall back to the caller default. killState is the kill flag
+ *  without that fallback: it throws when the flag cannot be read, for boot, which must not take an unreadable flag for
+ *  a killed module (that would unmount it for the life of the process). */
 export function createFlags(
   db: Executor,
   opts: {
@@ -68,6 +70,11 @@ export function createFlags(
     return parseValue(row?.value);
   }
 
+  async function killState(module: string): Promise<boolean> {
+    const v = await readKill(`${module}.killed`);
+    return v?.enabled === true;
+  }
+
   return {
     async isEnabled(key: string, fallback = false): Promise<boolean> {
       const v = await read(key);
@@ -77,10 +84,11 @@ export function createFlags(
       const v = await read(key);
       return typeof v?.variant === "string" ? v.variant : fallback;
     },
+    /** The kill flag as the database holds it; throws when it cannot be read. Per request, use isKilled. */
+    killState,
     async isKilled(module: string): Promise<boolean> {
       try {
-        const v = await readKill(`${module}.killed`);
-        return v?.enabled === true;
+        return await killState(module);
       } catch (e) {
         opts.logger?.warn({ module, err: errorForLog(e) }, "kill flag unreadable, failing closed");
         return true;
