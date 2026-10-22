@@ -1,4 +1,15 @@
+import { RequestVM } from "@bbc/shared/api/v1/requests";
+
 import { readFailureCopy } from "../../lib/error-context";
+
+/**
+ * Whether `id` can name a request on the server: its id as the contract reads it (a UUID). Anything else — a link
+ * anyone can write, `bbcclub://requests/abc` — is no request at all, and is never asked for: the server cannot read it
+ * as an id and answers 500, which would offer `Try again` forever (F015).
+ */
+export function isRequestId(id: string): boolean {
+  return RequestVM.shape.id.safeParse(id).success;
+}
 
 /** What the request page offers when it could not load: `Try again`, or the way back to Requests. */
 export type RequestFailureAction = "retry" | "backToRequests";

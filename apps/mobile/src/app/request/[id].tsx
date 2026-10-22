@@ -41,7 +41,7 @@ import { clubPhoto } from "@/features/places/club-photos";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { detailLines, detailTitle, queuedView, routeCodes } from "@/features/requests/request-card";
-import { requestFailureFrame, type RequestFailureAction } from "@/features/requests/request-failure";
+import { isRequestId, requestFailureFrame, type RequestFailureAction } from "@/features/requests/request-failure";
 import { closedAt, progressSteps, requestView, serverState, stepCaption } from "@/features/requests/request-view-logic";
 import { airportByCode } from "@/lib/airport-by-code";
 import { fetchRequest, submitRequest } from "@/lib/api";
@@ -199,6 +199,13 @@ export default function RequestDetailScreen() {
         await lookUpOrigin(vm);
         return;
       }
+      // An id no request can have (a link anyone can write): there is nothing to ask the server for.
+      if (!isRequestId(id)) {
+        setError(requestFailureFrame({ status: 404 }));
+        setLoaded(null);
+        setLoading(false);
+        return;
+      }
 
       const result = await fetchRequest(id);
       if (cancelled) return;
@@ -313,7 +320,9 @@ export default function RequestDetailScreen() {
                 : {
                     label: "Back to Requests",
                     testID: "request.error.requests",
-                    onPress: () => router.replace(REQUESTS),
+                    // Back down to the Requests tab beneath, as `Send now` does; with nothing beneath (a link at cold
+                    // start) it takes this page's place. `replace` would put a second tab bar over the first.
+                    onPress: () => router.dismissTo(REQUESTS),
                   }
             }
             secondary={retry ? { label: "Back", testID: "request.error.back", onPress: goBack } : undefined}
