@@ -99,6 +99,13 @@ export function createRequestsRepo(db: Executor) {
       return row;
     },
 
+    /** The request, its row locked until the transaction ends: a status change reads the status it moves from under
+     *  this lock, so a second webhook or click waits and then reads the first one's result (set-status.ts). */
+    async lockById(tx: Executor, id: string) {
+      const [row] = await tx.select().from(requests).where(eq(requests.id, id)).limit(1).for("update");
+      return row;
+    },
+
     async timeline(exec: Executor | undefined, requestId: string) {
       return (exec ?? db)
         .select()
@@ -175,11 +182,12 @@ export function createRequestsRepo(db: Executor) {
       return row?.attempts ?? 0;
     },
 
-    async setStatus(tx: Executor, id: string, status: Status, note: string | null, actor: string | null) {
+    /** Moves the request from `from` to `status` and writes the step; null when it is no longer at `from`. */
+    async setStatus(tx: Executor, id: string, from: Status, status: Status, note: string | null, actor: string | null) {
       const [row] = await tx
         .update(requests)
         .set({ status, updatedAt: sql`now()` })
-        .where(eq(requests.id, id))
+        .where(and(eq(requests.id, id), eq(requests.status, from)))
         .returning();
       if (!row) return null;
       await tx.insert(requestEvents).values({ requestId: id, status, note, actor });

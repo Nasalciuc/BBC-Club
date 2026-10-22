@@ -244,7 +244,11 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           if (details) return c.json(apiError("VALIDATION", { details }), 400);
           throw err;
         }
-        if (!r.ok) return c.json(apiError("NOT_FOUND"), 404);
+        if (!r.ok) {
+          // A step back (booked → quoted) or out of closed: refused, nothing written (set-status.ts).
+          if (r.code === "CONFLICT") return c.json(apiError("CONFLICT", { context: { from: r.from, to: r.to } }), 409);
+          return c.json(apiError("NOT_FOUND"), 404);
+        }
         return c.json({ ok: true, unchanged: r.unchanged });
       },
     );
@@ -359,11 +363,22 @@ function opsRoutes(
     const v = verifyAction(secret, c.req.param("token"));
     if (!v.ok) return c.html(page("This link is not valid or has expired."), 403);
     const r = await setStatus(conn, { requestId: v.requestId, status: v.action, agentId: "ops" }, { repo, publish });
-    if (!r.ok) return c.html(page("Request not found."), 404);
+    if (!r.ok) {
+      // A week-old link pressed after the request moved on: the page says where it is, and nothing is written.
+      if (r.code === "CONFLICT") return c.html(page(refusedLabel(r.from)));
+      return c.html(page("Request not found."), 404);
+    }
     return c.html(page(r.unchanged ? "Already marked — nothing changed." : `Marked as ${actionLabel(v.action)}.`));
   });
 
   return ops;
+}
+
+/** Why an operator link changed nothing: the request is already past the step it names. */
+function refusedLabel(from: string): string {
+  if (from === "closed") return "This request is closed — nothing changed.";
+  if (from === "booked") return "Already booked — nothing changed.";
+  return `Already ${from} — nothing changed.`;
 }
 
 function page(message: string): string {

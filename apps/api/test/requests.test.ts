@@ -237,6 +237,34 @@ describe("POST /v1/internal/requests/:id/status", () => {
   });
 });
 
+describe("POST /v1/internal/requests/:id/status — forward only", () => {
+  it("a step back answers 409 with where the request is, and writes nothing", async () => {
+    const t = await testApp({ suite: "requests-status-back" });
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const { id } = (await created.json()) as { id: string };
+    await t.drainAll();
+    const set = (status: string) =>
+      t.app.request(`/v1/internal/requests/${id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+        body: JSON.stringify({ status }),
+      });
+    expect((await set("booked")).status).toBe(200);
+    const back = await set("quoted");
+    expect(back.status).toBe(409);
+    const body = (await back.json()) as { error: { code: string; context?: Record<string, unknown> } };
+    expect(body.error.code).toBe("CONFLICT");
+    expect(body.error.context).toEqual({ from: "booked", to: "quoted" });
+    const [{ status }]: any = await t.db.execute(sql`SELECT status FROM requests.requests WHERE id = ${id}`);
+    expect(status).toBe("booked");
+    const detail = await t.app.request(`/v1/requests/${id}`, { headers: { Cookie: t.memberA.cookie } });
+    const vm = (await detail.json()) as { status: string; timeline: { status: string }[] };
+    expect(vm.status).toBe("booked");
+    expect(vm.timeline.map((e) => e.status)).toEqual(["received", "booked"]);
+    await t.close();
+  });
+});
+
 describe("send-requests job", () => {
   it("retries failures and stops after six attempts", async () => {
     const t = await testApp({ suite: "requests-job" });
