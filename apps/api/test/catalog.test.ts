@@ -251,7 +251,7 @@ describe("GET /v1/home", () => {
     await t.seedBroadcastOffer({ routeFrom: "JFK", routeTo: "LHR", title: "London calling" });
     const r = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie } });
     expect(r.status).toBe(200);
-    expect(r.headers.get("Cache-Control")).toContain("max-age=300");
+    expect(r.headers.get("Cache-Control")).toBe("private, no-cache");
     const body = HomeVM.parse(await r.json());
     expect(body.home?.code).toBe("JFK");
     expect(body.destinations.some((d) => d.code === "LHR")).toBe(true);
@@ -357,6 +357,80 @@ describe("GET /v1/home", () => {
         ?.items.map((i) => i.route.to)
         .sort(),
     ).toEqual(["GRU", "YVR"]);
+    await t.close();
+  });
+});
+
+// A member's Home and feed are revalidated on every request and never reused for another session on the same device:
+// iOS's shared URL cache keys on the URL, not on the cookie, and served member A's Home to member B for five minutes.
+describe("GET /v1/home and /v1/proposals — HTTP caching", () => {
+  it("answers no-cache with Vary: Cookie, Authorization, on the 200 and on the 304", async () => {
+    const t = await testApp({ suite: "catalog-home-vary" });
+    await t.seedCatalogBasics();
+    await t.seedBroadcastOffer({ routeTo: "LHR", title: "London calling" });
+    const perMember = (r: Response) => {
+      const cacheControl = r.headers.get("Cache-Control") ?? "";
+      const vary = (r.headers.get("Vary") ?? "").split(",").map((v) => v.trim().toLowerCase());
+      return {
+        noCache: cacheControl.includes("no-cache"),
+        maxAge: cacheControl.includes("max-age"),
+        cookie: vary.includes("cookie"),
+        authorization: vary.includes("authorization"),
+      };
+    };
+    const expected = { noCache: true, maxAge: false, cookie: true, authorization: true };
+    for (const path of ["/v1/home", "/v1/proposals"]) {
+      const first = await t.app.request(path, { headers: { Cookie: t.memberA.cookie } });
+      expect(first.status).toBe(200);
+      expect({ path, ...perMember(first) }).toEqual({ path, ...expected });
+      const etag = first.headers.get("ETag")!;
+      const again = await t.app.request(path, { headers: { Cookie: t.memberA.cookie, "If-None-Match": etag } });
+      expect(again.status).toBe(304);
+      expect({ path, ...perMember(again) }).toEqual({ path, ...expected });
+      expect(again.headers.get("ETag")).toBe(etag);
+    }
+    await t.close();
+  });
+});
+
+// The ETag is the body's: whatever Home shows changes it. If-None-Match is read as RFC 9110 reads it — a list of tags,
+// compared weakly, or `*`.
+describe("GET /v1/home — ETag", () => {
+  it("follows a pin's city, name and coordinates; matches W/, a list and *", async () => {
+    const t = await testApp({ suite: "catalog-home-etag" });
+    await t.seedCatalogBasics();
+    const home = (ifNoneMatch?: string) =>
+      t.app.request("/v1/home", {
+        headers: { Cookie: t.memberA.cookie, ...(ifNoneMatch ? { "If-None-Match": ifNoneMatch } : {}) },
+      });
+    const first = await home();
+    expect(first.status).toBe(200);
+    const etag = first.headers.get("ETag")!;
+    expect((await home(etag)).status).toBe(304);
+    expect((await home(`W/${etag}`)).status).toBe(304);
+    expect((await home(`"x", ${etag}`)).status).toBe(304);
+    expect((await home(`"x",W/${etag}`)).status).toBe(304);
+    expect((await home("*")).status).toBe(304);
+    expect((await home(`"x"`)).status).toBe(200);
+
+    // London's airport renamed and moved by an airports import: a pin's city, name and place are a new body.
+    const imported = await t.app.request("/v1/internal/catalog/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+      body: JSON.stringify({
+        kind: "airports",
+        csv: [
+          "code,name,city,country,country_code,region,lat,lng,popularity,tz",
+          "LHR,Heathrow Airport,Greater London,United Kingdom,GB,europe,51.4700,-0.4600,98,Europe/London",
+        ].join("\n"),
+      }),
+    });
+    expect(imported.status).toBe(200);
+    const renamed = await home(etag);
+    expect(renamed.status).toBe(200);
+    expect(renamed.headers.get("ETag")).not.toBe(etag);
+    const lhr = HomeVM.parse(await renamed.json()).destinations.find((d) => d.code === "LHR");
+    expect(lhr).toMatchObject({ city: "Greater London", name: "Heathrow Airport" });
     await t.close();
   });
 });
