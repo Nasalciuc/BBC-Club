@@ -5,7 +5,7 @@ import { Button, baselineOffset, belowBaseline, rn, tokens } from "@bbc/ui";
 
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
-import { telHref } from "@/features/requests/confirmation-logic";
+import { limitScope, limitedCopy, telHref } from "@/features/requests/confirmation-logic";
 import { env } from "@/lib/env";
 
 /**
@@ -33,16 +33,19 @@ const body = {
 };
 
 /**
- * Too many requests this hour (27): the message in the middle of the page, `Call your specialist` under it — only where
- * the club's number is configured; `Done` otherwise. The tab bar shows Requests: the others are there.
+ * Too many requests this hour (27): the message in the middle of the page — the member's own limit, or the neutral
+ * words for an address shared with others (`limitedCopy`) — `Call your specialist` under it — only where the club's
+ * number is configured; `Done` otherwise. The tab bar shows Requests: the others are there.
  */
 export default function RequestLimitedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ minutes?: string }>();
+  const params = useLocalSearchParams<{ minutes?: string; scope?: string }>();
   const minutes = Number(params.minutes);
   const shown = Number.isFinite(minutes) && minutes > 0 ? minutes : 1;
   const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
+  // The member's own limit blames the member; an address shared with others, or an unknown one, does not (F086).
+  const copy = limitedCopy({ scope: limitScope({ scope: params.scope }), minutes: shown, canCall: call !== null });
   const g = PAGE;
   return (
     <View style={styles.root} testID="request.rateLimited">
@@ -57,7 +60,7 @@ export default function RequestLimitedScreen() {
           ]}
           accessibilityRole="header"
         >
-          You’ve sent several requests this hour.
+          {copy.title}
         </Text>
         <Text
           style={[
@@ -71,7 +74,7 @@ export default function RequestLimitedScreen() {
             },
           ]}
         >
-          {`You can send another in ${shown} ${shown === 1 ? "minute" : "minutes"}. Your specialist already has the others.`}
+          {copy.body}
         </Text>
         <Button
           testID={call ? "request.rateLimited.call" : "request.rateLimited.done"}

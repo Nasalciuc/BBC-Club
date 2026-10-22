@@ -34,6 +34,7 @@ import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import {
   REQUEST_NAME_MAX,
   bodyProblem,
+  limitScope,
   retryMinutes,
   type RequestSource,
 } from "@/features/requests/confirmation-logic";
@@ -269,7 +270,10 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       const kind = submitFailureKind(result.code);
       if (kind === "rateLimited") {
         modalRef.current?.dismiss();
-        router.push(`/request/limited?minutes=${retryMinutes(result.retryAfterS)}` as Href);
+        // Which limit refused: the member's own, or an address shared with others (F086) — the page words them apart.
+        const scope = limitScope(result.context);
+        const query = `minutes=${retryMinutes(result.retryAfterS)}${scope ? `&scope=${scope}` : ""}`;
+        router.push(`/request/limited?${query}` as Href);
         return;
       }
       if (kind === "queued") {

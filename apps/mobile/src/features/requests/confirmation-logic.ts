@@ -14,6 +14,35 @@ export function retryMinutes(retryAfterS: number | undefined): number {
   return Math.max(1, Math.ceil(retryAfterS / 60));
 }
 
+/** Which limit refused a request (the 429's `error.context.scope`, g5): the address's — shared with whoever is behind
+ *  it — or the member's own; null when the server does not say (an older one) or says something this app does not know. */
+export function limitScope(context: unknown): "ip" | "member" | null {
+  const scope = context && typeof context === "object" ? (context as { scope?: unknown }).scope : undefined;
+  return scope === "ip" || scope === "member" ? scope : null;
+}
+
+/**
+ * The rate-limit page's words (27): the member's own limit says they sent several and their specialist has the others;
+ * any other — an address shared with others, or a server that does not say — is neutral: the member may have sent
+ * nothing (F086).
+ */
+export function limitedCopy(s: { scope?: "ip" | "member" | null; minutes: number; canCall: boolean }): {
+  title: string;
+  body: string;
+} {
+  const when = `${s.minutes} ${s.minutes === 1 ? "minute" : "minutes"}`;
+  if (s.scope === "member") {
+    return {
+      title: "You’ve sent several requests this hour.",
+      body: `You can send another in ${when}. Your specialist already has the others.`,
+    };
+  }
+  return {
+    title: "We couldn’t take this request just now.",
+    body: `Try again in ${when}${s.canCall ? ", or call your specialist" : ""}.`,
+  };
+}
+
 /** Call buttons exist only when a verified support number is configured (EXPO_PUBLIC_SUPPORT_PHONE) — the rule since #39. */
 export function telHref(phone: string | undefined): string | null {
   const digits = phone?.replace(/[^\d+]/g, "") ?? "";

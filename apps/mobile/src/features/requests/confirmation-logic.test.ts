@@ -7,6 +7,8 @@ import {
   REQUEST_NAME_MAX,
   bodyProblem,
   confirmationKind,
+  limitScope,
+  limitedCopy,
   otherFares,
   retryMinutes,
   telHref,
@@ -26,6 +28,28 @@ test("retry minutes: whole minutes, at least one", () => {
   expect(retryMinutes(undefined)).toBe(1);
   expect(retryMinutes(Number.NaN)).toBe(1);
 });
+test("the rate-limit page blames the member only for the member's own limit (F086)", () => {
+  // A shared address (an office, a hotel, a carrier's NAT): the member may have sent nothing.
+  expect(limitedCopy({ scope: "ip", minutes: 5, canCall: true })).toEqual({
+    title: "We couldn’t take this request just now.",
+    body: "Try again in 5 minutes, or call your specialist.",
+  });
+  expect(limitedCopy({ scope: "member", minutes: 6, canCall: true })).toEqual({
+    title: "You’ve sent several requests this hour.",
+    body: "You can send another in 6 minutes. Your specialist already has the others.",
+  });
+  // An older server says nothing of the scope: the neutral words, never the blame.
+  expect(limitedCopy({ minutes: 1, canCall: false })).toEqual({
+    title: "We couldn’t take this request just now.",
+    body: "Try again in 1 minute.",
+  });
+  expect(limitScope({ scope: "ip" })).toBe("ip");
+  expect(limitScope({ scope: "member" })).toBe("member");
+  expect(limitScope({ scope: "office" })).toBeNull();
+  expect(limitScope(undefined)).toBeNull();
+  expect(limitScope("member")).toBeNull();
+});
+
 test("no verified number, no call button", () => {
   expect(telHref(undefined)).toBeNull();
   expect(telHref("")).toBeNull();

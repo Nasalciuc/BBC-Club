@@ -69,7 +69,16 @@ export type { Profile };
 
 export type ApiResult<T> =
   | { ok: true; data: T }
-  | { ok: false; message: string; code?: string; status: number; gone?: FareGoneContext; retryAfterS?: number };
+  | {
+      ok: false;
+      message: string;
+      code?: string;
+      status: number;
+      gone?: FareGoneContext;
+      retryAfterS?: number;
+      /** The error's `context` as the server sent it (a 429's `{ scope }`): data, read by the screen that needs it. */
+      context?: Record<string, unknown>;
+    };
 
 export type { FareGoneContext };
 
@@ -77,16 +86,22 @@ async function parseJson(res: Response): Promise<unknown> {
   return res.json().catch(() => null);
 }
 
-function failFromBody(res: Response, body: { error?: { code?: string; message?: string } } | null): ApiResult<never> {
+function failFromBody(
+  res: Response,
+  body: { error?: { code?: string; message?: string; context?: unknown } } | null,
+): ApiResult<never> {
   if (res.status === 429) {
     const header = Number(res.headers.get("Retry-After"));
     const retryAfterS = Number.isFinite(header) && header >= 0 ? Math.ceil(header) : undefined;
+    // Which limit refused (POST /v1/requests: `{ scope: "ip" | "member" }`) — the rate-limit page words them apart.
+    const context = body?.error?.context;
     return {
       ok: false,
       message: authMessage("TOO_MANY_ATTEMPTS"),
       code: "RATE_LIMITED",
       status: 429,
       ...(retryAfterS !== undefined ? { retryAfterS } : {}),
+      ...(context && typeof context === "object" ? { context: context as Record<string, unknown> } : {}),
     };
   }
   return {
