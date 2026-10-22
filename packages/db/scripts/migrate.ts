@@ -580,6 +580,46 @@ try {
     }
   }
 
+  // After 0006 and 0031 (catalog.fares and its trip): the fares key — trip in it, a NULL carrier not distinct, the
+  // duplicates the old key let in collapsed. One transaction: the table is small, its lock held for the rebuild.
+  const faresKey = join(migrationsDir, "0034_catalog_fares_key.sql");
+  if (existsSync(faresKey)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0034_catalog_fares_key.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(faresKey, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0034_catalog_fares_key.sql')`);
+      });
+      console.log("catalog fares key applied");
+    }
+  }
+
+  // After 0006 (catalog schema): a fare's duration above zero or none, an airport's coordinates on the globe.
+  const catalogChecks = join(migrationsDir, "0035_catalog_checks.sql");
+  if (existsSync(catalogChecks)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0035_catalog_checks.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the stored durations fixed and the CHECKs as NOT VALID, then the scans that
+      // validate them.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(catalogChecks, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE catalog.fares VALIDATE CONSTRAINT fares_duration_pos`);
+        await tx.execute(sql`ALTER TABLE catalog.airports VALIDATE CONSTRAINT airports_coordinates`);
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0035_catalog_checks.sql')`);
+      });
+      console.log("catalog checks applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);

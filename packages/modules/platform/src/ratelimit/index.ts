@@ -1,4 +1,4 @@
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import type { FlagValue } from "../flags";
 import type { Redis } from "../redis/client";
 import { createMemoryLimiter } from "./memory-store";
@@ -53,10 +53,7 @@ export function createRateLimiter(deps: {
       }
       return await redisGcraCheck(redis, sha, key, spec.limit, spec.periodMs, spec.burst);
     } catch (err) {
-      deps.logger?.warn(
-        { rule: key, err: err instanceof Error ? err.message : String(err) },
-        "redis rate limit fell back to memory",
-      );
+      deps.logger?.warn({ rule: key, err: errorForLog(err) }, "redis rate limit fell back to memory");
       return memory.check(key, spec.limit, spec.periodMs, spec.burst);
     }
   }
@@ -88,7 +85,7 @@ export function createRateLimiter(deps: {
         return { ...result, limit: spec.limit };
       } catch (err) {
         if (spec.fail === "closed") {
-          deps.logger?.warn({ rule, err: err instanceof Error ? err.message : String(err) }, "rate limit fail-closed");
+          deps.logger?.warn({ rule, err: errorForLog(err) }, "rate limit fail-closed");
           throw new RateLimitUnavailable(rule);
         }
         throw err;

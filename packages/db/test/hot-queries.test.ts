@@ -32,7 +32,7 @@ async function seedVolume() {
            timestamptz '2026-01-01' + (g || ' seconds')::interval,
            timestamptz '2028-01-01', true
     FROM generate_series(1, 10000) g
-    ON CONFLICT (route_from, route_to, cabin, carrier, valid_from) DO NOTHING`),
+    ON CONFLICT (route_from, route_to, cabin, carrier, valid_from, trip) DO NOTHING`),
   );
   await iso.db.execute(
     sql.raw(`

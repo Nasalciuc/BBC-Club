@@ -13,6 +13,16 @@ const db = createDb(url, { max: 1, applicationName: "bbc-seed-flags" });
 const FLAGS: [string, Record<string, unknown>, string][] = [
   ["members.allow_non_crm_signups", { enabled: false }, "ADR-PROD-001: an unknown CRM email is waitlist, never active"],
   ["app.min_supported_version", { variant: "0.1.0" }, "forced-update threshold served by /v1/app-config"],
+  [
+    "app.store_url_ios",
+    { variant: "" },
+    "forced update: the App Store listing (https:// or itms-apps://) served by /v1/app-config as storeUrl.ios; empty until the listing exists",
+  ],
+  [
+    "app.store_url_android",
+    { variant: "" },
+    "forced update: the Play listing (https:// or market://) served by /v1/app-config as storeUrl.android; empty until the listing exists",
+  ],
   ["catalog.search_events", { enabled: false }, "ADR-032: search events stay off until an operator turns them on"],
   ["jobs.push.transport", { variant: "pg" }, "ADR-031: push dispatch stays in Postgres until variant=streams"],
   [

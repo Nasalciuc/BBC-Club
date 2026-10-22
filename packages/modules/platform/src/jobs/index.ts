@@ -1,7 +1,7 @@
-import { sql } from "drizzle-orm";
+import { desc, inArray, sql } from "drizzle-orm";
 import { CRON_FIELDS_RE, type JobSpec } from "@bbc/shared/platform-specs";
 import { jobRuns } from "../infrastructure/schema";
-import type { Db } from "@bbc/db";
+import { errorForLog, errorLine, type Db } from "@bbc/db";
 
 export type JobContext = {
   db: Db;
@@ -86,9 +86,10 @@ export function createJobs(
       deps.metrics?.inc("job_succeeded", { job: name });
       deps.logger.info({ job: name, durationMs, ...(metrics ?? {}) }, "job succeeded");
       return { status: "succeeded", durationMs, metrics };
-    } catch (e: any) {
+    } catch (e: unknown) {
       const durationMs = Date.now() - started;
-      const error = String(e?.message ?? e).slice(0, 2000);
+      // Never the error's own text: a failed query's message holds its parameters (AGENTS.md rule 6).
+      const error = errorLine(e).slice(0, 2000);
       // No row when the insert itself failed; the result and the log still say so.
       if (runId !== null)
         await db
@@ -96,7 +97,7 @@ export function createJobs(
           .set({ status: "failed", finishedAt: sql`now()`, durationMs, error })
           .where(sql`${jobRuns.id} = ${runId}`);
       deps.metrics?.inc("job_failed", { job: name });
-      deps.logger.error({ job: name, durationMs, err: error }, "job failed");
+      deps.logger.error({ job: name, durationMs, err: errorForLog(e) }, "job failed");
       return { status: "failed", durationMs, error };
     } finally {
       clearTimeout(timeout);
@@ -136,6 +137,16 @@ export function createJobs(
       return Object.fromEntries(
         rows.map((r) => [r.job, { status: r.status, at: r.started_at, durationMs: r.duration_ms }]),
       );
+    },
+    /** Last finished run per job, succeeded or failed — a run still going or skipped behind the lock says nothing about
+     *  whether the job works. For /status: a scheduled job whose last finished run failed is failing. */
+    async lastFinishedRuns(): Promise<Record<string, { status: string; at: Date }>> {
+      const rows = await db
+        .selectDistinctOn([jobRuns.job], { job: jobRuns.job, status: jobRuns.status, at: jobRuns.startedAt })
+        .from(jobRuns)
+        .where(inArray(jobRuns.status, ["succeeded", "failed"]))
+        .orderBy(jobRuns.job, desc(jobRuns.startedAt), desc(jobRuns.id));
+      return Object.fromEntries(rows.map((r) => [r.job, { status: r.status, at: r.at }]));
     },
   };
 }

@@ -9,7 +9,7 @@ import { consumeIdempotent } from "../kafka/consume";
 import { createKafkaProducer } from "../kafka/producer";
 import { createSearchBuffer } from "../search/buffer";
 import { createBreaker, createRedis, type Redis } from "../redis/client";
-import type { Db } from "@bbc/db";
+import { errorForLog, type Db } from "@bbc/db";
 
 export type Platform = ReturnType<typeof createPlatform>;
 
@@ -139,7 +139,7 @@ export function createPlatform(
       if (!redis) return;
       await redis
         .connect()
-        .catch((err) => logger.warn({ err: String(err) }, "redis connect failed; callers fall back"));
+        .catch((err) => logger.warn({ err: errorForLog(err) }, "redis connect failed; callers fall back"));
     },
     /** Called by /status: the platform is healthy when the DB answers and the queue is not stuck. */
     async health() {
@@ -152,12 +152,12 @@ export function createPlatform(
         try {
           await fn();
         } catch (err) {
-          logger.warn({ err: String(err) }, "platform close hook failed");
+          logger.warn({ err: errorForLog(err) }, "platform close hook failed");
         }
       }
       if (producer)
-        await producer.close().catch((err) => logger.warn({ err: String(err) }, "kafka producer close failed"));
-      if (redis) await redis.close().catch((err) => logger.warn({ err: String(err) }, "redis close failed"));
+        await producer.close().catch((err) => logger.warn({ err: errorForLog(err) }, "kafka producer close failed"));
+      if (redis) await redis.close().catch((err) => logger.warn({ err: errorForLog(err) }, "redis close failed"));
     },
   };
 }

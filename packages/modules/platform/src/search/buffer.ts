@@ -1,4 +1,5 @@
 import type { KafkaProducer } from "../kafka/producer";
+import { errorForLog } from "@bbc/db";
 import { SearchEvent } from "./event";
 
 export const SEARCH_TOPIC = "bbc.search.v1";
@@ -23,7 +24,7 @@ export function createSearchBuffer(deps: {
         const flagOn = await deps.flags.isEnabled("catalog.search_events", false);
         enabled = deps.producer !== null && flagOn;
       } catch (err) {
-        deps.logger.warn({ err: String(err) }, "search events flag unreadable");
+        deps.logger.warn({ err: errorForLog(err) }, "search events flag unreadable");
         enabled = false;
       }
       const producer = deps.producer;
@@ -37,7 +38,7 @@ export function createSearchBuffer(deps: {
           })),
         });
       } catch (err) {
-        deps.logger.warn({ err: String(err), n: batch.length }, "search events flush failed");
+        deps.logger.warn({ err: errorForLog(err), n: batch.length }, "search events flush failed");
         deps.metrics.inc("search_events_dropped");
       }
     })().finally(() => {

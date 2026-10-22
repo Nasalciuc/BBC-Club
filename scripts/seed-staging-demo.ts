@@ -8,7 +8,7 @@
  * preference or home airport changed, a password changed. The account's phones keep their sign-in.
  * The data is the fixture's (packages/shared/src/fixture.ts); only its dates move.
  */
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, like, notInArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { Db } from "@bbc/db";
 import { fares } from "@bbc/db/schema/catalog";
@@ -19,7 +19,10 @@ import { offers } from "@bbc/db/schema/proposals";
 import { requestEvents, requests } from "@bbc/db/schema/requests";
 import { loadEnv, type ServerEnv } from "@bbc/shared/env";
 import { fixture } from "@bbc/shared/fixture";
-import { ensureReviewAccount, reason, scriptAuth, type ReviewPersona } from "./seed-review-account";
+import type { IdentityFacade } from "@bbc/identity";
+import { buildApp } from "../apps/api/src/index";
+import { withdraw, type WithdrawDeps } from "../packages/modules/domain/proposals/src/application/withdraw";
+import { ensureReviewAccount, reason, type ReviewPersona } from "./seed-review-account";
 
 /** Staging's database hosts (infra/compose.staging.yml). Production's are `postgres` and `pgbouncer`. */
 const STAGING_DB_HOSTS = new Set(["postgres-staging", "pgbouncer-staging"]);
@@ -288,9 +291,20 @@ export function demoPlan(member: { id: string; email: string }, now: Date) {
   return { fares: fareRows, offers: offerRows, requests: requestRows };
 }
 
-/** Writes the plan in one transaction and returns what the member now sees. Four upserts, one per table, then the
- *  account's own traces removed and the inbox written whole. */
-export async function seedStagingDemo(db: Db, member: { id: string; email: string }, now = new Date()) {
+/** The fixture seed's offers (packages/db/scripts/seed-fixture.ts): not meant for staging (ADR-IMPL-040). */
+const FIXTURE_OFFER_KEYS = "fixture:%";
+
+/**
+ * Writes the plan in one transaction and returns what the member now sees. Four upserts, one per table, then the
+ * account's own traces removed and the inbox written whole. `events` is the app's publisher — its registry knows the
+ * consumers, so an offer.withdrawn reaches them (pending pushes suppressed, campaigns closed).
+ */
+export async function seedStagingDemo(
+  db: Db,
+  member: { id: string; email: string },
+  now: Date,
+  events: WithdrawDeps["events"],
+) {
   const plan = demoPlan(member, now);
   const fareRows = plan.fares;
   const offerRows = plan.offers.map((o) => o.row);
@@ -298,6 +312,17 @@ export async function seedStagingDemo(db: Db, member: { id: string; email: strin
   const requestIds = requestRows.map((r) => r.id);
   const eventRows = plan.requests.flatMap((r) => r.events);
   return db.transaction(async (tx) => {
+    // The fixture seed's offers beside the demo's were Paris and Tokyo twice on Explore: withdrawn as the internal
+    // withdraw route does it — status and offer.withdrawn, in this transaction. Only active ones: a second run
+    // finds none and publishes nothing.
+    const fixtureOffers = await tx
+      .select({ id: offers.id })
+      .from(offers)
+      .where(and(like(offers.idempotencyKey, FIXTURE_OFFER_KEYS), eq(offers.status, "active")));
+    for (const { id } of fixtureOffers) {
+      await withdraw({ db: tx, events }, id, "staging demo: the fixture seed is not meant for staging");
+    }
+
     await tx
       .insert(fares)
       .values(fareRows)
@@ -399,7 +424,14 @@ if (import.meta.main) {
     process.exit(1);
   }
   const email = env.REVIEW_ACCOUNT_EMAIL;
-  const { db, auth, close } = scriptAuth(env, "bbc-staging-demo");
+  // The app's own wiring, as loadtest-staging.ts does, with no poller: its event registry knows every consumer, so the
+  // offer.withdrawn of a fixture offer reaches them (the worker delivers it), as from the withdraw route.
+  const built = await buildApp({ env, role: "api", startPoller: false });
+  const db = built.db;
+  const auth = built.registry.facade<IdentityFacade>("identity").auth;
+  const events: WithdrawDeps["events"] = {
+    publish: (tx, e) => built.platform.events.publish(tx, { ...e, publishedBy: "proposals" }),
+  };
   try {
     const account = await ensureReviewAccount({
       auth,
@@ -409,7 +441,7 @@ if (import.meta.main) {
       persona: DEMO_PERSONA,
     });
     const now = new Date();
-    const n = await seedStagingDemo(db, { id: account.memberId, email }, now);
+    const n = await seedStagingDemo(db, { id: account.memberId, email }, now, events);
     console.log(
       `staging demo ready — the review account ${account.created ? "created" : "refreshed"}; ${n.fares} fares (${n.pins} pins), ` +
         `${n.offers} offers, ${n.requests} requests, ${n.inbox} inbox items; dates from ${ymd(now)}`,
@@ -418,7 +450,7 @@ if (import.meta.main) {
     console.error("staging demo failed:", reason(e));
     process.exitCode = 1;
   } finally {
-    await close();
+    await built.shutdown();
   }
   process.exit(process.exitCode ?? 0); // nothing of Better Auth's may keep the deploy step alive
 }

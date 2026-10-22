@@ -5,7 +5,7 @@
  * table at once and adds the airports it has never seen; the resolve-place-photos job looks them up, ten a minute.
  */
 import { z } from "zod";
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import type { PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { PLACE_PHOTOS_MAX_CODES } from "@bbc/shared/api/v1/places";
 
@@ -279,10 +279,8 @@ export async function resolvePlacePhotos(deps: {
         source: outcome.kind === "photo" ? outcome.source : "none",
       });
     } catch (err) {
-      // Postgres's own words (drizzle's message would repeat the query and its values).
-      const cause = (err as { cause?: { message?: unknown } }).cause?.message;
-      const message = typeof cause === "string" ? cause : err instanceof Error ? err.message : String(err);
-      deps.logger.warn({ code, err: message.slice(0, 300) }, "place photos: write refused");
+      // The SQLSTATE and the constraint, never the query's values (AGENTS.md rule 6).
+      deps.logger.warn({ code, err: errorForLog(err) }, "place photos: write refused");
       deps.metrics.inc("place_photos_failed", { stage: "write" });
       retry.push(code);
     }

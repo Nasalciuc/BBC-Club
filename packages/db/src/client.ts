@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 export { query, queryEach, RowShapeError } from "./query";
+export { errorForLog, errorLine, type LoggedError } from "./errors";
 
 export type Db = ReturnType<typeof createDb>;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];

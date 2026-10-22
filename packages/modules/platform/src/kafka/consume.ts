@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { Consumer } from "@platformatic/kafka";
-import type { Db } from "@bbc/db";
+import { errorForLog, type Db } from "@bbc/db";
 
 /** Capped exponential backoff. Attempt 0 waits 200ms, then 400, up to 60s. */
 export function kafkaRetryDelayMs(attempt: number): number {
@@ -117,7 +117,7 @@ export async function consumeIdempotent(opts: {
               partition: message.partition,
               offset: message.offset.toString(),
               delayMs,
-              err: String(err),
+              err: errorForLog(err),
             },
             "kafka consume failed; retrying",
           );

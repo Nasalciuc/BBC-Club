@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { col } from "@bbc/db/helpers";
 import { domainEvents, eventDeliveries, eventDlq } from "../infrastructure/schema";
 import type { EventRegistry } from "./registry";
-import { query, type Db, type Executor } from "@bbc/db";
+import { errorForLog, errorLine, query, type Db, type Executor } from "@bbc/db";
 import { z } from "zod";
 import type { HandlerTx } from "@bbc/shared/module-contract";
 
@@ -136,7 +136,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
       deps.metrics?.inc("deliveries_done", { consumer: row.consumer });
       return;
     } catch (e: any) {
-      if (ac.signal.aborted) throw new HandlerTimeout(String(e?.message ?? e));
+      if (ac.signal.aborted) throw new HandlerTimeout(errorForLog(e).message);
       throw e;
     } finally {
       fence.close(); // success, error or timeout: this handler's executor is dead from here on
@@ -199,7 +199,10 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
       try {
         await opts.onDead?.(n);
       } catch (err) {
-        deps.logger.error({ err, consumer: n.consumer, eventId: n.eventId }, "events.dead.notify_failed");
+        deps.logger.error(
+          { err: errorForLog(err), consumer: n.consumer, eventId: n.eventId },
+          "events.dead.notify_failed",
+        );
       }
     }
   }
@@ -217,7 +220,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
           await deliver(tx, row);
           return "done" as const;
         } catch (e: any) {
-          failed = { row, attempt: row.attempts + 1, message: String(e?.message ?? e).slice(0, 1000) };
+          failed = { row, attempt: row.attempts + 1, message: failureText(e) };
           throw e;
         }
       })
@@ -231,7 +234,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
     try {
       notice = await db.transaction(async (tx) => recordFailure(tx, f.row, f.attempt, f.message));
     } catch (writeErr) {
-      deps.logger.error({ err: writeErr, deliveryId: String(f.row.id) }, "events.record_failure");
+      deps.logger.error({ err: errorForLog(writeErr), deliveryId: String(f.row.id) }, "events.record_failure");
       await db.transaction(async (tx) => bumpRunAfter(tx, f.row.id, f.message));
     }
     if (notice) await notifyDead([notice]);
@@ -255,7 +258,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
           try {
             await tx.transaction(async (sp) => deliver(sp, row)); // SAVEPOINT
           } catch (e: any) {
-            const message = String(e?.message ?? e).slice(0, 1000);
+            const message = failureText(e);
             if (e instanceof HandlerTimeout) {
               timedOut = { row, attempt: row.attempts + 1, message };
               throw e;
@@ -264,7 +267,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
               const notice = await tx.transaction(async (sp) => recordFailure(sp, row, row.attempts + 1, message));
               if (notice) dead.push(notice);
             } catch (writeErr) {
-              deps.logger.error({ err: writeErr, deliveryId: String(row.id) }, "events.record_failure");
+              deps.logger.error({ err: errorForLog(writeErr), deliveryId: String(row.id) }, "events.record_failure");
               await tx.transaction(async (sp) => bumpRunAfter(sp, row.id, message));
             }
           }
@@ -282,7 +285,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
       try {
         notice = await db.transaction(async (tx) => recordFailure(tx, t.row, t.attempt, t.message));
       } catch (writeErr) {
-        deps.logger.error({ err: writeErr, deliveryId: String(t.row.id) }, "events.record_failure");
+        deps.logger.error({ err: errorForLog(writeErr), deliveryId: String(t.row.id) }, "events.record_failure");
         await db.transaction(async (tx) => bumpRunAfter(tx, t.row.id, t.message));
       }
       if (notice) await notifyDead([notice]);
@@ -310,7 +313,7 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
       try {
         processed = await processBatch();
       } catch (e) {
-        deps.logger.error({ err: String(e) }, "poller tick failed");
+        deps.logger.error({ err: errorForLog(e) }, "poller tick failed");
         await sleep(5_000);
       }
       await sleep(processed === 0 ? idleMs : busyMs);
@@ -388,6 +391,9 @@ const QueueStats = z.object({
   oldest_pending_s: z.number().int(),
 });
 
+/** A failed delivery as last_error, the DLQ and their log lines keep it: its name and message, and for a failed query
+ *  only its SQLSTATE and the objects it names — never its parameters (AGENTS.md rule 6). */
+const failureText = (e: unknown) => errorLine(e).slice(0, 1000);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function abortedPromise(signal: AbortSignal, msg: string): Promise<never> {
   return new Promise((_, rej) => {

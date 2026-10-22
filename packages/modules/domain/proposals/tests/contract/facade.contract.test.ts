@@ -89,6 +89,23 @@ describe("@bbc/proposals facade", () => {
     }
   });
 
+  it("a scheduled offer (publish_at later) is in no feed and not readable until its time comes", async () => {
+    const id = await insertOffer({ targeting: "user", targetMemberId: ACTOR });
+    try {
+      await db.execute(sql`UPDATE proposals.offers SET publish_at = now() + interval '2 hours' WHERE id = ${id}`);
+      expect(((await offersRepo.feed(db, ACTOR, null, 100)) as any[]).map((r) => r.id)).not.toContain(id);
+      expect(await offersRepo.getVisible(db, ACTOR, id)).toBeNull();
+      // Its operator still finds it: it is active, only not yet out.
+      expect((await offersRepo.getAny(db, id))?.status).toBe("active");
+
+      await db.execute(sql`UPDATE proposals.offers SET publish_at = now() - interval '1 minute' WHERE id = ${id}`);
+      expect(((await offersRepo.feed(db, ACTOR, null, 100)) as any[]).map((r) => r.id)).toContain(id);
+      expect((await offersRepo.getVisible(db, ACTOR, id))?.id).toBe(id);
+    } finally {
+      await cleanup([id]);
+    }
+  });
+
   it("getAny returns any offer regardless of actor", async () => {
     const id = await insertOffer({ targeting: "user", targetMemberId: OTHER });
     try {

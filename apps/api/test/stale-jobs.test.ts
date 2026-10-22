@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { STALE_FLOOR_MS, cronIntervalMs, staleAfterMs, staleJobs } from "../src/cron/stale";
+import { STALE_FLOOR_MS, cronIntervalMs, failingJobs, staleAfterMs, staleJobs } from "../src/cron/stale";
 
 const H = 3_600_000;
 
@@ -46,5 +46,27 @@ describe("staleJobs", () => {
 
   it("does not flag a scheduled job that has never run", () => {
     expect(staleJobs({}, schedule, wednesday)).toEqual([]);
+  });
+});
+
+describe("failingJobs", () => {
+  const schedule = [
+    { name: "campaign-fanout", cron: "* * * * *" },
+    { name: "db-report", cron: "0 9 * * 1" },
+    { name: "retention", cron: "0 4 * * *" },
+  ];
+
+  it("names the scheduled jobs whose last finished run failed", () => {
+    const finished = {
+      "campaign-fanout": { status: "failed" },
+      "db-report": { status: "succeeded" },
+      retention: { status: "failed" },
+    };
+    expect(failingJobs(finished, schedule)).toEqual(["campaign-fanout", "retention"]);
+  });
+
+  it("ignores jobs that are not scheduled now, and scheduled jobs with no finished run", () => {
+    expect(failingJobs({ "old-name": { status: "failed" } }, schedule)).toEqual([]);
+    expect(failingJobs({}, schedule)).toEqual([]);
   });
 });

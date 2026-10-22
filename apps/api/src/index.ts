@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { authOrigins, loadEnv } from "@bbc/shared/env";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { apiError } from "@bbc/shared/errors";
-import { createDb } from "@bbc/db";
+import { createDb, errorForLog } from "@bbc/db";
 import {
   createPlatform,
   registerPlatformJobs,
@@ -19,9 +19,9 @@ import { resolvePrincipal, type PrincipalVars } from "./middleware/principal";
 import { clientIp } from "./middleware/client-ip";
 import { authorize, registerRoute } from "./middleware/authorize";
 import { rateLimit } from "./middleware/rate-limit";
-import { ModuleRegistry } from "./registry";
+import { DatabaseUnreachable, ModuleRegistry } from "./registry";
 import { appConfig } from "./presentation/mobile/app-config";
-import { staleJobs } from "./cron/stale";
+import { failingJobs, staleJobs } from "./cron/stale";
 import { modules } from "./modules"; // the ordered list of ModuleDescriptors (identity, members, proposals, …)
 
 export type BuildOptions = {
@@ -84,7 +84,14 @@ export async function buildApp(opts: BuildOptions = {}) {
   const registry = new ModuleRegistry();
   for (const m of modules(opts.overrides ?? {})) registry.add(m);
   const mounted: { basePath: string; app: Hono<any> }[] = [];
-  await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
+  try {
+    await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
+  } catch (e) {
+    // The process entry exits non-zero on it; the container's restart policy starts the api again.
+    if (e instanceof DatabaseUnreachable)
+      platform.logger.fatal({ err: errorForLog(e) }, "boot: database unreachable, exiting");
+    throw e;
+  }
   const identity = registry.facade<IdentityFacade>("identity");
 
   let draining = false;
@@ -142,18 +149,25 @@ export async function buildApp(opts: BuildOptions = {}) {
     return c.json({ ok: dbOk, db: dbOk }, dbOk ? 200 : 503);
   });
   // Is the system well: the database, the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job
-  // on time. 503 when not — for Uptime Kuma and for people, never as a deploy gate.
+  // on time and not failing (its last finished run succeeded). 503 when not — for Uptime Kuma and for people, never as
+  // a deploy gate.
   registerRoute("GET", "/status", "public");
   app.get("/status", async (c) => {
     const checks: Record<string, unknown> = {};
     checks.db = await readyProbe();
     const h = await platform.health().catch(() => ({ ok: false, queue: null }));
     checks.queue = h.queue;
-    const runs = await platform.jobs.lastRuns().catch(() => ({}));
+    const runs = await platform.jobs.lastRuns().catch(() => null);
     // Each scheduled job against its own schedule; manual and removed jobs never count (src/cron/stale.ts).
-    const stale = staleJobs(runs, platform.jobs.schedule());
-    checks.staleJobs = stale;
-    const ok = checks.db === true && h.ok && stale.length === 0;
+    // A read that failed is not an empty answer: without its runs, nothing here can say the jobs are well.
+    const schedule = platform.jobs.schedule();
+    const stale = runs === null ? [] : staleJobs(runs, schedule);
+    checks.staleJobs = runs === null ? "unavailable" : stale;
+    const finished = await platform.jobs.lastFinishedRuns().catch(() => null);
+    const failing = finished === null ? [] : failingJobs(finished, schedule);
+    checks.failingJobs = finished === null ? "unavailable" : failing;
+    const ok =
+      checks.db === true && h.ok && runs !== null && stale.length === 0 && finished !== null && failing.length === 0;
     return c.json({ ok, ...checks }, ok ? 200 : 503);
   });
   registerRoute("GET", "/metrics", "public");
@@ -211,7 +225,12 @@ export async function buildApp(opts: BuildOptions = {}) {
 
 /** Process entry: builds, serves, dies cleanly on SIGTERM (compose drain then stop). */
 if (import.meta.main) {
-  const { app, shutdown, env, platform, setDraining } = await buildApp();
+  // A database still unreachable after boot's retries: buildApp logged it; exit non-zero so the restart policy starts
+  // the process again, rather than serve with every module unmounted. Anything else surfaces as before.
+  const { app, shutdown, env, platform, setDraining } = await buildApp().catch((e: unknown) => {
+    if (e instanceof DatabaseUnreachable) process.exit(1);
+    throw e;
+  });
   const server = Bun.serve({ port: env.PORT, fetch: app.fetch, idleTimeout: 30 });
   platform.logger.info({ port: server.port, env: env.NODE_ENV, role: env.APP_ROLE }, "api up");
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
