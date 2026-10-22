@@ -1,4 +1,5 @@
 import type { Platform } from "@bbc/platform";
+import { errorForLog } from "@bbc/db";
 
 const KILLABLE = ["proposals", "engagement", "requests", "notifications", "personalization", "members"];
 let lastGood: any = { minSupportedVersion: "0.1.0", recommendedVersion: "0.1.0", killSwitches: {}, maintenance: null };
@@ -14,7 +15,7 @@ export async function appConfig(platform: Platform) {
     ]);
     lastGood = { minSupportedVersion: min, recommendedVersion: rec, killSwitches: kills, maintenance: maint || null };
   } catch (e) {
-    platform.logger.warn({ err: String(e) }, "app-config served from cache");
+    platform.logger.warn({ err: errorForLog(e) }, "app-config served from cache");
   }
   return lastGood;
 }

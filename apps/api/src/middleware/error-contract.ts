@@ -2,6 +2,7 @@ import type { ErrorHandler } from "hono";
 import { ZodError } from "zod";
 import { DomainError, apiError, HTTP_STATUS, type ErrorCode } from "@bbc/shared/errors";
 import { RateLimitUnavailable } from "@bbc/platform/ratelimit";
+import { errorForLog } from "@bbc/db";
 
 type Logger = { error: (o: object, m?: string) => void; warn: (o: object, m?: string) => void };
 type Metrics = { inc(n: string, l?: Record<string, string>): void };
@@ -46,7 +47,8 @@ export function errorContract(logger: Logger, metrics?: Metrics): ErrorHandler<a
       return c.json(apiError(code, { requestId, message: anyErr.body.message }), anyErr.status);
     }
     metrics?.inc("http_errors", { code: "INTERNAL" });
-    logger.error({ requestId, path: c.req.path, err: String(anyErr?.stack ?? err) }, "unhandled");
+    // Never the error itself: a failed query's message holds its parameters (tokens, emails) — AGENTS.md rule 6.
+    logger.error({ requestId, path: c.req.path, err: errorForLog(err) }, "unhandled");
     return c.json(apiError("INTERNAL", { requestId }), 500); // generic message; detail only in logs
   };
 }
