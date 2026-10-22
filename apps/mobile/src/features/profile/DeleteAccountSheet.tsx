@@ -15,8 +15,7 @@ import {
 } from "@bbc/ui";
 
 import { deleteAccount } from "@/features/auth/flows";
-import { deleteFailureKind, stateCopy } from "@/lib/error-context";
-import { canConfirmDelete } from "./delete-logic";
+import { canConfirmDelete, deleteFailureCopy } from "./delete-logic";
 import { PasswordField } from "./PasswordField";
 import type { ProfileSheetHandle } from "./types";
 
@@ -34,8 +33,8 @@ type Props = {
 /**
  * 35: the deletion, confirmed with the password — what goes, how many open requests close, the password with its lock,
  * the filled red `Delete account` and `Cancel` under it; no × (the sheet's own `Cancel`, its backdrop and a drag close
- * it). A wrong password marks the field and says so under it; any other failure says so in the sheet, which stays open
- * to try again.
+ * it). A wrong or missing password marks the field and says so under it; any other failure says so in the sheet, which
+ * stays open to try again (delete-logic.ts: the hourly limit names the hour, no connection says so).
  */
 export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function DeleteAccountSheet(
   { openRequests, onDeleted },
@@ -44,20 +43,22 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
   const modalRef = useRef<ModalSheetHandle>(null);
   const insets = useSafeAreaInsets();
   const [password, setPassword] = useState("");
-  const [wrongPassword, setWrongPassword] = useState(false);
-  const [failed, setFailed] = useState(false);
+  /** Under the field: the password is what to change. */
+  const [fieldMessage, setFieldMessage] = useState<string | null>(null);
+  /** In the sheet: anything else. */
+  const [sheetMessage, setSheetMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // With the keyboard up the message would sit under the keys or the pinned buttons: each new one scrolls into view.
   const messageRef = useRef<Text>(null);
   useEffect(() => {
-    if (wrongPassword || failed) modalRef.current?.reveal(messageRef.current);
-  }, [wrongPassword, failed]);
+    if (fieldMessage || sheetMessage) modalRef.current?.reveal(messageRef.current);
+  }, [fieldMessage, sheetMessage]);
 
   useImperativeHandle(ref, () => ({
     present() {
       setPassword("");
-      setWrongPassword(false);
-      setFailed(false);
+      setFieldMessage(null);
+      setSheetMessage(null);
       setBusy(false);
       modalRef.current?.present();
     },
@@ -68,20 +69,19 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
 
   async function onDelete() {
     setBusy(true);
-    setWrongPassword(false);
-    setFailed(false);
+    setFieldMessage(null);
+    setSheetMessage(null);
     const result = await deleteAccount(password);
     setBusy(false);
     if (!result.ok) {
-      if (deleteFailureKind(result.code) === "wrongPassword") setWrongPassword(true);
-      else setFailed(true);
+      const copy = deleteFailureCopy(result.code, password.trim().length === 0);
+      if (copy.at === "field") setFieldMessage(copy.text);
+      else setSheetMessage(copy.text);
       return;
     }
     modalRef.current?.dismiss();
     onDeleted();
   }
-
-  const failure = stateCopy("deleteFailed");
 
   return (
     <ModalSheet
@@ -137,19 +137,19 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
           value={password}
           onChangeText={(next) => {
             setPassword(next);
-            setWrongPassword(false);
+            setFieldMessage(null);
           }}
-          error={wrongPassword}
+          error={fieldMessage !== null}
         />
-        {wrongPassword ? (
+        {fieldMessage ? (
           <Text ref={messageRef} testID="profile.deleteConfirm.wrongPassword" style={styles.wrong}>
-            {stateCopy("wrongPassword").title}
+            {fieldMessage}
           </Text>
         ) : null}
       </View>
-      {failed ? (
+      {sheetMessage ? (
         <Text ref={messageRef} testID="settings.deleteFailed" style={styles.failed}>
-          {failure.title} {failure.body}
+          {sheetMessage}
         </Text>
       ) : null}
     </ModalSheet>

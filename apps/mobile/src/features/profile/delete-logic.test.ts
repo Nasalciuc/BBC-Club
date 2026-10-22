@@ -1,6 +1,33 @@
 import { describe, expect, it } from "bun:test";
+import { stateCopy } from "../../lib/error-context";
+import { OFFLINE_MESSAGE } from "../../lib/timeout";
 import { refuseEmptyPassword } from "../auth/flows-logic";
-import { canConfirmDelete } from "./delete-logic";
+import { canConfirmDelete, DELETE_ENTER_PASSWORD, deleteFailureCopy } from "./delete-logic";
+
+describe("deleteFailureCopy — why the account was not deleted, where the member can act on it", () => {
+  it("the hourly limit (3 tries per hour per address) says when to try again, not just `Try again`", () => {
+    const copy = deleteFailureCopy("RATE_LIMITED");
+    expect(copy.at).toBe("sheet");
+    expect(copy.text).toContain("hour");
+  });
+
+  it("a session older than a day, or an empty field, asks for the password on the field", () => {
+    expect(deleteFailureCopy("SESSION_EXPIRED")).toEqual({ at: "field", text: DELETE_ENTER_PASSWORD });
+    expect(deleteFailureCopy("INVALID_PASSWORD", true)).toEqual({ at: "field", text: DELETE_ENTER_PASSWORD });
+  });
+
+  it("a wrong password marks the field, as before", () => {
+    expect(deleteFailureCopy("INVALID_PASSWORD")).toEqual({ at: "field", text: stateCopy("wrongPassword").title });
+  });
+
+  it("no connection says so; anything else keeps the sheet's own failure", () => {
+    expect(deleteFailureCopy("OFFLINE")).toEqual({ at: "sheet", text: OFFLINE_MESSAGE });
+    expect(deleteFailureCopy("TIMEOUT").text).toContain("check your connection");
+    const failed = stateCopy("deleteFailed");
+    expect(deleteFailureCopy("UNKNOWN")).toEqual({ at: "sheet", text: `${failed.title} ${failed.body}` });
+    expect(deleteFailureCopy(undefined)).toEqual({ at: "sheet", text: `${failed.title} ${failed.body}` });
+  });
+});
 
 describe("canConfirmDelete — the red pill needs the password (35)", () => {
   it("an empty field, or one of spaces only, keeps it disabled", () => {
