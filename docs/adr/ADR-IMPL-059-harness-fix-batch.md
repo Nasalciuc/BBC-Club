@@ -1,6 +1,6 @@
 # ADR-IMPL-059 — The harness fix batch: stricter contracts, one fare per trip, a request that can be flown
 
-Status: proposed · Date: 2026-10-22 · Scope: P1 (`packages/shared`: `api/v1/proposals.ts`, `api/v1/requests.ts`,
+Status: accepted · Date: 2026-10-22 · Scope: P1 (`packages/shared`: `api/v1/proposals.ts`, `api/v1/requests.ts`,
 `time-zone.ts`, `module-contract.ts`; `packages/modules/platform/src/ratelimit`; migrations 0034–0036 and their named
 steps in `packages/db/scripts/migrate.ts`; identity's auth routes and facade; catalog, members, requests, notifications;
 `packages/ui` hit slop and `./flight-facts`) · Amends ADR-IMPL-040 and ADR-IMPL-041 (their own amendment notes); the
