@@ -93,8 +93,17 @@ export type InboxVM = z.infer<typeof InboxVM>;
 
 // -- Account -----------------------------------------------------------------
 
+/** A password needs one number or symbol — the app's rule (apps/mobile/src/features/auth/schemas.ts), which can import
+ *  this. The API took 'aaaaaaaa' on a change and on a first set; Better Auth's reset route applies it too (g1). */
+export const PASSWORD_RULE = /[\d\W]/;
+export const PASSWORD_RULE_MESSAGE = "Use at least one number or symbol.";
+
 export const PasswordBody = z.object({
-  newPassword: z.string().min(8).max(128),
+  newPassword: z
+    .string()
+    .min(8)
+    .max(128)
+    .refine((p) => PASSWORD_RULE.test(p), { message: PASSWORD_RULE_MESSAGE }),
   /** Required when the member already has a credential. Path A (first set) omits it. */
   currentPassword: z.string().min(1).max(128).optional(),
 });
