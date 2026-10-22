@@ -164,7 +164,9 @@ describe("database observability", () => {
     expect(sample).toBeNull();
     expect(warns).toHaveLength(1);
     expect(warns[0]?.message).toContain("SHOW POOLS failed");
-    expect(warns[0]?.err).toBeInstanceOf(Error);
+    // The error as AGENTS.md rule 6 logs it (errorForLog): postgres.js's error keeps its code, never the error itself.
+    expect(warns[0]?.err).not.toBeInstanceOf(Error);
+    expect(warns[0]?.err).toMatchObject({ sqlstate: "ECONNREFUSED" });
   });
 
   it("an aborted job signal stops the webhook", async () => {

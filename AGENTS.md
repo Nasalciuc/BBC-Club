@@ -9,7 +9,7 @@
 3. **At-least-once + idempotent** is the default regime: handlers may run twice; use unique keys and upserts. Check state at the moment of the action (dispatch, respond), not when it was queued.
 4. **Await every side effect.** No `void send…`, no `forEach(async …)`, no fire-and-forget. Errors propagate. Lint does not check this yet (`@typescript-eslint/no-floating-promises` is off for the API, the app and the packages): the review does.
 5. **Invariants live in Postgres:** `pgEnum` for states, CHECK for ranges/XOR, UNIQUE for idempotency, `timestamptz` only, `created_at` everywhere, expiry on every transient row. `db:verify` checks the live database.
-6. **Env only through `loadEnv()`.** `process.env.X as string` is forbidden. Secrets never in code, logs or event payloads.
+6. **Env only through `loadEnv()`.** `process.env.X as string` is forbidden. Secrets never in code, logs or event payloads; log an error as `errorForLog(err)` from `@bbc/db`, never the error itself (a failed query's message holds its parameters).
 7. **Mobile:** React Compiler is ON — no `useMemo`/`useCallback`/`memo`. Reanimated only (no RN `Animated`). Colors/sizes only from `tokens`. Every interactive element has `testID="screen.element"`. Never run the app yourself; give the commands.
 8. **New things have a shape.** New module → `bun run new-module`. New event → schema in `packages/shared/src/events` + catalogue entry + at least one consumer (or `noConsumer`). New route → `registerRoute(...)` + `authorize(permission)`. New table → migration `NNNN_<module>_<desc>.sql`.
 9. **Do not touch without an ADR:** `packages/shared`, `packages/modules/platform`, existing migrations, `.dependency-cruiser.cjs`, `eslint.config.mjs`, `DESIGN.md`. Open the PR; the integrator decides.

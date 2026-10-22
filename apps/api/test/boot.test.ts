@@ -1,7 +1,92 @@
 import { describe, it, expect } from "bun:test";
+import { Hono } from "hono";
 import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
+import { ModuleRegistry } from "../src/registry";
+
+/** One module on a fake host whose database and kill flag fail `dbFailures` / `flagFailures` times before answering
+ *  (Infinity: never). The flag fails like the real one: `killState` throws, `isKilled` fails closed. */
+function flakyHost(opts: { dbFailures?: number; flagFailures?: number }) {
+  const calls = { db: 0, flags: 0, init: 0 };
+  const mounted: string[] = [];
+  const consumers: string[] = [];
+  const refused = () => new Error("connect ECONNREFUSED 127.0.0.1:6432");
+  const db = {
+    execute: async () => {
+      calls.db++;
+      if (calls.db <= (opts.dbFailures ?? 0)) throw refused();
+      return [];
+    },
+  };
+  const killState = async () => {
+    calls.flags++;
+    if (calls.flags <= (opts.flagFailures ?? 0)) throw refused();
+    return false;
+  };
+  const platform = {
+    logger: { info() {}, warn() {}, error() {}, fatal() {} },
+    flags: { killState, isKilled: () => killState().catch(() => true) },
+    events: { registerConsumer: (_type: string, name: string) => void consumers.push(name) },
+    jobs: { register() {} },
+  };
+  const registry = new ModuleRegistry().add({
+    name: "alpha",
+    layer: "domain",
+    init: async () => {
+      calls.init++;
+      return {
+        exposes: {},
+        routes: [{ basePath: "/v1", app: new Hono() }],
+        consumers: [{ type: "alpha.happened", name: "alpha.onHappened", handler: async () => {} }],
+        jobs: [],
+      };
+    },
+  });
+  const boot = () =>
+    registry.boot({
+      db,
+      platform,
+      env: {},
+      mount: (basePath: string) => void mounted.push(basePath),
+      retryDelaysMs: [1, 1, 1, 1, 1],
+    } as unknown as Parameters<ModuleRegistry["boot"]>[0]);
+  return { boot, calls, mounted, consumers };
+}
+
+describe("boot against a database that is not up yet", () => {
+  it("waits for the database before reading any kill flag", async () => {
+    const h = flakyHost({ dbFailures: 3 });
+    await h.boot();
+    expect(h.calls.db).toBe(4);
+    expect(h.mounted).toEqual(["/v1"]);
+  });
+
+  it("a kill flag unreadable twice, then false, mounts the module with its consumers", async () => {
+    const h = flakyHost({ flagFailures: 2 });
+    await h.boot();
+    expect(h.calls.flags).toBe(3);
+    expect(h.mounted).toEqual(["/v1"]);
+    expect(h.consumers).toEqual(["alpha.onHappened"]);
+  });
+
+  it("a kill flag that never reads rejects boot and mounts nothing", async () => {
+    const h = flakyHost({ flagFailures: Infinity });
+    await expect(h.boot()).rejects.toMatchObject({ name: "DatabaseUnreachable" });
+    expect(h.calls.flags).toBe(6); // the first read and five retries
+    expect(h.mounted).toEqual([]);
+    expect(h.consumers).toEqual([]);
+  });
+
+  it("a database that never answers rejects boot before any module starts", async () => {
+    const h = flakyHost({ dbFailures: Infinity });
+    await expect(h.boot()).rejects.toMatchObject({ name: "DatabaseUnreachable" });
+    expect(h.calls.db).toBe(6);
+    expect(h.calls.init).toBe(0);
+    expect(h.calls.flags).toBe(0);
+    expect(h.mounted).toEqual([]);
+  });
+});
 
 describe("host boot", () => {
   it("mounts every module, satisfies every port, and every consumed event has a handler", async () => {
@@ -45,6 +130,41 @@ describe("host boot", () => {
     expect(status.status).toBe(503);
     expect(((await status.json()) as { ok: boolean; queue: { dead: number } }).queue.dead).toBe(1);
     expect((await t.app.request("/ready")).status).toBe(200);
+    await t.close();
+  });
+
+  it("a scheduled job whose last finished run failed turns /status red and leaves /ready green", async () => {
+    const t = await testApp({ suite: "boot" });
+    const job = t.platform.jobs.schedule().find((j) => j.name === "retention");
+    expect(job).toBeDefined();
+    const run = (status: "failed" | "succeeded" | "running" | "skipped", secondsFromNow: number) =>
+      t.db.execute(sql`INSERT INTO platform.job_runs (job, status, started_at, finished_at)
+        VALUES ('retention', ${status}::platform.job_run_status, now() + ${secondsFromNow} * interval '1 second',
+                CASE WHEN ${status} = 'running' THEN NULL ELSE now() + ${secondsFromNow} * interval '1 second' END)`);
+    const status = async () => {
+      const res = await t.app.request("/status");
+      return {
+        code: res.status,
+        body: (await res.json()) as { ok: boolean; failingJobs: string[]; staleJobs: string[] },
+      };
+    };
+
+    await run("failed", 1);
+    let s = await status();
+    expect(s.code).toBe(503);
+    expect(s.body.failingJobs).toEqual(["retention"]);
+    expect(s.body.staleJobs).toEqual([]);
+    expect((await t.app.request("/ready")).status).toBe(200);
+
+    // A run still going, or one skipped behind the lock, says nothing yet about the failure.
+    await run("skipped", 2);
+    await run("running", 3);
+    expect((await status()).body.failingJobs).toEqual(["retention"]);
+
+    await run("succeeded", 4);
+    s = await status();
+    expect(s.body.failingJobs).toEqual([]);
+    expect(s.code).toBe(200);
     await t.close();
   });
 

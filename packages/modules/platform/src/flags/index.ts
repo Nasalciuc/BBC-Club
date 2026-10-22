@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import { flags as flagsTable } from "../infrastructure/schema";
 import type { Cache } from "../cache";
 
@@ -20,7 +20,9 @@ function parseValue(raw: unknown): FlagValue | null {
 }
 
 /** Feature flags cache 30s. Kill/pause skip the cache. A read error on kill/pause is fail-closed (treat as killed).
- *  A missing row is not killed. isEnabled/variant still fall back to the caller default. */
+ *  A missing row is not killed. isEnabled/variant still fall back to the caller default. killState is the kill flag
+ *  without that fallback: it throws when the flag cannot be read, for boot, which must not take an unreadable flag for
+ *  a killed module (that would unmount it for the life of the process). */
 export function createFlags(
   db: Executor,
   opts: {
@@ -40,32 +42,36 @@ export function createFlags(
 
   const localMs = 5_000;
 
-  async function read(key: string): Promise<FlagValue | null> {
+  /** The flag row through the same caches as `read`, or the error that kept it from being read: no fallback. For a
+   *  caller that keeps its own last good answer (app-config) and must not take a default for what the database holds. */
+  async function readStrict(key: string): Promise<FlagValue | null> {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < (opts.cache ? localMs : ttl)) return hit.value;
-    if (opts.cache) {
-      try {
-        const value = await opts.cache.getOrLoad(`flags:${key}`, Math.max(1, Math.ceil(ttl / 1000)), () => readDb(key));
-        cache.set(key, { value, at: Date.now() });
-        return value;
-      } catch (e) {
-        opts.logger?.warn({ key, err: String(e) }, "flag read failed, using fallback");
-        return null;
-      }
-    }
+    const value = opts.cache
+      ? await opts.cache.getOrLoad(`flags:${key}`, Math.max(1, Math.ceil(ttl / 1000)), () => readDb(key))
+      : await readDb(key);
+    cache.set(key, { value, at: Date.now() });
+    return value;
+  }
+
+  async function read(key: string): Promise<FlagValue | null> {
     try {
-      const value = await readDb(key);
-      cache.set(key, { value, at: Date.now() });
-      return value;
+      return await readStrict(key);
     } catch (e) {
-      opts.logger?.warn({ key, err: String(e) }, "flag read failed, using fallback");
-      return hit?.value ?? null;
+      opts.logger?.warn({ key, err: errorForLog(e) }, "flag read failed, using fallback");
+      // Without the shared cache, the last value this process read stands in for the one it could not.
+      return opts.cache ? null : (cache.get(key)?.value ?? null);
     }
   }
 
   async function readKill(key: string): Promise<FlagValue | null> {
     const [row] = await db.select({ value: flagsTable.value }).from(flagsTable).where(eq(flagsTable.key, key)).limit(1);
     return parseValue(row?.value);
+  }
+
+  async function killState(module: string): Promise<boolean> {
+    const v = await readKill(`${module}.killed`);
+    return v?.enabled === true;
   }
 
   return {
@@ -77,12 +83,13 @@ export function createFlags(
       const v = await read(key);
       return typeof v?.variant === "string" ? v.variant : fallback;
     },
+    /** The kill flag as the database holds it; throws when it cannot be read. Per request, use isKilled. */
+    killState,
     async isKilled(module: string): Promise<boolean> {
       try {
-        const v = await readKill(`${module}.killed`);
-        return v?.enabled === true;
+        return await killState(module);
       } catch (e) {
-        opts.logger?.warn({ module, err: String(e) }, "kill flag unreadable, failing closed");
+        opts.logger?.warn({ module, err: errorForLog(e) }, "kill flag unreadable, failing closed");
         return true;
       }
     },
@@ -91,7 +98,7 @@ export function createFlags(
         const v = await readKill(`consumer.${consumer}.paused`);
         return v?.enabled === true;
       } catch (e) {
-        opts.logger?.warn({ consumer, err: String(e) }, "pause flag unreadable, failing closed");
+        opts.logger?.warn({ consumer, err: errorForLog(e) }, "pause flag unreadable, failing closed");
         return true;
       }
     },
@@ -111,6 +118,7 @@ export function createFlags(
     invalidate: (key?: string) => (key ? cache.delete(key) : cache.clear()),
     /** Cached flag row. The limiter reads `ratelimit.<rule>` here — never a query the facade exposes. */
     read,
+    readStrict,
     async killSwitches(modules: string[]): Promise<Record<string, boolean>> {
       const out: Record<string, boolean> = {};
       for (const m of modules) out[m] = await this.isKilled(m);
