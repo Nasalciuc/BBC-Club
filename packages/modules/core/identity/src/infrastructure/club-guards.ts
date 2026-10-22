@@ -76,9 +76,9 @@ export function clubGuards({ isBreached }: ClubGuardDeps) {
       after: [
         {
           // The route answers 200 even when the code could not be mailed (runInBackgroundOrAwait swallows the error), and
-          // Join then waits for a code that never comes. A sign-in code goes to every address asked (path A), so the answer can
-          // say so without telling anyone whether the address has an account. Reset and verification codes keep their
-          // one answer; their failures are logged and counted (the send callback).
+          // Join then waits for a code that never comes. A sign-in code goes to every address asked (path A), so the
+          // answer can say so without telling anyone whether the address has an account. Reset and verification codes
+          // keep their one answer; their failures are logged and counted (the send callback).
           matcher: (ctx: { path?: string }) => ctx.path === "/email-otp/send-verification-otp",
           handler: createAuthMiddleware(async (ctx) => {
             if ((ctx.body as { type?: unknown } | undefined)?.type !== "sign-in") return;
