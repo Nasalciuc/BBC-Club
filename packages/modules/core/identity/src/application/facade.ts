@@ -24,7 +24,7 @@ export type IdentityFacadeOptions = {
 export function createIdentityFacade(
   auth: Auth,
   db: Executor,
-  opts: IdentityFacadeOptions = {},
+  options: IdentityFacadeOptions = {},
 ): Omit<IdentityFacade, "auth"> {
   /** `fresh` reads the session row and its user from the database instead of the signed cookie cache
    *  (SESSION_COOKIE_CACHE_SECONDS): a deleted member or an ended session is anonymous at once, not a minute later. */
@@ -84,7 +84,7 @@ export function createIdentityFacade(
   }
 
   const withOtpSendLock = otpSendLock(db);
-  const answerFloorMs = opts.otpAnswerFloorMs ?? POSTMARK_TIMEOUT_MS;
+  const answerFloorMs = options.otpAnswerFloorMs ?? POSTMARK_TIMEOUT_MS;
   /** Better Auth at /api/auth/*. A request that mails a code runs under its address's lock (otp-send-lock.ts), so two
    *  at the same moment mail one code; everything else goes straight through.
    *  A reset or verification code is mailed only when the address has an account, and Better Auth answers an unknown

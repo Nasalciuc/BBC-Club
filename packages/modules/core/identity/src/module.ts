@@ -53,6 +53,7 @@ function passwordRefusal(err: unknown): ApiError {
       return apiError("VALIDATION", { message: own ?? "Please check your password." });
   }
 }
+
 /** The change stands, the other sessions did not end: what happened, and the way that ends them all (ADR-IMPL-047). */
 const OTHERS_STILL_SIGNED_IN =
   "Your new password is set, but your other devices are still signed in. Sign out, then use Forgot password? to sign them all out.";
