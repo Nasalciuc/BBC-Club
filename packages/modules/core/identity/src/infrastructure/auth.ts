@@ -10,7 +10,8 @@ import type { EventPublisher } from "../ports/events";
 import type { Executor } from "@bbc/db";
 import { ac, roles } from "./access";
 import { claimOtpSend, releaseOtpClaim } from "./otp-cooldown";
-import { classifyOtpSendError, recordOtpSendFailure } from "./otp-send-outcome";
+import { classifyOtpSendError, recordOtpSendFailure, type OtpSendFailure } from "./otp-send-outcome";
+import { opsWebhook, otpFailureAlert } from "./ops-alert";
 import { clubGuards } from "./club-guards";
 import { BREACHED_PASSWORD_MESSAGE, breachCheck, breachListStandIn } from "./breach";
 import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
@@ -26,18 +27,33 @@ export type IdentityDeps = {
   email: EmailSender;
   events: EventPublisher;
   logger: Logger;
+  /** Counters on /metrics (platform.metrics): otp_sent{purpose}, otp_send_failed{purpose,reason}. */
+  metrics?: Metrics;
+  /** One line to the ops channel. Default: POST to OPS_WEBHOOK (ops-alert.ts); tests record instead. */
+  notifyOps?: (text: string) => Promise<void>;
   /** Test-only: replace the real HIBP plugin (and the club's own checks, breach.ts) with a predicate. Production never
    *  passes this. */
   breachedPassword?: (password: string) => boolean | Promise<boolean>;
 };
+export type Metrics = { inc(name: string, labels?: Record<string, string>, by?: number): void };
 
 const TEN_MINUTES = 60 * 10;
 /** OTP lifetime and send window — one live code per IP; aligned with verify UI countdown. */
 const FIFTEEN_MINUTES = 60 * 15;
 
-export function createAuth({ env, db, email, events, logger, breachedPassword }: IdentityDeps) {
+/** What the send callback rethrows: the failure's facts only. Postmark's own message can name the recipient, and Better
+ *  Auth prints whatever reaches runInBackgroundOrAwait to the console. */
+class OtpSendFailed extends Error {
+  constructor(failure: OtpSendFailure) {
+    super(`otp send failed: ${failure.reason}${failure.status !== undefined ? ` (status ${failure.status})` : ""}`);
+    this.name = "OtpSendFailed";
+  }
+}
+
+export function createAuth({ env, db, email, events, logger, metrics, notifyOps, breachedPassword }: IdentityDeps) {
   const isProd = env.NODE_ENV === "production";
   const isBreached = breachCheck({ env, breachedPassword });
+  const alertOtpFailure = otpFailureAlert({ post: notifyOps ?? opsWebhook(env, logger), logger });
 
   return betterAuth({
     appName: "BuyBusinessClass Club",
@@ -186,13 +202,26 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
             await email.sendOtp({ to, otp, purpose: type });
           } catch (e) {
             const failure = classifyOtpSendError(e);
+            // The facts only: never the address, never the code, never the provider's message (it can name the address).
+            logger.error(
+              {
+                purpose: type,
+                reason: failure.reason,
+                status: failure.status,
+                postmarkErrorCode: failure.postmarkErrorCode,
+              },
+              "otp send failed",
+            );
+            metrics?.inc("otp_send_failed", { purpose: type, reason: failure.reason });
             try {
               await releaseOtpClaim(db, claim);
             } finally {
               await recordOtpSendFailure(failure);
             }
-            throw e;
+            await alertOtpFailure(type, failure);
+            throw new OtpSendFailed(failure);
           }
+          metrics?.inc("otp_sent", { purpose: type });
           logger.info({ to: mask(to), purpose: type }, "otp sent");
         },
       }),

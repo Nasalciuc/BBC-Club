@@ -8,7 +8,7 @@ Written for someone who has never seen this system. Every command is copy-paste.
 ssh -L 5432:localhost:5432 -L 3001:localhost:3001 root@<host>   # then connect to localhost
 ```
 
-**Alerts:** `#bbc-ops` (disk, queue, failed jobs, crash-free) · `#bbc-sec` (5xx bursts, rate-limit anomalies, DLQ, failed restore) · phone escalation only for "API down > 5 min" from Uptime Kuma.
+**Alerts:** `#bbc-ops` (disk, queue, failed jobs, crash-free, code mails that fail — "Postmark down / OTP not arriving") · `#bbc-sec` (5xx bursts, rate-limit anomalies, DLQ, failed restore) · phone escalation only for "API down > 5 min" from Uptime Kuma.
 
 ---
 
@@ -481,9 +481,21 @@ The job returns `{ campaigns, pages, inserted, capped }` in `platform.job_runs.m
 
 ## Postmark down / OTP not arriving
 
-1. Check bounce rate in Postmark; check `#bbc-ops` for the OTP sent/verified ratio.
-2. Fallback: set `EMAIL_ADAPTER=ses` in the env file and restart the API.
-3. Existing sessions (30 days) keep working; only new sign-ups and resets are blocked.
+**What shows it.** Every code mail that fails leaves, on the API replica that tried it:
+
+- one JSON log line `otp send failed` at level error, with `purpose` (`sign-in`, `forget-password`, `email-verification`), `reason` (`inactive_recipient` · `timeout` · `provider_error`), Postmark's HTTP `status` and `postmarkErrorCode` — never the address or the code;
+- the counter `bbc_otp_send_failed{purpose,reason}` on that replica's `/metrics`, beside `bbc_otp_sent{purpose}` for the mails Postmark accepted (failed ÷ sent is the failure ratio);
+- the first failure in each 5 minutes posts `[bbc identity] otp send failed: purpose=… reason=… status=…` to `OPS_WEBHOOK`, with how many more failed since the last post (counters are per process, like every request counter here).
+
+**What members see.** Join and Sign in by code: `503 EMAIL_UNDELIVERABLE` "We couldn't send a code to that address. Check it, or try again in a moment." A reset (Forgot password?) or a verification code always answers 200 — by design, so the answer never tells whether an address has an account (ADR-PROD-001): a member who asked for a reset code may simply not get one, and only the log line and the counter know.
+
+**What to do, by `reason`:**
+
+1. `inactive_recipient` (Postmark 422 with `ErrorCode` 406): Postmark has suppressed that address after a hard bounce or a spam complaint. Find it in Postmark → the server → Activity (search by address when the member names it) and reactivate it under Suppressions only if the member confirms the address is right.
+2. `timeout` (no answer within 4 s) or `provider_error` with status 5xx: Postmark is slow or down — check status.postmarkapp.com. Members can retry; a failed send releases the 30-second resend lock.
+3. `provider_error` with status 401: `POSTMARK_TOKEN` is wrong or was rotated — every code fails. Fix the token in the env file and restart the API. Other 422 codes (sender signature, message stream) are configuration: read `postmarkErrorCode` against Postmark's API error codes.
+
+There is no second email provider: nothing reads `EMAIL_ADAPTER` and no SES sender exists. Existing sessions (30 days) keep working; only Join, sign-in by code and resets are blocked while Postmark refuses.
 
 ## Disk filling up (alert at 70 %)
 

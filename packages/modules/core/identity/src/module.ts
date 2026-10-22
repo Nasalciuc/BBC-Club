@@ -80,6 +80,7 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
       email: ports.email,
       breachedPassword: opts.breachedPassword,
       logger: platform.logger,
+      metrics: platform.metrics,
       events: {
         publish: async (e) => {
           await db.transaction((tx: unknown) => platform.events.publish(tx, { ...e, publishedBy: "identity" }));

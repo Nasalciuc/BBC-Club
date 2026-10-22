@@ -79,6 +79,11 @@ describe("OTP colleagues + per-email cooldown", () => {
     expect(await retry.json()).toEqual({ success: true });
     expect(t.email.sent.filter((s) => s.to.toLowerCase() === email).length).toBe(1);
 
+    // Both are on /metrics: the failure by reason, the send that worked.
+    const metrics = await (await t.app.request("/metrics")).text();
+    expect(metrics).toContain('bbc_otp_send_failed{purpose="sign-in",reason="inactive_recipient"} 1');
+    expect(metrics).toMatch(/bbc_otp_sent\{purpose="sign-in"\} \d+/);
+
     // A reset code keeps one answer whatever happened (anti-enumeration, ADR-PROD-001).
     t.email.failNext(1, inactive);
     const reset = await send("forget-password", t.memberA.email);
