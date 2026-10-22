@@ -11,7 +11,7 @@ import type { Executor } from "@bbc/db";
 import { ac, roles } from "./access";
 import { claimOtpSend, releaseOtpClaim } from "./otp-cooldown";
 import { clubGuards } from "./club-guards";
-import { BREACHED_PASSWORD_MESSAGE } from "./breach";
+import { BREACHED_PASSWORD_MESSAGE, breachCheck, breachListStandIn } from "./breach";
 import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
 
 export type Logger = {
@@ -185,33 +185,11 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
           logger.info({ to: mask(to), purpose: type }, "otp sent");
         },
       }),
-      ...(env.NODE_ENV === "test" || breachedPassword !== undefined
-        ? [
-            {
-              id: "test-hibp",
-              hooks: {
-                before: [
-                  {
-                    // The real plugin's paths the club uses: sign-up (in-process seeds), change and reset by code.
-                    matcher: (ctx: { path?: string }) =>
-                      typeof ctx.path === "string" &&
-                      (ctx.path.includes("sign-up") ||
-                        ctx.path.includes("change-password") ||
-                        ctx.path === "/email-otp/reset-password"),
-                    handler: async (ctx: { body?: { password?: string } }) => {
-                      const check = breachedPassword ?? (() => false);
-                      const password = ctx.body?.password;
-                      if (password && (await check(password))) {
-                        const { APIError } = await import("better-auth/api");
-                        throw new APIError("BAD_REQUEST", { message: BREACHED_PASSWORD_MESSAGE });
-                      }
-                    },
-                  },
-                ],
-              },
-            },
-          ]
-        : [haveIBeenPwned({ customPasswordCompromisedMessage: BREACHED_PASSWORD_MESSAGE })]),
+      // Tests: a stand-in that refuses exactly as the plugin does (same paths, at hash time, PASSWORD_COMPROMISED), with a
+      // predicate instead of the network.
+      env.NODE_ENV === "test" || breachedPassword !== undefined
+        ? breachListStandIn(breachCheck({ env, breachedPassword }))
+        : haveIBeenPwned({ customPasswordCompromisedMessage: BREACHED_PASSWORD_MESSAGE }),
       jwt({ jwks: { keyPairConfig: { alg: "EdDSA", crv: "Ed25519" } }, disableSettingJwtHeader: true }), // operator/system callers only
       bearer(),
       admin({ ac, roles, defaultRole: "member", adminRoles: ["operator", "system"] }),

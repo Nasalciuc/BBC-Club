@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import type { AuthContext, BetterAuthPlugin } from "better-auth";
+import { APIError } from "better-auth/api";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import type { ServerEnv } from "@bbc/shared/env";
 
 /** What a member reads when the password they chose is on the breach list (the same words on every path). */
@@ -42,6 +45,48 @@ export async function isPasswordBreached(password: string, fetchImpl: typeof fet
     const [hash, count] = line.trim().split(":");
     return hash?.toUpperCase() === suffix && Number(count ?? "1") > 0;
   });
+}
+
+/** Better Auth's haveIBeenPwned default paths: the plugin checks a password only while hashing it on one of these. */
+const PLUGIN_PATHS = [
+  "/sign-up/email",
+  "/change-password",
+  "/reset-password",
+  "/email-otp/reset-password",
+  "/phone-number/reset-password",
+  "/admin/create-user",
+  "/admin/set-user-password",
+];
+
+/**
+ * Test stand-in for Better Auth's haveIBeenPwned plugin, built the way the plugin is: it wraps `password.hash` and
+ * refuses on the plugin's paths only, at hash time — so after a reset's code is used, and never for the path-less
+ * `setPassword` — with the plugin's error (400 PASSWORD_COMPROMISED). Tests then meet what production meets.
+ */
+export function breachListStandIn(isBreached: (password: string) => Promise<boolean>) {
+  return {
+    id: "test-hibp",
+    init(ctx: AuthContext) {
+      const originalHash = ctx.password.hash;
+      return {
+        context: {
+          password: {
+            ...ctx.password,
+            async hash(password: string) {
+              const c = await getCurrentAuthContext();
+              if (c.path && PLUGIN_PATHS.includes(c.path) && (await isBreached(password))) {
+                throw APIError.from("BAD_REQUEST", {
+                  code: "PASSWORD_COMPROMISED",
+                  message: BREACHED_PASSWORD_MESSAGE,
+                });
+              }
+              return originalHash(password);
+            },
+          },
+        },
+      };
+    },
+  } satisfies BetterAuthPlugin;
 }
 
 /**

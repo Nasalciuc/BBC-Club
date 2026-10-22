@@ -101,8 +101,38 @@ describe("POST /v1/account/password", () => {
       body: JSON.stringify({ newPassword: "newClubPass2026!", currentPassword: "not-the-password" }),
     });
     expect(r.status).toBe(400);
-    const body = (await r.json()) as { error?: { message?: string } };
+    const body = (await r.json()) as { error?: { message?: string; details?: { path: string }[] } };
     expect(body.error?.message).toBe("That password isn't right.");
+    expect(body.error?.details?.[0]?.path).toBe("currentPassword");
+    await t.close();
+  });
+
+  it("the right current password with a breached new one is told the new one is the problem, not the current", async () => {
+    const t = await testApp({ suite: "pw-change-breached", identity: { breachedPassword: (p) => p === BREACHED } });
+    const change = (currentPassword: string, newPassword: string) =>
+      t.app.request("/v1/account/password", {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword, currentPassword }),
+      });
+
+    const breached = await change(t.memberA.password, BREACHED);
+    expect(breached.status).toBe(400);
+    const body = (await breached.json()) as {
+      error?: { code?: string; message?: string; details?: { path: string }[] };
+    };
+    expect(body.error?.code).toBe("VALIDATION");
+    expect(body.error?.message).toBe(BREACH_MESSAGE);
+    expect(body.error?.details?.[0]?.path).toBe("newPassword");
+
+    const wrong = await change("not-the-password", "newClubPass2026!");
+    expect(wrong.status).toBe(400);
+    expect(((await wrong.json()) as { error?: { message?: string } }).error?.message).toBe(
+      "That password isn't right.",
+    );
+
+    // Nothing changed: the password the member had still signs in.
+    expect(await t.auth.cookieFor(t.memberA.email, t.memberA.password)).toBeTruthy();
     await t.close();
   });
 

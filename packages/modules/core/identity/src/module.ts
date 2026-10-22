@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { and, eq, isNotNull } from "drizzle-orm";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
-import { apiError } from "@bbc/shared/errors";
+import { apiError, type ApiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import type { Executor } from "@bbc/db";
@@ -28,6 +28,31 @@ async function hasStoredPassword(exec: Executor, userId: string): Promise<boolea
 }
 
 const WRONG_PASSWORD = "That password isn't right.";
+
+/** A 400 from Better Auth's changePassword / setPassword, in the club's words, on the field at fault — decided by its
+ *  error code, never by whether the member has a password: a breached new password (PASSWORD_COMPROMISED) is not a
+ *  wrong current one, and telling the member so sends them to reset a password they typed right. */
+function passwordRefusal(err: unknown): ApiError {
+  const body =
+    err && typeof err === "object" ? (err as { body?: { code?: unknown; message?: unknown } }).body : undefined;
+  const code = typeof body?.code === "string" ? body.code : undefined;
+  const own = typeof body?.message === "string" && body.message.length > 0 ? body.message : undefined;
+  const on = (path: "currentPassword" | "newPassword", message: string) =>
+    apiError("VALIDATION", { message, details: [{ path, message }] });
+  switch (code) {
+    case "INVALID_PASSWORD":
+      return on("currentPassword", WRONG_PASSWORD);
+    case "PASSWORD_COMPROMISED":
+      return on("newPassword", BREACHED_PASSWORD_MESSAGE);
+    // PasswordBody's min 8 / max 128 answers these first; kept so a changed limit still lands on the right field.
+    case "PASSWORD_TOO_SHORT":
+      return on("newPassword", "Your password needs at least 8 characters.");
+    case "PASSWORD_TOO_LONG":
+      return on("newPassword", "Your password can be at most 128 characters.");
+    default:
+      return apiError("VALIDATION", { message: own ?? "Please check your password." });
+  }
+}
 /** The change stands, the other sessions did not end: what happened, and the way that ends them all (ADR-IMPL-047). */
 const OTHERS_STILL_SIGNED_IN =
   "Your new password is set, but your other devices are still signed in. Sign out, then use Forgot password? to sign them all out.";
@@ -176,17 +201,7 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
                 ((err as { status?: string }).status === "BAD_REQUEST" ? 400 : (err as { status?: number }).status) ??
                 500)
               : 500;
-          if (status === 400)
-            return c.json(
-              apiError("VALIDATION", {
-                message: hasPassword
-                  ? WRONG_PASSWORD
-                  : err && typeof err === "object"
-                    ? ((err as { body?: { message?: string } }).body?.message ?? "Invalid password")
-                    : "Invalid password",
-              }),
-              400,
-            );
+          if (status === 400) return c.json(passwordRefusal(err), 400);
           if (
             status === 401 ||
             (err && typeof err === "object" && (err as { status?: string }).status === "UNAUTHORIZED")
