@@ -25,6 +25,7 @@ import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
 import { signOut } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
 import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { isOffline } from "@/features/explore/offline-logic";
@@ -97,7 +98,8 @@ export default function RootLayout() {
 
   useEffect(() => () => clearPendingOtp(), []);
 
-  // Revoked session (apiFetch 401 on non-auth routes) → same clear as profile sign-out.
+  // Revoked session (apiFetch 401 on non-auth routes) → same clear as profile sign-out, and Sign in alone on the stack:
+  // Back must not reopen the screens of the session that ended (features/auth/leave.ts).
   useEffect(() => {
     let active = true;
     let handling = false;
@@ -107,7 +109,7 @@ export default function RootLayout() {
       void (async () => {
         try {
           await signOut();
-          if (active) router.replace("/sign-in");
+          if (active) leaveTo(router, "/sign-in");
         } finally {
           handling = false;
         }

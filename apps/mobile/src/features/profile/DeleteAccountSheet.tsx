@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +16,7 @@ import {
 } from "@bbc/ui";
 
 import { deleteAccount } from "@/features/auth/flows";
+import { clearStack } from "@/features/auth/leave";
 import { canConfirmDelete, deleteFailureCopy } from "./delete-logic";
 import { PasswordField } from "./PasswordField";
 import type { ProfileSheetHandle } from "./types";
@@ -40,6 +42,7 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
   { openRequests, onDeleted },
   ref,
 ) {
+  const router = useRouter();
   const modalRef = useRef<ModalSheetHandle>(null);
   const insets = useSafeAreaInsets();
   const [password, setPassword] = useState("");
@@ -80,6 +83,9 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
       return;
     }
     modalRef.current?.dismiss();
+    // The deleted member's screens go with the account: the parent's replace to Join then leaves Join alone on the stack,
+    // and Back cannot reopen their Profile (features/auth/leave.ts).
+    clearStack(router);
     onDeleted();
   }
 
