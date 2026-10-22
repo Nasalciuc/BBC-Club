@@ -136,7 +136,12 @@ export const ProfilePatchBody = z
 export type ProfilePatchBody = z.infer<typeof ProfilePatchBody>;
 
 export const TravelPreferencesBody = z.object({
-  destinations: z.array(z.string().length(3)).max(3).optional(),
+  // Airports as the home airport takes them, each once, in the order sent: ['lhr','LHR','cdg'] is ['LHR','CDG'].
+  destinations: z
+    .array(z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase())
+    .max(3)
+    .transform((codes) => [...new Set(codes)])
+    .optional(),
   cabin: z.enum(["business", "first"]).optional(),
   frequency: z.enum(["monthly", "quarterly", "rarely"]).optional(),
   passengers: Passengers.optional(),

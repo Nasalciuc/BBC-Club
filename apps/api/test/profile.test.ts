@@ -75,6 +75,32 @@ describe("PUT /v1/profile/travel", () => {
   });
 });
 
+describe("PUT /v1/profile/travel — what it stores", () => {
+  const put = (t: Awaited<ReturnType<typeof testApp>>, body: unknown) =>
+    t.app.request("/v1/profile/travel", {
+      method: "PUT",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const stored = async (t: Awaited<ReturnType<typeof testApp>>) =>
+    (
+      (await t.db.execute(sql`SELECT preferences FROM members.profile WHERE member_id = ${t.memberA.id}`)) as {
+        preferences: Record<string, unknown>;
+      }[]
+    )[0]?.preferences;
+
+  it("destinations are three letters, upper-cased, each once in the order sent", async () => {
+    const t = await testApp({ suite: "profile-dest" });
+    expect((await put(t, { destinations: ["lhr", "LHR", "cdg"] })).status).toBe(200);
+    expect((await stored(t))?.destinations).toEqual(["LHR", "CDG"]);
+    for (const destinations of [["L1R"], ["L H"], ["ßab"]]) {
+      expect((await put(t, { destinations })).status).toBe(400);
+    }
+    expect((await stored(t))?.destinations).toEqual(["LHR", "CDG"]);
+    await t.close();
+  });
+});
+
 describe("GET /v1/profile — notifications (ADR-IMPL-025)", () => {
   const put = (
     t: Awaited<ReturnType<typeof testApp>>,
