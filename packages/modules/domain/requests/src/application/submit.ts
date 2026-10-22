@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTx, type Executor } from "@bbc/db";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
-import { SubmittedRequestBody } from "@bbc/shared/api/v1/requests";
+import { RequestBody, SubmittedRequestBody } from "@bbc/shared/api/v1/requests";
 import type { ShownEstimate } from "./estimate";
 import type { FareAtRequest } from "./published";
 import type { OfferCheck } from "./offer";
@@ -57,16 +57,19 @@ export async function submit(
     offer?: (offerId: string, memberId: string | null) => Promise<OfferCheck>;
   },
 ) {
-  // A trip that can be flown, on a day not yet over everywhere (SubmittedRequestBody).
-  const body = SubmittedRequestBody.parse(raw);
+  // A trip that can be flown (RequestBody): what the body says, the same whenever it is sent.
+  const body = RequestBody.parse(raw);
   const phone = parseMemberPhone(body.contact.phone);
   if (!phone.valid) return { ok: false as const, code: "VALIDATION" as const };
   const route = requestRoute(body.legs, body.tripType);
   if (!route) return { ok: false as const, code: "VALIDATION" as const };
 
-  // A replay already committed is answered at once: no lock, no quota, no catalog read.
+  // A replay already committed is answered at once: no lock, no quota, no catalog read — whatever the day. A phone that
+  // never got its answer may send the request again after the trip's day has passed; the request it made stands.
   const committed = await byKey(exec, idempotencyKey);
   if (committed) return replayOf(committed, actor);
+  // A new request: on a day not yet over everywhere (SubmittedRequestBody).
+  SubmittedRequestBody.parse(raw);
 
   try {
     return await withTx(exec, (tx) => write(tx));

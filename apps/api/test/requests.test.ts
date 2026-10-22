@@ -296,6 +296,25 @@ describe("POST /v1/requests — only a trip that can be flown, and the fare or o
     expect((await problem(t, { ...trip, offerId: broadcast })).status).toBe(201);
     await t.close();
   });
+
+  it("a request already taken is answered as taken after its day has passed (a retry that never got its answer)", async () => {
+    const t = await testApp({ suite: "requests-replay-past-day" });
+    const key = crypto.randomUUID();
+    const on = (date: string) =>
+      t.sampleRequestBody({ priceAtRequest: undefined, tripType: "oneway", legs: [{ from: "JFK", to: "LHR", date }] });
+    const first = await t.submitRequestAs(t.memberA, on(day(0)), { idempotencyKey: key });
+    expect(first.status).toBe(201);
+    const { id } = (await first.json()) as { id: string };
+    // The phone sends it again days later, the day now over everywhere: the request it made stands.
+    const again = await t.submitRequestAs(t.memberA, on(day(-3)), { idempotencyKey: key });
+    expect(again.status).toBe(200);
+    expect(((await again.json()) as { id: string }).id).toBe(id);
+    // A new request for that day is still refused.
+    const fresh = await problem(t, { tripType: "oneway", legs: [{ from: "JFK", to: "LHR", date: day(-3) }] });
+    expect(fresh.status).toBe(400);
+    expect(fresh.paths).toContain("legs.0.date");
+    await t.close();
+  });
 });
 
 describe("GET /v1/requests", () => {
