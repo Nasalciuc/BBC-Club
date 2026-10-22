@@ -109,6 +109,22 @@ export async function requestReset(email: string): Promise<Result> {
   );
 }
 
+/**
+ * Forgot password: check the code on Verify, where its boxes are, before set-password asks for the new password.
+ * better-auth's check counts a wrong try like the reset does (five, then TOO_MANY_ATTEMPTS) and does not use up a right
+ * code: the reset consumes it later (apps/api/test/reset-code-check.test.ts).
+ */
+export async function checkResetCode(email: string, otp: string): Promise<Result> {
+  try {
+    const { error } = await withAuthTimeout(
+      authClient.emailOtp.checkVerificationOtp({ email, type: "forget-password", otp }),
+    );
+    return error ? fail(error) : { ok: true };
+  } catch (e) {
+    return fromNetwork(e);
+  }
+}
+
 /** Reset with code + new password, then sign in so the member lands in the gate. */
 export async function resetPassword(email: string, otp: string, password: string): Promise<Result> {
   try {

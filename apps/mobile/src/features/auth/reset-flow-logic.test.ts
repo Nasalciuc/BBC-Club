@@ -1,0 +1,26 @@
+import { describe, expect, it } from "bun:test";
+import { nextAfterResetFailure } from "./reset-flow-logic";
+
+describe("nextAfterResetFailure — where a failed reset leaves the member", () => {
+  it("a password the server refused stays on the screen, with the code kept for the next Continue", () => {
+    for (const code of ["PASSWORD_COMPROMISED", "PASSWORD_TOO_WEAK", "PASSWORD_TOO_SHORT"]) {
+      expect(nextAfterResetFailure(code)).toBe("stay");
+    }
+  });
+
+  it("no connection stays too: nothing reached the server, the code still works", () => {
+    expect(nextAfterResetFailure("OFFLINE")).toBe("stay");
+    expect(nextAfterResetFailure("TIMEOUT")).toBe("stay");
+  });
+
+  it("a code that no longer works goes back to Verify, where the boxes and Resend are", () => {
+    for (const code of ["INVALID_OTP", "OTP_EXPIRED", "TOO_MANY_ATTEMPTS"]) {
+      expect(nextAfterResetFailure(code)).toBe("verify");
+    }
+  });
+
+  it("anything else stays with its message — never a silent trip to Sign in", () => {
+    expect(nextAfterResetFailure("RATE_LIMITED")).toBe("stay");
+    expect(nextAfterResetFailure(undefined)).toBe("stay");
+  });
+});

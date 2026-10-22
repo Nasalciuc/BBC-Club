@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { BackHandler, StyleSheet, Text, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
-import { clearPendingOtp, takePendingOtp } from "@/features/auth/otp-holder";
+import { clearPendingOtp, peekPendingOtp } from "@/features/auth/otp-holder";
 import { resetPassword, setPassword, signOut } from "@/features/auth/flows";
 import { leaveTo } from "@/features/auth/leave";
+import { nextAfterResetFailure } from "@/features/auth/reset-flow-logic";
 import { Password } from "@/features/auth/schemas";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { AuthShell } from "@/components/auth-shell";
@@ -64,20 +65,38 @@ export default function SetPasswordScreen() {
     setError(null);
 
     if (purpose === "reset") {
-      const otp = takePendingOtp();
       const normalizedEmail = email?.trim().toLowerCase() ?? "";
-      if (!otp || !normalizedEmail) {
+      if (!normalizedEmail) {
         clearPendingOtp();
         setBusy(false);
         router.replace("/sign-in");
         return;
       }
+      // Read, not taken: a Continue that fails keeps the code for the next one (cleared once the reset is done, or when
+      // this screen goes).
+      const otp = peekPendingOtp();
+      if (!otp) {
+        // The code is held in memory only: gone (the app was restarted), it is typed again on Verify — still valid there.
+        setBusy(false);
+        router.replace({ pathname: "/verify-code", params: { purpose: "reset", email: normalizedEmail } });
+        return;
+      }
       const result = await resetPassword(normalizedEmail, otp, parsed.data);
       if (!result.ok) {
         setBusy(false);
+        if (nextAfterResetFailure(result.code) === "verify") {
+          // The code itself no longer works: Verify, with Resend open and why — the code never goes in the params.
+          clearPendingOtp();
+          router.replace({
+            pathname: "/verify-code",
+            params: { purpose: "reset", email: normalizedEmail, notice: result.code },
+          });
+          return;
+        }
         setError(result.message);
         return;
       }
+      clearPendingOtp();
     } else {
       const result = await setPassword(parsed.data);
       if (!result.ok) {

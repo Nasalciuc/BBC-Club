@@ -1,3 +1,5 @@
+import { authMessage } from "@bbc/shared/auth-messages";
+
 /**
  * Resend waits as long as the server does before it mails again: identity `otp-cooldown.ts` OTP_COOLDOWN_SECONDS (30;
  * the app cannot import server code). The per-IP send limit (10 per 15 min) stops abuse, and a 429 on Resend shows the
@@ -37,6 +39,20 @@ export function afterVerifyError(code: string | undefined): VerifyErrorPlan {
   // "That code has expired. We'll send you a new one." (shared AUTH_MESSAGES): Verify sends it, so the words are true.
   if (code === "OTP_EXPIRED") return { resend: true, resendNow: false, clear: true, message: null };
   return { resend: false, resendNow: false, clear: false, message: null };
+}
+
+/** Back from set-password: the code passed Verify's check but the reset refused it (it was replaced, or used up). */
+export const CODE_NO_LONGER_WORKS = "That code no longer works. Ask for a new one below.";
+
+/**
+ * Verify opened by set-password after a reset refused the code (reset-flow-logic.ts): the `notice` param names why —
+ * a code, never the OTP itself. Each known one is handled as on Verify itself; any other value changes nothing.
+ */
+export function afterResetNotice(notice: string | undefined): VerifyErrorPlan | null {
+  if (notice === "INVALID_OTP") return { resend: false, resendNow: true, clear: true, message: CODE_NO_LONGER_WORKS };
+  if (notice === "OTP_EXPIRED") return { ...afterVerifyError(notice), message: authMessage("OTP_EXPIRED") };
+  if (notice === "TOO_MANY_ATTEMPTS") return afterVerifyError(notice);
+  return null;
 }
 
 export function formatResendCountdown(totalSeconds: number): string {

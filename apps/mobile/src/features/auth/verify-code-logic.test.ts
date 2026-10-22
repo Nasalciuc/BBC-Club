@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
+import { authMessage } from "@bbc/shared/auth-messages";
 import {
+  afterResetNotice,
   afterVerifyError,
+  CODE_NO_LONGER_WORKS,
   formatResendCountdown,
   RESEND_SECONDS,
   resendDeadline,
@@ -26,6 +29,35 @@ describe("afterVerifyError — what Verify does with a code the server refused",
 
   it("a wrong code stays to be corrected, with the server's words", () => {
     expect(afterVerifyError("INVALID_OTP")).toEqual({ resend: false, resendNow: false, clear: false, message: null });
+  });
+});
+
+describe("afterResetNotice — back on Verify because set-password's reset refused the code", () => {
+  it("a code that passed the check but no longer works: boxes cleared, Resend open at once", () => {
+    expect(afterResetNotice("INVALID_OTP")).toEqual({
+      resend: false,
+      resendNow: true,
+      clear: true,
+      message: CODE_NO_LONGER_WORKS,
+    });
+  });
+
+  it("an expired code is replaced at once, as on Verify", () => {
+    expect(afterResetNotice("OTP_EXPIRED")).toEqual({
+      resend: true,
+      resendNow: false,
+      clear: true,
+      message: authMessage("OTP_EXPIRED"),
+    });
+  });
+
+  it("a code tried too many times opens Resend, as on Verify", () => {
+    expect(afterResetNotice("TOO_MANY_ATTEMPTS")).toEqual(afterVerifyError("TOO_MANY_ATTEMPTS"));
+  });
+
+  it("no notice, or one this screen does not know, changes nothing (a param is never trusted for words)", () => {
+    expect(afterResetNotice(undefined)).toBeNull();
+    expect(afterResetNotice("123456")).toBeNull();
   });
 });
 

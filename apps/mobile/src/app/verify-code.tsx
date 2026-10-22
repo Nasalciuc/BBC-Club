@@ -4,15 +4,17 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { setPendingOtp } from "@/features/auth/otp-holder";
-import { resendCode, verifyJoin } from "@/features/auth/flows";
+import { checkResetCode, resendCode, verifyJoin } from "@/features/auth/flows";
 import { leaveTo } from "@/features/auth/leave";
 import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { Otp } from "@/features/auth/schemas";
 import {
+  afterResetNotice,
   afterVerifyError,
   formatResendCountdown,
   resendDeadline,
   secondsLeft,
+  type VerifyErrorPlan,
 } from "@/features/auth/verify-code-logic";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
@@ -22,18 +24,28 @@ const CODE_LENGTH = 6;
 
 export default function VerifyCodeScreen() {
   const router = useRouter();
-  const { email, purpose: purposeParam } = useLocalSearchParams<{
+  const {
+    email,
+    purpose: purposeParam,
+    notice,
+  } = useLocalSearchParams<{
     email?: string;
     purpose?: string;
+    notice?: string;
   }>();
   const purpose = parseAuthPurpose(purposeParam);
   const inputRef = useRef<TextInput>(null);
+  // Back from set-password, whose reset refused the code: `notice` names why, never the code (verify-code-logic.ts).
+  const [noticePlan] = useState(() => afterResetNotice(notice));
   const [code, setCode] = useState("");
   // Resend opens at a wall-clock deadline (verify-code-logic.ts): a timer chain stops while the app is in the background.
-  const [deadline, setDeadline] = useState(() => resendDeadline(Date.now()));
+  // A dead code from set-password opens it at once.
+  const [deadline, setDeadline] = useState(() => (noticePlan?.resendNow ? Date.now() : resendDeadline(Date.now())));
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    noticePlan && !noticePlan.resend ? noticePlan.message : null,
+  );
   const seconds = secondsLeft(deadline, now);
 
   useEffect(() => {
@@ -58,8 +70,7 @@ export default function VerifyCodeScreen() {
    * A code the server refused (verify-code-logic.ts): a dead one empties the boxes and opens Resend at once; an expired
    * one is replaced at once — the words promise it — and if that send fails, its own error is shown instead.
    */
-  async function showVerifyError(result: { code?: string; message: string }, normalizedEmail: string) {
-    const plan = afterVerifyError(result.code);
+  async function applyPlan(plan: VerifyErrorPlan, fallback: string, normalizedEmail: string) {
     if (plan.clear) setCode("");
     if (plan.resendNow) {
       const at = Date.now();
@@ -73,8 +84,22 @@ export default function VerifyCodeScreen() {
         return;
       }
     }
-    setError(plan.message ?? result.message);
+    setError(plan.message ?? fallback);
   }
+
+  // Back from set-password with an expired code: a new one is sent at once, as on Verify itself — once. Resend's 30 s
+  // started with the screen.
+  const noticeSent = useRef(false);
+  useEffect(() => {
+    const normalizedEmail = email?.trim().toLowerCase() ?? "";
+    if (!noticePlan?.resend || !normalizedEmail || noticeSent.current) return;
+    noticeSent.current = true;
+    setBusy(true);
+    void resendCode(normalizedEmail, purpose).then((sent) => {
+      setError(sent.ok ? noticePlan.message : sent.message);
+      setBusy(false);
+    });
+  }, [noticePlan, email, purpose]);
 
   async function onVerify() {
     const otpResult = Otp.safeParse(code);
@@ -88,8 +113,20 @@ export default function VerifyCodeScreen() {
       return;
     }
 
+    setBusy(true);
+    setError(null);
+
     if (purpose === "reset") {
+      // Checked here, where the boxes are: a wrong, expired or dead code stays on Verify. A right one is not used up —
+      // set-password's reset consumes it.
+      const checked = await checkResetCode(normalizedEmail, otpResult.data);
+      if (!checked.ok) {
+        await applyPlan(afterVerifyError(checked.code), checked.message, normalizedEmail);
+        setBusy(false);
+        return;
+      }
       setPendingOtp(otpResult.data);
+      setBusy(false);
       router.replace({
         pathname: "/set-password",
         params: { purpose: "reset", email: normalizedEmail },
@@ -97,11 +134,9 @@ export default function VerifyCodeScreen() {
       return;
     }
 
-    setBusy(true);
-    setError(null);
     const result = await verifyJoin(normalizedEmail, otpResult.data);
     if (!result.ok) {
-      await showVerifyError(result, normalizedEmail);
+      await applyPlan(afterVerifyError(result.code), result.message, normalizedEmail);
       setBusy(false);
       return;
     }
