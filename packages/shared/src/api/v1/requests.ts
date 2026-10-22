@@ -66,7 +66,7 @@ function tripIssues(
     if (before && leg.date < before.date) issue(["legs", i, "date"], "Choose a date on or after the flight before.");
   });
   if (b.passengers.infant > b.passengers.adult) {
-    issue(["passengers", "infant"], "Each infant travels on an adult's lap: add an adult, or an infant less.");
+    issue(["passengers", "infant"], "Each infant travels on an adult's lap. Add an adult or remove an infant.");
   }
   for (const key of ["name", "phone", "email"] as const) {
     if (b.contact[key].includes(NUL)) issue(["contact", key], "Remove the hidden character, then try again.");
