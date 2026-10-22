@@ -37,7 +37,7 @@ DECISION (owner): confirm that the operators reading OPERATORS_EMAIL and the CRM
 
 - Data in transit: production API must be `https://` (`apps/mobile/app.config.ts` `assertProductionEnv`).
 - Session cookie and device id live in SecureStore (`client.ts:11–16`, `push.ts:9–16`).
-- Account deletion: Profile → Delete account → confirm (`apps/mobile/src/app/(tabs)/profile.tsx` `profile.delete` / `profile.deleteConfirm`) → `deleteAccount()` (`flows.ts:132–136`) → `authClient.deleteUser({})`.
+- Account deletion: Profile → Delete account → password → confirm (`apps/mobile/src/app/(tabs)/profile.tsx` `profile.delete` / `profile.deleteConfirm`) → `deleteAccount(password)` (`flows.ts`) → `authClient.deleteUser({ password })`; the API refuses an empty or wrong password (`400 INVALID_PASSWORD`) and deletes nothing.
 
 ## Not collected
 
