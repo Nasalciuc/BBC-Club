@@ -7,7 +7,12 @@ import { setPendingOtp } from "@/features/auth/otp-holder";
 import { resendCode, verifyJoin } from "@/features/auth/flows";
 import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { Otp } from "@/features/auth/schemas";
-import { formatResendCountdown, resendDeadline, secondsLeft } from "@/features/auth/verify-code-logic";
+import {
+  afterVerifyError,
+  formatResendCountdown,
+  resendDeadline,
+  secondsLeft,
+} from "@/features/auth/verify-code-logic";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { Club } from "@/constants/club";
@@ -40,6 +45,18 @@ export default function VerifyCodeScreen() {
   const canVerify = code.length === CODE_LENGTH && !busy;
   const destination = email?.trim() || "your email";
 
+  /** A code the server refused (verify-code-logic.ts): a dead one empties the boxes and opens Resend at once. */
+  function showVerifyError(result: { code?: string; message: string }) {
+    const plan = afterVerifyError(result.code);
+    if (plan.clear) setCode("");
+    if (plan.resendNow) {
+      const at = Date.now();
+      setDeadline(at);
+      setNow(at);
+    }
+    setError(plan.message ?? result.message);
+  }
+
   async function onVerify() {
     const otpResult = Otp.safeParse(code);
     if (!otpResult.success) {
@@ -66,7 +83,7 @@ export default function VerifyCodeScreen() {
     const result = await verifyJoin(normalizedEmail, otpResult.data);
     if (!result.ok) {
       setBusy(false);
-      setError(result.message);
+      showVerifyError(result);
       return;
     }
     // A member who already has a password goes straight in; only a new member chooses one.

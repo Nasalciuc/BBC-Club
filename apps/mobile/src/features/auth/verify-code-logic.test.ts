@@ -1,5 +1,28 @@
 import { describe, expect, it } from "bun:test";
-import { formatResendCountdown, RESEND_SECONDS, resendDeadline, secondsLeft } from "./verify-code-logic";
+import {
+  afterVerifyError,
+  formatResendCountdown,
+  RESEND_SECONDS,
+  resendDeadline,
+  secondsLeft,
+  TOO_MANY_ATTEMPTS_COPY,
+} from "./verify-code-logic";
+
+describe("afterVerifyError — what Verify does with a code the server refused", () => {
+  it("a code tried too many times is dead: boxes cleared, Resend open at once, words that say to ask again", () => {
+    expect(afterVerifyError("TOO_MANY_ATTEMPTS")).toEqual({
+      resend: false,
+      resendNow: true,
+      clear: true,
+      message: TOO_MANY_ATTEMPTS_COPY,
+    });
+    expect(TOO_MANY_ATTEMPTS_COPY).toBe("That code was tried too many times. Ask for a new one below.");
+  });
+
+  it("a wrong code stays to be corrected, with the server's words", () => {
+    expect(afterVerifyError("INVALID_OTP")).toEqual({ resend: false, resendNow: false, clear: false, message: null });
+  });
+});
 
 describe("Resend code — the server's 30 s cooldown, counted on the wall clock", () => {
   it("waits as long as the server does (identity otp-cooldown.ts OTP_COOLDOWN_SECONDS), not 15 minutes", () => {
