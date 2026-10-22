@@ -5,7 +5,7 @@
 **Publishes:** `member.registered` (post-commit hook; reconciled nightly by members), `member.deleted`, `member.email_verified`, `member.password_changed`.
 **Consumes:** none.
 **Ports:** `EmailSender` (satisfied by integration/email), `EventPublisher` (platform).
-**Facade (`src/api/index.ts`):** `handler` (Better Auth at /api/auth/*), `getSession(headers)`, `requireMember`, `requireRole`, `deleteAccount(headers)`, `auth` (for tests only).
+**Facade (`src/api/index.ts`):** `handler` (Better Auth at /api/auth/*), `getSession(headers)`, `requireMember`, `requireRole`, `deleteAccount(headers)`, `listUsersCreatedBefore(before)` (members' reconcile), `registeredEmail(memberId)` (the email member.registered carries, read from `auth.user`; null once the account is deleted — members makes a profile row on demand only for an account it answers), `auth` (for tests only).
 **Out of scope:** 2FA, social login, admin dashboard, avatars, passkeys (v2).
 **Invariants tested:** recipient = user.email & awaited · no dead session guard + route inventory · register→verify→exactly one event + lockout at 5 OTP attempts · delete = zero rows + journal tombstone · HIBP refusal · per-route rate limits (429 + Retry-After) · `POST /v1/account/password` limited per member as `profile.write` in a bucket of its own (`pw:m:<id>`), after `authorize` (ADR-IMPL-047), and the only route where a signed-in member changes it; a change ends every other session and keeps the one that made it: Better Auth's `/api/auth/change-password` and `/api/auth/verify-password` are not served (`disabledPaths`) · a reset by email code signs out every session (`revokeSessionsOnPasswordReset`).
 

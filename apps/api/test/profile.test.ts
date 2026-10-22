@@ -151,6 +151,38 @@ describe("profile writes right after the join code (member.registered not yet de
     expect(await linked(d.id)).toEqual([]);
     await t.close();
   });
+
+  it("an account deleted on another device: a save from a session still cached makes no profile", async () => {
+    const t = await testApp({ suite: "profile-deleted" });
+    // A second device, signed in before the deletion: its session cookie carries the cookie cache.
+    const otherDevice = await t.auth.cookieFor(t.memberA.email, t.memberA.password);
+    const identity = t.registry.facade<any>("identity");
+    // The password goes along for an identity that asks for it at deletion; the one on main takes the headers only.
+    await identity.deleteAccount(new Headers({ Cookie: t.memberA.cookie }), t.memberA.password);
+    await t.drainAll();
+    const count = async () =>
+      (
+        (await t.db.execute(sql`SELECT count(*)::int n FROM members.profile WHERE member_id = ${t.memberA.id}`)) as {
+          n: number;
+        }[]
+      )[0]?.n;
+    expect(await count()).toBe(0);
+
+    for (const [method, path, body] of [
+      ["PATCH", "/v1/profile", { homeAirport: "LHR" }],
+      ["PUT", "/v1/profile/travel", { cabin: "first" }],
+    ] as const) {
+      const r = await t.app.request(path, {
+        method,
+        headers: { Cookie: otherDevice, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      // 404 here (no account, no row made); 401 where writes read the session past the cache. Never a new profile.
+      expect([path, [401, 404].includes(r.status)]).toEqual([path, true]);
+    }
+    expect(await count()).toBe(0);
+    await t.close();
+  });
 });
 
 describe("PUT /v1/profile/travel — what it stores", () => {

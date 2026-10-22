@@ -54,19 +54,17 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
     };
 
     /** Right after the join code the profile row is not there until member.registered is delivered, and onboarding's
-     *  first save answered 404 'Not found.'. When the write finds no row and the member has an email, make the row the
-     *  delivery would make (`ensureProfile`) and write once more; still none (a deleted profile) → null → 404. */
-    async function writeOrCreate<T>(
-      tx: Executor,
-      principal: Principal,
-      actor: string,
-      write: () => Promise<T | null>,
-    ): Promise<T | null> {
+     *  first save answered 404 'Not found.'. When the write finds no row and the account still exists, make the row the
+     *  delivery would make (`ensureProfile`) and write once more; still none (a deleted profile) → null → 404.
+     *  The account is asked of identity, not read from the principal: a member deleted on another device keeps a
+     *  session in the cookie cache for up to a minute, and a save from it must not bring back, active and linked to
+     *  the CRM, the profile member.deleted erased (nothing would erase it again). */
+    async function writeOrCreate<T>(tx: Executor, actor: string, write: () => Promise<T | null>): Promise<T | null> {
       const first = await write();
       if (first) return first;
-      const email = memberEmail(principal);
+      const email = await ports.identity.registeredEmail(actor);
       if (!email) return null;
-      await facade.ensureProfile(tx, actor, email.trim().toLowerCase(), profileCreation);
+      await facade.ensureProfile(tx, actor, email, profileCreation);
       return write();
     }
 
@@ -95,7 +93,7 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           );
         }
         const updated = await withTx(conn, async (tx) => {
-          const p = await writeOrCreate(tx, principal, actor, () => facade.updateProfile(tx, actor, parsed.data));
+          const p = await writeOrCreate(tx, actor, () => facade.updateProfile(tx, actor, parsed.data));
           if (!p) return null;
           const fields = Object.keys(parsed.data);
           await publish(tx, {
@@ -142,9 +140,7 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           );
         }
         const updated = await withTx(conn, async (tx) => {
-          const p = await writeOrCreate(tx, principal, actor, () =>
-            facade.setTravelPreferences(tx, actor, parsed.data),
-          );
+          const p = await writeOrCreate(tx, actor, () => facade.setTravelPreferences(tx, actor, parsed.data));
           if (!p) return null;
           await publish(tx, {
             type: "member.profile_updated",

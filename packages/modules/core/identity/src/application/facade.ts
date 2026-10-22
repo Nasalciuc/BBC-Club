@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import { desc, lt } from "drizzle-orm";
+import { desc, eq, lt } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import type { Auth } from "../infrastructure/auth";
 import { user } from "../infrastructure/schema";
@@ -58,5 +58,24 @@ export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFac
     return rows;
   }
 
-  return { handler: auth.handler, getSession, requireMember, requireRole, deleteAccount, listUsersCreatedBefore };
+  /** Read from auth.user, never from the session: a session of a deleted account stays in the cookie cache for up to
+   *  SESSION_COOKIE_CACHE_SECONDS. The email is normalised as the member.registered hook (auth.ts) normalises it. */
+  async function registeredEmail(memberId: string): Promise<string | null> {
+    const [row]: { email: string }[] = await db
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, memberId))
+      .limit(1);
+    return row ? row.email.trim().toLowerCase() : null;
+  }
+
+  return {
+    handler: auth.handler,
+    getSession,
+    requireMember,
+    requireRole,
+    deleteAccount,
+    listUsersCreatedBefore,
+    registeredEmail,
+  };
 }
