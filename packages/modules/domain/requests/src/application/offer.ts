@@ -24,7 +24,7 @@ export const OFFER_TIMEOUT_MS = 1_000;
 export async function askOffer(
   q: {
     visible: () => Promise<unknown>;
-    any: () => Promise<ProposalOffer | null>;
+    stored: () => Promise<ProposalOffer | null>;
     memberId: string | null;
     now?: Date;
   },
@@ -33,7 +33,7 @@ export async function askOffer(
   const answer = await askWithin(
     async (): Promise<Exclude<OfferCheck, null>> => {
       if (q.memberId && (await q.visible())) return "ok";
-      const offer = await q.any();
+      const offer = await q.stored();
       if (!offer) return "missing";
       const lapsed = offer.status === "active" && offer.validUntil.getTime() <= (q.now ?? new Date()).getTime();
       const gone = offer.status === "withdrawn" || offer.status === "expired" || lapsed;

@@ -103,7 +103,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       askOffer(
         {
           visible: () => (memberId ? ports.proposals.getVisible(undefined, memberId, offerId) : Promise.resolve(null)),
-          any: () => ports.proposals.getAny(undefined, offerId),
+          stored: () => ports.proposals.getAny(undefined, offerId),
           memberId,
         },
         {
