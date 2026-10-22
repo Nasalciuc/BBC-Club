@@ -1,5 +1,19 @@
 import { describe, expect, it } from "bun:test";
-import { nextAfterResetFailure } from "./reset-flow-logic";
+import { RESET_DONE_SIGN_IN } from "./flows-logic";
+import { nextAfterResetFailure, RESET_DONE_NOTICE, signInNotice } from "./reset-flow-logic";
+
+describe("the reset is done but the sign-in after it is not", () => {
+  it("goes to Sign in, with a notice that the new password is set", () => {
+    expect(nextAfterResetFailure(RESET_DONE_SIGN_IN)).toBe("signIn");
+    expect(signInNotice("reset")).toBe(RESET_DONE_NOTICE);
+    expect(RESET_DONE_NOTICE).toBe("Your new password is set. Sign in with it in a few minutes.");
+  });
+
+  it("Sign in shows no notice otherwise (a param is never trusted for words)", () => {
+    expect(signInNotice(undefined)).toBeNull();
+    expect(signInNotice("anything")).toBeNull();
+  });
+});
 
 describe("nextAfterResetFailure — where a failed reset leaves the member", () => {
   it("a password the server refused stays on the screen, with the code kept for the next Continue", () => {

@@ -1,6 +1,25 @@
 import { describe, expect, it } from "bun:test";
 import { authMessage } from "@bbc/shared/auth-messages";
-import { fail } from "./flows-logic";
+import { afterResetSignIn, fail, RESET_DONE_SIGN_IN } from "./flows-logic";
+
+describe("afterResetSignIn — the reset succeeded; the sign-in with the new password may not", () => {
+  it("signed in: on to the gate", () => {
+    expect(afterResetSignIn(null)).toEqual({ ok: true });
+  });
+
+  it("5 wrong sign-ins before the reset: /sign-in/email answers 429 — the password is set, Sign in later", () => {
+    const result = afterResetSignIn({ status: 429 });
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.code).toBe(RESET_DONE_SIGN_IN);
+  });
+
+  it("any other refusal, or no connection, is the same: the spent code is never offered again", () => {
+    for (const err of [{ status: 500 }, { code: "INVALID_EMAIL_OR_PASSWORD", status: 401 }, "network" as const]) {
+      const result = afterResetSignIn(err);
+      expect(!result.ok && result.code).toBe(RESET_DONE_SIGN_IN);
+    }
+  });
+});
 
 describe("fail — a Better Auth error in the club's voice", () => {
   it("a code tried too many times is its own answer, not a rate limit (the server deleted it: waiting does not help)", () => {

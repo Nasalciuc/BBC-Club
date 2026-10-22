@@ -8,7 +8,7 @@ import { clearQueue } from "@/lib/queue";
 import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
-import { fail, refuseEmptyPassword, type FlowResult } from "./flows-logic";
+import { afterResetSignIn, fail, refuseEmptyPassword, type FlowResult } from "./flows-logic";
 import { otpSendResult } from "./otp-send-logic";
 
 /** Unregister push, drop pending queue, the Requests dot's number and what was saved, clear onboarded — then auth
@@ -125,20 +125,30 @@ export async function checkResetCode(email: string, otp: string): Promise<Result
   }
 }
 
-/** Reset with code + new password, then sign in so the member lands in the gate. */
+/**
+ * Reset with code + new password, then sign in so the member lands in the gate. Once the reset succeeded, a sign-in that
+ * does not is RESET_DONE_SIGN_IN (afterResetSignIn): Sign in with a notice, never the spent code again.
+ */
 export async function resetPassword(email: string, otp: string, password: string): Promise<Result> {
   try {
     const { error } = await withAuthTimeout(authClient.emailOtp.resetPassword({ email, otp, password }));
     if (error) return fail(error);
-    const signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
-    if (signedIn.error) return fail(signedIn.error);
-    resetUnreadQuotes();
-    const ready = (await requireSessionCookie()) ?? { ok: true as const };
-    if (ready.ok) appStorage.remove(PENDING_PASSWORD_KEY);
-    return ready;
   } catch (e) {
     return fromNetwork(e);
   }
+  let signedIn: Awaited<ReturnType<typeof authClient.signIn.email>>;
+  try {
+    signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
+  } catch {
+    return afterResetSignIn("network");
+  }
+  const after = afterResetSignIn(signedIn.error);
+  if (!after.ok) return after;
+  resetUnreadQuotes();
+  // Signed in on the server, but the cookie never reached SecureStore: the same — Sign in with the new password.
+  if (await requireSessionCookie()) return afterResetSignIn("network");
+  appStorage.remove(PENDING_PASSWORD_KEY);
+  return after;
 }
 
 /** First-time password after Path A OTP session — club route, not Better Auth client setPassword. */

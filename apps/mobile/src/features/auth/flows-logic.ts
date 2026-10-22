@@ -1,4 +1,7 @@
 import { authMessage } from "@bbc/shared/auth-messages";
+import { RESET_DONE_NOTICE, RESET_DONE_SIGN_IN } from "./reset-flow-logic";
+
+export { RESET_DONE_SIGN_IN };
 
 /** What an auth flow answers its screen (flows.ts). */
 export type FlowResult = { ok: true; message?: string } | { ok: false; message: string; code?: string };
@@ -12,6 +15,17 @@ export function fail(err: { code?: string; message?: string; status?: number } |
   const code =
     err?.status === 429 || (err?.code != null && RATE_LIMIT_CODES.has(err.code)) ? "RATE_LIMITED" : err?.code;
   return { ok: false, message: authMessage(code), code };
+}
+
+/**
+ * After a reset that succeeded, the sign-in with the new password. Its failure — 429 because the wrong sign-ins before
+ * the reset used /sign-in/email's 5 per 10 min, another refusal, no connection (`"network"`) — is never the reset's:
+ * the password is set and the code spent, so the member is sent to Sign in with RESET_DONE_NOTICE, never offered
+ * Continue again. No retry loop.
+ */
+export function afterResetSignIn(error: { code?: string; status?: number } | "network" | null): FlowResult {
+  if (error === null) return { ok: true };
+  return { ok: false, code: RESET_DONE_SIGN_IN, message: RESET_DONE_NOTICE };
 }
 
 /**

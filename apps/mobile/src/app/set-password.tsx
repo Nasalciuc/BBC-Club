@@ -84,7 +84,14 @@ export default function SetPasswordScreen() {
       const result = await resetPassword(normalizedEmail, otp, parsed.data);
       if (!result.ok) {
         setBusy(false);
-        if (nextAfterResetFailure(result.code) === "verify") {
+        const next = nextAfterResetFailure(result.code);
+        if (next === "signIn") {
+          // The password is set and the code spent; only the sign-in after it did not go through.
+          clearPendingOtp();
+          leaveTo(router, { pathname: "/sign-in", params: { notice: "reset" } });
+          return;
+        }
+        if (next === "verify") {
           // The code itself no longer works: Verify, with Resend open and why — the code never goes in the params.
           clearPendingOtp();
           router.replace({
