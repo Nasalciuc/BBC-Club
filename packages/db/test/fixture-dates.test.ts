@@ -38,6 +38,17 @@ describe("liveValidUntil", () => {
     }
   });
 
+  it("keeps 29 February on the last day of February in a year without one, and back on the 29th in a leap year", () => {
+    const leapDay = "2024-02-29T12:00:00Z";
+    expect(liveValidUntil(leapDay, new Date("2026-01-01T00:00:00Z")).toISOString()).toBe("2026-02-28T12:00:00.000Z");
+    expect(liveValidUntil(leapDay, new Date("2027-03-01T00:00:00Z")).toISOString()).toBe("2028-02-29T12:00:00.000Z");
+    expect(liveValidUntil(leapDay, new Date("2024-01-01T00:00:00Z")).toISOString()).toBe("2024-02-29T12:00:00.000Z");
+    // A day other than the 29th is never moved within its month.
+    expect(liveValidUntil("2024-02-28T08:30:00Z", new Date("2025-03-01T00:00:00Z")).toISOString()).toBe(
+      "2026-02-28T08:30:00.000Z",
+    );
+  });
+
   it("refuses a validity that is not a date", () => {
     expect(() => liveValidUntil("end of October", new Date("2026-11-01T00:00:00Z"))).toThrow(/not a date/);
   });
