@@ -10,6 +10,7 @@ import type { EventPublisher } from "../ports/events";
 import type { Executor } from "@bbc/db";
 import { ac, roles } from "./access";
 import { claimOtpSend, releaseOtpClaim } from "./otp-cooldown";
+import { clubGuards } from "./club-guards";
 import * as authSchema from "./schema"; // generated: `npx @better-auth/cli generate` → auth.* tables (pgSchema "auth")
 
 export type Logger = {
@@ -48,7 +49,7 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
     // Better Auth's own routes that check it, which the app never calls, would let a session guess it: /change-password
     // three times every ten seconds from each address, /verify-password sixty a minute. Only the HTTP router reads this
     // list: the club's route still calls auth.api.changePassword in-process. /delete-user stays (the app deletes there;
-    // customRules).
+    // customRules; club-guards asks for the password every time).
     disabledPaths: ["/change-password", "/verify-password"],
 
     emailAndPassword: {
@@ -141,6 +142,7 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
 
     plugins: [
       expo(),
+      clubGuards(),
       emailOTP({
         otpLength: 6,
         expiresIn: FIFTEEN_MINUTES,

@@ -41,8 +41,9 @@ export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFac
       await next();
     };
 
-  async function deleteAccount(headers: Headers): Promise<void> {
-    await auth.api.deleteUser({ headers, body: {} });
+  /** The same rule as the app's route: the password is asked for every time (club-guards runs for in-process calls). */
+  async function deleteAccount(headers: Headers, password: string): Promise<void> {
+    await auth.api.deleteUser({ headers, body: { password } });
   }
 
   async function listUsersCreatedBefore(

@@ -12,7 +12,8 @@ export type IdentityFacade = {
   getSession(headers: Headers): Promise<SessionInfo | null>;
   requireMember: MiddlewareHandler<AuthVars>;
   requireRole(...allowed: string[]): MiddlewareHandler<AuthVars>;
-  deleteAccount(headers: Headers): Promise<void>;
+  /** Deletes the signed-in member's account; refused without the right password (INVALID_PASSWORD). */
+  deleteAccount(headers: Headers, password: string): Promise<void>;
   listUsersCreatedBefore(before: Date, limit?: number): Promise<{ id: string; email: string; createdAt: Date }[]>;
 };
 

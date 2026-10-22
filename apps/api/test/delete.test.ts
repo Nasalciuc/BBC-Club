@@ -40,7 +40,7 @@ describe("account deletion — zero rows everywhere", () => {
     const createdBody = (await created.json()) as { id: string };
 
     const identity = t.registry.facade<any>("identity");
-    await identity.deleteAccount(new Headers({ Cookie: t.memberA.cookie }));
+    await identity.deleteAccount(new Headers({ Cookie: t.memberA.cookie }), t.memberA.password);
     await t.drainAll();
 
     const count = async (schema: string, table: string, col: string) => {
@@ -78,6 +78,61 @@ describe("account deletion — zero rows everywhere", () => {
     expect(tombstoned.every((e) => !JSON.stringify(e.payload).includes(email))).toBe(true);
     // platform.domain_events keeps the rows; payload is tombstoned (G11 names the table).
     expect(tombstoned.length).toBeGreaterThan(0);
+    await t.close();
+  });
+});
+
+/** Better Auth 1.6.31 checks the password only `if (ctx.body.password)`: an empty one skipped it, and a session signed in
+ *  within a day deleted the account with nothing typed. The club asks for the password every time. */
+describe("account deletion needs the password", () => {
+  it("an empty, missing or wrong password deletes nothing; the right one deletes the account", async () => {
+    const t = await testApp({ suite: "delete-password" });
+    const memberId = t.memberA.id;
+    let ip = 10;
+    // /delete-user allows 3 an hour per address: each attempt from its own, so the limit does not answer for the hook.
+    const del = (body: unknown) =>
+      t.app.request("/api/auth/delete-user", {
+        method: "POST",
+        headers: {
+          Cookie: t.memberA.cookie,
+          "Content-Type": "application/json",
+          Origin: t.appOrigin,
+          "X-Forwarded-For": `203.0.113.${ip++}, 173.245.48.1`,
+        },
+        body: JSON.stringify(body),
+      });
+    const users = async () => {
+      const rows: any[] = await t.db.execute(sql`SELECT count(*)::int AS n FROM auth."user" WHERE id = ${memberId}`);
+      return Number(rows[0]?.n ?? 0);
+    };
+
+    for (const body of [{ password: "" }, { password: "   " }, {}]) {
+      const r = await del(body);
+      expect(r.status).toBe(400);
+      // The code the app already maps to the field's error (and never to "deleted").
+      expect(((await r.json()) as { code?: string }).code).toBe("INVALID_PASSWORD");
+      expect(await users()).toBe(1);
+    }
+
+    const wrong = await del({ password: "not-the-password" });
+    expect(wrong.status).toBe(400);
+    expect(((await wrong.json()) as { code?: string }).code).toBe("INVALID_PASSWORD");
+    expect(await users()).toBe(1);
+
+    const right = await del({ password: t.memberA.password });
+    expect(right.status).toBe(200);
+    expect(await users()).toBe(0);
+    await t.close();
+  });
+
+  it("the facade asks for the password too: in-process calls run the same hook", async () => {
+    const t = await testApp({ suite: "delete-facade" });
+    const identity = t.registry.facade<any>("identity");
+    await expect(identity.deleteAccount(new Headers({ Cookie: t.memberA.cookie }), "")).rejects.toMatchObject({
+      body: { code: "INVALID_PASSWORD" },
+    });
+    const rows: any[] = await t.db.execute(sql`SELECT count(*)::int AS n FROM auth."user" WHERE id = ${t.memberA.id}`);
+    expect(Number(rows[0]?.n)).toBe(1);
     await t.close();
   });
 });
