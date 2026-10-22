@@ -1,12 +1,14 @@
-import { and, eq, gt, or, sql, isNull, desc, lt } from "drizzle-orm";
+import { and, eq, gt, lte, or, sql, isNull, desc, lt } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { offers, offerTargets } from "@bbc/db/schema/proposals";
 
-/** Visibility rule, expressed once: an offer is visible to a member iff it is active, valid, and
- *  broadcast OR targeted at them OR in a segment they belong to. Everything else is 404 for them. */
+/** Visibility rule, expressed once: an offer is visible to a member iff it is active, published (its publish_at has
+ *  come: a later one is a schedule), valid, and broadcast OR targeted at them OR in a segment they belong to.
+ *  Everything else is 404 for them. */
 function visibleTo(actorMemberId: string) {
   return and(
     eq(offers.status, "active"),
+    lte(offers.publishAt, sql`now()`),
     gt(offers.validUntil, sql`now()`),
     or(
       eq(offers.targeting, "broadcast"),
