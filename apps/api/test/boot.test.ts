@@ -133,6 +133,41 @@ describe("host boot", () => {
     await t.close();
   });
 
+  it("a scheduled job whose last finished run failed turns /status red and leaves /ready green", async () => {
+    const t = await testApp({ suite: "boot" });
+    const job = t.platform.jobs.schedule().find((j) => j.name === "retention");
+    expect(job).toBeDefined();
+    const run = (status: "failed" | "succeeded" | "running" | "skipped", secondsFromNow: number) =>
+      t.db.execute(sql`INSERT INTO platform.job_runs (job, status, started_at, finished_at)
+        VALUES ('retention', ${status}::platform.job_run_status, now() + ${secondsFromNow} * interval '1 second',
+                CASE WHEN ${status} = 'running' THEN NULL ELSE now() + ${secondsFromNow} * interval '1 second' END)`);
+    const status = async () => {
+      const res = await t.app.request("/status");
+      return {
+        code: res.status,
+        body: (await res.json()) as { ok: boolean; failingJobs: string[]; staleJobs: string[] },
+      };
+    };
+
+    await run("failed", 1);
+    let s = await status();
+    expect(s.code).toBe(503);
+    expect(s.body.failingJobs).toEqual(["retention"]);
+    expect(s.body.staleJobs).toEqual([]);
+    expect((await t.app.request("/ready")).status).toBe(200);
+
+    // A run still going, or one skipped behind the lock, says nothing yet about the failure.
+    await run("skipped", 2);
+    await run("running", 3);
+    expect((await status()).body.failingJobs).toEqual(["retention"]);
+
+    await run("succeeded", 4);
+    s = await status();
+    expect(s.body.failingJobs).toEqual([]);
+    expect(s.code).toBe(200);
+    await t.close();
+  });
+
   it("a killed module is not mounted and its routes answer 404, other modules unaffected", async () => {
     const t = await testApp({ suite: "boot" });
     await t.flags.kill("requests");

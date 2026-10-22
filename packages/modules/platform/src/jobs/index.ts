@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { desc, inArray, sql } from "drizzle-orm";
 import { CRON_FIELDS_RE, type JobSpec } from "@bbc/shared/platform-specs";
 import { jobRuns } from "../infrastructure/schema";
 import { errorForLog, errorLine, type Db } from "@bbc/db";
@@ -137,6 +137,16 @@ export function createJobs(
       return Object.fromEntries(
         rows.map((r) => [r.job, { status: r.status, at: r.started_at, durationMs: r.duration_ms }]),
       );
+    },
+    /** Last finished run per job, succeeded or failed — a run still going or skipped behind the lock says nothing about
+     *  whether the job works. For /status: a scheduled job whose last finished run failed is failing. */
+    async lastFinishedRuns(): Promise<Record<string, { status: string; at: Date }>> {
+      const rows = await db
+        .selectDistinctOn([jobRuns.job], { job: jobRuns.job, status: jobRuns.status, at: jobRuns.startedAt })
+        .from(jobRuns)
+        .where(inArray(jobRuns.status, ["succeeded", "failed"]))
+        .orderBy(jobRuns.job, desc(jobRuns.startedAt), desc(jobRuns.id));
+      return Object.fromEntries(rows.map((r) => [r.job, { status: r.status, at: r.at }]));
     },
   };
 }

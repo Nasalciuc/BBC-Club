@@ -39,3 +39,16 @@ export function staleJobs(
     })
     .map(({ name }) => name);
 }
+
+/**
+ * The scheduled jobs whose most recent finished run failed — a job that runs on time and fails every time (one member's
+ * time zone failing campaign-fanout each minute) is as wrong as one that stopped. Finished means succeeded or failed:
+ * a run still going, or one skipped behind the singleton lock, says nothing yet. The next successful run clears it.
+ * Runs of jobs not in the schedule are ignored, as for staleJobs.
+ */
+export function failingJobs(
+  finished: Readonly<Record<string, { status: string }>>,
+  schedule: ReadonlyArray<{ name: string }>,
+): string[] {
+  return schedule.filter(({ name }) => finished[name]?.status === "failed").map(({ name }) => name);
+}

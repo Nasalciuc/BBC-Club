@@ -21,7 +21,7 @@ import { authorize, registerRoute } from "./middleware/authorize";
 import { rateLimit } from "./middleware/rate-limit";
 import { DatabaseUnreachable, ModuleRegistry } from "./registry";
 import { appConfig } from "./presentation/mobile/app-config";
-import { staleJobs } from "./cron/stale";
+import { failingJobs, staleJobs } from "./cron/stale";
 import { modules } from "./modules"; // the ordered list of ModuleDescriptors (identity, members, proposals, …)
 
 export type BuildOptions = {
@@ -149,7 +149,8 @@ export async function buildApp(opts: BuildOptions = {}) {
     return c.json({ ok: dbOk, db: dbOk }, dbOk ? 200 : 503);
   });
   // Is the system well: the database, the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job
-  // on time. 503 when not — for Uptime Kuma and for people, never as a deploy gate.
+  // on time and not failing (its last finished run succeeded). 503 when not — for Uptime Kuma and for people, never as
+  // a deploy gate.
   registerRoute("GET", "/status", "public");
   app.get("/status", async (c) => {
     const checks: Record<string, unknown> = {};
@@ -158,9 +159,13 @@ export async function buildApp(opts: BuildOptions = {}) {
     checks.queue = h.queue;
     const runs = await platform.jobs.lastRuns().catch(() => ({}));
     // Each scheduled job against its own schedule; manual and removed jobs never count (src/cron/stale.ts).
-    const stale = staleJobs(runs, platform.jobs.schedule());
+    const schedule = platform.jobs.schedule();
+    const stale = staleJobs(runs, schedule);
     checks.staleJobs = stale;
-    const ok = checks.db === true && h.ok && stale.length === 0;
+    const finished = await platform.jobs.lastFinishedRuns().catch(() => ({}));
+    const failing = failingJobs(finished, schedule);
+    checks.failingJobs = failing;
+    const ok = checks.db === true && h.ok && stale.length === 0 && failing.length === 0;
     return c.json({ ok, ...checks }, ok ? 200 : 503);
   });
   registerRoute("GET", "/metrics", "public");

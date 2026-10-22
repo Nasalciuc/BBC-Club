@@ -18,12 +18,12 @@ ssh -L 5432:localhost:5432 -L 3001:localhost:3001 root@<host>   # then connect t
 cd /opt/bbc
 DC="docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env"
 $DC ps
-$DC exec -T api bun -e "fetch('http://localhost:8000/status').then(r=>r.text()).then(t=>console.log(t))" | jq   # db, queue, staleJobs (503 when unwell)
+$DC exec -T api bun -e "fetch('http://localhost:8000/status').then(r=>r.text()).then(t=>console.log(t))" | jq   # db, queue, staleJobs, failingJobs (503 when unwell)
 $DC exec -T api bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
 $DC exec -T worker bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
 ```
 
-Request counters on `/metrics` are **per Bun process**; `exec` asks the first API replica. Caddy answers 404 for `/metrics`, `/ready`, `/status` and `/worker-metrics` to every address but its own: closed from the internet, and to a `curl` on the box too, which reaches Caddy from Docker's bridge address. The commands above ask each process directly. `/ready` is that one process — not draining, its database answers — and is what deploys wait on; `/status` is the system — the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job on time — and is what Uptime Kuma watches. A dead letter turns `/status` red and leaves `/ready` green, so the deploy that fixes it still rolls. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`, so they are on the worker's `/metrics` (port 8001), the third command. Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
+Request counters on `/metrics` are **per Bun process**; `exec` asks the first API replica. Caddy answers 404 for `/metrics`, `/ready`, `/status` and `/worker-metrics` to every address but its own: closed from the internet, and to a `curl` on the box too, which reaches Caddy from Docker's bridge address. The commands above ask each process directly. `/ready` is that one process — not draining, its database answers — and is what deploys wait on; `/status` is the system — the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job on time (`staleJobs`) and not failing (`failingJobs`: its last finished run failed; the next run that succeeds clears it) — and is what Uptime Kuma watches. A dead letter turns `/status` red and leaves `/ready` green, so the deploy that fixes it still rolls. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`, so they are on the worker's `/metrics` (port 8001), the third command. Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
 
 GlitchTip uses **its own Postgres** (`glitchtip-postgres`). It is not in the pgBackRest stanza.
 
@@ -56,7 +56,7 @@ After `shared_preload_libraries=pg_stat_statements` changes, Postgres must resta
 - Caddy is recreated once (new mounts, and its four settings instead of all of `production.env`): a few seconds without traffic, at the first production deploy or the first staging deploy of `main`.
 - MinIO keeps the credentials it started with — staging's, from the old `staging.env` — until it is recreated once with production's: `docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env up -d --no-deps minio`. Nothing in the app uses it yet; before R1b at the latest.
 - Postgres keeps its old container settings until it is recreated on purpose (§ Memory and replicas); `oom_score_adj` -500 and the 60 s stop grace period start then. On staging, step 4 recreates `pgbouncer-staging` once (its new memory limit): a moment of errors on staging only.
-- Uptime Kuma monitors made before R1 watch `/ready`, which now answers for one process: point the system monitor at `http://api:8000/status`, red on a dead letter, a stuck queue, or a scheduled job gone late (a stopped worker shows there).
+- Uptime Kuma monitors made before R1 watch `/ready`, which now answers for one process: point the system monitor at `http://api:8000/status`, red on a dead letter, a stuck queue, a scheduled job gone late (a stopped worker shows there) or one whose last finished run failed.
 - Until Caddy takes R1's Caddyfile, the old one sends `/status` to the API like any path, so it answers from outside: the queue's counts and the names of late jobs, nothing about members.
 
 ## Roll back right now
@@ -266,7 +266,7 @@ flags, both seeded off; with both off the job asks the site nothing.
 All or nothing: a region or a country that does not answer, fewer than 80 % of last night's cities listed or placed on
 their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
 `platform.job_runs` says `failed` and why, and the worker's `/metrics` counts it in
-`bbc_job_failed{job="sync-site-destinations"}` (`/status` shows a job that stopped running, not one that fails). A
+`bbc_job_failed{job="sync-site-destinations"}`, and `/status` turns red with the job in `failingJobs` until a run succeeds. A
 single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no answer, a 5xx)
 keeps last night's verdict. The run's counts are in `platform.job_runs`; the log lines `site: no airport`,
 `site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`, `site: photo does not answer`,
