@@ -1,5 +1,5 @@
 import { authClient, waitForSessionCookie } from "./client";
-import { authMessage, CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
+import { CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
 import { resetUnreadQuotes } from "@/features/requests/unread-quotes-store";
 import { clearSaved } from "@/features/saved/saved";
 import { fetchPasswordStatus, postAccountPassword } from "@/lib/api";
@@ -8,6 +8,7 @@ import { clearQueue } from "@/lib/queue";
 import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
+import { fail, refuseEmptyPassword, type FlowResult } from "./flows-logic";
 import { otpSendResult } from "./otp-send-logic";
 
 /** Unregister push, drop pending queue, the Requests dot's number and what was saved, clear onboarded — then auth
@@ -21,18 +22,10 @@ async function clearLocalSession(): Promise<void> {
   appStorage.remove(PENDING_PASSWORD_KEY);
 }
 
-type Result = { ok: true; message?: string } | { ok: false; message: string; code?: string };
+type Result = FlowResult;
 
 /** Cookie not in SecureStore yet (or lost) — set-password would 401 with "Please sign in." */
 const SESSION_NOT_READY = "Your session isn't ready. Verify your email code again.";
-
-const RATE_LIMIT_CODES = new Set(["RATE_LIMITED", "TOO_MANY_REQUESTS", "TOO_MANY_ATTEMPTS"]);
-
-function fail(err: { code?: string; message?: string; status?: number } | null | undefined): Result {
-  const code =
-    err?.status === 429 || (err?.code != null && RATE_LIMIT_CODES.has(err.code)) ? "RATE_LIMITED" : err?.code;
-  return { ok: false, message: authMessage(code), code };
-}
 
 function fromNetwork(e: unknown): Result {
   const n = networkFail(e instanceof NetworkError ? e : e);
@@ -155,8 +148,11 @@ export async function signOut(): Promise<void> {
   await withAuthTimeout(authClient.signOut()).catch(() => undefined);
 }
 
-/** Account deletion (Apple 5.1.1(v)); the confirmation sheet re-asks the password before calling this. */
+/** Account deletion (Apple 5.1.1(v)); the confirmation sheet re-asks the password before calling this, and an empty
+ *  one is refused here, never sent (flows-logic.ts). */
 export async function deleteAccount(password: string): Promise<Result> {
+  const refused = refuseEmptyPassword(password);
+  if (refused) return refused;
   try {
     const { error } = await withAuthTimeout(authClient.deleteUser({ password }));
     if (error) return fail(error);

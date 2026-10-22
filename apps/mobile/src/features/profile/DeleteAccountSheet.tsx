@@ -16,6 +16,7 @@ import {
 
 import { deleteAccount } from "@/features/auth/flows";
 import { deleteFailureKind, stateCopy } from "@/lib/error-context";
+import { canConfirmDelete } from "./delete-logic";
 import { PasswordField } from "./PasswordField";
 import type { ProfileSheetHandle } from "./types";
 
@@ -102,6 +103,8 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
             height={DELETE_PARTS.pill}
             text="buttonDelete"
             busy={busy}
+            // Only with the password typed: the server deletes on an empty one (delete-logic.ts).
+            disabled={!canConfirmDelete(password, busy)}
             onPress={() => void onDelete()}
           />
           <TextButton
