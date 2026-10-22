@@ -63,6 +63,8 @@ type Ports = { email: EmailFacade };
 export type IdentityModuleOptions = {
   /** Replaces the breach list (HIBP) with a predicate; it may throw to stand for an unreachable list. */
   breachedPassword?: (password: string) => boolean | Promise<boolean>;
+  /** The floor under a reset or verification code's answer (default: Postmark's timeout, 4 s). */
+  otpAnswerFloorMs?: number;
 };
 
 /** Wiring only. Better Auth's hooks have no transaction of their own, so the EventPublisher port takes a
@@ -237,7 +239,7 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
     );
 
     return {
-      exposes: { ...createIdentityFacade(auth, conn), auth },
+      exposes: { ...createIdentityFacade(auth, conn, { otpAnswerFloorMs: opts.otpAnswerFloorMs }), auth },
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [],
       jobs: [],

@@ -4,6 +4,7 @@ import type { Executor } from "@bbc/db";
 import type { Auth } from "../infrastructure/auth";
 import { user } from "../infrastructure/schema";
 import { otpSendLock, otpSendTarget } from "../infrastructure/otp-send-lock";
+import { POSTMARK_TIMEOUT_MS } from "@bbc/email";
 import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
 
 export type { Member, AuthVars, SessionInfo, IdentityFacade };
@@ -11,8 +12,20 @@ export type { Member, AuthVars, SessionInfo, IdentityFacade };
 /** Methods that change nothing: they may answer from the cookie cache. Every other method reads the session fresh. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/** Code types Better Auth mails only to an existing account: their answers wait for the floor. */
+const FLOORED_CODE_TYPES = new Set(["forget-password", "email-verification"]);
+
+export type IdentityFacadeOptions = {
+  /** The floor under a reset or verification code's answer. Default: Postmark's timeout. Tests make it short. */
+  otpAnswerFloorMs?: number;
+};
+
 /** Implementation — imported by module.ts, not by other packages via api/index.ts. */
-export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFacade, "auth"> {
+export function createIdentityFacade(
+  auth: Auth,
+  db: Executor,
+  opts: IdentityFacadeOptions = {},
+): Omit<IdentityFacade, "auth"> {
   /** `fresh` reads the session row and its user from the database instead of the signed cookie cache
    *  (SESSION_COOKIE_CACHE_SECONDS): a deleted member or an ended session is anonymous at once, not a minute later. */
   async function getSession(headers: Headers, opts: { fresh?: boolean } = {}): Promise<SessionInfo | null> {
@@ -71,12 +84,24 @@ export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFac
   }
 
   const withOtpSendLock = otpSendLock(db);
+  const answerFloorMs = opts.otpAnswerFloorMs ?? POSTMARK_TIMEOUT_MS;
   /** Better Auth at /api/auth/*. A request that mails a code runs under its address's lock (otp-send-lock.ts), so two
-   *  at the same moment mail one code; everything else goes straight through. */
+   *  at the same moment mail one code; everything else goes straight through.
+   *  A reset or verification code is mailed only when the address has an account, and Better Auth answers an unknown
+   *  address before sending anything: the time told who is a member. Those answers are held until a floor (Postmark's
+   *  timeout, the longest a send takes) has passed since the request came in — counted before the lock, so waiting on
+   *  it tells nothing either, and waited out after the lock is released, so no connection is held meanwhile. A sign-in
+   *  code goes to any address (nothing to hide, and a failure must reach Join at once); a 429 stays immediate (per IP). */
   const handler: Auth["handler"] = async (req) => {
     const target = await otpSendTarget(req);
     if (!target) return auth.handler(req);
-    return withOtpSendLock(target, () => auth.handler(req));
+    const receivedAt = Date.now();
+    const res = await withOtpSendLock(target, () => auth.handler(req));
+    if (FLOORED_CODE_TYPES.has(target.type) && res.status !== 429) {
+      const wait = receivedAt + answerFloorMs - Date.now();
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+    return res;
   };
 
   return { handler, getSession, requireMember, requireRole, deleteAccount, listUsersCreatedBefore };

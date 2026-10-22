@@ -43,7 +43,7 @@ describe("OTP colleagues + per-email cooldown", () => {
   });
 
   it("a sign-in code that could not be mailed is answered 503 EMAIL_UNDELIVERABLE; the retry mails it", async () => {
-    const t = await testApp({ suite: "otp-fail-retry" });
+    const t = await testApp({ suite: "otp-fail-retry", identity: { otpAnswerFloorMs: 50 } });
     await t.db.execute(sql`DELETE FROM auth.rate_limit`);
     await t.db.execute(sql`DELETE FROM auth.otp_cooldown`);
 
