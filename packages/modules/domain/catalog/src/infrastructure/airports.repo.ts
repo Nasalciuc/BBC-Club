@@ -112,15 +112,17 @@ export const airportsRepo = {
               ),
           )
         : sql`false`;
-    // Two neighbouring letters swapped, from four letters: the city itself or its start, for any one swap. The
-    // variants are letters and spaces only (adjacentSwaps), so LIKE reads them literally; unaccent as the typed text.
+    // Two neighbouring letters swapped, from four letters: the city itself or its start (a prefix pattern matches
+    // both), for any one swap. The variants are letters and spaces only (adjacentSwaps), so LIKE reads them literally;
+    // unaccent as the typed text. The patterns are built once per query (an uncorrelated ARRAY(...) is an InitPlan),
+    // never per airport: unaccenting them row by row made a long query thirty times slower on every keystroke.
     const swaps = adjacentSwaps(raw);
     const swapped =
       swaps.length > 0
-        ? sql`EXISTS (SELECT 1 FROM unnest(ARRAY[${sql.join(
+        ? sql`${city} LIKE ANY (ARRAY(SELECT unaccent(v.s) || '%' FROM unnest(ARRAY[${sql.join(
             swaps.map((s) => sql`${s}`),
             sql`, `,
-          )}]::text[]) AS v(s) WHERE ${city} = unaccent(v.s) OR ${city} LIKE unaccent(v.s) || '%')`
+          )}]::text[]) AS v(s)))`
         : sql`false`;
     // A known country nickname (UK, USA, UAE) means the country — before any code that happens to spell it (USA).
     const tier = sql`CASE
