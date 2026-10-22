@@ -1,8 +1,8 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Linking, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { FareVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
 import { Button, Photo, PhotoCredit, StateMessage, tokens } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
@@ -10,6 +10,7 @@ import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { DestinationDetails } from "@/features/explore/DestinationDetails";
 import { destinationFromParams } from "@/features/explore/destination-route";
+import { HOME_AIRPORT_MESSAGE, isHomeAirport } from "@/features/explore/discovery-logic";
 import { fareHref } from "@/features/explore/open-offer";
 import { rememberDates } from "@/features/explore/recent-searches";
 import {
@@ -18,7 +19,7 @@ import {
   SearchTravelersSheet,
   type TravelersSheetHandle,
 } from "@/features/explore/SearchPreferenceSheets";
-import { useExploreHome } from "@/features/explore/useExploreHome";
+import { DEFAULT_ORIGIN, profileOrigin } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { clubPhoto } from "@/features/places/club-photos";
 import { bandPicture } from "@/features/places/place-photo-logic";
@@ -26,8 +27,9 @@ import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhoto
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
-import { fetchProfile, type Profile } from "@/lib/api";
+import { useProfile } from "@/features/profile/useProfile";
 import { env } from "@/lib/env";
+import { statusBarOn } from "@/lib/status-bar-logic";
 
 /**
  * 04, on a 47-pt status bar: the city's photograph from the screen's top, the sheet over its foot from 217.9 with
@@ -56,18 +58,28 @@ export default function DestinationScreen() {
   const datesRef = useRef<DatesPageHandle>(null);
   const cabinRef = useRef<CabinSheetHandle>(null);
   const travelersRef = useRef<TravelersSheetHandle>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // The one profile every screen shares (F104): read, or asked once.
+  const profile = useProfile();
   const { offline, refresh } = useOffline();
-  const { defaultFrom } = useExploreHome();
-  const { state, dispatch, retry } = useSearch({ defaultFrom });
-  const photoFor = usePlacePhotos([chosen?.airport.code]);
-
+  // The search's origin comes with the page (Search passes it); without it (a link, an older list) the profile's
+  // airport — never all of Home just to learn it (F104).
+  const given = chosen?.origin ?? null;
+  const [found, setFound] = useState<AirportVM | null>(null);
   useEffect(() => {
+    if (given) return;
+    let cancelled = false;
     void (async () => {
-      const result = await fetchProfile();
-      if (result.ok) setProfile(result.data);
-    })();
-  }, []);
+      const airport = await profileOrigin();
+      if (!cancelled) setFound(airport);
+    })().catch(() => {
+      if (!cancelled) setFound(DEFAULT_ORIGIN);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [given?.code]);
+  const { state, dispatch, retry } = useSearch({ defaultFrom: given ?? found });
+  const photoFor = usePlacePhotos([chosen?.airport.code]);
 
   // The member's usual cabin and travelers first, then the destination with the dates it was last searched for.
   const usualCabin = profile?.preferences.cabin;
@@ -106,6 +118,8 @@ export default function DestinationScreen() {
   }
 
   const search: SearchContext = { dates: state.dates, cabin: state.cabin, passengers: state.passengers };
+  // Opened on the member's own airport (a link, a list from before): no search and no quote for a trip to itself.
+  const ownAirport = isHomeAirport(chosen.airport.code, state.from);
   const heroHeight = insets.top + PAGE.sheetTop + PAGE.corner;
   // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo.
   const bundled = clubPhoto(chosen.airport.code, "any");
@@ -126,7 +140,7 @@ export default function DestinationScreen() {
 
   return (
     <View style={styles.root} testID="destination.root">
-      <ScreenStatusBar on="dark" />
+      <ScreenStatusBar on={statusBarOn({ hasImage: Boolean(bundled ?? band.source), pastHero: false })} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={{ height: heroHeight }}>
           <Photo
@@ -139,40 +153,56 @@ export default function DestinationScreen() {
           />
         </View>
         <View style={styles.sheet}>
-          <DestinationDetails
-            look="page"
-            testIDPrefix="destination"
-            state={state}
-            offline={offline}
-            onRetry={retrySearch}
-            onOpenFare={(fare: FareVM) =>
-              router.push(
-                fareHref(fare.id, fare.offerId, {
-                  depart: state.dates.depart,
-                  return: state.dates.return,
-                  passengers: state.passengers,
-                }),
-              )
-            }
-            onEditDates={() =>
-              datesRef.current?.present(
-                {
-                  tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
-                  depart: state.dates.depart,
-                  ret: state.dates.return,
-                  editing: "depart",
-                },
-                {
-                  fromCity: state.from?.city,
-                  toCity: chosen.airport.city,
-                  toCode: chosen.airport.code,
-                  flexible: state.dates.flexible,
-                },
-              )
-            }
-            onEditCabin={() => cabinRef.current?.present(state.cabin)}
-            onEditTravelers={() => travelersRef.current?.present(state.passengers)}
-          />
+          {ownAirport ? (
+            <View style={styles.own}>
+              <StateMessage
+                testID="destination.home"
+                align="center"
+                title={HOME_AIRPORT_MESSAGE.title}
+                body={HOME_AIRPORT_MESSAGE.body}
+                primary={{
+                  label: "Search a city",
+                  testID: "destination.home.search",
+                  onPress: () => router.replace("/search" as Href),
+                }}
+              />
+            </View>
+          ) : (
+            <DestinationDetails
+              look="page"
+              testIDPrefix="destination"
+              state={state}
+              offline={offline}
+              onRetry={retrySearch}
+              onOpenFare={(fare: FareVM) =>
+                router.push(
+                  fareHref(fare.id, fare.offerId, {
+                    depart: state.dates.depart,
+                    return: state.dates.return,
+                    passengers: state.passengers,
+                  }),
+                )
+              }
+              onEditDates={() =>
+                datesRef.current?.present(
+                  {
+                    tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
+                    depart: state.dates.depart,
+                    ret: state.dates.return,
+                    editing: "depart",
+                  },
+                  {
+                    fromCity: state.from?.city,
+                    toCity: chosen.airport.city,
+                    toCode: chosen.airport.code,
+                    flexible: state.dates.flexible,
+                  },
+                )
+              }
+              onEditCabin={() => cabinRef.current?.present(state.cabin)}
+              onEditTravelers={() => travelersRef.current?.present(state.passengers)}
+            />
+          )}
           {credit ? (
             // The credit the photograph owes (ADR-IMPL-043).
             <PhotoCredit
@@ -190,33 +220,39 @@ export default function DestinationScreen() {
           ) : null}
         </View>
       </ScrollView>
-      <View style={styles.footer}>
-        <Button
-          testID="destination.quote"
-          label="Request a quote"
-          variant="primary"
-          height={PAGE.pill.height}
-          text="buttonBold"
-          style={{ paddingBottom: 2 * PAGE.pill.wordsLift }}
-          onPress={() =>
-            requestRef.current?.present({
-              fare: null,
-              profile,
-              fromCode: state.from?.code,
-              toCode: chosen.airport.code,
-              fromCity: state.from?.city,
-              city: chosen.airport.city,
-              search,
-              estimateShown: state.status === "empty" && state.estimate !== null,
-            })
-          }
-        />
-      </View>
+      {ownAirport ? null : (
+        <View style={styles.footer}>
+          <Button
+            testID="destination.quote"
+            label="Request a quote"
+            variant="primary"
+            height={PAGE.pill.height}
+            text="buttonBold"
+            style={{ paddingBottom: 2 * PAGE.pill.wordsLift }}
+            onPress={() =>
+              requestRef.current?.present({
+                fare: null,
+                profile,
+                fromCode: state.from?.code,
+                toCode: chosen.airport.code,
+                fromCity: state.from?.city,
+                city: chosen.airport.city,
+                search,
+                estimateShown: state.status === "empty" && state.estimate !== null,
+              })
+            }
+          />
+        </View>
+      )}
       <RootTabBar active="explore" />
       <RequestSheet ref={requestRef} />
       <DatesPage
         ref={datesRef}
-        onFlexible={() => dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } })}
+        onFlexible={() => {
+          dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } });
+          // Flexible: the dates remembered for the destination are forgotten, so Search brings none back.
+          rememberDates(chosen.airport.code, null);
+        }}
         onUse={(sel) => {
           const dates = {
             depart: sel.depart,
@@ -239,6 +275,7 @@ export default function DestinationScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   missing: { justifyContent: "center", paddingHorizontal: tokens.space.gutter },
+  own: { paddingHorizontal: tokens.space.gutter, paddingVertical: tokens.space.xl },
   scroll: { paddingBottom: tokens.space.lg },
   sheet: {
     marginTop: -PAGE.corner,

@@ -102,6 +102,8 @@ function failFromBody(
   if (res.status === 429) {
     const header = Number(res.headers.get("Retry-After"));
     const retryAfterS = Number.isFinite(header) && header >= 0 ? Math.ceil(header) : undefined;
+    // errorContext carries which limit refused (POST /v1/requests: `{ scope: "ip" | "member" }`): the rate-limit page
+    // words them apart.
     return {
       ok: false,
       message: authMessage("TOO_MANY_ATTEMPTS"),

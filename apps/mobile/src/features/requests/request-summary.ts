@@ -1,6 +1,7 @@
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 
 import { cabinLabel } from "../explore/travel-preferences";
+import { knownCarrier } from "../fares/known-carrier";
 import { formatPrice } from "../../lib/format";
 import { savingPercent } from "../../lib/saving";
 
@@ -12,7 +13,8 @@ export type RequestSummary = {
   cabin: string;
   /** `JFK 18:55 → LHR 07:00 +1` for a fare with its clocks; `JFK → LHR` otherwise. */
   route: string;
-  /** A fare's airline — its code (the design's mark), its logo where it has one; a quote has none yet. */
+  /** A fare's airline — its code (the design's mark), its logo where it has one; a quote, or a fare that names no
+   *  airline, has none. */
   carrier: { code: string | null; name: string; logoUrl: string | null } | null;
   /**
    * A fare's price and, where the published fare is on record, that fare struck with where it was published and what
@@ -40,6 +42,8 @@ export function requestSummary(input: {
   cabin: "business" | "first";
 }): RequestSummary {
   const { fare } = input;
+  // A fare that names no airline (`Unknown` from the catalogue) shows none, as the server records none.
+  const carrier = knownCarrier(fare?.carrier);
   const named = input.fromCity && input.toCity ? `${input.fromCity} to ${input.toCity}` : null;
   const plus = fare && fare.arriveDayOffset > 0 ? ` +${fare.arriveDayOffset}` : "";
   const route =
@@ -50,7 +54,7 @@ export function requestSummary(input: {
     title: named ?? `${input.from} → ${input.to}`,
     cabin: cabinLabel(input.cabin),
     route,
-    carrier: fare ? { code: fare.carrier.code, name: fare.carrier.name, logoUrl: fare.carrier.logoUrl } : null,
+    carrier: carrier ? { code: carrier.code, name: carrier.name, logoUrl: carrier.logoUrl } : null,
     price: fare ? summaryPrice(fare.price) : null,
   };
 }

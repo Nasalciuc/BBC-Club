@@ -1,6 +1,6 @@
 import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { type ForwardedRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Linking, ScrollView, Share, StyleSheet, Text, type TextStyle, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,7 +23,6 @@ import {
   baselineOffset,
   belowBaseline,
   cabinText,
-  departYmd,
   rn,
   tokens,
 } from "@bbc/ui";
@@ -31,6 +30,7 @@ import {
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
+import { offerFromParams } from "@/features/explore/open-offer";
 import { datesShortLabel, travelersLabel } from "@/features/explore/travel-preferences";
 import { airlineRibbon } from "@/features/fares/airline-marks";
 import { FARE_HERO, FareHero, fareHeroBottom, type HeroPage } from "@/features/fares/FareHero";
@@ -38,23 +38,31 @@ import {
   aboutFareLines,
   aboutFareNote,
   comparisonLine,
+  errorFrameActions,
+  fareDates,
   fareSearchFromParams,
   savings as savingsOf,
   shareFareText,
 } from "@/features/fares/fare-page-logic";
+import { withKnownCarrier } from "@/features/fares/known-carrier";
+import { offerFare } from "@/features/fares/offer-page-logic";
+import { routeFareFor } from "@/features/fares/route-fare";
 import { useFareWeather } from "@/features/fares/weather";
+import { useProfile } from "@/features/profile/useProfile";
 import { CABIN_PHOTOS, clubPhoto } from "@/features/places/club-photos";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
 import { airportByCode } from "@/lib/airport-by-code";
-import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
+import { fetchFare, fetchProposal, type FareGoneContext } from "@/lib/api";
 import { env } from "@/lib/env";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { savingPercent } from "@/lib/saving";
+import { statusBarOn } from "@/lib/status-bar-logic";
 
 /** 21's message. */
 const GONE_TITLE = "This fare is unavailable.";
+const OFFER_GONE_TITLE = "This offer is unavailable.";
 const STATUS = 47;
 
 /**
@@ -93,6 +101,10 @@ export default function FareDetailScreen() {
   const params = useLocalSearchParams();
   const id = typeof params.id === "string" ? params.id : undefined;
   const offerIdParam = typeof params.offerId === "string" ? params.offerId : undefined;
+  // An offer's own page (offerHref, F067): `id` is the offer's, the page shows and requests the offer itself — its
+  // price, never a catalogue fare's. Its route and cabin ride along for a closed offer's alternative.
+  const offerRoute = offerFromParams(params);
+  const offerMode = offerRoute !== null;
   const search = fareSearchFromParams(params);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -100,13 +112,16 @@ export default function FareDetailScreen() {
   const sheetRef = useRef<RequestSheetHandle>(null);
   const aboutRef = useRef<ModalSheetHandle>(null);
   const comparisonRef = useRef<ModalSheetHandle>(null);
-  const [fare, setFare] = useState<FareVM | null>(null);
+  const [catalogFare, setCatalogFare] = useState<FareVM | null>(null);
   const [offer, setOffer] = useState<ProposalDetailVM | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // An offer's page: a catalogue fare on its route, for the flight facts the offer does not state — never its price.
+  const [routeFare, setRouteFare] = useState<FareVM | null>(null);
+  // The one profile every screen shares (F104): read, or asked once.
+  const profile = useProfile();
   const [loading, setLoading] = useState(true);
   const [gone, setGone] = useState<FareGoneContext | true | null>(null);
-  // `retry: false` — a fare that does not exist: asking again cannot bring it, so the page offers no `Try again`.
-  const [error, setError] = useState<{ title: string; body: string; retry?: false } | null>(null);
+  // `status: 404` — a fare that does not exist: asking again cannot bring it, so the page offers the way back instead.
+  const [error, setError] = useState<{ title: string; body: string; status?: number } | null>(null);
   // `Try again` loads the fare again, here — it never leaves the page (ADR-IMPL-047).
   const [reloadToken, setReloadToken] = useState(0);
   // The photograph carries the status bar until the page scrolls it away; the page under it then needs dark glyphs.
@@ -114,36 +129,59 @@ export default function FareDetailScreen() {
   // The route's map needs both airports where they are: asked once the fare is known.
   const [airports, setAirports] = useState<{ from: AirportVM; to: AirportVM } | null>(null);
   const saved = useIsSaved("fare", id);
+  // What the page shows: the fare, or the offer as a fare is shown — at the offer's own price (offerFare).
+  const fare: FareVM | null = offerMode
+    ? offer
+      ? offerFare(offer, routeFare, { from: airports?.from.city, to: airports?.to.city })
+      : null
+    : catalogFare;
   const closed = gone && gone !== true ? gone : null;
-  const city = fare?.to.code ?? closed?.to;
+  const city = fare?.to.code ?? closed?.to ?? offerRoute?.to ?? undefined;
   const photoFor = usePlacePhotos([city]);
-  const dates = { depart: search.depart ?? (fare ? departYmd(fare) : null), return: search.return };
+  // The fare's own day when it has one; a searched range never stands over the flight shown (fareDates).
+  const dates = fare ? fareDates(fare, search) : { depart: search.depart, return: null };
   const weather = useFareWeather();
 
   useEffect(() => {
     if (!id) {
-      setError({ title: stateCopy("route").title, body: GONE_TITLE, retry: false });
+      setError({ title: stateCopy("route").title, body: GONE_TITLE, status: 404 });
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
+    if (offerMode) {
+      void (async () => {
+        const offerResult = await fetchProposal(id);
+        if (!offerResult.ok) {
+          // An offer that has closed (410) or is not there for this member (404): the closed frame, with an
+          // alternative on the same route.
+          if (offerResult.status === 404 || offerResult.status === 410) setGone(true);
+          else setError(readFailureCopy(offerResult.code, "fare"));
+          setLoading(false);
+          return;
+        }
+        setGone(null);
+        setOffer(offerResult.data);
+        setLoading(false);
+      })();
+      return;
+    }
     void (async () => {
-      const [fareResult, profileResult] = await Promise.all([fetchFare(id), fetchProfile()]);
-      if (profileResult.ok) setProfile(profileResult.data);
+      const fareResult = await fetchFare(id);
       if (!fareResult.ok) {
         if (fareResult.status === 410) {
           setGone(fareResult.gone ?? true);
         } else if (fareResult.status === 404) {
-          // An unknown id (a link): the same words as no id at all, and no `Try again` (ADR-IMPL-047).
-          setError({ title: stateCopy("route").title, body: GONE_TITLE, retry: false });
+          // An unknown id (a link): the same words as no id at all, and the way back, not `Try again` (ADR-IMPL-047).
+          setError({ title: stateCopy("route").title, body: GONE_TITLE, status: 404 });
         } else {
           setError(readFailureCopy(fareResult.code, "fare"));
         }
         setLoading(false);
         return;
       }
-      setFare(fareResult.data);
+      setCatalogFare(fareResult.data);
       const resolvedOfferId =
         (offerIdParam && offerIdParam.length > 0 ? offerIdParam : null) ?? fareResult.data.offerId;
       if (resolvedOfferId) {
@@ -152,7 +190,23 @@ export default function FareDetailScreen() {
       }
       setLoading(false);
     })();
-  }, [id, offerIdParam, reloadToken]);
+  }, [id, offerIdParam, offerMode, reloadToken]);
+
+  // An offer's page: the catalogue's fare on the offer's route and cabin, for the facts the offer does not state.
+  const offerFrom = offerMode ? offer?.route.from : undefined;
+  const offerTo = offerMode ? offer?.route.to : undefined;
+  const offerCabin = offerMode ? offer?.cabin : undefined;
+  useEffect(() => {
+    if (!offerFrom || !offerTo || !offerCabin) return;
+    let cancelled = false;
+    void (async () => {
+      const found = await routeFareFor({ route: { from: offerFrom, to: offerTo }, cabin: offerCabin });
+      if (!cancelled) setRouteFare(found);
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [offerFrom, offerTo, offerCabin]);
 
   const fromCode = fare?.from.code;
   const toCode = fare?.to.code;
@@ -197,6 +251,9 @@ export default function FareDetailScreen() {
 
   const dy = insets.top - STATUS;
   const heroBottom = fareHeroBottom(Boolean(gone)) + dy;
+  // White glyphs only over a picture: the empty slot while loading, after an error or for a city without one is the
+  // light tint, and so is the page once the photograph has scrolled away (ADR-IMPL-047).
+  const barOn = statusBarOn({ hasImage: Boolean(pages[0]?.source), pastHero });
 
   const creditRow = credit ? (
     // The credit the photograph owes (ADR-IMPL-043).
@@ -224,7 +281,8 @@ export default function FareDetailScreen() {
       gone={Boolean(gone)}
       onBack={() => router.back()}
       actions={
-        fare && id
+        // Share and the heart are a fare's: its link and the saved fares name fares, never offers.
+        fare && id && !offerMode
           ? ({ top, size }) => (
               <>
                 <RoundButton
@@ -262,7 +320,7 @@ export default function FareDetailScreen() {
   if (loading) {
     return (
       <View style={styles.root}>
-        <ScreenStatusBar on="dark" />
+        <ScreenStatusBar on={barOn} />
         {hero}
         <View style={styles.skeletons}>
           <Skeleton width="80%" height={33} radius="pill" />
@@ -279,7 +337,7 @@ export default function FareDetailScreen() {
   if (gone) {
     return (
       <View testID="fare.root" style={styles.root}>
-        <ScreenStatusBar on="dark" />
+        <ScreenStatusBar on={barOn} />
         {hero}
         <View style={styles.grow} testID="fare.gone">
           <Text
@@ -291,35 +349,52 @@ export default function FareDetailScreen() {
             ]}
             accessibilityRole="header"
           >
-            {GONE_TITLE}
+            {offerMode ? OFFER_GONE_TITLE : GONE_TITLE}
           </Text>
-          <View
-            style={{
-              marginTop: GONE.pill.top - (GONE.title - baselineOffset(GONE_ROLE) + GONE_ROLE.lineHeight),
-              paddingLeft: GONE.pill.left,
-              paddingRight: GONE.pill.right,
-            }}
-          >
-            <Button
-              testID="fare.alternative"
-              label="Request an alternative"
-              variant="primary"
-              height={GONE.pill.height}
-              text="buttonGone"
-              style={{ paddingBottom: 2 * GONE.pill.lift }}
-              onPress={() =>
-                sheetRef.current?.present({
-                  profile,
-                  mode: "alternative",
-                  replacesFareId: id,
-                  fromCode: closed?.from,
-                  toCode: closed?.to,
-                  fromCity: closed?.fromCity ?? undefined,
-                  city: closed?.toCity ?? closed?.to,
-                })
-              }
-            />
-          </View>
+          {offerMode && !(offerRoute.from && offerRoute.to) ? null : (
+            <View
+              style={{
+                marginTop: GONE.pill.top - (GONE.title - baselineOffset(GONE_ROLE) + GONE_ROLE.lineHeight),
+                paddingLeft: GONE.pill.left,
+                paddingRight: GONE.pill.right,
+              }}
+            >
+              <Button
+                testID="fare.alternative"
+                label="Request an alternative"
+                variant="primary"
+                height={GONE.pill.height}
+                text="buttonGone"
+                style={{ paddingBottom: 2 * GONE.pill.lift }}
+                onPress={() =>
+                  sheetRef.current?.present(
+                    offerMode
+                      ? // A closed offer names no fare to replace: the specialist quotes its route and cabin.
+                        {
+                          profile,
+                          mode: "quote",
+                          fromCode: offerRoute.from ?? undefined,
+                          toCode: offerRoute.to ?? undefined,
+                          search: {
+                            dates: { depart: null, return: null, flexible: true },
+                            cabin: offerRoute.cabin ?? profile?.preferences.cabin ?? "business",
+                            passengers: profile?.preferences.passengers ?? { adult: 1, child: 0, infant: 0 },
+                          },
+                        }
+                      : {
+                          profile,
+                          mode: "alternative",
+                          replacesFareId: id,
+                          fromCode: closed?.from,
+                          toCode: closed?.to,
+                          fromCity: closed?.fromCity ?? undefined,
+                          city: closed?.toCity ?? closed?.to,
+                        },
+                  )
+                }
+              />
+            </View>
+          )}
           {creditRow}
         </View>
         <RootTabBar active="explore" />
@@ -332,7 +407,7 @@ export default function FareDetailScreen() {
     const copy = error ?? stateCopy("route");
     return (
       <View testID="fare.root" style={styles.root}>
-        <ScreenStatusBar on="dark" />
+        <ScreenStatusBar on={barOn} />
         {hero}
         <View style={[styles.message, styles.grow]}>
           <StateMessage
@@ -341,8 +416,15 @@ export default function FareDetailScreen() {
             title={copy.title}
             body={copy.body}
             primary={
-              error?.retry === false
-                ? undefined
+              errorFrameActions({ status: error?.status }).includes("back")
+                ? {
+                    label: "Back to Explore",
+                    testID: "fare.notFound.back",
+                    onPress: () => {
+                      if (router.canGoBack()) router.back();
+                      else router.replace("/(tabs)/explore" as Href);
+                    },
+                  }
                 : { label: "Try again", testID: "fare.error.retry", onPress: () => setReloadToken((n) => n + 1) }
             }
           />
@@ -363,7 +445,7 @@ export default function FareDetailScreen() {
 
   return (
     <View testID="fare.root" style={styles.root}>
-      <ScreenStatusBar on={pastHero ? "light" : "dark"} />
+      <ScreenStatusBar on={barOn} />
       <ScrollView
         scrollEventThrottle={16}
         onScroll={(e) => {
@@ -426,7 +508,12 @@ export default function FareDetailScreen() {
             marginRight: PAGE.overview.right,
           }}
         >
-          <FareOverviewCard testID="fare.flight" fare={fare} ribbon={airlineRibbon(fare.carrier.code)} />
+          <FareOverviewCard
+            testID="fare.flight"
+            // A fare that names no airline prints none (never `Unknown`), as the request records none.
+            fare={withKnownCarrier(fare)}
+            ribbon={airlineRibbon(fare.carrier.code)}
+          />
         </View>
         <View
           style={{
@@ -480,7 +567,18 @@ export default function FareDetailScreen() {
           style={{ paddingBottom: 2 * PAGE.pill.lift }}
           onPress={() =>
             sheetRef.current?.present({
-              fare,
+              // An offer's page asks for the offer itself — its id and its price (F067); a fare's, for the fare.
+              ...(offerMode && offer
+                ? {
+                    fare: null,
+                    offer,
+                    facts: fare,
+                    fromCode: fare.from.code,
+                    toCode: fare.to.code,
+                    fromCity: fare.from.city !== fare.from.code ? fare.from.city : undefined,
+                    city: fare.to.city !== fare.to.code ? fare.to.city : undefined,
+                  }
+                : { fare }),
               profile,
               confirmation: offer ? "offer" : "search",
               photo: offer?.mediaUrl ?? null,
@@ -503,8 +601,8 @@ export default function FareDetailScreen() {
       <AboutFareSheet
         ref={aboutRef}
         fare={fare}
-        depart={search.depart ?? departYmd(fare)}
-        ret={search.depart ? search.return : null}
+        depart={dates.depart}
+        ret={dates.return}
         passengers={search.passengers}
       />
       {comparable ? <ComparisonSheet ref={comparisonRef} fare={fare} /> : null}

@@ -1,17 +1,29 @@
 import { StyleSheet, Text, View } from "react-native";
 import type { HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
-import { CAROUSEL_PAD, HOME_SHEET_HANDLE, OfferCardWide, TextButton, baselineOffset, rn, tokens } from "@bbc/ui";
+import {
+  CAROUSEL_PAD,
+  CarouselRow,
+  HOME_SHEET_HANDLE,
+  OfferCardWide,
+  Skeleton,
+  TextButton,
+  baselineOffset,
+  rn,
+  tokens,
+} from "@bbc/ui";
 
 import { CLUB_PICTURE, usePlacePhotos } from "@/features/places/usePlacePhotos";
 
-import { offerCardModel } from "./offer-card-logic";
+import { offerCardModel, sheetExpandedState } from "./offer-card-logic";
 import { NoOffers, OfferCards, offerPicture } from "./SheetRest";
 
 type Section = HomeVM["sections"][number];
 
 type Props = {
   home: HomeVM | null;
+  /** Home is on its way: the cards' places, never `No offers yet.` before it answered (ADR-IMPL-047). */
+  homeLoading: boolean;
   onOpenOffer: (card: ProposalCardVM) => void;
   onSearch: () => void;
 };
@@ -37,6 +49,9 @@ const ALL = {
   rowGap: 8,
   halfHeight: 96.7,
   fullHeight: 74.8,
+  /** The inspire row's first card from the screen's edge, and its cards' width (OfferCard `look="sheet"`). */
+  sheetCardsInset: 11.2,
+  sheetCard: { width: 121.4 },
 } as const;
 /** With no offer at all, the message's title 77.5 under the content's top, as 17 sets it under its section. */
 const NO_OFFERS_TOP = 77.5;
@@ -80,7 +95,8 @@ function placeRegions(regions: readonly Section[], afterInspire: boolean): Place
  * the server's order and words (`To Europe`, `To Asia`, `To the Middle East`) with its cards laid sideways — two to a
  * row, one across the row when it stands alone. Everything is on the page already, so no `See all` here.
  */
-export function SheetExpanded({ home, onOpenOffer, onSearch }: Props) {
+export function SheetExpanded({ home, homeLoading, onOpenOffer, onSearch }: Props) {
+  const shown = sheetExpandedState(home, homeLoading);
   const sections = home?.sections ?? [];
   const inspire = sections.find((s) => s.key === "inspire")?.items ?? [];
   const regions = sections.filter((s) => s.key !== "inspire" && s.items.length > 0);
@@ -124,9 +140,30 @@ export function SheetExpanded({ home, onOpenOffer, onSearch }: Props) {
 
   const inspireTitleTop = ALL.titleBaseline - baselineOffset(titleType);
 
+  if (shown === "loading") {
+    // Home on its way: `Offers to inspire` and its cards' places, as Explore at rest keeps them (SheetRest).
+    return (
+      <View>
+        <Text
+          style={[styles.title, { marginTop: inspireTitleTop, marginLeft: ALL.inspireLeft - gutter }]}
+          accessibilityRole="header"
+        >
+          Offers to inspire
+        </Text>
+        <View style={{ marginTop: ALL.inspireTop - CAROUSEL_PAD - (inspireTitleTop + titleType.lineHeight) }}>
+          <CarouselRow testID="explore.inspire.loading" inset={ALL.sheetCardsInset}>
+            <Skeleton width={ALL.sheetCard.width} height={ALL.inspireHeight} radius="md" />
+            <Skeleton width={ALL.sheetCard.width} height={ALL.inspireHeight} radius="md" />
+            <Skeleton width={ALL.sheetCard.width} height={ALL.inspireHeight} radius="md" />
+          </CarouselRow>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View>
-      {inspire.length === 0 && regions.length === 0 ? (
+      {shown === "empty" ? (
         // No offer at all: the message 77.5 under the sheet's content top, as 17 sets it under its title.
         <NoOffers onSearch={onSearch} marginTop={NO_OFFERS_TOP} />
       ) : (

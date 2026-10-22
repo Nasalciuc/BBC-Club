@@ -55,7 +55,8 @@ export function useSearch(options: Options = {}) {
   }
 
   useEffect(() => {
-    if (!state.from || !state.to) return;
+    // The member's own airport is never searched as a destination (F013): the page says so instead.
+    if (!state.from || !state.to || state.from.code === state.to.code) return;
     const timer = setTimeout(() => runSearch(state.from!, state.to!, state.cabin, state.dates), 250);
     return () => {
       clearTimeout(timer);

@@ -1,5 +1,5 @@
 import * as Notifications from "expo-notifications";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useIsFocused, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,8 +22,7 @@ import {
 
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
-import { destinationHref } from "@/features/explore/destination-route";
-import { cheapestFareOnRoute, fareHref } from "@/features/explore/open-offer";
+import { createTapGuard, openOffer } from "@/features/explore/open-offer";
 import { OfferCards } from "@/features/explore/SheetRest";
 import { useExploreHome } from "@/features/explore/useExploreHome";
 import { airlineMark, airlineRibbon } from "@/features/fares/airline-marks";
@@ -34,8 +33,16 @@ import {
 import { RECEIVED_TRIP_FRAME, clubPhoto, clubReceivedPhoto } from "@/features/places/club-photos";
 import { bandPicture, cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import {
+  type ConfirmationModel,
+  confirmationFromRequest,
+  confirmationRoute,
+  readConfirmation,
+  sentRequestId,
+} from "@/features/requests/confirmation-handoff";
 import { confirmationKind, otherFares, tripFacts, type RequestSource } from "@/features/requests/confirmation-logic";
-import { fetchProfile } from "@/lib/api";
+import { useProfile } from "@/features/profile/useProfile";
+import { fetchRequest } from "@/lib/api";
 import { env } from "@/lib/env";
 import { displayPhone } from "@/lib/phone";
 import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
@@ -124,49 +131,45 @@ export default function RequestConfirmedScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const askRef = useRef<NotificationsAskSheetHandle>(null);
-  const params = useLocalSearchParams<{
-    id?: string;
-    source?: string;
-    queued?: string;
-    city?: string;
-    phone?: string;
-    from?: string;
-    to?: string;
-    cabin?: string;
-    trip?: string;
-    dates?: string;
-    travelers?: string;
-    carrier?: string;
-    airline?: string;
-    logo?: string;
-    media?: string;
-  }>();
-  const text = (v: string | undefined) => (typeof v === "string" ? v : "");
-  const source: RequestSource = params.source === "search" ? "search" : "offer";
-  const kind = confirmationKind(source, params.queued === "1");
-  // The number this request will be called on, as the sheet sent it; the profile's only when the sheet passed none.
-  const requestPhone = text(params.phone) || null;
-  const [profilePhone, setProfilePhone] = useState<string | null>(null);
-  const phone = requestPhone ?? profilePhone;
-  const from = text(params.from);
-  const to = text(params.to);
-  const city = text(params.city);
-  const { home } = useExploreHome();
-  const others = otherFares(home, to);
-  const photoFor = usePlacePhotos(kind === "saved" ? [] : [to]);
-
+  // Only the request's id (or queued key) and whether it was saved offline come from the URL (F014): what the page
+  // shows was handed over by the sheet, in memory — or, after a relaunch or from a link, is read from the request
+  // itself. No phone, city or picture is ever taken from a param.
+  const route = confirmationRoute(useLocalSearchParams());
+  const handedOver = readConfirmation(route.id);
+  const [loaded, setLoaded] = useState<ConfirmationModel | null>(null);
+  const model = handedOver ?? loaded;
+  // The request that was sent, by its server id: read from the server when nothing was handed over, and opened by
+  // `View request`. None for a request saved offline, or for an id a link made up.
+  const sentId = sentRequestId(route);
+  const fromServer = !handedOver && sentId !== null;
   useEffect(() => {
-    // Saved on the phone (offline): this screen names no number, and there is no network to ask.
-    if (requestPhone || kind === "saved") return;
+    if (!fromServer || !sentId) return;
     let cancelled = false;
     void (async () => {
-      const profile = await fetchProfile();
-      if (!cancelled && profile.ok) setProfilePhone(displayPhone(profile.data.phone));
+      const result = await fetchRequest(sentId);
+      if (!cancelled && result.ok) {
+        setLoaded(confirmationFromRequest(result.data, displayPhone(result.data.phone ?? null)));
+      }
     })().catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [requestPhone, kind]);
+  }, [fromServer, sentId]);
+  const source: RequestSource = model?.source ?? "search";
+  const kind = confirmationKind(source, route.queued);
+  // The number this request will be called on, as the sheet sent it; the profile's only when the sheet passed none.
+  const requestPhone = model?.phone || null;
+  // The profile from the one store every screen shares (F104) — asked only when the sheet passed no number. Saved on
+  // the phone (offline): this screen names no number, and there is no network to ask.
+  const profile = useProfile({ load: !requestPhone && kind !== "saved" });
+  const phone = requestPhone ?? (kind === "saved" ? null : displayPhone(profile?.phone ?? null));
+  const from = model?.from ?? "";
+  const to = model?.to ?? "";
+  const city = model?.city ?? "";
+  // Home's offers for `Other great fares` — no origin to resolve here.
+  const { home } = useExploreHome({ origin: false });
+  const others = otherFares(home, to);
+  const photoFor = usePlacePhotos(kind === "saved" ? [] : [to]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,19 +192,19 @@ export default function RequestConfirmedScreen() {
     };
   }, []);
 
-  const id = text(params.id);
   const viewRequest = () => {
-    if (id) router.push(`/request/${id}` as Href);
+    if (sentId) router.push(`/request/${sentId}` as Href);
   };
 
-  async function openOther(card: ProposalCardVM) {
-    const fare = await cheapestFareOnRoute(card);
-    if (fare) {
-      router.push(fareHref(fare.id, card.id));
-      return;
-    }
-    const place = home?.destinations.find((d) => d.code === card.route.to);
-    if (place) router.push(destinationHref(place, null));
+  // `Other great fares` open the offer's own page at once (F067), one navigation at a time (F101).
+  const focused = useIsFocused();
+  const [tapGuard] = useState(() => createTapGuard());
+  useEffect(() => {
+    if (focused) tapGuard.release();
+  }, [focused]);
+
+  function openOther(card: ProposalCardVM) {
+    openOffer(router, card, tapGuard);
   }
 
   if (kind === "saved") {
@@ -269,7 +272,7 @@ export default function RequestConfirmedScreen() {
   const g = PAGE;
   const heroHeight = insets.top + g.hero;
   const own = clubReceivedPhoto(to);
-  const picture = bandPicture(text(params.media) || null, photoFor(to), {
+  const picture = bandPicture(model?.media ?? null, photoFor(to), {
     headers: PICTURE_HEADERS,
     mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
     size: { width, height: heroHeight },
@@ -278,10 +281,10 @@ export default function RequestConfirmedScreen() {
   const heroSource = own?.source ?? picture.source;
   const credit = own ? null : picture.credit;
   const creditLink = credit?.link ?? null;
-  const carrierName = text(params.carrier);
-  const carrier = carrierName ? { name: carrierName, logoUrl: text(params.logo) || null } : null;
-  const airline = text(params.airline) || null;
-  const facts = tripFacts(text(params.trip), text(params.travelers));
+  const carrierName = model?.carrier?.name ?? "";
+  const carrier = carrierName ? { name: carrierName, logoUrl: model?.carrier?.logoUrl ?? null } : null;
+  const airline = model?.carrier?.code ?? null;
+  const facts = tripFacts(model?.trip ?? "", model?.travelers ?? "");
   const lastLine = phone ? phoneRole : body;
 
   return (
@@ -368,15 +371,13 @@ export default function RequestConfirmedScreen() {
             >
               <TripCard
                 testID="confirmation.trip"
-                photo={
-                  clubPhoto(to, "request") ?? cardPicture(text(params.media) || null, photoFor(to), PICTURE_HEADERS)
-                }
+                photo={clubPhoto(to, "request") ?? cardPicture(model?.media ?? null, photoFor(to), PICTURE_HEADERS)}
                 position={clubPhoto(to, "request") ? RECEIVED_TRIP_FRAME : undefined}
                 fallback={CLUB_PICTURE}
-                cabin={params.cabin === "first" ? "FIRST CLASS" : "BUSINESS CLASS"}
+                cabin={model?.cabin === "first" ? "FIRST CLASS" : "BUSINESS CLASS"}
                 from={from}
                 to={to}
-                dates={text(params.dates) || null}
+                dates={model?.dates || null}
                 facts={facts}
                 carrier={carrier}
                 ribbon={carrier ? airlineRibbon(airline) : null}
@@ -454,7 +455,7 @@ export default function RequestConfirmedScreen() {
                 <OfferCards
                   items={others}
                   home={home}
-                  onOpenOffer={(card) => void openOther(card)}
+                  onOpenOffer={openOther}
                   testID="confirmation.others"
                   cardTestID="confirmation.other"
                   compact

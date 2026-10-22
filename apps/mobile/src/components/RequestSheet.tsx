@@ -31,7 +31,14 @@ import { clubPhoto } from "@/features/places/club-photos";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
-import { bodyProblem, retryMinutes, type RequestSource } from "@/features/requests/confirmation-logic";
+import { putConfirmation } from "@/features/requests/confirmation-handoff";
+import {
+  REQUEST_NAME_MAX,
+  bodyProblem,
+  limitScope,
+  retryMinutes,
+  type RequestSource,
+} from "@/features/requests/confirmation-logic";
 import { requestSummary, type RequestSummary } from "@/features/requests/request-summary";
 import {
   buildDraft,
@@ -41,6 +48,7 @@ import {
   useRequestDraft,
   type RequestDraft,
   type RequestMode,
+  type RequestOffer,
   type SearchContext,
 } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
@@ -52,6 +60,10 @@ import { defaultPhoneCountry, displayPhone, validatePhone } from "@/lib/phone";
 export type RequestSheetHandle = {
   present: (opts: {
     fare?: FareVM | null;
+    /** An offer's own page (F067): the request is the offer — its id and price, never a catalogue fare's. */
+    offer?: RequestOffer | null;
+    /** The offer as its page showed it (its facts), for the trip card — always at the offer's own price. */
+    facts?: FareVM | null;
     profile?: Profile | null;
     fromCode?: string;
     toCode?: string;
@@ -74,6 +86,8 @@ export type RequestSheetHandle = {
 };
 
 const NO_SUMMARY: RequestSummary = { title: "", cabin: "", route: "", carrier: null, price: null };
+/** An offer whose page named no airline: none on the trip card (knownCarrier). */
+const NO_AIRLINE = { code: null, name: "", logoUrl: null };
 
 /** `RequestBody.note` takes 500 characters; the field stops there instead of refusing the request. */
 const NOTE_MAX = 500;
@@ -140,7 +154,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     present(opts) {
       const next = buildDraft(opts);
       // A fare found in search confirms as a search does; only an offer has a picture of its own.
-      sourceRef.current = opts.confirmation ?? (opts.fare?.offerId ? "offer" : "search");
+      sourceRef.current = opts.confirmation ?? (opts.offer || opts.fare?.offerId ? "offer" : "search");
       photoRef.current = opts.photo ?? null;
       cityRef.current = opts.fare?.to.city ?? opts.city ?? opts.toCode ?? "";
       // An alternative to an expired fare passes the airport code as `city` (fare/[id].tsx): that is no name.
@@ -149,9 +163,17 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       const outbound = next.legs[0];
       const fromCity = opts.fare?.from.city ?? opts.fromCity ?? null;
       setTrip({ fromCity, toCity: cityNameRef.current, toCode: outbound?.to ?? null, media: opts.photo ?? null });
+      // The trip card: the fare, or the offer as its page showed it — at the offer's own price, which is what is sent.
+      const offer = opts.offer ?? null;
+      const shown = offer
+        ? {
+            ...(opts.facts ?? { carrier: NO_AIRLINE, departLocal: null, arriveLocal: null, arriveDayOffset: 0 }),
+            price: offer.price,
+          }
+        : opts.fare;
       setSummary(
         requestSummary({
-          fare: opts.fare,
+          fare: shown,
           from: outbound?.from ?? "",
           to: outbound?.to ?? "",
           fromCity,
@@ -182,10 +204,11 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     modalRef.current?.dismiss();
     const outbound = state.legs[0];
     const round = state.tripType === "round";
-    const query = new URLSearchParams({
-      id: input.id,
+    // Handed over in memory, keyed by the request's id (saved offline: its queued key) — the URL carries only that key
+    // and whether it was queued, never the phone, the city or a picture (F014).
+    const key = input.id || keyRef.current;
+    putConfirmation(key, {
       source: sourceRef.current,
-      queued: input.queued ? "1" : "0",
       city: cityRef.current,
       phone: input.phone,
       from: outbound?.from ?? "",
@@ -194,11 +217,12 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       trip: state.tripType,
       dates: datesChipLabel({ depart: outbound?.date || null, return: round ? state.legs[1]?.date || null : null }),
       travelers: travelersLabel(state.passengers),
-      carrier: summary.carrier?.name ?? "",
-      airline: summary.carrier?.code ?? "",
-      logo: summary.carrier?.logoUrl ?? "",
-      media: photoRef.current ?? "",
+      carrier: summary.carrier
+        ? { name: summary.carrier.name, code: summary.carrier.code, logoUrl: summary.carrier.logoUrl }
+        : null,
+      media: photoRef.current,
     });
+    const query = new URLSearchParams({ id: key, queued: input.queued ? "1" : "0" });
     router.push(`/request/confirmed?${query.toString()}` as Href);
   }
 
@@ -223,6 +247,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   }
 
   async function submitOnce() {
+    // A new attempt: the last one's notice goes, whatever stops this one (DESIGN.md: never stacked).
+    dispatch({ type: "setSubmitError", error: null });
     if (missingReturn(state.tripType, state.legs[1]?.date)) {
       dispatch({ type: "setReturnError", error: "Select a return date or choose One way." });
       return;
@@ -242,7 +268,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       }),
     );
     if (!valid.success) {
-      dispatch({ type: "setSubmitError", error: bodyProblem(valid.error.issues) });
+      dispatch({ type: "setSubmitError", error: bodyProblem(valid.error.issues, state) });
       return;
     }
     const body = valid.data;
@@ -262,7 +288,10 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       const kind = submitFailureKind(result.code);
       if (kind === "rateLimited") {
         modalRef.current?.dismiss();
-        router.push(`/request/limited?minutes=${retryMinutes(result.retryAfterS)}` as Href);
+        // Which limit refused: the member's own, or an address shared with others (F086) — the page words them apart.
+        const scope = limitScope(result.context);
+        const query = `minutes=${retryMinutes(result.retryAfterS)}${scope ? `&scope=${scope}` : ""}`;
+        router.push(`/request/limited?${query}` as Href);
         return;
       }
       if (kind === "queued") {
@@ -436,6 +465,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
             autoCapitalize="words"
             autoComplete="name"
+            // `RequestBody.contact.name` takes 80 characters: the field stops there instead of refusing the request.
+            maxLength={REQUEST_NAME_MAX}
           />
         </View>
         <View ref={phoneBlock} style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
