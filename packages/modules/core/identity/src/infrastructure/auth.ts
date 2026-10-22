@@ -72,9 +72,9 @@ export function createAuth({ env, db, email, events, logger, metrics, notifyOps,
     // customRules; club-guards asks for the password every time).
     // /sign-up/email: Join is OTP-first (ADR-PROD-001 path A) and the app never calls it. Served, it answered an
     // existing address with a synthetic user whose role was null and a new one with role "member" (an account oracle),
-    // mailed a code to any address it was given, and left an unverified account in the owner's way. In-process
+    // mailed a code to whatever address it was given, and left an unverified account in the owner's way. In-process
     // auth.api.signUpEmail (seed scripts, tests, load bench) is unaffected.
-    // /expo-authorization-proxy (mounted by expo()) redirects to any https URL but the API's own origin: an open redirect
+    // /expo-authorization-proxy (mounted by expo()) redirects to every https URL but the API's own origin: an open redirect
     // on the club's domain, for a social login the club does not have (MODULE.md). expo() stays for the app's cookies. If
     // social login ever ships, allow-list the providers' authorization hosts instead of serving it as it is.
     disabledPaths: ["/change-password", "/verify-password", "/sign-up/email", "/expo-authorization-proxy"],

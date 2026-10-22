@@ -91,7 +91,7 @@ export function createIdentityFacade(
    *  address before sending anything: the time told who is a member. Those answers are held until a floor (Postmark's
    *  timeout, the longest a send takes) has passed since the request came in — counted before the lock, so waiting on
    *  it tells nothing either, and waited out after the lock is released, so no connection is held meanwhile. A sign-in
-   *  code goes to any address (nothing to hide, and a failure must reach Join at once); a 429 stays immediate (per IP). */
+   *  code goes to every address asked (nothing to hide, and a failure must reach Join at once); a 429 stays immediate (per IP). */
   const handler: Auth["handler"] = async (req) => {
     const target = await otpSendTarget(req);
     if (!target) return auth.handler(req);

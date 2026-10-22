@@ -39,7 +39,7 @@ export async function recordOtpSendFailure(failure: OtpSendFailure): Promise<voi
   (await outcome.get()).failure = failure;
 }
 
-/** The failure this request's send recorded, if any. */
+/** The failure this request's send recorded, or null. */
 export async function otpSendFailure(): Promise<OtpSendFailure | null> {
   if (!(await hasRequestState())) return null;
   return (await outcome.get()).failure;
