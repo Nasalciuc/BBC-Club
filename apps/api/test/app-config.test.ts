@@ -67,16 +67,40 @@ describe("appConfig", () => {
     expect(Object.values(cold.killSwitches).some(Boolean)).toBe(false);
   });
 
+  it("carries each platform's store listing the operator set, and only a store or https address", async () => {
+    const ios = "itms-apps://apps.apple.com/app/id1234567890";
+    const android = "market://details?id=com.buybusinessclass.club";
+    const f = fakePlatform({ "app.store_url_ios": { variant: ios }, "app.store_url_android": { variant: android } });
+    expect((await appConfig(f.platform)).storeUrl).toEqual({ ios, android });
+
+    f.state.values["app.store_url_android"] = { variant: "javascript:alert(1)" };
+    f.state.values["app.store_url_ios"] = { variant: "https://apps.apple.com/app/id1234567890" };
+    expect((await appConfig(f.platform)).storeUrl).toEqual({ ios: "https://apps.apple.com/app/id1234567890" });
+
+    f.state.values["app.store_url_ios"] = { variant: "http://apps.apple.com/app/id1234567890" };
+    expect(await appConfig(f.platform)).not.toHaveProperty("storeUrl");
+
+    const unset = fakePlatform({});
+    expect(await appConfig(unset.platform)).not.toHaveProperty("storeUrl");
+  });
+
   it("GET /v1/app-config reads the flags the operator set", async () => {
     const t = await testApp({ suite: "app-config" });
+    expect(await (await t.app.request("/v1/app-config")).json()).not.toHaveProperty("storeUrl");
     await t.flags.set("app.min_supported_version", { variant: "2.0.0" });
     await t.flags.set("app.maintenance_message", { variant: "Back at 10:00." });
+    await t.flags.set("app.store_url_ios", { variant: "https://apps.apple.com/app/id1234567890" });
+    await t.flags.set("app.store_url_android", { variant: "market://details?id=com.buybusinessclass.club" });
     const res = await t.app.request("/v1/app-config");
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({
       minSupportedVersion: "2.0.0",
       maintenance: "Back at 10:00.",
       killSwitches: { requests: false },
+      storeUrl: {
+        ios: "https://apps.apple.com/app/id1234567890",
+        android: "market://details?id=com.buybusinessclass.club",
+      },
     });
     await t.close();
   });

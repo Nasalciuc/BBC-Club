@@ -5,12 +5,26 @@ const KILLABLE = ["proposals", "engagement", "requests", "notifications", "perso
 /** The whole answer's budget: the app waits on it before its first screen. */
 const READ_TIMEOUT_MS = 1_500;
 
+/** Where the forced-update page sends the member. Set once the listings exist; absent until then. */
+export type StoreUrl = { ios?: string; android?: string };
+
 export type AppConfig = {
   minSupportedVersion: string;
   recommendedVersion: string;
   killSwitches: Record<string, boolean>;
   maintenance: string | null;
+  storeUrl?: StoreUrl;
 };
+
+/** A store listing or a web page, nothing the app could be made to run (javascript:, a deep link into itself). */
+const STORE_URL = /^(?:https|itms-apps|market):\/\/\S+$/;
+
+function storeUrlOf(ios: string, android: string): StoreUrl | undefined {
+  const out: StoreUrl = {};
+  if (STORE_URL.test(ios)) out.ios = ios;
+  if (STORE_URL.test(android)) out.android = android;
+  return out.ios || out.android ? out : undefined;
+}
 
 /** A cold process that has never read the flags. */
 const BUILT_IN: AppConfig = {
@@ -34,13 +48,22 @@ async function readAll(platform: Platform): Promise<AppConfig> {
     for (const m of KILLABLE) out[m] = await platform.flags.killState(m);
     return out;
   };
-  const [min, rec, maint, kills] = await Promise.all([
+  const [min, rec, maint, ios, android, kills] = await Promise.all([
     variant("app.min_supported_version", "0.1.0"),
     variant("app.recommended_version", "0.1.0"),
     variant("app.maintenance_message", ""),
+    variant("app.store_url_ios", ""),
+    variant("app.store_url_android", ""),
     killStates(),
   ]);
-  return { minSupportedVersion: min, recommendedVersion: rec, killSwitches: kills, maintenance: maint || null };
+  const storeUrl = storeUrlOf(ios.trim(), android.trim());
+  return {
+    minSupportedVersion: min,
+    recommendedVersion: rec,
+    killSwitches: kills,
+    maintenance: maint || null,
+    ...(storeUrl ? { storeUrl } : {}),
+  };
 }
 
 /** First request of every cold start, before login. Must answer even if the DB is down: any read that fails or does not
