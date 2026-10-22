@@ -88,7 +88,8 @@ export function afterAttempt(
 ): { outcome: ItemOutcome; keep: QueuedRequest | null } {
   const kind = classifySubmit(result);
   if (kind === "sent") return { outcome: "sent", keep: null };
-  // No network, or a session to renew (a 401 signs the member out, which clears the queue): no attempt is counted.
+  // No network, or a session to renew: no attempt is counted. A 401 ends the session but keeps the queue with its owner
+  // (features/auth/flows.ts endRevokedSession): the request goes out once that member signs in again.
   if (kind === "offline") return { outcome: "offline", keep: item };
   if (kind === "session") return { outcome: "failed", keep: item };
   if (kind === "wait") {

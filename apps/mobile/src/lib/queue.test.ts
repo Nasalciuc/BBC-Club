@@ -2,6 +2,7 @@
  *  flush at a time answers the callers that arrive while it runs (ADR-IMPL-041, A2c). */
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { RequestBody } from "@bbc/shared/api/v1/requests";
+import { clearOnExit } from "../features/auth/flows-logic";
 import { parseQueue, type QueuedRequest } from "./queue-logic";
 
 const store = new Map<string, string>();
@@ -318,5 +319,38 @@ describe("whose requests they are", () => {
     while (stoppedAt(writes, "member-a") && stoppedAt(writes, "member-b")) writes += 1;
     // Five writes in that sign-in: B's set aside, the queue emptied, the owner, A's back, A's set-aside gone.
     expect(writes).toBe(5);
+  });
+});
+
+describe("a session's end on the phone (features/auth/flows-logic.ts clearOnExit) with the real queue", () => {
+  const noop = () => undefined;
+  const stores = {
+    clearQueue: () => queue.clearQueue(),
+    resetUnreadQuotes: noop,
+    clearMemberData: noop,
+    forgetLocalOwner: noop,
+    clearPendingPassword: noop,
+  };
+
+  it("a session the server ended (401) keeps a request saved offline: back for its member, set aside for another", () => {
+    queue.adoptQueue("member-a");
+    const saved = queue.enqueueRequest(body, "key-401")!;
+    clearOnExit("revoked", stores);
+    expect(store.get("pending.owner")).toBe("member-a");
+    expect(stored().map((q) => q.id)).toEqual([saved.id]);
+    queue.adoptQueue("member-a");
+    expect(queue.listQueued().map((q) => q.id)).toEqual([saved.id]);
+    queue.adoptQueue("member-b");
+    expect(queue.listQueued()).toEqual([]);
+    queue.adoptQueue("member-a");
+    expect(queue.listQueued().map((q) => q.id)).toEqual([saved.id]);
+  });
+
+  it("the member's own Sign out clears it, as before", () => {
+    queue.adoptQueue("member-a");
+    queue.enqueueRequest(body, "key-out");
+    clearOnExit("signOut", stores);
+    expect(store.has("pending")).toBe(false);
+    expect(store.has("pending.owner")).toBe(false);
   });
 });

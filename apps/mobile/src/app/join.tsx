@@ -42,7 +42,8 @@ export default function JoinScreen() {
   return (
     <AuthShell
       logo="center"
-      onBack="/sign-in"
+      // Back to where Join was opened from; alone on the stack (after a deletion) it goes to Welcome.
+      onBack="/"
       footer={
         <>
           <ClubButton

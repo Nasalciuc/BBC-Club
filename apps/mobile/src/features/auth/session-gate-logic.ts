@@ -36,6 +36,33 @@ export async function loadProfileWith(
   return { kind: "unavailable", status: lastStatus ?? 0 };
 }
 
+/** The phone's zone when the profile's differs (the server's default is America/New_York): quiet hours are the
+ *  member's. Null when equal, or when the phone names no place (features/explore/discovery-logic.ts deviceTimeZone). */
+export function timezoneToSend(profileZone: string, deviceZone: string | null): string | null {
+  return deviceZone && deviceZone !== profileZone ? deviceZone : null;
+}
+
+/** A zone PATCH, and the key it is remembered by: one member, one zone. */
+export type TimezoneUpdate = { zone: string; key: string };
+
+/**
+ * After the gate's own profile load (no extra GET): the zone to PATCH, or null. Only for a living profile (a pending one
+ * has no row yet — onboarding sends the zone with the home airport); never twice for the same member and zone in one run
+ * of the app (`sent` holds the keys already sent), so a zone the server refuses is not sent again on every navigation —
+ * while another member who signs in on this phone in the same run still gets theirs.
+ */
+export function timezoneUpdate(
+  load: ProfileLoad,
+  deviceZone: string | null,
+  sent: ReadonlySet<string>,
+): TimezoneUpdate | null {
+  if (load.kind !== "ok" || load.profile.status === "pending" || load.profile.status === "deleted") return null;
+  const zone = timezoneToSend(load.profile.timezone, deviceZone);
+  if (zone === null) return null;
+  const key = `${load.profile.memberId} ${zone}`;
+  return sent.has(key) ? null : { zone, key };
+}
+
 export type RouteTarget = "/sign-in" | "/set-password" | "/onboarding" | "/(tabs)/explore";
 
 export function routeFor(load: ProfileLoad, onboarded: boolean, passwordPending = false): RouteTarget {

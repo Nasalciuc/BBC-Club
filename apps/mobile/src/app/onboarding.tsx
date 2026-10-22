@@ -26,6 +26,7 @@ import type { AirportVM } from "@bbc/shared/api/v1/fares";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { deviceTimeZone } from "@/features/explore/discovery-logic";
 import { HOME_CARD, HomeAirportCard } from "@/features/onboarding/HomeAirportCard";
+import { onboardingProfilePatch, retryWithoutTimezone } from "@/features/onboarding/onboarding-logic";
 import { airportSearchState, nearFirst, rowCities, wantsAirportSearch } from "@/lib/airport-search-state";
 import { fetchAirports, fetchHomeSuggestion, patchProfile, putTravelPreferences } from "@/lib/api";
 import { stateCopy } from "@/lib/error-context";
@@ -120,7 +121,11 @@ export default function OnboardingScreen() {
     setBusy(true);
     setError(null);
 
-    const airportResult = await patchProfile({ homeAirport: selected.code });
+    // The phone's zone goes with the airport: quiet hours are the member's (the server's default is New York's).
+    const body = onboardingProfilePatch(selected.code, deviceTimeZone());
+    let airportResult = await patchProfile(body);
+    const airportOnly = retryWithoutTimezone(body, airportResult);
+    if (airportOnly) airportResult = await patchProfile(airportOnly);
     if (!airportResult.ok) {
       setBusy(false);
       setError(airportResult.message);
