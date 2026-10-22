@@ -26,6 +26,7 @@ import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
 import { signOut } from "@/features/auth/flows";
 import { leaveTo } from "@/features/auth/leave";
+import { adoptLocalData } from "@/features/auth/local-owner";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
 import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { isOffline } from "@/features/explore/offline-logic";
@@ -170,8 +171,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (!signedIn || !memberId) return;
     // The requests on the phone are this member's: another member's, left by a session that expired, are set aside for
-    // them — never sent under this account (lib/queue.ts).
+    // them — never sent under this account (lib/queue.ts). So are the saved items, recent searches and onboarded flag:
+    // another member's go (features/auth/local-owner.ts; each sign-in does this first, this is the backstop).
     adoptQueue(memberId);
+    adoptLocalData(memberId);
     const submit = (body: Parameters<typeof submitRequest>[0], key: string) => submitRequest(body, key);
     const timer = createFlushTimer({
       pending: listQueued,

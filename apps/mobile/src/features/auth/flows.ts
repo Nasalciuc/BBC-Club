@@ -1,24 +1,24 @@
 import { authClient, waitForSessionCookie } from "./client";
 import { CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
 import { resetUnreadQuotes } from "@/features/requests/unread-quotes-store";
-import { clearSaved } from "@/features/saved/saved";
 import { fetchPasswordStatus, postAccountPassword } from "@/lib/api";
 import { unregisterPushDevice } from "@/lib/push";
 import { clearQueue } from "@/lib/queue";
-import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
+import { appStorage, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
 import { afterResetSignIn, fail, refuseEmptyPassword, type FlowResult } from "./flows-logic";
+import { adoptLocalData, clearMemberData, forgetLocalOwner } from "./local-owner";
 import { otpSendResult } from "./otp-send-logic";
 
-/** Unregister push, drop pending queue, the Requests dot's number and what was saved, clear onboarded — then auth
- *  ends. */
+/** Unregister push, drop pending queue, the Requests dot's number and the member's data on the phone (saved items,
+ *  recent searches, onboarded — local-owner.ts) with its owner — then auth ends. */
 async function clearLocalSession(): Promise<void> {
   await unregisterPushDevice().catch(() => undefined);
   clearQueue();
   resetUnreadQuotes();
-  clearSaved();
-  appStorage.remove(ONBOARDED_KEY);
+  clearMemberData();
+  forgetLocalOwner();
   appStorage.remove(PENDING_PASSWORD_KEY);
 }
 
@@ -47,8 +47,10 @@ async function hasPasswordOnFile(): Promise<boolean> {
 /** Sign In: email + password. */
 export async function signIn(email: string, password: string): Promise<Result> {
   try {
-    const { error } = await withAuthTimeout(authClient.signIn.email({ email, password }));
-    if (error) return fail(error);
+    const signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
+    if (signedIn.error) return fail(signedIn.error);
+    // Before the post-auth route is chosen (it reads the onboarded flag): another member's data on the phone goes.
+    adoptLocalData(signedIn.data.user.id);
     // A member signed in: the Requests dot starts from nothing — an answer for the member before is dropped.
     resetUnreadQuotes();
     const ready = (await requireSessionCookie()) ?? { ok: true as const };
@@ -74,8 +76,9 @@ export async function join(email: string): Promise<Result> {
 /** Consume join OTP — creates user + session when the email is new (Path A). */
 export async function verifyJoin(email: string, otp: string): Promise<Result> {
   try {
-    const { error } = await withAuthTimeout(authClient.signIn.emailOtp({ email, otp }));
-    if (error) return fail(error);
+    const verified = await withAuthTimeout(authClient.signIn.emailOtp({ email, otp }));
+    if (verified.error) return fail(verified.error);
+    adoptLocalData(verified.data.user.id);
     resetUnreadQuotes();
     // Without a SecureStore cookie, set-password's POST /v1/account/password is 401 "Please sign in."
     const ready = await requireSessionCookie();
@@ -142,13 +145,13 @@ export async function resetPassword(email: string, otp: string, password: string
   } catch {
     return afterResetSignIn("network");
   }
-  const after = afterResetSignIn(signedIn.error);
-  if (!after.ok) return after;
+  if (signedIn.error) return afterResetSignIn(signedIn.error);
+  adoptLocalData(signedIn.data.user.id);
   resetUnreadQuotes();
   // Signed in on the server, but the cookie never reached SecureStore: the same — Sign in with the new password.
   if (await requireSessionCookie()) return afterResetSignIn("network");
   appStorage.remove(PENDING_PASSWORD_KEY);
-  return after;
+  return afterResetSignIn(null);
 }
 
 /** First-time password after Path A OTP session — club route, not Better Auth client setPassword. */
