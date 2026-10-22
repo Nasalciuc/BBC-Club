@@ -12,12 +12,15 @@ export const INTERNAL_BODY_LIMIT = 1024 * KB;
 export const MEMBER_BODY_LIMIT = 256 * KB;
 
 /** Over the limit: the API's own shape and a 413, never Hono's bare HTTPException (which the error contract would turn
- *  into 500 INTERNAL). No new error code: the app reads VALIDATION. */
-const tooLarge = (c: Context) =>
-  c.json(
+ *  into 500 INTERNAL). No new error code: the app reads VALIDATION. Counted in http_errors as the error contract counts
+ *  every other client error; the request metrics below never see it. */
+const tooLarge = (metrics: { inc(n: string, l?: Record<string, string>): void }) => (c: Context) => {
+  metrics.inc("http_errors", { code: "VALIDATION" });
+  return c.json(
     apiError("VALIDATION", { message: "This request is too large.", requestId: c.get("requestId") as string }),
     413,
   );
+};
 
 /** Order is a security property: id → headers → cors(auth only) → body limit → (principal, added by the host). */
 export function installBaseMiddleware(
@@ -44,8 +47,9 @@ export function installBaseMiddleware(
     }),
   );
   // One limit per request: /v1/* also matches /v1/internal/*, so the member limit skips the internal paths.
-  const internalLimit = bodyLimit({ maxSize: INTERNAL_BODY_LIMIT, onError: tooLarge });
-  const memberLimit = bodyLimit({ maxSize: MEMBER_BODY_LIMIT, onError: tooLarge });
+  const onError = tooLarge(opts.metrics);
+  const internalLimit = bodyLimit({ maxSize: INTERNAL_BODY_LIMIT, onError });
+  const memberLimit = bodyLimit({ maxSize: MEMBER_BODY_LIMIT, onError });
   app.use("/v1/internal/*", internalLimit);
   app.use("/v1/*", (c, next) => (c.req.path.startsWith("/v1/internal/") ? next() : memberLimit(c, next)));
   // RED metrics: one line per request, labels bounded (route template, not raw path)

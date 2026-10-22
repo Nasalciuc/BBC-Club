@@ -77,6 +77,25 @@ describe("body limits", () => {
     await expectTooLarge(res);
   });
 
+  it("a refusal is counted as a client error, never as INTERNAL", async () => {
+    const counted = async (code: string) => {
+      const line = (await t.platform.metrics.render())
+        .split("\n")
+        .find((l) => l.startsWith(`bbc_http_errors{code="${code}"} `));
+      return line ? Number(line.split(" ")[1]) : 0;
+    };
+    const [validation, internal] = [await counted("VALIDATION"), await counted("INTERNAL")];
+    await expectTooLarge(
+      await t.app.request("/v1/profile", {
+        method: "PATCH",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: bodyOf(300 * KB),
+      }),
+    );
+    expect(await counted("VALIDATION")).toBe(validation + 1);
+    expect(await counted("INTERNAL")).toBe(internal);
+  });
+
   it("none of them was logged as unhandled", () => {
     expect(logged).not.toContain("unhandled");
   });
