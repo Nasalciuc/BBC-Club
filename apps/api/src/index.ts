@@ -157,15 +157,17 @@ export async function buildApp(opts: BuildOptions = {}) {
     checks.db = await readyProbe();
     const h = await platform.health().catch(() => ({ ok: false, queue: null }));
     checks.queue = h.queue;
-    const runs = await platform.jobs.lastRuns().catch(() => ({}));
+    const runs = await platform.jobs.lastRuns().catch(() => null);
     // Each scheduled job against its own schedule; manual and removed jobs never count (src/cron/stale.ts).
+    // A read that failed is not an empty answer: without its runs, nothing here can say the jobs are well.
     const schedule = platform.jobs.schedule();
-    const stale = staleJobs(runs, schedule);
-    checks.staleJobs = stale;
-    const finished = await platform.jobs.lastFinishedRuns().catch(() => ({}));
-    const failing = failingJobs(finished, schedule);
-    checks.failingJobs = failing;
-    const ok = checks.db === true && h.ok && stale.length === 0 && failing.length === 0;
+    const stale = runs === null ? [] : staleJobs(runs, schedule);
+    checks.staleJobs = runs === null ? "unavailable" : stale;
+    const finished = await platform.jobs.lastFinishedRuns().catch(() => null);
+    const failing = finished === null ? [] : failingJobs(finished, schedule);
+    checks.failingJobs = finished === null ? "unavailable" : failing;
+    const ok =
+      checks.db === true && h.ok && runs !== null && stale.length === 0 && finished !== null && failing.length === 0;
     return c.json({ ok, ...checks }, ok ? 200 : 503);
   });
   registerRoute("GET", "/metrics", "public");
