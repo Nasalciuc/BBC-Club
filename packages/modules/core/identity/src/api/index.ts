@@ -14,6 +14,10 @@ export type IdentityFacade = {
   requireRole(...allowed: string[]): MiddlewareHandler<AuthVars>;
   deleteAccount(headers: Headers): Promise<void>;
   listUsersCreatedBefore(before: Date, limit?: number): Promise<{ id: string; email: string; createdAt: Date }[]>;
+  /** The email member.registered carries for this account (trimmed, lower-cased), or null when there is no account —
+   *  deleted, while a session of it may still be in the cookie cache. Members makes a profile row on demand only for an
+   *  account this answers. */
+  registeredEmail(memberId: string): Promise<string | null>;
 };
 
 export type { Auth } from "../infrastructure/auth";

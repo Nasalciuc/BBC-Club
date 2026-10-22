@@ -1,6 +1,16 @@
 import type { Executor } from "@bbc/db";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
 
+/** What making a profile row needs: the CRM mirror lookup and the open-signups flag (ADR-PROD-001). */
+export type ProfileCreationDeps = {
+  crm: {
+    findByEmail(
+      emailNormalized: string,
+    ): Promise<{ crmClientId: string; fullName?: string; homeAirport?: string } | null>;
+  };
+  flags: { get(key: string): Promise<boolean> };
+};
+
 export type ProfileRow = {
   memberId: string;
   status: "active" | "waitlist" | "deleted";
@@ -71,5 +81,13 @@ export type MembersFacade = {
     exec: Executor | undefined,
     actorMemberId: string,
     prefs: Array<{ category: "offers_personal" | "offers_broadcast"; enabled: boolean }>,
+  ): Promise<void>;
+  /** The member's profile row, made now if member.registered has not been delivered yet (the same insert the delivery
+   *  makes; ON CONFLICT DO NOTHING). Publishes nothing: the delivery still links to the CRM, once. */
+  ensureProfile(
+    exec: Executor | undefined,
+    memberId: string,
+    emailNormalized: string,
+    deps: ProfileCreationDeps,
   ): Promise<void>;
 };

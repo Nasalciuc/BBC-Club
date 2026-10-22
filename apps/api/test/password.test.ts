@@ -146,6 +146,30 @@ describe("POST /v1/account/password", () => {
     await t.close();
   });
 
+  it("needs a number or a symbol, on a change and on a first set (the app's rule, now the API's)", async () => {
+    const t = await testApp({ suite: "pw-rule" });
+    const post = (cookie: string, body: Record<string, string>) =>
+      t.app.request("/v1/account/password", {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const lettersOnly = { path: "newPassword", message: "Use at least one number or symbol." };
+
+    const change = await post(t.memberA.cookie, { newPassword: "aaaaaaaa", currentPassword: t.memberA.password });
+    expect(change.status).toBe(400);
+    const changeBody = (await change.json()) as { error: { code: string; details?: unknown[] } };
+    expect(changeBody.error.code).toBe("VALIDATION");
+    expect(changeBody.error.details).toContainEqual(lettersOnly);
+
+    await t.withPathAPassword(t.memberB.id);
+    const first = await post(t.memberB.cookie, { newPassword: "cccccccc" });
+    expect(first.status).toBe(400);
+    expect(((await first.json()) as { error: { details?: unknown[] } }).error.details).toContainEqual(lettersOnly);
+    expect((await post(t.memberB.cookie, { newPassword: "cccccccc1" })).status).toBe(200);
+    await t.close();
+  });
+
   it("401 without session", async () => {
     const t = await testApp({ suite: "pw-unauth" });
     const r = await t.app.request("/v1/account/password", {

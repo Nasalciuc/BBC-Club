@@ -3,7 +3,8 @@ import { and, eq, gt, ne, notExists, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { profile, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
-import type { AudienceMember, MembersFacade, ProfileRow, NotificationPrefView } from "../api";
+import type { AudienceMember, MembersFacade, ProfileRow, NotificationPrefView, ProfileCreationDeps } from "../api";
+import { insertProfile } from "./create-profile";
 
 export type { ProfileRow, NotificationPrefView, MembersFacade };
 export { toProfileVM } from "./to-profile-vm";
@@ -119,24 +120,37 @@ export function createMembersFacade(db: Executor): MembersFacade {
     return getProfile(exec, actorMemberId);
   }
 
-  /** Merges, never replaces. A client that sends only { cabin } must not wipe passengers. */
+  /** Merges, never replaces. A client that sends only { cabin } must not wipe passengers. The merge is one statement
+   *  (jsonb `||` on the row it locks): read, merge in JS, then write let the last of two saves at once drop the other's
+   *  field under READ COMMITTED. Top-level keys sent replace, keys not sent stay. */
   async function setTravelPreferences(
     exec: Executor | undefined,
     actorMemberId: string,
     patch: TravelPreferencesBody,
   ): Promise<ProfileRow | null> {
-    const [row] = await (exec ?? db)
-      .select({ preferences: profile.preferences })
-      .from(profile)
-      .where(live(actorMemberId))
-      .limit(1);
-    if (!row) return null;
-    const merged: TravelPreferences = { ...(row.preferences ?? {}), ...patch };
-    await (exec ?? db)
+    const sent: TravelPreferences = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const rows = await (exec ?? db)
       .update(profile)
-      .set({ preferences: merged, updatedAt: sql`now()` })
-      .where(live(actorMemberId));
+      .set({
+        preferences: sql`coalesce(${profile.preferences}, '{}'::jsonb) || ${JSON.stringify(sent)}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(live(actorMemberId))
+      .returning({ memberId: profile.memberId });
+    if (rows.length === 0) return null;
     return getProfile(exec, actorMemberId);
+  }
+
+  /** Makes the member's profile row now if member.registered has not been delivered yet — right after the join code,
+   *  onboarding's first save found no row and answered 404. The delivery's own insert (shared: `insertProfile`) then
+   *  does nothing, and it publishes member.linked_to_crm once; this publishes nothing. A row already there is left. */
+  async function ensureProfile(
+    exec: Executor | undefined,
+    memberId: string,
+    emailNormalized: string,
+    deps: ProfileCreationDeps,
+  ): Promise<void> {
+    await insertProfile(exec ?? db, deps, memberId, emailNormalized);
   }
 
   async function setNotificationPreferences(
@@ -165,5 +179,6 @@ export function createMembersFacade(db: Executor): MembersFacade {
     updateProfile,
     setTravelPreferences,
     setNotificationPreferences,
+    ensureProfile,
   };
 }

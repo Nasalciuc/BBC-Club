@@ -109,7 +109,7 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
     databaseHooks: {
       user: {
         create: {
-          // Runs after Better Auth's insert, outside its transaction → members reconciles nightly (MODULE.md).
+          // Runs after Better Auth's insert, outside its transaction → members reconciles every 15 min (MODULE.md).
           after: async (user) => {
             await events.publish({
               type: "member.registered",
