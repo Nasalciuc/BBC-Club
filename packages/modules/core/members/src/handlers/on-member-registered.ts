@@ -52,8 +52,9 @@ export type IdentityUsersPort = {
   listUsersCreatedBefore(before: Date): Promise<{ id: string; email: string; createdAt: Date }[]>;
 };
 
-/** Nightly: the identity hook publishes after Better Auth's insert, outside its transaction. If the event was
- *  lost, the member has an auth user and no profile. Diff in memory — no cross-schema SQL. */
+/** Every 15 minutes (reconcile-profiles): the identity hook publishes after Better Auth's insert, outside its
+ *  transaction. If the event was lost, the member has an auth user and no profile. Diff in memory — no cross-schema
+ *  SQL. */
 export async function reconcileMissingProfiles(deps: {
   db: Executor;
   identity: IdentityUsersPort;

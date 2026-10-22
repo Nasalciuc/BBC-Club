@@ -1,6 +1,6 @@
 export interface EventPublisher {
   /** Appends to platform.domain_events. Identity hooks do not have Better Auth's transaction,
-   *  so they publish post-commit; members reconciles nightly (see MODULE.md). */
+   *  so they publish post-commit; members reconciles every 15 minutes (see MODULE.md). */
   publish(event: {
     type: string;
     version: number;
