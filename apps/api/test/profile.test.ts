@@ -75,6 +75,84 @@ describe("PUT /v1/profile/travel", () => {
   });
 });
 
+describe("profile writes right after the join code (member.registered not yet delivered)", () => {
+  it("the first save makes the profile row; the delivery then adds nothing and links to the CRM once", async () => {
+    const suite = "profile-early";
+    const carol = `carol.${suite}@test.dev`; // known to the CRM → active
+    const dave = `dave.${suite}@test.dev`; // unknown → waitlist (ADR-PROD-001)
+    const t = await testApp({
+      suite,
+      knownClients: [
+        {
+          email: `alex.${suite}@test.dev`,
+          crmClientId: `crm_alex_${suite}`,
+          fullName: "Alex Morgan",
+          homeAirport: "JFK",
+        },
+        { email: carol, crmClientId: `crm_carol_${suite}`, fullName: "Carol King", homeAirport: "BOS" },
+      ],
+    });
+    const join = async (email: string) => {
+      const m = await t.auth.createMember(email);
+      return { ...m, cookie: await t.auth.cookieFor(email) };
+    };
+    const rows = async (memberId: string) =>
+      (await t.db.execute(sql`SELECT status, crm_client_id, home_airport, preferences FROM members.profile
+        WHERE member_id = ${memberId}`)) as {
+        status: string;
+        crm_client_id: string | null;
+        home_airport: string | null;
+        preferences: Record<string, unknown>;
+      }[];
+    const linked = async (memberId: string) =>
+      (await t.journal.forMember(memberId)).filter(
+        (e: { payload: { type: string } }) => e.payload.type === "member.linked_to_crm",
+      );
+
+    // No drain: member.registered is queued, the profile row does not exist yet.
+    const c = await join(carol);
+    const d = await join(dave);
+    expect(await rows(c.id)).toEqual([]);
+
+    const patch = await t.app.request("/v1/profile", {
+      method: "PATCH",
+      headers: { Cookie: c.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ homeAirport: "LHR" }),
+    });
+    expect(patch.status).toBe(200);
+    expect(ProfileVM.parse(await patch.json()).homeAirport).toBe("LHR");
+    const travel = await t.app.request("/v1/profile/travel", {
+      method: "PUT",
+      headers: { Cookie: d.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ cabin: "first" }),
+    });
+    expect(travel.status).toBe(200);
+    expect(ProfileVM.parse(await travel.json()).preferences.cabin).toBe("first");
+    // The save made the row the delivery would have made — and published no link of its own.
+    expect(await rows(c.id)).toEqual([
+      { status: "active", crm_client_id: `crm_carol_${suite}`, home_airport: "LHR", preferences: {} },
+    ]);
+    expect(await rows(d.id)).toEqual([
+      { status: "waitlist", crm_client_id: null, home_airport: null, preferences: { cabin: "first" } },
+    ]);
+    expect(await linked(c.id)).toEqual([]);
+
+    await t.drainAll();
+    // One row each, the member's saves intact; the delivery published the CRM link exactly once.
+    expect(await rows(c.id)).toEqual([
+      { status: "active", crm_client_id: `crm_carol_${suite}`, home_airport: "LHR", preferences: {} },
+    ]);
+    expect(await rows(d.id)).toEqual([
+      { status: "waitlist", crm_client_id: null, home_airport: null, preferences: { cabin: "first" } },
+    ]);
+    const links = await linked(c.id);
+    expect(links).toHaveLength(1);
+    expect(links[0].payload.crmClientId).toBe(`crm_carol_${suite}`);
+    expect(await linked(d.id)).toEqual([]);
+    await t.close();
+  });
+});
+
 describe("PUT /v1/profile/travel — what it stores", () => {
   const put = (t: Awaited<ReturnType<typeof testApp>>, body: unknown) =>
     t.app.request("/v1/profile/travel", {

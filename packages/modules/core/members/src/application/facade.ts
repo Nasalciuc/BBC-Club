@@ -3,7 +3,8 @@ import { and, eq, gt, ne, notExists, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { profile, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
-import type { AudienceMember, MembersFacade, ProfileRow, NotificationPrefView } from "../api";
+import type { AudienceMember, MembersFacade, ProfileRow, NotificationPrefView, ProfileCreationDeps } from "../api";
+import { insertProfile } from "./create-profile";
 
 export type { ProfileRow, NotificationPrefView, MembersFacade };
 export { toProfileVM } from "./to-profile-vm";
@@ -140,6 +141,18 @@ export function createMembersFacade(db: Executor): MembersFacade {
     return getProfile(exec, actorMemberId);
   }
 
+  /** Makes the member's profile row now if member.registered has not been delivered yet — right after the join code,
+   *  onboarding's first save found no row and answered 404. The delivery's own insert (shared: `insertProfile`) then
+   *  does nothing, and it publishes member.linked_to_crm once; this publishes nothing. A row already there is left. */
+  async function ensureProfile(
+    exec: Executor | undefined,
+    memberId: string,
+    emailNormalized: string,
+    deps: ProfileCreationDeps,
+  ): Promise<void> {
+    await insertProfile(exec ?? db, deps, memberId, emailNormalized);
+  }
+
   async function setNotificationPreferences(
     exec: Executor | undefined,
     actorMemberId: string,
@@ -166,5 +179,6 @@ export function createMembersFacade(db: Executor): MembersFacade {
     updateProfile,
     setTravelPreferences,
     setNotificationPreferences,
+    ensureProfile,
   };
 }
