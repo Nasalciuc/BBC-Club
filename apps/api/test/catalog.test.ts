@@ -44,6 +44,46 @@ describe("catalog routes", () => {
     await t.close();
   });
 
+  // A malformed id, a NUL byte or a date no calendar holds is the member's input, never a server error: each used to
+  // reach Postgres (a uuid cast, a NUL in text, a year out of range) and answer 500 INTERNAL.
+  it("bad input is a 404 or a 400 before any query, never a 500", async () => {
+    const t = await testApp({ suite: "catalog-bad-input" });
+    await t.seedCatalogBasics();
+    const status = async (path: string) =>
+      (await t.app.request(path, { headers: { Cookie: t.memberA.cookie } })).status;
+    const day = 86_400_000;
+    const at = (ms: number) => encodeURIComponent(new Date(Date.now() + ms).toISOString());
+    const search = "/v1/search?from=JFK&to=LHR&cabin=business";
+    expect({
+      fareNotUuid: await status("/v1/fares/abc"),
+      fareUnknown: await status("/v1/fares/00000000-0000-4000-8000-000000000000"),
+      airportsNul: await status("/v1/airports?q=lon%00don"),
+      searchFromNul: await status("/v1/search?from=J%00K&to=LHR&cabin=business"),
+      searchToDigits: await status("/v1/search?from=JFK&to=1A2&cabin=business"),
+      whenYearZero: await status(`${search}&when=0000-01-01T00:00:00Z`),
+      whenNegativeYear: await status(`${search}&when=-000001-01-01T00:00:00Z`),
+      whenFarFuture: await status(`${search}&when=%2B275760-09-13T00:00:00.000Z`),
+      whenLastWeek: await status(`${search}&when=${at(-7 * day)}`),
+      whenIn3Years: await status(`${search}&when=${at(3 * 365 * day)}`),
+      whenToday: await status(`${search}&when=${at(0)}`),
+      whenNextMonth: await status(`${search}&when=${at(30 * day)}`),
+    }).toEqual({
+      fareNotUuid: 404,
+      fareUnknown: 404,
+      airportsNul: 400,
+      searchFromNul: 400,
+      searchToDigits: 400,
+      whenYearZero: 400,
+      whenNegativeYear: 400,
+      whenFarFuture: 400,
+      whenLastWeek: 400,
+      whenIn3Years: 400,
+      whenToday: 200,
+      whenNextMonth: 200,
+    });
+    await t.close();
+  });
+
   it("401/403 responses do not carry error.context", async () => {
     const t = await testApp({ suite: "catalog-authz-context" });
     const anon = await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business");
@@ -131,7 +171,9 @@ describe("catalog routes", () => {
     expect((await search("JFK", "EWR")).estimate).toBeNull();
 
     // A dated search: the route may have fares on other days, and published fares win — no undated estimate.
-    expect((await search("JFK", "ZRH", "business", "2026-11-20T00:00:00Z")).estimate).toBeNull();
+    // (A day a month ahead: a past day is refused.)
+    const inAMonth = new Date(Date.now() + 30 * 86_400_000).toISOString();
+    expect((await search("JFK", "ZRH", "business", inAMonth)).estimate).toBeNull();
 
     // Rules edited by hand (their fingerprint is no longer their own): refused, no estimate.
     const stored = storedPricingRules(FIXTURE_RULES);

@@ -82,6 +82,16 @@ describe("GET /v1/proposals/:id", () => {
     await t.close();
   });
 
+  // bbcclub://fare/<id>?offerId=abc reaches this route: an id that is not a UUID is not an offer, never a 500.
+  it("404 for an id that is not a UUID", async () => {
+    const t = await testApp({ suite: "proposal-bad-id" });
+    for (const id of ["abc", "q_123", "00000000-0000-4000-8000-00000000000"]) {
+      const r = await t.app.request(`/v1/proposals/${id}`, { headers: { Cookie: t.memberA.cookie } });
+      expect({ id, status: r.status }).toEqual({ id, status: 404 });
+    }
+    await t.close();
+  });
+
   it("404 for another member's targeted offer (IDOR)", async () => {
     const t = await testApp({ suite: "proposal-idor-detail" });
     const offerId = await t.seedTargetedOffer(t.memberB.id);

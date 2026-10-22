@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute, type PrincipalVars } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
@@ -202,6 +203,9 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
         const id = c.req.param("id");
+        // An offer's id is a UUID (a bbcclub:// link can carry anything): anything else is no offer, never a cast
+        // Postgres refuses.
+        if (!z.string().uuid().safeParse(id).success) return c.json(apiError("NOT_FOUND"), 404);
 
         const row = await ports.proposals.getVisible(undefined, actor, id);
         if (!row) {

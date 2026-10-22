@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { desc, gte, sql } from "drizzle-orm";
 import { errorForLog, type Db, type Executor } from "@bbc/db";
 import { demandDaily } from "@bbc/db/schema/catalog";
@@ -29,6 +30,20 @@ import type { CatalogFacade, DestinationPin } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
   return row.published && row.validFrom <= now && row.validUntil > now;
+}
+
+/** A route's IATA code as a member's request may carry it (upper-cased first). */
+const IATA = /^[A-Z]{3}$/;
+/** A fare's id is a UUID: anything else is no fare (404), never a cast Postgres refuses (500). */
+const isUuid = (v: string) => z.string().uuid().safeParse(v).success;
+
+/** The travel dates a search takes: from yesterday (a member a day behind UTC still means today) to two years ahead —
+ *  nothing is sold further out, and a year Postgres cannot store is never a 500. */
+function searchWhenInRange(when: Date, now = new Date()): boolean {
+  const earliest = new Date(now.getTime() - 86_400_000);
+  const latest = new Date(now);
+  latest.setUTCFullYear(latest.getUTCFullYear() + 2);
+  return when >= earliest && when <= latest;
 }
 
 /** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
@@ -195,12 +210,15 @@ export const catalogModule = (
         const to = (c.req.query("to") ?? "").toUpperCase();
         const cabin = c.req.query("cabin") as "business" | "first" | undefined;
         const whenRaw = c.req.query("when");
-        if (!from || from.length !== 3 || !to || to.length !== 3 || (cabin !== "business" && cabin !== "first")) {
+        if (!IATA.test(from) || !IATA.test(to) || (cabin !== "business" && cabin !== "first")) {
           return c.json(apiError("VALIDATION", { message: "from, to (IATA), cabin required" }), 400);
         }
         const when = whenRaw ? new Date(whenRaw) : undefined;
         if (when && Number.isNaN(when.getTime())) {
           return c.json(apiError("VALIDATION", { message: "when must be ISO datetime" }), 400);
+        }
+        if (when && !searchWhenInRange(when)) {
+          return c.json(apiError("VALIDATION", { message: "when must be a day from today to two years ahead" }), 400);
         }
 
         const [fromApt, toApt, rows] = await Promise.all([
@@ -246,6 +264,7 @@ export const catalogModule = (
       }),
       async (c) => {
         const id = c.req.param("id");
+        if (!isUuid(id)) return c.json(apiError("NOT_FOUND"), 404);
         const row = await faresRepo.getAny(conn, id);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
 
@@ -290,7 +309,10 @@ export const catalogModule = (
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const q = (c.req.query("q") ?? "").slice(0, 64);
+        const raw = c.req.query("q") ?? "";
+        // Postgres text cannot hold a NUL: no airport has one, and the query would fail.
+        if (raw.includes("\u0000")) return c.json(apiError("VALIDATION", { message: "q has a NUL character" }), 400);
+        const q = raw.slice(0, 64);
         const gen = await platform.cache.generation("catalog:airports:gen");
         const rows =
           gen == null
