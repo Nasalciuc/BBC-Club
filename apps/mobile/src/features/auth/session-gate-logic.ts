@@ -42,15 +42,25 @@ export function timezoneToSend(profileZone: string, deviceZone: string | null): 
   return deviceZone && deviceZone !== profileZone ? deviceZone : null;
 }
 
+/** A zone PATCH, and the key it is remembered by: one member, one zone. */
+export type TimezoneUpdate = { zone: string; key: string };
+
 /**
  * After the gate's own profile load (no extra GET): the zone to PATCH, or null. Only for a living profile (a pending one
- * has no row yet — onboarding sends the zone with the home airport); never twice in one run of the app (`sent`), so a
- * zone the server refuses is not sent again on every navigation.
+ * has no row yet — onboarding sends the zone with the home airport); never twice for the same member and zone in one run
+ * of the app (`sent` holds the keys already sent), so a zone the server refuses is not sent again on every navigation —
+ * while another member who signs in on this phone in the same run still gets theirs.
  */
-export function timezoneUpdate(load: ProfileLoad, deviceZone: string | null, sent: string | null): string | null {
+export function timezoneUpdate(
+  load: ProfileLoad,
+  deviceZone: string | null,
+  sent: ReadonlySet<string>,
+): TimezoneUpdate | null {
   if (load.kind !== "ok" || load.profile.status === "pending" || load.profile.status === "deleted") return null;
   const zone = timezoneToSend(load.profile.timezone, deviceZone);
-  return zone !== null && zone !== sent ? zone : null;
+  if (zone === null) return null;
+  const key = `${load.profile.memberId} ${zone}`;
+  return sent.has(key) ? null : { zone, key };
 }
 
 export type RouteTarget = "/sign-in" | "/set-password" | "/onboarding" | "/(tabs)/explore";

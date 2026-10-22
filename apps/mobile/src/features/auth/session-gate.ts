@@ -16,17 +16,17 @@ export function passwordStillPending(): boolean {
 export const routeForProfile = (load: ProfileLoad): Href =>
   routeFor(load, appStorage.getBoolean(ONBOARDED_KEY) === true, passwordStillPending()) as Href;
 
-/** The zone sent in this run of the app: once each, refused or not. */
-let zoneSent: string | null = null;
+/** The zones sent in this run of the app, per member: once each, refused or not. */
+const zonesSent = new Set<string>();
 
 export async function resolvePostAuthRoute(): Promise<Href> {
   const load = await loadProfileAfterAuth();
   // Quiet hours follow the phone's zone — a member who skipped onboarding, or travels, too. Best effort: a failure
   // changes nothing about where the member goes.
-  const zone = timezoneUpdate(load, deviceTimeZone(), zoneSent);
-  if (zone) {
-    zoneSent = zone;
-    await patchProfile({ timezone: zone }).catch(() => undefined);
+  const update = timezoneUpdate(load, deviceTimeZone(), zonesSent);
+  if (update) {
+    zonesSent.add(update.key);
+    await patchProfile({ timezone: update.zone }).catch(() => undefined);
   }
   return routeForProfile(load);
 }
