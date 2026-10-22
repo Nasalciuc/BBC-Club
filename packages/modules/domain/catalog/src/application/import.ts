@@ -26,6 +26,9 @@ const Degrees = (max: number) =>
     .regex(/^-?\d{1,3}(\.\d+)?$/, "a number of degrees")
     .refine((v) => Math.abs(Number(v)) <= max, `from -${max} to ${max}`);
 
+const YES = new Set(["true", "yes", "y", "1"]);
+const NO = new Set(["false", "no", "n", "0"]);
+
 const FareCsvRow = z
   .object({
     route_from: Iata,
@@ -34,10 +37,18 @@ const FareCsvRow = z
     carrier: z.string().length(2).nullable().optional(),
     carrier_name: OptionalText,
     product: OptionalText,
+    /** Yes or no, as a spreadsheet or a person writes it (TRUE, yes, y, 1 / FALSE, no, n, 0), any case; an empty cell
+     *  or no such column is nonstop. Anything else is refused: it used to mean Connecting, silently. */
     nonstop: z
       .string()
       .optional()
-      .transform((v) => (v == null || v === "" ? true : v === "true" || v === "1")),
+      .transform((v, ctx) => {
+        const s = (v ?? "").trim().toLowerCase();
+        if (s === "" || YES.has(s)) return true;
+        if (NO.has(s)) return false;
+        ctx.addIssue({ code: "custom", message: "yes or no (true/false, yes/no, y/n, 1/0)" });
+        return z.NEVER;
+      }),
     duration_minutes: z
       .string()
       .optional()

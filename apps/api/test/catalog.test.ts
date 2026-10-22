@@ -505,6 +505,43 @@ describe("catalogue import — what it refuses, and where", () => {
     await t.close();
   }, 60_000);
 
+  // A spreadsheet writes TRUE/FALSE: every value but 'true' and '1' used to mean Connecting, without a word.
+  it("reads nonstop as a spreadsheet writes it, and refuses what is no yes or no", async () => {
+    const t = await testApp({ suite: "catalog-import-nonstop" });
+    await t.seedCatalogBasics();
+    const post = (csv: string) =>
+      t.app.request("/v1/internal/catalog/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+        body: JSON.stringify({ kind: "fares", csv }),
+      });
+    const cells: [string, string, boolean][] = [
+      ["UA", "TRUE", true],
+      ["DL", "yes", true],
+      ["AF", "Y", true],
+      ["KL", "", true],
+      ["LH", "False", false],
+      ["IB", "0", false],
+      ["AY", "no", false],
+    ];
+    const csv = [FARES, ...cells.map(([carrier, nonstop]) => fare({ carrier, carrier_name: carrier, nonstop }))];
+    expect((await post(csv.join("\n"))).status).toBe(200);
+    const search = (await (
+      await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business", { headers: { Cookie: t.memberA.cookie } })
+    ).json()) as { items: { carrier: { code: string }; nonstop: boolean }[] };
+    for (const [carrier, cell, nonstop] of cells) {
+      expect({ cell, nonstop: search.items.find((i) => i.carrier.code === carrier)?.nonstop }).toEqual({
+        cell,
+        nonstop,
+      });
+    }
+    const nope = await post([FARES, fare(), fare({ carrier: "SK", nonstop: "nope" })].join("\n"));
+    expect(nope.status).toBe(400);
+    const body = (await nope.json()) as { error?: { details?: { path: string }[] } };
+    expect(body.error?.details?.[0]?.path).toBe("row 3.nonstop");
+    await t.close();
+  }, 60_000);
+
   it("names at most twenty rows, and a row the database refuses", async () => {
     const t = await testApp({ suite: "catalog-import-rows" });
     await t.seedCatalogBasics();
