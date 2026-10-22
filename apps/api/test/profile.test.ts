@@ -99,6 +99,21 @@ describe("PUT /v1/profile/travel — what it stores", () => {
     expect((await stored(t))?.destinations).toEqual(["LHR", "CDG"]);
     await t.close();
   });
+
+  it("each infant travels with an adult", async () => {
+    const t = await testApp({ suite: "profile-infants" });
+    const tooMany = await put(t, { passengers: { adult: 1, child: 0, infant: 4 } });
+    expect(tooMany.status).toBe(400);
+    const body = (await tooMany.json()) as { error: { details: { path: string; message: string }[] } };
+    expect(body.error.details).toContainEqual({
+      path: "passengers.infant",
+      message: "Each infant travels with an adult.",
+    });
+    expect((await stored(t))?.passengers).toBeUndefined();
+    expect((await put(t, { passengers: { adult: 2, child: 0, infant: 2 } })).status).toBe(200);
+    expect((await stored(t))?.passengers).toEqual({ adult: 2, child: 0, infant: 2 });
+    await t.close();
+  });
 });
 
 describe("GET /v1/profile — notifications (ADR-IMPL-025)", () => {

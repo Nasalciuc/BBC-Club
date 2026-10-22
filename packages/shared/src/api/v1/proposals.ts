@@ -135,18 +135,30 @@ export const ProfilePatchBody = z
   });
 export type ProfilePatchBody = z.infer<typeof ProfilePatchBody>;
 
-export const TravelPreferencesBody = z.object({
-  // Airports as the home airport takes them, each once, in the order sent: ['lhr','LHR','cdg'] is ['LHR','CDG'].
-  destinations: z
-    .array(z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase())
-    .max(3)
-    .transform((codes) => [...new Set(codes)])
-    .optional(),
-  cabin: z.enum(["business", "first"]).optional(),
-  frequency: z.enum(["monthly", "quarterly", "rarely"]).optional(),
-  passengers: Passengers.optional(),
-  notes: z.string().max(500).optional(),
-});
+export const TravelPreferencesBody = z
+  .object({
+    // Airports as the home airport takes them, each once, in the order sent: ['lhr','LHR','cdg'] is ['LHR','CDG'].
+    destinations: z
+      .array(z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase())
+      .max(3)
+      .transform((codes) => [...new Set(codes)])
+      .optional(),
+    cabin: z.enum(["business", "first"]).optional(),
+    frequency: z.enum(["monthly", "quarterly", "rarely"]).optional(),
+    passengers: Passengers.optional(),
+    notes: z.string().max(500).optional(),
+  })
+  // On the body, not on the shared Passengers: RequestVM and ProfileVM parse with Passengers, and a stored row that
+  // breaks the rule must still read.
+  .superRefine((b, ctx) => {
+    if (b.passengers && b.passengers.infant > b.passengers.adult) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["passengers", "infant"],
+        message: "Each infant travels with an adult.",
+      });
+    }
+  });
 export type TravelPreferencesBody = z.infer<typeof TravelPreferencesBody>;
 
 // -- Notification preferences ------------------------------------------------
