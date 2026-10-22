@@ -36,6 +36,10 @@ describe("POST /v1/requests rate limits", () => {
     }
     const sixth = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { ip: "198.51.100.21" });
     expect(sixth.status).toBe(429);
+    // The member's own limit, told apart from the address's (the app's copy differs).
+    expect(((await sixth.clone().json()) as { error: { context?: unknown } }).error.context).toEqual({
+      scope: "member",
+    });
     const retry = Number(sixth.headers.get("Retry-After"));
     expect(retry).toBeGreaterThanOrEqual(350);
     expect(retry).toBeLessThanOrEqual(360);
@@ -69,4 +73,30 @@ describe("POST /v1/requests rate limits", () => {
     }
     await t.close();
   });
+
+  it("the address's limit says so: a member with no requests behind a busy address reads scope 'ip'", async () => {
+    const t = await testApp({ suite: "requests-rate-ip-scope" });
+    const ip = "198.51.100.23";
+    // requests.submit.ip: burst 20 — four colleagues send five each.
+    for (let m = 0; m < 4; m++) {
+      const email = `office${m}.requests-rate@test.dev`;
+      const member = await t.auth.createMember(email);
+      const cookie = await t.auth.cookieFor(member.email);
+      for (let i = 0; i < 5; i++) {
+        const r = await t.submitRequestAs(
+          { cookie },
+          t.sampleRequestBody({ contact: { name: `Office ${m}`, phone: "+12125550148", email } }),
+          { ip },
+        );
+        expect(r.status).toBe(201);
+      }
+    }
+    const first = await t.submitRequestAs(t.memberB, t.sampleRequestBody(), { ip });
+    expect(first.status).toBe(429);
+    expect(Number(first.headers.get("Retry-After"))).toBeGreaterThanOrEqual(1);
+    const body = (await first.json()) as { error: { code: string; context?: unknown } };
+    expect(body.error.code).toBe("RATE_LIMITED");
+    expect(body.error.context).toEqual({ scope: "ip" });
+    await t.close();
+  }, 30_000);
 });

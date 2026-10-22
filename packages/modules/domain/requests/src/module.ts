@@ -159,7 +159,8 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         if (!result.ok) {
           if (result.code === "RATE_LIMITED") {
             c.header("Retry-After", String(Math.max(1, Math.ceil((result.retryAfterMs ?? 1000) / 1000))));
-            return c.json(apiError("RATE_LIMITED"), 429);
+            // Which limit: the address's, shared with others behind it, or the member's own.
+            return c.json(apiError("RATE_LIMITED", { context: { scope: result.scope } }), 429);
           }
           if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
           return c.json(apiError("VALIDATION"), 400);

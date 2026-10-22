@@ -72,15 +72,29 @@ export async function submit(
     if (replay) return replayOf(replay, actor);
 
     // Counted on this transaction's connection, so nothing here waits for a second one while holding the lock; a unit
-    // is spent only if the request is written.
+    // is spent only if the request is written. `scope` says which limit refused: the address's (an office, a hotel,
+    // a carrier's NAT — shared with others) or the member's own; the app words them differently.
     if (actor.ip) {
       const ip = await deps.rateLimit.check("requests.submit.ip", `ip:${actor.ip}`, tx);
-      if (!ip.allowed) return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: ip.retryAfterMs };
+      if (!ip.allowed) {
+        return {
+          ok: false as const,
+          code: "RATE_LIMITED" as const,
+          scope: "ip" as const,
+          retryAfterMs: ip.retryAfterMs,
+        };
+      }
     }
     if (actor.memberId) {
       const member = await deps.rateLimit.check("requests.submit", `m:${actor.memberId}`, tx);
-      if (!member.allowed)
-        return { ok: false as const, code: "RATE_LIMITED" as const, retryAfterMs: member.retryAfterMs };
+      if (!member.allowed) {
+        return {
+          ok: false as const,
+          code: "RATE_LIMITED" as const,
+          scope: "member" as const,
+          retryAfterMs: member.retryAfterMs,
+        };
+      }
     }
 
     // A quote (no fare, no offer) whose app showed the indicative fare carries that estimate for its outbound route —
