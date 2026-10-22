@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Linking, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,6 +10,7 @@ import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { DestinationDetails } from "@/features/explore/DestinationDetails";
 import { destinationFromParams } from "@/features/explore/destination-route";
+import { HOME_AIRPORT_MESSAGE, isHomeAirport } from "@/features/explore/discovery-logic";
 import { fareHref } from "@/features/explore/open-offer";
 import { rememberDates } from "@/features/explore/recent-searches";
 import {
@@ -106,6 +107,8 @@ export default function DestinationScreen() {
   }
 
   const search: SearchContext = { dates: state.dates, cabin: state.cabin, passengers: state.passengers };
+  // Opened on the member's own airport (a link, a list from before): no search and no quote for a trip to itself.
+  const ownAirport = isHomeAirport(chosen.airport.code, state.from);
   const heroHeight = insets.top + PAGE.sheetTop + PAGE.corner;
   // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo.
   const bundled = clubPhoto(chosen.airport.code, "any");
@@ -139,40 +142,56 @@ export default function DestinationScreen() {
           />
         </View>
         <View style={styles.sheet}>
-          <DestinationDetails
-            look="page"
-            testIDPrefix="destination"
-            state={state}
-            offline={offline}
-            onRetry={retrySearch}
-            onOpenFare={(fare: FareVM) =>
-              router.push(
-                fareHref(fare.id, fare.offerId, {
-                  depart: state.dates.depart,
-                  return: state.dates.return,
-                  passengers: state.passengers,
-                }),
-              )
-            }
-            onEditDates={() =>
-              datesRef.current?.present(
-                {
-                  tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
-                  depart: state.dates.depart,
-                  ret: state.dates.return,
-                  editing: "depart",
-                },
-                {
-                  fromCity: state.from?.city,
-                  toCity: chosen.airport.city,
-                  toCode: chosen.airport.code,
-                  flexible: state.dates.flexible,
-                },
-              )
-            }
-            onEditCabin={() => cabinRef.current?.present(state.cabin)}
-            onEditTravelers={() => travelersRef.current?.present(state.passengers)}
-          />
+          {ownAirport ? (
+            <View style={styles.own}>
+              <StateMessage
+                testID="destination.home"
+                align="center"
+                title={HOME_AIRPORT_MESSAGE.title}
+                body={HOME_AIRPORT_MESSAGE.body}
+                primary={{
+                  label: "Search a city",
+                  testID: "destination.home.search",
+                  onPress: () => router.replace("/search" as Href),
+                }}
+              />
+            </View>
+          ) : (
+            <DestinationDetails
+              look="page"
+              testIDPrefix="destination"
+              state={state}
+              offline={offline}
+              onRetry={retrySearch}
+              onOpenFare={(fare: FareVM) =>
+                router.push(
+                  fareHref(fare.id, fare.offerId, {
+                    depart: state.dates.depart,
+                    return: state.dates.return,
+                    passengers: state.passengers,
+                  }),
+                )
+              }
+              onEditDates={() =>
+                datesRef.current?.present(
+                  {
+                    tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
+                    depart: state.dates.depart,
+                    ret: state.dates.return,
+                    editing: "depart",
+                  },
+                  {
+                    fromCity: state.from?.city,
+                    toCity: chosen.airport.city,
+                    toCode: chosen.airport.code,
+                    flexible: state.dates.flexible,
+                  },
+                )
+              }
+              onEditCabin={() => cabinRef.current?.present(state.cabin)}
+              onEditTravelers={() => travelersRef.current?.present(state.passengers)}
+            />
+          )}
           {credit ? (
             // The credit the photograph owes (ADR-IMPL-043).
             <PhotoCredit
@@ -190,28 +209,30 @@ export default function DestinationScreen() {
           ) : null}
         </View>
       </ScrollView>
-      <View style={styles.footer}>
-        <Button
-          testID="destination.quote"
-          label="Request a quote"
-          variant="primary"
-          height={PAGE.pill.height}
-          text="buttonBold"
-          style={{ paddingBottom: 2 * PAGE.pill.wordsLift }}
-          onPress={() =>
-            requestRef.current?.present({
-              fare: null,
-              profile,
-              fromCode: state.from?.code,
-              toCode: chosen.airport.code,
-              fromCity: state.from?.city,
-              city: chosen.airport.city,
-              search,
-              estimateShown: state.status === "empty" && state.estimate !== null,
-            })
-          }
-        />
-      </View>
+      {ownAirport ? null : (
+        <View style={styles.footer}>
+          <Button
+            testID="destination.quote"
+            label="Request a quote"
+            variant="primary"
+            height={PAGE.pill.height}
+            text="buttonBold"
+            style={{ paddingBottom: 2 * PAGE.pill.wordsLift }}
+            onPress={() =>
+              requestRef.current?.present({
+                fare: null,
+                profile,
+                fromCode: state.from?.code,
+                toCode: chosen.airport.code,
+                fromCity: state.from?.city,
+                city: chosen.airport.city,
+                search,
+                estimateShown: state.status === "empty" && state.estimate !== null,
+              })
+            }
+          />
+        </View>
+      )}
       <RootTabBar active="explore" />
       <RequestSheet ref={requestRef} />
       <DatesPage
@@ -243,6 +264,7 @@ export default function DestinationScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
   missing: { justifyContent: "center", paddingHorizontal: tokens.space.gutter },
+  own: { paddingHorizontal: tokens.space.gutter, paddingVertical: tokens.space.xl },
   scroll: { paddingBottom: tokens.space.lg },
   sheet: {
     marginTop: -PAGE.corner,

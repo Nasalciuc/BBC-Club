@@ -1,7 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import type { AirportVM } from "@bbc/shared/api/v1/fares";
 
-import { airportLine, airportName, deviceTimeZone, popularLabel, popularRows, popularState } from "./discovery-logic";
+import {
+  HOME_AIRPORT_MESSAGE,
+  airportLine,
+  airportName,
+  deviceTimeZone,
+  isHomeAirport,
+  popularLabel,
+  popularRows,
+  popularState,
+  withoutHome,
+} from "./discovery-logic";
 
 const a = (code: string, city: string): AirportVM => ({ code, city, name: city, countryCode: "XX", lat: 0, lng: 0 });
 const POPULAR = [a("LHR", "London"), a("CDG", "Paris"), a("HND", "Tokyo"), a("DXB", "Dubai"), a("SIN", "Singapore")];
@@ -34,6 +44,31 @@ describe("popularState — what stands under Search's field before typing (F011)
   it("Home answered without a popular destination: the hint, or the recent searches alone", () => {
     expect(popularState({ popular: 0, recent: 0, load: "ok" })).toBe("hint");
     expect(popularState({ popular: 0, recent: 1, load: "ok" })).toBe("none");
+  });
+});
+
+describe("the member's own airport is never a destination (F013)", () => {
+  const JFK = a("JFK", "New York");
+
+  it("Search's airports and recent searches leave the home airport out", () => {
+    expect(withoutHome([JFK, a("LGA", "New York"), a("LHR", "London")], JFK).map((x) => x.code)).toEqual([
+      "LGA",
+      "LHR",
+    ]);
+    const recent = [{ airport: JFK }, { airport: a("LHR", "London") }];
+    expect(withoutHome(recent, JFK).map((r) => r.airport.code)).toEqual(["LHR"]);
+    // No origin known yet: nothing is left out.
+    expect(withoutHome([JFK], null)).toHaveLength(1);
+  });
+
+  it("a destination page opened on the home airport says so instead of searching it", () => {
+    expect(isHomeAirport("JFK", JFK)).toBe(true);
+    expect(isHomeAirport("LHR", JFK)).toBe(false);
+    expect(isHomeAirport("JFK", null)).toBe(false);
+    expect(HOME_AIRPORT_MESSAGE).toEqual({
+      title: "That’s your home airport.",
+      body: "Choose another city.",
+    });
   });
 });
 

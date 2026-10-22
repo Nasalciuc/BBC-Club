@@ -27,6 +27,7 @@ import {
   popularLabel,
   popularRows,
   popularState,
+  withoutHome,
 } from "@/features/explore/discovery-logic";
 import { destinationHref } from "@/features/explore/destination-route";
 import { clearRecentSearches, readRecentSearches, rememberSearch } from "@/features/explore/recent-searches";
@@ -52,7 +53,7 @@ export default function SearchScreen() {
   const [result, setResult] = useState(() => airportSearchState<AirportVM>("idle"));
   // `Try again` runs the search effect once more; an answer that comes after the member typed on is dropped.
   const [attempt, setAttempt] = useState(0);
-  const [recent, setRecent] = useState(() => readRecentSearches());
+  const [remembered, setRemembered] = useState(() => readRecentSearches());
   const [home, setHome] = useState<HomeVM | null>(null);
   // Loading, answered, or failed with its code (offline or not): a failed Home shows its message with `Try again`,
   // never skeletons for ever (F011).
@@ -124,6 +125,11 @@ export default function SearchScreen() {
     lat: d.lat,
     lng: d.lng,
   }));
+  // The member's own airport is where the trip starts, never a destination (F013): left out of the airports found
+  // and of the recent searches.
+  const recent = withoutHome(remembered, from);
+  const airportHits = withoutHome(result.airports, from);
+  const airportPhase = result.phase === "results" && airportHits.length === 0 ? "empty" : result.phase;
   const recentAirports = recent.map((r) => r.airport);
   const shownPopular = popularRows(popular ?? suggestions, from);
   const before = popularState({ popular: shownPopular.length, recent: recent.length, load: homeLoad.state });
@@ -164,7 +170,7 @@ export default function SearchScreen() {
         keyboardDismissMode="on-drag"
       >
         {typing ? (
-          result.phase === "empty" ? (
+          airportPhase === "empty" ? (
             <View style={styles.message}>
               <EmptyState
                 testID="search.empty"
@@ -177,7 +183,7 @@ export default function SearchScreen() {
                 primaryFill={false}
               />
             </View>
-          ) : result.phase === "error" ? (
+          ) : airportPhase === "error" ? (
             <View style={styles.message}>
               <StateMessage
                 testID="search.error"
@@ -197,7 +203,7 @@ export default function SearchScreen() {
                     <Skeleton height={55} radius="sm" />
                   </>
                 ) : (
-                  result.airports.map((a) => (
+                  airportHits.map((a) => (
                     <AirportRow
                       key={a.code}
                       testID={`explore.airport.${a.code}`}
@@ -269,7 +275,7 @@ export default function SearchScreen() {
                     testID: "search.recent.clear",
                     onPress: () => {
                       clearRecentSearches();
-                      setRecent([]);
+                      setRemembered([]);
                     },
                   }}
                 />

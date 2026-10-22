@@ -11,6 +11,23 @@ export function popularRows(popular: readonly AirportVM[], from: Pick<AirportVM,
   return popular.filter((a) => a.code !== from?.code).slice(0, max);
 }
 
+/** A row Search lists: an airport, or a recent search of one. */
+type Listed = Pick<AirportVM, "code"> | { airport: Pick<AirportVM, "code"> };
+const codeOf = (row: Listed) => ("airport" in row ? row.airport.code : row.code);
+
+/** The member's own airport is where the trip starts, never where it goes (F013): Search's airports and recent searches
+ *  leave it out. Nothing is left out before the origin is known. */
+export function withoutHome<T extends Listed>(rows: readonly T[], home: Pick<AirportVM, "code"> | null): T[] {
+  return home ? rows.filter((row) => codeOf(row) !== home.code) : [...rows];
+}
+
+/** A destination's page opened on the member's own airport (a link, an older list): it says so instead of searching. */
+export function isHomeAirport(code: string, home: Pick<AirportVM, "code"> | null): boolean {
+  return home !== null && home.code === code;
+}
+
+export const HOME_AIRPORT_MESSAGE = { title: "That’s your home airport.", body: "Choose another city." } as const;
+
 /** Where Search's GET /v1/home stands: still on its way, answered, or failed. */
 export type HomeLoad = "loading" | "ok" | "failed";
 
