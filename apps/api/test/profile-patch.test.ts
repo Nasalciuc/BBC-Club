@@ -183,7 +183,7 @@ describe("PATCH /v1/profile", () => {
     await t.close();
   });
 
-  it("text Postgres cannot hold (U+0000) is 400, never 500", async () => {
+  it("text Postgres cannot keep as sent (U+0000, a surrogate without its pair) is 400, never 500", async () => {
     const t = await testApp({ suite: "profile-nul" });
     const name = await t.app.request("/v1/profile", {
       method: "PATCH",
@@ -197,6 +197,27 @@ describe("PATCH /v1/profile", () => {
       body: JSON.stringify({ notes: "window seat\u0000" }),
     });
     expect(notes.status).toBe(400);
+
+    // A surrogate without its pair, as JSON can carry it: jsonb refuses the escape (travel notes answered 500), text
+    // would keep U+FFFD instead of what was sent. A pair (an emoji) is text like any other.
+    const send = (method: string, path: string, body: string) =>
+      t.app.request(path, {
+        method,
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body,
+      });
+    for (const [method, path, body] of [
+      ["PUT", "/v1/profile/travel", '{"notes":"window \\ud800 seat"}'],
+      ["PUT", "/v1/profile/travel", '{"notes":"\\udc00"}'],
+      ["PATCH", "/v1/profile", '{"displayName":"An\\ud83d"}'],
+    ] as const) {
+      const r = await send(method, path, body);
+      expect([body, r.status]).toEqual([body, 400]);
+      const details = ((await r.json()) as { error: { details: { message: string }[] } }).error.details;
+      expect(details[0]?.message).toBe("That text has a character we can't keep. Remove it and try again.");
+    }
+    expect((await send("PUT", "/v1/profile/travel", JSON.stringify({ notes: "Window seat ✈️ 🛫" }))).status).toBe(200);
+    expect((await send("PATCH", "/v1/profile", JSON.stringify({ displayName: "Ana 😀" }))).status).toBe(200);
     await t.close();
   });
 

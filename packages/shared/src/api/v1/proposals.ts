@@ -116,14 +116,34 @@ export type PasswordBody = z.infer<typeof PasswordBody>;
  *  and members (core) may not ask catalog (domain); Home answers home:null for a code it does not know. */
 const IATA = /^[A-Za-z]{3}$/;
 
-/** Postgres text cannot hold U+0000: a free-text field carrying it passed the contract and answered 500. */
-const noNul = (s: string) => !s.includes("\u0000");
-const NO_NUL = { message: "That text has a character we can't keep. Remove it and try again." };
+/** Text Postgres keeps as sent. U+0000: text refuses it. A UTF-16 surrogate without its pair (JSON can carry "\ud800"):
+ *  jsonb refuses its escape, so travel notes answered 500, and text would keep U+FFFD in its place. Either passed the
+ *  contract. A loop, not `isWellFormed` or a lookbehind: the same check runs in the app on Hermes. */
+const storable = (s: string) => {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0) return false;
+    if (c >= 0xdc00 && c <= 0xdfff) return false;
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const next = s.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+      i++;
+    }
+  }
+  return true;
+};
+const NOT_STORABLE = { message: "That text has a character we can't keep. Remove it and try again." };
 
 export const ProfilePatchBody = z
   .object({
     // Trimmed, never blank. 120 for CRM names; the request sheet's 2-80 is the app's rule.
-    displayName: z.string().trim().min(1, { message: "Tell us your name." }).max(120).refine(noNul, NO_NUL).optional(),
+    displayName: z
+      .string()
+      .trim()
+      .min(1, { message: "Tell us your name." })
+      .max(120)
+      .refine(storable, NOT_STORABLE)
+      .optional(),
     homeAirport: z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase().optional(),
     // Read by Intl for quiet hours: a zone it cannot read stopped every broadcast campaign (ADR-IMPL-058).
     timezone: z.string().min(1).max(80).refine(isIanaZone, { message: "Choose a time zone from the list." }).optional(),
@@ -159,7 +179,7 @@ export const TravelPreferencesBody = z
     cabin: z.enum(["business", "first"]).optional(),
     frequency: z.enum(["monthly", "quarterly", "rarely"]).optional(),
     passengers: Passengers.optional(),
-    notes: z.string().max(500).refine(noNul, NO_NUL).optional(),
+    notes: z.string().max(500).refine(storable, NOT_STORABLE).optional(),
   })
   // On the body, not on the shared Passengers: RequestVM and ProfileVM parse with Passengers, and a stored row that
   // breaks the rule must still read.
@@ -190,10 +210,10 @@ export type NotificationPreferencesBody = z.infer<typeof NotificationPreferences
 /** Bounded well under the 2 704-byte btree row of UNIQUE device_native_token (a 10 000-character token answered 500);
  *  APNs (64 hex) and FCM (~160) tokens fit many times over. */
 export const DeviceBody = z.object({
-  deviceId: z.string().min(1).max(200).refine(noNul, NO_NUL),
+  deviceId: z.string().min(1).max(200).refine(storable, NOT_STORABLE),
   platform: z.enum(["ios", "android"]),
-  nativeToken: z.string().min(1).max(1024).refine(noNul, NO_NUL),
-  expoToken: z.string().max(1024).refine(noNul, NO_NUL).optional(),
-  appVersion: z.string().max(32).refine(noNul, NO_NUL).optional(),
+  nativeToken: z.string().min(1).max(1024).refine(storable, NOT_STORABLE),
+  expoToken: z.string().max(1024).refine(storable, NOT_STORABLE).optional(),
+  appVersion: z.string().max(32).refine(storable, NOT_STORABLE).optional(),
 });
 export type DeviceBody = z.infer<typeof DeviceBody>;

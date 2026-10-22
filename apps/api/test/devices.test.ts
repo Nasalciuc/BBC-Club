@@ -77,6 +77,7 @@ describe("POST /v1/devices", () => {
       [t.memberA.cookie, { expoToken: "x".repeat(1025) }],
       [t.memberB.cookie, { appVersion: "1.0.0\u0000" }],
       [t.memberB.cookie, { appVersion: "1".repeat(33) }],
+      [t.memberB.cookie, { deviceId: "dev\ud800" + crypto.randomUUID() }],
     ];
     for (const [cookie, over] of refused) {
       const r = await post(cookie, over);
