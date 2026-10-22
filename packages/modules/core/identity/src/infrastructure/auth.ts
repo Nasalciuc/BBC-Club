@@ -36,6 +36,7 @@ const FIFTEEN_MINUTES = 60 * 15;
 
 export function createAuth({ env, db, email, events, logger, breachedPassword }: IdentityDeps) {
   const isProd = env.NODE_ENV === "production";
+  const isBreached = breachCheck({ env, breachedPassword });
 
   return betterAuth({
     appName: "BuyBusinessClass Club",
@@ -63,7 +64,9 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
 
     emailAndPassword: {
       enabled: true,
-      minPasswordLength: 8, // number/symbol rule is enforced by the shared Zod schema; breach check below
+      // The number-or-symbol rule: the app's schema for every path, club-guards for a reset by code (before its code is
+      // used). A change or first set through POST /v1/account/password relies on the app until PasswordBody carries it.
+      minPasswordLength: 8,
       maxPasswordLength: 128,
       requireEmailVerification: true, // no session until the code is verified
       autoSignIn: false,
@@ -150,7 +153,7 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
 
     plugins: [
       expo(),
-      clubGuards(),
+      clubGuards({ isBreached }),
       emailOTP({
         otpLength: 6,
         expiresIn: FIFTEEN_MINUTES,
@@ -188,7 +191,7 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       // Tests: a stand-in that refuses exactly as the plugin does (same paths, at hash time, PASSWORD_COMPROMISED), with a
       // predicate instead of the network.
       env.NODE_ENV === "test" || breachedPassword !== undefined
-        ? breachListStandIn(breachCheck({ env, breachedPassword }))
+        ? breachListStandIn(isBreached)
         : haveIBeenPwned({ customPasswordCompromisedMessage: BREACHED_PASSWORD_MESSAGE }),
       jwt({ jwks: { keyPairConfig: { alg: "EdDSA", crv: "Ed25519" } }, disableSettingJwtHeader: true }), // operator/system callers only
       bearer(),

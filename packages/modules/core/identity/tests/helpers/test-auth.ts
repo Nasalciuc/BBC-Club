@@ -28,7 +28,7 @@ function capturingMailbox(): EmailSender & {
 
 export type IdentityTestOpts = {
   /** When set, replaces the real HIBP plugin with this predicate. */
-  hibp?: (password: string) => boolean;
+  hibp?: (password: string) => boolean | Promise<boolean>;
 };
 
 export async function testAuth(opts: IdentityTestOpts = {}) {
