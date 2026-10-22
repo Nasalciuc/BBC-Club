@@ -4,6 +4,7 @@ import type { FareVM } from "@bbc/shared/api/v1/fares";
 import { CHIP_SLOP, Chip, FlightCard, Skeleton, baselineOffset, belowBaseline, fareBasis, rn, tokens } from "@bbc/ui";
 
 import { airlineMark } from "@/features/fares/airline-marks";
+import { withKnownCarrier } from "@/features/fares/known-carrier";
 import type { SearchState } from "@/features/search/useSearch";
 import { countryName } from "@/lib/countries";
 import { formatPrice } from "@/lib/format";
@@ -455,7 +456,8 @@ function Options({
           <FlightCard
             key={fare.id}
             testID={`${testIDPrefix}.fare.${fare.id}`}
-            fare={fare}
+            // A fare that names no airline prints none (never `Unknown`), as on its page and its request.
+            fare={withKnownCarrier(fare)}
             layout={layout}
             mark={airlineMark(fare.carrier.code)}
             onPress={() => onOpenFare(fare)}

@@ -44,7 +44,7 @@ import {
   savings as savingsOf,
   shareFareText,
 } from "@/features/fares/fare-page-logic";
-import { knownCarrier } from "@/features/fares/known-carrier";
+import { withKnownCarrier } from "@/features/fares/known-carrier";
 import { offerFare } from "@/features/fares/offer-page-logic";
 import { routeFareFor } from "@/features/fares/route-fare";
 import { useFareWeather } from "@/features/fares/weather";
@@ -511,7 +511,7 @@ export default function FareDetailScreen() {
           <FareOverviewCard
             testID="fare.flight"
             // A fare that names no airline prints none (never `Unknown`), as the request records none.
-            fare={knownCarrier(fare.carrier) ? fare : { ...fare, carrier: { ...fare.carrier, name: "" } }}
+            fare={withKnownCarrier(fare)}
             ribbon={airlineRibbon(fare.carrier.code)}
           />
         </View>

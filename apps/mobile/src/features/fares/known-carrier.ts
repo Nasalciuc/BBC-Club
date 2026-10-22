@@ -17,3 +17,11 @@ export function knownCarrier<C extends Pick<FareVM["carrier"], "code" | "name">>
   const name = carrier.name.trim();
   return name.length > 0 && name.toLowerCase() !== NO_AIRLINE ? carrier : null;
 }
+
+/**
+ * A fare as a card prints it (`FareOverviewCard` on the fare's page, `FlightCard` in a destination's flight options):
+ * a fare that names no airline carries no name to print — never `Unknown`. A fare with an airline is left as it is.
+ */
+export function withKnownCarrier<F extends { carrier: Pick<FareVM["carrier"], "code" | "name"> }>(fare: F): F {
+  return knownCarrier(fare.carrier) ? fare : { ...fare, carrier: { ...fare.carrier, name: "" } };
+}
