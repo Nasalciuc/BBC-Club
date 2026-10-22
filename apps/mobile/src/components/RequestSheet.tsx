@@ -31,6 +31,7 @@ import { clubPhoto } from "@/features/places/club-photos";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
+import { putConfirmation } from "@/features/requests/confirmation-handoff";
 import {
   REQUEST_NAME_MAX,
   bodyProblem,
@@ -203,10 +204,11 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     modalRef.current?.dismiss();
     const outbound = state.legs[0];
     const round = state.tripType === "round";
-    const query = new URLSearchParams({
-      id: input.id,
+    // Handed over in memory, keyed by the request's id (saved offline: its queued key) — the URL carries only that key
+    // and whether it was queued, never the phone, the city or a picture (F014).
+    const key = input.id || keyRef.current;
+    putConfirmation(key, {
       source: sourceRef.current,
-      queued: input.queued ? "1" : "0",
       city: cityRef.current,
       phone: input.phone,
       from: outbound?.from ?? "",
@@ -215,11 +217,12 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       trip: state.tripType,
       dates: datesChipLabel({ depart: outbound?.date || null, return: round ? state.legs[1]?.date || null : null }),
       travelers: travelersLabel(state.passengers),
-      carrier: summary.carrier?.name ?? "",
-      airline: summary.carrier?.code ?? "",
-      logo: summary.carrier?.logoUrl ?? "",
-      media: photoRef.current ?? "",
+      carrier: summary.carrier
+        ? { name: summary.carrier.name, code: summary.carrier.code, logoUrl: summary.carrier.logoUrl }
+        : null,
+      media: photoRef.current,
     });
+    const query = new URLSearchParams({ id: key, queued: input.queued ? "1" : "0" });
     router.push(`/request/confirmed?${query.toString()}` as Href);
   }
 

@@ -33,14 +33,24 @@ import {
 import { RECEIVED_TRIP_FRAME, clubPhoto, clubReceivedPhoto } from "@/features/places/club-photos";
 import { bandPicture, cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import {
+  type ConfirmationModel,
+  confirmationFromRequest,
+  confirmationRoute,
+  readConfirmation,
+} from "@/features/requests/confirmation-handoff";
 import { confirmationKind, otherFares, tripFacts, type RequestSource } from "@/features/requests/confirmation-logic";
 import { useProfile } from "@/features/profile/useProfile";
+import { fetchRequest } from "@/lib/api";
 import { env } from "@/lib/env";
 import { displayPhone } from "@/lib/phone";
 import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
 import { appStorage, PUSH_ASKED_AT_KEY } from "@/lib/storage-keys";
 
 type Role = { fontSize: number; lineHeight: number };
+
+/** A request's id on the server; a request saved offline is keyed by its queued key instead. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The margin that puts a line's baseline `pitch` under the one before it. */
 const after = (pitch: number, prev: Role, next: Role) => pitch - belowBaseline(prev) - baselineOffset(next);
@@ -123,35 +133,38 @@ export default function RequestConfirmedScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const askRef = useRef<NotificationsAskSheetHandle>(null);
-  const params = useLocalSearchParams<{
-    id?: string;
-    source?: string;
-    queued?: string;
-    city?: string;
-    phone?: string;
-    from?: string;
-    to?: string;
-    cabin?: string;
-    trip?: string;
-    dates?: string;
-    travelers?: string;
-    carrier?: string;
-    airline?: string;
-    logo?: string;
-    media?: string;
-  }>();
-  const text = (v: string | undefined) => (typeof v === "string" ? v : "");
-  const source: RequestSource = params.source === "search" ? "search" : "offer";
-  const kind = confirmationKind(source, params.queued === "1");
+  // Only the request's id (or queued key) and whether it was saved offline come from the URL (F014): what the page
+  // shows was handed over by the sheet, in memory — or, after a relaunch or from a link, is read from the request
+  // itself. No phone, city or picture is ever taken from a param.
+  const route = confirmationRoute(useLocalSearchParams());
+  const handedOver = readConfirmation(route.id);
+  const [loaded, setLoaded] = useState<ConfirmationModel | null>(null);
+  const model = handedOver ?? loaded;
+  const fromServer = !handedOver && !route.queued && UUID.test(route.id);
+  useEffect(() => {
+    if (!fromServer) return;
+    let cancelled = false;
+    void (async () => {
+      const result = await fetchRequest(route.id);
+      if (!cancelled && result.ok) {
+        setLoaded(confirmationFromRequest(result.data, displayPhone(result.data.phone ?? null)));
+      }
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [fromServer, route.id]);
+  const source: RequestSource = model?.source ?? "search";
+  const kind = confirmationKind(source, route.queued);
   // The number this request will be called on, as the sheet sent it; the profile's only when the sheet passed none.
-  const requestPhone = text(params.phone) || null;
+  const requestPhone = model?.phone || null;
   // The profile from the one store every screen shares (F104) — asked only when the sheet passed no number. Saved on
   // the phone (offline): this screen names no number, and there is no network to ask.
   const profile = useProfile({ load: !requestPhone && kind !== "saved" });
   const phone = requestPhone ?? (kind === "saved" ? null : displayPhone(profile?.phone ?? null));
-  const from = text(params.from);
-  const to = text(params.to);
-  const city = text(params.city);
+  const from = model?.from ?? "";
+  const to = model?.to ?? "";
+  const city = model?.city ?? "";
   // Home's offers for `Other great fares` — no origin to resolve here.
   const { home } = useExploreHome({ origin: false });
   const others = otherFares(home, to);
@@ -178,7 +191,8 @@ export default function RequestConfirmedScreen() {
     };
   }, []);
 
-  const id = text(params.id);
+  // A request saved offline has no id on the server yet: nothing to view.
+  const id = route.queued ? "" : route.id;
   const viewRequest = () => {
     if (id) router.push(`/request/${id}` as Href);
   };
@@ -259,7 +273,7 @@ export default function RequestConfirmedScreen() {
   const g = PAGE;
   const heroHeight = insets.top + g.hero;
   const own = clubReceivedPhoto(to);
-  const picture = bandPicture(text(params.media) || null, photoFor(to), {
+  const picture = bandPicture(model?.media ?? null, photoFor(to), {
     headers: PICTURE_HEADERS,
     mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
     size: { width, height: heroHeight },
@@ -268,10 +282,10 @@ export default function RequestConfirmedScreen() {
   const heroSource = own?.source ?? picture.source;
   const credit = own ? null : picture.credit;
   const creditLink = credit?.link ?? null;
-  const carrierName = text(params.carrier);
-  const carrier = carrierName ? { name: carrierName, logoUrl: text(params.logo) || null } : null;
-  const airline = text(params.airline) || null;
-  const facts = tripFacts(text(params.trip), text(params.travelers));
+  const carrierName = model?.carrier?.name ?? "";
+  const carrier = carrierName ? { name: carrierName, logoUrl: model?.carrier?.logoUrl ?? null } : null;
+  const airline = model?.carrier?.code ?? null;
+  const facts = tripFacts(model?.trip ?? "", model?.travelers ?? "");
   const lastLine = phone ? phoneRole : body;
 
   return (
@@ -358,15 +372,13 @@ export default function RequestConfirmedScreen() {
             >
               <TripCard
                 testID="confirmation.trip"
-                photo={
-                  clubPhoto(to, "request") ?? cardPicture(text(params.media) || null, photoFor(to), PICTURE_HEADERS)
-                }
+                photo={clubPhoto(to, "request") ?? cardPicture(model?.media ?? null, photoFor(to), PICTURE_HEADERS)}
                 position={clubPhoto(to, "request") ? RECEIVED_TRIP_FRAME : undefined}
                 fallback={CLUB_PICTURE}
-                cabin={params.cabin === "first" ? "FIRST CLASS" : "BUSINESS CLASS"}
+                cabin={model?.cabin === "first" ? "FIRST CLASS" : "BUSINESS CLASS"}
                 from={from}
                 to={to}
-                dates={text(params.dates) || null}
+                dates={model?.dates || null}
                 facts={facts}
                 carrier={carrier}
                 ribbon={carrier ? airlineRibbon(airline) : null}
