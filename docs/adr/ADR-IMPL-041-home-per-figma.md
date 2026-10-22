@@ -273,8 +273,10 @@ day before listed it; and a fare whose sale opens next week was listed for a lat
 `valid_from ≤ now < valid_until`, the rule of `GET /v1/fares/:id`, so no listed fare opens on a 410. With a travel day,
 a timed fare (`depart_at` set) matches when its departure day in the origin airport's zone is that day; an undated fare
 matches while it is still sold on that day (`when < valid_until`). An undated search, and the estimate it alone can
-carry (ADR-IMPL-037), are unchanged. A `when` before yesterday or more than two years ahead is refused (400): a past day
-has no fare to sell, and a year Postgres cannot hold was a 500.
+carry (ADR-IMPL-037), are unchanged. A `when` before yesterday or more than two years ahead has no fare: the search
+answers an empty list (no estimate, no demand noted) without asking Postgres, where a year it cannot hold was a 500. Not
+a 400: Search's recent searches keep the dates they were searched for (`recent-searches.ts`), so a day gone by is still
+sent, and an error there would come back on every Try again. A `when` that is no date at all stays a 400.
 
 **Consequences.** API only (`faresRepo.searchSelect`, the `/v1/search` route). Tests: `apps/api/test/catalog.test.ts`
 (a flight on its own day though its sale closed the day before, not the day before or after; a fare on sale from ten

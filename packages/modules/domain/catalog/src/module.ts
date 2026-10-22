@@ -36,8 +36,9 @@ const IATA = /^[A-Z]{3}$/;
 /** A fare's id is a UUID: anything else is no fare (404), never a cast Postgres refuses (500). */
 const isUuid = (v: string) => z.string().uuid().safeParse(v).success;
 
-/** The travel dates a search takes: from yesterday (a member a day behind UTC still means today) to two years ahead —
- *  nothing is sold further out, and a year Postgres cannot store is never a 500. */
+/** The travel days fares are sold for: from yesterday (a member a day behind UTC still means today) to two years ahead.
+ *  A day outside them has no fare — the search answers an empty list without asking Postgres (a year it cannot store
+ *  was a 500). Never an error: the app's recent searches keep their dates, and a day gone by is still sent. */
 function searchWhenInRange(when: Date, now = new Date()): boolean {
   const earliest = new Date(now.getTime() - 86_400_000);
   const latest = new Date(now);
@@ -216,27 +217,29 @@ export const catalogModule = (
         if (when && Number.isNaN(when.getTime())) {
           return c.json(apiError("VALIDATION", { message: "when must be ISO datetime" }), 400);
         }
-        if (when && !searchWhenInRange(when)) {
-          return c.json(apiError("VALIDATION", { message: "when must be a day from today to two years ahead" }), 400);
-        }
+        // A day gone by (a recent search's remembered date) or further out than anything is sold: no fare flies then.
+        // An empty list, as for any day without one — an error would come back on every Try again.
+        const sold = !when || searchWhenInRange(when);
 
         const [fromApt, toApt, rows] = await Promise.all([
           airportsRepo.get(conn, from),
           airportsRepo.get(conn, to),
-          faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }),
+          sold ? faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }) : Promise.resolve([]),
         ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
 
         const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
-        const month = (when ?? new Date()).toISOString().slice(0, 7);
-        platform.search.note({
-          from,
-          to,
-          cabin,
-          month,
-          hadFares: items.length > 0,
-          results: items.length,
-        });
+        // Demand counts the days fares are sold for; a day outside them is no route's demand.
+        if (sold) {
+          platform.search.note({
+            from,
+            to,
+            cabin,
+            month: (when ?? new Date()).toISOString().slice(0, 7),
+            hadFares: items.length > 0,
+            results: items.length,
+          });
+        }
         // No fare in this cabin: the company's formula, as an indicative price (ADR-IMPL-037). Undated searches only —
         // with a date, the route may have fares on other days, and published fares always win. The flag rows are read
         // only then, so searches with fares cost nothing extra. The rules are not in the repository: each environment

@@ -45,7 +45,9 @@ describe("catalog routes", () => {
   });
 
   // A malformed id, a NUL byte or a date no calendar holds is the member's input, never a server error: each used to
-  // reach Postgres (a uuid cast, a NUL in text, a year out of range) and answer 500 INTERNAL.
+  // reach Postgres (a uuid cast, a NUL in text, a year out of range) and answer 500 INTERNAL. A day outside the days
+  // fares are sold for — gone by, as a recent search remembers it, or years out — has no fare: an empty list without a
+  // query, never an error the app would show again on every Try again.
   it("bad input is a 404 or a 400 before any query, never a 500", async () => {
     const t = await testApp({ suite: "catalog-bad-input" });
     await t.seedCatalogBasics();
@@ -54,32 +56,45 @@ describe("catalog routes", () => {
     const day = 86_400_000;
     const at = (ms: number) => encodeURIComponent(new Date(Date.now() + ms).toISOString());
     const search = "/v1/search?from=JFK&to=LHR&cabin=business";
+    /** How many fares a search for that day lists (a 200, whatever the day). */
+    const fares = async (when: string) => {
+      const r = await t.app.request(`${search}&when=${when}`, { headers: { Cookie: t.memberA.cookie } });
+      expect({ when, status: r.status }).toEqual({ when, status: 200 });
+      return ((await r.json()) as { items: unknown[] }).items.length;
+    };
     expect({
       fareNotUuid: await status("/v1/fares/abc"),
       fareUnknown: await status("/v1/fares/00000000-0000-4000-8000-000000000000"),
       airportsNul: await status("/v1/airports?q=lon%00don"),
       searchFromNul: await status("/v1/search?from=J%00K&to=LHR&cabin=business"),
       searchToDigits: await status("/v1/search?from=JFK&to=1A2&cabin=business"),
-      whenYearZero: await status(`${search}&when=0000-01-01T00:00:00Z`),
-      whenNegativeYear: await status(`${search}&when=-000001-01-01T00:00:00Z`),
-      whenFarFuture: await status(`${search}&when=%2B275760-09-13T00:00:00.000Z`),
-      whenLastWeek: await status(`${search}&when=${at(-7 * day)}`),
-      whenIn3Years: await status(`${search}&when=${at(3 * 365 * day)}`),
-      whenToday: await status(`${search}&when=${at(0)}`),
-      whenNextMonth: await status(`${search}&when=${at(30 * day)}`),
+      whenNotADate: await status(`${search}&when=tomorrow`),
     }).toEqual({
       fareNotUuid: 404,
       fareUnknown: 404,
       airportsNul: 400,
       searchFromNul: 400,
       searchToDigits: 400,
-      whenYearZero: 400,
-      whenNegativeYear: 400,
-      whenFarFuture: 400,
-      whenLastWeek: 400,
-      whenIn3Years: 400,
-      whenToday: 200,
-      whenNextMonth: 200,
+      whenNotADate: 400,
+    });
+    // The fares listed for each day: none outside the days fares are sold for, the route's undated fares inside them.
+    const listed = {
+      yearZero: await fares("0000-01-01T00:00:00Z"),
+      negativeYear: await fares("-000001-01-01T00:00:00Z"),
+      farFuture: await fares("%2B275760-09-13T00:00:00.000Z"),
+      lastWeek: await fares(at(-7 * day)),
+      in3Years: await fares(at(3 * 365 * day)),
+      today: await fares(at(0)),
+      nextWeek: await fares(at(7 * day)),
+    };
+    expect({ ...listed, today: listed.today > 0, nextWeek: listed.nextWeek > 0 }).toEqual({
+      yearZero: 0,
+      negativeYear: 0,
+      farFuture: 0,
+      lastWeek: 0,
+      in3Years: 0,
+      today: true,
+      nextWeek: true,
     });
     await t.close();
   });
