@@ -46,6 +46,21 @@ describe("errorForLog", () => {
     expect(logged.cause).toMatchObject({ name: "DrizzleQueryError", sqlstate: "57014" });
   });
 
+  it("withholds a wrapper message that repeats the failed query's text", () => {
+    const query = Object.assign(new Error(`Failed query: select\nparams: ${SECRET}`), {
+      name: "DrizzleQueryError",
+      query: "select",
+      params: [SECRET],
+      cause: { code: "57014" },
+    });
+    const wrapped = new Error(`save failed: ${query.message}`, { cause: query });
+    const logged = errorForLog(wrapped);
+    expect(JSON.stringify(logged)).not.toContain(SECRET);
+    expect(logged.message).not.toContain("save failed");
+    expect(logged.cause).toMatchObject({ name: "DrizzleQueryError", message: "Failed query", sqlstate: "57014" });
+    expect(errorLine(wrapped)).not.toContain(SECRET);
+  });
+
   it("keeps an ordinary error's name and message, and drops the fields it carries", () => {
     const err = Object.assign(new Error("request timed out"), { name: "TimeoutError", body: { email: "a@b.c" } });
     const logged = errorForLog(err);

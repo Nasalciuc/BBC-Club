@@ -35,6 +35,13 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
+/** Whether this error or anything in its cause chain is a query error — a wrapper over one is suspect. */
+function wrapsQueryError(err: unknown, depth = 0): boolean {
+  if (!(err instanceof Error) || depth > MAX_DEPTH) return false;
+  if (isQueryError(err)) return true;
+  return wrapsQueryError((err as { cause?: unknown }).cause, depth + 1);
+}
+
 export function errorForLog(err: unknown, depth = 0): LoggedError {
   if (!(err instanceof Error)) {
     // A thrown string or object: its type only — its text may be anything.
@@ -59,9 +66,13 @@ export function errorForLog(err: unknown, depth = 0): LoggedError {
       stack: frames(err.stack),
     };
   }
+  // A wrapper that repeats its cause's text (`save failed: ${cause.message}`) repeats the query's parameters too:
+  // sanitising the cause below does not clean the copy up here. Its own words are withheld; the cause, sanitised,
+  // still says what failed.
+  const repeatsCause = cause instanceof Error && cause.message.length > 0 && err.message.includes(cause.message);
   return {
     name: err.name,
-    message: err.message,
+    message: repeatsCause && wrapsQueryError(err) ? "message withheld: it repeats a failed query" : err.message,
     stack: frames(err.stack),
     ...(next ? { cause: next } : {}),
   };
