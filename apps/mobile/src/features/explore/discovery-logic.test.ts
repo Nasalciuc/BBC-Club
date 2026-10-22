@@ -29,6 +29,18 @@ describe("airportName", () => {
     expect(airportName({ name: "London", city: "London" })).toBe("London Airport");
     expect(airportLine({ name: "Heathrow", code: "LHR" })).toBe("Heathrow Airport  ·  LHR");
   });
+
+  it("keeps the city when what is left is only a generic word — never a bare `International`", () => {
+    expect(airportName({ name: "Los Angeles International", city: "Los Angeles" })).toBe("Los Angeles International");
+    expect(airportName({ name: "Long Beach International Airport", city: "Long Beach" })).toBe(
+      "Long Beach International Airport",
+    );
+    expect(airportName({ name: "Bangor Airport", city: "Bangor" })).toBe("Bangor Airport");
+    expect(airportName({ name: "Roanoke Regional Airport", city: "Roanoke" })).toBe("Roanoke Regional Airport");
+    // A remainder that names the airport is kept without its city, as before.
+    expect(airportName({ name: "London Heathrow Airport", city: "London" })).toBe("Heathrow Airport");
+    expect(airportName({ name: "Heathrow Airport", city: "London" })).toBe("Heathrow Airport");
+  });
 });
 
 describe("deviceTimeZone", () => {

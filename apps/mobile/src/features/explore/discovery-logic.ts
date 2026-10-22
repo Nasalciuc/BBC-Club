@@ -25,15 +25,19 @@ function defaultResolve(): string | undefined {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
+/** What is left of `Los Angeles International` without its city: generic words only, which name no airport. */
+const GENERIC_ONLY = /^(?:(?:international|intl\.?|regional|municipal|airport|airfield)\s*)+$/i;
+
 /**
  * `Heathrow Airport` (03, 18): the catalogue's name (`Heathrow`), called an airport where it does not say so already
  * (`John F Kennedy International`, `Leonardo da Vinci–Fiumicino Airport` stay as they are), without the city it sits
- * under (18: `London` over `City Airport`, not `London City Airport`).
+ * under (18: `London` over `City Airport`, not `London City Airport`) — unless only generic words would be left
+ * (`Los Angeles International` stays whole, never a bare `International`).
  */
 export function airportName(airport: Pick<AirportVM, "name"> & Partial<Pick<AirportVM, "city">>): string {
   const city = airport.city?.trim();
   const rest = city && airport.name.startsWith(`${city} `) ? airport.name.slice(city.length + 1).trim() : "";
-  const name = rest || airport.name;
+  const name = rest && !GENERIC_ONLY.test(rest) ? rest : airport.name;
   return /airport|international|aeroport|aeropuerto|aeroporto|flughafen/i.test(name) ? name : `${name} Airport`;
 }
 
