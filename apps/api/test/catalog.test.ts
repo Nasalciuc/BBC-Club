@@ -93,21 +93,25 @@ describe("catalog routes", () => {
     // Day D, three weeks out, in New York; the flight leaves at 20:10 there — already the next day in UTC.
     const d = new Date(Date.now() + 21 * DAY).toISOString().slice(0, 10);
     const departAt = new Date(`${d}T20:10:00-05:00`);
-    const [{ id: timed }] = (await t.db.execute(sql`
+    const idOf = (rows: unknown) => (rows as { id: string }[])[0]?.id ?? "";
+    const timed = idOf(
+      await t.db.execute(sql`
       INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, carrier_name, nonstop, duration_minutes,
         depart_at, arrive_at, price, currency, source, valid_from, valid_until, published)
       VALUES ('JFK', 'LHR', 'business', 'VS', 'Virgin Atlantic', true, 410,
         ${departAt.toISOString()}::timestamptz, ${new Date(departAt.getTime() + 410 * 60_000).toISOString()}::timestamptz,
         '4350.00', 'USD', 'manual', now() - interval '1 day', ${new Date(departAt.getTime() - DAY).toISOString()}::timestamptz, true)
-      ON CONFLICT (route_from, route_to, cabin, carrier, valid_from) DO NOTHING
-      RETURNING id`)) as unknown as { id: string }[];
+      RETURNING id`),
+    );
     // On sale from ten days ahead: its page answers 410 until then, so no search lists it.
-    const [{ id: later }] = (await t.db.execute(sql`
+    const later = idOf(
+      await t.db.execute(sql`
       INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, carrier_name, nonstop, duration_minutes,
         price, currency, source, valid_from, valid_until, published)
       VALUES ('JFK', 'LHR', 'business', 'LX', 'Swiss', true, 430, '3990.00', 'USD', 'manual',
         now() + interval '10 days', now() + interval '40 days', true)
-      RETURNING id`)) as unknown as { id: string }[];
+      RETURNING id`),
+    );
     const ids = async (when?: string) => {
       const query = new URLSearchParams({ from: "JFK", to: "LHR", cabin: "business", ...(when ? { when } : {}) });
       const r = await t.app.request(`/v1/search?${query}`, { headers: { Cookie: t.memberA.cookie } });
@@ -128,9 +132,11 @@ describe("catalog routes", () => {
     expect((await t.app.request(`/v1/fares/${later}`, { headers: { Cookie: t.memberA.cookie } })).status).toBe(410);
 
     // An undated fare (sold for 30 days) is any day's while it is sold, not past it.
-    const [{ id: ba }] = (await t.db.execute(
-      sql`SELECT id FROM catalog.fares WHERE route_from = 'JFK' AND route_to = 'LHR' AND carrier = 'BA'`,
-    )) as unknown as { id: string }[];
+    const ba = idOf(
+      await t.db.execute(
+        sql`SELECT id FROM catalog.fares WHERE route_from = 'JFK' AND route_to = 'LHR' AND carrier = 'BA'`,
+      ),
+    );
     expect(await ids(noon(shift(0)))).toContain(ba);
     expect(await ids(new Date(Date.now() + 35 * DAY).toISOString())).not.toContain(ba);
     await t.close();
