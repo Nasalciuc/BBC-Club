@@ -57,12 +57,20 @@ export default function VerifyCodeScreen() {
   const canVerify = code.length === CODE_LENGTH && !busy;
   const destination = email?.trim() || "your email";
 
-  /** Ask the server to mail a code again; Resend waits its 30 s from now. */
+  /**
+   * Ask the server to mail a code again. Resend is closed while the request is out, and its 30 s count from the answer:
+   * the server's cooldown starts when it takes the request (identity otp-cooldown.ts), so a Resend that opened 30 s
+   * after the tap could still be inside it — and a send there mails nothing while answering 200.
+   */
   async function sendNewCode(normalizedEmail: string) {
-    const sentAt = Date.now();
-    setDeadline(resendDeadline(sentAt));
-    setNow(sentAt);
-    return resendCode(normalizedEmail, purpose);
+    const askedAt = Date.now();
+    setDeadline(resendDeadline(askedAt));
+    setNow(askedAt);
+    const sent = await resendCode(normalizedEmail, purpose);
+    const answeredAt = Date.now();
+    setDeadline(resendDeadline(answeredAt));
+    setNow(answeredAt);
+    return sent;
   }
 
   /**
