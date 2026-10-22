@@ -42,26 +42,25 @@ export function createFlags(
 
   const localMs = 5_000;
 
-  async function read(key: string): Promise<FlagValue | null> {
+  /** The flag row through the same caches as `read`, or the error that kept it from being read: no fallback. For a
+   *  caller that keeps its own last good answer (app-config) and must not take a default for what the database holds. */
+  async function readStrict(key: string): Promise<FlagValue | null> {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < (opts.cache ? localMs : ttl)) return hit.value;
-    if (opts.cache) {
-      try {
-        const value = await opts.cache.getOrLoad(`flags:${key}`, Math.max(1, Math.ceil(ttl / 1000)), () => readDb(key));
-        cache.set(key, { value, at: Date.now() });
-        return value;
-      } catch (e) {
-        opts.logger?.warn({ key, err: errorForLog(e) }, "flag read failed, using fallback");
-        return null;
-      }
-    }
+    const value = opts.cache
+      ? await opts.cache.getOrLoad(`flags:${key}`, Math.max(1, Math.ceil(ttl / 1000)), () => readDb(key))
+      : await readDb(key);
+    cache.set(key, { value, at: Date.now() });
+    return value;
+  }
+
+  async function read(key: string): Promise<FlagValue | null> {
     try {
-      const value = await readDb(key);
-      cache.set(key, { value, at: Date.now() });
-      return value;
+      return await readStrict(key);
     } catch (e) {
       opts.logger?.warn({ key, err: errorForLog(e) }, "flag read failed, using fallback");
-      return hit?.value ?? null;
+      // Without the shared cache, the last value this process read stands in for the one it could not.
+      return opts.cache ? null : (cache.get(key)?.value ?? null);
     }
   }
 
@@ -119,6 +118,7 @@ export function createFlags(
     invalidate: (key?: string) => (key ? cache.delete(key) : cache.clear()),
     /** Cached flag row. The limiter reads `ratelimit.<rule>` here — never a query the facade exposes. */
     read,
+    readStrict,
     async killSwitches(modules: string[]): Promise<Record<string, boolean>> {
       const out: Record<string, boolean> = {};
       for (const m of modules) out[m] = await this.isKilled(m);
