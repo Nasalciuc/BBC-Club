@@ -196,6 +196,38 @@ describe("campaign-fanout job", () => {
     expect(warned).toContainEqual(expect.objectContaining({ memberId: "tz-2-bad", reason: "invalid_time_zone" }));
   });
 
+  it("an offer published for later: its campaign is not claimed before then, and is after", async () => {
+    await seedMembers(3);
+    const offerId = crypto.randomUUID();
+    const later = new Date(Date.now() + 2 * 3_600_000).toISOString();
+    await deliver({ ...broadcast(offerId), publishedAt: later }, "406");
+    const [c] = (await db.execute(sql`SELECT not_before FROM notifications.campaigns`)) as any[];
+    expect(new Date(c.not_before).toISOString()).toBe(later);
+
+    const early = await run();
+    expect(early.campaigns).toBe(0);
+    expect(await notificationCount()).toBe(0);
+    const [waiting] = (await db.execute(sql`SELECT status FROM notifications.campaigns`)) as any[];
+    expect(waiting.status).toBe("pending");
+
+    // Two hours on: publish_at has come.
+    await db.execute(sql`UPDATE notifications.campaigns SET not_before = now() - interval '1 second'`);
+    const due = await run();
+    expect(due).toMatchObject({ campaigns: 1, inserted: 3 });
+  });
+
+  it("a campaign waiting for its time does not hold up one that is due", async () => {
+    await seedMembers(2);
+    await deliver({ ...broadcast(), publishedAt: new Date(Date.now() + 3_600_000).toISOString() }, "407");
+    const dueOffer = crypto.randomUUID();
+    await deliver(broadcast(dueOffer), "408");
+    const m = await run();
+    expect(m.campaigns).toBe(1);
+    expect(
+      await count(sql`SELECT count(*)::int AS n FROM notifications.notifications WHERE offer_id = ${dueOffer}::uuid`),
+    ).toBe(2);
+  });
+
   it("20 000 members during quiet hours still fan out in under 10 s", async () => {
     await seedMembers(20_000);
     await deliver(broadcast(), "450");

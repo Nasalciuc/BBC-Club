@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import type { MembersFacade } from "@bbc/members";
 import { onOfferPublished } from "../../src/handlers/on-offer-published";
+import { isInQuietHours } from "../../src/application/quiet-hours";
 
 let iso: IsolatedDb;
 beforeAll(async () => {
@@ -96,5 +97,43 @@ describe("onOfferPublished — personal", () => {
     )) as unknown as { n: number }[];
     expect(n?.n).toBe(1);
     expect(warned).toContainEqual(expect.objectContaining({ memberId, reason: "invalid_time_zone" }));
+  });
+});
+
+describe("onOfferPublished — published for later", () => {
+  it("a personal offer published in two hours is pushed then, never while it is still invisible", async () => {
+    const memberId = `later-${crypto.randomUUID()}`;
+    const offerId = crypto.randomUUID();
+    const publishedAt = new Date(Date.now() + 2 * 3_600_000);
+    // A zone outside quiet hours right now (one of these always is), so only publishedAt can move the push later.
+    const awake = ["Europe/London", "Asia/Tokyo", "America/Los_Angeles"].find((tz) => !isInQuietHours(new Date(), tz));
+    const facade = {
+      getStatus: async () => "active",
+      preferencesOf: async () => ({ offers_personal: true, offers_broadcast: true }),
+      timezoneOf: async () => awake,
+    } as unknown as MembersFacade;
+    await iso.db.transaction(async (tx) => {
+      await onOfferPublished(
+        { tx, members: facade, sourceEventId: "779" },
+        {
+          type: "offer.published",
+          version: 1,
+          offerId,
+          targeting: "user",
+          targetMemberId: memberId,
+          routeFrom: "JFK",
+          routeTo: "LHR",
+          cabin: "business",
+          title: "Your October in London",
+          validUntil: "2027-12-31T23:59:59.000Z",
+          publishedAt: publishedAt.toISOString(),
+        },
+      );
+    });
+    const [row] = (await iso.db.execute(
+      sql`SELECT scheduled_for FROM notifications.notifications WHERE offer_id = ${offerId}::uuid`,
+    )) as unknown as { scheduled_for: string }[];
+    expect(row).toBeDefined();
+    expect(new Date(row!.scheduled_for).getTime()).toBeGreaterThanOrEqual(publishedAt.getTime());
   });
 });

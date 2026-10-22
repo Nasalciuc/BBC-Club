@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { withTx, type Executor, type Tx } from "@bbc/db";
 import { campaigns, notificationsTable } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
@@ -22,12 +22,18 @@ export type CampaignFanoutDeps = {
 
 type Metrics = { campaigns: number; pages: number; inserted: number; capped: number };
 
-/** Oldest open campaign, locked for the claim. A second runner skips it (the job is also a singleton). */
+/** Oldest open campaign that is due, locked for the claim. A second runner skips it (the job is also a singleton).
+ *  A campaign whose offer is published later (`not_before`) waits for that time, and holds up none behind it. */
 async function claimCampaign(tx: Tx): Promise<Campaign | null> {
   const [c] = await tx
     .select()
     .from(campaigns)
-    .where(inArray(campaigns.status, ["pending", "running"]))
+    .where(
+      and(
+        inArray(campaigns.status, ["pending", "running"]),
+        or(isNull(campaigns.notBefore), lte(campaigns.notBefore, sql`now()`)),
+      ),
+    )
     .orderBy(asc(campaigns.createdAt))
     .limit(1)
     .for("update", { skipLocked: true });

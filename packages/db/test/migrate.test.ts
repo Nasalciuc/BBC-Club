@@ -90,6 +90,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog fare trip and airport description applied/);
     expect(second.out).not.toMatch(/proposals offer rating applied/);
     expect(second.out).not.toMatch(/members profile avatar url applied/);
+    expect(second.out).not.toMatch(/notifications campaign not before applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -127,6 +128,7 @@ describe("extras ledger", () => {
       "0031_catalog_fare_trip_and_airport_description.sql",
       "0032_proposals_offer_rating.sql",
       "0033_members_profile_avatar_url.sql",
+      "0036_notifications_campaign_not_before.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

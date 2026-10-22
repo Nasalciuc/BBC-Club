@@ -580,6 +580,24 @@ try {
     }
   }
 
+  // After 0018 (notifications.campaigns): a broadcast offer published for later is pushed then (g5-offer-push-at-publish).
+  const campaignNotBefore = join(migrationsDir, "0036_notifications_campaign_not_before.sql");
+  if (existsSync(campaignNotBefore)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0036_notifications_campaign_not_before.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(campaignNotBefore, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0036_notifications_campaign_not_before.sql')`,
+        );
+      });
+      console.log("notifications campaign not before applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);

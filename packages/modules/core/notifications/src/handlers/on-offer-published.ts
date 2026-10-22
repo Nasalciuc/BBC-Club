@@ -33,6 +33,8 @@ export async function onOfferPublished(
         title: evt.title,
         body,
         deepLink,
+        // An offer published for later is pushed then, never while it is still invisible (campaign-fanout waits).
+        notBefore: new Date(evt.publishedAt),
       })
       .onConflictDoNothing({ target: campaigns.sourceEventId });
     return;
@@ -60,7 +62,9 @@ export async function onOfferPublished(
   const tz = safeTimeZone(await deps.members.timezoneOf(deps.tx, memberId), () =>
     deps.logger?.warn({ memberId, reason: "invalid_time_zone" }, "member time zone not valid; default used"),
   );
-  const scheduledFor = scheduleAfterQuietHours(new Date(), tz).toISOString();
+  // Not before the offer is published: a push for one published later would open a 404 until then.
+  const from = new Date(Math.max(Date.now(), new Date(evt.publishedAt).getTime()));
+  const scheduledFor = scheduleAfterQuietHours(from, tz).toISOString();
 
   // Partial unique index: ON CONFLICT must name the same columns + WHERE offer_id IS NOT NULL.
   await deps.tx.execute(sql`
