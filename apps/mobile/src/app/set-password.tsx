@@ -5,6 +5,7 @@ import { BackHandler, StyleSheet, Text, View } from "react-native";
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { clearPendingOtp, takePendingOtp } from "@/features/auth/otp-holder";
 import { resetPassword, setPassword, signOut } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
 import { Password } from "@/features/auth/schemas";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { AuthShell } from "@/components/auth-shell";
@@ -21,7 +22,7 @@ function hasNumberOrSymbol(value: string) {
 async function leaveJoin(router: ReturnType<typeof useRouter>): Promise<void> {
   clearPendingOtp();
   await signOut();
-  router.replace("/");
+  leaveTo(router, "/");
 }
 
 export default function SetPasswordScreen() {
@@ -86,9 +87,10 @@ export default function SetPasswordScreen() {
       }
     }
 
+    // Signed in: onboarding or Explore alone on the stack — Back must not reach Join or Forgot password.
     const dest = await resolvePostAuthRoute();
     setBusy(false);
-    router.replace(dest);
+    leaveTo(router, dest);
   }
 
   return (

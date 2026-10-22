@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { setPendingOtp } from "@/features/auth/otp-holder";
 import { resendCode, verifyJoin } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
 import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { Otp } from "@/features/auth/schemas";
 import {
@@ -104,15 +105,16 @@ export default function VerifyCodeScreen() {
       setBusy(false);
       return;
     }
-    // A member who already has a password goes straight in; only a new member chooses one.
+    // A member who already has a password goes straight in; only a new member chooses one. Either way the entry screens
+    // go: Back must not show Join to a signed-in member (features/auth/leave.ts).
     if (!passwordStillPending()) {
       const dest = await resolvePostAuthRoute();
       setBusy(false);
-      router.replace(dest);
+      leaveTo(router, dest);
       return;
     }
     setBusy(false);
-    router.replace({
+    leaveTo(router, {
       pathname: "/set-password",
       params: { purpose: "join" },
     });

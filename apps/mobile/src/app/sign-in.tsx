@@ -8,6 +8,7 @@ import { ClubButton } from "@/components/club-button";
 import { ClubField, ClubInput, ClubPasswordInput } from "@/components/club-field";
 import { Club } from "@/constants/club";
 import { signIn } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
 import { Email } from "@/features/auth/schemas";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { authMessage } from "@bbc/shared/auth-messages";
@@ -43,9 +44,10 @@ export default function SignInScreen() {
       setError(result.message);
       return;
     }
+    // Signed in: onboarding or Explore alone on the stack — Back must not return to Welcome or Sign in.
     const dest = await resolvePostAuthRoute();
     setBusy(false);
-    router.replace(dest);
+    leaveTo(router, dest);
   }
 
   return (
