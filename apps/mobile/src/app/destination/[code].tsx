@@ -29,6 +29,7 @@ import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
 import { fetchProfile, type Profile } from "@/lib/api";
 import { env } from "@/lib/env";
+import { statusBarOn } from "@/lib/status-bar-logic";
 
 /**
  * 04, on a 47-pt status bar: the city's photograph from the screen's top, the sheet over its foot from 217.9 with
@@ -129,7 +130,7 @@ export default function DestinationScreen() {
 
   return (
     <View style={styles.root} testID="destination.root">
-      <ScreenStatusBar on="dark" />
+      <ScreenStatusBar on={statusBarOn({ hasImage: Boolean(bundled ?? band.source), pastHero: false })} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={{ height: heroHeight }}>
           <Photo

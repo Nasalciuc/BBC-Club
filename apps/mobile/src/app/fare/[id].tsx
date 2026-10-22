@@ -53,6 +53,7 @@ import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Prof
 import { env } from "@/lib/env";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { savingPercent } from "@/lib/saving";
+import { statusBarOn } from "@/lib/status-bar-logic";
 
 /** 21's message. */
 const GONE_TITLE = "This fare is unavailable.";
@@ -199,6 +200,9 @@ export default function FareDetailScreen() {
 
   const dy = insets.top - STATUS;
   const heroBottom = fareHeroBottom(Boolean(gone)) + dy;
+  // White glyphs only over a picture: the empty slot while loading, after an error or for a city without one is the
+  // light tint, and so is the page once the photograph has scrolled away (ADR-IMPL-047).
+  const barOn = statusBarOn({ hasImage: Boolean(pages[0]?.source), pastHero });
 
   const creditRow = credit ? (
     // The credit the photograph owes (ADR-IMPL-043).
@@ -264,7 +268,7 @@ export default function FareDetailScreen() {
   if (loading) {
     return (
       <View style={styles.root}>
-        <ScreenStatusBar on="dark" />
+        <ScreenStatusBar on={barOn} />
         {hero}
         <View style={styles.skeletons}>
           <Skeleton width="80%" height={33} radius="pill" />
@@ -281,7 +285,7 @@ export default function FareDetailScreen() {
   if (gone) {
     return (
       <View testID="fare.root" style={styles.root}>
-        <ScreenStatusBar on="dark" />
+        <ScreenStatusBar on={barOn} />
         {hero}
         <View style={styles.grow} testID="fare.gone">
           <Text
@@ -334,7 +338,7 @@ export default function FareDetailScreen() {
     const copy = error ?? stateCopy("route");
     return (
       <View testID="fare.root" style={styles.root}>
-        <ScreenStatusBar on="dark" />
+        <ScreenStatusBar on={barOn} />
         {hero}
         <View style={[styles.message, styles.grow]}>
           <StateMessage
@@ -365,7 +369,7 @@ export default function FareDetailScreen() {
 
   return (
     <View testID="fare.root" style={styles.root}>
-      <ScreenStatusBar on={pastHero ? "light" : "dark"} />
+      <ScreenStatusBar on={barOn} />
       <ScrollView
         scrollEventThrottle={16}
         onScroll={(e) => {
