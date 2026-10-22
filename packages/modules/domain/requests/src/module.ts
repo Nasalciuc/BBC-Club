@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
@@ -21,6 +22,8 @@ import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
 import type { CrmFacade } from "@bbc/crm";
 import type { CatalogFacade } from "@bbc/catalog";
+
+const RequestId = z.string().uuid();
 
 type Ports = {
   crm: CrmFacade;
@@ -205,7 +208,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       async (c) => {
         const memberId = actorMemberId(c.get("principal"));
         if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
-        const row = await repo.getForMember(undefined, memberId, c.req.param("id"));
+        // An id that is not a UUID names no request (bbcclub://requests/abc): 404, never a cast error from Postgres.
+        const id = RequestId.safeParse(c.req.param("id"));
+        if (!id.success) return c.json(apiError("NOT_FOUND"), 404);
+        const row = await repo.getForMember(undefined, memberId, id.data);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
         const [timeline, cities] = await Promise.all([repo.timeline(undefined, row.id), citiesFor([row])]);
         return c.json(toRequestVM(row, timeline, cityOf(cities, row)));

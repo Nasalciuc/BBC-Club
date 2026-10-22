@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
@@ -24,6 +25,8 @@ import { DeviceBody } from "@bbc/shared/api/v1/proposals";
 import type { NotificationsFacade } from "./api";
 import type { MembersFacade } from "@bbc/members";
 import type { PushFacade } from "@bbc/push";
+
+const NotificationId = z.string().uuid();
 
 type Ports = {
   members: MembersFacade;
@@ -122,7 +125,10 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const r = await markRead(conn, c.get("principal"), c.req.param("id"));
+        // An id that is not a UUID names no notification: 404, never a cast error from Postgres.
+        const id = NotificationId.safeParse(c.req.param("id"));
+        if (!id.success) return c.json(apiError("NOT_FOUND"), 404);
+        const r = await markRead(conn, c.get("principal"), id.data);
         if (r === "ok") return c.json({ ok: true });
         return c.json(apiError(r === "not_found" ? "NOT_FOUND" : "FORBIDDEN"), r === "not_found" ? 404 : 403);
       },
