@@ -190,7 +190,12 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
           name: "notifications.onOfferPublished",
           handler: (ctx: HandlerContext, raw: unknown) =>
             onOfferPublished(
-              { tx: ctx.tx as unknown as Executor, members: ports.members, sourceEventId: String(ctx.event.id) },
+              {
+                tx: ctx.tx as unknown as Executor,
+                members: ports.members,
+                sourceEventId: String(ctx.event.id),
+                logger: ctx.logger,
+              },
               raw,
             ),
         },
@@ -257,7 +262,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
             singleton: true,
             timeoutMs: 55_000,
             handler: async (ctx: JobContext) =>
-              campaignFanout({ db: conn, members: ports.members, signal: ctx.signal }),
+              campaignFanout({ db: conn, members: ports.members, signal: ctx.signal, logger: platform.logger }),
           },
         },
         {

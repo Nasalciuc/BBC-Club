@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { OfferPublishedV1 } from "@bbc/shared/events/offer";
 import { campaigns } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
-import { scheduleAfterQuietHours } from "../application/quiet-hours";
+import { safeTimeZone, scheduleAfterQuietHours } from "../application/quiet-hours";
 import type { Executor } from "@bbc/db";
 
 /** `offer.published` → a personal offer becomes one pending inbox/push row; a broadcast becomes one campaign row,
@@ -13,6 +13,8 @@ export async function onOfferPublished(
     tx: Executor;
     members: MembersFacade;
     sourceEventId: string;
+    /** Says which member's stored time zone was not one (their row follows the club's default). */
+    logger?: { warn(obj: object, msg: string): void };
   },
   raw: unknown,
 ): Promise<void> {
@@ -54,7 +56,10 @@ export async function onOfferPublished(
     LIMIT 1`);
   if (alreadyToday.length > 0) return;
 
-  const tz = await deps.members.timezoneOf(deps.tx, memberId);
+  // A stored zone that is not one never fails the delivery: the club's default, and the member named in the log.
+  const tz = safeTimeZone(await deps.members.timezoneOf(deps.tx, memberId), () =>
+    deps.logger?.warn({ memberId, reason: "invalid_time_zone" }, "member time zone not valid; default used"),
+  );
   const scheduledFor = scheduleAfterQuietHours(new Date(), tz).toISOString();
 
   // Partial unique index: ON CONFLICT must name the same columns + WHERE offer_id IS NOT NULL.

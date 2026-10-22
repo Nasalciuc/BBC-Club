@@ -7,6 +7,7 @@ import type { AudienceMember, MembersFacade } from "@bbc/members";
 import { onOfferPublished } from "../../src/handlers/on-offer-published";
 import { campaignFanout, type CampaignFanoutDeps } from "../../src/application/campaign-fanout";
 import { onOfferExpired, onOfferWithdrawn } from "../../src/handlers/on-offer-lifecycle";
+import { scheduleAfterQuietHours } from "../../src/application/quiet-hours";
 
 let iso: IsolatedDb;
 let db: IsolatedDb["db"];
@@ -160,6 +161,39 @@ describe("campaign-fanout job", () => {
     const at = Object.fromEntries(rows.map((r) => [r.member_id, new Date(r.scheduled_for).getTime()]));
     expect(at["qh-london"]).toBe(late.getTime());
     expect(at["qh-tokyo"]).toBeGreaterThan(late.getTime()); // pushed to 08:00 Tokyo
+  });
+
+  it("a member whose stored time zone is not one: the run completes, and their row follows the club's default", async () => {
+    await db.execute(sql`
+      INSERT INTO members.profile (member_id, status, timezone) VALUES
+        ('tz-1-london', 'active', 'Europe/London'), ('tz-2-bad', 'active', 'Europe/London'),
+        ('tz-3-tokyo', 'active', 'Asia/Tokyo')`);
+    // A value stored before time zones were checked: the audience hands it on as it is.
+    const withBadZone = {
+      audiencePage: async (exec: unknown, q: Parameters<Page>[1]) =>
+        (await audiencePage(exec as undefined, q)).map((m) =>
+          m.memberId === "tz-2-bad" ? { ...m, timezone: "Not/AZone" } : m,
+        ),
+    } as unknown as MembersFacade;
+    const offerId = crypto.randomUUID();
+    await deliver(broadcast(offerId), "405");
+    const at = new Date("2026-09-28T03:00:00.000Z"); // 23:00 in New York: quiet hours there
+    const warned: object[] = [];
+    const m = await run({
+      members: withBadZone,
+      now: () => at,
+      logger: { warn: (o: object) => warned.push(o) },
+    });
+    expect(m.campaigns).toBe(1);
+    const [c] = (await db.execute(sql`SELECT status FROM notifications.campaigns`)) as any[];
+    expect(c.status).toBe("done");
+    const rows = (await db.execute(sql`
+      SELECT member_id, scheduled_for FROM notifications.notifications WHERE offer_id = ${offerId}::uuid
+      ORDER BY member_id`)) as any[];
+    expect(rows.map((r) => r.member_id)).toEqual(["tz-1-london", "tz-2-bad", "tz-3-tokyo"]);
+    const bad = rows.find((r) => r.member_id === "tz-2-bad");
+    expect(new Date(bad.scheduled_for).getTime()).toBe(scheduleAfterQuietHours(at, "America/New_York").getTime());
+    expect(warned).toContainEqual(expect.objectContaining({ memberId: "tz-2-bad", reason: "invalid_time_zone" }));
   });
 
   it("20 000 members during quiet hours still fan out in under 10 s", async () => {

@@ -61,3 +61,40 @@ describe("onOfferPublished — broadcast", () => {
     expect(hits).toEqual([]);
   });
 });
+
+describe("onOfferPublished — personal", () => {
+  it("a member whose stored time zone is not one still gets the offer, scheduled by the club's default", async () => {
+    const memberId = `tz-bad-${crypto.randomUUID()}`;
+    const offerId = crypto.randomUUID();
+    const warned: object[] = [];
+    const facade = {
+      getStatus: async () => "active",
+      preferencesOf: async () => ({ offers_personal: true, offers_broadcast: true }),
+      timezoneOf: async () => "Not/AZone",
+    } as unknown as MembersFacade;
+    await iso.db.transaction(async (tx) => {
+      await onOfferPublished(
+        { tx, members: facade, sourceEventId: "778", logger: { warn: (o: object) => warned.push(o) } },
+        {
+          type: "offer.published",
+          version: 1,
+          offerId,
+          targeting: "user",
+          targetMemberId: memberId,
+          routeFrom: "JFK",
+          routeTo: "LHR",
+          cabin: "business",
+          title: "Your October in London",
+          validUntil: "2027-12-31T23:59:59.000Z",
+          publishedAt: "2026-09-28T09:00:00.000Z",
+        },
+      );
+    });
+    const [n] = (await iso.db.execute(
+      sql`SELECT count(*)::int AS n FROM notifications.notifications
+          WHERE offer_id = ${offerId}::uuid AND member_id = ${memberId}`,
+    )) as unknown as { n: number }[];
+    expect(n?.n).toBe(1);
+    expect(warned).toContainEqual(expect.objectContaining({ memberId, reason: "invalid_time_zone" }));
+  });
+});
