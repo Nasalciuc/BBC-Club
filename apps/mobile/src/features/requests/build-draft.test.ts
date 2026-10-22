@@ -82,6 +82,38 @@ describe("buildDraft — dates", () => {
   });
 });
 
+describe("buildDraft — an offer is requested as the offer, at its own price (F067, F096)", () => {
+  const offer = {
+    id: "6c23904e-b0c6-45e3-8da8-81138445551a",
+    route: { from: "KEF", to: "CDG" },
+    cabin: "business" as const,
+    price: { offer: 1700, published: 2400, publishedSource: "Sabre · 16 Sep", currency: "USD" },
+  };
+
+  it("sends offerId and the offer's price — never a catalogue fare's id or price", () => {
+    const draft = buildDraft({ offer, today: TODAY });
+    expect(draft.mode).toBe("offer");
+    const body = draftToBody({ ...draft, contact: CONTACT });
+    expect(body.offerId).toBe(offer.id);
+    expect(body).not.toHaveProperty("fareId");
+    expect(body.fareId).toBeUndefined();
+    expect(body.intent).toBeUndefined();
+    expect(body.priceAtRequest).toBe(1700);
+    expect(body.cabin).toBe("business");
+    expect(body.legs[0]).toMatchObject({ from: "KEF", to: "CDG" });
+    expect(RequestBody.safeParse(body).success).toBe(true);
+  });
+
+  it("the offer wins over a fare passed beside it: its id and its price, never both", () => {
+    const fare = { ...fixture.fares[0]!, price: { offer: 1900.5, currency: "USD" } };
+    const body = draftToBody({ ...buildDraft({ offer, fare, today: TODAY }), contact: CONTACT });
+    expect(body.offerId).toBe(offer.id);
+    expect(body.fareId).toBeUndefined();
+    expect(body.priceAtRequest).toBe(1700);
+    expect(RequestBody.safeParse(body).success).toBe(true);
+  });
+});
+
 describe("buildDraft — never a day that has passed (F006)", () => {
   it("a remembered departure before today gives way to the suggestion", () => {
     const draft = buildDraft({

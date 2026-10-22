@@ -47,6 +47,7 @@ import {
   useRequestDraft,
   type RequestDraft,
   type RequestMode,
+  type RequestOffer,
   type SearchContext,
 } from "@/features/requests/useRequestDraft";
 import { submitRequest, type Profile } from "@/lib/api";
@@ -58,6 +59,10 @@ import { defaultPhoneCountry, displayPhone, validatePhone } from "@/lib/phone";
 export type RequestSheetHandle = {
   present: (opts: {
     fare?: FareVM | null;
+    /** An offer's own page (F067): the request is the offer — its id and price, never a catalogue fare's. */
+    offer?: RequestOffer | null;
+    /** The offer as its page showed it (its facts), for the trip card — always at the offer's own price. */
+    facts?: FareVM | null;
     profile?: Profile | null;
     fromCode?: string;
     toCode?: string;
@@ -80,6 +85,8 @@ export type RequestSheetHandle = {
 };
 
 const NO_SUMMARY: RequestSummary = { title: "", cabin: "", route: "", carrier: null, price: null };
+/** An offer whose page named no airline: none on the trip card (knownCarrier). */
+const NO_AIRLINE = { code: null, name: "", logoUrl: null };
 
 /** `RequestBody.note` takes 500 characters; the field stops there instead of refusing the request. */
 const NOTE_MAX = 500;
@@ -146,7 +153,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     present(opts) {
       const next = buildDraft(opts);
       // A fare found in search confirms as a search does; only an offer has a picture of its own.
-      sourceRef.current = opts.confirmation ?? (opts.fare?.offerId ? "offer" : "search");
+      sourceRef.current = opts.confirmation ?? (opts.offer || opts.fare?.offerId ? "offer" : "search");
       photoRef.current = opts.photo ?? null;
       cityRef.current = opts.fare?.to.city ?? opts.city ?? opts.toCode ?? "";
       // An alternative to an expired fare passes the airport code as `city` (fare/[id].tsx): that is no name.
@@ -155,9 +162,17 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       const outbound = next.legs[0];
       const fromCity = opts.fare?.from.city ?? opts.fromCity ?? null;
       setTrip({ fromCity, toCity: cityNameRef.current, toCode: outbound?.to ?? null, media: opts.photo ?? null });
+      // The trip card: the fare, or the offer as its page showed it — at the offer's own price, which is what is sent.
+      const offer = opts.offer ?? null;
+      const shown = offer
+        ? {
+            ...(opts.facts ?? { carrier: NO_AIRLINE, departLocal: null, arriveLocal: null, arriveDayOffset: 0 }),
+            price: offer.price,
+          }
+        : opts.fare;
       setSummary(
         requestSummary({
-          fare: opts.fare,
+          fare: shown,
           from: outbound?.from ?? "",
           to: outbound?.to ?? "",
           fromCity,

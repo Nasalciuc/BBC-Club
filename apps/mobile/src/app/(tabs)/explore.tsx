@@ -22,7 +22,7 @@ import { DestinationDetails } from "@/features/explore/DestinationDetails";
 import { globeCentreY, sheetSnaps, sheetTop } from "@/features/explore/explore-layout";
 import { firstName } from "@/features/explore/greeting";
 import { GreetingHeader } from "@/features/explore/GreetingHeader";
-import { cheapestFareOnRoute, fareHref } from "@/features/explore/open-offer";
+import { createTapGuard, fareHref, openOffer } from "@/features/explore/open-offer";
 import { rememberDates, rememberSearch } from "@/features/explore/recent-searches";
 import {
   type CabinSheetHandle,
@@ -173,24 +173,16 @@ export default function ExploreScreen() {
     });
   }
 
-  async function openOffer(card: ProposalCardVM) {
-    const fare = await cheapestFareOnRoute(card);
-    if (fare) {
-      router.push(fareHref(fare.id, card.id));
-      return;
-    }
-    requestRef.current?.present({
-      fare: null,
-      profile,
-      fromCode: card.route.from,
-      toCode: card.route.to,
-      // The cities by name where Home knows them: the sheet's title and the confirmation's `London is next.`
-      fromCity: card.route.from === state.from?.code ? state.from.city : undefined,
-      city: home?.destinations.find((d) => d.code === card.route.to)?.city,
-      search,
-      confirmation: "offer",
-      photo: card.mediaUrl,
-    });
+  // An offer card opens the offer's own page at once (F067): its price, and the request made there, are the offer's —
+  // never the cheapest catalogue fare on its route. One navigation at a time (F101): a second tap before Explore is
+  // back in view is ignored.
+  const [tapGuard] = useState(() => createTapGuard());
+  useEffect(() => {
+    if (focused) tapGuard.release();
+  }, [focused]);
+
+  function onOpenOffer(card: ProposalCardVM) {
+    openOffer(router, card, tapGuard);
   }
 
   function retrySearch() {
@@ -371,7 +363,7 @@ export default function ExploreScreen() {
           <SheetExpanded
             home={home}
             homeLoading={homeLoading}
-            onOpenOffer={(card) => void openOffer(card)}
+            onOpenOffer={onOpenOffer}
             onSearch={() => router.push("/search" as Href)}
           />
         ) : (
@@ -387,7 +379,7 @@ export default function ExploreScreen() {
             <SheetRest
               home={home}
               homeLoading={homeLoading}
-              onOpenOffer={(card) => void openOffer(card)}
+              onOpenOffer={onOpenOffer}
               onSeeAll={() => setSheetIndex(STOP.all)}
               onSearch={() => router.push("/search" as Href)}
             />

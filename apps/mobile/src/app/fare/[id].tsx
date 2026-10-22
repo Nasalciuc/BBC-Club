@@ -30,6 +30,7 @@ import {
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
+import { offerFromParams } from "@/features/explore/open-offer";
 import { datesShortLabel, travelersLabel } from "@/features/explore/travel-preferences";
 import { airlineRibbon } from "@/features/fares/airline-marks";
 import { FARE_HERO, FareHero, fareHeroBottom, type HeroPage } from "@/features/fares/FareHero";
@@ -44,6 +45,8 @@ import {
   shareFareText,
 } from "@/features/fares/fare-page-logic";
 import { knownCarrier } from "@/features/fares/known-carrier";
+import { offerFare } from "@/features/fares/offer-page-logic";
+import { routeFareFor } from "@/features/fares/route-fare";
 import { useFareWeather } from "@/features/fares/weather";
 import { CABIN_PHOTOS, clubPhoto } from "@/features/places/club-photos";
 import { bandPicture } from "@/features/places/place-photo-logic";
@@ -58,6 +61,7 @@ import { statusBarOn } from "@/lib/status-bar-logic";
 
 /** 21's message. */
 const GONE_TITLE = "This fare is unavailable.";
+const OFFER_GONE_TITLE = "This offer is unavailable.";
 const STATUS = 47;
 
 /**
@@ -96,6 +100,10 @@ export default function FareDetailScreen() {
   const params = useLocalSearchParams();
   const id = typeof params.id === "string" ? params.id : undefined;
   const offerIdParam = typeof params.offerId === "string" ? params.offerId : undefined;
+  // An offer's own page (offerHref, F067): `id` is the offer's, the page shows and requests the offer itself — its
+  // price, never a catalogue fare's. Its route and cabin ride along for a closed offer's alternative.
+  const offerRoute = offerFromParams(params);
+  const offerMode = offerRoute !== null;
   const search = fareSearchFromParams(params);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -103,8 +111,10 @@ export default function FareDetailScreen() {
   const sheetRef = useRef<RequestSheetHandle>(null);
   const aboutRef = useRef<ModalSheetHandle>(null);
   const comparisonRef = useRef<ModalSheetHandle>(null);
-  const [fare, setFare] = useState<FareVM | null>(null);
+  const [catalogFare, setCatalogFare] = useState<FareVM | null>(null);
   const [offer, setOffer] = useState<ProposalDetailVM | null>(null);
+  // An offer's page: a catalogue fare on its route, for the flight facts the offer does not state — never its price.
+  const [routeFare, setRouteFare] = useState<FareVM | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [gone, setGone] = useState<FareGoneContext | true | null>(null);
@@ -117,8 +127,14 @@ export default function FareDetailScreen() {
   // The route's map needs both airports where they are: asked once the fare is known.
   const [airports, setAirports] = useState<{ from: AirportVM; to: AirportVM } | null>(null);
   const saved = useIsSaved("fare", id);
+  // What the page shows: the fare, or the offer as a fare is shown — at the offer's own price (offerFare).
+  const fare: FareVM | null = offerMode
+    ? offer
+      ? offerFare(offer, routeFare, { from: airports?.from.city, to: airports?.to.city })
+      : null
+    : catalogFare;
   const closed = gone && gone !== true ? gone : null;
-  const city = fare?.to.code ?? closed?.to;
+  const city = fare?.to.code ?? closed?.to ?? offerRoute?.to ?? undefined;
   const photoFor = usePlacePhotos([city]);
   // The fare's own day when it has one; a searched range never stands over the flight shown (fareDates).
   const dates = fare ? fareDates(fare, search) : { depart: search.depart, return: null };
@@ -132,6 +148,24 @@ export default function FareDetailScreen() {
     }
     setLoading(true);
     setError(null);
+    if (offerMode) {
+      void (async () => {
+        const [offerResult, profileResult] = await Promise.all([fetchProposal(id), fetchProfile()]);
+        if (profileResult.ok) setProfile(profileResult.data);
+        if (!offerResult.ok) {
+          // An offer that has closed (410) or is not there for this member (404): the closed frame, with an
+          // alternative on the same route.
+          if (offerResult.status === 404 || offerResult.status === 410) setGone(true);
+          else setError(readFailureCopy(offerResult.code, "fare"));
+          setLoading(false);
+          return;
+        }
+        setGone(null);
+        setOffer(offerResult.data);
+        setLoading(false);
+      })();
+      return;
+    }
     void (async () => {
       const [fareResult, profileResult] = await Promise.all([fetchFare(id), fetchProfile()]);
       if (profileResult.ok) setProfile(profileResult.data);
@@ -147,7 +181,7 @@ export default function FareDetailScreen() {
         setLoading(false);
         return;
       }
-      setFare(fareResult.data);
+      setCatalogFare(fareResult.data);
       const resolvedOfferId =
         (offerIdParam && offerIdParam.length > 0 ? offerIdParam : null) ?? fareResult.data.offerId;
       if (resolvedOfferId) {
@@ -156,7 +190,23 @@ export default function FareDetailScreen() {
       }
       setLoading(false);
     })();
-  }, [id, offerIdParam, reloadToken]);
+  }, [id, offerIdParam, offerMode, reloadToken]);
+
+  // An offer's page: the catalogue's fare on the offer's route and cabin, for the facts the offer does not state.
+  const offerFrom = offerMode ? offer?.route.from : undefined;
+  const offerTo = offerMode ? offer?.route.to : undefined;
+  const offerCabin = offerMode ? offer?.cabin : undefined;
+  useEffect(() => {
+    if (!offerFrom || !offerTo || !offerCabin) return;
+    let cancelled = false;
+    void (async () => {
+      const found = await routeFareFor({ route: { from: offerFrom, to: offerTo }, cabin: offerCabin });
+      if (!cancelled) setRouteFare(found);
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [offerFrom, offerTo, offerCabin]);
 
   const fromCode = fare?.from.code;
   const toCode = fare?.to.code;
@@ -231,7 +281,8 @@ export default function FareDetailScreen() {
       gone={Boolean(gone)}
       onBack={() => router.back()}
       actions={
-        fare && id
+        // Share and the heart are a fare's: its link and the saved fares name fares, never offers.
+        fare && id && !offerMode
           ? ({ top, size }) => (
               <>
                 <RoundButton
@@ -298,35 +349,52 @@ export default function FareDetailScreen() {
             ]}
             accessibilityRole="header"
           >
-            {GONE_TITLE}
+            {offerMode ? OFFER_GONE_TITLE : GONE_TITLE}
           </Text>
-          <View
-            style={{
-              marginTop: GONE.pill.top - (GONE.title - baselineOffset(GONE_ROLE) + GONE_ROLE.lineHeight),
-              paddingLeft: GONE.pill.left,
-              paddingRight: GONE.pill.right,
-            }}
-          >
-            <Button
-              testID="fare.alternative"
-              label="Request an alternative"
-              variant="primary"
-              height={GONE.pill.height}
-              text="buttonGone"
-              style={{ paddingBottom: 2 * GONE.pill.lift }}
-              onPress={() =>
-                sheetRef.current?.present({
-                  profile,
-                  mode: "alternative",
-                  replacesFareId: id,
-                  fromCode: closed?.from,
-                  toCode: closed?.to,
-                  fromCity: closed?.fromCity ?? undefined,
-                  city: closed?.toCity ?? closed?.to,
-                })
-              }
-            />
-          </View>
+          {offerMode && !(offerRoute.from && offerRoute.to) ? null : (
+            <View
+              style={{
+                marginTop: GONE.pill.top - (GONE.title - baselineOffset(GONE_ROLE) + GONE_ROLE.lineHeight),
+                paddingLeft: GONE.pill.left,
+                paddingRight: GONE.pill.right,
+              }}
+            >
+              <Button
+                testID="fare.alternative"
+                label="Request an alternative"
+                variant="primary"
+                height={GONE.pill.height}
+                text="buttonGone"
+                style={{ paddingBottom: 2 * GONE.pill.lift }}
+                onPress={() =>
+                  sheetRef.current?.present(
+                    offerMode
+                      ? // A closed offer names no fare to replace: the specialist quotes its route and cabin.
+                        {
+                          profile,
+                          mode: "quote",
+                          fromCode: offerRoute.from ?? undefined,
+                          toCode: offerRoute.to ?? undefined,
+                          search: {
+                            dates: { depart: null, return: null, flexible: true },
+                            cabin: offerRoute.cabin ?? profile?.preferences.cabin ?? "business",
+                            passengers: profile?.preferences.passengers ?? { adult: 1, child: 0, infant: 0 },
+                          },
+                        }
+                      : {
+                          profile,
+                          mode: "alternative",
+                          replacesFareId: id,
+                          fromCode: closed?.from,
+                          toCode: closed?.to,
+                          fromCity: closed?.fromCity ?? undefined,
+                          city: closed?.toCity ?? closed?.to,
+                        },
+                  )
+                }
+              />
+            </View>
+          )}
           {creditRow}
         </View>
         <RootTabBar active="explore" />
@@ -499,7 +567,18 @@ export default function FareDetailScreen() {
           style={{ paddingBottom: 2 * PAGE.pill.lift }}
           onPress={() =>
             sheetRef.current?.present({
-              fare,
+              // An offer's page asks for the offer itself — its id and its price (F067); a fare's, for the fare.
+              ...(offerMode && offer
+                ? {
+                    fare: null,
+                    offer,
+                    facts: fare,
+                    fromCode: fare.from.code,
+                    toCode: fare.to.code,
+                    fromCity: fare.from.city !== fare.from.code ? fare.from.city : undefined,
+                    city: fare.to.city !== fare.to.code ? fare.to.city : undefined,
+                  }
+                : { fare }),
               profile,
               confirmation: offer ? "offer" : "search",
               photo: offer?.mediaUrl ?? null,

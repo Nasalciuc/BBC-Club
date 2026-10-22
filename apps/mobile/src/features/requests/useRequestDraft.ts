@@ -1,6 +1,7 @@
 import { useReducer } from "react";
 import type { RequestBody, RequestLeg, Passengers } from "@bbc/shared/api/v1/requests";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
+import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
 // The pure date helpers, not the component index: this module is imported by tests that run without React Native.
 import { addDays, todayLocal } from "@bbc/ui/calendar-logic";
 import { departYmd } from "@bbc/ui/flight-facts";
@@ -170,8 +171,15 @@ function draftDates(
   return { depart: searched.depart, ret: searched.return, tripType: searched.return ? "round" : "oneway" };
 }
 
+/** An offer the member asks about (GET /v1/proposals/:id): requested as itself — its id, its route and cabin, its
+ *  price — never as a catalogue fare on the same route (F067). */
+export type RequestOffer = Pick<ProposalDetailVM, "id" | "route" | "cabin" | "price">;
+
 export function buildDraft(opts: {
   fare?: FareVM | null;
+  /** An offer's own page: the request carries `offerId` and the offer's price, and no `fareId` (RequestBody forbids
+   *  both). It wins over a fare passed beside it. */
+  offer?: RequestOffer | null;
   profile?: Profile | null;
   fromCode?: string;
   toCode?: string;
@@ -182,14 +190,17 @@ export function buildDraft(opts: {
   estimateShown?: boolean;
   today?: string;
 }): RequestDraft {
-  const from = opts.fare?.from.code ?? opts.fromCode ?? "JFK";
-  const to = opts.fare?.to.code ?? opts.toCode ?? "LHR";
-  // The fare's cabin wins; then the cabin chosen for this search; then the profile's usual cabin.
-  const cabin = opts.fare?.cabin ?? opts.search?.cabin ?? opts.profile?.preferences?.cabin ?? "business";
+  const offer = opts.offer ?? null;
+  // An offer is not a catalogue fare: neither its id, nor its price, nor its day stands for the offer.
+  const fare = offer ? null : (opts.fare ?? null);
+  const from = offer?.route.from ?? fare?.from.code ?? opts.fromCode ?? "JFK";
+  const to = offer?.route.to ?? fare?.to.code ?? opts.toCode ?? "LHR";
+  // The offer's or fare's cabin wins; then the cabin chosen for this search; then the profile's usual cabin.
+  const cabin = offer?.cabin ?? fare?.cabin ?? opts.search?.cabin ?? opts.profile?.preferences?.cabin ?? "business";
   const passengers: Passengers = opts.search?.passengers ??
     opts.profile?.preferences?.passengers ?? { adult: 1, child: 0, infant: 0 };
-  const mode: RequestMode = opts.mode ?? (opts.fare?.offerId ? "offer" : opts.fare ? "fare" : "quote");
-  const { depart, ret, tripType } = draftDates(opts.fare ?? null, opts.search ?? null, opts.today);
+  const mode: RequestMode = opts.mode ?? (offer || fare?.offerId ? "offer" : fare ? "fare" : "quote");
+  const { depart, ret, tripType } = draftDates(fare, opts.search ?? null, opts.today);
   // A one-way search chose no return: if the member turns it into a round trip, the return is theirs to pick.
   return {
     mode,
@@ -207,10 +218,11 @@ export function buildDraft(opts: {
       email: opts.profile?.email ?? "",
     },
     note: "",
-    fareId: mode === "fare" ? opts.fare?.id : undefined,
-    offerId: mode === "offer" ? (opts.fare?.offerId ?? undefined) : undefined,
+    fareId: mode === "fare" ? fare?.id : undefined,
+    offerId: mode === "offer" ? (offer?.id ?? fare?.offerId ?? undefined) : undefined,
     replacesFareId: mode === "alternative" ? opts.replacesFareId : undefined,
-    priceAtRequest: opts.fare?.price.offer,
+    // The price the member saw on the page: the offer's own, or the fare's.
+    priceAtRequest: offer?.price.offer ?? fare?.price.offer,
     estimateFor: mode === "quote" && opts.estimateShown === true ? { from, to, cabin } : null,
     phoneError: null,
     returnError: null,

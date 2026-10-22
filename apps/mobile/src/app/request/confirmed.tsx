@@ -1,5 +1,5 @@
 import * as Notifications from "expo-notifications";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useIsFocused, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,8 +22,7 @@ import {
 
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
-import { destinationHref } from "@/features/explore/destination-route";
-import { cheapestFareOnRoute, fareHref } from "@/features/explore/open-offer";
+import { createTapGuard, openOffer } from "@/features/explore/open-offer";
 import { OfferCards } from "@/features/explore/SheetRest";
 import { useExploreHome } from "@/features/explore/useExploreHome";
 import { airlineMark, airlineRibbon } from "@/features/fares/airline-marks";
@@ -194,14 +193,15 @@ export default function RequestConfirmedScreen() {
     if (id) router.push(`/request/${id}` as Href);
   };
 
-  async function openOther(card: ProposalCardVM) {
-    const fare = await cheapestFareOnRoute(card);
-    if (fare) {
-      router.push(fareHref(fare.id, card.id));
-      return;
-    }
-    const place = home?.destinations.find((d) => d.code === card.route.to);
-    if (place) router.push(destinationHref(place, null));
+  // `Other great fares` open the offer's own page at once (F067), one navigation at a time (F101).
+  const focused = useIsFocused();
+  const [tapGuard] = useState(() => createTapGuard());
+  useEffect(() => {
+    if (focused) tapGuard.release();
+  }, [focused]);
+
+  function openOther(card: ProposalCardVM) {
+    openOffer(router, card, tapGuard);
   }
 
   if (kind === "saved") {
@@ -454,7 +454,7 @@ export default function RequestConfirmedScreen() {
                 <OfferCards
                   items={others}
                   home={home}
-                  onOpenOffer={(card) => void openOther(card)}
+                  onOpenOffer={openOther}
                   testID="confirmation.others"
                   cardTestID="confirmation.other"
                   compact
