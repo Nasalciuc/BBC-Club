@@ -25,6 +25,8 @@ export function principalFromJwtPayload(payload: {
   return { ok: false, status: 403 };
 }
 
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
 type Opts = {
   identity: IdentityFacade;
   appOrigin: string;
@@ -66,7 +68,11 @@ export function resolvePrincipal(opts: Opts): MiddlewareHandler<PrincipalVars> {
         return c.json(err("UNAUTHORIZED"), 401);
       }
     }
-    const s = await opts.identity.getSession(c.req.raw.headers);
+    // A write reads the session from the database, not from the signed cookie cache (SESSION_COOKIE_CACHE_SECONDS): a
+    // member deleted on another device, or a session ended there, must not land a request, a device token or a
+    // preference after member.deleted has erased everything (nothing would erase them again). Reads keep the cache.
+    const fresh = !SAFE_METHODS.has(c.req.method);
+    const s = await opts.identity.getSession(c.req.raw.headers, { fresh });
     if (s) {
       c.set("principal", {
         kind: "member",
