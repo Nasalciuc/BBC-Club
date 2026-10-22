@@ -67,3 +67,12 @@ its build stage), and `seed-staging-demo.test.ts` checks that it does. Reproduce
 file, that same error; with it, `staging demo ready`, twice. The same fall-back stopped `seed-review-account.ts` and
 `loadtest-staging.ts` when run by hand in the image (RUNBOOK, `docs/perf/LOADTEST.md`); they resolve now too. The API
 itself was never affected: `apps/api` and every package have a `tsconfig.json` of their own.
+
+**Amendment — 22 Oct 2026: the fixture seed's offers are withdrawn.** Staging held the fixture seed's offers
+(`fixture:*`) beside the demo's (`staging-demo:*`): Paris and Tokyo twice on Explore, which does not dedupe. In its
+transaction the script now withdraws every active `fixture:*` offer as `POST /v1/internal/offers/:id/withdraw` does —
+the proposals module's `withdraw` (status `withdrawn` and `offer.withdrawn`), so its consumers close what they hold for
+the offer and suppress its pending pushes. To reach them the event is published through the app's own wiring:
+`seed-staging-demo.ts` builds the app as `loadtest-staging.ts` does (`buildApp`, role `api`, no poller) instead of
+`scriptAuth`, whose registry knows no consumer; the worker delivers the event. A second run finds none active and
+publishes nothing. Tested in `apps/api/test/staging-demo.test.ts`.
