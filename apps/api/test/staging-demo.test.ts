@@ -1,6 +1,7 @@
 /** The staging demo (ADR-IMPL-040) through the real routes: what the review account sees after the script runs. */
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
+import { hashPassword } from "better-auth/crypto";
 
 import { HomeVM, SearchResultVM } from "@bbc/shared/api/v1/fares";
 import { ProfileVM } from "@bbc/shared/api/v1/profile";
@@ -30,7 +31,8 @@ describe("staging demo", () => {
 
     // A password changed in the app is put back to the environment's.
     const ctx = await auth.$context;
-    await ctx.internalAdapter.updatePassword(first.memberId, await ctx.password.hash("changed-by-a-tester-9"));
+    // Better Auth's own hasher, directly: the breach check wraps ctx.password.hash and needs a request (as in production).
+    await ctx.internalAdapter.updatePassword(first.memberId, await hashPassword("changed-by-a-tester-9"));
     await expect(t.auth.cookieFor(email, password)).rejects.toThrow(/sign-in failed/);
     expect((await ensureReviewAccount({ auth, db: t.db, email, password })).passwordRestored).toBe(true);
     const cookie = { headers: { Cookie: await t.auth.cookieFor(email, password) } };
