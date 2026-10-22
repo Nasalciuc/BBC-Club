@@ -6,6 +6,8 @@ import { addDays, todayLocal } from "@bbc/ui/calendar-logic";
 import { departYmd } from "@bbc/ui/flight-facts";
 import type { Profile } from "@/lib/api";
 
+import { REQUEST_NAME_MAX } from "./confirmation-logic";
+
 export type TripType = "round" | "oneway";
 export type RequestMode = "fare" | "offer" | "quote" | "alternative";
 
@@ -199,7 +201,8 @@ export function buildDraft(opts: {
     passengers,
     cabin,
     contact: {
-      name: opts.profile?.displayName ?? "",
+      // The profile takes 120 characters, a request 80: a longer name starts within the field's limit.
+      name: (opts.profile?.displayName ?? "").slice(0, REQUEST_NAME_MAX),
       phone: opts.profile?.phone ?? "",
       email: opts.profile?.email ?? "",
     },

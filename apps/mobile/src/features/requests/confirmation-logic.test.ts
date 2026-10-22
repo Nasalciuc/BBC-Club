@@ -1,7 +1,17 @@
 import { test, expect } from "bun:test";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 
-import { bodyProblem, confirmationKind, otherFares, retryMinutes, telHref, tripFacts } from "./confirmation-logic";
+import { RequestBody } from "@bbc/shared/api/v1/requests";
+
+import {
+  REQUEST_NAME_MAX,
+  bodyProblem,
+  confirmationKind,
+  otherFares,
+  retryMinutes,
+  telHref,
+  tripFacts,
+} from "./confirmation-logic";
 test("the confirmation follows the source; offline always wins", () => {
   expect(confirmationKind("offer", false)).toBe("offer");
   expect(confirmationKind("search", false)).toBe("search");
@@ -33,8 +43,47 @@ test("a request whose details cannot go says what to fix, calmly — never zod's
     "That phone number doesn't look right.",
   );
   expect(bodyProblem(issue(["note"]))).toBe("Keep the note under 500 characters.");
-  expect(bodyProblem(issue(["legs", 1, "date"]))).toBe("Check your dates and try again.");
+  expect(bodyProblem(issue(["legs", 1, "date"]))).toBe(
+    "Check your dates: a day from today on, and the return on or after the departure.",
+  );
   expect(bodyProblem([])).toBeNull();
+});
+
+test("a name the request cannot take says what to do with it — never 'Add your name' when it is there (F100)", () => {
+  const body = (name: string) => ({
+    tripType: "oneway" as const,
+    cabin: "business" as const,
+    legs: [{ from: "JFK", to: "LHR", date: "2026-11-10" }],
+    passengers: { adult: 1, child: 0, infant: 0 },
+    contact: { name, phone: "+12125550148", email: "ada@example.com" },
+  });
+  const problem = (name: string) => {
+    const parsed = RequestBody.safeParse(body(name));
+    expect(parsed.success).toBe(false);
+    return parsed.success ? null : bodyProblem(parsed.error.issues, body(name));
+  };
+  expect(problem("")).toBe("Add your name, so your specialist knows who to ask for.");
+  expect(problem("A")).toBe("Use your full name.");
+  expect(problem("A".repeat(81))).toBe("Shorten the name to 80 characters.");
+  expect(REQUEST_NAME_MAX).toBe(80);
+});
+
+test("an impossible trip says what to change, calmly — the dates, the route, the travelers or the fare", () => {
+  const issue = (path: (string | number)[], message = "That day has passed. Choose a date from today on.") => [
+    { path, message },
+  ];
+  const dates = "Check your dates: a day from today on, and the return on or after the departure.";
+  expect(bodyProblem(issue(["legs", 0, "date"]))).toBe(dates);
+  expect(bodyProblem(issue(["legs"], "A round trip has two flights: there and back."))).toBe(dates);
+  expect(bodyProblem(issue(["legs", 0, "to"], "Choose a destination other than where the flight leaves from."))).toBe(
+    "Choose a destination other than where the flight leaves from.",
+  );
+  expect(bodyProblem(issue(["passengers", "infant"], "x"))).toBe(
+    "Each infant travels on an adult's lap: add an adult, or an infant less.",
+  );
+  expect(bodyProblem(issue(["fareId"], "x"))).toBe(
+    "This fare can't be requested any more. Ask for a quote on the route instead.",
+  );
 });
 
 test("the trip under the route (08): the trip and the travelers", () => {

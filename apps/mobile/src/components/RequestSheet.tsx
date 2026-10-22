@@ -31,7 +31,12 @@ import { clubPhoto } from "@/features/places/club-photos";
 import { cardPicture } from "@/features/places/place-photo-logic";
 import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
-import { bodyProblem, retryMinutes, type RequestSource } from "@/features/requests/confirmation-logic";
+import {
+  REQUEST_NAME_MAX,
+  bodyProblem,
+  retryMinutes,
+  type RequestSource,
+} from "@/features/requests/confirmation-logic";
 import { requestSummary, type RequestSummary } from "@/features/requests/request-summary";
 import {
   buildDraft,
@@ -244,7 +249,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
       }),
     );
     if (!valid.success) {
-      dispatch({ type: "setSubmitError", error: bodyProblem(valid.error.issues) });
+      dispatch({ type: "setSubmitError", error: bodyProblem(valid.error.issues, state) });
       return;
     }
     const body = valid.data;
@@ -438,6 +443,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             onChangeText={(v) => dispatch({ type: "setContact", field: "name", value: v })}
             autoCapitalize="words"
             autoComplete="name"
+            // `RequestBody.contact.name` takes 80 characters: the field stops there instead of refusing the request.
+            maxLength={REQUEST_NAME_MAX}
           />
         </View>
         <View ref={phoneBlock} style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>

@@ -218,6 +218,11 @@ describe("buildDraft — cabin and travelers", () => {
     expect(fromFare.cabin).toBe("first");
   });
 
+  it("starts a profile name longer than a request takes within the field's 80 characters (F100)", () => {
+    const long = { ...profile, displayName: "B".repeat(120) } as typeof profile;
+    expect(buildDraft({ mode: "quote", profile: long, today: TODAY }).contact.name).toHaveLength(80);
+  });
+
   it("falls back to business and one adult with no profile and no search", () => {
     const draft = buildDraft({ mode: "quote", today: TODAY });
     expect(draft.cabin).toBe("business");
