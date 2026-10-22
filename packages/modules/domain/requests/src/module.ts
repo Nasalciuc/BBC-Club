@@ -1,4 +1,5 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
+import { z } from "zod";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
@@ -6,7 +7,7 @@ import { apiError, zodFieldErrors } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { RequestSubmittedV1 } from "@bbc/shared/events/request";
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import { createRequestsRepo } from "./infrastructure/requests.repo";
 import { submit } from "./application/submit";
 import { setStatus } from "./application/set-status";
@@ -16,22 +17,30 @@ import { toRequestVM } from "./application/to-request-vm";
 import { destinationCities, routeEnds } from "./application/route";
 import { askEstimate } from "./application/estimate";
 import { askFare } from "./application/published";
-import { createSendRequestsJob } from "./jobs/send-requests";
+import { askOffer, OFFER_TIMEOUT_MS } from "./application/offer";
+import { askWithin } from "./application/ask-within";
+import { createSendRequestsJob, type OfferForCrm } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
 import type { CrmFacade } from "@bbc/crm";
 import type { CatalogFacade } from "@bbc/catalog";
+import type { ProposalsFacade } from "@bbc/proposals";
+
+const RequestId = z.string().uuid();
+const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,200}$/;
 
 type Ports = {
   crm: CrmFacade;
   /** The estimate a quote's search showed (ADR-IMPL-042) — a question, asked through the catalog's facade. */
   catalog: CatalogFacade;
+  /** Whether the offer a request names is one the member could see (same layer). */
+  proposals: ProposalsFacade;
 };
 
 export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
   name: "requests",
   layer: "domain",
-  needs: ["crm", "catalog"],
+  needs: ["crm", "catalog", "proposals"],
   init: ({ db, platform, ports, env }) => {
     const conn = db as unknown as Executor;
     const repo = createRequestsRepo(conn);
@@ -56,7 +65,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         (codes) => ports.catalog.getAirports(undefined, codes),
         (err) => {
           platform.metrics.inc("request_cities_unavailable");
-          platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "request cities unavailable");
+          platform.logger.warn({ err: errorForLog(err) }, "request cities unavailable");
         },
       );
     const cityOf = (cities: Map<string, string>, row: { legs: unknown; tripType: string }) => {
@@ -88,6 +97,44 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           );
         },
       });
+    // Whether the member could have seen the offer a request names: two reads by key from proposals, never fatal — a
+    // failed or slow read checks nothing (counted and logged), and the request goes through.
+    const offer = (offerId: string, memberId: string | null) =>
+      askOffer(
+        {
+          visible: () => (memberId ? ports.proposals.getVisible(undefined, memberId, offerId) : Promise.resolve(null)),
+          stored: () => ports.proposals.getAny(undefined, offerId),
+          memberId,
+        },
+        {
+          unavailable: (reason, err) => {
+            platform.metrics.inc("request_offer_unavailable", { reason });
+            platform.logger.warn(
+              { reason, err: err === undefined ? undefined : errorForLog(err) },
+              "request offer unavailable",
+            );
+          },
+        },
+      );
+    // The offer an offer request names, as the specialist reads it when the request is sent (system scope): one read,
+    // never fatal — an error or a slow answer sends the request without it.
+    const offerForCrm = async (offerId: string): Promise<OfferForCrm | null> => {
+      const answer = await askWithin(
+        () => ports.proposals.getAny(undefined, offerId),
+        OFFER_TIMEOUT_MS,
+        (reason, err) => {
+          platform.metrics.inc("request_offer_unavailable", { reason });
+          platform.logger.warn(
+            { reason, err: err === undefined ? undefined : errorForLog(err) },
+            "request offer unavailable",
+          );
+        },
+      );
+      const o = answer?.value;
+      const amount = o ? Number(o.price) : NaN;
+      if (!o || !Number.isFinite(amount)) return null;
+      return { id: o.id, title: o.title, price: { amount, currency: o.currency } };
+    };
     // One line to the ops channel (OPS_WEBHOOK, as the worker's DB alerts); a failed post is logged, never thrown.
     const notifyOps = async (text: string) => {
       const hook = env.OPS_WEBHOOK;
@@ -104,7 +151,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         });
         if (!res.ok) platform.logger.warn({ status: res.status }, "ops alert not posted");
       } catch (err) {
-        platform.logger.warn({ err: err instanceof Error ? err.message : String(err) }, "ops alert not posted");
+        platform.logger.warn({ err: errorForLog(err) }, "ops alert not posted");
       }
     };
 
@@ -121,6 +168,13 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       async (c) => {
         const key = c.req.header("Idempotency-Key");
         if (!key) return c.json(apiError("VALIDATION", { message: "Idempotency-Key is required" }), 400);
+        // The app sends a UUID. A key past ~2 700 bytes cannot enter the requests_idempotency index (a 500).
+        if (!IDEMPOTENCY_KEY.test(key)) {
+          return c.json(
+            apiError("VALIDATION", { message: "Idempotency-Key must be 8-200 letters, digits, - or _." }),
+            400,
+          );
+        }
 
         const principal = c.get("principal");
         const platformHdr = (c.req.header("X-App-Platform") ?? "ios").toLowerCase();
@@ -139,6 +193,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
             rateLimit: platform.rateLimit,
             indicative,
             fare,
+            offer,
           });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
@@ -148,9 +203,14 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         if (!result.ok) {
           if (result.code === "RATE_LIMITED") {
             c.header("Retry-After", String(Math.max(1, Math.ceil((result.retryAfterMs ?? 1000) / 1000))));
-            return c.json(apiError("RATE_LIMITED"), 429);
+            // Which limit: the address's, shared with others behind it, or the member's own.
+            return c.json(apiError("RATE_LIMITED", { context: { scope: result.scope } }), 429);
           }
           if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
+          // The fare or offer it names, with the field: `fareId`, `legs.0`, `cabin`, `offerId`.
+          if ("details" in result) {
+            return c.json(apiError("VALIDATION", { message: result.message, details: result.details }), 400);
+          }
           return c.json(apiError("VALIDATION"), 400);
         }
         const created = result.request;
@@ -205,7 +265,10 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
       async (c) => {
         const memberId = actorMemberId(c.get("principal"));
         if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
-        const row = await repo.getForMember(undefined, memberId, c.req.param("id"));
+        // An id that is not a UUID names no request (bbcclub://requests/abc): 404, never a cast error from Postgres.
+        const id = RequestId.safeParse(c.req.param("id"));
+        if (!id.success) return c.json(apiError("NOT_FOUND"), 404);
+        const row = await repo.getForMember(undefined, memberId, id.data);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
         const [timeline, cities] = await Promise.all([repo.timeline(undefined, row.id), citiesFor([row])]);
         return c.json(toRequestVM(row, timeline, cityOf(cities, row)));
@@ -230,7 +293,11 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           if (details) return c.json(apiError("VALIDATION", { details }), 400);
           throw err;
         }
-        if (!r.ok) return c.json(apiError("NOT_FOUND"), 404);
+        if (!r.ok) {
+          // A step back (booked → quoted) or out of closed: refused, nothing written (set-status.ts).
+          if (r.code === "CONFLICT") return c.json(apiError("CONFLICT", { context: { from: r.from, to: r.to } }), 409);
+          return c.json(apiError("NOT_FOUND"), 404);
+        }
         return c.json({ ok: true, unchanged: r.unchanged });
       },
     );
@@ -279,6 +346,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
               notifyOps,
               appOrigin: env.APP_ORIGIN,
               opsLinkSecret: env.OPS_LINK_SECRET ?? "",
+              offer: offerForCrm,
             }),
           },
         },
@@ -307,10 +375,27 @@ function opsRoutes(
   secret: string,
 ) {
   const ops = new Hono<AppEnv>();
-  const limit = rateLimit(platform.rateLimit, "ops.link", (c) => `ip:${c.get("clientIp") ?? "unknown"}`);
+  // Per address, as it protects the tokens; answered as the rest of these pages are, in HTML — an operator opens them
+  // in a browser, never the app. Null when the link may be opened.
+  const limited = async (c: Context<AppEnv>): Promise<Response | null> => {
+    let r;
+    try {
+      r = await platform.rateLimit.check("ops.link", `ip:${c.get("clientIp") ?? "unknown"}`);
+    } catch {
+      return c.html(page("This page is briefly unavailable — open the link again in a minute."), 503);
+    }
+    c.header("RateLimit-Limit", String(r.limit));
+    c.header("RateLimit-Remaining", String(r.remaining));
+    c.header("RateLimit-Reset", String(Math.ceil(r.resetMs / 1000)));
+    if (r.allowed) return null;
+    c.header("Retry-After", String(Math.max(1, Math.ceil((r.retryAfterMs ?? r.resetMs) / 1000))));
+    return c.html(page("Too many links at once — wait a minute and open it again."), 429);
+  };
 
   registerRoute("GET", "/ops/requests/:token", "public", "ops.link");
-  ops.get("/requests/:token", limit, async (c) => {
+  ops.get("/requests/:token", async (c) => {
+    const refused = await limited(c);
+    if (refused) return refused;
     const v = verifyAction(secret, c.req.param("token"));
     if (!v.ok) {
       return c.html(
@@ -341,15 +426,28 @@ function opsRoutes(
   });
 
   registerRoute("POST", "/ops/requests/:token", "public", "ops.link");
-  ops.post("/requests/:token", limit, async (c) => {
+  ops.post("/requests/:token", async (c) => {
+    const refused = await limited(c);
+    if (refused) return refused;
     const v = verifyAction(secret, c.req.param("token"));
     if (!v.ok) return c.html(page("This link is not valid or has expired."), 403);
     const r = await setStatus(conn, { requestId: v.requestId, status: v.action, agentId: "ops" }, { repo, publish });
-    if (!r.ok) return c.html(page("Request not found."), 404);
+    if (!r.ok) {
+      // A week-old link pressed after the request moved on: the page says where it is, and nothing is written.
+      if (r.code === "CONFLICT") return c.html(page(refusedLabel(r.from)));
+      return c.html(page("Request not found."), 404);
+    }
     return c.html(page(r.unchanged ? "Already marked — nothing changed." : `Marked as ${actionLabel(v.action)}.`));
   });
 
   return ops;
+}
+
+/** Why an operator link changed nothing: the request is already past the step it names. */
+function refusedLabel(from: string): string {
+  if (from === "closed") return "This request is closed — nothing changed.";
+  if (from === "booked") return "Already booked — nothing changed.";
+  return `Already ${from} — nothing changed.`;
 }
 
 function page(message: string): string {

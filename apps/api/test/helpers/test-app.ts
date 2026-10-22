@@ -303,8 +303,8 @@ export async function testApp(
         tripType: "round",
         cabin: "business",
         legs: [
-          { from: "JFK", to: "LHR", date: "2026-10-12" },
-          { from: "LHR", to: "JFK", date: "2026-10-19" },
+          { from: "JFK", to: "LHR", date: "2027-10-12" },
+          { from: "LHR", to: "JFK", date: "2027-10-19" },
         ],
         passengers: { adult: 1, child: 0, infant: 0 },
         contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },

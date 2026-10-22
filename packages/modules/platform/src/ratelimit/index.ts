@@ -71,7 +71,10 @@ export function createRateLimiter(deps: {
   }
 
   return {
-    async check(rule: RuleName, subject: string): Promise<RateCheck> {
+    /** `exec`: a transaction the caller holds — a postgres rule is checked on its connection, so a caller that must
+     *  count inside its own transaction (requests.submit, under its idempotency lock) never waits for a second pooled
+     *  connection while holding one. Its unit is spent only if that transaction commits. Other stores ignore it. */
+    async check(rule: RuleName, subject: string, exec?: Executor): Promise<RateCheck> {
       const spec = await ruleOf(rule);
       const key = `${rule}:${subject}`;
       try {
@@ -80,7 +83,7 @@ export function createRateLimiter(deps: {
             ? memory.check(key, spec.limit, spec.periodMs, spec.burst)
             : spec.store === "redis"
               ? await redisCheck(key, spec)
-              : await gcraCheck(deps.db, key, spec.limit, spec.periodMs, spec.burst);
+              : await gcraCheck(exec ?? deps.db, key, spec.limit, spec.periodMs, spec.burst);
         if (!result.allowed) deps.metrics?.inc("rate_limited_total", { rule });
         return { ...result, limit: spec.limit };
       } catch (err) {

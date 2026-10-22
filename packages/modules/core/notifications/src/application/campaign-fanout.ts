@@ -1,8 +1,8 @@
-import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { withTx, type Executor, type Tx } from "@bbc/db";
 import { campaigns, notificationsTable } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
-import { scheduleAfterQuietHours } from "./quiet-hours";
+import { safeTimeZone, scheduleAfterQuietHours } from "./quiet-hours";
 
 const PAGE = 1_000;
 const OFFER_CATEGORIES = ["offers_personal", "offers_broadcast"] as const;
@@ -16,16 +16,24 @@ export type CampaignFanoutDeps = {
   signal?: AbortSignal;
   /** Members per transaction. Tests pass a small page to cross page boundaries cheaply. */
   pageSize?: number;
+  /** Says which member's stored time zone was not one (their row follows the club's default). */
+  logger?: { warn(obj: object, msg: string): void };
 };
 
 type Metrics = { campaigns: number; pages: number; inserted: number; capped: number };
 
-/** Oldest open campaign, locked for the claim. A second runner skips it (the job is also a singleton). */
+/** Oldest open campaign that is due, locked for the claim. A second runner skips it (the job is also a singleton).
+ *  A campaign whose offer is published later (`not_before`) waits for that time, and holds up none behind it. */
 async function claimCampaign(tx: Tx): Promise<Campaign | null> {
   const [c] = await tx
     .select()
     .from(campaigns)
-    .where(inArray(campaigns.status, ["pending", "running"]))
+    .where(
+      and(
+        inArray(campaigns.status, ["pending", "running"]),
+        or(isNull(campaigns.notBefore), lte(campaigns.notBefore, sql`now()`)),
+      ),
+    )
     .orderBy(asc(campaigns.createdAt))
     .limit(1)
     .for("update", { skipLocked: true });
@@ -42,6 +50,7 @@ async function fanOutPage(
   c: Campaign,
   page: { memberId: string; timezone: string }[],
   now: Date,
+  logger?: CampaignFanoutDeps["logger"],
 ): Promise<{ inserted: number; capped: number } | null> {
   // Lock and re-read the campaign first: on-offer-lifecycle closes it under the same row lock, so a page either
   // commits before the close (and the close suppresses its rows) or sees the close and writes nothing.
@@ -68,7 +77,18 @@ async function fanOutPage(
     );
   const capped = new Set(cappedRows.map((r) => r.memberId));
   // Once per time zone, not per member: the walk through quiet hours costs ~2 ms at night, and a page shares `now`.
+  // A stored zone that is not one never fails the page (and so every later campaign): that member's row follows the
+  // club's default zone, and the member is named in the log.
   const sendAt = new Map<string, Date>();
+  const valid = new Map<string, boolean>();
+  const zoneOf = (p: { memberId: string; timezone: string }) => {
+    let ok = valid.get(p.timezone);
+    if (ok === undefined) valid.set(p.timezone, (ok = safeTimeZone(p.timezone) === p.timezone));
+    if (ok) return p.timezone;
+    return safeTimeZone(p.timezone, () =>
+      logger?.warn({ memberId: p.memberId, reason: "invalid_time_zone" }, "member time zone not valid; default used"),
+    );
+  };
   const scheduledFor = (timeZone: string) => {
     let at = sendAt.get(timeZone);
     if (!at) sendAt.set(timeZone, (at = scheduleAfterQuietHours(now, timeZone)));
@@ -85,7 +105,7 @@ async function fanOutPage(
       offerId: c.offerId,
       sourceEventId: c.sourceEventId,
       status: "pending" as const,
-      scheduledFor: scheduledFor(p.timezone),
+      scheduledFor: scheduledFor(zoneOf(p)),
     }));
   let inserted = 0;
   if (rows.length) {
@@ -126,7 +146,7 @@ export async function campaignFanout(deps: CampaignFanoutDeps): Promise<Metrics>
         break;
       }
       const now = deps.now?.() ?? new Date();
-      const r = await withTx(deps.db, (tx) => fanOutPage(tx, c, page, now));
+      const r = await withTx(deps.db, (tx) => fanOutPage(tx, c, page, now, deps.logger));
       if (!r) {
         closed = true; // by its offer's withdrawal or expiry: nothing more to write, nothing to mark
         break;

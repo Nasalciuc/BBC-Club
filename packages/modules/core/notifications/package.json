@@ -11,7 +11,7 @@
   },
   "scripts": {
     "test": "bun test --preload ../../../db/src/testing/preload.ts",
-    "test:db": "bun test tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
+    "test:db": "bun test tests --preload ../../../db/src/testing/preload.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

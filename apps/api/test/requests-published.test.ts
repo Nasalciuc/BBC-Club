@@ -80,4 +80,43 @@ describe("a fare request keeps its fare's published price and its airline", () =
     expect(stored).toEqual(britishAirways);
     await t.close();
   }, 60_000);
+
+  it("the specialist's payload names the fare: its id, the price the member saw, the published price, the airline", async () => {
+    const t = await testApp({ suite: "requests-published-send" });
+    await t.seedCatalogBasics();
+    const [ba] = (await t.db.execute(
+      sql`SELECT id FROM catalog.fares WHERE route_from = 'JFK' AND route_to = 'LHR' AND carrier = 'BA'`,
+    )) as unknown as { id: string }[];
+    if (!ba) throw new Error("the BA fare was not seeded");
+    const fare = await t.submitRequestAs(t.memberA, t.sampleRequestBody({ fareId: ba.id, priceAtRequest: 4200 }));
+    expect(fare.status).toBe(201);
+    const offerId = await t.seedBroadcastOffer();
+    const offer = await t.submitRequestAs(
+      t.memberB,
+      t.sampleRequestBody({
+        offerId,
+        priceAtRequest: undefined,
+        contact: { name: "Bob", phone: "+12125550222", email: "bob@test.dev" },
+      }),
+    );
+    expect(offer.status).toBe(201);
+    await t.platform.jobs.run("send-requests");
+    const sent = t.crm.submitted as Record<string, unknown>[];
+    const forFare = sent.find((p) => p.fare_id === ba.id);
+    expect(forFare).toMatchObject({
+      intent: "fare",
+      fare_id: ba.id,
+      offer_id: null,
+      price_at_request: { amount: 4200, currency: "USD" },
+      published_at_request: { amount: 7850, source: "Sabre · test" },
+      carrier: { code: "BA", name: "British Airways" },
+    });
+    const forOffer = sent.find((p) => p.offer_id === offerId);
+    expect(forOffer).toMatchObject({
+      intent: "offer",
+      fare_id: null,
+      offer: { id: offerId, title: "Autumn in Paris", price: { amount: 3850, currency: "USD" } },
+    });
+    await t.close();
+  });
 });

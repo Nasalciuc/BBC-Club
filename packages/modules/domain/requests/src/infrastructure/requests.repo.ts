@@ -39,6 +39,13 @@ export const ClaimedRow = z.object({
   note: z.string().nullable(),
   shown_estimate_amount: z.number().int().positive().nullable(),
   shown_estimate_currency: z.literal("USD").nullable(),
+  /** What a fare request recorded of its fare (0029, 0030): the price the member saw, the published price and its
+   *  source, the airline. The specialist's e-mail names them. */
+  price_at_request: z.string().nullable(),
+  published_at_request: z.coerce.number().positive().nullable(),
+  published_source_at_request: z.string().nullable(),
+  carrier_at_request: z.string().nullable(),
+  carrier_name_at_request: z.string().nullable(),
 });
 export type ClaimedRow = z.infer<typeof ClaimedRow>;
 
@@ -54,7 +61,9 @@ export function claimUnsentSql(limit: number) {
           ${col(r.legs)}, ${col(r.tripType)}, ${col(r.cabin)}, ${col(r.passengers)}, ${col(r.source)},
           ${col(r.appVersion)}, ${col(r.sendAttempts)}, ${col(r.phoneValid)}, ${col(r.phoneE164)},
           ${col(r.intent)}, ${col(r.replacesFareId)}, ${col(r.fareId)}, ${col(r.offerId)}, ${col(r.note)},
-          ${col(r.shownEstimateAmount)}, ${col(r.shownEstimateCurrency)}
+          ${col(r.shownEstimateAmount)}, ${col(r.shownEstimateCurrency)}, ${col(r.priceAtRequest)},
+          ${col(r.publishedAtRequest)}, ${col(r.publishedSourceAtRequest)}, ${col(r.carrierAtRequest)},
+          ${col(r.carrierNameAtRequest)}
         FROM ${r}
         WHERE ${col(r.sentToCrm)} = false
           AND ${col(r.sendAttempts)} < ${MAX_SEND_ATTEMPTS}
@@ -96,6 +105,13 @@ export function createRequestsRepo(db: Executor) {
 
     async getById(exec: Executor | undefined, id: string) {
       const [row] = await (exec ?? db).select().from(requests).where(eq(requests.id, id)).limit(1);
+      return row;
+    },
+
+    /** The request, its row locked until the transaction ends: a status change reads the status it moves from under
+     *  this lock, so a second webhook or click waits and then reads the first one's result (set-status.ts). */
+    async lockById(tx: Executor, id: string) {
+      const [row] = await tx.select().from(requests).where(eq(requests.id, id)).limit(1).for("update");
       return row;
     },
 
@@ -175,11 +191,12 @@ export function createRequestsRepo(db: Executor) {
       return row?.attempts ?? 0;
     },
 
-    async setStatus(tx: Executor, id: string, status: Status, note: string | null, actor: string | null) {
+    /** Moves the request from `from` to `status` and writes the step; null when it is no longer at `from`. */
+    async setStatus(tx: Executor, id: string, from: Status, status: Status, note: string | null, actor: string | null) {
       const [row] = await tx
         .update(requests)
         .set({ status, updatedAt: sql`now()` })
-        .where(eq(requests.id, id))
+        .where(and(eq(requests.id, id), eq(requests.status, from)))
         .returning();
       if (!row) return null;
       await tx.insert(requestEvents).values({ requestId: id, status, note, actor });

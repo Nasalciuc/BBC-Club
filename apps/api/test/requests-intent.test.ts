@@ -5,7 +5,6 @@ import { signAction } from "../../../packages/modules/domain/requests/src/applic
 import { testApp } from "./helpers/test-app";
 
 const FARE = "11111111-1111-4111-8111-111111111111";
-const OFFER = "22222222-2222-4222-8222-222222222222";
 const SECRET = "ops-link-secret-at-least-32-characters";
 
 describe("request intent", () => {
@@ -53,8 +52,15 @@ describe("request intent", () => {
 
   it("derives fare and offer when no intent was stored", async () => {
     const t = await testApp({ suite: "requests-intent-source" });
+    // A fare request names a fare that exists, for its trip (JFK → LHR, business); an offer request one the member sees.
+    await t.db.execute(sql`
+      INSERT INTO catalog.fares (id, route_from, route_to, cabin, carrier, carrier_name, price, currency, source,
+        valid_from, valid_until, published)
+      VALUES (${FARE}, 'JFK', 'LHR', 'business', 'BA', 'British Airways', '4200.00', 'USD', 'manual',
+        now() - interval '1 day', now() + interval '30 days', true)`);
+    const offerId = await t.seedBroadcastOffer();
     const fare = await t.submitRequestAs(t.memberA, t.sampleRequestBody({ fareId: FARE }));
-    const offer = await t.submitRequestAs(t.memberA, t.sampleRequestBody({ offerId: OFFER }));
+    const offer = await t.submitRequestAs(t.memberA, t.sampleRequestBody({ offerId }));
     expect(fare.status).toBe(201);
     expect(offer.status).toBe(201);
     await t.platform.jobs.run("send-requests");
