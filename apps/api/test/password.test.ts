@@ -4,6 +4,37 @@ import { sql } from "drizzle-orm";
 import type { IdentityFacade } from "@bbc/identity";
 import { testApp } from "./helpers/test-app";
 
+/** The stand-in breach list's one entry, and what the member reads when they choose it. */
+const BREACHED = "password123456";
+const BREACH_MESSAGE = "This password has appeared in a data breach. Please choose a different one.";
+
+type App = Awaited<ReturnType<typeof testApp>>;
+
+/** Join as the app does (ADR-PROD-001 path A): email → code → a session with no password yet. */
+async function joinByCode(t: App, email: string): Promise<string> {
+  const post = (path: string, body: Record<string, string>) =>
+    t.app.request(`/api/auth${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
+      body: JSON.stringify(body),
+    });
+  expect((await post("/email-otp/send-verification-otp", { email, type: "sign-in" })).status).toBe(200);
+  const verify = await post("/sign-in/email-otp", { email, otp: t.email.lastOtp(email) });
+  expect(verify.status).toBe(200);
+  return verify.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0] ?? "")
+    .filter((c) => c.length > 0)
+    .join("; ");
+}
+
+const setFirst = (t: App, cookie: string, newPassword: string) =>
+  t.app.request("/v1/account/password", {
+    method: "POST",
+    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ newPassword }),
+  });
+
 describe("POST /v1/account/password", () => {
   it("Path A: first-time set without currentPassword is 200 and publishes member.password_changed", async () => {
     const t = await testApp({ suite: "pw-change" });
@@ -177,6 +208,49 @@ describe("POST /v1/account/password", () => {
       body: JSON.stringify({ displayName: "Alex Still Here" }),
     });
     expect(edit.status).toBe(200);
+    await t.close();
+  });
+
+  it("Path A: a breached first password is refused and nothing is set (ADR-PROD-001: HIBP applies to set-password)", async () => {
+    const t = await testApp({ suite: "pw-first-breached", identity: { breachedPassword: (p) => p === BREACHED } });
+    const cookie = await joinByCode(t, `pw-first-breached.${crypto.randomUUID().slice(0, 8)}@test.dev`);
+    const status = async () => (await t.app.request("/v1/account/password", { headers: { Cookie: cookie } })).json();
+    expect(await status()).toEqual({ hasPassword: false });
+
+    const breached = await setFirst(t, cookie, BREACHED);
+    expect(breached.status).toBe(400);
+    const body = (await breached.json()) as {
+      error?: { code?: string; message?: string; details?: { path: string }[] };
+    };
+    expect(body.error?.code).toBe("VALIDATION");
+    expect(body.error?.message).toBe(BREACH_MESSAGE);
+    expect(body.error?.details?.[0]?.path).toBe("newPassword");
+    expect(await status()).toEqual({ hasPassword: false });
+
+    expect((await setFirst(t, cookie, "fine-pass-2026x")).status).toBe(200);
+    expect(await status()).toEqual({ hasPassword: true });
+    await t.close();
+  });
+
+  it("Path A: when the breach list cannot be reached, nothing is set and the member is asked to try again", async () => {
+    const t = await testApp({
+      suite: "pw-first-hibp-down",
+      identity: {
+        // Only this one is asked while the list is down; the fixture members' sign-ups are checked as usual.
+        breachedPassword: (p) => {
+          if (p === "unchecked-pass-2026x") throw new Error("api.pwnedpasswords.com unreachable");
+          return false;
+        },
+      },
+    });
+    const cookie = await joinByCode(t, `pw-first-down.${crypto.randomUUID().slice(0, 8)}@test.dev`);
+    const r = await setFirst(t, cookie, "unchecked-pass-2026x");
+    expect(r.status).toBe(503);
+    const body = (await r.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("SERVICE_DISABLED");
+    expect(body.error?.message).toBe("We couldn't check this password just now. Try again in a moment.");
+    const status = await t.app.request("/v1/account/password", { headers: { Cookie: cookie } });
+    expect(await status.json()).toEqual({ hasPassword: false });
     await t.close();
   });
 

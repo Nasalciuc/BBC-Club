@@ -18,7 +18,7 @@ export function modules(overrides: Record<string, any> = {}): ModuleDescriptor<a
     emailModule(overrides.email),
     pushModule(overrides.push),
     crmModule(overrides.crm), // integration
-    identityModule(),
+    identityModule(overrides.identity), // tests: breached-password predicate
     membersModule(),
     notificationsModule(), // core — push via needs; override lands on pushModule
     proposalsModule(),

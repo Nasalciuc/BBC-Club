@@ -14,6 +14,7 @@ import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
 import { rateLimit, subjectOf } from "@bbc/platform/ratelimit";
 import { account } from "./infrastructure/schema";
+import { BREACH_CHECK_UNAVAILABLE_MESSAGE, BREACHED_PASSWORD_MESSAGE, breachCheck } from "./infrastructure/breach";
 
 /** better-auth's own rule (setPassword, changePassword, deleteUser): a credential account *with* a stored password.
  *  A credential row can exist with a null password — that is not a password. */
@@ -33,18 +34,26 @@ const OTHERS_STILL_SIGNED_IN =
 
 type Ports = { email: EmailFacade };
 
+/** Test seams only; production passes nothing. */
+export type IdentityModuleOptions = {
+  /** Replaces the breach list (HIBP) with a predicate; it may throw to stand for an unreachable list. */
+  breachedPassword?: (password: string) => boolean | Promise<boolean>;
+};
+
 /** Wiring only. Better Auth's hooks have no transaction of their own, so the EventPublisher port takes a
  *  single argument; we open a transaction here and drop platform's return value to satisfy Promise<void>. */
-export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
+export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescriptor<Ports, IdentityFacade> => ({
   name: "identity",
   layer: "core",
   needs: ["email"],
   init: ({ env, db, platform, ports }) => {
     const conn = db as unknown as Executor;
+    const isBreached = breachCheck({ env, breachedPassword: opts.breachedPassword });
     const auth = createAuth({
       env,
       db: conn,
       email: ports.email,
+      breachedPassword: opts.breachedPassword,
       logger: platform.logger,
       events: {
         publish: async (e) => {
@@ -103,6 +112,26 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
         if (hasPassword && !currentPassword) {
           // A member who joins again by email code already has a password: nothing to set. 409, so the app moves on.
           return c.json(apiError("CONFLICT", { message: "This account already has a password." }), 409);
+        }
+        if (!hasPassword) {
+          // The first password after a code Join (path A) goes through auth.api.setPassword, a server-only endpoint with no
+          // path: Better Auth's haveIBeenPwned never sees it. ADR-PROD-001 asks for the same refusal as everywhere else,
+          // so the club checks here, before anything is stored. An unreachable list refuses too (fails closed).
+          let breached: boolean;
+          try {
+            breached = await isBreached(parsed.data.newPassword);
+          } catch {
+            return c.json(apiError("SERVICE_DISABLED", { message: BREACH_CHECK_UNAVAILABLE_MESSAGE }), 503);
+          }
+          if (breached) {
+            return c.json(
+              apiError("VALIDATION", {
+                message: BREACHED_PASSWORD_MESSAGE,
+                details: [{ path: "newPassword", message: BREACHED_PASSWORD_MESSAGE }],
+              }),
+              400,
+            );
+          }
         }
 
         let othersEnded = true;
