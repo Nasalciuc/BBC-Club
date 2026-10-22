@@ -10,7 +10,6 @@ import type { AppEnv } from "@bbc/shared/http/app-env";
 import { errorForLog, type Executor } from "@bbc/db";
 import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
-import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
 import { campaigns, notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
 import { devicesRepo } from "./infrastructure/devices.repo";
@@ -21,6 +20,7 @@ import { reconcileReceipts } from "./application/receipts";
 import { cleanupDevices } from "./application/cleanup-devices";
 import { onOfferPublished } from "./handlers/on-offer-published";
 import { onOfferExpired, onOfferWithdrawn } from "./handlers/on-offer-lifecycle";
+import { onRequestStatusChanged } from "./handlers/on-request-status-changed";
 import { DeviceBody } from "@bbc/shared/api/v1/proposals";
 import type { NotificationsFacade } from "./api";
 import type { MembersFacade } from "@bbc/members";
@@ -207,20 +207,8 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
         {
           type: "request.status_changed",
           name: "notifications.onRequestStatusChanged",
-          handler: async (ctx: HandlerContext, raw: unknown) => {
-            const evt = RequestStatusChangedV1.parse(raw);
-            if (evt.to !== "quoted" || !evt.memberId) return;
-            const body = `${evt.route ?? "Your trip"} — tap to call your specialist`;
-            const deepLink = `bbcclub://requests/${evt.requestId}`;
-            await ctx.tx.execute(sql`
-              INSERT INTO notifications.notifications
-                (member_id, category, title, body, deep_link, request_id, source_event_id, status, scheduled_for)
-              VALUES
-                (${evt.memberId}, 'transactional', 'Your quote is ready', ${body}, ${deepLink},
-                 ${evt.requestId}::uuid, ${String(ctx.event.id)}, 'pending', now())
-              ON CONFLICT (member_id, request_id, category) WHERE request_id IS NOT NULL
-              DO NOTHING`);
-          },
+          handler: (ctx: HandlerContext, raw: unknown) =>
+            onRequestStatusChanged({ tx: ctx.tx as unknown as Executor, sourceEventId: String(ctx.event.id) }, raw),
         },
         {
           type: "member.deleted",

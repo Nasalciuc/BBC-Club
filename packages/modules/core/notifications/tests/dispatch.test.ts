@@ -6,6 +6,7 @@ import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import type { MembersFacade } from "@bbc/members";
 import type { PushSender } from "../src/ports/push";
 import { deliverSending, dispatch, dispatchReaperSql, type DispatchDeps } from "../src/application/dispatch";
+import { onRequestStatusChanged } from "../src/handlers/on-request-status-changed";
 
 let iso: IsolatedDb;
 beforeAll(async () => {
@@ -413,4 +414,65 @@ test("an active member with a token is still delivered", async () => {
   expect(sends).toBe(1);
   expect(metrics.sent).toBe(1);
   expect(await statusOf(id)).toBe("delivered");
+});
+
+/** request.status_changed as requests publishes it, delivered in its own transaction as the poller would. */
+async function statusChanged(requestId: string, memberId: string, from: string, to: string) {
+  const payload = {
+    type: "request.status_changed",
+    version: 1,
+    requestId,
+    memberId,
+    from,
+    to,
+    route: "JFK → LHR",
+    changedAt: new Date().toISOString(),
+  };
+  await iso.db.transaction(async (tx) =>
+    onRequestStatusChanged({ tx: tx as never, sourceEventId: `evt-${crypto.randomUUID()}` }, payload),
+  );
+}
+
+test("a quote push waiting to go is never sent once the request is closed or booked", async () => {
+  for (const to of ["closed", "booked"] as const) {
+    const memberId = `m-${crypto.randomUUID()}`;
+    const requestId = crypto.randomUUID();
+    await insertToken(memberId, `tok-quote-${requestId}`);
+    await statusChanged(requestId, memberId, "received", "quoted");
+    const [queued] = rowList(
+      await iso.db.execute(
+        sql`SELECT id, status FROM notifications.notifications WHERE request_id = ${requestId}::uuid`,
+      ),
+    ) as { id: string; status: string }[];
+    expect(queued?.status).toBe("pending");
+
+    // Before the next tick, the operator closes it (or the member booked on the call).
+    await statusChanged(requestId, memberId, "quoted", to);
+    let sends = 0;
+    await dispatch(
+      deps({
+        send: async (input) => {
+          if (input.collapseId === queued?.id) sends += 1;
+          return { ok: true, ticketId: "quote" };
+        },
+      }),
+    );
+    expect(sends).toBe(0);
+    const row = await rowOf(queued!.id);
+    expect(row?.status).toBe("suppressed");
+    expect(row?.last_error).toBe("request_moved_on");
+  }
+});
+
+test("a quote push already being sent is left to finish", async () => {
+  const memberId = `m-${crypto.randomUUID()}`;
+  const requestId = crypto.randomUUID();
+  await statusChanged(requestId, memberId, "received", "quoted");
+  await iso.db.execute(sql`
+    UPDATE notifications.notifications SET status = 'sending', claimed_at = now() WHERE request_id = ${requestId}::uuid`);
+  await statusChanged(requestId, memberId, "quoted", "closed");
+  const [row] = rowList(
+    await iso.db.execute(sql`SELECT status FROM notifications.notifications WHERE request_id = ${requestId}::uuid`),
+  ) as { status: string }[];
+  expect(row?.status).toBe("sending");
 });
