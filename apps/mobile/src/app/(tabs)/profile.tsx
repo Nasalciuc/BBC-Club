@@ -516,7 +516,7 @@ const PILL = 33.9;
 /** The pills reach 44 pt above and below (`Button`'s slop): their holders keep that room. */
 const PILL_SLOP = hitSlopFor(PILL);
 const DELETE = { height: 33.4, gap: 8.8 } as const;
-const SIGN_OUT = { height: 29.3, gap: 16 } as const;
+const SIGN_OUT = { height: 29.3, gap: tokens.space.md } as const;
 const DELETE_SLOP = hitSlopFor(DELETE.height, DELETE.gap, SIGN_OUT.gap);
 const SIGN_OUT_SLOP = hitSlopFor(SIGN_OUT.height, SIGN_OUT.gap);
 const statValue = tokens.type.statValue;
