@@ -59,7 +59,8 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const actor = actorMemberId(c.get("principal"));
+        const principal = c.get("principal");
+        const actor = actorMemberId(principal);
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
         const parsed = ProfilePatchBody.safeParse(await c.req.json().catch(() => ({})));
         if (!parsed.success) {
@@ -89,7 +90,9 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           return p;
         });
         if (!updated) return c.json(apiError("NOT_FOUND"), 404);
-        return c.json(updated);
+        // The ProfileVM GET answers, as the travel save does: email and notifications included (ADR-IMPL-025).
+        const prefs = await facade.preferencesOf(undefined, actor);
+        return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
       },
     );
 

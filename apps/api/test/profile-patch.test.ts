@@ -2,6 +2,7 @@
 import { describe, it, expect } from "bun:test";
 import { sql } from "drizzle-orm";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
+import { ProfileVM } from "@bbc/shared/api/v1/profile";
 import { testApp } from "./helpers/test-app";
 
 describe("PATCH /v1/profile", () => {
@@ -20,6 +21,38 @@ describe("PATCH /v1/profile", () => {
     const evts = await t.journal.forMember(t.memberA.id);
     const updated = evts.filter((e: any) => e.payload.type === "member.profile_updated");
     expect(updated.length).toBeGreaterThanOrEqual(1);
+    await t.close();
+  });
+
+  it("answers the ProfileVM the app reads, as GET and the travel save do (ADR-IMPL-025)", async () => {
+    const t = await testApp({ suite: "profile-patch-vm" });
+    await t.app.request("/v1/profile/preferences", {
+      method: "PUT",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        preferences: [
+          { category: "offers_personal", enabled: false },
+          { category: "offers_broadcast", enabled: false },
+        ],
+      }),
+    });
+    const r = await t.app.request("/v1/profile", {
+      method: "PATCH",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ homeAirport: "LHR" }),
+    });
+    expect(r.status).toBe(200);
+    const parsed = ProfileVM.safeParse(await r.json());
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.email).toBe(t.memberA.email);
+    expect(parsed.data?.memberId).toBe(t.memberA.id);
+    expect(parsed.data?.homeAirport).toBe("LHR");
+    expect(parsed.data?.notifications).toEqual({ requestUpdates: true, offers: false });
+    // The same profile GET answers.
+    const get = ProfileVM.parse(
+      await (await t.app.request("/v1/profile", { headers: { Cookie: t.memberA.cookie } })).json(),
+    );
+    expect(parsed.data).toEqual(get);
     await t.close();
   });
 
