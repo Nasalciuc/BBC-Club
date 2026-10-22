@@ -11,7 +11,6 @@ import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { airportsRepo } from "./infrastructure/airports.repo";
-import { discoveryRepo } from "./infrastructure/discovery.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { placePhotosRepo } from "./infrastructure/place-photos.repo";
 import { siteRepo } from "./infrastructure/site.repo";
@@ -19,7 +18,7 @@ import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
 import { formatInZone } from "./application/flight-local";
-import { homeZones, popularFrom } from "./application/discovery";
+import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody } from "./application/import";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
@@ -368,7 +367,7 @@ export const catalogModule = (
       async (c) => {
         const zones = homeZones(c.req.query("tz") ?? "");
         if (!zones) return c.json(apiError("VALIDATION", { message: "tz must be an IANA time zone" }), 400);
-        const airport = zones.length > 0 ? await discoveryRepo.busiestIn(conn, zones) : null;
+        const airport = await homeSuggestion(conn, zones);
         return c.json({ airport: airport ? toAirportVM(airport) : null });
       },
     );

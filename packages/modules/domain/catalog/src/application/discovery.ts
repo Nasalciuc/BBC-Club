@@ -46,6 +46,29 @@ export async function popularFrom(exec: Executor, origin: AirportRow, now = new 
   return pickPopular(origin, searched, await discoveryRepo.hubs(exec, 12));
 }
 
+/** The city a zone is named after, as `city_norm` spells a city: `America/Bogota` → `bogota`, `Asia/Ho_Chi_Minh` →
+ *  `ho chi minh` (lower-case, accent-free). */
+export function zoneCity(zone: string): string {
+  const last = zone.slice(zone.lastIndexOf("/") + 1);
+  return last.replace(/_/g, " ").normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+/**
+ * The home airport to suggest (ADR-IMPL-039: offered, never chosen) for the zones a phone reported: the busiest
+ * airport there. A tie on popularity goes to the airports of the zone's own city (Lima, not Arequipa), then by code;
+ * a tie between other cities, none the zone's own, suggests nothing — the member is asked without a guess.
+ */
+export async function homeSuggestion(exec: Executor, zones: string[]): Promise<AirportRow | null> {
+  if (zones.length === 0) return null;
+  const top = await discoveryRepo.busiestIn(exec, zones);
+  if (top.length <= 1) return top[0] ?? null;
+  const cities = new Set(zones.map(zoneCity));
+  const own = top.find((a) => cities.has(a.cityNorm ?? zoneCity(a.city)));
+  if (own) return own;
+  const distinct = new Set(top.map((a) => a.cityNorm ?? a.city));
+  return distinct.size === 1 ? (top[0] ?? null) : null;
+}
+
 /**
  * Names a phone may report that the airport data spells differently, mapped to the data's (current IANA) name. Android
  * reports the ICU name ("Asia/Calcutta" where the data says "Asia/Kolkata"); a phone with old time zone data reports a
