@@ -1,6 +1,6 @@
 # ADR-IMPL-058 — Platform and host: a boot that waits for its database, strict flag reads, errors without parameters
 
-Status: proposed · Date: 2026-10-22 · Scope: P1 (`packages/modules/platform`: flags, jobs, the events poller and every
+Status: accepted · Date: 2026-10-22 · Scope: P1 (`packages/modules/platform`: flags, jobs, the events poller and every
 platform log line; `@bbc/db` `errorForLog`/`errorLine`; the api host: boot, the api and worker entries, `/status`,
 `/v1/app-config`, the body limits, the error contract; `AGENTS.md` rule 6; `infra/RUNBOOK.md`) · Amends ADR-IMPL-013
 point 7 (kill flag read errors) for boot only; keeps the rest of it.
