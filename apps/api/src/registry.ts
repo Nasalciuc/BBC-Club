@@ -20,15 +20,38 @@ export class DatabaseUnreachable extends Error {
   override name = "DatabaseUnreachable";
 }
 
+/** One boot read's deadline. The delays between retries only run once a read settles, and through the pooler a query
+ *  can wait for a server with no statement_timeout to stop it (transaction mode takes no startup parameters), so a
+ *  read that never settles would hold boot past every retry. The deadline settles the attempt; the retry loop then
+ *  decides. The underlying query is not abortable through drizzle, so it may still finish later, unheard. */
+export const BOOT_READ_TIMEOUT_MS = 10_000;
+
+function withDeadline<T>(what: string, read: () => Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`boot read timed out after ${timeoutMs} ms: ${what}`)), timeoutMs);
+    read().then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e: unknown) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 async function withRetry<T>(
   what: string,
   read: () => Promise<T>,
   delaysMs: readonly number[],
   logger: { warn: (o: object, m?: string) => void },
+  timeoutMs: number = BOOT_READ_TIMEOUT_MS,
 ): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await read();
+      return await withDeadline(what, read, timeoutMs);
     } catch (e) {
       const delay = delaysMs[attempt - 1];
       if (delay === undefined)
@@ -66,6 +89,8 @@ export class ModuleRegistry {
     mount: (basePath: string, app: Hono<any>) => void;
     /** Waits between attempts; tests pass short ones. */
     retryDelaysMs?: readonly number[];
+    /** One read's deadline; tests pass a short one. */
+    readTimeoutMs?: number;
   }) {
     const layerOf = new Map(this.modules.map((m) => [m.name, m.layer] as const));
     for (const m of this.modules)
@@ -78,12 +103,18 @@ export class ModuleRegistry {
 
     const delays = deps.retryDelaysMs ?? BOOT_RETRY_MS;
     const logger = deps.platform.logger;
-    await withRetry("SELECT 1", () => deps.db.execute(sql`SELECT 1`), delays, logger);
+    await withRetry("SELECT 1", () => deps.db.execute(sql`SELECT 1`), delays, logger, deps.readTimeoutMs);
     const killed = new Map<string, boolean>();
     for (const m of this.modules)
       killed.set(
         m.name,
-        await withRetry(`kill flag of ${m.name}`, () => deps.platform.flags.killState(m.name), delays, logger),
+        await withRetry(
+          `kill flag of ${m.name}`,
+          () => deps.platform.flags.killState(m.name),
+          delays,
+          logger,
+          deps.readTimeoutMs,
+        ),
       );
 
     const byLayer = [...this.modules].sort((a, b) => LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer));

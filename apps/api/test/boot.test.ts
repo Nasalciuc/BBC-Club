@@ -7,7 +7,7 @@ import { ModuleRegistry } from "../src/registry";
 
 /** One module on a fake host whose database and kill flag fail `dbFailures` / `flagFailures` times before answering
  *  (Infinity: never). The flag fails like the real one: `killState` throws, `isKilled` fails closed. */
-function flakyHost(opts: { dbFailures?: number; flagFailures?: number }) {
+function flakyHost(opts: { dbFailures?: number; flagFailures?: number; dbHangs?: boolean }) {
   const calls = { db: 0, flags: 0, init: 0 };
   const mounted: string[] = [];
   const consumers: string[] = [];
@@ -15,6 +15,7 @@ function flakyHost(opts: { dbFailures?: number; flagFailures?: number }) {
   const db = {
     execute: async () => {
       calls.db++;
+      if (opts.dbHangs) return new Promise(() => {}); // a pooler wait that never settles
       if (calls.db <= (opts.dbFailures ?? 0)) throw refused();
       return [];
     },
@@ -43,13 +44,14 @@ function flakyHost(opts: { dbFailures?: number; flagFailures?: number }) {
       };
     },
   });
-  const boot = () =>
+  const boot = (overrides: { retryDelaysMs?: readonly number[]; readTimeoutMs?: number } = {}) =>
     registry.boot({
       db,
       platform,
       env: {},
       mount: (basePath: string) => void mounted.push(basePath),
       retryDelaysMs: [1, 1, 1, 1, 1],
+      ...overrides,
     } as unknown as Parameters<ModuleRegistry["boot"]>[0]);
   return { boot, calls, mounted, consumers };
 }
@@ -85,6 +87,17 @@ describe("boot against a database that is not up yet", () => {
     expect(h.calls.init).toBe(0);
     expect(h.calls.flags).toBe(0);
     expect(h.mounted).toEqual([]);
+  });
+
+  it("a read that never settles is bounded by its deadline and retried, not awaited forever", async () => {
+    const h = flakyHost({ dbHangs: true });
+    // A 20 ms read deadline and two retries: three bounded attempts, then boot gives up.
+    await expect(h.boot({ retryDelaysMs: [1, 1], readTimeoutMs: 20 })).rejects.toMatchObject({
+      name: "DatabaseUnreachable",
+    });
+    expect(h.calls.db).toBe(3);
+    expect(h.calls.init).toBe(0);
+    expect(h.calls.flags).toBe(0);
   });
 });
 
