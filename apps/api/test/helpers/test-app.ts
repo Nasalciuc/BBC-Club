@@ -8,6 +8,7 @@ import { testAuth } from "./test-auth";
 import type { IdentityFacade } from "@bbc/identity";
 import type { IdentityModuleOptions } from "@bbc/identity/module";
 import type { EngagementFacade } from "@bbc/engagement";
+import { DEPART, RETURN } from "./days";
 
 /** The whole host, in-memory (no port), against an isolated clone of the test template, with capturing adapters.
  *  Every suite that needs the system uses this — nobody builds their own wiring.
@@ -307,8 +308,8 @@ export async function testApp(
         tripType: "round",
         cabin: "business",
         legs: [
-          { from: "JFK", to: "LHR", date: "2027-10-12" },
-          { from: "LHR", to: "JFK", date: "2027-10-19" },
+          { from: "JFK", to: "LHR", date: DEPART },
+          { from: "LHR", to: "JFK", date: RETURN },
         ],
         passengers: { adult: 1, child: 0, infant: 0 },
         contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },

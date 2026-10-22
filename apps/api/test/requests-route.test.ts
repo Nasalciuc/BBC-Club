@@ -5,6 +5,7 @@ import { describe, expect, it } from "bun:test";
 import { RequestVM } from "@bbc/shared/api/v1/requests";
 import { signAction } from "../../../packages/modules/domain/requests/src/application/operator-links";
 import { testApp } from "./helpers/test-app";
+import { DEPART, DAYS_WITH_YEAR } from "./helpers/days";
 
 const SECRET = "ops-link-secret-at-least-32-characters";
 
@@ -31,7 +32,7 @@ describe("a request names its destination", () => {
     expect(detail.city).toBe("London");
     expect([detail.tripType, detail.phone]).toEqual(["round", "+12125550148"]);
     // One month is named once, with the year (09: `Nov 12 – 19, 2026`; ADR-IMPL-056).
-    expect(detail.dates).toBe("Oct 12–19, 2027");
+    expect(detail.dates).toBe(DAYS_WITH_YEAR);
 
     // The operator's page and the status event the quote-ready push is written from.
     const html = await (await t.app.request(`/ops/requests/${signAction(SECRET, vm.id, "quoted")}`)).text();
@@ -56,7 +57,7 @@ describe("a request names its destination", () => {
     await t.seedCatalogBasics();
     const oneWay = await t.submitRequestAs(
       t.memberA,
-      t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to: "CDG", date: "2027-10-12" }] }),
+      t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to: "CDG", date: DEPART }] }),
       { idempotencyKey: crypto.randomUUID() },
     );
     expect(oneWay.status).toBe(201);
@@ -68,7 +69,7 @@ describe("a request names its destination", () => {
 
     const unknown = await t.submitRequestAs(
       t.memberA,
-      t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to: "QQQ", date: "2027-10-12" }] }),
+      t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to: "QQQ", date: DEPART }] }),
       { idempotencyKey: crypto.randomUUID() },
     );
     expect(unknown.status).toBe(201);

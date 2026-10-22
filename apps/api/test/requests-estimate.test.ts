@@ -6,13 +6,14 @@ import { sql } from "drizzle-orm";
 import { storedPricingRules } from "../../../packages/modules/domain/catalog/src/pricing/rules";
 import { FIXTURE_RULES } from "../../../packages/modules/domain/catalog/tests/unit/pricing-rules.fixture";
 import { testApp } from "./helpers/test-app";
+import { DEPART, RETURN } from "./helpers/days";
 
 const FARE = "11111111-1111-4111-8111-111111111111";
 
 const round = (from: string, to: string, over: Record<string, unknown> = {}) => ({
   legs: [
-    { from, to, date: "2027-10-12" },
-    { from: to, to: from, date: "2027-10-19" },
+    { from, to, date: DEPART },
+    { from: to, to: from, date: RETURN },
   ],
   priceAtRequest: undefined,
   // The app showed the indicative fare before the member asked (the frontend's estimate row).
