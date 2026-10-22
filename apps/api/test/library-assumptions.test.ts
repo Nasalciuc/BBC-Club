@@ -113,3 +113,19 @@ describe("Better Auth rate-limit customRules", () => {
     expect(verify.status).toBeLessThan(400);
   });
 });
+
+describe("routes the club does not use are not served", () => {
+  let t: Awaited<ReturnType<typeof testApp>>;
+  beforeAll(async () => {
+    t = await testApp({ suite: "library-unserved" });
+  });
+  afterAll(async () => {
+    await t.close();
+  });
+
+  it("expo-authorization-proxy is 404, not a redirect to any https URL (no social login)", async () => {
+    const r = await t.app.request("/api/auth/expo-authorization-proxy?authorizationURL=https://evil.example/x?state=1");
+    expect(r.status).toBe(404);
+    expect(r.headers.get("location")).toBeNull();
+  });
+});

@@ -54,7 +54,10 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
     // existing address with a synthetic user whose role was null and a new one with role "member" (an account oracle),
     // mailed a code to any address it was given, and left an unverified account in the owner's way. In-process
     // auth.api.signUpEmail (seed scripts, tests, load bench) is unaffected.
-    disabledPaths: ["/change-password", "/verify-password", "/sign-up/email"],
+    // /expo-authorization-proxy (mounted by expo()) redirects to any https URL but the API's own origin: an open redirect
+    // on the club's domain, for a social login the club does not have (MODULE.md). expo() stays for the app's cookies. If
+    // social login ever ships, allow-list the providers' authorization hosts instead of serving it as it is.
+    disabledPaths: ["/change-password", "/verify-password", "/sign-up/email", "/expo-authorization-proxy"],
 
     emailAndPassword: {
       enabled: true,
