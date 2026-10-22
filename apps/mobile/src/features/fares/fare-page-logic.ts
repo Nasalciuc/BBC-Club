@@ -4,6 +4,8 @@ import { fareBasis } from "@bbc/ui/flight-facts";
 
 import { formatPrice } from "../../lib/format";
 
+import { knownCarrier } from "./known-carrier";
+
 type Fare = Pick<
   FareVM,
   "carrier" | "cabin" | "nonstop" | "durationMinutes" | "departAt" | "departLocal" | "departDate" | "price"
@@ -109,7 +111,8 @@ export function aboutFareNote(fare: Pick<Fare, "carrier" | "price">): string {
   const match = /(\d{1,2})\s+([A-Za-z]{3,})\.?\s*$/.exec(fare.price.publishedSource ?? "");
   const month = match ? MONTH_NAMES.find((m) => m.toLowerCase().startsWith(match[2]!.toLowerCase().slice(0, 3))) : null;
   if (!match || !month) return promise;
-  return `The published ${fare.carrier.name} fare was recorded on ${Number(match[1])} ${month}. ${promise}`;
+  const airline = knownCarrier(fare.carrier);
+  return `The published ${airline ? `${airline.name} ` : ""}fare was recorded on ${Number(match[1])} ${month}. ${promise}`;
 }
 
 /** What closed, as Figma 135:848 names it: the day, the route by its cities, the airline and cabin — what is known. */
@@ -181,7 +184,9 @@ export function aboutFareLines(fare: AboutFare): [string, string] {
   const route = `from ${fare.from.city} (${fare.from.code}) to ${fare.to.city} (${fare.to.code})`;
   const first = `This indicative ${trip}fare is for ${who} flying ${route}${days ? `, ${days}` : ""}. Your specialist confirms availability and the final fare.`;
   const seat = fare.cabin === "business" ? ", with a spacious seat and a more comfortable journey" : "";
-  const second = `Travel in ${cabinWord(fare.cabin)} with ${fare.carrier.name}${seat}. Your specialist confirms the cabin details and arranges the booking by phone.`;
+  // A fare that names no airline says nothing of one — never `with Unknown`.
+  const airline = knownCarrier(fare.carrier);
+  const second = `Travel in ${cabinWord(fare.cabin)}${airline ? ` with ${airline.name}` : ""}${seat}. Your specialist confirms the cabin details and arranges the booking by phone.`;
   return [first, second];
 }
 

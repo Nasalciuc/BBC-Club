@@ -16,6 +16,7 @@ import {
   savings,
   shareFareText,
 } from "./fare-page-logic";
+import { knownCarrier } from "./known-carrier";
 
 const ba = fixture.fares[0]!;
 
@@ -142,6 +143,26 @@ describe("About this fare, 3.0 (20)", () => {
     );
     expect(longDay("2028-02-29")).toBe("February 29, 2028");
     expect(longDay(null)).toBeNull();
+  });
+
+  it("names no airline for a fare that has none — never `with Unknown`", () => {
+    const unknown = { ...ba, carrier: { code: null, name: "Unknown", logoUrl: null } };
+    const [, second] = aboutFareLines({ ...unknown, trip: "one_way", ...search });
+    expect(second).toBe(
+      "Travel in Business, with a spacious seat and a more comfortable journey. Your specialist confirms the cabin details and arranges the booking by phone.",
+    );
+    expect(aboutFareNote(unknown)).toBe(
+      "The published fare was recorded on 16 September. Your specialist will confirm current availability and fare conditions before booking.",
+    );
+    expect(knownCarrier(unknown.carrier)).toBeNull();
+    expect(knownCarrier({ code: null, name: "  " })).toBeNull();
+    expect(knownCarrier(ba.carrier)).toEqual(ba.carrier);
+    // A code alone names the airline even when the catalogue had no name for it.
+    expect(knownCarrier({ code: "BA", name: "Unknown", logoUrl: null })).toEqual({
+      code: "BA",
+      name: "Unknown",
+      logoUrl: null,
+    });
   });
 
   it("writes the days as 20 does, across a month and a year too", () => {
