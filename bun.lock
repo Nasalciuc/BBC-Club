@@ -136,6 +136,7 @@
         "@bbc/email": "workspace:*",
         "@bbc/platform": "workspace:*",
         "@bbc/shared": "workspace:*",
+        "@better-auth/core": "1.6.31",
         "@better-auth/expo": "~1.6.0",
         "better-auth": "~1.6.0",
         "drizzle-orm": "1.0.0-rc.4",
