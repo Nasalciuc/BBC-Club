@@ -3,6 +3,7 @@ import type { RequestBody, RequestLeg, Passengers } from "@bbc/shared/api/v1/req
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 // The pure date helpers, not the component index: this module is imported by tests that run without React Native.
 import { addDays, todayLocal } from "@bbc/ui/calendar-logic";
+import { departYmd } from "@bbc/ui/flight-facts";
 import type { Profile } from "@/lib/api";
 
 export type TripType = "round" | "oneway";
@@ -132,6 +133,31 @@ export function defaultDates(today: string = todayLocal()): { depart: string; re
   return { depart, ret: addDays(depart, DEFAULT_TRIP_NIGHTS) };
 }
 
+/**
+ * The days a request starts from. A fare is one flight: it is asked for on the day it leaves (`departYmd`, as its page
+ * prints it), one way or round trip as the catalogue sells it — a round trip's return the one searched for when it
+ * comes after that day, else a week later, still the member's to change. A fare without a day of its own takes the
+ * searched day, else the suggestion, and still its trip. Without a fare: the dates chosen for this search, else the
+ * suggestion (two weeks out, a week long).
+ */
+function draftDates(
+  fare: Pick<FareVM, "departAt" | "departLocal" | "departDate" | "trip"> | null,
+  search: SearchContext | null,
+  today: string | undefined,
+): { depart: string; ret: string | null; tripType: TripType } {
+  const suggested = defaultDates(today);
+  const searched = search?.dates.depart ? search.dates : null;
+  if (fare) {
+    const depart = departYmd(fare) ?? searched?.depart ?? suggested.depart;
+    const trip = fare.trip ?? (searched && !searched.return ? "one_way" : "round_trip");
+    if (trip === "one_way") return { depart, ret: null, tripType: "oneway" };
+    const back = searched?.return && searched.return > depart ? searched.return : null;
+    return { depart, ret: back ?? addDays(depart, DEFAULT_TRIP_NIGHTS), tripType: "round" };
+  }
+  if (!searched?.depart) return { depart: suggested.depart, ret: suggested.ret, tripType: "round" };
+  return { depart: searched.depart, ret: searched.return, tripType: searched.return ? "round" : "oneway" };
+}
+
 export function buildDraft(opts: {
   fare?: FareVM | null;
   profile?: Profile | null;
@@ -151,10 +177,7 @@ export function buildDraft(opts: {
   const passengers: Passengers = opts.search?.passengers ??
     opts.profile?.preferences?.passengers ?? { adult: 1, child: 0, infant: 0 };
   const mode: RequestMode = opts.mode ?? (opts.fare?.offerId ? "offer" : opts.fare ? "fare" : "quote");
-  const suggested = defaultDates(opts.today);
-  const depart = opts.search?.dates.depart ?? suggested.depart;
-  const ret = opts.search?.dates.depart ? opts.search.dates.return : suggested.ret;
-  const tripType: TripType = opts.search?.dates.depart && !opts.search.dates.return ? "oneway" : "round";
+  const { depart, ret, tripType } = draftDates(opts.fare ?? null, opts.search ?? null, opts.today);
   // A one-way search chose no return: if the member turns it into a round trip, the return is theirs to pick.
   return {
     mode,
