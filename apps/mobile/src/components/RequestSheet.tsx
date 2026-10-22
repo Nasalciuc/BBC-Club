@@ -223,6 +223,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   }
 
   async function submitOnce() {
+    // A new attempt: the last one's notice goes, whatever stops this one (DESIGN.md: never stacked).
+    dispatch({ type: "setSubmitError", error: null });
     if (missingReturn(state.tripType, state.legs[1]?.date)) {
       dispatch({ type: "setReturnError", error: "Select a return date or choose One way." });
       return;

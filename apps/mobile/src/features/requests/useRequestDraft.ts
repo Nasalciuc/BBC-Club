@@ -52,7 +52,12 @@ type Action =
       saved?: boolean;
     };
 
-function reducer(state: RequestDraft, action: Action): RequestDraft {
+/**
+ * The sheet's state. A failed send's notice (`This request didn't send.`) speaks of the draft as it was: every change
+ * to the draft takes it away, so it never stays beside a field's own error once its cause is fixed (DESIGN.md: states
+ * are separate frames, never stacked); a field's own error goes when that field changes.
+ */
+export function requestDraftReducer(state: RequestDraft, action: Action): RequestDraft {
   switch (action.type) {
     case "reset":
       return action.draft;
@@ -62,11 +67,12 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
         tripType: action.tripType,
         legs: legsForTripType(state.legs, action.tripType),
         returnError: null,
+        submitError: null,
       };
     case "setDepart": {
       const legs = [...state.legs];
       if (legs[0]) legs[0] = { ...legs[0], date: action.date };
-      return { ...state, legs };
+      return { ...state, legs, submitError: null };
     }
     case "setReturn": {
       const legs = [...state.legs];
@@ -74,18 +80,19 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
       else if (legs[0]) {
         legs.push({ from: legs[0].to, to: legs[0].from, date: action.date });
       }
-      return { ...state, legs, returnError: null };
+      return { ...state, legs, returnError: null, submitError: null };
     }
     case "setPassengers":
-      return { ...state, passengers: action.passengers };
+      return { ...state, passengers: action.passengers, submitError: null };
     case "setContact":
       return {
         ...state,
         contact: { ...state.contact, [action.field]: action.value },
         phoneError: action.field === "phone" ? null : state.phoneError,
+        submitError: null,
       };
     case "setNote":
-      return { ...state, note: action.note };
+      return { ...state, note: action.note, submitError: null };
     case "setPhoneError":
       return { ...state, phoneError: action.error };
     case "setReturnError":
@@ -253,6 +260,6 @@ export function draftToBody(draft: RequestDraft): RequestBody {
 }
 
 export function useRequestDraft(initial: RequestDraft) {
-  const [state, dispatch] = useReducer(reducer, initial);
+  const [state, dispatch] = useReducer(requestDraftReducer, initial);
   return { state, dispatch };
 }

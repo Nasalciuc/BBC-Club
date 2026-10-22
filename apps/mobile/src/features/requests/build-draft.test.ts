@@ -2,10 +2,45 @@ import { describe, expect, it } from "bun:test";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
 import { fixture } from "@bbc/shared/fixture";
 
-import { buildDraft, defaultDates, draftToBody, legsForTripType, missingReturn } from "./useRequestDraft";
+import {
+  buildDraft,
+  defaultDates,
+  draftToBody,
+  legsForTripType,
+  missingReturn,
+  requestDraftReducer,
+} from "./useRequestDraft";
 
 const TODAY = "2026-10-08";
 const CONTACT = { name: "Ada Lovelace", phone: "+12125550148", email: "ada@example.com" };
+
+describe("the sheet's notice never outlives its cause (F099)", () => {
+  const failed = {
+    ...buildDraft({ mode: "quote", today: TODAY }),
+    submitError: "Add an email address we can write to.",
+  };
+
+  it("any change to the draft takes the old 'This request didn't send' notice away", () => {
+    const changes = [
+      { type: "setContact", field: "email", value: "ada@example.com" },
+      { type: "setContact", field: "name", value: "Ada" },
+      { type: "setNote", note: "Window seat" },
+      { type: "setTripType", tripType: "oneway" },
+      { type: "setDepart", date: "2026-11-03" },
+      { type: "setReturn", date: "2026-11-10" },
+      { type: "setPassengers", passengers: { adult: 2, child: 0, infant: 0 } },
+    ] as const;
+    for (const action of changes) {
+      expect(requestDraftReducer(failed, action).submitError).toBeNull();
+    }
+  });
+
+  it("an error of a field's own stays until that field changes", () => {
+    const state = { ...failed, phoneError: "That phone number doesn't look right." };
+    expect(requestDraftReducer(state, { type: "setNote", note: "x" }).phoneError).toBe(state.phoneError);
+    expect(requestDraftReducer(state, { type: "setContact", field: "phone", value: "+1" }).phoneError).toBeNull();
+  });
+});
 
 describe("buildDraft — dates", () => {
   it("suggests two weeks out and a week long when nothing was chosen — never a fixed day", () => {
