@@ -3,7 +3,7 @@ import { desc, lt } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import type { Auth } from "../infrastructure/auth";
 import { user } from "../infrastructure/schema";
-import { otpSendLock, otpSendTarget } from "../infrastructure/otp-send-lock";
+import { isOtpSendRequest, otpSendLock, otpSendTarget } from "../infrastructure/otp-send-lock";
 import { POSTMARK_TIMEOUT_MS } from "@bbc/email";
 import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
 
@@ -11,9 +11,6 @@ export type { Member, AuthVars, SessionInfo, IdentityFacade };
 
 /** Methods that change nothing: they may answer from the cookie cache. Every other method reads the session fresh. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-
-/** Code types Better Auth mails only to an existing account: their answers wait for the floor. */
-const FLOORED_CODE_TYPES = new Set(["forget-password", "email-verification"]);
 
 export type IdentityFacadeOptions = {
   /** The floor under a reset or verification code's answer. Default: Postmark's timeout. Tests make it short. */
@@ -94,16 +91,22 @@ export function createIdentityFacade(
    *  code goes to every address asked (nothing to hide, and a failure must reach Join at once); a 429 stays immediate
    *  (it is per IP). */
   const handler: Auth["handler"] = async (req) => {
+    if (!isOtpSendRequest(req)) return auth.handler(req);
+    const receivedAt = performance.now();
     const target = await otpSendTarget(req);
-    if (!target) return auth.handler(req);
-    const receivedAt = Date.now();
-    const res = await withOtpSendLock(target, () => auth.handler(req));
-    if (FLOORED_CODE_TYPES.has(target.type) && res.status !== 429) {
-      const wait = receivedAt + answerFloorMs - Date.now();
-      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-    }
+    const res = target ? await withOtpSendLock(target, () => auth.handler(req)) : await auth.handler(req);
+    // Only what the club read as a sign-in code answers at once. A reset or verification code waits, and so does a body
+    // the club could not read the way Better Auth reads it (another content type): it may be a reset code all the same.
+    if (target?.type !== "sign-in" && res.status !== 429) await waitUntil(receivedAt + answerFloorMs);
     return res;
   };
 
   return { handler, getSession, requireMember, requireRole, deleteAccount, listUsersCreatedBefore };
+}
+
+/** Waits until `deadline` (a performance.now() time). A timer can wake a fraction of a millisecond early: look again. */
+async function waitUntil(deadline: number): Promise<void> {
+  for (let left = deadline - performance.now(); left > 0; left = deadline - performance.now()) {
+    await new Promise((resolve) => setTimeout(resolve, Math.ceil(left)));
+  }
 }

@@ -16,13 +16,22 @@ describe("a reset-code answer takes as long for an address with an account as fo
       await ctx.db.execute(sql`UPDATE auth."user" SET email_verified = true WHERE email = ${member}`);
       const unknown = `timing-nobody.${crypto.randomUUID().slice(0, 8)}@test.dev`;
 
-      const timed = async (email: string, path = "/email-otp/send-verification-otp", type = "forget-password") => {
+      const timed = async (
+        email: string,
+        path = "/email-otp/send-verification-otp",
+        type = "forget-password",
+        form = false,
+      ) => {
         const started = performance.now();
         const res = await facade.handler(
           new Request(`http://localhost:8000/api/auth${path}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Origin: "http://localhost:8000" },
-            body: JSON.stringify({ email, type }),
+            // `form`: a content type Better Auth lets through as JSON but reads as a form.
+            headers: {
+              "Content-Type": form ? "application/x-www-form-urlencoded,application/json" : "application/json",
+              Origin: "http://localhost:8000",
+            },
+            body: form ? new URLSearchParams({ email, type }).toString() : JSON.stringify({ email, type }),
           }),
         );
         return { status: res.status, body: await res.json(), ms: performance.now() - started };
@@ -41,6 +50,31 @@ describe("a reset-code answer takes as long for an address with an account as fo
       const other = await timed(unknown, "/email-otp/request-password-reset");
       expect(other.status).toBe(200);
       expect(other.ms).toBeGreaterThanOrEqual(500);
+
+      // A body the club cannot read as Better Auth does is held too: it is a reset code here, mailed to the member.
+      const formForMember = await timed(member, "/email-otp/request-password-reset", "forget-password", true);
+      expect(formForMember.status).toBe(200);
+      expect(formForMember.ms).toBeGreaterThanOrEqual(500);
+
+      // A sign-in to a JSON parser, the member's reset code to Better Auth (it reads this content type as a form): held,
+      // because the club reads only what Better Auth reads as JSON.
+      const startedPolyglot = performance.now();
+      const polyglot = await facade.handler(
+        new Request("http://localhost:8000/api/auth/email-otp/send-verification-otp", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded,application/json",
+            Origin: "http://localhost:8000",
+          },
+          body: JSON.stringify({
+            type: "sign-in",
+            email: unknown,
+            x: `&type=forget-password&email=${encodeURIComponent(member)}&z=`,
+          }),
+        }),
+      );
+      expect(polyglot.status).toBe(200);
+      expect(performance.now() - startedPolyglot).toBeGreaterThanOrEqual(500);
 
       // A sign-in code has nothing to hide (it is mailed to any address): no floor.
       ctx.mailbox.delayMs = 0;

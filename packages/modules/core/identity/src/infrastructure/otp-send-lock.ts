@@ -10,12 +10,26 @@ const SEND_PATHS: Record<string, "from-body" | "forget-password"> = {
 
 export type OtpSendTarget = { type: string; email: string };
 
+const sendKind = (req: Request) =>
+  req.method === "POST" ? SEND_PATHS[new URL(req.url).pathname.replace(/\/+$/, "")] : undefined;
+
+/** A POST to one of the routes that mail a code, whatever its body. */
+export function isOtpSendRequest(req: Request): boolean {
+  return sendKind(req) !== undefined;
+}
+
+/** Better Auth's router (better-call `getBody`) reads a body as JSON only when its Content-Type matches this; another
+ *  type it reads as a form or as text. The club reads the body only when Better Auth reads it as JSON too: otherwise a
+ *  body could say one thing to the club and another to Better Auth (`application/x-www-form-urlencoded,application/json`
+ *  passes Better Auth's JSON-only check and is read as a form). */
+const JSON_CONTENT_TYPE = /^application\/([a-z0-9.+-]*\+)?json/i;
+
 /** The code a request asks to mail and where to, read from a clone of its JSON body; null for anything else (another
- *  route, another method, a body that does not parse) — those go to Better Auth untouched. */
+ *  route, another method, a body that is not JSON to Better Auth or does not parse) — those go to Better Auth untouched. */
 export async function otpSendTarget(req: Request): Promise<OtpSendTarget | null> {
-  if (req.method !== "POST") return null;
-  const kind = SEND_PATHS[new URL(req.url).pathname.replace(/\/+$/, "")];
+  const kind = sendKind(req);
   if (!kind) return null;
+  if (!JSON_CONTENT_TYPE.test(req.headers.get("content-type") ?? "")) return null;
   const body: unknown = await req
     .clone()
     .json()
