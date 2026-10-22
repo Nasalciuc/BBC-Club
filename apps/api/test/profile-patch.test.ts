@@ -75,6 +75,27 @@ describe("PATCH /v1/profile", () => {
     await t.close();
   });
 
+  it("a home airport is three letters, upper-cased (the request legs' rule): never 500, never 'L H'", async () => {
+    const t = await testApp({ suite: "profile-iata" });
+    const patch = (homeAirport: string) =>
+      t.app.request("/v1/profile", {
+        method: "PATCH",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ homeAirport }),
+      });
+    // 'ßab' upper-cases to 'SSAB' (CHECK profile_iata_len → 500); '😀A' is three UTF-16 units, two characters.
+    for (const code of ["ßab", "😀A", "L H", "123", "LH", "LHRX"]) {
+      const r = await patch(code);
+      expect([code, r.status]).toEqual([code, 400]);
+    }
+    expect((await patch("lhr")).status).toBe(200);
+    const [row] = (await t.db.execute(
+      sql`SELECT home_airport FROM members.profile WHERE member_id = ${t.memberA.id}`,
+    )) as { home_airport: string }[];
+    expect(row?.home_airport).toBe("LHR");
+    await t.close();
+  });
+
   it("401 without session", async () => {
     const t = await testApp({ suite: "profile-unauth" });
     const r = await t.app.request("/v1/profile", {

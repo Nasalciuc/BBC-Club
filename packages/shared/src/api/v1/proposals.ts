@@ -102,10 +102,15 @@ export type PasswordBody = z.infer<typeof PasswordBody>;
 
 // -- Profile -----------------------------------------------------------------
 
+/** Three letters, upper-cased — the request legs' rule (requests.ts). `.length(3)` let 'ßab' through (upper-cased to
+ *  'SSAB', refused by CHECK profile_iata_len → 500) and stored 'L H'. Whether the airport exists is catalog's to say,
+ *  and members (core) may not ask catalog (domain); Home answers home:null for a code it does not know. */
+const IATA = /^[A-Za-z]{3}$/;
+
 export const ProfilePatchBody = z
   .object({
     displayName: z.string().min(1).max(120).optional(),
-    homeAirport: z.string().length(3).optional(),
+    homeAirport: z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase().optional(),
     // Read by Intl for quiet hours: a zone it cannot read stopped every broadcast campaign (ADR-IMPL-058).
     timezone: z.string().min(1).max(80).refine(isIanaZone, { message: "Choose a time zone from the list." }).optional(),
     // Same E.164 rule as requests contact.phone — client sends E.164; refuse bare digit junk.
