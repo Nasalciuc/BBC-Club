@@ -367,6 +367,184 @@ describe("catalog routes", () => {
   });
 });
 
+// The catalogue import refuses what no screen can show, before writing anything, and says where: `row N.<field>`, N
+// the file's line (the header is line 1). It used to store a currency '123', a price '1e3' as 1000 and '99.999' as 100,
+// fares between airports nobody knows, a latitude of 999, a region 'Europe' (out of Home's carousels), a code 'Q1Z'
+// (which then broke Popular and place photos) — or answer with raw SQL or a Zod array and no row.
+describe("catalogue import — what it refuses, and where", () => {
+  const until = () => new Date(Date.now() + 14 * 86_400_000).toISOString();
+  const since = () => new Date(Date.now() - 86_400_000).toISOString();
+  const FARES =
+    "route_from,route_to,cabin,carrier,carrier_name,product,nonstop,duration_minutes,price,published_price,published_source,currency,valid_from,valid_until";
+  const fare = (over: Partial<Record<string, string>> = {}) => {
+    const v: Record<string, string> = {
+      route_from: "JFK",
+      route_to: "LHR",
+      cabin: "business",
+      carrier: "UA",
+      carrier_name: "United",
+      product: "Polaris",
+      nonstop: "true",
+      duration_minutes: "430",
+      price: "4600.00",
+      published_price: "8200.00",
+      published_source: "Sabre · test",
+      currency: "USD",
+      valid_from: since(),
+      valid_until: until(),
+      ...over,
+    };
+    return FARES.split(",")
+      .map((k) => v[k] ?? "")
+      .join(",");
+  };
+  const AIRPORTS = "code,name,city,country,country_code,region,lat,lng,popularity,tz";
+  const airport = (over: Partial<Record<string, string>> = {}) => {
+    const v: Record<string, string> = {
+      code: "LHR",
+      name: "Heathrow",
+      city: "London",
+      country: "United Kingdom",
+      country_code: "GB",
+      region: "europe",
+      lat: "51.47",
+      lng: "-0.4543",
+      popularity: "98",
+      tz: "Europe/London",
+      ...over,
+    };
+    return AIRPORTS.split(",")
+      .map((k) => v[k] ?? "")
+      .join(",");
+  };
+
+  it("refuses each bad value with 400 and the row's line and field; a good file still imports", async () => {
+    const t = await testApp({ suite: "catalog-import-refuses" });
+    await t.seedCatalogBasics();
+    const importCsv = async (kind: "fares" | "airports", csv: string) => {
+      const r = await t.app.request("/v1/internal/catalog/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+        body: JSON.stringify({ kind, csv }),
+      });
+      const body = (await r.json()) as { error?: { code?: string; details?: { path: string; message: string }[] } };
+      return { status: r.status, code: body.error?.code, path: body.error?.details?.[0]?.path ?? null };
+    };
+    const refused = (path: string) => ({ status: 400, code: "VALIDATION", path });
+
+    const fares: [string, Partial<Record<string, string>>, string][] = [
+      ["currency 123", { currency: "123" }, "row 2.currency"],
+      ["price 1e3", { price: "1e3" }, "row 2.price"],
+      ["price 99.999", { price: "99.999" }, "row 2.price"],
+      ["price 0", { price: "0", published_price: "", published_source: "" }, "row 2.price"],
+      ["published price 1e4", { published_price: "1e4" }, "row 2.published_price"],
+      ["published below the price", { published_price: "4000.00" }, "row 2.published_price"],
+      ["a published price without its source", { published_source: "" }, "row 2.published_source"],
+      ["route K1F", { route_from: "K1F", route_to: "BOS" }, "row 2.route_from"],
+      ["an airport nobody knows", { route_to: "QQQ" }, "row 2.route_to"],
+      ["a route to itself", { route_to: "JFK" }, "row 2.route_to"],
+      ["a sale that ends before it starts", { valid_until: since(), valid_from: until() }, "row 2.valid_until"],
+      ["a cabin in capitals", { cabin: "Business" }, "row 2.cabin"],
+    ];
+    for (const [name, over, path] of fares) {
+      expect({ name, ...(await importCsv("fares", [FARES, fare(over)].join("\n"))) }).toEqual({
+        name,
+        ...refused(path),
+      });
+    }
+    // The second data row is line 3; a header plus a blank line moves it on.
+    expect(await importCsv("fares", [FARES, fare(), fare({ currency: "1$D" })].join("\n"))).toEqual(
+      refused("row 3.currency"),
+    );
+    expect(await importCsv("fares", [FARES, "", fare({ price: "abc" })].join("\n"))).toEqual(refused("row 3.price"));
+
+    const airports: [string, Partial<Record<string, string>>, string][] = [
+      ["lat 999", { lat: "999" }, "row 2.lat"],
+      ["lng 500", { lng: "500" }, "row 2.lng"],
+      ["code Q1Z", { code: "Q1Z" }, "row 2.code"],
+      ["popularity -5", { popularity: "-5" }, "row 2.popularity"],
+      ["region Europe", { region: "Europe" }, "row 2.region"],
+      ["a region Home has no carousel key for", { region: "atlantis" }, "row 2.region"],
+      ["a country code of three letters", { country_code: "GBR" }, "row 2.country_code"],
+      ["a time zone that is none", { tz: "Europe/Lndon" }, "row 2.tz"],
+      ["no city", { city: "" }, "row 2.city"],
+    ];
+    for (const [name, over, path] of airports) {
+      expect({ name, ...(await importCsv("airports", [AIRPORTS, airport(over)].join("\n"))) }).toEqual({
+        name,
+        ...refused(path),
+      });
+    }
+    // Nothing of a refused file was written.
+    const lhr = (await t.db.execute(
+      sql`SELECT lat::text, region FROM catalog.airports WHERE code = 'LHR'`,
+    )) as unknown as { lat: string; region: string }[];
+    expect(lhr[0]).toEqual({ lat: "51.470000", region: "europe" });
+
+    // Good files still import: an empty carrier name or product is none (the airline's code stands in for its name),
+    // a lower-case currency is upper-cased, an empty currency is USD, an empty popularity is 0.
+    expect(
+      (await importCsv("fares", [FARES, fare({ carrier_name: "", product: "", currency: "usd" })].join("\n"))).status,
+    ).toBe(200);
+    expect(
+      (await importCsv("fares", [FARES, fare({ carrier: "DL", carrier_name: "Delta", currency: "" })].join("\n")))
+        .status,
+    ).toBe(200);
+    const search = (await (
+      await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business", { headers: { Cookie: t.memberA.cookie } })
+    ).json()) as {
+      items: { carrier: { code: string; name: string }; product: string | null; price: { currency: string } }[];
+    };
+    expect(search.items.find((i) => i.carrier.code === "UA")).toMatchObject({
+      carrier: { code: "UA", name: "UA" },
+      product: null,
+      price: { currency: "USD" },
+    });
+    expect(search.items.find((i) => i.carrier.code === "DL")?.price.currency).toBe("USD");
+    expect((await importCsv("airports", [AIRPORTS, airport({ popularity: "" })].join("\n"))).status).toBe(200);
+    await t.close();
+  }, 60_000);
+
+  it("names at most twenty rows, and a row the database refuses", async () => {
+    const t = await testApp({ suite: "catalog-import-rows" });
+    await t.seedCatalogBasics();
+    const post = async (csv: string) => {
+      const r = await t.app.request("/v1/internal/catalog/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
+        body: JSON.stringify({ kind: "fares", csv }),
+      });
+      return {
+        status: r.status,
+        body: (await r.json()) as { error?: { message?: string; details?: { path: string; message: string }[] } },
+      };
+    };
+    const many = await post([FARES, ...Array.from({ length: 25 }, () => fare({ currency: "1" }))].join("\n"));
+    expect(many.status).toBe(400);
+    expect(many.body.error?.details?.length).toBe(20);
+    expect(many.body.error?.details?.[19]?.path).toBe("row 21.currency");
+
+    // A rule only the database holds: the row is named, never the query or its values.
+    await t.db.execute(sql`ALTER TABLE catalog.fares ADD CONSTRAINT fares_test_no_zz CHECK (carrier <> 'ZZ')`);
+    try {
+      const refused = await post([FARES, fare(), fare({ carrier: "ZZ", carrier_name: "Zed" })].join("\n"));
+      expect(refused.status).toBe(400);
+      expect(refused.body.error?.details?.[0]?.path).toBe("row 3");
+      expect(refused.body.error?.details?.[0]?.message).toContain("fares_test_no_zz");
+      expect(JSON.stringify(refused.body)).not.toContain("Failed query");
+      expect(JSON.stringify(refused.body)).not.toContain("Zed");
+    } finally {
+      await t.db.execute(sql`ALTER TABLE catalog.fares DROP CONSTRAINT fares_test_no_zz`);
+    }
+    // The first row went with the second: nothing of the file is written.
+    const ua = (await t.db.execute(
+      sql`SELECT count(*)::int AS n FROM catalog.fares WHERE carrier = 'UA'`,
+    )) as unknown as { n: number }[];
+    expect(ua[0]?.n).toBe(0);
+    await t.close();
+  }, 60_000);
+});
+
 describe("GET /v1/home", () => {
   it("returns home + destinations + sections", async () => {
     const t = await testApp({ suite: "catalog-home" });

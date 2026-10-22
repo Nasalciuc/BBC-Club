@@ -53,6 +53,12 @@ export const airportsRepo = {
     return row ?? null;
   },
 
+  /** The regions the catalogue uses (Home's carousel keys: `europe`, `middle_east`…). */
+  async regions(exec: Executor): Promise<string[]> {
+    const rows = await exec.selectDistinct({ region: airports.region }).from(airports);
+    return rows.map((r) => r.region);
+  },
+
   async getMany(exec: Executor, codes: string[]) {
     if (codes.length === 0) return [];
     return exec

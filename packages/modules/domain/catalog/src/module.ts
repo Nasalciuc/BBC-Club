@@ -19,7 +19,7 @@ import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
 import { formatInZone } from "./application/flight-local";
 import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
-import { importCatalog, ImportBody } from "./application/import";
+import { importCatalog, ImportBody, ImportError } from "./application/import";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
 import { syncSite } from "./application/site-sync";
@@ -488,7 +488,11 @@ export const catalogModule = (
           await invalidateMaps();
           return c.json(r);
         } catch (e: unknown) {
-          return c.json(apiError("VALIDATION", { message: e instanceof Error ? e.message : "import failed" }), 400);
+          // The file's fault, row by row; anything else is ours (the error contract logs it without the query's values).
+          if (e instanceof ImportError) {
+            return c.json(apiError("VALIDATION", { message: "The file was not imported.", details: e.details }), 400);
+          }
+          throw e;
         }
       },
     );
