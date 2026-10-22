@@ -119,23 +119,24 @@ export function createMembersFacade(db: Executor): MembersFacade {
     return getProfile(exec, actorMemberId);
   }
 
-  /** Merges, never replaces. A client that sends only { cabin } must not wipe passengers. */
+  /** Merges, never replaces. A client that sends only { cabin } must not wipe passengers. The merge is one statement
+   *  (jsonb `||` on the row it locks): read, merge in JS, then write let the last of two saves at once drop the other's
+   *  field under READ COMMITTED. Top-level keys sent replace, keys not sent stay. */
   async function setTravelPreferences(
     exec: Executor | undefined,
     actorMemberId: string,
     patch: TravelPreferencesBody,
   ): Promise<ProfileRow | null> {
-    const [row] = await (exec ?? db)
-      .select({ preferences: profile.preferences })
-      .from(profile)
-      .where(live(actorMemberId))
-      .limit(1);
-    if (!row) return null;
-    const merged: TravelPreferences = { ...(row.preferences ?? {}), ...patch };
-    await (exec ?? db)
+    const sent: TravelPreferences = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    const rows = await (exec ?? db)
       .update(profile)
-      .set({ preferences: merged, updatedAt: sql`now()` })
-      .where(live(actorMemberId));
+      .set({
+        preferences: sql`coalesce(${profile.preferences}, '{}'::jsonb) || ${JSON.stringify(sent)}::jsonb`,
+        updatedAt: sql`now()`,
+      })
+      .where(live(actorMemberId))
+      .returning({ memberId: profile.memberId });
+    if (rows.length === 0) return null;
     return getProfile(exec, actorMemberId);
   }
 

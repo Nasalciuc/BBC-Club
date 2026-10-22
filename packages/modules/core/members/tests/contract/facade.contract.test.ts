@@ -129,6 +129,40 @@ describe("@bbc/members facade", () => {
     }
   });
 
+  it("two travel saves at the same moment both land: the merge is one statement, never read-merge-write", async () => {
+    const memberId = randomId();
+    try {
+      await db.execute(sql`INSERT INTO members.profile (member_id, status) VALUES (${memberId}, 'active')`);
+      const facade = createMembersFacade(db);
+      const lost: number[] = [];
+      for (let round = 0; round < 20; round++) {
+        await db.execute(sql`UPDATE members.profile SET preferences = '{}'::jsonb WHERE member_id = ${memberId}`);
+        await Promise.all([
+          facade.setTravelPreferences(undefined, memberId, { cabin: "first" }),
+          facade.setTravelPreferences(undefined, memberId, { passengers: { adult: 2, child: 0, infant: 0 } }),
+        ]);
+        const p = await facade.getProfile(undefined, memberId);
+        if (p?.preferences.cabin !== "first" || p.preferences.passengers?.adult !== 2) lost.push(round);
+      }
+      expect(lost).toEqual([]);
+
+      // Top-level keys replace, as the spread did; keys not sent stay.
+      const after = await facade.setTravelPreferences(undefined, memberId, {
+        passengers: { adult: 1, child: 1, infant: 0 },
+        destinations: ["LHR"],
+      });
+      expect(after?.preferences).toEqual({
+        cabin: "first",
+        passengers: { adult: 1, child: 1, infant: 0 },
+        destinations: ["LHR"],
+      });
+      // An unknown member has no row to merge into.
+      expect(await facade.setTravelPreferences(undefined, randomId(), { cabin: "first" })).toBeNull();
+    } finally {
+      await cleanup([memberId]);
+    }
+  });
+
   it("getProfile returns null for unknown member", async () => {
     const facade = createMembersFacade(db);
     const p = await facade.getProfile(undefined, randomId());
