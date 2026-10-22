@@ -17,8 +17,9 @@ import { toRequestVM } from "./application/to-request-vm";
 import { destinationCities, routeEnds } from "./application/route";
 import { askEstimate } from "./application/estimate";
 import { askFare } from "./application/published";
-import { askOffer } from "./application/offer";
-import { createSendRequestsJob } from "./jobs/send-requests";
+import { askOffer, OFFER_TIMEOUT_MS } from "./application/offer";
+import { askWithin } from "./application/ask-within";
+import { createSendRequestsJob, type OfferForCrm } from "./jobs/send-requests";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
 import type { RequestsFacade } from "./api";
 import type { CrmFacade } from "@bbc/crm";
@@ -115,6 +116,25 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           },
         },
       );
+    // The offer an offer request names, as the specialist reads it when the request is sent (system scope): one read,
+    // never fatal — an error or a slow answer sends the request without it.
+    const offerForCrm = async (offerId: string): Promise<OfferForCrm | null> => {
+      const answer = await askWithin(
+        () => ports.proposals.getAny(undefined, offerId),
+        OFFER_TIMEOUT_MS,
+        (reason, err) => {
+          platform.metrics.inc("request_offer_unavailable", { reason });
+          platform.logger.warn(
+            { reason, err: err === undefined ? undefined : errorForLog(err) },
+            "request offer unavailable",
+          );
+        },
+      );
+      const o = answer?.value;
+      const amount = o ? Number(o.price) : NaN;
+      if (!o || !Number.isFinite(amount)) return null;
+      return { id: o.id, title: o.title, price: { amount, currency: o.currency } };
+    };
     // One line to the ops channel (OPS_WEBHOOK, as the worker's DB alerts); a failed post is logged, never thrown.
     const notifyOps = async (text: string) => {
       const hook = env.OPS_WEBHOOK;
@@ -326,6 +346,7 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
               notifyOps,
               appOrigin: env.APP_ORIGIN,
               opsLinkSecret: env.OPS_LINK_SECRET ?? "",
+              offer: offerForCrm,
             }),
           },
         },

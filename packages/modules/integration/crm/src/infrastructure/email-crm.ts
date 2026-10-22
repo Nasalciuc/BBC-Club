@@ -1,41 +1,50 @@
-import type { CrmFacade } from "../api";
+import type { CrmFacade, CrmMoney, CrmRequestPayload } from "../api";
 import type { EmailFacade } from "@bbc/email";
 
-type Payload = {
-  reference: string;
-  trip_type: string;
-  cabin_class: string;
-  client: { name: string; phone: string; email: string };
-  flights: { from: string; to: string; date: string }[];
-  passengers: { adult: number; child: number; infant: number };
-  note?: string | null;
-  /** The indicative price the member's search showed, recomputed by the server (ADR-IMPL-042). Round trip. */
-  shown_estimate?: { amount: number; currency: string; cabin: string } | null;
-  phone_valid?: boolean;
-  intent?: "quote" | "alternative" | "fare" | "offer";
-  replaces_fare_id?: string | null;
-  _actions?: { quoted: string; booked: string; closed: string };
-};
+type Payload = CrmRequestPayload;
 
 function opening(p: Payload): string {
   if (p.intent === "quote") return `New quote request ${p.reference}`;
   if (p.intent === "alternative") return `New alternative request ${p.reference}`;
+  if (p.intent === "offer") return `New offer request ${p.reference}`;
   return `New fare request ${p.reference}`;
+}
+
+/** `$4,200` — whole units, as the app shows a fare. */
+function money(m: CrmMoney): string {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: m.currency, maximumFractionDigits: 0 }).format(
+      m.amount,
+    );
+  } catch {
+    return `${m.currency} ${m.amount}`;
+  }
 }
 
 /** `Indicative estimate shown: $2,055 round trip, business (formula)` — the wording approved with ADR-IMPL-037. */
 function estimateLine(e: NonNullable<Payload["shown_estimate"]>): string {
-  let amount: string;
-  try {
-    amount = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: e.currency,
-      maximumFractionDigits: 0,
-    }).format(e.amount);
-  } catch {
-    amount = `${e.currency} ${e.amount}`;
+  return `Indicative estimate shown: ${money(e)} round trip, ${e.cabin} (formula)`;
+}
+
+/** `Fare <id> — British Airways — $4,200 (published $7,850, Sabre · 16 Sep)`: which fare, on which airline, at the price
+ *  the member saw beside the published one they were shown. Only what the request recorded. */
+function fareLine(p: Payload): string | null {
+  if (!p.fare_id) return null;
+  const parts = [`Fare ${p.fare_id}`];
+  if (p.carrier) parts.push(oneLine(p.carrier.name));
+  if (p.price_at_request) {
+    const published = p.published_at_request
+      ? ` (published ${money({ amount: p.published_at_request.amount, currency: p.price_at_request.currency })}, ${oneLine(p.published_at_request.source)})`
+      : "";
+    parts.push(`${money(p.price_at_request)}${published}`);
   }
-  return `Indicative estimate shown: ${amount} round trip, ${e.cabin} (formula)`;
+  return parts.join(" — ");
+}
+
+/** `Offer Your October in London — <id> — $3,900`: the offer as it reads when the request is sent. */
+function offerLine(p: Payload): string | null {
+  if (p.offer) return `Offer ${oneLine(p.offer.title)} — ${p.offer.id} — ${money(p.offer.price)}`;
+  return p.offer_id ? `Offer ${p.offer_id}` : null;
 }
 
 /** Every break a mail client may honour: CR LF, LF, CR, VT, FF, NEL, LINE and PARAGRAPH SEPARATOR. */
@@ -108,11 +117,15 @@ export function emailCrm(deps: { email: EmailFacade; operatorsEmail: string }): 
       const note = noteLines(p.note);
       const first = p.flights[0];
       const hop = `${first?.from ?? ""}→${first?.to ?? ""}`;
+      const fare = fareLine(p);
+      const offer = offerLine(p);
       const text = [
         opening(p),
         ...(p.intent === "alternative" && p.replaces_fare_id
           ? ["", `Type: Alternative to an expired fare (fare ${p.replaces_fare_id})`]
           : []),
+        ...(fare ? ["", fare] : []),
+        ...(offer ? ["", offer] : []),
         "",
         route,
         `${p.cabin_class} · ${p.trip_type} · ${p.passengers.adult} adult(s), ${p.passengers.child} child(ren), ${p.passengers.infant} infant(s)`,
