@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import postgres from "postgres";
 import { loadEnv } from "@bbc/shared/env";
-import type { Db } from "@bbc/db";
+import { errorForLog, type Db } from "@bbc/db";
 import type { Metrics } from "../telemetry/metrics";
 
 const ConnRow = {
@@ -112,7 +112,7 @@ export async function pgbouncerWaitingClients(url: string, logger: WarnLog): Pro
       pools: rows.length,
     };
   } catch (err) {
-    logger.warn({ err }, "pgbouncer SHOW POOLS failed");
+    logger.warn({ err: errorForLog(err) }, "pgbouncer SHOW POOLS failed");
     return null;
   } finally {
     await c.end({ timeout: 1 }).catch(() => {});

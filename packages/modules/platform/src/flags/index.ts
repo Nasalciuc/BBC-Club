@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import { flags as flagsTable } from "../infrastructure/schema";
 import type { Cache } from "../cache";
 
@@ -49,7 +49,7 @@ export function createFlags(
         cache.set(key, { value, at: Date.now() });
         return value;
       } catch (e) {
-        opts.logger?.warn({ key, err: String(e) }, "flag read failed, using fallback");
+        opts.logger?.warn({ key, err: errorForLog(e) }, "flag read failed, using fallback");
         return null;
       }
     }
@@ -58,7 +58,7 @@ export function createFlags(
       cache.set(key, { value, at: Date.now() });
       return value;
     } catch (e) {
-      opts.logger?.warn({ key, err: String(e) }, "flag read failed, using fallback");
+      opts.logger?.warn({ key, err: errorForLog(e) }, "flag read failed, using fallback");
       return hit?.value ?? null;
     }
   }
@@ -82,7 +82,7 @@ export function createFlags(
         const v = await readKill(`${module}.killed`);
         return v?.enabled === true;
       } catch (e) {
-        opts.logger?.warn({ module, err: String(e) }, "kill flag unreadable, failing closed");
+        opts.logger?.warn({ module, err: errorForLog(e) }, "kill flag unreadable, failing closed");
         return true;
       }
     },
@@ -91,7 +91,7 @@ export function createFlags(
         const v = await readKill(`consumer.${consumer}.paused`);
         return v?.enabled === true;
       } catch (e) {
-        opts.logger?.warn({ consumer, err: String(e) }, "pause flag unreadable, failing closed");
+        opts.logger?.warn({ consumer, err: errorForLog(e) }, "pause flag unreadable, failing closed");
         return true;
       }
     },

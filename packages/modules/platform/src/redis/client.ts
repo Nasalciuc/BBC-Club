@@ -1,5 +1,6 @@
 import { createClient } from "redis";
 import bloom from "@redis/bloom";
+import { errorForLog } from "@bbc/db";
 
 /** RESP3 + client-side caching. disableOfflineQueue: a dead socket fails the command at once. */
 export function createRedis(url: string, logger: { warn(o: object, m?: string): void }) {
@@ -14,7 +15,7 @@ export function createRedis(url: string, logger: { warn(o: object, m?: string): 
       connectTimeout: 2_000,
     },
   });
-  client.on("error", (err) => logger.warn({ err: String(err) }, "redis error"));
+  client.on("error", (err) => logger.warn({ err: errorForLog(err) }, "redis error"));
   return client;
 }
 
