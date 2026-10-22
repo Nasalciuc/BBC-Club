@@ -96,6 +96,8 @@ export function createSendRequestsJob(deps: {
             ? { code: row.carrier_at_request, name: row.carrier_name_at_request }
             : null,
           offer,
+          // Which try: past the first, the mail may be a copy of one a timed-out send delivered after all.
+          _attempt: row.send_attempts + 1,
           _source: row.source,
           _app_version: row.app_version,
           _request_id: row.id,

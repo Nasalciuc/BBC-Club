@@ -32,6 +32,9 @@ export type CrmRequestPayload = {
   /** The offer an offer request was made from, as it reads when the request is sent. */
   offer_id?: string | null;
   offer?: { id: string; title: string; price: CrmMoney } | null;
+  /** Which try this is (1 the first). Past the first, the mail may be a second copy of one already delivered: a send
+   *  that timed out after the mail service took it is tried again (send-requests). */
+  _attempt?: number;
   _source?: string;
   _app_version?: string | null;
   _request_id?: string;

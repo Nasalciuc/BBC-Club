@@ -96,11 +96,22 @@ function noteLines(note: string | null | undefined): string[] | null {
   return ["Note from the member:", ...lines.map((line) => `> ${line}`.trimEnd())];
 }
 
+/** A send tried again after a failure that may have come after the mail left (a timeout once the mail service took it):
+ *  the operator may hold the first copy. The reference stays the key two copies share. */
+function resend(p: Payload): number | null {
+  return p._attempt !== undefined && p._attempt > 1 ? p._attempt : null;
+}
+
 function subjectFor(p: Payload, hop: string): string {
   const tail = `${p.reference} · ${hop} · ${p.cabin_class}`;
-  if (p.intent === "quote") return `Quote request ${tail}`;
-  if (p.intent === "alternative") return `Alternative request ${tail}`;
-  return `Request ${tail}`;
+  const subject =
+    p.intent === "quote"
+      ? `Quote request ${tail}`
+      : p.intent === "alternative"
+        ? `Alternative request ${tail}`
+        : `Request ${tail}`;
+  const attempt = resend(p);
+  return attempt ? `Resent (attempt ${attempt}) — may duplicate: ${subject}` : subject;
 }
 
 export function emailCrm(deps: { email: EmailFacade; operatorsEmail: string }): CrmFacade {
@@ -119,7 +130,9 @@ export function emailCrm(deps: { email: EmailFacade; operatorsEmail: string }): 
       const hop = `${first?.from ?? ""}→${first?.to ?? ""}`;
       const fare = fareLine(p);
       const offer = offerLine(p);
+      const attempt = resend(p);
       const text = [
+        ...(attempt ? [`If ${p.reference} already reached you, ignore this copy.`, ""] : []),
         opening(p),
         ...(p.intent === "alternative" && p.replaces_fare_id
           ? ["", `Type: Alternative to an expired fare (fare ${p.replaces_fare_id})`]

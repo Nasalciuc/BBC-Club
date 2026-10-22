@@ -26,9 +26,9 @@ async function insert(ref: string): Promise<string> {
   return created.id;
 }
 
-/** Only this test's row: other tests' unsent rows are pushed out of the claim. */
+/** Only this test's row: other tests' unsent rows are closed, and a closed request is never sent. */
 async function only(id: string) {
-  await db.execute(sql`UPDATE requests.requests SET sent_to_crm = true WHERE id <> ${id} AND sent_to_crm = false`);
+  await db.execute(sql`UPDATE requests.requests SET status = 'closed' WHERE id <> ${id} AND sent_to_crm = false`);
 }
 
 function job(crm: { submitRequest(payload: unknown): Promise<{ crmRequestId: string }> }, warned: object[] = []) {
@@ -73,5 +73,30 @@ describe("send-requests — a failed send never stores or logs a failed query's 
     expect(row?.last_error).toContain("23505");
     expect(JSON.stringify(warned)).not.toContain(SECRET);
     expect(warned.length).toBeGreaterThan(0);
+  });
+});
+
+describe("send-requests — a resend says which try it is", () => {
+  it("a CRM that timed out once (the mail may have gone): the next run's payload has _attempt 2", async () => {
+    const id = await insert("R-RESEND");
+    await only(id);
+    const attempts: unknown[] = [];
+    let calls = 0;
+    const run = job({
+      async submitRequest(payload: unknown) {
+        attempts.push((payload as { _attempt?: unknown })._attempt);
+        if (++calls === 1) throw Object.assign(new Error("The operation timed out."), { name: "TimeoutError" });
+        return { crmRequestId: "crm-resend" };
+      },
+    });
+    await run();
+    // Five minutes on: the retry.
+    await db.execute(sql`UPDATE requests.requests SET sent_at = now() - interval '10 minutes' WHERE id = ${id}`);
+    await run();
+    expect(attempts).toEqual([1, 2]);
+    const [row] = (await db.execute(sql`SELECT sent_to_crm FROM requests.requests WHERE id = ${id}`)) as unknown as {
+      sent_to_crm: boolean;
+    }[];
+    expect(row?.sent_to_crm).toBe(true);
   });
 });

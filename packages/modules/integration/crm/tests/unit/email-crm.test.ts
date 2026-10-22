@@ -126,6 +126,32 @@ describe("emailCrm", () => {
     expect(sent[2]?.text).not.toContain("published");
   });
 
+  it("a resend says it may be a second copy, under the same reference", async () => {
+    const sent: { subject: string; text: string }[] = [];
+    const email: EmailFacade = {
+      async sendOtp() {},
+      async sendOperatorRequest(input) {
+        sent.push({ subject: input.subject, text: input.text });
+      },
+    };
+    const crm = emailCrm({ email, operatorsEmail: "ops@buybusinessclass.com" });
+    const body = {
+      reference: "R-4",
+      trip_type: "oneway",
+      cabin_class: "Business Class",
+      client: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
+      flights: [{ from: "JFK", to: "LHR", date: "2027-10-12" }],
+      passengers: { adult: 1, child: 0, infant: 0 },
+      intent: "quote" as const,
+    };
+    await crm.submitRequest({ ...body, _attempt: 1 });
+    await crm.submitRequest({ ...body, _attempt: 2 });
+    expect(sent[0]?.subject).toBe("Quote request R-4 · JFK→LHR · Business Class");
+    expect(sent[0]?.text).not.toContain("ignore this copy");
+    expect(sent[1]?.subject).toBe("Resent (attempt 2) — may duplicate: Quote request R-4 · JFK→LHR · Business Class");
+    expect(sent[1]?.text).toContain("If R-4 already reached you, ignore this copy.");
+  });
+
   it("writes the estimate the member saw and the member's note, only when there is one (ADR-IMPL-042)", async () => {
     const sent: string[] = [];
     const email: EmailFacade = {
