@@ -29,7 +29,7 @@ with the same fixed dates whatever the member had chosen.
   `1 traveler` open two small sheets of their own (`SearchPreferenceSheets.tsx`) that change this search only — the
   profile's defaults stay where the member set them. Labels and the mono summary of the empty states come from
   `travel-preferences.ts` (`1 traveler`, never `1 adult`). A chosen departure day goes to `GET /v1/search` as `when`
-  (noon UTC of that day: the fares valid then); flexible dates search undated, the only search that can carry an
+  (noon UTC of that day: the fares valid then — amended 22 Oct 2026, below: the fares on sale now that fly that day); flexible dates search undated, the only search that can carry an
   estimate (ADR-IMPL-037). A cabin change re-runs the search; travelers only prefill the request. The travelers sheets
   (Home's and Profile's) set the adults and keep the children and infants already in the party (`withAdults`, tested
   in `travel-preferences.test.ts`).
@@ -259,3 +259,23 @@ a blank row between two months, its last line under Android's navigation bar.
 **Consequences.** JavaScript only: an OTA reaches the 0.2.0 APK. Tests: `travel-preferences.test.ts` (`faresLabel`),
 `calendar-logic.test.ts` (`monthWeeks`: five weeks for October 2026, four for February, six for August). The e2e flows
 keep their test IDs (`calendar.day.<date>`, `explore.fare.<id>`).
+
+## Amendment — what a dated search's `when` means (22 Oct 2026)
+
+**Context.** `when` was read as the instant a fare's sale window is checked at (`valid_from ≤ when < valid_until`, "the
+fares valid then"). The fixture's and the staging demo's dated fares close their sale the day before they fly, so a
+search on the flight's own day found nothing (fa01 on 10 November, fa04 on 24 November, fa06 on 4 December) while the
+day before listed it; and a fare whose sale opens next week was listed for a later day, its page then answering 410
+(`GET /v1/fares/:id` reads the window at now).
+
+**Decision.** `when` is the travel day, its UTC date part (the app still sends noon UTC of the chosen day,
+`travel-preferences.ts` — no app change). A fare is listed only while it is on sale now: published and
+`valid_from ≤ now < valid_until`, the rule of `GET /v1/fares/:id`, so no listed fare opens on a 410. With a travel day,
+a timed fare (`depart_at` set) matches when its departure day in the origin airport's zone is that day; an undated fare
+matches while it is still sold on that day (`when < valid_until`). An undated search, and the estimate it alone can
+carry (ADR-IMPL-037), are unchanged. A `when` before yesterday or more than two years ahead is refused (400): a past day
+has no fare to sell, and a year Postgres cannot hold was a 500.
+
+**Consequences.** API only (`faresRepo.searchSelect`, the `/v1/search` route). Tests: `apps/api/test/catalog.test.ts`
+(a flight on its own day though its sale closed the day before, not the day before or after; a fare on sale from ten
+days ahead listed for no day; an undated fare not past its sale; the bounds of `when`).

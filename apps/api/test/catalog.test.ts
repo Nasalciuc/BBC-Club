@@ -84,6 +84,58 @@ describe("catalog routes", () => {
     await t.close();
   });
 
+  // ADR-IMPL-041 (amended): a fare is listed only while it is on sale (as its page reads it, so no item opens on a
+  // 410); a travel date picks a timed fare by its departure day in the origin's zone, an undated one while it is sold.
+  it("a dated search finds a flight on its own day, and never a fare not on sale yet", async () => {
+    const t = await testApp({ suite: "catalog-dated-search" });
+    await t.seedCatalogBasics();
+    const DAY = 86_400_000;
+    // Day D, three weeks out, in New York; the flight leaves at 20:10 there — already the next day in UTC.
+    const d = new Date(Date.now() + 21 * DAY).toISOString().slice(0, 10);
+    const departAt = new Date(`${d}T20:10:00-05:00`);
+    const [{ id: timed }] = (await t.db.execute(sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, carrier_name, nonstop, duration_minutes,
+        depart_at, arrive_at, price, currency, source, valid_from, valid_until, published)
+      VALUES ('JFK', 'LHR', 'business', 'VS', 'Virgin Atlantic', true, 410,
+        ${departAt.toISOString()}::timestamptz, ${new Date(departAt.getTime() + 410 * 60_000).toISOString()}::timestamptz,
+        '4350.00', 'USD', 'manual', now() - interval '1 day', ${new Date(departAt.getTime() - DAY).toISOString()}::timestamptz, true)
+      ON CONFLICT (route_from, route_to, cabin, carrier, valid_from) DO NOTHING
+      RETURNING id`)) as unknown as { id: string }[];
+    // On sale from ten days ahead: its page answers 410 until then, so no search lists it.
+    const [{ id: later }] = (await t.db.execute(sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, carrier_name, nonstop, duration_minutes,
+        price, currency, source, valid_from, valid_until, published)
+      VALUES ('JFK', 'LHR', 'business', 'LX', 'Swiss', true, 430, '3990.00', 'USD', 'manual',
+        now() + interval '10 days', now() + interval '40 days', true)
+      RETURNING id`)) as unknown as { id: string }[];
+    const ids = async (when?: string) => {
+      const query = new URLSearchParams({ from: "JFK", to: "LHR", cabin: "business", ...(when ? { when } : {}) });
+      const r = await t.app.request(`/v1/search?${query}`, { headers: { Cookie: t.memberA.cookie } });
+      expect(r.status).toBe(200);
+      return ((await r.json()) as { items: { id: string }[] }).items.map((i) => i.id);
+    };
+    const noon = (ymd: string) => `${ymd}T12:00:00.000Z`; // what the app sends for a chosen day
+    const shift = (days: number) => new Date(Date.parse(`${d}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
+
+    expect(await ids(noon(d))).toContain(timed); // its own day, though its sale closed the day before
+    expect(await ids(noon(shift(-1)))).not.toContain(timed);
+    expect(await ids(noon(shift(1)))).not.toContain(timed);
+    expect(await ids()).toContain(timed); // undated: on sale now
+
+    for (const when of [undefined, noon(shift(-10)), noon(d), noon(shift(10))]) {
+      expect({ when, listed: (await ids(when)).includes(later) }).toEqual({ when, listed: false });
+    }
+    expect((await t.app.request(`/v1/fares/${later}`, { headers: { Cookie: t.memberA.cookie } })).status).toBe(410);
+
+    // An undated fare (sold for 30 days) is any day's while it is sold, not past it.
+    const [{ id: ba }] = (await t.db.execute(
+      sql`SELECT id FROM catalog.fares WHERE route_from = 'JFK' AND route_to = 'LHR' AND carrier = 'BA'`,
+    )) as unknown as { id: string }[];
+    expect(await ids(noon(shift(0)))).toContain(ba);
+    expect(await ids(new Date(Date.now() + 35 * DAY).toISOString())).not.toContain(ba);
+    await t.close();
+  });
+
   it("401/403 responses do not carry error.context", async () => {
     const t = await testApp({ suite: "catalog-authz-context" });
     const anon = await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business");
