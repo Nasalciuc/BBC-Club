@@ -62,6 +62,17 @@ export function confirmationRoute(params: Record<string, string | string[] | und
   return { id: one(params.id) ?? "", queued: one(params.queued) === "1" };
 }
 
+/** A request's id on the server; a request saved offline is keyed by its queued key instead. */
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The request the page may read and open (`View request`): one that was sent — never one saved offline, which the
+ * server does not have yet — and only by an id shaped as the server's, never whatever else a link put in the URL.
+ */
+export function sentRequestId(route: { id: string; queued: boolean }): string | null {
+  return !route.queued && REQUEST_ID.test(route.id) ? route.id : null;
+}
+
 /**
  * The confirmation from the request itself (GET /v1/requests/:id) when nothing was handed over: the server's own
  * words — no picture but the city's.

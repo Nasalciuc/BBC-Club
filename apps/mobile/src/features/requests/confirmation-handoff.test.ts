@@ -9,6 +9,7 @@ import {
   confirmationRoute,
   putConfirmation,
   readConfirmation,
+  sentRequestId,
 } from "./confirmation-handoff";
 
 const ID = "67a7f334-8c1d-4eb6-bff4-8d71d9deaaa3";
@@ -57,6 +58,16 @@ describe("the confirmation is handed over in memory, never in the URL (F014)", (
     expect(route).toEqual({ id: ID, queued: false });
     expect(confirmationRoute({ id: ["a", "b"], queued: "1" })).toEqual({ id: "a", queued: true });
     expect(confirmationRoute({})).toEqual({ id: "", queued: false });
+  });
+
+  it("reads and opens only a request that was sent, by an id shaped as the server's — never a made-up one", () => {
+    expect(sentRequestId({ id: ID, queued: false })).toBe(ID);
+    // Saved offline: the server does not have it yet.
+    expect(sentRequestId({ id: ID, queued: true })).toBeNull();
+    // A link's own words are no request: `View request` opens nothing and nothing is read.
+    expect(sentRequestId({ id: "../settings", queued: false })).toBeNull();
+    expect(sentRequestId({ id: `${ID}/timeline`, queued: false })).toBeNull();
+    expect(sentRequestId({ id: "", queued: false })).toBeNull();
   });
 
   it("without the hand-over (a relaunch, a link) the request itself is read — its server data, never a picture", () => {

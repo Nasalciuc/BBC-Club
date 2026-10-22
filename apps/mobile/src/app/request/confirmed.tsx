@@ -38,6 +38,7 @@ import {
   confirmationFromRequest,
   confirmationRoute,
   readConfirmation,
+  sentRequestId,
 } from "@/features/requests/confirmation-handoff";
 import { confirmationKind, otherFares, tripFacts, type RequestSource } from "@/features/requests/confirmation-logic";
 import { useProfile } from "@/features/profile/useProfile";
@@ -48,9 +49,6 @@ import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
 import { appStorage, PUSH_ASKED_AT_KEY } from "@/lib/storage-keys";
 
 type Role = { fontSize: number; lineHeight: number };
-
-/** A request's id on the server; a request saved offline is keyed by its queued key instead. */
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The margin that puts a line's baseline `pitch` under the one before it. */
 const after = (pitch: number, prev: Role, next: Role) => pitch - belowBaseline(prev) - baselineOffset(next);
@@ -140,12 +138,15 @@ export default function RequestConfirmedScreen() {
   const handedOver = readConfirmation(route.id);
   const [loaded, setLoaded] = useState<ConfirmationModel | null>(null);
   const model = handedOver ?? loaded;
-  const fromServer = !handedOver && !route.queued && UUID.test(route.id);
+  // The request that was sent, by its server id: read from the server when nothing was handed over, and opened by
+  // `View request`. None for a request saved offline, or for an id a link made up.
+  const sentId = sentRequestId(route);
+  const fromServer = !handedOver && sentId !== null;
   useEffect(() => {
-    if (!fromServer) return;
+    if (!fromServer || !sentId) return;
     let cancelled = false;
     void (async () => {
-      const result = await fetchRequest(route.id);
+      const result = await fetchRequest(sentId);
       if (!cancelled && result.ok) {
         setLoaded(confirmationFromRequest(result.data, displayPhone(result.data.phone ?? null)));
       }
@@ -153,7 +154,7 @@ export default function RequestConfirmedScreen() {
     return () => {
       cancelled = true;
     };
-  }, [fromServer, route.id]);
+  }, [fromServer, sentId]);
   const source: RequestSource = model?.source ?? "search";
   const kind = confirmationKind(source, route.queued);
   // The number this request will be called on, as the sheet sent it; the profile's only when the sheet passed none.
@@ -191,10 +192,8 @@ export default function RequestConfirmedScreen() {
     };
   }, []);
 
-  // A request saved offline has no id on the server yet: nothing to view.
-  const id = route.queued ? "" : route.id;
   const viewRequest = () => {
-    if (id) router.push(`/request/${id}` as Href);
+    if (sentId) router.push(`/request/${sentId}` as Href);
   };
 
   // `Other great fares` open the offer's own page at once (F067), one navigation at a time (F101).
