@@ -50,7 +50,11 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
     // three times every ten seconds from each address, /verify-password sixty a minute. Only the HTTP router reads this
     // list: the club's route still calls auth.api.changePassword in-process. /delete-user stays (the app deletes there;
     // customRules; club-guards asks for the password every time).
-    disabledPaths: ["/change-password", "/verify-password"],
+    // /sign-up/email: Join is OTP-first (ADR-PROD-001 path A) and the app never calls it. Served, it answered an
+    // existing address with a synthetic user whose role was null and a new one with role "member" (an account oracle),
+    // mailed a code to any address it was given, and left an unverified account in the owner's way. In-process
+    // auth.api.signUpEmail (seed scripts, tests, load bench) is unaffected.
+    disabledPaths: ["/change-password", "/verify-password", "/sign-up/email"],
 
     emailAndPassword: {
       enabled: true,
@@ -79,7 +83,6 @@ export function createAuth({ env, db, email, events, logger, breachedPassword }:
       max: 60, // default for everything not listed
       customRules: {
         "/sign-in/email": { window: TEN_MINUTES, max: 5 },
-        "/sign-up/email": { window: TEN_MINUTES, max: 5 },
         // Final per-IP limit for OTP send (plugin rateLimit is applied first, then this overwrites —
         // see better-auth rate-limiter resolveRateLimitConfig). Keep emailOTP({ rateLimit }) in sync.
         "/email-otp/send-verification-otp": { window: FIFTEEN_MINUTES, max: 10 },

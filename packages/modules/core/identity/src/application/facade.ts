@@ -15,7 +15,12 @@ export function createIdentityFacade(auth: Auth, db: Executor): Omit<IdentityFac
   /** `fresh` reads the session row and its user from the database instead of the signed cookie cache
    *  (SESSION_COOKIE_CACHE_SECONDS): a deleted member or an ended session is anonymous at once, not a minute later. */
   async function getSession(headers: Headers, opts: { fresh?: boolean } = {}): Promise<SessionInfo | null> {
-    const s = await auth.api.getSession({ headers, query: opts.fresh ? { disableCookieCache: true } : undefined });
+    let s = await auth.api.getSession({ headers, query: opts.fresh ? { disableCookieCache: true } : undefined });
+    if (s?.user && !s.user.emailVerified && !opts.fresh) {
+      // A code sign-in verifies an account registered unverified earlier, but Better Auth writes the user as it was
+      // (emailVerified: false) into the cookie cache: read once more past the cache before calling the member unverified.
+      s = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
+    }
     if (!s?.user) return null;
     if (!s.user.emailVerified) return null;
     return {
