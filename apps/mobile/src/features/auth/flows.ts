@@ -60,14 +60,14 @@ export async function signIn(email: string, password: string): Promise<Result> {
 }
 
 /**
- * Join Path A (ADR-PROD-001 / identity MODULE.md): email only → sign-in OTP.
- * Constant-shape outcome while the server answers (no email oracle); when nothing answers, the
- * connection error stands instead of a code that never left (otp-send-logic.ts).
+ * Join Path A (ADR-PROD-001 / identity MODULE.md): email only → sign-in OTP, mailed to any address alike, so a send
+ * that failed says so and the screen stays (otp-send-logic.ts).
  */
 export async function join(email: string): Promise<Result> {
   return otpSendResult(
     () => withAuthTimeout(authClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" })),
     CONSTANT_OTP_SENT,
+    "join",
   );
 }
 
@@ -99,11 +99,13 @@ export async function resendCode(email: string, purpose: AuthPurpose): Promise<R
   }
 }
 
-/** Forgot password: request a reset code. Constant-shape while the server answers; no answer, no pretence. */
+/** Forgot password: request a reset code. Constant-shape while the server answers (no oracle) except its per-IP limit;
+ *  no answer, no pretence (otp-send-logic.ts). */
 export async function requestReset(email: string): Promise<Result> {
   return otpSendResult(
     () => withAuthTimeout(authClient.emailOtp.sendVerificationOtp({ email, type: "forget-password" })),
     CONSTANT_RESET_SENT,
+    "reset",
   );
 }
 
