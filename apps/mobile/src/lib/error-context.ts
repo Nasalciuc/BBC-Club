@@ -51,10 +51,28 @@ export function deleteFailureKind(code?: string): "wrongPassword" | "deleteFaile
   return code === "INVALID_PASSWORD" ? "wrongPassword" : "deleteFailed";
 }
 
+/**
+ * A request that did not reach the club — offline, a timeout, or the club's server not answering while the phone is
+ * online — is kept on the phone and sent later; its Idempotency-Key makes a send that did arrive count once.
+ */
 export function submitFailureKind(code?: string): "notSent" | "queued" | "rateLimited" {
   if (code === "RATE_LIMITED") return "rateLimited";
-  if (code === "TIMEOUT" || code === "OFFLINE") return "queued";
+  if (code === "TIMEOUT" || code === "OFFLINE" || code === "UNREACHABLE") return "queued";
   return "notSent";
+}
+
+/** What a call that reached no server says when the phone itself is online (F110). */
+export const UNREACHABLE_MESSAGE = "We can’t reach the club right now. Try again in a moment.";
+
+/**
+ * Why a call reached no server, from what the platform says about the network (NetInfo) at that moment: `OFFLINE` only
+ * when it says the phone is off the network; otherwise — online, or not known — it is the club's server that did not
+ * answer (DNS, TLS, the server down): `UNREACHABLE`, never "You're offline" (F110).
+ */
+export function classifyFetchFailure(
+  state: { isConnected?: boolean | null; isInternetReachable?: boolean | null } | null | undefined,
+): "OFFLINE" | "UNREACHABLE" {
+  return state?.isConnected === false || state?.isInternetReachable === false ? "OFFLINE" : "UNREACHABLE";
 }
 
 /** What a screen could not read (readFailureCopy). */
@@ -65,9 +83,10 @@ export type ReadSubject = "request" | "requests" | "explore" | "profile" | "fare
  * send here — and promises a reload only where one comes (ADR-IMPL-047): the requests list loads again by itself once
  * the phone is back online (it listens for it), so offline it says it will; every other page waits for its Try again. A
  * timeout is not offline — the phone is online and nothing reloads by itself — so it is the page's own message, as
- * anything else is.
+ * anything else is. A club that did not answer while the phone is online says just that (F110), with `Try again`.
  */
 export function readFailureCopy(code: string | undefined, what: ReadSubject): { title: string; body: string } {
+  if (code === "UNREACHABLE") return { title: "We can’t reach the club right now.", body: "Try again in a moment." };
   if (code !== "OFFLINE") return stateCopy("route");
   return {
     title: "You’re offline.",
@@ -78,7 +97,8 @@ export function readFailureCopy(code: string | undefined, what: ReadSubject): { 
 /** Over a list already on screen, when a reload did not answer: what is shown may be out of date — never "This screen
  *  could not be loaded", which the list on screen contradicts. `loaded` false: the server has not answered once yet,
  *  and only the requests waiting on the phone are shown — nothing was there to refresh. Offline, the list loads again
- *  by itself once the phone is back online; a timeout is not offline (ADR-IMPL-047). */
+ *  by itself once the phone is back online; a timeout is not offline (ADR-IMPL-047), nor a club that did not answer
+ *  while the phone is online (`UNREACHABLE`, F110). */
 export function refreshFailedLine(code: string | undefined, loaded = true): string {
   if (code === "OFFLINE") return "You’re offline. Your requests load when you’re back online.";
   return loaded ? "We couldn’t refresh your requests just now." : "We couldn’t load your other requests just now.";

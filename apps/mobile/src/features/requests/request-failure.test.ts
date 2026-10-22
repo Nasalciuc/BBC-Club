@@ -33,5 +33,10 @@ describe("requestFailureFrame — a request page that could not load (F015)", ()
       ...readFailureCopy("OFFLINE", "request"),
       actions: ["retry"],
     });
+    expect(requestFailureFrame({ status: 0, code: "UNREACHABLE" })).toEqual({
+      kind: "unreachable",
+      ...readFailureCopy("UNREACHABLE", "request"),
+      actions: ["retry"],
+    });
   });
 });

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  UNREACHABLE_MESSAGE,
+  classifyFetchFailure,
   deleteFailureKind,
   passwordChangedNotice,
   readFailureCopy,
@@ -84,6 +86,36 @@ test("over a list already on screen, a failed reload never says the screen could
   expect(refreshFailedLine("TIMEOUT", false)).toBe("We couldn’t load your other requests just now.");
   expect(refreshFailedLine("TIMEOUT")).toBe("We couldn’t refresh your requests just now.");
   expect(refreshFailedLine(undefined)).not.toContain("could not be loaded");
+});
+
+describe("a call that reached no server while the phone is online is not 'offline' (F110)", () => {
+  test("the platform decides: offline only when it says the phone is off the network", () => {
+    expect(classifyFetchFailure({ isConnected: false, isInternetReachable: null })).toBe("OFFLINE");
+    expect(classifyFetchFailure({ isConnected: true, isInternetReachable: false })).toBe("OFFLINE");
+    expect(classifyFetchFailure({ isConnected: false })).toBe("OFFLINE");
+    // Online, or not yet known: the club's server is what did not answer (DNS, TLS, the server down).
+    expect(classifyFetchFailure({ isConnected: true, isInternetReachable: true })).toBe("UNREACHABLE");
+    expect(classifyFetchFailure({ isConnected: true, isInternetReachable: null })).toBe("UNREACHABLE");
+    expect(classifyFetchFailure(null)).toBe("UNREACHABLE");
+  });
+
+  test("a page that could not reach the club says so, never 'offline', and offers Try again", () => {
+    for (const what of ["request", "requests", "explore", "profile", "fare"] as const) {
+      const copy = readFailureCopy("UNREACHABLE", what);
+      expect(copy).toEqual({ title: "We can’t reach the club right now.", body: "Try again in a moment." });
+      expect(`${copy.title} ${copy.body}`.toLowerCase()).not.toContain("offline");
+    }
+    expect(UNREACHABLE_MESSAGE).toBe("We can’t reach the club right now. Try again in a moment.");
+  });
+
+  test("a request that could not reach the club is kept on the phone, as offline (its Idempotency-Key guards a send that did arrive)", () => {
+    expect(submitFailureKind("UNREACHABLE")).toBe("queued");
+  });
+
+  test("over a list on screen, an unreachable club never says 'offline'", () => {
+    expect(refreshFailedLine("UNREACHABLE")).toBe("We couldn’t refresh your requests just now.");
+    expect(refreshFailedLine("UNREACHABLE", false)).toBe("We couldn’t load your other requests just now.");
+  });
 });
 
 test("a password change made with the other sessions still alive is a notice; any other failure is not (ADR-IMPL-047)", () => {

@@ -4,7 +4,7 @@ import { readFailureCopy } from "../../lib/error-context";
 export type RequestFailureAction = "retry" | "backToRequests";
 
 export type RequestFailureFrame = {
-  kind: "notFound" | "offline" | "route";
+  kind: "notFound" | "offline" | "unreachable" | "route";
   title: string;
   body: string;
   actions: RequestFailureAction[];
@@ -26,7 +26,7 @@ export function requestFailureFrame(result: { status: number; code?: string }): 
     };
   }
   return {
-    kind: result.code === "OFFLINE" ? "offline" : "route",
+    kind: result.code === "OFFLINE" ? "offline" : result.code === "UNREACHABLE" ? "unreachable" : "route",
     ...readFailureCopy(result.code, "request"),
     actions: ["retry"],
   };
