@@ -117,6 +117,15 @@ describe("a destination's one line", () => {
     expect((await importAirports([`${head},description`, `${lhr},`].join("\n"))).status).toBe(200);
     expect(await lineOf()).toBeNull();
 
+    // A CSV-escaped quote (`""`) is a quote in the line, and a line break inside quotes stays in its cell (RFC 4180):
+    // the quotes used to vanish, and the break to split the record and refuse the file.
+    const quoted = `"The ""Big Smoke"", by the Thames."`;
+    expect((await importAirports([`${head},description`, `${lhr},${quoted}`].join("\n"))).status).toBe(200);
+    expect(await lineOf()).toBe(`The "Big Smoke", by the Thames.`);
+    const twoLines = await importAirports([`${head},description`, `${lhr},"Old river,\nnew city."`].join("\n"));
+    expect(twoLines.status).toBe(200);
+    expect(await lineOf()).toBe("Old river,\nnew city.");
+
     // The database refuses a blank line written past the import.
     const blank = await t.db
       .execute(sql`UPDATE catalog.airports SET description = '   ' WHERE code = 'LHR'`)

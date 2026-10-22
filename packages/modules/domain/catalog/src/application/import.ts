@@ -53,36 +53,109 @@ const AirportCsvRow = z.object({
     .transform((v) => (v === undefined ? undefined : v.trim() || null)),
 });
 
-function parseCsv(raw: string): string[][] {
-  const lines = raw
-    .trim()
-    .split(/\r?\n/)
-    .filter((l) => l.trim());
-  return lines.map((line) => {
-    const cols: string[] = [];
-    let cur = "";
-    let inQ = false;
-    for (const ch of line) {
-      if (ch === '"') {
-        inQ = !inQ;
-        continue;
-      }
-      if (ch === "," && !inQ) {
-        cols.push(cur);
-        cur = "";
-        continue;
-      }
-      cur += ch;
-    }
-    cols.push(cur);
-    return cols.map((c) => c.trim());
-  });
+/** A file the reader cannot read, at the line its record starts on (the header is line 1). */
+export class CsvError extends Error {
+  constructor(
+    readonly line: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "CsvError";
+  }
 }
 
-function rowsFromCsv(raw: string): Record<string, string>[] {
+/**
+ * RFC 4180 over the whole file: a quoted cell may hold commas, line breaks (CRLF, LF or CR) and quotes, written
+ * twice (`""`). Unquoted cells are trimmed; quoted ones are kept as written. Blank lines, the empty lines at the end
+ * and a byte-order mark are ignored. Each record carries the file line it starts on. A quote left open, or text after
+ * a closing quote, is a CsvError.
+ */
+export function parseCsv(raw: string): { line: number; cells: string[] }[] {
+  const src = raw.startsWith("﻿") ? raw.slice(1) : raw;
+  const records: { line: number; cells: string[] }[] = [];
+  let line = 1;
+  let i = 0;
+  while (i < src.length) {
+    const start = line;
+    const cells: string[] = [];
+    let quotedAny = false;
+    // One record: cells until an unquoted line end or the end of the file.
+    for (;;) {
+      let cell = "";
+      let quoted = false;
+      // Spaces before an opening quote are not part of the cell.
+      let j = i;
+      while (j < src.length && (src[j] === " " || src[j] === "\t")) j++;
+      if (src[j] === '"') {
+        quoted = true;
+        quotedAny = true;
+        i = j + 1;
+        for (;;) {
+          if (i >= src.length) throw new CsvError(start, `row ${start}: a quoted cell is not closed`);
+          const ch = src[i];
+          if (ch === '"') {
+            if (src[i + 1] === '"') {
+              cell += '"';
+              i += 2;
+              continue;
+            }
+            i += 1;
+            break;
+          }
+          if (ch === "\r" || ch === "\n") {
+            // A line break inside quotes is the cell's; CRLF counts as one line.
+            if (ch === "\r" && src[i + 1] === "\n") {
+              cell += "\r\n";
+              i += 2;
+            } else {
+              cell += ch;
+              i += 1;
+            }
+            line += 1;
+            continue;
+          }
+          cell += ch;
+          i += 1;
+        }
+        while (i < src.length && (src[i] === " " || src[i] === "\t")) i++;
+        if (i < src.length && src[i] !== "," && src[i] !== "\r" && src[i] !== "\n") {
+          throw new CsvError(start, `row ${start}: text after a closing quote`);
+        }
+      } else {
+        while (i < src.length && src[i] !== "," && src[i] !== "\r" && src[i] !== "\n") {
+          cell += src[i];
+          i += 1;
+        }
+      }
+      cells.push(quoted ? cell : cell.trim());
+      if (i < src.length && src[i] === ",") {
+        i += 1;
+        continue;
+      }
+      // A line end (CRLF, LF or CR) or the end of the file closes the record.
+      if (src[i] === "\r" && src[i + 1] === "\n") i += 2;
+      else if (i < src.length) i += 1;
+      if (i <= src.length) line += 1;
+      break;
+    }
+    // A blank line is no record.
+    if (!quotedAny && cells.length === 1 && cells[0] === "") continue;
+    records.push({ line: start, cells });
+  }
+  return records;
+}
+
+/** The records after the header, each value named by its column, with the line the record starts on. A record with
+ *  more cells than the header is refused (a comma left unquoted); a shorter one leaves its last values empty. */
+export function rowsFromCsv(raw: string): { line: number; values: Record<string, string> }[] {
   const [header, ...body] = parseCsv(raw);
   if (!header) return [];
-  return body.map((cols) => Object.fromEntries(header.map((h, i) => [h, cols[i] ?? ""])));
+  return body.map(({ line, cells }) => {
+    if (cells.length > header.cells.length) {
+      throw new CsvError(line, `row ${line}: ${cells.length} cells, the header has ${header.cells.length}`);
+    }
+    return { line, values: Object.fromEntries(header.cells.map((h, i) => [h, cells[i] ?? ""])) };
+  });
 }
 
 export const ImportBody = z.object({
@@ -94,7 +167,7 @@ export type ImportBody = z.infer<typeof ImportBody>;
 export async function importCatalog(deps: { db: Db }, input: ImportBody): Promise<{ imported: number }> {
   return withTx(deps.db, async (tx) => {
     if (input.kind === "airports") {
-      const rows = rowsFromCsv(input.csv).map((r) => AirportCsvRow.parse(r));
+      const rows = rowsFromCsv(input.csv).map((r) => AirportCsvRow.parse(r.values));
       for (const r of rows) assertIanaZone(r.tz);
       const n = await airportsRepo.upsertMany(
         tx,
@@ -115,7 +188,7 @@ export async function importCatalog(deps: { db: Db }, input: ImportBody): Promis
       return { imported: n };
     }
 
-    const rows = rowsFromCsv(input.csv).map((r) => FareCsvRow.parse(r));
+    const rows = rowsFromCsv(input.csv).map((r) => FareCsvRow.parse(r.values));
     let n = 0;
     for (const r of rows) {
       const publishedPrice = r.published_price && r.published_price.length ? r.published_price : null;
