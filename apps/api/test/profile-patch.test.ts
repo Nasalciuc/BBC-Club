@@ -1,6 +1,7 @@
 /** PATCH /v1/profile + PUT /v1/profile/preferences: member-scoped update. */
 import { describe, it, expect } from "bun:test";
 import { sql } from "drizzle-orm";
+import { RequestBody } from "@bbc/shared/api/v1/requests";
 import { testApp } from "./helpers/test-app";
 
 describe("PATCH /v1/profile", () => {
@@ -93,6 +94,38 @@ describe("PATCH /v1/profile", () => {
       sql`SELECT home_airport FROM members.profile WHERE member_id = ${t.memberA.id}`,
     )) as { home_airport: string }[];
     expect(row?.home_airport).toBe("LHR");
+    await t.close();
+  });
+
+  it("a phone is stored in E.164, the form a request's contact takes — never as typed", async () => {
+    const t = await testApp({ suite: "profile-phone" });
+    const patch = (phone: string) =>
+      t.app.request("/v1/profile", {
+        method: "PATCH",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+    const stored = async () =>
+      (
+        (await t.db.execute(sql`SELECT phone FROM members.profile WHERE member_id = ${t.memberA.id}`)) as {
+          phone: string | null;
+        }[]
+      )[0]?.phone;
+    const requestPhone = RequestBody.innerType().shape.contact.shape.phone;
+
+    const typed = await patch("(212) 555-0101");
+    expect(typed.status).toBe(200);
+    expect(((await typed.json()) as { phone: string }).phone).toBe("+12125550101");
+    expect(await stored()).toBe("+12125550101");
+    expect(requestPhone.safeParse(await stored()).success).toBe(true);
+
+    // An extension has no place in E.164 (nor in the app's PhoneSheet, which sends parsed.e164): the number is kept.
+    expect((await patch("+1 212 555 0100 ext. 12345")).status).toBe(200);
+    expect(await stored()).toBe("+12125550100");
+    expect(requestPhone.safeParse(await stored()).success).toBe(true);
+
+    expect((await patch("abc")).status).toBe(400);
+    expect(await stored()).toBe("+12125550100");
     await t.close();
   });
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isMemberPhone } from "../../phone";
+import { parseMemberPhone } from "../../phone";
 import { isIanaZone } from "../../time-zone";
 import { Passengers } from "./requests";
 
@@ -113,12 +113,20 @@ export const ProfilePatchBody = z
     homeAirport: z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase().optional(),
     // Read by Intl for quiet hours: a zone it cannot read stopped every broadcast campaign (ADR-IMPL-058).
     timezone: z.string().min(1).max(80).refine(isIanaZone, { message: "Choose a time zone from the list." }).optional(),
-    // Same E.164 rule as requests contact.phone — client sends E.164; refuse bare digit junk.
+    // Stored in E.164 (default country US), so a saved phone always passes RequestBody.contact.phone (7-20): typed as
+    // '(212) 555-0101' it is '+12125550101'; an extension has no place in E.164 and is not kept.
     phone: z
       .string()
       .min(1)
       .max(30)
-      .refine(isMemberPhone, { message: "That phone number doesn't look right." })
+      .transform((raw, ctx) => {
+        const { e164 } = parseMemberPhone(raw);
+        if (!e164 || e164.length < 7 || e164.length > 20) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "That phone number doesn't look right." });
+          return z.NEVER;
+        }
+        return e164;
+      })
       .optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
