@@ -95,7 +95,7 @@ export function Globe(props: Props) {
   useEffect(() => {
     if (!show) return;
     const duration = reducedMotion ? 0 : FADE_MS;
-    fade.value = withTiming(1, { duration });
+    fade.set(withTiming(1, { duration }));
     const t = setTimeout(() => setDrawnGone(true), duration + 50);
     return () => clearTimeout(t);
   }, [show, reducedMotion, fade]);
