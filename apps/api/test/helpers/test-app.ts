@@ -10,6 +10,10 @@ import type { IdentityModuleOptions } from "@bbc/identity/module";
 import type { EngagementFacade } from "@bbc/engagement";
 import { DEPART, RETURN } from "./days";
 
+/** A travel day `n` days from today (YYYY-MM-DD): fixture legs dated from the clock, never a fixed calendar day
+ *  the server will one day call past (`earliestLegDay`). */
+export const dayFromNow = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
 /** The whole host, in-memory (no port), against an isolated clone of the test template, with capturing adapters.
  *  Every suite that needs the system uses this — nobody builds their own wiring.
  *  Pass `suite` to name the isolated DB (and to isolate fixture emails when suites share a process).

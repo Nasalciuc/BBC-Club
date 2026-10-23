@@ -18,24 +18,49 @@ export function isOtpSendRequest(req: Request): boolean {
   return sendKind(req) !== undefined;
 }
 
-/** Better Auth's router (better-call `getBody`) reads a body as JSON only when its Content-Type matches this; another
- *  type it reads as a form or as text. The club reads the body only when Better Auth reads it as JSON too: otherwise a
- *  body could say one thing to the club and another to Better Auth (`application/x-www-form-urlencoded,application/json`
- *  passes Better Auth's JSON-only check and is read as a form). */
+/** Better Auth's router (better-call `getBody`) reads JSON when Content-Type matches this, and form bodies
+ *  (`application/x-www-form-urlencoded`, `multipart/form-data`) as FormData. The club reads the same media types so a
+ *  form reset stays under the per-address lock; a mixed Content-Type that Better Auth would still parse as one kind is
+ *  left unread (null), so the body cannot say one thing to the club and another to Better Auth. */
 const JSON_CONTENT_TYPE = /^application\/([a-z0-9.+-]*\+)?json/i;
+/** A single form media type (optional parameters after `;`). A mixed Content-Type that also claims JSON is left
+ *  unread — Better Auth may treat it as a form while a naive reader would treat it as JSON. */
+const FORM_CONTENT_TYPE = /^(application\/x-www-form-urlencoded|multipart\/form-data)(\s*;.*)?$/i;
 
-/** The code a request asks to mail and where to, read from a clone of its JSON body; null for anything else (another
- *  route, another method, a body that is not JSON to Better Auth or does not parse) — those go to Better Auth untouched. */
+async function readSendBody(req: Request): Promise<Record<string, unknown> | null> {
+  const contentType = req.headers.get("content-type") ?? "";
+  if (JSON_CONTENT_TYPE.test(contentType)) {
+    const body: unknown = await req
+      .clone()
+      .json()
+      .catch(() => null);
+    return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+  }
+  if (FORM_CONTENT_TYPE.test(contentType)) {
+    const form = await req
+      .clone()
+      .formData()
+      .catch(() => null);
+    if (!form) return null;
+    const values: Record<string, unknown> = {};
+    form.forEach((value, key) => {
+      values[key] = value;
+    });
+    return values;
+  }
+  return null;
+}
+
+/** The code a request asks to mail and where to, read from a clone of its body; null for anything else (another
+ *  route, another method, a body that is not JSON/form to Better Auth or does not parse) — those go to Better Auth
+ *  untouched (the answer floor still holds). */
 export async function otpSendTarget(req: Request): Promise<OtpSendTarget | null> {
   const kind = sendKind(req);
   if (!kind) return null;
-  if (!JSON_CONTENT_TYPE.test(req.headers.get("content-type") ?? "")) return null;
-  const body: unknown = await req
-    .clone()
-    .json()
-    .catch(() => null);
-  if (!body || typeof body !== "object") return null;
-  const { email, type } = body as { email?: unknown; type?: unknown };
+  const body = await readSendBody(req);
+  if (!body) return null;
+  const email = body.email;
+  const type = body.type;
   if (typeof email !== "string" || email.trim() === "") return null;
   const codeType = kind === "forget-password" ? kind : typeof type === "string" ? type : null;
   if (!codeType) return null;

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isMemberPhone } from "../../phone";
 import { calendarDay } from "../../requests/display";
+import { NOT_STORABLE, storable } from "./text";
 
 /** An airport is three letters (IATA), upper-cased (`jfk` reads as JFK): the code is the route, the title and the push
  *  (ADR-IMPL-042). */
@@ -25,13 +26,11 @@ export const Passengers = z.object({
 });
 export type Passengers = z.infer<typeof Passengers>;
 
-/** A character a database text column cannot hold, and no name, phone, address or note needs. */
-const NUL = "\u0000";
-
 /**
  * A trip that can be flown: a round trip is two legs, the second the first reversed; one way is one leg; multi-city two
  * to six; no leg ends where it starts; each leg on or after the one before; an infant travels on an adult's lap, so no
- * more infants than adults (here, not on `Passengers`, which views parse too); and no NUL in what the member typed.
+ * more infants than adults (here, not on `Passengers`, which views parse too). What the member typed is checked where
+ * it is declared: the contact and the note refuse a character `text` cannot keep (`./text` `storable`).
  * Each issue names its field (`legs.1.date`, `passengers.infant`), so the app can point at it. Nothing here depends on
  * today: a request kept on the phone (the offline queue parses `RequestBody`) stays readable as its day passes — the
  * server refuses a past day (`SubmittedRequestBody`), and the app asks the member to call.
@@ -68,10 +67,6 @@ function tripIssues(
   if (b.passengers.infant > b.passengers.adult) {
     issue(["passengers", "infant"], "Each infant travels on an adult's lap. Add an adult or remove an infant.");
   }
-  for (const key of ["name", "phone", "email"] as const) {
-    if (b.contact[key].includes(NUL)) issue(["contact", key], "Remove the hidden character, then try again.");
-  }
-  if (b.note?.includes(NUL)) issue(["note"], "Remove the hidden character, then try again.");
 }
 
 /** The first day a leg may be on: yesterday in UTC — today, or later, somewhere every member may be. */
@@ -89,13 +84,18 @@ export const RequestBody = z
     legs: z.array(RequestLeg).min(1).max(6),
     passengers: Passengers,
     contact: z.object({
-      name: z.string().min(2).max(80),
-      phone: z.string().min(7).max(20).refine(isMemberPhone, {
-        message: "That phone number doesn't look right.",
-      }),
-      email: z.string().email(),
+      name: z.string().min(2).max(80).refine(storable, NOT_STORABLE),
+      phone: z
+        .string()
+        .min(7)
+        .max(20)
+        .refine(isMemberPhone, {
+          message: "That phone number doesn't look right.",
+        })
+        .refine(storable, NOT_STORABLE),
+      email: z.string().email().refine(storable, NOT_STORABLE),
     }),
-    note: z.string().max(500).optional(),
+    note: z.string().max(500).refine(storable, NOT_STORABLE).optional(),
     priceAtRequest: z.number().positive().optional(),
     intent: z.enum(["quote", "alternative"]).optional(),
     replacesFareId: z.string().uuid().optional(),

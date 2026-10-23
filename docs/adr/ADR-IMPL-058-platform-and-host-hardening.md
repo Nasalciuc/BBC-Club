@@ -1,6 +1,6 @@
 # ADR-IMPL-058 — Platform and host: a boot that waits for its database, strict flag reads, errors without parameters
 
-Status: proposed · Date: 2026-10-22 · Scope: P1 (`packages/modules/platform`: flags, jobs, the events poller and every
+Status: accepted · Date: 2026-10-22 · Scope: P1 (`packages/modules/platform`: flags, jobs, the events poller and every
 platform log line; `@bbc/db` `errorForLog`/`errorLine`; the api host: boot, the api and worker entries, `/status`,
 `/v1/app-config`, the body limits, the error contract; `AGENTS.md` rule 6; `infra/RUNBOOK.md`) · Amends ADR-IMPL-013
 point 7 (kill flag read errors) for boot only; keeps the rest of it.
@@ -52,8 +52,9 @@ platform and the host:
    jobs whose last finished run failed — and is 503 while it is not empty. The next run that succeeds clears it. `/ready`
    is unchanged and stays the deploy gate.
 5. **One body limit per request, answered in the API's shape.** `/v1/internal/*` takes 1 MB; the 256 KB member limit
-   skips paths under `/v1/internal/`. Over the limit: 413 `{ code: VALIDATION, message: "This request is too large." }`
-   (no new error code; `packages/shared` untouched), counted in `http_errors` as a client error. The error contract maps
+   skips paths under `/v1/internal/`. Over the limit: 413 `{ error: { code: "VALIDATION", message: "This request is
+too large.", requestId: … } }` (the `apiError` shape; no new error code; `packages/shared` untouched), counted in
+   `http_errors` as a client error. The error contract maps
    any Hono `HTTPException` below 500 to its own status (401/403/429 as for Better Auth, anything else VALIDATION) with
    the code's own message, and never logs it as `unhandled`.
 6. **An error reaches a log line or a stored text only through `errorForLog`/`errorLine` (`@bbc/db`).** A query error

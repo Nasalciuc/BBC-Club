@@ -4,10 +4,13 @@ import { describe, expect, it } from "bun:test";
 import { RequestBody, SubmittedRequestBody, earliestLegDay } from "@bbc/shared/api/v1/requests";
 import { DEPART } from "../days";
 
+/** A travel day from the clock: `SubmittedRequestBody` refuses a past day, so the fixture never names one. */
+const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
 const base = {
   tripType: "oneway",
   cabin: "business",
-  legs: [{ from: "JFK", to: "LHR", date: "2027-10-12" }],
+  legs: [{ from: "JFK", to: "LHR", date: day(60) }],
   passengers: { adult: 1, child: 0, infant: 0 },
   contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
 };
@@ -69,5 +72,12 @@ describe("a trip that can be flown", () => {
     expect(issues({ passengers: { adult: 2, child: 0, infant: 2 } })).toEqual([]);
     expect(issues({ note: "Aisle\u0000please" })).toEqual(["note"]);
     expect(issues({ contact: { ...base.contact, name: "Alex\u0000" } })).toEqual(["contact.name"]);
+  });
+
+  it("a surrogate without its pair is refused in the contact and the note (text would keep U+FFFD)", () => {
+    expect(issues({ note: "Window \ud800seat" })).toContain("note");
+    expect(issues({ contact: { ...base.contact, name: "Alex \ud800" } })).toContain("contact.name");
+    expect(issues({ contact: { ...base.contact, email: "al\ud800ex@test.dev" } })).toContain("contact.email");
+    expect(issues({ note: "Window \ud83d\ude0aseat" })).toEqual([]);
   });
 });

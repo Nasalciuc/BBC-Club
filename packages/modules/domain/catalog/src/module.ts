@@ -40,7 +40,9 @@ const isUuid = (v: string) => z.string().uuid().safeParse(v).success;
  *  A day outside them has no fare — the search answers an empty list without asking Postgres (a year it cannot store
  *  was a 500). Never an error: the app's recent searches keep their dates, and a day gone by is still sent. */
 function searchWhenInRange(when: Date, now = new Date()): boolean {
-  const earliest = new Date(now.getTime() - 86_400_000);
+  // Travel days, not a rolling 24 hours: yesterday begins at its UTC midnight, so a member west of UTC whose
+  // yesterday is still their today is in range at any hour of the server's day.
+  const earliest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
   const latest = new Date(now);
   latest.setUTCFullYear(latest.getUTCFullYear() + 2);
   return when >= earliest && when <= latest;

@@ -13,7 +13,8 @@ describe("a request names its destination", () => {
   it("round trip JFK–LHR reads JFK → LHR and London everywhere, never JFK → JFK", async () => {
     const t = await testApp({ suite: "requests-route", env: { OPS_LINK_SECRET: SECRET } });
     await t.seedCatalogBasics();
-    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const body = t.sampleRequestBody();
+    const created = await t.submitRequestAs(t.memberA, body);
     expect(created.status).toBe(201);
     const vm = RequestVM.parse(await created.json());
     expect(vm.route).toBe("JFK → LHR");
