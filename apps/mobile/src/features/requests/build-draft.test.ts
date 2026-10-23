@@ -11,7 +11,13 @@ import {
   requestDraftReducer,
 } from "./useRequestDraft";
 
-const TODAY = "2026-10-08";
+/** Runtime today: a fixed calendar day eventually falls before `earliestLegDay` and flunks a body that ships. */
+const TODAY = new Date().toISOString().slice(0, 10);
+const inDays = (n: number) => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
 const CONTACT = { name: "Ada Lovelace", phone: "+12125550148", email: "ada@example.com" };
 
 describe("the sheet's notice never outlives its cause (F099)", () => {
@@ -44,39 +50,42 @@ describe("the sheet's notice never outlives its cause (F099)", () => {
 
 describe("buildDraft — dates", () => {
   it("suggests two weeks out and a week long when nothing was chosen — never a fixed day", () => {
-    expect(defaultDates(TODAY)).toEqual({ depart: "2026-10-22", ret: "2026-10-29" });
+    const suggested = defaultDates(TODAY);
+    expect(defaultDates(TODAY)).toEqual(suggested);
     const draft = buildDraft({ mode: "quote", fromCode: "JFK", toCode: "LHR", today: TODAY });
     expect(draft.tripType).toBe("round");
-    expect(draft.legs.map((l) => l.date)).toEqual(["2026-10-22", "2026-10-29"]);
+    expect(draft.legs.map((l) => l.date)).toEqual([suggested.depart, suggested.ret]);
     // The old fixture (12–19 Oct 2026) is gone: a year later the suggestion still lies ahead.
     expect(buildDraft({ mode: "quote", today: "2027-10-08" }).legs[0]?.date).toBe("2027-10-22");
   });
 
   it("carries the dates chosen on Home, round trip or one way", () => {
+    const depart = inDays(30);
+    const back = inDays(37);
     const round = buildDraft({
       mode: "quote",
       today: TODAY,
       search: {
-        dates: { depart: "2026-11-03", return: "2026-11-10", flexible: false },
+        dates: { depart, return: back, flexible: false },
         cabin: "business",
         passengers: { adult: 1, child: 0, infant: 0 },
       },
     });
     expect(round.tripType).toBe("round");
-    expect(round.legs.map((l) => l.date)).toEqual(["2026-11-03", "2026-11-10"]);
+    expect(round.legs.map((l) => l.date)).toEqual([depart, back]);
 
     const oneWay = buildDraft({
       mode: "quote",
       today: TODAY,
       search: {
-        dates: { depart: "2026-11-03", return: null, flexible: false },
+        dates: { depart, return: null, flexible: false },
         cabin: "business",
         passengers: { adult: 1, child: 0, infant: 0 },
       },
     });
     expect(oneWay.tripType).toBe("oneway");
     expect(draftToBody(oneWay).legs).toHaveLength(1);
-    expect(oneWay.legs[0]?.date).toBe("2026-11-03");
+    expect(oneWay.legs[0]?.date).toBe(depart);
     // No return was chosen: none is invented for a later switch to Round trip.
     expect(oneWay.legs[1]?.date).toBe("");
   });
@@ -179,12 +188,13 @@ describe("buildDraft — a fare's own day and trip (F097)", () => {
 
   it("a fare without a day of its own keeps the suggestion, but takes its trip from the fare", () => {
     const undated = { ...fa01, departAt: null, departLocal: null, departDate: null };
+    const suggested = defaultDates(TODAY);
     const oneWay = buildDraft({ fare: undated, today: TODAY });
     expect(oneWay.tripType).toBe("oneway");
-    expect(oneWay.legs[0]?.date).toBe("2026-10-22");
+    expect(oneWay.legs[0]?.date).toBe(suggested.depart);
     const round = buildDraft({ fare: { ...undated, trip: "round_trip" }, today: TODAY });
     expect(round.tripType).toBe("round");
-    expect(round.legs.map((l) => l.date)).toEqual(["2026-10-22", "2026-10-29"]);
+    expect(round.legs.map((l) => l.date)).toEqual([suggested.depart, suggested.ret]);
   });
 });
 
@@ -243,7 +253,8 @@ describe("buildDraft — cabin and travelers", () => {
     expect(fromSearch.cabin).toBe("business");
     expect(fromSearch.passengers.adult).toBe(3);
     // Flexible dates keep the suggestion.
-    expect(fromSearch.legs.map((l) => l.date)).toEqual(["2026-10-22", "2026-10-29"]);
+    const suggested = defaultDates(TODAY);
+    expect(fromSearch.legs.map((l) => l.date)).toEqual([suggested.depart, suggested.ret]);
 
     const fare = { cabin: "first", from: { code: "JFK" }, to: { code: "LHR" }, offerId: null, price: { offer: 1 } };
     const fromFare = buildDraft({ fare: fare as never, profile, search, today: TODAY });
