@@ -212,6 +212,7 @@
         "@bbc/crm": "workspace:*",
         "@bbc/db": "workspace:*",
         "@bbc/platform": "workspace:*",
+        "@bbc/proposals": "workspace:*",
         "@bbc/shared": "workspace:*",
         "drizzle-orm": "1.0.0-rc.4",
         "hono": "^4.7.0",

@@ -1,20 +1,18 @@
 import { MemberRegisteredV1 } from "@bbc/shared/events/member";
 import { event } from "@bbc/shared/events";
 import { profile } from "@bbc/db/schema/members";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
+import { insertProfile } from "../application/create-profile";
+import type { ProfileCreationDeps } from "../api";
 
 /** Creates the profile and links it to the CRM mirror. Idempotent: platform.event_inbox gates re-delivery,
- *  and the insert is ON CONFLICT DO NOTHING on the primary key. */
+ *  and the insert is ON CONFLICT DO NOTHING on the primary key. A profile write right after the join code may have
+ *  made the row first (`ensureProfile`, same insert): this delivery's insert is then a no-op, and it still publishes
+ *  member.linked_to_crm — once, from the row, so it never claims a link the row does not have. */
 export async function onMemberRegistered(
-  deps: {
+  deps: ProfileCreationDeps & {
     tx: Executor; // the poller's delivery transaction
-    crm: {
-      findByEmail(
-        emailNormalized: string,
-      ): Promise<{ crmClientId: string; fullName?: string; homeAirport?: string } | null>;
-    };
-    flags: { get(key: string): Promise<boolean> };
     publish: (evt: {
       type: string;
       version: number;
@@ -27,24 +25,14 @@ export async function onMemberRegistered(
   raw: unknown,
 ) {
   const evt = MemberRegisteredV1.parse(raw);
-  const match = await deps.crm.findByEmail(evt.emailNormalized);
-  // ADR-PROD-001: v1 keeps this flag off — unknown CRM email is waitlist, never active.
-  const openSignups = await deps.flags.get("members.allow_non_crm_signups");
-  const status = match ? "active" : openSignups ? "active" : "waitlist";
+  await insertProfile(deps.tx, deps, evt.memberId, evt.emailNormalized);
 
-  await deps.tx
-    .insert(profile)
-    .values({
-      memberId: evt.memberId,
-      crmClientId: match?.crmClientId ?? null,
-      linkedAt: match ? new Date() : null,
-      displayName: match?.fullName ?? null,
-      homeAirport: match?.homeAirport ?? null,
-      status,
-    })
-    .onConflictDoNothing({ target: profile.memberId });
-
-  if (match) {
+  const [row] = await deps.tx
+    .select({ crmClientId: profile.crmClientId, linkedAt: profile.linkedAt })
+    .from(profile)
+    .where(eq(profile.memberId, evt.memberId))
+    .limit(1);
+  if (row?.crmClientId) {
     await deps.publish({
       type: "member.linked_to_crm",
       version: 1,
@@ -53,8 +41,8 @@ export async function onMemberRegistered(
       memberId: evt.memberId,
       payload: event("member.linked_to_crm", {
         memberId: evt.memberId,
-        crmClientId: match.crmClientId,
-        linkedAt: new Date().toISOString(),
+        crmClientId: row.crmClientId,
+        linkedAt: (row.linkedAt ?? new Date()).toISOString(),
       }),
     });
   }
@@ -64,8 +52,9 @@ export type IdentityUsersPort = {
   listUsersCreatedBefore(before: Date): Promise<{ id: string; email: string; createdAt: Date }[]>;
 };
 
-/** Nightly: the identity hook publishes after Better Auth's insert, outside its transaction. If the event was
- *  lost, the member has an auth user and no profile. Diff in memory — no cross-schema SQL. */
+/** Every 15 minutes (reconcile-profiles): the identity hook publishes after Better Auth's insert, outside its
+ *  transaction. If the event was lost, the member has an auth user and no profile. Diff in memory — no cross-schema
+ *  SQL. */
 export async function reconcileMissingProfiles(deps: {
   db: Executor;
   identity: IdentityUsersPort;

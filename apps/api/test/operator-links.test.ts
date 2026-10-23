@@ -85,4 +85,68 @@ describe("operator action links", () => {
     }
     await t.close();
   });
+
+  it("a stale link never takes a request back: Quote sent on a booked request, Booked on a closed one", async () => {
+    const t = await testApp({ suite: "ops-links-stale", env: { OPS_LINK_SECRET: SECRET } });
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const { id } = (await created.json()) as { id: string };
+    const post = (action: "quoted" | "booked" | "closed") =>
+      t.app.request(`/ops/requests/${signAction(SECRET, id, action)}`, { method: "POST" });
+    expect(await (await post("quoted")).text()).toContain("Marked as quote sent.");
+    expect(await (await post("booked")).text()).toContain("Marked as booked.");
+    const before = await events(t, "request.status_changed");
+
+    const stale = await post("quoted");
+    expect(stale.status).toBe(200);
+    expect(stale.headers.get("content-type")).toContain("text/html");
+    expect(await stale.text()).toContain("Already booked — nothing changed.");
+    const status = async () =>
+      ((await t.db.execute(sql`SELECT status FROM requests.requests WHERE id = ${id}`)) as { status: string }[])[0]
+        ?.status;
+    expect(await status()).toBe("booked");
+    expect(await events(t, "request.status_changed")).toBe(before);
+
+    expect(await (await post("closed")).text()).toContain("Marked as closed.");
+    const reopen = await post("booked");
+    expect(reopen.status).toBe(200);
+    expect(await reopen.text()).toContain("This request is closed — nothing changed.");
+    expect(await status()).toBe("closed");
+    const timeline = (await t.db.execute(
+      sql`SELECT status FROM requests.request_events WHERE request_id = ${id} ORDER BY created_at, id`,
+    )) as { status: string }[];
+    expect(timeline.map((e) => e.status)).toEqual(["received", "quoted", "booked", "closed"]);
+    await t.close();
+  });
+
+  it("too many links from one address: an HTML page with Retry-After, never a JSON error", async () => {
+    const t = await testApp({ suite: "ops-links-429", env: { OPS_LINK_SECRET: SECRET } });
+    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const { id } = (await created.json()) as { id: string };
+    const token = signAction(SECRET, id, "quoted");
+    const from = { "X-Forwarded-For": "10.74.14.1, 173.245.48.1" };
+    const answers: Response[] = [];
+    for (let i = 0; i < 14; i++) answers.push(await t.app.request(`/ops/requests/${token}`, { headers: from }));
+    const limited = answers.filter((r) => r.status === 429);
+    expect(limited.length).toBeGreaterThan(0);
+    for (const r of limited) {
+      expect(r.headers.get("content-type")).toContain("text/html");
+      expect(Number(r.headers.get("retry-after"))).toBeGreaterThanOrEqual(1);
+      expect(await r.text()).toContain("Too many links at once — wait a minute and open it again.");
+    }
+    // The confirm button is limited the same way, and writes nothing while it is.
+    const post = await t.app.request(`/ops/requests/${token}`, { method: "POST", headers: from });
+    expect(post.status).toBe(429);
+    expect(post.headers.get("content-type")).toContain("text/html");
+    expect(await post.text()).toContain("Too many links at once");
+    const rows = (await t.db.execute(sql`SELECT status FROM requests.requests WHERE id = ${id}`)) as {
+      status: string;
+    }[];
+    expect(rows[0]?.status).toBe("received");
+    // Another address is not held up.
+    const other = await t.app.request(`/ops/requests/${token}`, {
+      headers: { "X-Forwarded-For": "10.74.14.2, 173.245.48.1" },
+    });
+    expect(other.status).toBe(200);
+    await t.close();
+  });
 });

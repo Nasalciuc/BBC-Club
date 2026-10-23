@@ -3,8 +3,9 @@
  *  reads its trip type and the number the specialist calls. */
 import { describe, expect, it } from "bun:test";
 import { RequestVM } from "@bbc/shared/api/v1/requests";
+import { requestDates } from "@bbc/shared/requests/display";
 import { signAction } from "../../../packages/modules/domain/requests/src/application/operator-links";
-import { testApp } from "./helpers/test-app";
+import { dayFromNow, testApp } from "./helpers/test-app";
 
 const SECRET = "ops-link-secret-at-least-32-characters";
 
@@ -12,7 +13,8 @@ describe("a request names its destination", () => {
   it("round trip JFK–LHR reads JFK → LHR and London everywhere, never JFK → JFK", async () => {
     const t = await testApp({ suite: "requests-route", env: { OPS_LINK_SECRET: SECRET } });
     await t.seedCatalogBasics();
-    const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
+    const body = t.sampleRequestBody();
+    const created = await t.submitRequestAs(t.memberA, body);
     expect(created.status).toBe(201);
     const vm = RequestVM.parse(await created.json());
     expect(vm.route).toBe("JFK → LHR");
@@ -31,7 +33,7 @@ describe("a request names its destination", () => {
     expect(detail.city).toBe("London");
     expect([detail.tripType, detail.phone]).toEqual(["round", "+12125550148"]);
     // One month is named once, with the year (09: `Nov 12 – 19, 2026`; ADR-IMPL-056).
-    expect(detail.dates).toBe("Oct 12–19, 2026");
+    expect(detail.dates).toBe(requestDates(body.legs, { year: true }));
 
     // The operator's page and the status event the quote-ready push is written from.
     const html = await (await t.app.request(`/ops/requests/${signAction(SECRET, vm.id, "quoted")}`)).text();
@@ -56,7 +58,7 @@ describe("a request names its destination", () => {
     await t.seedCatalogBasics();
     const oneWay = await t.submitRequestAs(
       t.memberA,
-      t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to: "CDG", date: "2027-10-12" }] }),
+      t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to: "CDG", date: dayFromNow(60) }] }),
       { idempotencyKey: crypto.randomUUID() },
     );
     expect(oneWay.status).toBe(201);
@@ -68,7 +70,7 @@ describe("a request names its destination", () => {
 
     const unknown = await t.submitRequestAs(
       t.memberA,
-      t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to: "QQQ", date: "2027-10-12" }] }),
+      t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to: "QQQ", date: dayFromNow(60) }] }),
       { idempotencyKey: crypto.randomUUID() },
     );
     expect(unknown.status).toBe(201);

@@ -4,6 +4,9 @@ import type { AskFailure } from "../../src/application/ask-within";
 import { askFare, carrierAtRequest, publishedAtRequest, type CatalogFare } from "../../src/application/published";
 
 const fare: CatalogFare = {
+  routeFrom: "JFK",
+  routeTo: "LHR",
+  cabin: "business",
   price: "4200.00",
   publishedPrice: "7850.00",
   publishedSource: "BA published · 16 Sep",
@@ -82,6 +85,7 @@ describe("carrierAtRequest — the airline a fare request was made for (ADR-IMPL
     expect(await askFare(async () => fare, 4100, r)).toEqual({
       published: null,
       carrier: { code: "BA", name: "British Airways" },
+      trip: { from: "JFK", to: "LHR", cabin: "business" },
     });
     // A fare request without a price keeps its airline too.
     expect((await askFare(async () => fare, undefined, r)).carrier).toEqual({ code: "BA", name: "British Airways" });
@@ -104,9 +108,11 @@ describe("askFare — what a fare request records never decides whether it is ac
     ).toEqual({
       published: { amount: 7850, source: "BA published · 16 Sep" },
       carrier: { code: "BA", name: "British Airways" },
+      trip: { from: "JFK", to: "LHR", cabin: "business" },
     });
     expect(reads).toBe(1);
-    expect(await askFare(async () => null, 4200, r)).toEqual({ published: null, carrier: null });
+    // No such fare: nothing to record, and the request is refused for it (submit).
+    expect(await askFare(async () => null, 4200, r)).toEqual({ published: null, carrier: null, trip: "missing" });
     expect(r.reasons).toEqual([]);
   });
 
@@ -120,10 +126,11 @@ describe("askFare — what a fare request records never decides whether it is ac
         4200,
         r,
       ),
-    ).toEqual({ published: null, carrier: null });
+    ).toEqual({ published: null, carrier: null, trip: null });
     const slow = () =>
       new Promise<CatalogFare>((_, reject) => setTimeout(() => reject(new Error("late")), 30)) as Promise<CatalogFare>;
-    expect(await askFare(slow, 4200, { ...r, timeoutMs: 5 })).toEqual({ published: null, carrier: null });
+    // A read that failed checks nothing: the request goes on.
+    expect(await askFare(slow, 4200, { ...r, timeoutMs: 5 })).toEqual({ published: null, carrier: null, trip: null });
     expect(r.reasons).toEqual(["error", "timeout"]);
     await Bun.sleep(40); // the late rejection is handled: no unhandled rejection fails this test
   });

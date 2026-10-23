@@ -8,6 +8,10 @@ import { testAuth } from "./test-auth";
 import type { IdentityFacade } from "@bbc/identity";
 import type { EngagementFacade } from "@bbc/engagement";
 
+/** A travel day `n` days from today (YYYY-MM-DD): fixture legs dated from the clock, never a fixed calendar day
+ *  the server will one day call past (`earliestLegDay`). */
+export const dayFromNow = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+
 /** The whole host, in-memory (no port), against an isolated clone of the test template, with capturing adapters.
  *  Every suite that needs the system uses this — nobody builds their own wiring.
  *  Pass `suite` to name the isolated DB (and to isolate fixture emails when suites share a process).
@@ -303,8 +307,8 @@ export async function testApp(
         tripType: "round",
         cabin: "business",
         legs: [
-          { from: "JFK", to: "LHR", date: "2026-10-12" },
-          { from: "LHR", to: "JFK", date: "2026-10-19" },
+          { from: "JFK", to: "LHR", date: dayFromNow(60) },
+          { from: "LHR", to: "JFK", date: dayFromNow(67) },
         ],
         passengers: { adult: 1, child: 0, infant: 0 },
         contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },

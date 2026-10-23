@@ -92,6 +92,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/members profile avatar url applied/);
     expect(second.out).not.toMatch(/catalog fares key applied/);
     expect(second.out).not.toMatch(/catalog checks applied/);
+    expect(second.out).not.toMatch(/notifications campaign not before applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -131,6 +132,7 @@ describe("extras ledger", () => {
       "0033_members_profile_avatar_url.sql",
       "0034_catalog_fares_key.sql",
       "0035_catalog_checks.sql",
+      "0036_notifications_campaign_not_before.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

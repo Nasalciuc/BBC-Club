@@ -5,14 +5,14 @@ import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { storedPricingRules } from "../../../packages/modules/domain/catalog/src/pricing/rules";
 import { FIXTURE_RULES } from "../../../packages/modules/domain/catalog/tests/unit/pricing-rules.fixture";
-import { testApp } from "./helpers/test-app";
+import { dayFromNow, testApp } from "./helpers/test-app";
 
 const FARE = "11111111-1111-4111-8111-111111111111";
 
 const round = (from: string, to: string, over: Record<string, unknown> = {}) => ({
   legs: [
-    { from, to, date: "2027-10-12" },
-    { from: to, to: from, date: "2027-10-19" },
+    { from, to, date: dayFromNow(60) },
+    { from: to, to: from, date: dayFromNow(67) },
   ],
   priceAtRequest: undefined,
   // The app showed the indicative fare before the member asked (the frontend's estimate row).
@@ -92,7 +92,13 @@ describe("a quote request carries the estimate its search showed", () => {
       amount: null,
       currency: null,
     });
-    // A fare request and an alternative never carry one.
+    // A fare request and an alternative never carry one. (The fare exists, for this trip: a request names a real one.
+    // Not published, so the quotes above and below still read the route as one without fares.)
+    await t.db.execute(sql`
+      INSERT INTO catalog.fares (id, route_from, route_to, cabin, carrier, carrier_name, price, currency, source,
+        valid_from, valid_until, published)
+      VALUES (${FARE}, 'JFK', 'ZRH', 'business', 'LX', 'Swiss', '3900.00', 'USD', 'manual',
+        now() - interval '1 day', now() + interval '30 days', false)`);
     expect(await shown(t, await post({ fareId: FARE, ...round("JFK", "ZRH") }))).toEqual({
       amount: null,
       currency: null,

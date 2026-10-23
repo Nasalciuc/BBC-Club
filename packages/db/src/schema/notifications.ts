@@ -118,6 +118,8 @@ export const campaigns = notifications.table(
     status: campaignStatus("status").notNull().default("pending"),
     createdAt: createdAt(),
     finishedAt: tz("finished_at"),
+    // the offer's publish time (0036): the job does not claim the campaign before it; null = at once
+    notBefore: tz("not_before"),
   },
   (t) => [
     index("campaigns_offer").on(t.offerId),

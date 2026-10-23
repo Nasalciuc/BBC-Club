@@ -19,4 +19,18 @@ describe("GET /v1/requests/:id", () => {
     expect(anon.status).toBe(401);
     await t.close();
   });
+
+  it("an id that is not a UUID is 404, never a 500 (bbcclub://requests/abc); a random UUID is 404 too", async () => {
+    const t = await testApp({ suite: "requests-idor-badid" });
+    for (const id of ["abc", "not-a-uuid", "q_123"]) {
+      const r = await t.app.request(`/v1/requests/${id}`, { headers: { Cookie: t.memberA.cookie } });
+      expect(r.status).toBe(404);
+      expect(((await r.json()) as { error: { code: string } }).error.code).toBe("NOT_FOUND");
+    }
+    const random = await t.app.request(`/v1/requests/${crypto.randomUUID()}`, {
+      headers: { Cookie: t.memberA.cookie },
+    });
+    expect(random.status).toBe(404);
+    await t.close();
+  });
 });

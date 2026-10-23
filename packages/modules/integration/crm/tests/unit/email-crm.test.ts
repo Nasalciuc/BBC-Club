@@ -76,11 +76,80 @@ describe("emailCrm", () => {
       "Alternative request R-1 · JFK→LHR · Business Class",
     ]);
     expect(sent[0]?.text.startsWith("New fare request R-1")).toBe(true);
-    expect(sent[1]?.text.startsWith("New fare request R-1")).toBe(true);
+    expect(sent[1]?.text.startsWith("New offer request R-1")).toBe(true);
     expect(sent[2]?.text.startsWith("New quote request R-1")).toBe(true);
     expect(sent[3]?.text.startsWith("New alternative request R-1")).toBe(true);
     expect(sent[3]?.text).toContain(`Type: Alternative to an expired fare (fare ${fare})`);
     expect(sent[2]?.text).not.toContain("Type: Alternative");
+  });
+
+  it("names the fare the member asked from — airline, price, published price — and the offer", async () => {
+    const sent: { subject: string; text: string }[] = [];
+    const email: EmailFacade = {
+      async sendOtp() {},
+      async sendOperatorRequest(input) {
+        sent.push({ subject: input.subject, text: input.text });
+      },
+    };
+    const crm = emailCrm({ email, operatorsEmail: "ops@buybusinessclass.com" });
+    const body = {
+      reference: "R-3",
+      trip_type: "oneway",
+      cabin_class: "Business Class",
+      client: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
+      flights: [{ from: "JFK", to: "LHR", date: "2027-10-12" }],
+      passengers: { adult: 1, child: 0, infant: 0 },
+    };
+    const fareId = "11111111-1111-4111-8111-111111111111";
+    await crm.submitRequest({
+      ...body,
+      intent: "fare",
+      fare_id: fareId,
+      price_at_request: { amount: 4200, currency: "USD" },
+      published_at_request: { amount: 7850, source: "Sabre · 16 Sep" },
+      carrier: { code: "BA", name: "British Airways" },
+    });
+    const offerId = "22222222-2222-4222-8222-222222222222";
+    await crm.submitRequest({
+      ...body,
+      intent: "offer",
+      offer_id: offerId,
+      offer: { id: offerId, title: "Your October in London", price: { amount: 3900, currency: "USD" } },
+    });
+    const [fare, offer] = sent;
+    expect(fare?.text).toContain(`Fare ${fareId} — British Airways — $4,200 (published $7,850, Sabre · 16 Sep)`);
+    expect(offer?.text.startsWith("New offer request R-3")).toBe(true);
+    expect(offer?.text).toContain(`Offer Your October in London — ${offerId} — $3,900`);
+    // Without them (an older job, another adapter's payload): nothing invented.
+    await crm.submitRequest({ ...body, intent: "fare" });
+    expect(sent[2]?.text).not.toContain("Fare ");
+    expect(sent[2]?.text).not.toContain("published");
+  });
+
+  it("a resend says it may be a second copy, under the same reference", async () => {
+    const sent: { subject: string; text: string }[] = [];
+    const email: EmailFacade = {
+      async sendOtp() {},
+      async sendOperatorRequest(input) {
+        sent.push({ subject: input.subject, text: input.text });
+      },
+    };
+    const crm = emailCrm({ email, operatorsEmail: "ops@buybusinessclass.com" });
+    const body = {
+      reference: "R-4",
+      trip_type: "oneway",
+      cabin_class: "Business Class",
+      client: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
+      flights: [{ from: "JFK", to: "LHR", date: "2027-10-12" }],
+      passengers: { adult: 1, child: 0, infant: 0 },
+      intent: "quote" as const,
+    };
+    await crm.submitRequest({ ...body, _attempt: 1 });
+    await crm.submitRequest({ ...body, _attempt: 2 });
+    expect(sent[0]?.subject).toBe("Quote request R-4 · JFK→LHR · Business Class");
+    expect(sent[0]?.text).not.toContain("ignore this copy");
+    expect(sent[1]?.subject).toBe("Resent (attempt 2) — may duplicate: Quote request R-4 · JFK→LHR · Business Class");
+    expect(sent[1]?.text).toContain("If R-4 already reached you, ignore this copy.");
   });
 
   it("writes the estimate the member saw and the member's note, only when there is one (ADR-IMPL-042)", async () => {

@@ -1,6 +1,8 @@
 import { z } from "zod";
-import { isMemberPhone } from "../../phone";
+import { parseMemberPhone } from "../../phone";
+import { isIanaZone } from "../../time-zone";
 import { Passengers } from "./requests";
+import { NOT_STORABLE, storable } from "./text";
 
 // -- Price -------------------------------------------------------------------
 
@@ -92,8 +94,17 @@ export type InboxVM = z.infer<typeof InboxVM>;
 
 // -- Account -----------------------------------------------------------------
 
+/** A password needs one number or symbol — the app's rule (apps/mobile/src/features/auth/schemas.ts), which can import
+ *  this. The API took 'aaaaaaaa' on a change and on a first set; Better Auth's reset route applies it too (g1). */
+export const PASSWORD_RULE = /[\d\W]/;
+export const PASSWORD_RULE_MESSAGE = "Use at least one number or symbol.";
+
 export const PasswordBody = z.object({
-  newPassword: z.string().min(8).max(128),
+  newPassword: z
+    .string()
+    .min(8)
+    .max(128)
+    .refine((p) => PASSWORD_RULE.test(p), { message: PASSWORD_RULE_MESSAGE }),
   /** Required when the member already has a credential. Path A (first set) omits it. */
   currentPassword: z.string().min(1).max(128).optional(),
 });
@@ -101,17 +112,40 @@ export type PasswordBody = z.infer<typeof PasswordBody>;
 
 // -- Profile -----------------------------------------------------------------
 
+/** Three letters, upper-cased — the request legs' rule (requests.ts). `.length(3)` let 'ßab' through (upper-cased to
+ *  'SSAB', refused by CHECK profile_iata_len → 500) and stored 'L H'. Whether the airport exists is catalog's to say,
+ *  and members (core) may not ask catalog (domain); Home answers home:null for a code it does not know. */
+const IATA = /^[A-Za-z]{3}$/;
+
+/** Text Postgres keeps as sent: `./text` (`storable`) — U+0000 and a surrogate without its pair are refused. */
+
 export const ProfilePatchBody = z
   .object({
-    displayName: z.string().min(1).max(120).optional(),
-    homeAirport: z.string().length(3).optional(),
-    timezone: z.string().min(1).max(80).optional(),
-    // Same E.164 rule as requests contact.phone — client sends E.164; refuse bare digit junk.
+    // Trimmed, never blank. 120 for CRM names; the request sheet's 2-80 is the app's rule.
+    displayName: z
+      .string()
+      .trim()
+      .min(1, { message: "Tell us your name." })
+      .max(120)
+      .refine(storable, NOT_STORABLE)
+      .optional(),
+    homeAirport: z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase().optional(),
+    // Read by Intl for quiet hours: a zone it cannot read stopped every broadcast campaign (ADR-IMPL-058).
+    timezone: z.string().min(1).max(80).refine(isIanaZone, { message: "Choose a time zone from the list." }).optional(),
+    // Stored in E.164 (default country US), so a saved phone always passes RequestBody.contact.phone (7-20): typed as
+    // '(212) 555-0101' it is '+12125550101'; an extension has no place in E.164 and is not kept.
     phone: z
       .string()
       .min(1)
       .max(30)
-      .refine(isMemberPhone, { message: "That phone number doesn't look right." })
+      .transform((raw, ctx) => {
+        const { e164 } = parseMemberPhone(raw);
+        if (!e164 || e164.length < 7 || e164.length > 20) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "That phone number doesn't look right." });
+          return z.NEVER;
+        }
+        return e164;
+      })
       .optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
@@ -119,13 +153,30 @@ export const ProfilePatchBody = z
   });
 export type ProfilePatchBody = z.infer<typeof ProfilePatchBody>;
 
-export const TravelPreferencesBody = z.object({
-  destinations: z.array(z.string().length(3)).max(3).optional(),
-  cabin: z.enum(["business", "first"]).optional(),
-  frequency: z.enum(["monthly", "quarterly", "rarely"]).optional(),
-  passengers: Passengers.optional(),
-  notes: z.string().max(500).optional(),
-});
+export const TravelPreferencesBody = z
+  .object({
+    // Airports as the home airport takes them, each once, in the order sent: ['lhr','LHR','cdg'] is ['LHR','CDG'].
+    destinations: z
+      .array(z.string().regex(IATA, { message: "Choose an airport from the list." }).toUpperCase())
+      .max(3)
+      .transform((codes) => [...new Set(codes)])
+      .optional(),
+    cabin: z.enum(["business", "first"]).optional(),
+    frequency: z.enum(["monthly", "quarterly", "rarely"]).optional(),
+    passengers: Passengers.optional(),
+    notes: z.string().max(500).refine(storable, NOT_STORABLE).optional(),
+  })
+  // On the body, not on the shared Passengers: RequestVM and ProfileVM parse with Passengers, and a stored row that
+  // breaks the rule must still read.
+  .superRefine((b, ctx) => {
+    if (b.passengers && b.passengers.infant > b.passengers.adult) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["passengers", "infant"],
+        message: "Each infant travels with an adult.",
+      });
+    }
+  });
 export type TravelPreferencesBody = z.infer<typeof TravelPreferencesBody>;
 
 // -- Notification preferences ------------------------------------------------
@@ -141,11 +192,17 @@ export type NotificationPreferencesBody = z.infer<typeof NotificationPreferences
 
 // -- Devices -----------------------------------------------------------------
 
+/** A push token is printable ASCII, at most 1 024 characters — so at most 1 024 bytes, well under the 2 704-byte btree
+ *  row of UNIQUE device_native_token. A 10 000-character token answered 500, and so did 1 024 characters outside ASCII
+ *  (three bytes each in UTF-8): max() counts UTF-16 units, the index counts bytes. APNs (64 hex) and FCM (~160: letters,
+ *  digits, `_:-`) tokens fit many times over. deviceId (UNIQUE with member_id) stays far under the row at 200. */
+const PUSH_TOKEN = /^[\x21-\x7E]+$/;
+
 export const DeviceBody = z.object({
-  deviceId: z.string().min(1).max(200),
+  deviceId: z.string().min(1).max(200).refine(storable, NOT_STORABLE),
   platform: z.enum(["ios", "android"]),
-  nativeToken: z.string().min(1),
-  expoToken: z.string().optional(),
-  appVersion: z.string().optional(),
+  nativeToken: z.string().min(1).max(1024).regex(PUSH_TOKEN, NOT_STORABLE),
+  expoToken: z.string().max(1024).refine(storable, NOT_STORABLE).optional(),
+  appVersion: z.string().max(32).refine(storable, NOT_STORABLE).optional(),
 });
 export type DeviceBody = z.infer<typeof DeviceBody>;
