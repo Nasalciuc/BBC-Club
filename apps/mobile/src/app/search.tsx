@@ -61,10 +61,10 @@ export default function SearchScreen() {
   const [homeAttempt, setHomeAttempt] = useState(0);
   const [popular, setPopular] = useState<AirportVM[] | null>(null);
 
-  // Home names the origin (`Popular from New York`) and the starting fares on the cards.
+  // Home names the origin (`Popular from New York`) and the starting fares on the cards. The loading state is set by
+  // the first mount (`useState`) and by `Try again` — never inside this effect (`react-hooks/set-state-in-effect`).
   useEffect(() => {
     let cancelled = false;
-    setHomeLoad({ state: "loading" });
     void (async () => {
       const res = await fetchHome();
       if (cancelled) return;
@@ -259,7 +259,10 @@ export default function SearchScreen() {
                   body={homeFailure.body}
                   link={{
                     label: "Try again",
-                    onPress: () => setHomeAttempt((n) => n + 1),
+                    onPress: () => {
+                      setHomeLoad({ state: "loading" });
+                      setHomeAttempt((n) => n + 1);
+                    },
                     testID: "search.home.error.retry",
                   }}
                 />
