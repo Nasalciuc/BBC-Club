@@ -12,7 +12,14 @@ describe("hitSlopFor — a drawn element smaller than 44 pt reaches it by its sl
     expect(hitSlopFor(29.65, 0, 0)).toEqual({ top: 0, bottom: 0 });
     const deleteRow = hitSlopFor(33.4, 8.8, 16);
     expect(deleteRow.top).toBeCloseTo(4.4, 5);
-    expect(deleteRow.bottom).toBeCloseTo(5.3, 5);
+    // Shortfall that the top cannot take (cap 4.4) goes to the bottom while its gap allows.
+    expect(deleteRow.bottom).toBeCloseTo(6.2, 5);
+  });
+
+  it("a side with no gap gives its shortfall to the other side when room remains", () => {
+    // 29 pt drawn, 30 pt above, nothing below: 15 pt of top slop fits → the target is 44 pt.
+    expect(hitSlopFor(29, 30, 0)).toEqual({ top: 15, bottom: 0 });
+    expect(hitSlopFor(29, 0, 30)).toEqual({ top: 0, bottom: 15 });
   });
 
   it("an element already 44 pt or taller reaches no further", () => {

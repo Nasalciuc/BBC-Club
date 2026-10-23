@@ -15,8 +15,19 @@ export function hitSlopFor(
   gapAbove: number = Number.POSITIVE_INFINITY,
   gapBelow: number = Number.POSITIVE_INFINITY,
 ): { top: number; bottom: number } {
-  const need = Math.max(0, (MIN_TARGET - height) / 2);
-  return { top: Math.min(need, Math.max(0, gapAbove) / 2), bottom: Math.min(need, Math.max(0, gapBelow) / 2) };
+  // Half the shortfall each side first; what one side cannot take (a neighbour too close) goes to the other while
+  // room remains, so a target with space on only one side still reaches 44 pt when that side can hold it.
+  const totalNeed = Math.max(0, MIN_TARGET - height);
+  const topCap = Math.max(0, gapAbove) / 2;
+  const bottomCap = Math.max(0, gapBelow) / 2;
+  let top = Math.min(totalNeed / 2, topCap);
+  let bottom = Math.min(totalNeed / 2, bottomCap);
+  let remaining = totalNeed - top - bottom;
+  const topExtra = Math.min(remaining, topCap - top);
+  top += topExtra;
+  remaining -= topExtra;
+  bottom += Math.min(remaining, bottomCap - bottom);
+  return { top, bottom };
 }
 
 export type Slop = number | { top?: number; bottom?: number; left?: number; right?: number };
