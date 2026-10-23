@@ -295,6 +295,7 @@ export default function ExploreScreen() {
         index={sheetIndex}
         onChange={setSheetIndex}
         snapPoints={snaps}
+        active={focused}
         footer={footer}
         accessory={mode === "all" ? <SheetDone onDone={() => setSheetIndex(STOP.rest)} /> : undefined}
         testID="explore.sheet"

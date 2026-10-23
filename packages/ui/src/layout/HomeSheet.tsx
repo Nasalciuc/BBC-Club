@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useRef } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import BottomSheet, {
   type BottomSheetBackgroundProps,
@@ -45,6 +45,11 @@ type Props = {
    * where the scrolling content starts). The screen places it; it does not scroll.
    */
   accessory?: ReactNode;
+  /**
+   * When the hosting screen is on screen. After a tab switch Android can leave the sheet closed while React's index
+   * stays at rest (parity: `explore.search` gone); becoming active snaps it back to `index`.
+   */
+  active?: boolean;
   testID?: string;
 };
 const AccessoryContext = createContext<ReactNode>(null);
@@ -114,7 +119,7 @@ function SheetHandle({ animatedIndex }: BottomSheetHandleProps) {
 
 /** Explore's sheet over the globe, at three stops (02, 13, 16). BottomSheetScrollView, never ScrollView — the content's
  *  gesture must not fight the sheet's. */
-export function HomeSheet({ index, onChange, snapPoints, children, footer, accessory, testID }: Props) {
+export function HomeSheet({ index, onChange, snapPoints, children, footer, accessory, active = true, testID }: Props) {
   const sheet = useRef<BottomSheet>(null);
   // The sheet is never closed: three stops and no pan down to close. The library says -1 when a snap lands on none
   // of them — its target moved while it ran, as the screen's height settles after its first layout — and passing
@@ -124,6 +129,11 @@ export function HomeSheet({ index, onChange, snapPoints, children, footer, acces
     if (next >= 0) onChange(next);
     else sheet.current?.snapToIndex(index);
   }
+  // A tab that was off-screen can leave the sheet closed while `index` stays at rest — controlled `index={0}` then
+  // changes nothing. Snap again when the host comes back.
+  useEffect(() => {
+    if (active) sheet.current?.snapToIndex(index);
+  }, [active, index]);
   return (
     <LookContext.Provider value={index >= 2 ? RAISED.all : RAISED.route}>
       <AccessoryContext.Provider value={accessory ?? null}>
