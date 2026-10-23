@@ -77,13 +77,15 @@ describe("ingest refuses what the offers table refuses, and unsafe values", () =
   });
 
   const later = (ms: number) => new Date(Date.now() + ms).toISOString();
+  // One timestamp for both fields: two `later()` calls can straddle a clock tick and stop being equal.
+  const in10Days = later(10 * DAY);
   const bad: Record<string, Record<string, unknown>> = {
     "price 0": { price: "0" },
     "price 0.00": { price: "0.00", publishedPrice: undefined },
     "published below price": { publishedPrice: "1500.00" },
     "validUntil past": { validUntil: later(-DAY) },
     "publishAt after validUntil": { publishAt: later(12 * DAY) },
-    "publishAt equal to validUntil": { publishAt: later(10 * DAY), validUntil: later(10 * DAY) },
+    "publishAt equal to validUntil": { publishAt: in10Days, validUntil: in10Days },
     "routeFrom = routeTo": { routeTo: "KEF" },
     "routeFrom = routeTo, other case": { routeTo: "kef" },
     "price beyond numeric(10,2)": { price: "12345678901", publishedPrice: undefined },

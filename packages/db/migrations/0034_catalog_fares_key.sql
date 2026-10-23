@@ -9,7 +9,43 @@
 
 -- The duplicates the old key let in: per route, cabin, carrier (none counting as one), valid_from and trip, the most
 -- recently updated row stays — the import's last word; the others go. A request that named a removed duplicate keeps
--- its own copy of the fare's price, carrier and published price (0029, 0030).
+-- its own copy of the fare's price, carrier and published price (0029, 0030), but its fare_id is first remapped to
+-- the row that stays: fare_id and replaces_fare_id are plain uuid columns with no foreign key, so nothing else
+-- would stop them pointing at a fare that no longer exists.
+WITH ranked AS (
+  SELECT id,
+         first_value(id) OVER (
+           PARTITION BY route_from, route_to, cabin, coalesce(carrier, ''), valid_from, trip
+           ORDER BY updated_at DESC, created_at DESC, id DESC
+         ) AS kept_id,
+         row_number() OVER (
+           PARTITION BY route_from, route_to, cabin, coalesce(carrier, ''), valid_from, trip
+           ORDER BY updated_at DESC, created_at DESC, id DESC
+         ) AS n
+  FROM catalog.fares
+)
+UPDATE requests.requests r
+SET fare_id = ranked.kept_id
+FROM ranked
+WHERE r.fare_id = ranked.id AND ranked.n > 1;
+
+WITH ranked AS (
+  SELECT id,
+         first_value(id) OVER (
+           PARTITION BY route_from, route_to, cabin, coalesce(carrier, ''), valid_from, trip
+           ORDER BY updated_at DESC, created_at DESC, id DESC
+         ) AS kept_id,
+         row_number() OVER (
+           PARTITION BY route_from, route_to, cabin, coalesce(carrier, ''), valid_from, trip
+           ORDER BY updated_at DESC, created_at DESC, id DESC
+         ) AS n
+  FROM catalog.fares
+)
+UPDATE requests.requests r
+SET replaces_fare_id = ranked.kept_id
+FROM ranked
+WHERE r.replaces_fare_id = ranked.id AND ranked.n > 1;
+
 -- destructive: removes only the stale copies of a carrier-less fare that the old key could not see as one fare
 DELETE FROM catalog.fares f
 USING (
