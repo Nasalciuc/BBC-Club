@@ -58,6 +58,18 @@ describe("which requests take the per-address send lock", () => {
     expect(isOtpSendRequest(post("/sign-in/email-otp", "{}"))).toBe(false);
     expect(isOtpSendRequest(new Request("http://localhost:8000/api/auth/email-otp/send-verification-otp"))).toBe(false);
   });
+
+  it("a form reset stays under the per-address lock (Better Auth reads form bodies too)", async () => {
+    expect(
+      await otpSendTarget(
+        new Request("http://localhost:8000/api/auth/email-otp/request-password-reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: "email=Alex%40Test.dev",
+        }),
+      ),
+    ).toEqual({ type: "forget-password", email: "alex@test.dev" });
+  });
 });
 
 describe("the per-address send lock", () => {
