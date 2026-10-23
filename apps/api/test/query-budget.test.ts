@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 import { storedPricingRules } from "../../../packages/modules/domain/catalog/src/pricing/rules";
 import { FIXTURE_RULES } from "../../../packages/modules/domain/catalog/tests/unit/pricing-rules.fixture";
+import { DEPART, RETURN } from "./helpers/days";
 
 /** Measured 28 Sep on the isolated fixture (not production). A new query in a loop must fail this. */
 const BUDGET: Record<string, number> = {
@@ -87,7 +88,7 @@ describe("query budget per route", () => {
     for (const to of ["CDG", "ZRH"]) {
       const more = await t.submitRequestAs(
         t.memberA,
-        t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to, date: "2027-10-12" }] }),
+        t.sampleRequestBody({ tripType: "oneway", legs: [{ from: "JFK", to, date: DEPART }] }),
         { idempotencyKey: crypto.randomUUID() },
       );
       expect(more.status).toBe(201);
@@ -110,8 +111,8 @@ describe("query budget per route", () => {
           estimateShown: true,
           priceAtRequest: undefined,
           legs: [
-            { from: "JFK", to: "ZRH", date: "2027-10-12" },
-            { from: "ZRH", to: "JFK", date: "2027-10-19" },
+            { from: "JFK", to: "ZRH", date: DEPART },
+            { from: "ZRH", to: "JFK", date: RETURN },
           ],
         }),
         { idempotencyKey: crypto.randomUUID() },
@@ -141,8 +142,8 @@ describe("query budget per route", () => {
           estimateShown: true,
           priceAtRequest: undefined,
           legs: [
-            { from: "JFK", to: "ZRH", date: "2027-10-12" },
-            { from: "ZRH", to: "JFK", date: "2027-10-19" },
+            { from: "JFK", to: "ZRH", date: DEPART },
+            { from: "ZRH", to: "JFK", date: RETURN },
           ],
         }),
         { idempotencyKey: crypto.randomUUID() },

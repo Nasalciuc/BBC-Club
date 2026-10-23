@@ -1,4 +1,4 @@
-import type { DestinationPinVM, HomePlaceVM } from "@bbc/shared/api/v1/fares";
+import type { DestinationPinVM, HomePlaceVM, HomeVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 
 import { countryName } from "../../lib/countries";
@@ -32,4 +32,16 @@ export function offerCardModel(
     savePercent: savingPercent(item.price),
     rating: item.rating != null ? item.rating.toFixed(1) : null,
   };
+}
+
+/**
+ * Every offer (16): what the raised sheet shows — the offers once Home has some; the cards' places while Home is on its
+ * way; `No offers yet.` only once Home answered without one, never before (ADR-IMPL-047).
+ */
+export function sheetExpandedState(
+  home: Pick<HomeVM, "sections"> | null,
+  homeLoading: boolean,
+): "loading" | "empty" | "offers" {
+  if (home && home.sections.some((s) => s.items.length > 0)) return "offers";
+  return !home && homeLoading ? "loading" : "empty";
 }

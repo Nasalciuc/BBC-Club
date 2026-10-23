@@ -47,6 +47,18 @@ describe("requestSummary — the trip at the top of the request sheet (06)", () 
     expect(summary.price).toEqual({ amount: "$4,200", percent: null, published: null, source: null });
   });
 
+  it("names no airline for a fare with none — never `Unknown`, as the server records none (carrierAtRequest)", () => {
+    const fare = { ...fixture.fares[0]!, carrier: { code: null, name: "Unknown", logoUrl: null } };
+    expect(requestSummary({ fare, from: "JFK", to: "LHR", cabin: "business" }).carrier).toBeNull();
+    // An airline named without a code is still an airline.
+    const named = { ...fixture.fares[0]!, carrier: { code: null, name: "La Compagnie", logoUrl: null } };
+    expect(requestSummary({ fare: named, from: "EWR", to: "ORY", cabin: "business" }).carrier).toEqual({
+      code: null,
+      name: "La Compagnie",
+      logoUrl: null,
+    });
+  });
+
   it("strikes the published fare only with its source on record", () => {
     const fare = { ...fixture.fares[0]!, price: { offer: 4200, published: 7850, currency: "USD" } };
     const summary = requestSummary({ fare, from: "JFK", to: "LHR", cabin: "business" });

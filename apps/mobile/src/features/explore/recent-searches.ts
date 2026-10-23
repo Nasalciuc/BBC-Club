@@ -17,7 +17,8 @@ export function rememberSearch(airport: AirportVM, dates: RecentDates | null = n
   return next;
 }
 
-export function rememberDates(code: string, dates: RecentDates): void {
+/** The dates chosen for a destination already searched; null — `Keep the dates flexible` forgets them. */
+export function rememberDates(code: string, dates: RecentDates | null): void {
   appStorage.set(RECENT_SEARCHES_KEY, JSON.stringify(withDates(readRecentSearches(), code, dates)));
 }
 

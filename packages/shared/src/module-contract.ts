@@ -64,6 +64,9 @@ export type ModulePlatform = {
     /** The whole cached row value, or null (no row, or unreadable — it never throws). For settings an operator keeps
      *  beside the module's flags (ADR-IMPL-037: `catalog.pricing_rules`); the caller validates the shape. */
     read: (key: string) => Promise<Record<string, unknown> | null>;
+    /** `read` without the fallback: the error that kept the row from being read, never a null in its place. For a
+     *  caller that must tell an unreadable row from a missing one (`catalog.pricing_rules`, ADR-IMPL-059). */
+    readStrict: (key: string) => Promise<Record<string, unknown> | null>;
   };
   events: {
     publish: (exec: unknown, input: PublishInput) => Promise<unknown>;

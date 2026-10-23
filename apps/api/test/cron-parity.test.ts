@@ -33,7 +33,8 @@ function jobsNamedAsExisting(): { module: string; job: string }[] {
 
 /** Named as existing by a MODULE.md another group corrects (F094): members' `purge-deleted` is g3's half. Remove the
  *  entry once members' MODULE.md no longer names it. */
-const KNOWN_GAPS = new Set(["core/members:purge-deleted"]);
+// MODULE.md jobs that are named but not built yet, as "<module>:<job>". None today.
+const KNOWN_GAPS = new Set<string>();
 
 describe("cron parity (ADR-IMPL-021)", () => {
   it("the committed crontab is exactly what the registered job specs generate", async () => {

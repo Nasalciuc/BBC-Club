@@ -1,9 +1,13 @@
 import { useReducer } from "react";
 import type { RequestBody, RequestLeg, Passengers } from "@bbc/shared/api/v1/requests";
 import type { FareVM } from "@bbc/shared/api/v1/fares";
+import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
 // The pure date helpers, not the component index: this module is imported by tests that run without React Native.
 import { addDays, todayLocal } from "@bbc/ui/calendar-logic";
+import { departYmd } from "@bbc/ui/flight-facts";
 import type { Profile } from "@/lib/api";
+
+import { REQUEST_NAME_MAX } from "./confirmation-logic";
 
 export type TripType = "round" | "oneway";
 export type RequestMode = "fare" | "offer" | "quote" | "alternative";
@@ -51,7 +55,12 @@ type Action =
       saved?: boolean;
     };
 
-function reducer(state: RequestDraft, action: Action): RequestDraft {
+/**
+ * The sheet's state. A failed send's notice (`This request didn't send.`) speaks of the draft as it was: every change
+ * to the draft takes it away, so it never stays beside a field's own error once its cause is fixed (DESIGN.md: states
+ * are separate frames, never stacked); a field's own error goes when that field changes.
+ */
+export function requestDraftReducer(state: RequestDraft, action: Action): RequestDraft {
   switch (action.type) {
     case "reset":
       return action.draft;
@@ -61,11 +70,12 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
         tripType: action.tripType,
         legs: legsForTripType(state.legs, action.tripType),
         returnError: null,
+        submitError: null,
       };
     case "setDepart": {
       const legs = [...state.legs];
       if (legs[0]) legs[0] = { ...legs[0], date: action.date };
-      return { ...state, legs };
+      return { ...state, legs, submitError: null };
     }
     case "setReturn": {
       const legs = [...state.legs];
@@ -73,18 +83,19 @@ function reducer(state: RequestDraft, action: Action): RequestDraft {
       else if (legs[0]) {
         legs.push({ from: legs[0].to, to: legs[0].from, date: action.date });
       }
-      return { ...state, legs, returnError: null };
+      return { ...state, legs, returnError: null, submitError: null };
     }
     case "setPassengers":
-      return { ...state, passengers: action.passengers };
+      return { ...state, passengers: action.passengers, submitError: null };
     case "setContact":
       return {
         ...state,
         contact: { ...state.contact, [action.field]: action.value },
         phoneError: action.field === "phone" ? null : state.phoneError,
+        submitError: null,
       };
     case "setNote":
-      return { ...state, note: action.note };
+      return { ...state, note: action.note, submitError: null };
     case "setPhoneError":
       return { ...state, phoneError: action.error };
     case "setReturnError":
@@ -132,8 +143,43 @@ export function defaultDates(today: string = todayLocal()): { depart: string; re
   return { depart, ret: addDays(depart, DEFAULT_TRIP_NIGHTS) };
 }
 
+/**
+ * The days a request starts from. A fare is one flight: it is asked for on the day it leaves (`departYmd`, as its page
+ * prints it), one way or round trip as the catalogue sells it — a round trip's return the one searched for when it
+ * comes after that day, else a week later, still the member's to change. A fare without a day of its own takes the
+ * searched day, else the suggestion, and still its trip. Without a fare: the dates chosen for this search, else the
+ * suggestion (two weeks out, a week long). A day before today is never proposed.
+ */
+function draftDates(
+  fare: Pick<FareVM, "departAt" | "departLocal" | "departDate" | "trip"> | null,
+  search: SearchContext | null,
+  today: string | undefined,
+): { depart: string; ret: string | null; tripType: TripType } {
+  const day = today ?? todayLocal();
+  const suggested = defaultDates(day);
+  // A day that has passed is no day to ask for (F006): a remembered search, or a fare that has already left.
+  const searched = search?.dates.depart && search.dates.depart >= day ? search.dates : null;
+  if (fare) {
+    const own = departYmd(fare);
+    const depart = (own && own >= day ? own : null) ?? searched?.depart ?? suggested.depart;
+    const trip = fare.trip ?? (searched && !searched.return ? "one_way" : "round_trip");
+    if (trip === "one_way") return { depart, ret: null, tripType: "oneway" };
+    const back = searched?.return && searched.return > depart ? searched.return : null;
+    return { depart, ret: back ?? addDays(depart, DEFAULT_TRIP_NIGHTS), tripType: "round" };
+  }
+  if (!searched?.depart) return { depart: suggested.depart, ret: suggested.ret, tripType: "round" };
+  return { depart: searched.depart, ret: searched.return, tripType: searched.return ? "round" : "oneway" };
+}
+
+/** An offer the member asks about (GET /v1/proposals/:id): requested as itself — its id, its route and cabin, its
+ *  price — never as a catalogue fare on the same route (F067). */
+export type RequestOffer = Pick<ProposalDetailVM, "id" | "route" | "cabin" | "price">;
+
 export function buildDraft(opts: {
   fare?: FareVM | null;
+  /** An offer's own page: the request carries `offerId` and the offer's price, and no `fareId` (RequestBody forbids
+   *  both). It wins over a fare passed beside it. */
+  offer?: RequestOffer | null;
   profile?: Profile | null;
   fromCode?: string;
   toCode?: string;
@@ -144,17 +190,17 @@ export function buildDraft(opts: {
   estimateShown?: boolean;
   today?: string;
 }): RequestDraft {
-  const from = opts.fare?.from.code ?? opts.fromCode ?? "JFK";
-  const to = opts.fare?.to.code ?? opts.toCode ?? "LHR";
-  // The fare's cabin wins; then the cabin chosen for this search; then the profile's usual cabin.
-  const cabin = opts.fare?.cabin ?? opts.search?.cabin ?? opts.profile?.preferences?.cabin ?? "business";
+  const offer = opts.offer ?? null;
+  // An offer is not a catalogue fare: neither its id, nor its price, nor its day stands for the offer.
+  const fare = offer ? null : (opts.fare ?? null);
+  const from = offer?.route.from ?? fare?.from.code ?? opts.fromCode ?? "JFK";
+  const to = offer?.route.to ?? fare?.to.code ?? opts.toCode ?? "LHR";
+  // The offer's or fare's cabin wins; then the cabin chosen for this search; then the profile's usual cabin.
+  const cabin = offer?.cabin ?? fare?.cabin ?? opts.search?.cabin ?? opts.profile?.preferences?.cabin ?? "business";
   const passengers: Passengers = opts.search?.passengers ??
     opts.profile?.preferences?.passengers ?? { adult: 1, child: 0, infant: 0 };
-  const mode: RequestMode = opts.mode ?? (opts.fare?.offerId ? "offer" : opts.fare ? "fare" : "quote");
-  const suggested = defaultDates(opts.today);
-  const depart = opts.search?.dates.depart ?? suggested.depart;
-  const ret = opts.search?.dates.depart ? opts.search.dates.return : suggested.ret;
-  const tripType: TripType = opts.search?.dates.depart && !opts.search.dates.return ? "oneway" : "round";
+  const mode: RequestMode = opts.mode ?? (offer || fare?.offerId ? "offer" : fare ? "fare" : "quote");
+  const { depart, ret, tripType } = draftDates(fare, opts.search ?? null, opts.today);
   // A one-way search chose no return: if the member turns it into a round trip, the return is theirs to pick.
   return {
     mode,
@@ -166,15 +212,17 @@ export function buildDraft(opts: {
     passengers,
     cabin,
     contact: {
-      name: opts.profile?.displayName ?? "",
+      // The profile takes 120 characters, a request 80: a longer name starts within the field's limit.
+      name: (opts.profile?.displayName ?? "").slice(0, REQUEST_NAME_MAX),
       phone: opts.profile?.phone ?? "",
       email: opts.profile?.email ?? "",
     },
     note: "",
-    fareId: mode === "fare" ? opts.fare?.id : undefined,
-    offerId: mode === "offer" ? (opts.fare?.offerId ?? undefined) : undefined,
+    fareId: mode === "fare" ? fare?.id : undefined,
+    offerId: mode === "offer" ? (offer?.id ?? fare?.offerId ?? undefined) : undefined,
     replacesFareId: mode === "alternative" ? opts.replacesFareId : undefined,
-    priceAtRequest: opts.fare?.price.offer,
+    // The price the member saw on the page: the offer's own, or the fare's.
+    priceAtRequest: offer?.price.offer ?? fare?.price.offer,
     estimateFor: mode === "quote" && opts.estimateShown === true ? { from, to, cabin } : null,
     phoneError: null,
     returnError: null,
@@ -227,6 +275,6 @@ export function draftToBody(draft: RequestDraft): RequestBody {
 }
 
 export function useRequestDraft(initial: RequestDraft) {
-  const [state, dispatch] = useReducer(reducer, initial);
+  const [state, dispatch] = useReducer(requestDraftReducer, initial);
   return { state, dispatch };
 }

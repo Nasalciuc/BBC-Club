@@ -24,6 +24,19 @@ describe("parseRecent", () => {
     expect(parseRecent(JSON.stringify(list))).toHaveLength(RECENT_MAX);
   });
 
+  it("forgets dates that have passed — the destination stays, searched with flexible dates (F006)", () => {
+    const stored = JSON.stringify([
+      { airport: LHR, dates: { depart: "2026-10-05", return: "2026-10-12" } },
+      { airport: CDG, dates: NOV },
+    ]);
+    expect(parseRecent(stored, "2026-10-20")).toEqual([
+      { airport: LHR, dates: null },
+      { airport: CDG, dates: NOV },
+    ]);
+    // Today is not past.
+    expect(parseRecent(stored, "2026-10-05")[0]?.dates).toEqual({ depart: "2026-10-05", return: "2026-10-12" });
+  });
+
   it("forgets what it cannot read", () => {
     expect(parseRecent(undefined)).toEqual([]);
     expect(parseRecent("{")).toEqual([]);
@@ -42,6 +55,11 @@ describe("withSearch", () => {
 });
 
 describe("withDates", () => {
+  it("`Keep the dates flexible` forgets the dates remembered for the destination", () => {
+    const list = withDates(withSearch([], LHR, NOV), "LHR", null);
+    expect(list[0]?.dates).toBeNull();
+  });
+
   it("dates a destination already in the list and leaves the others", () => {
     const list = withDates(withSearch(withSearch([], LHR, null), CDG, null), "LHR", NOV);
     expect(list.find((r) => r.airport.code === "LHR")?.dates).toEqual(NOV);

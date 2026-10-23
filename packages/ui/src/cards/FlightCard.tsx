@@ -112,7 +112,10 @@ export function FlightCard({ fare, layout, mark, onPress, testID }: Props) {
       : `${fare.from.code} to ${fare.to.code}`,
     facts,
     [price, basis].filter(Boolean).join(" "),
-  ].join(", ");
+  ]
+    // A fare that names no airline is read without one (the app passes no name), never with a stray comma first.
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <Pressable

@@ -6,6 +6,7 @@ import type { AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
 import {
   AirportRow,
   EmptyState,
+  NoticeCard,
   PopularCard,
   RecentRow,
   SearchField,
@@ -19,7 +20,15 @@ import {
 } from "@bbc/ui";
 
 import { ScreenStatusBar } from "@/components/screen-status-bar";
-import { airportLine, airportName, popularLabel, popularRows } from "@/features/explore/discovery-logic";
+import {
+  type HomeLoad,
+  airportLine,
+  airportName,
+  popularLabel,
+  popularRows,
+  popularState,
+  withoutHome,
+} from "@/features/explore/discovery-logic";
 import { destinationHref } from "@/features/explore/destination-route";
 import { clearRecentSearches, readRecentSearches, rememberSearch } from "@/features/explore/recent-searches";
 import type { RecentDates } from "@/features/explore/recent-search-logic";
@@ -29,7 +38,7 @@ import { cardPicture } from "@/features/places/place-photo-logic";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { airportSearchState } from "@/lib/airport-search-state";
 import { fetchAirports, fetchHome, fetchPopular } from "@/lib/api";
-import { stateCopy } from "@/lib/error-context";
+import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { formatPrice } from "@/lib/format";
 
 /**
@@ -44,21 +53,34 @@ export default function SearchScreen() {
   const [result, setResult] = useState(() => airportSearchState<AirportVM>("idle"));
   // `Try again` runs the search effect once more; an answer that comes after the member typed on is dropped.
   const [attempt, setAttempt] = useState(0);
-  const [recent, setRecent] = useState(() => readRecentSearches());
+  const [remembered, setRemembered] = useState(() => readRecentSearches());
   const [home, setHome] = useState<HomeVM | null>(null);
+  // Loading, answered, or failed with its code (offline or not): a failed Home shows its message with `Try again`,
+  // never skeletons for ever (F011).
+  const [homeLoad, setHomeLoad] = useState<{ state: HomeLoad; code?: string }>({ state: "loading" });
+  const [homeAttempt, setHomeAttempt] = useState(0);
   const [popular, setPopular] = useState<AirportVM[] | null>(null);
 
-  // Home names the origin (`Popular from New York`) and the starting fares on the cards.
+  // Home names the origin (`Popular from New York`) and the starting fares on the cards. The loading state is set by
+  // the first mount (`useState`) and by `Try again` — never inside this effect (`react-hooks/set-state-in-effect`).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       const res = await fetchHome();
-      if (!cancelled && res.ok && !res.data.notModified) setHome(res.data.home);
-    })();
+      if (cancelled) return;
+      if (!res.ok) {
+        setHomeLoad({ state: "failed", code: res.code });
+        return;
+      }
+      if (!res.data.notModified) setHome(res.data.home);
+      setHomeLoad({ state: "ok" });
+    })().catch(() => {
+      if (!cancelled) setHomeLoad({ state: "failed" });
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [homeAttempt]);
 
   const from = home?.home ?? null;
   const fromCode = from?.code;
@@ -103,8 +125,15 @@ export default function SearchScreen() {
     lat: d.lat,
     lng: d.lng,
   }));
+  // The member's own airport is where the trip starts, never a destination (F013): left out of the airports found
+  // and of the recent searches.
+  const recent = withoutHome(remembered, from);
+  const airportHits = withoutHome(result.airports, from);
+  const airportPhase = result.phase === "results" && airportHits.length === 0 ? "empty" : result.phase;
   const recentAirports = recent.map((r) => r.airport);
   const shownPopular = popularRows(popular ?? suggestions, from);
+  const before = popularState({ popular: shownPopular.length, recent: recent.length, load: homeLoad.state });
+  const homeFailure = readFailureCopy(homeLoad.code, "explore");
   const photoFor = usePlacePhotos([...shownPopular, ...recentAirports].map((a) => a.code));
   const priceOf = (code: string) => {
     const d = home?.destinations.find((x) => x.code === code);
@@ -114,7 +143,8 @@ export default function SearchScreen() {
   function choose(airport: AirportVM, dates: RecentDates | null = null) {
     Keyboard.dismiss();
     rememberSearch(airport, dates);
-    router.replace(destinationHref(airport, dates));
+    // The origin rides along: the destination page never loads all of Home to learn it (F104).
+    router.replace(destinationHref(airport, dates, from));
   }
 
   return (
@@ -141,7 +171,7 @@ export default function SearchScreen() {
         keyboardDismissMode="on-drag"
       >
         {typing ? (
-          result.phase === "empty" ? (
+          airportPhase === "empty" ? (
             <View style={styles.message}>
               <EmptyState
                 testID="search.empty"
@@ -154,7 +184,7 @@ export default function SearchScreen() {
                 primaryFill={false}
               />
             </View>
-          ) : result.phase === "error" ? (
+          ) : airportPhase === "error" ? (
             <View style={styles.message}>
               <StateMessage
                 testID="search.error"
@@ -174,7 +204,7 @@ export default function SearchScreen() {
                     <Skeleton height={55} radius="sm" />
                   </>
                 ) : (
-                  result.airports.map((a) => (
+                  airportHits.map((a) => (
                     <AirportRow
                       key={a.code}
                       testID={`explore.airport.${a.code}`}
@@ -190,7 +220,7 @@ export default function SearchScreen() {
           )
         ) : (
           <>
-            {shownPopular.length > 0 ? (
+            {before === "cards" ? (
               <View style={styles.popular}>
                 <SectionHeader title={from ? popularLabel(from) : "Popular"} size="titleSm" />
                 <View style={styles.cards}>
@@ -210,7 +240,7 @@ export default function SearchScreen() {
                   ))}
                 </View>
               </View>
-            ) : home === null ? (
+            ) : before === "skeleton" ? (
               <View style={styles.popular}>
                 <Skeleton width={220} height={22} radius="pill" />
                 <View style={styles.cards}>
@@ -218,9 +248,28 @@ export default function SearchScreen() {
                   <Skeleton height={166} radius="sm" />
                 </View>
               </View>
+            ) : before === "error" ? (
+              // Home did not load: its message in the cards' place, and `Try again` asks once more. Typing and the
+              // recent searches still work.
+              <View style={styles.popular}>
+                <NoticeCard
+                  testID="search.home.error"
+                  tone={homeLoad.code === "OFFLINE" ? "offline" : "error"}
+                  title={homeFailure.title}
+                  body={homeFailure.body}
+                  link={{
+                    label: "Try again",
+                    onPress: () => {
+                      setHomeLoad({ state: "loading" });
+                      setHomeAttempt((n) => n + 1);
+                    },
+                    testID: "search.home.error.retry",
+                  }}
+                />
+              </View>
             ) : null}
             {recent.length > 0 ? (
-              <View style={shownPopular.length > 0 || home === null ? styles.recent : styles.popular}>
+              <View style={before === "hint" || before === "none" ? styles.popular : styles.recent}>
                 <SectionHeader
                   title="Recent searches"
                   size="titleSm"
@@ -230,7 +279,7 @@ export default function SearchScreen() {
                     testID: "search.recent.clear",
                     onPress: () => {
                       clearRecentSearches();
-                      setRecent([]);
+                      setRemembered([]);
                     },
                   }}
                 />
@@ -252,7 +301,7 @@ export default function SearchScreen() {
                 </View>
               </View>
             ) : null}
-            {shownPopular.length === 0 && recent.length === 0 && home !== null ? (
+            {before === "hint" || before === "error" ? (
               <Text style={styles.hint}>Type a city or an airport code.</Text>
             ) : null}
           </>

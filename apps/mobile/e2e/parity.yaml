@@ -31,6 +31,8 @@ appId: com.buybusinessclass.club
 - takeScreenshot: 233-4069
 - tapOn: { id: "tab.explore" }
 - assertVisible: { id: "explore.root" }
+# After other tabs, wait for the sheet to snap back open (HomeSheet `active`) before tapping search.
+- assertVisible: { id: "explore.search" }
 - tapOn: { id: "explore.search" }
 - assertVisible: { id: "explore.airportQuery" }
 - takeScreenshot: 104-838

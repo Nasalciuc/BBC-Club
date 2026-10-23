@@ -8,6 +8,7 @@ import { testAuth } from "./test-auth";
 import type { IdentityFacade } from "@bbc/identity";
 import type { IdentityModuleOptions } from "@bbc/identity/module";
 import type { EngagementFacade } from "@bbc/engagement";
+import { DEPART, RETURN } from "./days";
 
 /** A travel day `n` days from today (YYYY-MM-DD): fixture legs dated from the clock, never a fixed calendar day
  *  the server will one day call past (`earliestLegDay`). */
@@ -311,8 +312,8 @@ export async function testApp(
         tripType: "round",
         cabin: "business",
         legs: [
-          { from: "JFK", to: "LHR", date: dayFromNow(60) },
-          { from: "LHR", to: "JFK", date: dayFromNow(67) },
+          { from: "JFK", to: "LHR", date: DEPART },
+          { from: "LHR", to: "JFK", date: RETURN },
         ],
         passengers: { adult: 1, child: 0, infant: 0 },
         contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },

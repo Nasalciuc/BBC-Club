@@ -2,6 +2,7 @@
  *  by the server alone (SubmittedRequestBody): a request kept on the phone must stay readable after its day. */
 import { describe, expect, it } from "bun:test";
 import { RequestBody, SubmittedRequestBody, earliestLegDay } from "@bbc/shared/api/v1/requests";
+import { DEPART } from "../days";
 
 /** A travel day from the clock: `SubmittedRequestBody` refuses a past day, so the fixture never names one. */
 const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
@@ -29,7 +30,9 @@ describe("a past day", () => {
     const refused = SubmittedRequestBody.safeParse(past);
     expect(refused.success).toBe(false);
     if (!refused.success) expect(refused.error.issues.map((i) => i.path.join("."))).toEqual(["legs.0.date"]);
-    expect(SubmittedRequestBody.safeParse(base).success).toBe(true);
+    expect(SubmittedRequestBody.safeParse({ ...base, legs: [{ from: "JFK", to: "LHR", date: DEPART }] }).success).toBe(
+      true,
+    );
   });
 });
 

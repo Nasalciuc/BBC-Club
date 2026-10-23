@@ -22,7 +22,7 @@ import { DestinationDetails } from "@/features/explore/DestinationDetails";
 import { globeCentreY, sheetSnaps, sheetTop } from "@/features/explore/explore-layout";
 import { firstName } from "@/features/explore/greeting";
 import { GreetingHeader } from "@/features/explore/GreetingHeader";
-import { cheapestFareOnRoute, fareHref } from "@/features/explore/open-offer";
+import { createTapGuard, fareHref, openOffer } from "@/features/explore/open-offer";
 import { rememberDates, rememberSearch } from "@/features/explore/recent-searches";
 import {
   type CabinSheetHandle,
@@ -41,7 +41,7 @@ import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
-import { fetchProfile, type Profile } from "@/lib/api";
+import { useProfile } from "@/features/profile/useProfile";
 import { monogram } from "@/lib/monogram";
 
 /** The sheet's stops: at rest (02), a chosen route (13), every offer (16). */
@@ -77,18 +77,13 @@ export default function ExploreScreen() {
   // opens raised, one already open beneath raises its sheet.
   const { offers: offersParam } = useLocalSearchParams<{ offers?: string }>();
   const [sheetIndex, setSheetIndex] = useState<number>(() => (offersParam === "all" ? STOP.all : STOP.rest));
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // The one profile every screen shares (F104), asked again each time Explore comes into view: the name, the portrait
+  // and the usual cabin may have changed on Profile.
+  const profile = useProfile();
   const { offline, refresh } = useOffline();
   const { home, homeLoading, homeError, defaultFrom, retryHome } = useExploreHome();
   const { state, dispatch, retry } = useSearch({ defaultFrom });
   const { pins, homeCoord, pinToAirport } = useDestinations(home, state.to);
-
-  useEffect(() => {
-    void (async () => {
-      const result = await fetchProfile();
-      if (result.ok) setProfile(result.data);
-    })();
-  }, []);
 
   // The member's usual cabin and travelers (Profile → Edit profile) are where a search starts, until a chip is touched.
   const usualCabin = profile?.preferences.cabin;
@@ -173,24 +168,16 @@ export default function ExploreScreen() {
     });
   }
 
-  async function openOffer(card: ProposalCardVM) {
-    const fare = await cheapestFareOnRoute(card);
-    if (fare) {
-      router.push(fareHref(fare.id, card.id));
-      return;
-    }
-    requestRef.current?.present({
-      fare: null,
-      profile,
-      fromCode: card.route.from,
-      toCode: card.route.to,
-      // The cities by name where Home knows them: the sheet's title and the confirmation's `London is next.`
-      fromCity: card.route.from === state.from?.code ? state.from.city : undefined,
-      city: home?.destinations.find((d) => d.code === card.route.to)?.city,
-      search,
-      confirmation: "offer",
-      photo: card.mediaUrl,
-    });
+  // An offer card opens the offer's own page at once (F067): its price, and the request made there, are the offer's —
+  // never the cheapest catalogue fare on its route. One navigation at a time (F101): a second tap before Explore is
+  // back in view is ignored.
+  const [tapGuard] = useState(() => createTapGuard());
+  useEffect(() => {
+    if (focused) tapGuard.release();
+  }, [focused]);
+
+  function onOpenOffer(card: ProposalCardVM) {
+    openOffer(router, card, tapGuard);
   }
 
   function retrySearch() {
@@ -308,6 +295,7 @@ export default function ExploreScreen() {
         index={sheetIndex}
         onChange={setSheetIndex}
         snapPoints={snaps}
+        active={focused}
         footer={footer}
         accessory={mode === "all" ? <SheetDone onDone={() => setSheetIndex(STOP.rest)} /> : undefined}
         testID="explore.sheet"
@@ -370,7 +358,8 @@ export default function ExploreScreen() {
         ) : mode === "all" ? (
           <SheetExpanded
             home={home}
-            onOpenOffer={(card) => void openOffer(card)}
+            homeLoading={homeLoading}
+            onOpenOffer={onOpenOffer}
             onSearch={() => router.push("/search" as Href)}
           />
         ) : (
@@ -386,7 +375,7 @@ export default function ExploreScreen() {
             <SheetRest
               home={home}
               homeLoading={homeLoading}
-              onOpenOffer={(card) => void openOffer(card)}
+              onOpenOffer={onOpenOffer}
               onSeeAll={() => setSheetIndex(STOP.all)}
               onSearch={() => router.push("/search" as Href)}
             />
@@ -396,7 +385,11 @@ export default function ExploreScreen() {
       <RequestSheet ref={requestRef} />
       <DatesPage
         ref={datesRef}
-        onFlexible={() => dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } })}
+        onFlexible={() => {
+          dispatch({ type: "setDates", dates: { depart: null, return: null, flexible: true } });
+          // Flexible: the dates remembered for the destination are forgotten, so Search and the globe bring none back.
+          if (state.to) rememberDates(state.to.code, null);
+        }}
         onUse={(sel) => {
           const dates = {
             depart: sel.depart,

@@ -38,7 +38,8 @@ export type IdentityDeps = {
 export type Metrics = { inc(name: string, labels?: Record<string, string>, by?: number): void };
 
 const TEN_MINUTES = 60 * 10;
-/** OTP lifetime and send window — one live code per IP; aligned with verify UI countdown. */
+/** OTP lifetime and the per-IP send window (10 sends / 15 min); a second send to one address inside 30 s mails nothing
+ *  (`auth.otp_cooldown`, the app's Resend countdown). */
 const FIFTEEN_MINUTES = 60 * 15;
 
 /** What the send callback rethrows: the failure's facts only. Postmark's own message can name the recipient, and Better

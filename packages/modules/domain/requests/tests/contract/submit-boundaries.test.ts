@@ -7,6 +7,7 @@ import type { Executor } from "@bbc/db";
 import { createPlatform } from "@bbc/platform";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { submit, type SubmitActor } from "../../src/application/submit";
+import { DEPART, RETURN } from "../days";
 
 let iso: IsolatedDb;
 let db: Executor;
@@ -23,7 +24,7 @@ const actor: SubmitActor = { memberId: "mem-boundaries", source: "ios", appVersi
 const body = {
   tripType: "oneway",
   cabin: "business",
-  legs: [{ from: "JFK", to: "LHR", date: "2027-10-12" }],
+  legs: [{ from: "JFK", to: "LHR", date: DEPART }],
   passengers: { adult: 1, child: 0, infant: 0 },
   contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
 };
@@ -91,8 +92,8 @@ describe("submit — transaction boundaries", () => {
       ...body,
       tripType: "round",
       legs: [
-        { from: "JFK", to: "ZRH", date: "2027-10-12" },
-        { from: "ZRH", to: "JFK", date: "2027-10-19" },
+        { from: "JFK", to: "ZRH", date: DEPART },
+        { from: "ZRH", to: "JFK", date: RETURN },
       ],
       estimateShown: true,
       // Not in RequestBody: dropped by the parse, never stored.

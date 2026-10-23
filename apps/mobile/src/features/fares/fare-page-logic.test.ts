@@ -11,11 +11,15 @@ import {
   closedFareLines,
   comparisonLine,
   departDayLabel,
+  errorFrameActions,
   factsLine,
+  fareDates,
   longDay,
   savings,
   shareFareText,
 } from "./fare-page-logic";
+import { knownCarrier } from "./known-carrier";
+import { datesShortLabel } from "../explore/travel-preferences";
 
 const ba = fixture.fares[0]!;
 
@@ -112,6 +116,18 @@ describe("a closed fare (Figma 135:848)", () => {
   });
 });
 
+describe("the fare page's error frame (F114)", () => {
+  it("a fare that does not exist offers the way back — asking again cannot bring it", () => {
+    expect(errorFrameActions({ status: 404 })).toEqual(["back"]);
+  });
+
+  it("anything else may pass: Try again", () => {
+    expect(errorFrameActions({ status: 500 })).toEqual(["retry"]);
+    expect(errorFrameActions({ status: 0 })).toEqual(["retry"]);
+    expect(errorFrameActions({})).toEqual(["retry"]);
+  });
+});
+
 describe("About this fare, 3.0 (20)", () => {
   const search = { depart: "2026-11-12", return: "2026-11-19", passengers: { adult: 1, child: 0, infant: 0 } };
 
@@ -144,6 +160,58 @@ describe("About this fare, 3.0 (20)", () => {
     expect(longDay(null)).toBeNull();
   });
 
+  it("names no airline for a fare that has none — never `with Unknown`", () => {
+    const unknown = { ...ba, carrier: { code: null, name: "Unknown", logoUrl: null } };
+    const [, second] = aboutFareLines({ ...unknown, trip: "one_way", ...search });
+    expect(second).toBe(
+      "Travel in Business, with a spacious seat and a more comfortable journey. Your specialist confirms the cabin details and arranges the booking by phone.",
+    );
+    expect(aboutFareNote(unknown)).toBe(
+      "The published fare was recorded on 16 September. Your specialist will confirm current availability and fare conditions before booking.",
+    );
+    expect(knownCarrier(unknown.carrier)).toBeNull();
+    expect(knownCarrier({ code: null, name: "  " })).toBeNull();
+    expect(knownCarrier(ba.carrier)).toEqual(ba.carrier);
+    // A code alone names the airline even when the catalogue had no name for it.
+    expect(knownCarrier({ code: "BA", name: "Unknown", logoUrl: null })).toEqual({
+      code: "BA",
+      name: "Unknown",
+      logoUrl: null,
+    });
+  });
+
+  it("prints the fare's own day, never a searched range over it, and no range for a one-way fare (F007)", () => {
+    const nov21 = { ...ba, departDate: "2026-11-21", trip: "one_way" as const };
+    const dates = fareDates(nov21, { depart: "2026-11-12", return: "2026-11-19" });
+    expect(dates).toEqual({ depart: "2026-11-21", return: null });
+    expect(datesShortLabel(dates)).toBe("Nov 21");
+    const [first] = aboutFareLines({ ...nov21, ...dates, passengers: null });
+    expect(first).toBe(
+      "This indicative one-way fare is for one adult flying from New York (JFK) to London (LHR), November 21, 2026. Your specialist confirms availability and the final fare.",
+    );
+    // A round-trip fare keeps the searched return after its own day; one before it is not a return.
+    const round = { ...nov21, trip: "round_trip" as const };
+    expect(fareDates(round, { depart: "2026-11-20", return: "2026-11-28" })).toEqual({
+      depart: "2026-11-21",
+      return: "2026-11-28",
+    });
+    expect(fareDates(round, { depart: "2026-11-12", return: "2026-11-19" })).toEqual({
+      depart: "2026-11-21",
+      return: null,
+    });
+    // A fare without a day of its own shows the member's searched dates; a one-way one, the day alone.
+    const undated = { ...ba, departAt: null, departLocal: null, departDate: null };
+    expect(fareDates({ ...undated, trip: "round_trip" }, { depart: "2026-11-12", return: "2026-11-19" })).toEqual({
+      depart: "2026-11-12",
+      return: "2026-11-19",
+    });
+    expect(fareDates({ ...undated, trip: "one_way" }, { depart: "2026-11-12", return: "2026-11-19" })).toEqual({
+      depart: "2026-11-12",
+      return: null,
+    });
+    expect(fareDates(undated, { depart: null, return: null })).toEqual({ depart: null, return: null });
+  });
+
   it("writes the days as 20 does, across a month and a year too", () => {
     expect(longDays("2026-11-12", "2026-11-19")).toBe("November 12–19, 2026");
     expect(longDays("2026-10-28", "2026-11-02")).toBe("October 28 – November 2, 2026");
@@ -161,9 +229,17 @@ describe("About this fare, 3.0 (20)", () => {
     });
   });
 
-  it("shares the route, the cabin, the fare one way and its link", () => {
-    expect(shareFareText(ba)).toBe(
+  it("shares the route, the cabin, the fare with what it buys as the catalogue says, and its link", () => {
+    expect(shareFareText({ ...ba, trip: "one_way" })).toBe(
       "New York to London in Business, $4,200 one way, with BuyBusinessClass Club: bbcclub://fare/00000000-0000-4000-8000-00000000fa01",
+    );
+    // ADR-IMPL-056: a round-trip fare is never shared as one way.
+    expect(shareFareText({ ...ba, price: { offer: 3900, currency: "USD" }, trip: "round_trip" })).toBe(
+      "New York to London in Business, $3,900 round trip, with BuyBusinessClass Club: bbcclub://fare/00000000-0000-4000-8000-00000000fa01",
+    );
+    // An older server names no trip: the price is not described as more than is known.
+    expect(shareFareText({ ...ba, trip: undefined })).toBe(
+      "New York to London in Business, $4,200, with BuyBusinessClass Club: bbcclub://fare/00000000-0000-4000-8000-00000000fa01",
     );
   });
 });

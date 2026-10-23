@@ -58,17 +58,18 @@ describe("notifications fan-out + dispatch", () => {
       WHERE member_id = ${t.memberB.id} AND offer_id = ${offerId}`);
     expect(bRows.length).toBe(0);
 
+    // Quiet hours (22:00–08:00 in the member's zone) can push scheduled_for forward; the inbox hides
+    // pending rows until then. Force due now so both the inbox check and dispatch see the row.
+    await t.db.execute(sql`
+      UPDATE notifications.notifications
+      SET scheduled_for = now() - interval '1 second'
+      WHERE offer_id = ${offerId} AND member_id = ${t.memberA.id}`);
+
     // Inbox shows the row before/after dispatch.
     const inbox = await t.app.request("/v1/inbox", { headers: { Cookie: t.memberA.cookie } });
     expect(inbox.status).toBe(200);
     const inboxBody = (await inbox.json()) as { items: { offerId?: string; title: string }[] };
     expect(inboxBody.items.some((i) => i.offerId === offerId)).toBe(true);
-
-    // Force due now in case quiet hours pushed scheduled_for forward.
-    await t.db.execute(sql`
-      UPDATE notifications.notifications
-      SET scheduled_for = now() - interval '1 second'
-      WHERE offer_id = ${offerId} AND member_id = ${t.memberA.id}`);
 
     const before = t.push.sent.length;
     await runJob(t, "dispatch");

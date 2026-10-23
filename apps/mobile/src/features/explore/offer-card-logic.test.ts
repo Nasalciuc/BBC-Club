@@ -2,7 +2,29 @@ import { describe, expect, it } from "bun:test";
 import type { DestinationPinVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 
-import { offerCardModel } from "./offer-card-logic";
+import { offerCardModel, sheetExpandedState } from "./offer-card-logic";
+
+describe("every offer (16) while Home loads — never 'No offers yet.' before it answered (ADR-IMPL-047)", () => {
+  const card = { id: "x" } as unknown as ProposalCardVM;
+
+  it("Home on its way: the cards' places, not the empty message", () => {
+    expect(sheetExpandedState(null, true)).toBe("loading");
+  });
+
+  it("Home answered with no offer: the empty message; with offers: the offers", () => {
+    expect(sheetExpandedState({ sections: [] }, false)).toBe("empty");
+    expect(sheetExpandedState({ sections: [{ key: "inspire", title: "Offers to inspire", items: [] }] }, false)).toBe(
+      "empty",
+    );
+    expect(sheetExpandedState({ sections: [{ key: "europe", title: "To Europe", items: [card] }] }, false)).toBe(
+      "offers",
+    );
+    // A Home reloading over offers already shown keeps them.
+    expect(
+      sheetExpandedState({ sections: [{ key: "inspire", title: "Offers to inspire", items: [card] }] }, true),
+    ).toBe("offers");
+  });
+});
 
 const PARIS: DestinationPinVM = {
   code: "CDG",

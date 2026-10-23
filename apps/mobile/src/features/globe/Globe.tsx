@@ -15,6 +15,7 @@ import { GLOBE_SPEC, GlobeFallback, routeView, tokens } from "@bbc/ui";
 
 import { env } from "@/lib/env";
 
+import { type TileProbe, satelliteTileProbe, shouldShowMapbox } from "./mapbox-ready-logic";
 import type { MapboxGlobeProps } from "./MapboxGlobe";
 
 export const MAPBOX_READY =
@@ -54,6 +55,10 @@ export function Globe(props: Props) {
   const [mapFailed, setMapFailed] = useState(false);
   // Mapbox has loaded and drawn: fade it in over the drawn globe, then let the drawn one go.
   const [mapReady, setMapReady] = useState(false);
+  // …and only once one tile of its satellite imagery has come back as an image (F107): a style without imagery draws
+  // a black sphere, and Mapbox 10.3.7 on Android never says so.
+  const [tileProbe, setTileProbe] = useState<TileProbe>("pending");
+  const show = shouldShowMapbox({ styleLoaded: mapReady, tileProbe });
   const [drawnGone, setDrawnGone] = useState(false);
   const reducedMotion = useReducedMotion();
   const fade = useSharedValue(0);
@@ -70,13 +75,30 @@ export function Globe(props: Props) {
     frameTop.value = withTiming(frameCentre - FRAME / 2, { duration: reducedMotion ? 0 : tokens.motion.panel * 2 });
   }, [frameCentre, reducedMotion, frameTop]);
 
+  // One tile of the imagery, asked once per session; without it the drawn globe stays.
   useEffect(() => {
-    if (!mapReady) return;
+    if (!MAPBOX_READY) return;
+    let cancelled = false;
+    void satelliteTileProbe(env.EXPO_PUBLIC_MAPBOX_TOKEN).then((probe) => {
+      if (cancelled) return;
+      setTileProbe(probe);
+      if (probe === "failed") {
+        console.warn("Mapbox imagery did not load; drawing GlobeFallback instead.");
+        setMapFailed(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!show) return;
     const duration = reducedMotion ? 0 : FADE_MS;
-    fade.value = withTiming(1, { duration });
+    fade.set(withTiming(1, { duration }));
     const t = setTimeout(() => setDrawnGone(true), duration + 50);
     return () => clearTimeout(t);
-  }, [mapReady, reducedMotion, fade]);
+  }, [show, reducedMotion, fade]);
 
   const left = (width - FRAME) / 2;
   const top = frameCentre - FRAME / 2;
@@ -111,7 +133,7 @@ export function Globe(props: Props) {
       <DrawnGlobeOnError onFail={() => setMapFailed(true)}>
         <Suspense fallback={null}>
           {/* Invisible until loaded, and untouchable: the drawn globe's pins take the taps meanwhile. */}
-          <Animated.View style={[StyleSheet.absoluteFill, fadeStyle]} pointerEvents={mapReady ? "auto" : "none"}>
+          <Animated.View style={[StyleSheet.absoluteFill, fadeStyle]} pointerEvents={show ? "auto" : "none"}>
             <MapboxGlobe
               {...mapProps}
               pins={pins}
