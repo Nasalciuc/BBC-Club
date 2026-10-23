@@ -1,38 +1,44 @@
 import { authClient, waitForSessionCookie } from "./client";
-import { authMessage, CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
+import { CONSTANT_OTP_SENT, CONSTANT_RESET_SENT } from "@bbc/shared/auth-messages";
 import { resetUnreadQuotes } from "@/features/requests/unread-quotes-store";
-import { clearSaved } from "@/features/saved/saved";
 import { fetchPasswordStatus, postAccountPassword } from "@/lib/api";
 import { unregisterPushDevice } from "@/lib/push";
 import { clearQueue } from "@/lib/queue";
-import { appStorage, ONBOARDED_KEY, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
+import { appStorage, PENDING_PASSWORD_KEY } from "@/lib/storage-keys";
 import { NetworkError, networkFail, withAuthTimeout } from "@/lib/timeout";
 import type { AuthPurpose } from "@/lib/auth-purpose";
+import {
+  afterResetSignIn,
+  clearOnExit,
+  fail,
+  refuseEmptyPassword,
+  type ExitKind,
+  type ExitStores,
+  type FlowResult,
+} from "./flows-logic";
+import { adoptLocalData, clearMemberData, forgetLocalOwner } from "./local-owner";
 import { otpSendResult } from "./otp-send-logic";
 
-/** Unregister push, drop pending queue, the Requests dot's number and what was saved, clear onboarded — then auth
- *  ends. */
-async function clearLocalSession(): Promise<void> {
+const PHONE_STORES: ExitStores = {
+  clearQueue,
+  resetUnreadQuotes,
+  clearMemberData,
+  forgetLocalOwner,
+  clearPendingPassword: () => appStorage.remove(PENDING_PASSWORD_KEY),
+};
+
+/** Unregister push, then clear what this kind of end clears (flows-logic.ts exitPlan): on the member's own Sign out or
+ *  Delete account the queue, the Requests dot's number and their data on the phone (saved items, recent searches,
+ *  onboarded — local-owner.ts) with its owner; when the server ended the session, the dot and a pending password only. */
+async function clearLocalSession(kind: ExitKind): Promise<void> {
   await unregisterPushDevice().catch(() => undefined);
-  clearQueue();
-  resetUnreadQuotes();
-  clearSaved();
-  appStorage.remove(ONBOARDED_KEY);
-  appStorage.remove(PENDING_PASSWORD_KEY);
+  clearOnExit(kind, PHONE_STORES);
 }
 
-type Result = { ok: true; message?: string } | { ok: false; message: string; code?: string };
+type Result = FlowResult;
 
 /** Cookie not in SecureStore yet (or lost) — set-password would 401 with "Please sign in." */
 const SESSION_NOT_READY = "Your session isn't ready. Verify your email code again.";
-
-const RATE_LIMIT_CODES = new Set(["RATE_LIMITED", "TOO_MANY_REQUESTS", "TOO_MANY_ATTEMPTS"]);
-
-function fail(err: { code?: string; message?: string; status?: number } | null | undefined): Result {
-  const code =
-    err?.status === 429 || (err?.code != null && RATE_LIMIT_CODES.has(err.code)) ? "RATE_LIMITED" : err?.code;
-  return { ok: false, message: authMessage(code), code };
-}
 
 function fromNetwork(e: unknown): Result {
   const n = networkFail(e instanceof NetworkError ? e : e);
@@ -54,8 +60,10 @@ async function hasPasswordOnFile(): Promise<boolean> {
 /** Sign In: email + password. */
 export async function signIn(email: string, password: string): Promise<Result> {
   try {
-    const { error } = await withAuthTimeout(authClient.signIn.email({ email, password }));
-    if (error) return fail(error);
+    const signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
+    if (signedIn.error) return fail(signedIn.error);
+    // Before the post-auth route is chosen (it reads the onboarded flag): another member's data on the phone goes.
+    adoptLocalData(signedIn.data.user.id);
     // A member signed in: the Requests dot starts from nothing — an answer for the member before is dropped.
     resetUnreadQuotes();
     const ready = (await requireSessionCookie()) ?? { ok: true as const };
@@ -67,22 +75,23 @@ export async function signIn(email: string, password: string): Promise<Result> {
 }
 
 /**
- * Join Path A (ADR-PROD-001 / identity MODULE.md): email only → sign-in OTP.
- * Constant-shape outcome while the server answers (no email oracle); when nothing answers, the
- * connection error stands instead of a code that never left (otp-send-logic.ts).
+ * Join Path A (ADR-PROD-001 / identity MODULE.md): email only → sign-in OTP, mailed to any address alike, so a send
+ * that failed says so and the screen stays (otp-send-logic.ts).
  */
 export async function join(email: string): Promise<Result> {
   return otpSendResult(
     () => withAuthTimeout(authClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" })),
     CONSTANT_OTP_SENT,
+    "join",
   );
 }
 
 /** Consume join OTP — creates user + session when the email is new (Path A). */
 export async function verifyJoin(email: string, otp: string): Promise<Result> {
   try {
-    const { error } = await withAuthTimeout(authClient.signIn.emailOtp({ email, otp }));
-    if (error) return fail(error);
+    const verified = await withAuthTimeout(authClient.signIn.emailOtp({ email, otp }));
+    if (verified.error) return fail(verified.error);
+    adoptLocalData(verified.data.user.id);
     resetUnreadQuotes();
     // Without a SecureStore cookie, set-password's POST /v1/account/password is 401 "Please sign in."
     const ready = await requireSessionCookie();
@@ -106,28 +115,56 @@ export async function resendCode(email: string, purpose: AuthPurpose): Promise<R
   }
 }
 
-/** Forgot password: request a reset code. Constant-shape while the server answers; no answer, no pretence. */
+/** Forgot password: request a reset code. Constant-shape while the server answers (no oracle) except its per-IP limit;
+ *  no answer, no pretence (otp-send-logic.ts). */
 export async function requestReset(email: string): Promise<Result> {
   return otpSendResult(
     () => withAuthTimeout(authClient.emailOtp.sendVerificationOtp({ email, type: "forget-password" })),
     CONSTANT_RESET_SENT,
+    "reset",
   );
 }
 
-/** Reset with code + new password, then sign in so the member lands in the gate. */
+/**
+ * Forgot password: check the code on Verify, where its boxes are, before set-password asks for the new password.
+ * better-auth's check counts a wrong try like the reset does (five, then TOO_MANY_ATTEMPTS) and does not use up a right
+ * code: the reset consumes it later (apps/api/test/reset-code-check.test.ts).
+ */
+export async function checkResetCode(email: string, otp: string): Promise<Result> {
+  try {
+    const { error } = await withAuthTimeout(
+      authClient.emailOtp.checkVerificationOtp({ email, type: "forget-password", otp }),
+    );
+    return error ? fail(error) : { ok: true };
+  } catch (e) {
+    return fromNetwork(e);
+  }
+}
+
+/**
+ * Reset with code + new password, then sign in so the member lands in the gate. Once the reset succeeded, a sign-in that
+ * does not is RESET_DONE_SIGN_IN (afterResetSignIn): Sign in with a notice, never the spent code again.
+ */
 export async function resetPassword(email: string, otp: string, password: string): Promise<Result> {
   try {
     const { error } = await withAuthTimeout(authClient.emailOtp.resetPassword({ email, otp, password }));
     if (error) return fail(error);
-    const signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
-    if (signedIn.error) return fail(signedIn.error);
-    resetUnreadQuotes();
-    const ready = (await requireSessionCookie()) ?? { ok: true as const };
-    if (ready.ok) appStorage.remove(PENDING_PASSWORD_KEY);
-    return ready;
   } catch (e) {
     return fromNetwork(e);
   }
+  let signedIn: Awaited<ReturnType<typeof authClient.signIn.email>>;
+  try {
+    signedIn = await withAuthTimeout(authClient.signIn.email({ email, password }));
+  } catch {
+    return afterResetSignIn("network");
+  }
+  if (signedIn.error) return afterResetSignIn(signedIn.error);
+  adoptLocalData(signedIn.data.user.id);
+  resetUnreadQuotes();
+  // Signed in on the server, but the cookie never reached SecureStore: the same — Sign in with the new password.
+  if (await requireSessionCookie()) return afterResetSignIn("network");
+  appStorage.remove(PENDING_PASSWORD_KEY);
+  return afterResetSignIn(null);
 }
 
 /** First-time password after Path A OTP session — club route, not Better Auth client setPassword. */
@@ -151,16 +188,29 @@ export async function setPassword(newPassword: string): Promise<Result> {
 }
 
 export async function signOut(): Promise<void> {
-  await clearLocalSession();
+  await clearLocalSession("signOut");
   await withAuthTimeout(authClient.signOut()).catch(() => undefined);
 }
 
-/** Account deletion (Apple 5.1.1(v)); the confirmation sheet re-asks the password before calling this. */
+/**
+ * The server ended the session (a 401 on a /v1 call: a password changed or reset elsewhere, an expiry). Not the member's
+ * sign-out: a request saved offline — whose confirmation promised "Nothing more to do" — stays on the phone with its
+ * owner and goes out when that member signs in again; another member's sign-in sets it aside (lib/queue.ts).
+ */
+export async function endRevokedSession(): Promise<void> {
+  await clearLocalSession("revoked");
+  await withAuthTimeout(authClient.signOut()).catch(() => undefined);
+}
+
+/** Account deletion (Apple 5.1.1(v)); the confirmation sheet re-asks the password before calling this, and an empty
+ *  one is refused here, never sent (flows-logic.ts). */
 export async function deleteAccount(password: string): Promise<Result> {
+  const refused = refuseEmptyPassword(password);
+  if (refused) return refused;
   try {
     const { error } = await withAuthTimeout(authClient.deleteUser({ password }));
     if (error) return fail(error);
-    await clearLocalSession();
+    await clearLocalSession("deleted");
     return { ok: true };
   } catch (e) {
     return fromNetwork(e);

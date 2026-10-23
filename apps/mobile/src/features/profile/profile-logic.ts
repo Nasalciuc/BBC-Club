@@ -29,8 +29,30 @@ export function profileStats(
   items: readonly { status: RequestVM["status"] }[],
   hasMore: boolean,
 ): { trips: string; open: string } {
-  const open = items.filter((r) => isOpen(r.status)).length;
   const trips = items.filter((r) => r.status !== "closed").length;
-  const moreOpen = hasMore && open === items.length;
-  return { trips: hasMore ? `${trips}+` : String(trips), open: moreOpen ? `${open}+` : String(open) };
+  const open = openRequestsFor(items, hasMore);
+  return { trips: hasMore ? `${trips}+` : String(trips), open: open.more ? `${open.count}+` : String(open.count) };
+}
+
+/**
+ * The open requests among the server's first fifty, and whether more lie past them: the server lists those in
+ * progress first (ADR-IMPL-042), so only a page that is all open, with more after it, leaves some uncounted.
+ */
+export function openRequestsFor(
+  items: readonly { status: RequestVM["status"] }[],
+  hasMore: boolean,
+): { count: number; more: boolean } {
+  const count = items.filter((r) => isOpen(r.status)).length;
+  return { count, more: hasMore && count === items.length };
+}
+
+/**
+ * 35: what deleting the account closes, on a line of its own (F106) — the exact count, `more than` it when the first
+ * page did not hold them all, nothing when none is open, and no number when the requests did not load (null).
+ */
+export function openRequestsLine(open: { count: number; more?: boolean } | null): string | null {
+  if (open === null) return "Any open requests are closed.";
+  if (open.count <= 0) return null;
+  if (open.more) return `This closes more than ${open.count} open requests.`;
+  return `This closes ${open.count} open request${open.count === 1 ? "" : "s"}.`;
 }

@@ -84,4 +84,54 @@ describe("registration path (ADR-PROD-001)", () => {
     expect(ok.status).toBe(200);
     await t.close();
   });
+
+  it("sign-up/email is not served: no account oracle, no unsolicited code (Join is OTP-first)", async () => {
+    const t = await testApp({ suite: "regsignup" });
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    const signUp = (email: string) =>
+      t.app.request("/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
+        body: JSON.stringify({ email, password: "harness-pass-99", name: "" }),
+      });
+    const mailsBefore = t.email.sent.length;
+    const existing = await signUp(t.memberA.email);
+    const fresh = await signUp(`regsignup.${crypto.randomUUID().slice(0, 8)}@test.dev`);
+    expect(existing.status).toBe(404);
+    expect(fresh.status).toBe(404);
+    expect(await existing.text()).toBe(await fresh.text());
+    expect(t.email.sent.length).toBe(mailsBefore);
+    await t.close();
+  });
+
+  it("an address registered unverified before sign-up/email was closed: its owner's Join lands signed in", async () => {
+    const t = await testApp({ suite: "regprereg" });
+    await t.db.execute(sql`DELETE FROM auth.rate_limit`);
+    const email = `regprereg.${crypto.randomUUID().slice(0, 8)}@test.dev`;
+    // What a stranger could do over HTTP until now: an unverified account with their password.
+    await t.auth.createMember(email, "strangers-pass-2026", { verified: false });
+    const send = await t.app.request("/api/auth/email-otp/send-verification-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
+      body: JSON.stringify({ email, type: "sign-in" }),
+    });
+    expect(send.status).toBe(200);
+    const verify = await t.app.request("/api/auth/sign-in/email-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
+      body: JSON.stringify({ email, otp: t.email.lastOtp(email) }),
+    });
+    expect(verify.status).toBe(200);
+    const cookie = verify.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0] ?? "")
+      .filter((c) => c.length > 0)
+      .join("; ");
+    // The cookie cache was written with the user as it was before the code verified it (emailVerified: false).
+    const status = await t.app.request("/v1/account/password", { headers: { Cookie: cookie } });
+    expect(status.status).toBe(200);
+    // The stranger's password went with the verification: the owner sets their own.
+    expect(await status.json()).toEqual({ hasPassword: false });
+    await t.close();
+  });
 });

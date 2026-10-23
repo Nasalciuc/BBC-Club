@@ -85,12 +85,21 @@ export function linkCanOpen(leaf: string, signedIn: boolean, holding: ReadonlySe
 /**
  * For Expo Router's own linking (`+native-intent.tsx`): the club's links are routed by the root layout once a session is
  * known, so Expo Router must leave them alone — `requests/<id>` matches no screen file here (the detail is
- * `request/[id]`) and would open "Unmatched Route" beneath the screen the layout pushes. Any other path passes through.
+ * `request/[id]`) and would open "Unmatched Route" beneath the screen the layout pushes.
+ *
+ * No other link opens a screen of its own: a link is anyone's to write, and a screen built from its params
+ * (`request/confirmed?phone=…&media=https://…`) would show a page the club never sent, with someone else's pictures
+ * (F014). At launch (`initial`) any other link opens the app's start, where Welcome or the gate decides; while the app
+ * runs it only brings the app forward — the member stays where they were. A development build (`dev`) still opens the
+ * component gallery by its link (ADR-IMPL-046); a release build redirects that route to the start anyway.
  */
-export function systemPathFor(path: string): string | null {
+export function systemPathFor(path: string, initial = true, dev = false): string | null {
+  const start = initial ? "/" : null;
   try {
-    return routeFromDeepLinkUrl(path) ? null : path;
+    if (routeFromDeepLinkUrl(path)) return null;
+    if (dev && segmentsFromDeepLinkUrl(path).join("/") === "dev/gallery") return "/dev/gallery";
+    return start;
   } catch {
-    return path;
+    return start;
   }
 }

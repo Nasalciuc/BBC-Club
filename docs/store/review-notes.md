@@ -25,9 +25,7 @@ On staging the same account also carries the demo situations — pins, offers, r
 
 ## Account deletion (as shipped today)
 
-Profile tab → **Delete account** (`profile.delete`) → confirm (`profile.deleteConfirm` / `profile.deleteConfirm.confirm`). The sheet does **not** re-ask the password. `deleteAccount()` in `apps/mobile/src/features/auth/flows.ts:132–136` clears local session (push, queue, onboarded flag) and calls `authClient.deleteUser({})`.
-
-When `feat/new-interior` lands, this path moves to Settings and asks for the password. That PR updates this file.
+Profile tab → **Delete account** (`profile.delete`), or Profile → Settings → **Delete account** (`settings.delete`) → the confirmation sheet (`profile.deleteConfirm`) asks for the account's password (`profile.deleteConfirm.password`). Use the demo account's password. The red **Delete account** (`profile.deleteConfirm.confirm`) stays disabled until a password is typed. `deleteAccount(password)` in `apps/mobile/src/features/auth/flows.ts` refuses an empty password without a request (`refuseEmptyPassword`, `features/auth/flows-logic.ts`), calls `authClient.deleteUser({ password })`, then clears the member's data on the phone (push device, request queue, saved items, recent searches, onboarded flag). The API deletes nothing without the right password: an empty or wrong one is `400 INVALID_PASSWORD`, the sheet marks the field (`profile.deleteConfirm.wrongPassword`) and stays open. A member who joined by code and never set a password sets one first with Forgot password?.
 
 ## What the reviewer will not find
 

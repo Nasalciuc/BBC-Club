@@ -34,18 +34,19 @@ import {
 } from "@bbc/ui";
 
 import { RootTabBar } from "@/components/RootTabBar";
-import { ScreenStatusBar } from "@/components/screen-status-bar";
+import { ScreenStatusBar, heroImageKey, statusBarOn } from "@/components/screen-status-bar";
 import { isOffline } from "@/features/explore/offline-logic";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { clubPhoto } from "@/features/places/club-photos";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { telHref } from "@/features/requests/confirmation-logic";
 import { detailLines, detailTitle, queuedView, routeCodes } from "@/features/requests/request-card";
+import { isRequestId, requestFailureFrame, type RequestFailureAction } from "@/features/requests/request-failure";
 import { closedAt, progressSteps, requestView, serverState, stepCaption } from "@/features/requests/request-view-logic";
 import { airportByCode } from "@/lib/airport-by-code";
 import { fetchRequest, submitRequest } from "@/lib/api";
 import { env } from "@/lib/env";
-import { readFailureCopy, stateCopy } from "@/lib/error-context";
+import { stateCopy } from "@/lib/error-context";
 import { displayPhone } from "@/lib/phone";
 import { getQueued, sendOne } from "@/lib/queue";
 import { savingPercent } from "@/lib/saving";
@@ -117,10 +118,14 @@ export default function RequestDetailScreen() {
   // The request on screen: a reload (after `Send now`, `Try again`) keeps it while it asks, and waits for nothing.
   const shown = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<{ title: string; body: string } | null>(null);
+  // What the failure frame says, and what it offers: `Try again`, or only the way back to Requests for a request that
+  // is not there to load (F015).
+  const [error, setError] = useState<{ title: string; body: string; actions: RequestFailureAction[] } | null>(null);
   const [sending, setSending] = useState(false);
   const [sendNote, setSendNoteState] = useState<string | null>(null);
   const [pastHero, setPastHero] = useState(false);
+  // The photograph as last drawn (or not), by which one it was: the status bar's glyphs follow it (F028).
+  const [heroDrawn, setHeroDrawn] = useState<{ key: string | null; ok: boolean } | null>(null);
   // Said aloud too: a screen reader would otherwise not hear that the request did not go. iOS queues it behind what
   // VoiceOver is saying (the button coming back from busy); Android reads the live region the note sits in.
   const setSendNote = (note: string | null) => {
@@ -153,7 +158,7 @@ export default function RequestDetailScreen() {
 
   useEffect(() => {
     if (!id || typeof id !== "string") {
-      setError({ ...stateCopy("route"), body: "This request could not be found." });
+      setError(requestFailureFrame({ status: 404 }));
       setLoading(false);
       return;
     }
@@ -175,7 +180,12 @@ export default function RequestDetailScreen() {
         if (cancelled) return;
         if (!item) {
           // Sent meanwhile (a flush from elsewhere), or removed: the queue no longer holds it.
-          setError({ ...stateCopy("route"), body: "This request is no longer waiting on your phone." });
+          // Asking again cannot bring it back: the way out is Requests, where a request sent meanwhile is listed.
+          setError({
+            ...stateCopy("route"),
+            body: "This request is no longer waiting on your phone.",
+            actions: ["backToRequests"],
+          });
           setLoaded(null);
           setLoading(false);
           return;
@@ -189,11 +199,18 @@ export default function RequestDetailScreen() {
         await lookUpOrigin(vm);
         return;
       }
+      // An id no request can have (a link anyone can write): there is nothing to ask the server for.
+      if (!isRequestId(id)) {
+        setError(requestFailureFrame({ status: 404 }));
+        setLoaded(null);
+        setLoading(false);
+        return;
+      }
 
       const result = await fetchRequest(id);
       if (cancelled) return;
       if (!result.ok) {
-        setError(readFailureCopy(result.code, "request"));
+        setError(requestFailureFrame(result));
         setLoaded(null);
         setLoading(false);
         return;
@@ -208,7 +225,7 @@ export default function RequestDetailScreen() {
       setLoading(false);
     })().catch(() => {
       if (!cancelled) {
-        setError(stateCopy("route"));
+        setError({ ...stateCopy("route"), actions: ["retry"] });
         setLoaded(null);
         setLoading(false);
       }
@@ -283,7 +300,8 @@ export default function RequestDetailScreen() {
   }
 
   if (error || !current) {
-    const copy = error ?? stateCopy("route");
+    const copy = error ?? { ...stateCopy("route"), actions: ["retry"] };
+    const retry = copy.actions.includes("retry");
     return (
       <View testID="request.root" style={[styles.root, { paddingTop: insets.top }]}>
         <ScreenStatusBar on="light" />
@@ -296,8 +314,18 @@ export default function RequestDetailScreen() {
             title={copy.title}
             body={copy.body}
             align="center"
-            primary={{ label: "Try again", testID: "request.error.retry", onPress: () => setReloadToken((n) => n + 1) }}
-            secondary={{ label: "Back", testID: "request.error.back", onPress: goBack }}
+            primary={
+              retry
+                ? { label: "Try again", testID: "request.error.retry", onPress: () => setReloadToken((n) => n + 1) }
+                : {
+                    label: "Back to Requests",
+                    testID: "request.error.requests",
+                    // Back down to the Requests tab beneath, as `Send now` does; with nothing beneath (a link at cold
+                    // start) it takes this page's place. `replace` would put a second tab bar over the first.
+                    onPress: () => router.dismissTo(REQUESTS),
+                  }
+            }
+            secondary={retry ? { label: "Back", testID: "request.error.back", onPress: goBack } : undefined}
           />
         </View>
         <RootTabBar active="requests" />
@@ -337,6 +365,9 @@ export default function RequestDetailScreen() {
     mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
     size: { width, height: heroHeight },
   });
+  const heroImage = bundled ?? picture.source;
+  const heroKey = heroImageKey(heroImage);
+  const heroLoaded = heroDrawn !== null && heroDrawn.key === heroKey && heroDrawn.ok;
   const credit = bundled ? null : picture.credit;
   const creditLink = credit?.link ?? null;
   const notice = view.notice
@@ -375,8 +406,9 @@ export default function RequestDetailScreen() {
 
   return (
     <View testID="request.root" style={styles.root}>
-      {/* Light glyphs over the photograph; dark ones once the page has scrolled past it. */}
-      <ScreenStatusBar on={pastHero ? "light" : "dark"} />
+      {/* Light glyphs over the photograph once it is drawn; dark ones over the tint without one (a city without a
+          photograph, loading or failed), and once the page has scrolled past it (F028). */}
+      <ScreenStatusBar on={statusBarOn({ hasImage: heroKey !== null, loaded: heroLoaded, pastHero })} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         scrollEventThrottle={16}
@@ -387,10 +419,12 @@ export default function RequestDetailScreen() {
       >
         <View style={[styles.hero, { height: heroHeight }]}>
           <Photo
-            source={bundled ?? picture.source}
+            source={heroImage}
             fallback={null}
             cachePolicy={bundled ? "disk" : picture.cache}
             style={StyleSheet.absoluteFill}
+            onLoad={() => setHeroDrawn({ key: heroKey, ok: true })}
+            onError={() => setHeroDrawn({ key: heroKey, ok: false })}
             testID="request.photo"
           />
           {back}

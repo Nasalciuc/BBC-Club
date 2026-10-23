@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,17 +16,20 @@ import {
 } from "@bbc/ui";
 
 import { deleteAccount } from "@/features/auth/flows";
-import { deleteFailureKind, stateCopy } from "@/lib/error-context";
+import { clearStack } from "@/features/auth/leave";
+import { canConfirmDelete, deleteFailureCopy } from "./delete-logic";
 import { PasswordField } from "./PasswordField";
+import { openRequestsLine } from "./profile-logic";
 import type { ProfileSheetHandle } from "./types";
 
 /** 35 is drawn over a 34-pt home indicator: a taller inset makes the sheet taller by the difference. */
 const IMAGE_INSET = 34;
 
 type Props = {
-  /** The member's requests still in progress: deleting the account closes them, and the sheet says so. */
+  /** The member's requests still in progress: deleting the account closes them, and the sheet says so — `more` when the
+   *  server's first page did not hold them all (`openRequestsFor`, F106). */
   /** null: the count did not load — the sheet says open requests are closed, without a number. */
-  openRequests: number | null;
+  openRequests: { count: number; more: boolean } | null;
   /** The account is gone and the session with it. */
   onDeleted: () => void;
 };
@@ -33,30 +37,33 @@ type Props = {
 /**
  * 35: the deletion, confirmed with the password — what goes, how many open requests close, the password with its lock,
  * the filled red `Delete account` and `Cancel` under it; no × (the sheet's own `Cancel`, its backdrop and a drag close
- * it). A wrong password marks the field and says so under it; any other failure says so in the sheet, which stays open
- * to try again.
+ * it). A wrong or missing password marks the field and says so under it; any other failure says so in the sheet, which
+ * stays open to try again (delete-logic.ts: the hourly limit names the hour, no connection says so).
  */
 export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function DeleteAccountSheet(
   { openRequests, onDeleted },
   ref,
 ) {
+  const router = useRouter();
   const modalRef = useRef<ModalSheetHandle>(null);
   const insets = useSafeAreaInsets();
   const [password, setPassword] = useState("");
-  const [wrongPassword, setWrongPassword] = useState(false);
-  const [failed, setFailed] = useState(false);
+  /** Under the field: the password is what to change. */
+  const [fieldMessage, setFieldMessage] = useState<string | null>(null);
+  /** In the sheet: anything else. */
+  const [sheetMessage, setSheetMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // With the keyboard up the message would sit under the keys or the pinned buttons: each new one scrolls into view.
   const messageRef = useRef<Text>(null);
   useEffect(() => {
-    if (wrongPassword || failed) modalRef.current?.reveal(messageRef.current);
-  }, [wrongPassword, failed]);
+    if (fieldMessage || sheetMessage) modalRef.current?.reveal(messageRef.current);
+  }, [fieldMessage, sheetMessage]);
 
   useImperativeHandle(ref, () => ({
     present() {
       setPassword("");
-      setWrongPassword(false);
-      setFailed(false);
+      setFieldMessage(null);
+      setSheetMessage(null);
       setBusy(false);
       modalRef.current?.present();
     },
@@ -67,20 +74,22 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
 
   async function onDelete() {
     setBusy(true);
-    setWrongPassword(false);
-    setFailed(false);
+    setFieldMessage(null);
+    setSheetMessage(null);
     const result = await deleteAccount(password);
     setBusy(false);
     if (!result.ok) {
-      if (deleteFailureKind(result.code) === "wrongPassword") setWrongPassword(true);
-      else setFailed(true);
+      const copy = deleteFailureCopy(result.code, password.trim().length === 0);
+      if (copy.at === "field") setFieldMessage(copy.text);
+      else setSheetMessage(copy.text);
       return;
     }
     modalRef.current?.dismiss();
+    // The deleted member's screens go with the account: the parent's replace to Join then leaves Join alone on the stack,
+    // and Back cannot reopen their Profile (features/auth/leave.ts).
+    clearStack(router);
     onDeleted();
   }
-
-  const failure = stateCopy("deleteFailed");
 
   return (
     <ModalSheet
@@ -102,6 +111,8 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
             height={DELETE_PARTS.pill}
             text="buttonDelete"
             busy={busy}
+            // Only with the password typed: the server deletes on an empty one (delete-logic.ts).
+            disabled={!canConfirmDelete(password, busy)}
             onPress={() => void onDelete()}
           />
           <TextButton
@@ -118,11 +129,7 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
       <Text style={styles.body}>
         Your profile, preferences and request history are removed from the app. This can’t be undone.
         {/* 35: what closes with the account on a line of its own. */}
-        {openRequests === null
-          ? "\nAny open requests are closed."
-          : openRequests > 0
-            ? `\nThis closes ${openRequests} open request${openRequests === 1 ? "" : "s"}.`
-            : ""}
+        {openRequestsLine(openRequests) ? `\n${openRequestsLine(openRequests)}` : ""}
       </Text>
       <View style={styles.password}>
         <PasswordField
@@ -134,19 +141,19 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
           value={password}
           onChangeText={(next) => {
             setPassword(next);
-            setWrongPassword(false);
+            setFieldMessage(null);
           }}
-          error={wrongPassword}
+          error={fieldMessage !== null}
         />
-        {wrongPassword ? (
+        {fieldMessage ? (
           <Text ref={messageRef} testID="profile.deleteConfirm.wrongPassword" style={styles.wrong}>
-            {stateCopy("wrongPassword").title}
+            {fieldMessage}
           </Text>
         ) : null}
       </View>
-      {failed ? (
+      {sheetMessage ? (
         <Text ref={messageRef} testID="settings.deleteFailed" style={styles.failed}>
-          {failure.title} {failure.body}
+          {sheetMessage}
         </Text>
       ) : null}
     </ModalSheet>

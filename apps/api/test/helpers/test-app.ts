@@ -6,6 +6,7 @@ import { capturingEmail } from "./capturing-email";
 import { mockCrm } from "./mock-crm";
 import { testAuth } from "./test-auth";
 import type { IdentityFacade } from "@bbc/identity";
+import type { IdentityModuleOptions } from "@bbc/identity/module";
 import type { EngagementFacade } from "@bbc/engagement";
 
 /** A travel day `n` days from today (YYYY-MM-DD): fixture legs dated from the clock, never a fixed calendar day
@@ -25,6 +26,8 @@ export async function testApp(
     poolMax?: number;
     env?: Record<string, string>;
     queryLog?: string[];
+    /** identityModule's test seams: the breached-password predicate (else: nothing is breached), the OTP answer floor. */
+    identity?: IdentityModuleOptions;
   } = {},
 ) {
   const poolMax = opts.poolMax ?? 6;
@@ -61,7 +64,8 @@ export async function testApp(
     },
   };
 
-  let built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
+  const overrides = { email, crm, push, identity: opts.identity };
+  let built = await buildApp({ env, db, overrides, startPoller: false });
   let auth = testAuth(built.registry.facade<IdentityFacade>("identity").auth, db);
   const internalSecret = env.INTERNAL_API_SECRET;
 
@@ -104,7 +108,7 @@ export async function testApp(
     async restart() {
       // Do not call built.shutdown() — that closes the shared db pool.
       await built.platform.poller.stop();
-      built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
+      built = await buildApp({ env, db, overrides, startPoller: false });
       auth = testAuth(built.registry.facade<IdentityFacade>("identity").auth, db);
       memberA.cookie = await auth.cookieFor(memberA.email);
       memberB.cookie = await auth.cookieFor(memberB.email);

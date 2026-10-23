@@ -22,7 +22,7 @@ export function lastDevOtp(to: string): string | null {
 /** Postmark answers in well under a second. Past this the call is abandoned and fails: the OTP send releases its
  *  cooldown claim, so the member can ask again; a request to the specialists fails with this reason, under the CRM's own
  *  5 s ceiling, and its job retries it. Without it a hung connection waited for as long as the socket lived. */
-const POSTMARK_TIMEOUT_MS = 4_000;
+export const POSTMARK_TIMEOUT_MS = 4_000;
 
 export function postmarkSender(opts: {
   token: string;

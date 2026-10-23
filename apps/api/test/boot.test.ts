@@ -203,23 +203,28 @@ describe("host boot", () => {
 });
 
 describe("smoke = Demo 2", () => {
-  it("register → code → feed → request → drained → CRM has the submit", async () => {
+  it("join by code → feed → request → drained → CRM has the submit", async () => {
     const t = await testApp({ suite: "boot" });
     const email = "new.member@test.dev";
-    const signUp = await t.app.request("/api/auth/sign-up/email", {
+    // Join is OTP-first (ADR-PROD-001 path A): /sign-up/email is not served.
+    const send = await t.app.request("/api/auth/email-otp/send-verification-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
-      body: JSON.stringify({ email, password: "atlantic2026!", name: "" }),
+      body: JSON.stringify({ email, type: "sign-in" }),
     });
-    expect(signUp.status).toBeLessThan(400);
+    expect(send.status).toBe(200);
     const otp = t.email.lastOtp(email);
-    const verify = await t.app.request("/api/auth/email-otp/verify-email", {
+    const verify = await t.app.request("/api/auth/sign-in/email-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
       body: JSON.stringify({ email, otp }),
     });
-    expect(verify.status).toBeLessThan(400);
-    const cookie = (verify.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+    expect(verify.status).toBe(200);
+    const cookie = verify.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0] ?? "")
+      .filter((c) => c.length > 0)
+      .join("; ");
     await t.drainAll();
     const offerId = await t.seedBroadcastOffer();
     const feed = await t.app.request("/v1/proposals", { headers: { Cookie: cookie } });

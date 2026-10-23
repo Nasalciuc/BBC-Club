@@ -3,7 +3,7 @@ import { testApp } from "./helpers/test-app";
 
 describe("OTP rate buckets behind Cloudflare", () => {
   it("two clients behind the same Cloudflare edge get independent buckets", async () => {
-    const t = await testApp({ suite: "otp-buckets" });
+    const t = await testApp({ suite: "otp-buckets", identity: { otpAnswerFloorMs: 50 } });
     const a = await t.auth.createMember("a.otp-buckets@example.com");
     const b = await t.auth.createMember("b.otp-buckets@example.com");
 

@@ -24,7 +24,9 @@ import { tokens } from "@bbc/ui";
 import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
-import { signOut } from "@/features/auth/flows";
+import { endRevokedSession } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
+import { adoptLocalData } from "@/features/auth/local-owner";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
 import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { isOffline } from "@/features/explore/offline-logic";
@@ -97,7 +99,9 @@ export default function RootLayout() {
 
   useEffect(() => () => clearPendingOtp(), []);
 
-  // Revoked session (apiFetch 401 on non-auth routes) → same clear as profile sign-out.
+  // Revoked session (apiFetch 401 on non-auth routes) → the session ends on the phone, but not as a sign-out: requests
+  // saved offline stay for their member (features/auth/flows.ts endRevokedSession). Then Sign in alone on the stack:
+  // Back must not reopen the screens of the session that ended (features/auth/leave.ts).
   useEffect(() => {
     let active = true;
     let handling = false;
@@ -106,8 +110,8 @@ export default function RootLayout() {
       handling = true;
       void (async () => {
         try {
-          await signOut();
-          if (active) router.replace("/sign-in");
+          await endRevokedSession();
+          if (active) leaveTo(router, "/sign-in");
         } finally {
           handling = false;
         }
@@ -168,8 +172,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (!signedIn || !memberId) return;
     // The requests on the phone are this member's: another member's, left by a session that expired, are set aside for
-    // them — never sent under this account (lib/queue.ts).
+    // them — never sent under this account (lib/queue.ts). So are the saved items, recent searches and onboarded flag:
+    // another member's go (features/auth/local-owner.ts; each sign-in does this first, this is the backstop).
     adoptQueue(memberId);
+    adoptLocalData(memberId);
     const submit = (body: Parameters<typeof submitRequest>[0], key: string) => submitRequest(body, key);
     const timer = createFlushTimer({
       pending: listQueued,

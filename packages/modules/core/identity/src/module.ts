@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { and, eq, isNotNull } from "drizzle-orm";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
-import { apiError } from "@bbc/shared/errors";
+import { apiError, type ApiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import type { Executor } from "@bbc/db";
@@ -14,6 +14,12 @@ import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
 import { rateLimit, subjectOf } from "@bbc/platform/ratelimit";
 import { account } from "./infrastructure/schema";
+import {
+  BREACH_CHECK_UNAVAILABLE_MESSAGE,
+  BREACHED_PASSWORD_MESSAGE,
+  breachCheck,
+  isBreachListFailure,
+} from "./infrastructure/breach";
 
 /** better-auth's own rule (setPassword, changePassword, deleteUser): a credential account *with* a stored password.
  *  A credential row can exist with a null password — that is not a password. */
@@ -27,25 +33,62 @@ async function hasStoredPassword(exec: Executor, userId: string): Promise<boolea
 }
 
 const WRONG_PASSWORD = "That password isn't right.";
+
+/** A 400 from Better Auth's changePassword / setPassword, in the club's words, on the field at fault — decided by its
+ *  error code, never by whether the member has a password: a breached new password (PASSWORD_COMPROMISED) is not a
+ *  wrong current one, and telling the member so sends them to reset a password they typed right. */
+function passwordRefusal(err: unknown): ApiError {
+  const body =
+    err && typeof err === "object" ? (err as { body?: { code?: unknown; message?: unknown } }).body : undefined;
+  const code = typeof body?.code === "string" ? body.code : undefined;
+  const own = typeof body?.message === "string" && body.message.length > 0 ? body.message : undefined;
+  const on = (path: "currentPassword" | "newPassword", message: string) =>
+    apiError("VALIDATION", { message, details: [{ path, message }] });
+  switch (code) {
+    case "INVALID_PASSWORD":
+      return on("currentPassword", WRONG_PASSWORD);
+    case "PASSWORD_COMPROMISED":
+      return on("newPassword", BREACHED_PASSWORD_MESSAGE);
+    // PasswordBody's min 8 / max 128 answers these first; kept so a changed limit still lands on the right field.
+    case "PASSWORD_TOO_SHORT":
+      return on("newPassword", "Your password needs at least 8 characters.");
+    case "PASSWORD_TOO_LONG":
+      return on("newPassword", "Your password can be at most 128 characters.");
+    default:
+      return apiError("VALIDATION", { message: own ?? "Please check your password." });
+  }
+}
+
 /** The change stands, the other sessions did not end: what happened, and the way that ends them all (ADR-IMPL-047). */
 const OTHERS_STILL_SIGNED_IN =
   "Your new password is set, but your other devices are still signed in. Sign out, then use Forgot password? to sign them all out.";
 
 type Ports = { email: EmailFacade };
 
+/** Test seams only; production passes nothing. */
+export type IdentityModuleOptions = {
+  /** Replaces the breach list (HIBP) with a predicate; it may throw to stand for an unreachable list. */
+  breachedPassword?: (password: string) => boolean | Promise<boolean>;
+  /** The floor under a reset or verification code's answer (default: Postmark's timeout, 4 s). */
+  otpAnswerFloorMs?: number;
+};
+
 /** Wiring only. Better Auth's hooks have no transaction of their own, so the EventPublisher port takes a
  *  single argument; we open a transaction here and drop platform's return value to satisfy Promise<void>. */
-export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
+export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescriptor<Ports, IdentityFacade> => ({
   name: "identity",
   layer: "core",
   needs: ["email"],
   init: ({ env, db, platform, ports }) => {
     const conn = db as unknown as Executor;
+    const isBreached = breachCheck({ env, breachedPassword: opts.breachedPassword });
     const auth = createAuth({
       env,
       db: conn,
       email: ports.email,
+      breachedPassword: opts.breachedPassword,
       logger: platform.logger,
+      metrics: platform.metrics,
       events: {
         publish: async (e) => {
           await db.transaction((tx: unknown) => platform.events.publish(tx, { ...e, publishedBy: "identity" }));
@@ -104,6 +147,26 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
           // A member who joins again by email code already has a password: nothing to set. 409, so the app moves on.
           return c.json(apiError("CONFLICT", { message: "This account already has a password." }), 409);
         }
+        if (!hasPassword) {
+          // The first password after a code Join (path A) goes through auth.api.setPassword, a server-only endpoint with no
+          // path: Better Auth's haveIBeenPwned never sees it. ADR-PROD-001 asks for the same refusal as everywhere else,
+          // so the club checks here, before anything is stored. An unreachable list refuses too (fails closed).
+          let breached: boolean;
+          try {
+            breached = await isBreached(parsed.data.newPassword);
+          } catch {
+            return c.json(apiError("SERVICE_DISABLED", { message: BREACH_CHECK_UNAVAILABLE_MESSAGE }), 503);
+          }
+          if (breached) {
+            return c.json(
+              apiError("VALIDATION", {
+                message: BREACHED_PASSWORD_MESSAGE,
+                details: [{ path: "newPassword", message: BREACHED_PASSWORD_MESSAGE }],
+              }),
+              400,
+            );
+          }
+        }
 
         let othersEnded = true;
         try {
@@ -147,17 +210,12 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
                 ((err as { status?: string }).status === "BAD_REQUEST" ? 400 : (err as { status?: number }).status) ??
                 500)
               : 500;
-          if (status === 400)
-            return c.json(
-              apiError("VALIDATION", {
-                message: hasPassword
-                  ? WRONG_PASSWORD
-                  : err && typeof err === "object"
-                    ? ((err as { body?: { message?: string } }).body?.message ?? "Invalid password")
-                    : "Invalid password",
-              }),
-              400,
-            );
+          if (status === 400) return c.json(passwordRefusal(err), 400);
+          // A change: Better Auth's breach plugin could not read the list and stored nothing. The same answer as for a
+          // first password (above), not a 500.
+          if (isBreachListFailure(err)) {
+            return c.json(apiError("SERVICE_DISABLED", { message: BREACH_CHECK_UNAVAILABLE_MESSAGE }), 503);
+          }
           if (
             status === 401 ||
             (err && typeof err === "object" && (err as { status?: string }).status === "UNAUTHORIZED")
@@ -192,7 +250,7 @@ export const identityModule = (): ModuleDescriptor<Ports, IdentityFacade> => ({
     );
 
     return {
-      exposes: { ...createIdentityFacade(auth, conn), auth },
+      exposes: { ...createIdentityFacade(auth, conn, { otpAnswerFloorMs: opts.otpAnswerFloorMs }), auth },
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [],
       jobs: [],

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import type { ApiResult, Profile } from "@/lib/api";
-import { loadProfileWith, routeFor } from "./session-gate-logic";
+import { loadProfileWith, routeFor, timezoneToSend, timezoneUpdate } from "./session-gate-logic";
 
 const sleep = async () => undefined;
 
@@ -86,5 +86,51 @@ describe("loadProfileWith + routeFor", () => {
   it("a signed-out load ignores a stale pending-password flag", async () => {
     const load = await loadProfileWith(async () => fail(401), sleep);
     expect(routeFor(load, false, true)).toBe("/sign-in");
+  });
+});
+
+describe("timezoneToSend / timezoneUpdate — the member's quiet hours follow the phone's zone", () => {
+  it("a phone in Tokyo with the server's New York default sends Tokyo", () => {
+    expect(timezoneToSend("America/New_York", "Asia/Tokyo")).toBe("Asia/Tokyo");
+  });
+
+  it("the same zone, or a phone with no place zone, sends nothing", () => {
+    expect(timezoneToSend("Asia/Tokyo", "Asia/Tokyo")).toBeNull();
+    expect(timezoneToSend("America/New_York", null)).toBeNull();
+    expect(timezoneToSend("America/New_York", "")).toBeNull();
+  });
+
+  it("after the gate's own profile load: only a living profile, and a zone not already sent in this run", async () => {
+    const tokyoPhone = "Asia/Tokyo";
+    const none = new Set<string>();
+    const active = await loadProfileWith(async () => ok(profile({ timezone: "America/New_York" })), sleep);
+    const update = timezoneUpdate(active, tokyoPhone, none);
+    expect(update?.zone).toBe("Asia/Tokyo");
+    // Refused or not, it is not sent again on every navigation.
+    expect(timezoneUpdate(active, tokyoPhone, new Set([update!.key]))).toBeNull();
+    const pending = await loadProfileWith(async () => ok(profile({ status: "pending" })), sleep);
+    expect(timezoneUpdate(pending, tokyoPhone, none)).toBeNull();
+    const deleted = await loadProfileWith(async () => ok(profile({ status: "deleted" })), sleep);
+    expect(timezoneUpdate(deleted, tokyoPhone, none)).toBeNull();
+    const busy = await loadProfileWith(async () => fail(503), sleep);
+    expect(timezoneUpdate(busy, tokyoPhone, none)).toBeNull();
+  });
+
+  it("another member signing in on this phone in the same run still gets the phone's zone", async () => {
+    const tokyoPhone = "Asia/Tokyo";
+    const a = await loadProfileWith(
+      async () => ok(profile({ memberId: "member-a", timezone: "America/New_York" })),
+      sleep,
+    );
+    const b = await loadProfileWith(
+      async () => ok(profile({ memberId: "member-b", timezone: "America/New_York" })),
+      sleep,
+    );
+    const sent = new Set<string>();
+    const forA = timezoneUpdate(a, tokyoPhone, sent);
+    expect(forA?.zone).toBe("Asia/Tokyo");
+    sent.add(forA!.key);
+    expect(timezoneUpdate(a, tokyoPhone, sent)).toBeNull();
+    expect(timezoneUpdate(b, tokyoPhone, sent)?.zone).toBe("Asia/Tokyo");
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { cabinLabel, profileStats, travelersLabel } from "./profile-logic";
+import { cabinLabel, openRequestsFor, openRequestsLine, profileStats, travelersLabel } from "./profile-logic";
 
 describe("the member's preferences, in words (12, 36)", () => {
   it("the cabin: Business unless First was chosen", () => {
@@ -34,5 +34,31 @@ describe("profileStats (12)", () => {
     expect(profileStats(items, true)).toEqual({ trips: "3+", open: "2" });
     const allOpen = [{ status: "quoted" as const }, { status: "received" as const }];
     expect(profileStats(allOpen, true)).toEqual({ trips: "2+", open: "2+" });
+  });
+});
+
+describe("what Delete account says it closes (35, F106)", () => {
+  const open = { status: "received" as const };
+  const closed = { status: "closed" as const };
+
+  it("the open requests on the server's first page, and whether more lie past it", () => {
+    expect(openRequestsFor([open, open, closed], false)).toEqual({ count: 2, more: false });
+    // Fifty listed, all open, more past them: the count is not the whole.
+    expect(
+      openRequestsFor(
+        Array.from({ length: 50 }, () => open),
+        true,
+      ),
+    ).toEqual({ count: 50, more: true });
+    // In progress first (ADR-IMPL-042): a page that ends on a closed one has listed every open one.
+    expect(openRequestsFor([open, closed], true)).toEqual({ count: 1, more: false });
+  });
+
+  it("an exact count, `more than` past the first page, nothing when none, no number when it did not load", () => {
+    expect(openRequestsLine({ count: 50, more: true })).toBe("This closes more than 50 open requests.");
+    expect(openRequestsLine({ count: 3, more: false })).toBe("This closes 3 open requests.");
+    expect(openRequestsLine({ count: 1 })).toBe("This closes 1 open request.");
+    expect(openRequestsLine({ count: 0, more: false })).toBeNull();
+    expect(openRequestsLine(null)).toBe("Any open requests are closed.");
   });
 });

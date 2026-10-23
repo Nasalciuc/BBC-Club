@@ -5,6 +5,7 @@ export { baselineOffset, belowBaseline, rn } from "./rn-type";
 export { Avatar } from "./primitives/Avatar";
 export { BackButton } from "./primitives/BackButton";
 export { Button } from "./primitives/Button";
+export { MIN_TARGET, buttonHitSlop, hitSlopFor } from "./primitives/hit-slop";
 export { CabinCard } from "./primitives/CabinCard";
 export { CHECK_CIRCLE_SIZE, CheckCircle } from "./primitives/CheckCircle";
 export { CloseButton } from "./primitives/CloseButton";
