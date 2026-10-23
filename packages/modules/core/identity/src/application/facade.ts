@@ -92,15 +92,18 @@ export function createIdentityFacade(
   }
 
   const withOtpSendLock = otpSendLock(db);
-  const answerFloorMs = options.otpAnswerFloorMs ?? POSTMARK_TIMEOUT_MS;
+  // Floor covers the send timeout, the ops webhook's own timeout (ops-alert.ts) and a margin for the claim/release
+  // queries: a member send that fails can outlast Postmark's 4 s, and an unknown address answers at the floor — a
+  // shorter floor would tell who has an account.
+  const answerFloorMs = options.otpAnswerFloorMs ?? POSTMARK_TIMEOUT_MS + 3_000 + 1_000;
   /** Better Auth at /api/auth/*. A request that mails a code runs under its address's lock (otp-send-lock.ts), so two
    *  at the same moment mail one code; everything else goes straight through.
    *  A reset or verification code is mailed only when the address has an account, and Better Auth answers an unknown
-   *  address before sending anything: the time told who is a member. Those answers are held until a floor (Postmark's
-   *  timeout, the longest a send takes) has passed since the request came in — counted before the lock, so waiting on
-   *  it tells nothing either, and waited out after the lock is released, so no connection is held meanwhile. A sign-in
-   *  code goes to every address asked (nothing to hide, and a failure must reach Join at once); a 429 stays immediate
-   *  (it is per IP). */
+   *  address before sending anything: the time told who is a member. Those answers are held until a floor (send timeout
+   *  + ops webhook timeout + a margin — the longest a failing member send takes) has passed since the request came in —
+   *  counted before the lock, so waiting on it tells nothing either, and waited out after the lock is released, so no
+   *  connection is held meanwhile. A sign-in code goes to every address asked (nothing to hide, and a failure must
+   *  reach Join at once); a 429 stays immediate (it is per IP). */
   const handler: Auth["handler"] = async (req) => {
     if (!isOtpSendRequest(req)) return auth.handler(req);
     const receivedAt = performance.now();
