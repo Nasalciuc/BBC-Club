@@ -7,6 +7,10 @@ describe("GET /v1/test/last-otp", () => {
     const t = await testApp({
       suite: "last-otp-prod",
       env: { NODE_ENV: "production", POSTMARK_SERVER_TOKEN: "x".repeat(10) },
+      // Production turns the breached-password check on, and the test app signs its members up with a password: that
+      // would ask api.pwnedpasswords.com, which a cloud session and its pre-push hook cannot reach. This test is about
+      // the route's registration, not passwords.
+      identity: { breachedPassword: () => false },
     });
     const r = await t.app.request("/v1/test/last-otp?email=alex@test.dev");
     expect(r.status).toBe(404);
