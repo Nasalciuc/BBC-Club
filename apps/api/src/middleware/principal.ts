@@ -4,6 +4,7 @@ import { jwtVerify, createRemoteJWKSet, customFetch } from "jose";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { err, type PrincipalVars } from "@bbc/shared/authz/authorize";
 import type { IdentityFacade } from "@bbc/identity";
+import { errorForLog } from "@bbc/db";
 
 export type { PrincipalVars };
 
@@ -40,7 +41,14 @@ export function resolvePrincipal(opts: Opts): MiddlewareHandler<PrincipalVars> {
     // Tests boot the host in-memory (no listen); fetch JWKS through the identity handler.
     [customFetch]: async (input: string | URL | Request, init?: RequestInit) => {
       const req = input instanceof Request ? input : new Request(String(input), init);
-      return opts.identity.handler(req);
+      try {
+        return await opts.identity.handler(req);
+      } catch (err) {
+        // A failed key read leaves Better Auth's handler (onAPIError.throw); jose then answers the bearer 401 without a
+        // word, so the reason is logged here, through errorForLog (AGENTS.md rule 6).
+        opts.logger.warn({ err: errorForLog(err) }, "jwks unavailable");
+        throw err;
+      }
     },
   });
   const secretHashes = opts.internalSecrets.map(sha256);

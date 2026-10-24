@@ -254,9 +254,10 @@ function mask(email: string) {
 }
 
 /** One of Better Auth's log calls as a club log line: the error through errorForLog, and the message only when it is
- *  not a query's text (its router passes a failed query's message itself, parameters included). */
-export function betterAuthLine(logger: Logger, level: string, message: string, args: unknown[]): void {
-  const err = args.find((a) => a instanceof Error);
+ *  not a query's text (its router passes a failed query's message itself, parameters included). Some calls pass the
+ *  error as the message (`logger.error(e)`): it is found there too. */
+export function betterAuthLine(logger: Logger, level: string, message: unknown, args: unknown[]): void {
+  const err = [message, ...args].find((a) => a instanceof Error);
   const first = String(message).split("\n")[0] ?? "";
   const text = /Failed query|params:|@/.test(String(message)) ? "better-auth: failed query" : `better-auth: ${first}`;
   const fields = err ? { err: errorForLog(err) } : {};
