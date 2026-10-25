@@ -25,6 +25,12 @@ appId: com.buybusinessclass.club
 - tapOn: { id: "profile.edit" }
 - assertVisible: { id: "editProfile.root" }
 - takeScreenshot: 479-8296
+# Brief 3.4.1: the member's own name, the first row (36 draws none). Its sheet opens and closes unsaved, so the frames
+# after this one keep the seeded member's name.
+- tapOn: { id: "editProfile.name" }
+- assertVisible: { id: "profile.name.input" }
+- tapOn: { id: "profile.name.close" }
+- assertNotVisible: { id: "profile.name.sheet" }
 - tapOn: { id: "editProfile.back" }
 - tapOn: { id: "tab.requests" }
 - assertVisible: { id: "requests.root" }

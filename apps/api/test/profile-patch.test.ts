@@ -183,6 +183,27 @@ describe("PATCH /v1/profile", () => {
     await t.close();
   });
 
+  it("a member without a name sets their own; the next load answers it (brief 3.4.1, D1)", async () => {
+    const t = await testApp({ suite: "profile-own-name" });
+    // CRM_ADAPTER=email finds no CRM match: every new member starts with no name (create-profile.ts).
+    await t.db.execute(sql`UPDATE members.profile SET display_name = NULL WHERE member_id = ${t.memberA.id}`);
+    const load = async () =>
+      ProfileVM.parse(await (await t.app.request("/v1/profile", { headers: { Cookie: t.memberA.cookie } })).json());
+    expect((await load()).displayName).toBeNull();
+    // A made-up name, as the Name sheet sends it: trimmed by the app, 2 to 80 characters.
+    const saved = await t.app.request("/v1/profile", {
+      method: "PATCH",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: "Dana Ives" }),
+    });
+    expect(saved.status).toBe(200);
+    // The answer is the whole profile the app's store takes at once; the next GET is the same.
+    const answer = ProfileVM.parse(await saved.json());
+    expect(answer.displayName).toBe("Dana Ives");
+    expect(await load()).toEqual(answer);
+    await t.close();
+  });
+
   it("text Postgres cannot keep as sent (U+0000, a surrogate without its pair) is 400, never 500", async () => {
     const t = await testApp({ suite: "profile-nul" });
     const name = await t.app.request("/v1/profile", {
