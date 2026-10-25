@@ -281,7 +281,8 @@ the site puts it in; the few names that need help are listed in `SITE_CITY_AIRPO
 - `catalog.site_pins`: after the fares' pins, up to twelve of the site's cities listed from the member's home airport
   (the site's home page first, then the busiest), priced by the formula in the member's cabin (ADR-IMPL-037), so the
   pin, its search's estimate row and the quote show one number. Nothing while `catalog.estimates` is off: no price, no
-  pin.
+  pin. With `catalog.site_prices` on, the pins show the site's stored answers, and `refresh-site-prices` keeps them
+  only while this flag is on too ("The site's prices" below).
 
 All or nothing: a region or a country that does not answer, fewer than 80 % of last night's cities listed or placed on
 their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
@@ -369,10 +370,13 @@ ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
 
 **The job** `refresh-site-prices` (worker, every ten minutes) keeps the answers for the routes Home's site pins show:
 from each airport `catalog.site_routes` lists, its first 36 cities in the pins' order, round trip. Routes without an
-answer first, then answers 18 hours old or more; at most 150 questions a run, one every 500 ms; nothing asked with
-either flag off. It stops at the site's first 429 (`rateLimited: 1` in its run) and when the breaker opens
-(`breakerOpen: 1`); the next run, ten minutes later, goes on. Run it now, as `sync-site-destinations` above, with
-`refresh-site-prices` in the path. Its outcome:
+answer first, then answers 18 hours old or more; at most 150 questions a run, one every 500 ms. It asks only while
+`catalog.estimates`, `catalog.site_prices` and `catalog.site_pins` are all on — without the pins no member sees those
+routes, and a search asks for its own — and reads them again before each question, so turning one off stops a run
+already going (`stopped: 1`, within the flags' cache of about 35 s). With one off it asks nothing (`skipped: 1`) and
+still deletes the expired answers (`purged`). It stops at the site's first 429 (`rateLimited: 1` in its run) and when
+the breaker opens (`breakerOpen: 1`); the next run, ten minutes later, goes on. Run it now, as `sync-site-destinations`
+above, with `refresh-site-prices` in the path. Its outcome:
 
 ```sql
 SELECT status, metrics, duration_ms FROM platform.job_runs
@@ -383,7 +387,8 @@ WHERE job = 'refresh-site-prices' ORDER BY started_at DESC LIMIT 5;
 bodies not its shape — open it for a minute; then one question goes, and its answer closes or reopens it. While it is
 open the search shows the formula at once, the job asks nothing, and `bbc_site_prices_unavailable{reason="breaker"}`
 counts it. Nothing to reset: it closes itself when the site answers. If the site stays down, the formula stands in
-everywhere; turning the flag off changes nothing more but stops the questions.
+everywhere; turning the flag off changes nothing more but stops the questions — a run already going included, before
+its next one.
 
 **Watch:** `bbc_site_prices_answered{status}` (priced, none), `bbc_site_prices_unavailable{reason}` (`breaker`,
 `timeout`, `error`, `invalid` — the site changed its answer's shape, `rate_limited`, `bad_request` — a request of ours

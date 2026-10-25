@@ -151,7 +151,7 @@ describe("site prices — a quote and Home's pins read, never ask", () => {
     const pins = await t.facade.destinations(undefined, "JFK");
     expect(pins.find((p) => p.code === "ZRH")).toMatchObject({ fromPrice: FORMULA_ZRH.business });
     for (const p of pins) expect(p).not.toHaveProperty("priceSource");
-    expect(await t.run()).toEqual({ skipped: 1 });
+    expect(await t.run()).toEqual({ skipped: 1, purged: 0 });
     expect(t.site.calls).toEqual([]);
     await t.iso.drop();
   });
@@ -209,6 +209,7 @@ describe("site prices — the refresh job", () => {
     });
     await t.seedSiteRoutes();
     await t.estimatesOn(true);
+    await t.flags.set("catalog.site_pins", { enabled: true });
 
     const first = await t.run();
     expect(first).toMatchObject({ due: 4, asked: 4, priced: 3, none: 1, failed: 0, rateLimited: 0, breakerOpen: 0 });
@@ -247,6 +248,7 @@ describe("site prices — the refresh job", () => {
     });
     await t.seedSiteRoutes();
     await t.estimatesOn(true);
+    await t.flags.set("catalog.site_pins", { enabled: true });
     const report = await t.run();
     // The pins' order from JFK: Zurich (the site's home page), then by traffic; the run stops at the 429.
     expect(report).toMatchObject({ rateLimited: 1, failed: 1 });
@@ -277,11 +279,73 @@ describe("site prices — the refresh job", () => {
         t.site.routes[`${home}-${to} ${RT}`] = { status: 503 };
     }
     await t.estimatesOn(true);
+    await t.flags.set("catalog.site_pins", { enabled: true });
     const report = await t.run();
     expect(report).toMatchObject({ due: 36, asked: 5, failed: 5, breakerOpen: 1 });
     expect(await t.run()).toMatchObject({ asked: 0, breakerOpen: 1 });
     expect(t.site.calls).toHaveLength(5);
     expect(await t.rows()).toEqual([]);
+    await t.iso.drop();
+  });
+
+  it("asks nothing without Home's site pins: the routes it keeps are theirs, and no member sees them", async () => {
+    const t = await setup("site-prices-job-no-pins", {
+      [`JFK-ZRH ${RT}`]: { business: 2222, first: 3333, premium_economy: 1111 },
+    });
+    await t.seedSiteRoutes();
+    await t.estimatesOn(true);
+    expect(await t.run()).toEqual({ skipped: 1, purged: 0 });
+    expect(t.site.calls).toEqual([]);
+    expect(await t.rows()).toEqual([]);
+    await t.iso.drop();
+  });
+
+  for (const flag of ["catalog.site_prices", "catalog.site_pins", "catalog.estimates"]) {
+    it(`${flag} turned off during a run stops it before its next question`, async () => {
+      const t = await setup(`site-prices-job-off-${flag.slice(8)}`, {
+        [`JFK-ZRH ${RT}`]: { business: 2222, first: 3333, premium_economy: 1111 },
+        [`JFK-CDG ${RT}`]: { business: 2100, first: 3100, premium_economy: 1000 },
+        [`JFK-HND ${RT}`]: { business: 2500, first: 3700, premium_economy: 1300 },
+        [`MIA-HND ${RT}`]: { business: 2400, first: 3600, premium_economy: 1200 },
+      });
+      await t.seedSiteRoutes();
+      await t.estimatesOn(true);
+      await t.flags.set("catalog.site_pins", { enabled: true });
+      // The operator switches it off while the second question is out.
+      t.site.onCall = async () => {
+        if (t.site.calls.length === 2) await t.flags.set(flag, { enabled: false });
+      };
+      const report = await t.run();
+      expect(report).toMatchObject({ due: 4, asked: 2, priced: 2, stopped: 1 });
+      expect(t.site.calls).toHaveLength(2);
+      // What it learned before the switch is kept: answers, not errors.
+      expect(await t.rows()).toHaveLength(2);
+      await t.iso.drop();
+    });
+  }
+
+  it("deletes expired answers with the site's prices off: nothing kept past its day once the feature is off", async () => {
+    const t = await setup("site-prices-job-purge-off");
+    await t.estimatesOn(true);
+    await sitePricesRepo.store(
+      t.iso.db,
+      { from: "JFK", to: "ZRH", trip: RT },
+      { kind: "priced", figures: { business: 2222, first: 3333, premiumEconomy: 1111 } },
+    );
+    await sitePricesRepo.store(t.iso.db, { from: "JFK", to: "CDG", trip: RT }, { kind: "none" });
+    await t.flags.set("catalog.site_prices", { enabled: false });
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_prices SET fetched_at = now() - interval '25 hours', expires_at = now() - interval '1 hour'
+      WHERE route_to = 'ZRH'`);
+    expect(await t.run()).toEqual({ skipped: 1, purged: 1 });
+    expect((await t.rows()).map((r) => r.route_to)).toEqual(["CDG"]);
+    // Estimates off as well (the master switch): the same.
+    await t.flags.set("catalog.estimates", { enabled: false });
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_prices SET fetched_at = now() - interval '25 hours', expires_at = now() - interval '1 hour'`);
+    expect(await t.run()).toEqual({ skipped: 1, purged: 1 });
+    expect(await t.rows()).toEqual([]);
+    expect(t.site.calls).toEqual([]);
     await t.iso.drop();
   });
 });

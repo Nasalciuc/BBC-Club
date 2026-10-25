@@ -21,6 +21,8 @@ export type FakePriceSite = {
   /** Every request, as `FROM-TO trip` (with its User-Agent in `agents`). */
   calls: string[];
   agents: string[];
+  /** Awaited once a request is counted, before it is answered: what a test does while a run is going. */
+  onCall?: (key: string) => Promise<void> | void;
 };
 
 export function fakePriceSite(routes: Record<string, FakeAnswer> = {}): FakePriceSite & { fetch: Fetch } {
@@ -31,6 +33,7 @@ export function fakePriceSite(routes: Record<string, FakeAnswer> = {}): FakePric
     const key = `${u.searchParams.get("from")}-${u.searchParams.get("to")} ${u.searchParams.get("trip_type")}`;
     site.calls.push(key);
     site.agents.push(new Headers(init?.headers).get("user-agent") ?? "");
+    await site.onCall?.(key);
     const answer = site.routes[key] ?? "unknown_airport";
     const json = (status: number, body: unknown) =>
       new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -56,5 +59,6 @@ export function fakePriceSite(routes: Record<string, FakeAnswer> = {}): FakePric
     if ("status" in answer) return new Response(answer.body ?? "", { status: answer.status });
     return json(200, answer);
   };
-  return { ...site, fetch };
+  // The same object the fetch reads: a test may set `onCall` or change `routes` after handing `fetch` over.
+  return Object.assign(site, { fetch });
 }

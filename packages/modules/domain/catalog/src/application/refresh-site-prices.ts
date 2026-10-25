@@ -11,7 +11,9 @@
  * their answer expires and the next search asks again.
  *
  * It respects the breaker (nothing asked while it is open; it stops when it opens) and stops at the site's first 429.
- * An error stores nothing: the stored answer, if any, stays until it expires. Then it deletes the expired answers.
+ * Its flags (`stillOn`: estimates, the site's prices, the site's pins) are read before each question: one turned off
+ * stops the run. An error stores nothing: the stored answer, if any, stays until it expires. Then it deletes the expired
+ * answers (the module's handler deletes them too while a flag is off, without asking anything).
  * Running it twice changes nothing the second time: every route it asked is fresh.
  */
 import type { Executor } from "@bbc/db";
@@ -79,6 +81,8 @@ export type RefreshReport = {
   rateLimited: number;
   /** 1 when the breaker was open, or opened, and stopped the run. */
   breakerOpen: number;
+  /** 1 when a flag the job runs under was turned off during the run, and stopped it. */
+  stopped: number;
   purged: number;
 };
 
@@ -90,6 +94,9 @@ export async function refreshSitePrices(
     signal: AbortSignal;
     metrics: { inc(name: string, labels?: Record<string, string>, by?: number): void };
     logger: { warn(obj: object, msg: string): void; error(obj: object, msg: string): void };
+    /** Whether the job may still ask the site — its flags, read before each question (they are cached), so turning
+     *  one off stops a run already going (AGENTS rule 3: the state at the moment of the call). */
+    stillOn: () => Promise<boolean>;
   },
   opts: { budget?: number; gapMs?: number; perHome?: number } = {},
 ): Promise<RefreshReport> {
@@ -109,6 +116,7 @@ export async function refreshSitePrices(
     failed: 0,
     rateLimited: 0,
     breakerOpen: 0,
+    stopped: 0,
     purged: 0,
   };
   let lastStart = Number.NEGATIVE_INFINITY;
@@ -121,6 +129,11 @@ export async function refreshSitePrices(
       } catch {
         break; // the job's time is up
       }
+    }
+    if (!(await deps.stillOn())) {
+      report.stopped = 1;
+      deps.logger.warn({ asked: report.asked }, "site prices: a flag was turned off, the run stops");
+      break;
     }
     lastStart = deps.clock.now();
     const q = { from: r.from.code, to: r.to.code, trip: "round_trip" as const };

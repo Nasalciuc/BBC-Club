@@ -101,6 +101,14 @@ export const catalogModule = (
       clock: siteClock,
     });
 
+    /** ADR-IMPL-063: the refresh job asks the site only while estimates (the master switch), the site's prices and
+     *  Home's site pins — the routes it keeps are theirs — are all on. Read before each question (cached, ~35 s to
+     *  reach every replica): one turned off stops a run already going. */
+    const refreshSitePricesOn = async () =>
+      (await platform.flags.isEnabled("catalog.estimates", false)) &&
+      (await platform.flags.isEnabled("catalog.site_prices", false)) &&
+      (await platform.flags.isEnabled("catalog.site_pins", false));
+
     /** The search's one live question to the site (ADR-IMPL-063), within a second; what it learns is stored, so Home's
      *  pins and the quote that follows show the same number. An error stores nothing: the formula stands in. */
     async function askSiteNow(q: {
@@ -761,18 +769,18 @@ export const catalogModule = (
         {
           // ADR-IMPL-063: the company's site's answers for the routes Home's site pins show, so a pin shows the site's
           // price without asking it. At most 150 questions a run, about two a second (75 s and more); it stops at the
-          // site's first 429 or when the breaker opens. Ten minutes apart, five to finish. With the site's prices or
-          // estimates off, nothing is asked.
+          // site's first 429, when the breaker opens, or when one of its flags is turned off. Ten minutes apart, five
+          // to finish. With estimates, the site's prices or the site's pins off, nothing is asked — and the expired
+          // answers are still deleted, so none outlives its day once the feature is off.
           name: "refresh-site-prices",
           spec: {
             cron: "*/10 * * * *",
             singleton: true,
             timeoutMs: 300_000,
             handler: async (ctx) => {
-              const on =
-                (await platform.flags.isEnabled("catalog.estimates", false)) &&
-                (await platform.flags.isEnabled("catalog.site_prices", false));
-              if (!on) return { skipped: 1 };
+              if (!(await refreshSitePricesOn())) {
+                return { skipped: 1, purged: await sitePricesRepo.purgeExpired(conn) };
+              }
               return refreshSitePrices({
                 db: conn,
                 client: sitePrices,
@@ -780,6 +788,7 @@ export const catalogModule = (
                 signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
                 metrics: platform.metrics,
                 logger: platform.logger,
+                stillOn: refreshSitePricesOn,
               });
             },
           },

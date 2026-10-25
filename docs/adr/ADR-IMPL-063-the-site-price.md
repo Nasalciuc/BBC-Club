@@ -78,15 +78,21 @@ e-mail's line) · Brief 3.1 step 2, decision D6.
    first; at most **150 questions a run, one starting every 500 ms** (about two a second). It stops at the site's first
    429 and when the breaker opens (nothing is asked while it is open); an error stores nothing. Then it deletes the
    expired rows. Its counts go to `platform.job_runs` (`due`, `asked`, `priced`, `none`, `failed`, `rateLimited`,
-   `breakerOpen`, `purged`). Run twice, the second run asks nothing and changes no row. Routes searched outside the pins
-   are not refreshed: their answer expires and the next search asks again — the set the job keeps is the pins', not
-   every route ever searched.
+   `breakerOpen`, `stopped`, `purged`). Run twice, the second run asks nothing and changes no row. Routes searched
+   outside the pins are not refreshed: their answer expires and the next search asks again — the set the job keeps is
+   the pins', not every route ever searched. It asks only while `catalog.site_pins` is on as well as the two flags
+   below: the routes it keeps are the pins', and without the pins no member sees them — a search asks for its own route.
+   Its flags are read again before each question (they are cached), so turning one off stops a run already going
+   (`stopped: 1`; AGENTS rule 3). With any of them off it asks nothing and still deletes the expired rows
+   (`{ skipped: 1, purged }`), so no answer outlives its day once the feature is off — platform's `retention` does not
+   know this table.
 6. **The flag** `catalog.site_prices`, `{ enabled: false }`, seeded off by `scripts/seed-flags.ts`, read under
    `catalog.estimates`, which stays the master switch: with estimates off nothing is read or asked, whatever this flag
-   says. With the site's prices off, the search, the pins, the quote and the job behave exactly as before — no row read,
-   no question, no `source` in any answer (tested). With them on and no valid rules, the site's answers still show; only
-   the fallback is missing (`*_estimates_unavailable{reason}` counts it as before). `pricing/estimate-rules.ts` splits
-   "may estimates show, and from what" (`estimateSources`) from "which rules" (`estimateRules`, unchanged).
+   says. With the site's prices off, the search, the pins and the quote behave exactly as before — no row read, no
+   question, no `source` in any answer — and the job asks nothing; it only deletes expired rows (tested). With them on
+   and no valid rules, the site's answers still show; only the fallback is missing (`*_estimates_unavailable{reason}`
+   counts it as before). `pricing/estimate-rules.ts` splits "may estimates show, and from what" (`estimateSources`) from
+   "which rules" (`estimateRules`, unchanged).
 7. **The contract — Option A** (`packages/shared`, AGENTS rule 9: this ADR). `EstimateVM` keeps its literals —
    `trip: "round_trip"`, `basis: "formula"` — and gains `source?: "site" | "club"` and `asOf?` (ISO, the moment the site
    answered; `site` only), both `.optional().catch(undefined)`. Both sources are the company's formula — the site
@@ -127,9 +133,10 @@ codes the site spells otherwise (`DJT`/`PBI`, `BSZ`/`FRU`, `GNJ`/`KVD`): a separ
   show the site's prices; airports the site does not know lose their number (`DJT`, `NBJ`) and show "Request a quote";
   a home outside North America (Chișinău) sees prices only to North America, as D6 says.
 - Whenever the site cannot be asked, the formula's drifts come back for that route until the site answers again.
-- Volume, per environment: the pins' routes (about 757 deals from the site's US cities, more as airport pairs) refreshed
-  every 18 hours — about 1.5–2.5k calls a day, at most 150 every ten minutes — plus one call per searched route without
-  a stored answer, a day. Staging and production share one host (ADR-IMPL-010), so the site sees both.
+- Volume, per environment: with the site's pins on, the pins' routes (about 757 deals from the site's US cities, more as
+  airport pairs) refreshed every 18 hours — about 1.5–2.5k calls a day, at most 150 every ten minutes — plus one call
+  per searched route without a stored answer, a day; with the pins off, the searches' calls alone. Staging and
+  production share one host (ADR-IMPL-010), so the site sees both.
 - A quote's estimate costs one more indexed read with the flag on (the route's row); Home's site pins one batched read.
 
 **Left to the owner.**
