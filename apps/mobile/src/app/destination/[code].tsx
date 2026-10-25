@@ -22,7 +22,9 @@ import {
 import { DEFAULT_ORIGIN, profileOrigin } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { clubPhoto } from "@/features/places/club-photos";
+import { Landmarks } from "@/features/places/Landmarks";
 import { bandPicture } from "@/features/places/place-photo-logic";
+import { usePlaceLandmarks } from "@/features/places/usePlaceLandmarks";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
@@ -45,8 +47,8 @@ const PAGE = {
 
 /**
  * A destination chosen on Search (04): the city's photograph, then the same destination as Explore's sheet shows (13) —
- * its country, the trip's chips, the fare's summary and local time, the flight options — and `Request a quote` over
- * the tab bar.
+ * its country, the trip's chips, the fare's summary and local time, the flight options — then up to three of the city's
+ * landmarks with their credits (ADR-IMPL-064; the images draw none), and `Request a quote` over the tab bar.
  */
 export default function DestinationScreen() {
   const params = useLocalSearchParams();
@@ -80,6 +82,8 @@ export default function DestinationScreen() {
   }, [given?.code]);
   const { state, dispatch, retry } = useSearch({ defaultFrom: given ?? found });
   const photoFor = usePlacePhotos([chosen?.airport.code]);
+  // Up to three landmarks of the city, each with its name and credit (ADR-IMPL-064); none — nothing at all.
+  const landmarks = usePlaceLandmarks(chosen?.airport.code);
 
   // The member's usual cabin and travelers first, then the destination with the dates it was last searched for.
   const usualCabin = profile?.preferences.cabin;
@@ -218,6 +222,7 @@ export default function DestinationScreen() {
               }
             />
           ) : null}
+          {ownAirport ? null : <Landmarks landmarks={landmarks} testIDPrefix="destination" />}
         </View>
       </ScrollView>
       {ownAirport ? null : (
