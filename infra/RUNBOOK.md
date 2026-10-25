@@ -292,8 +292,12 @@ All or nothing: a region or a country that does not answer, fewer than 80 % of l
 their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
 `platform.job_runs` says `failed` and why, and the worker's `/metrics` counts it in
 `bbc_job_failed{job="sync-site-destinations"}`, and `/status` turns red with the job in `failingJobs` until a run
-succeeds. A single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no
-answer, a 5xx) keeps last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
+succeeds. "Last night" is the snapshot while its day has more than an hour to run (ADR-IMPL-067): a run twelve hours
+after a good one is weighed against it, the run a day after is not — that snapshot serves no deal and no pin from then
+on — so a site that really lists a fifth fewer cities is taken a day after its last good read, with no step of yours;
+until then the failures above say so, and the deals and site pins stay on the last good read for its day. A single
+city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no answer, a 5xx) keeps
+last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
 asks (a minute without one, two at most), then the page is asked again; a second 429 on any page, a city's included,
 fails the night — unlike a city page that merely does not answer (`site getOne?id=…: HTTP 429 again after waiting`). The
 pace leaves room for staging's read at the same minute (about 50 a minute each against the address's 120), so a 429

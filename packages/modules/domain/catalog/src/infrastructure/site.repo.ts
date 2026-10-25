@@ -8,6 +8,11 @@ import type { PlacePhotoRow } from "./place-photos.repo";
 /** D6 (ADR-IMPL-067): a route the read wrote is served for this long — the CHECK `site_routes_validity` holds it. */
 export const SITE_ROUTE_VALID = sql`interval '24 hours'`;
 
+/** A snapshot holds back a read that lists far fewer cities (site-sync.ts) only while it has more than this left of its
+ *  day: with two runs a day, the run twelve hours after a good one is weighed against it, the run a day after is not —
+ *  what it would keep serves nothing from then on (ADR-IMPL-067). */
+const SITE_GUARD_LEFT = sql`interval '1 hour'`;
+
 /** A route still served `marginS` seconds from now: a reader that keeps what it read for a minute asks for a minute
  *  more, so nothing it serves passes its day while kept. */
 const served = (marginS = 0) =>
@@ -17,8 +22,14 @@ const served = (marginS = 0) =>
 
 /** ADR-IMPL-045. The site's destinations as the last night's read left them. */
 export const siteRepo = {
-  async count(exec: Executor): Promise<number> {
-    const [row] = await exec.select({ n: sql<number>`count(*)::int`.mapWith(Number) }).from(sitePlaces);
+  /** The cities a night's read is weighed against: the snapshot's, each written (or kept) by a read whose day has more
+   *  than SITE_GUARD_LEFT to run. Past that the snapshot holds back nothing, so a site that lastingly lists fewer
+   *  cities is taken at the run a day after the last good one, instead of leaving no deal and no pin for good. */
+  async guarding(exec: Executor): Promise<number> {
+    const [row] = await exec
+      .select({ n: sql<number>`count(*)::int`.mapWith(Number) })
+      .from(sitePlaces)
+      .where(gt(sitePlaces.syncedAt, sql`now() - ${SITE_ROUTE_VALID} + ${SITE_GUARD_LEFT}`));
     return row?.n ?? 0;
   },
 

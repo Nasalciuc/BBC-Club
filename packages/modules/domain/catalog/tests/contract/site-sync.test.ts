@@ -265,6 +265,43 @@ describe("site destinations — the nightly job", () => {
     await t.iso.drop();
   });
 
+  it("a site that keeps listing far fewer cities is taken once the last good read's day is ending (ADR-IMPL-067)", async () => {
+    const t = await setup("site-shrink-lasting");
+    await t.flags.set("catalog.site_photos", { enabled: true });
+    await t.run();
+    const before = await t.places();
+    /** Time passes for the snapshot: its read, and the day of every route it wrote. */
+    const age = async (hours: number) => {
+      await t.iso.db.execute(sql`
+        UPDATE catalog.site_places SET synced_at = synced_at - make_interval(hours => ${hours})`);
+      await t.iso.db.execute(sql`
+        UPDATE catalog.site_routes
+        SET synced_at = synced_at - make_interval(hours => ${hours}), valid_until = valid_until - make_interval(hours => ${hours})`);
+    };
+
+    t.site.regions = [t.site.regions[2]!]; // only Asia, from now on: 2 cities of 7
+    // The next run, twelve hours on: the snapshot serves another twelve — the read is refused, nothing changes.
+    await age(12);
+    await expect(t.run()).rejects.toThrow("the last night 6: nothing changed");
+    expect(await t.places()).toEqual(before);
+    // The run after, a day on: the snapshot serves nothing more — the site's list as it now is, Tokyo served again.
+    await age(12);
+    expect(await t.run()).toMatchObject({ read: 1, cities: 2, places: 1 });
+    expect((await t.places()).map((p) => p.cmsId)).toEqual([283]);
+    const [tokyo] = (await t.iso.db.execute(sql`
+      SELECT count(*)::int AS n FROM catalog.site_routes WHERE cms_id = 283 AND valid_until > now()`)) as unknown as {
+      n: number;
+    }[];
+    expect(tokyo?.n).toBeGreaterThan(0);
+    // And it guards again: the next run, an hour on, weighs a read against Tokyo alone — Kyoto, with no airport, is no
+    // city placed.
+    const japan = t.site.regions[0]!.countries[0]!;
+    japan.cities = japan.cities.filter((c) => c.id !== 283);
+    await age(1);
+    await expect(t.run()).rejects.toThrow("the last night 1: nothing changed");
+    await t.iso.drop();
+  });
+
   it("photos off, or a city skipped, takes effect on a night the site does not answer", async () => {
     const t = await setup("site-switch");
     await t.flags.set("catalog.site_photos", { enabled: true });

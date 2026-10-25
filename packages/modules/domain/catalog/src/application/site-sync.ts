@@ -3,7 +3,9 @@
  * (site-places.ts), checks each city's own photo answers, then — in one transaction — replaces the snapshot and puts
  * the site's photos on those airports, or takes them back. All or nothing: a site that does not answer, answers with
  * far fewer cities than last night, or whose cities no longer find their airports, changes nothing — except the
- * photos' own switch, which works on any night: off, or a city skipped, takes effect before the site is asked.
+ * photos' own switch, which works on any night: off, or a city skipped, takes effect before the site is asked. "Last
+ * night" is a snapshot still within its day (ADR-IMPL-067): one at its end holds back no read, so a site that keeps
+ * listing fewer cities is taken a day after its last good read rather than never.
  */
 import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
@@ -21,7 +23,8 @@ import {
 } from "./site-cms";
 import { planSite } from "./site-places";
 
-/** A night that finds, or places, fewer than this share of last night's cities changes nothing. */
+/** A night that finds, or places, fewer than this share of last night's cities changes nothing — while last night's
+ *  snapshot is within its day (siteRepo.guarding). */
 export const SITE_SHRINK_FLOOR = 0.8;
 /** Cities whose own page may fail before the night is given up (each kept as it was): this share, at least three. */
 export const SITE_FAILED_CEILING = 0.1;
@@ -83,7 +86,7 @@ export async function syncSite(
 
   const read = await readSite(deps.site);
   const listed = read.cities.length + read.failed.length;
-  const before = await siteRepo.count(deps.db);
+  const before = await siteRepo.guarding(deps.db);
   if (before > 0 && listed < before * SITE_SHRINK_FLOOR) {
     throw new SiteError("night", `the site lists ${listed} cities, the last night ${before}: nothing changed`);
   }

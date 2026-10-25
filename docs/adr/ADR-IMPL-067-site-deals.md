@@ -52,6 +52,11 @@ a day; a snapshot row is served for a day) and ADR-IMPL-040 (a demo offer an ope
    minute, ask a minute more (`valid_until > now() + 60 s`). A deal the site drops is deleted by the next sync's replace
    (all or nothing, as before); a sync that fails changes nothing, and the deals it leaves expire within the day; a city
    whose own page fails keeps its rows with the day their own read gave them, so it leaves the deals within a day too.
+   ADR-IMPL-045's guard — a night that lists or places fewer than 80 % of last night's cities changes nothing — weighs a
+   night against the snapshot only while its day has more than an hour to run (`siteRepo.guarding`, the places'
+   `synced_at`): the run twelve hours after a good one is refused, the run a day after is not, since what it would keep
+   serves nothing from then on. Without that, a site that lastingly drops a fifth of its cities would leave Explore
+   with no deal and no site pin for good; with it, they are back a day after the last good read.
 3. **Twice a day.** `sync-site-destinations` runs at 07:40 and 19:40 UTC (was 07:40): with a day of validity, a run
    once a day would end each day's deals minutes before the next run wrote its own, and one failed night would empty
    Explore for a day. Twice a day, one failed run leaves the deals twelve more hours. It reads the site when the site's
