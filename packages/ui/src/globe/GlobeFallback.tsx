@@ -18,8 +18,9 @@ import {
   projector,
   radiusFor,
 } from "./globe-logic";
+import { drawnGlobeTap } from "./globe-tap";
 import { GlobePin, RouteEnd } from "./GlobePin";
-import { type PinToPlace, type Rect, labelScale, pinAt, pinPriority, placeLabels } from "./pin-labels";
+import { type PinToPlace, type Rect, labelScale, pinPriority, placeLabels } from "./pin-labels";
 
 /**
  * A destination on the globe. `fromPrice` is the formatted starting fare (`$3,900`), empty for a destination chosen
@@ -196,30 +197,19 @@ export function GlobeFallback({
     if (code !== selected && (!tap || pressGuard.choose(code))) onSelect(code);
   }
 
-  // ADR-IMPL-068: a tap, in the view that was on screen. On a pin it is the pin's — chosen here too, for the tap may
-  // cancel the pin's own press (the guard keeps it to one choice); on the sky it is nothing; elsewhere on the disc it
-  // is the place under the finger. A chosen route's view takes no tap: its ends are no targets.
+  // ADR-IMPL-068: a tap, in the view that was on screen — whose it is, `drawnGlobeTap` decides (globe-tap.ts). On a pin
+  // it is the pin's — chosen here too, for the tap may cancel the pin's own press (the guard keeps it to one choice); on
+  // the sky it is nothing; elsewhere on the disc it is the place under the finger. A chosen route's view takes no tap:
+  // its ends are no targets.
   function onTap(x: number, y: number, view: GlobeView) {
-    if (sel) return;
     const seen = projector(size, view.rotation, view.zoom);
-    const hit = pinAt(x, y, pinsInView(pins, seen, labels).placed);
-    if (hit) {
-      choosePin(hit);
-      return;
+    const placedThen = sel ? [] : pinsInView(pins, seen, labels).placed;
+    const choice = drawnGlobeTap({ x, y }, { size, view, placed: placedThen, route: sel !== null }, pressGuard);
+    if (choice?.kind === "pin") {
+      choosePin(choice.code);
+    } else if (choice?.kind === "place") {
+      onTapPlace?.(choice.tap);
     }
-    if (!onTapPlace || pressGuard.pressedLately()) return;
-    const at = seen.invert(x, y);
-    if (!at) return;
-    onTapPlace({
-      lng: at[0],
-      lat: at[1],
-      x,
-      y,
-      project: (p) => {
-        const xy = seen.point([p.lng, p.lat]);
-        return xy ? { x: xy[0], y: xy[1] } : null;
-      },
-    });
   }
   useEffect(() => engine.onTap(onTap), [engine, onTap]);
 

@@ -113,7 +113,6 @@ export {
   ZOOM_RANGE,
   globePadding,
   mapPoint,
-  mapTap,
   radiusAtZoom,
   routeCamera,
   routeLine,
@@ -121,6 +120,7 @@ export {
   type GlobeCamera,
   type LngLat,
 } from "./globe/globe-geo";
+export { drawnGlobeTap, mapboxPress, type TapChoice } from "./globe/globe-tap";
 
 export { EmptyState } from "./states/EmptyState";
 export { ErrorState, NoticeCard, StateMessage } from "./states/ErrorState";

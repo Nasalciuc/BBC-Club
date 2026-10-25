@@ -38,7 +38,7 @@ import {
   globePadding,
   labelScale,
   mapPoint,
-  mapTap,
+  mapboxPress,
   pinFrame,
   pinPriority,
   placeLabels,
@@ -144,8 +144,9 @@ export default function MapboxGlobe({
   const [arc, setArc] = useState(1);
   // Where the camera stands, for the labels: which pins are on the near side, and on which side each label fits.
   const [seen, setSeen] = useState<GlobeCamera>({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM });
-  // ADR-IMPL-068: a pin's press, so a map press of the same touch is not taken for a tap beside it (Android's map
-  // absorbs a press on a MarkerView; iOS is unchecked).
+  // ADR-IMPL-068: one choice per touch. @rnmapbox/maps 10.3.7 keeps a press on a MarkerView from the map (iOS ignores the
+  // touch, Android absorbs the press), but a press in a pin's hit slop, outside its MarkerView, reaches the map — and on
+  // Android may reach the pin too: whichever answers first chooses.
   const [pressGuard] = useState(() => createPressGuard());
 
   const moving = appActive && !paused && !reducedMotion;
@@ -282,23 +283,28 @@ export default function MapboxGlobe({
 
   const line = dest && home ? routeLine(home, dest) : null;
   const middle = dest && home ? routeMiddle(home, dest) : null;
-  // ADR-IMPL-068: a press at rest on the globe, on no pin, is a tap on the place under it (`mapTap`). A press on the sky
-  // — Mapbox answers it with a place on its horizon, which Android reports reprojected onto the limb, not where the finger
-  // was — or on a pin's target, which the pin's own press answers, is not.
+  // ADR-IMPL-068: with the globe's tap, a press at rest — whose it is, `mapboxPress` decides (globe-tap.ts). On a pin's
+  // 44-pt target it is the pin's: the map gets the press in the ring outside the MarkerView, where the pin's own press
+  // does not reach, and chooses the pin through the guard. On the sky — Mapbox answers it with a place on its horizon,
+  // which Android reports reprojected onto the limb, not where the finger was — it is nothing; elsewhere on the disc, the
+  // place under the finger. Without the tap (no list to snap to) a press only pauses the turn, as before.
   function onMapPress(feature: {
     geometry: { coordinates: number[] };
     properties: { screenPointX: number; screenPointY: number };
   }) {
     touched(view.current); // a press is a touch: the slow turn pauses for it too
-    if (!onTapPlace || selected !== null || pressGuard.pressedLately()) return;
+    if (!onTapPlace) return;
     const [lng, lat] = feature.geometry.coordinates;
     if (lng === undefined || lat === undefined) return;
     const cam: GlobeCamera = { center: [...view.current.center] as LngLat, zoom: view.current.zoom };
     const screen = { x: feature.properties.screenPointX, y: feature.properties.screenPointY };
-    // The finger and the city in one projection, so how far apart they stand on screen is measured alike.
-    const at = mapTap({ lng, lat, screen }, cam, centre, placed);
-    if (!at) return;
-    onTapPlace({ lng, lat, x: at.x, y: at.y, project: (p) => mapPoint(p, cam, centre) });
+    const seenThen = { camera: cam, centre, placed, route: selected !== null };
+    const choice = mapboxPress({ lng, lat, screen }, seenThen, pressGuard);
+    if (choice?.kind === "pin") {
+      if (pressGuard.choose(choice.code)) onSelect(choice.code);
+    } else if (choice?.kind === "place") {
+      onTapPlace(choice.tap);
+    }
   }
 
   // Mapbox's terms: logo and attribution always visible — just above the sheet.

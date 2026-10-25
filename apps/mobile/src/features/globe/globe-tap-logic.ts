@@ -83,6 +83,29 @@ export function answerTap<P extends Spot>(
   return { kind: "place", place: nearest.place, km: nearest.km, showDistance };
 }
 
+/** What Explore does with a tap: open a city (with the distance line, or none), or show an answer. */
+export type ExploreTap<P> =
+  { kind: "open"; place: P; note: string | null } | { kind: "answer"; answer: "none" | "home" };
+
+/**
+ * A tap on Explore's globe (ADR-IMPL-068, decision 4): only at rest (02) — with a route chosen (13) or every offer
+ * raised (16) a tap does what it did, nothing. A city opens with `Nearest: Rome · 180 km` when the line is to be shown;
+ * nothing near, or the member's own city, is an answer. Null without a list, as `answerTap`.
+ */
+export function exploreTap<P extends Spot & { city: string }>(
+  mode: "rest" | "route" | "all",
+  tap: GlobeTap,
+  places: readonly P[] | undefined,
+  home: Spot | null,
+): ExploreTap<P> | null {
+  if (mode !== "rest") return null;
+  const answer = answerTap(tap, places, home);
+  if (!answer) return null;
+  if (answer.kind !== "place") return { kind: "answer", answer: answer.kind };
+  const note = answer.showDistance ? nearestLine(answer.place.city, answer.km) : null;
+  return { kind: "open", place: answer.place, note };
+}
+
 /** The distance as the line prints it: to the nearest 10 km, at least 10. */
 export function roundKm(km: number): number {
   return Math.max(10, Math.round(km / 10) * 10);

@@ -91,14 +91,19 @@ all`. No image draws the answer or the distance line (`DESIGN.md` has no rule fo
    (the engine builds both gestures once; the detector swaps them only when a list comes or goes). The composition is
    pinned by `globe-engine.test.ts` against the library's own gesture builders (the Race, the 8-pt `maxDist` equal to
    the pan's `minDist`, no Tap without a list); that a drag then fires no tap is the library's doing, checked on a
-   phone. Mapbox (`mapTap`): Mapbox answers a press beside the globe with the nearest place on its horizon, and on
-   Android @rnmapbox/maps 10.3.7 reports as the press's screen point that place reprojected (`pixelForCoordinate`), on
-   the limb — not the finger. So the place decides first: one past the near side (`NEAR_SIDE_DEG`, 80°, where no pin is
-   drawn either) is the sky's. Then the screen point must be on the disc (`onGlobeDisc`: the radius at the camera's zoom
-   around the globe's centre — iOS reports the finger) and on no pin's target; a press within 400 ms of a pin's press is
-   the pin's (Android's map absorbs a press on a MarkerView; iOS is unchecked). Then the place Mapbox gives is the tap.
-   Pins, labels, the route view and reduced motion are unchanged. The globe gains no accessible element: Search stays
-   the screen reader's way to a city.
+   phone. Mapbox (`mapboxPress`, then `mapTap`): a press on a pin's 44-pt target is the pin's. @rnmapbox/maps 10.3.7
+   keeps a press on a MarkerView from the map (iOS's map ignores a touch whose view is in one, Android's absorbs a press
+   inside one), but a MarkerView is the pin's own frame, without the hit slop that grows it to 44 pt: a press in that
+   ring reaches the map, and on iOS the map alone — so the map's press chooses the pin, through the guard (Android may
+   send the press to the pin too). Mapbox answers a press beside the globe with the nearest place on its horizon, and
+   on Android reports as the press's screen point that place reprojected (`pixelForCoordinate`), on the limb — not the
+   finger. So the place decides first: one past the near side (`NEAR_SIDE_DEG`, 80°, where no pin is drawn either) is
+   the sky's. Then the screen point must be on the disc (`onGlobeDisc`: the radius at the camera's zoom around the
+   globe's centre — iOS reports the finger); a press within 400 ms of a pin's press is that pin's. Then the place Mapbox
+   gives is the tap. Each globe's choice is one pure function (`globe-tap.ts`: `drawnGlobeTap`, `mapboxPress`; Explore's
+   `exploreTap`), tested for the pin first, the sky, the route view, the guard and the rest stop. Pins, labels, the
+   route view and reduced motion are unchanged. The globe gains no accessible element: Search stays the screen reader's
+   way to a city.
 8. **The black globe's floor, over the air.** Mapbox's `background` layer (`existing`) is recoloured to the drawn
    globe's deep ocean (`globe-ocean-deep`): a missing tile shows the sea, never near-black. The satellite tile probe
    (F107) is asked again when the app comes back to the foreground or the phone comes back online, while Mapbox is the
@@ -136,7 +141,8 @@ new design component for the answer: no image draws one; the existing notice hol
 - **To check on a phone** (not runnable here): Mapbox's `onPress` over the sky, beside the globe at rest and in a corner
   zoomed in, on Android above all (its place is the horizon's, past the near side: `mapTap` ignores it — if the camera's
   horizon stood short of 80° the zoomed-in corner would show it); 10 swipes across the globe fire 0 taps, on both
-  globes, with the flag on; a pin's press on iOS is not also a map press (a doubled press would choose once, through the
-  guard); with the flag on, the drawn globe's pins still open on the first tap (the Tap's activation and the pin's
-  press); the e2e flows that tap `globe.pin.LHR` run with the flag off, so they keep the drawn globe of before; a
-  missing tile shows the ocean, not black.
+  globes, with the flag on; with the flag on, a press just beside a Mapbox pin, inside its 44-pt target, opens the pin
+  once on both platforms; with the flag on, the drawn globe's pins still open on the first tap (the Tap's activation and
+  the pin's press); the e2e flows that tap `globe.pin.LHR` run with the flag off, so they keep the drawn globe of
+  before; a missing tile shows the ocean, not black. With the flag off Mapbox's pins answer as before this change: on
+  iOS only inside the MarkerView's frame (the ring is the map's, which then only pauses the turn) — a separate change.

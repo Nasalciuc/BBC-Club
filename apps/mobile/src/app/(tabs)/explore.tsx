@@ -38,7 +38,7 @@ import { SkyBackdrop, SkyClouds } from "@/features/explore/SkyBackdrop";
 import { useExploreHome } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
-import { NOTHING_NEAR, answerTap, nearestLine } from "@/features/globe/globe-tap-logic";
+import { NOTHING_NEAR, exploreTap } from "@/features/globe/globe-tap-logic";
 import { useDestinations } from "@/features/globe/useDestinations";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
@@ -137,17 +137,15 @@ export default function ExploreScreen() {
   // before. The search stays the screen reader's way to a city: the globe gains no element.
   const canTapGlobe = (home?.bookable?.length ?? 0) > 0;
   function onTapGlobe(tap: GlobeTap) {
-    if (mode !== "rest") return;
-    const homeAirport = home?.home ?? null;
-    const answer = answerTap(tap, home?.bookable, homeAirport);
-    if (!answer) return;
-    if (answer.kind !== "place") {
+    const what = exploreTap(mode, tap, home?.bookable, home?.home ?? null);
+    if (!what) return;
+    if (what.kind === "answer") {
       setTapNote(null);
-      setTapAnswer(answer.kind);
+      setTapAnswer(what.answer);
       return;
     }
-    const { place } = answer;
-    setTapNote(answer.showDistance ? { code: place.code, line: nearestLine(place.city, answer.km) } : null);
+    const { place, note } = what;
+    setTapNote(note ? { code: place.code, line: note } : null);
     // A city with a pin opens as its pin does, with everything the pin knows (its zone, its line).
     selectDestination(pinToAirport(place.code) ?? place);
   }

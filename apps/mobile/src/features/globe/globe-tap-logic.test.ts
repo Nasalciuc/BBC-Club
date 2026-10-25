@@ -6,12 +6,14 @@
  */
 import { describe, expect, it } from "bun:test";
 import type { GlobeTap } from "@bbc/ui";
+import { drawnGlobeTap } from "@bbc/ui/globe-tap";
 
 import {
   DISTANCE_SHOWN_PT,
   HOME_METRO_KM,
   TAP_REACH_KM,
   answerTap,
+  exploreTap,
   greatCircleKm,
   nearestBookable,
   nearestLine,
@@ -119,6 +121,82 @@ describe("the scripted taps (3.3 globe)", () => {
     const gaps = OCEAN_10.map(nearestKm);
     expect(Math.round(Math.min(...gaps))).toBe(1399);
     expect(Math.round(Math.max(...gaps))).toBe(5288);
+  });
+});
+
+/** The drawn globe at rest: its 760-pt frame (GLOBE_SPEC.frame) at zoom 1, 168 pt across its radius (02). */
+const FRAME = 760;
+const NO_PRESS = { pressedLately: () => false };
+
+/**
+ * A finger on `at` on the drawn globe, as its engine reports a tap: the globe turned so `at` stands 25° west of the
+ * view's centre, the finger where `at` is drawn — and what the globe's own tap makes of it (`drawnGlobeTap`: the pins
+ * first, then `projector`'s inverse under the finger).
+ */
+function drawnTapAt(at: { lat: number; lng: number }): GlobeTap {
+  const view = { rotation: [-(at.lng + 25), -at.lat] as const, zoom: 1 };
+  const seen = { size: FRAME, view, placed: [], route: false };
+  // Where `at` is drawn in that view: the projection a tap at the centre carries.
+  const probe = drawnGlobeTap({ x: FRAME / 2, y: FRAME / 2 }, seen, NO_PRESS);
+  if (probe?.kind !== "place") throw new Error("the view's centre is on the globe");
+  const finger = probe.tap.project(at);
+  if (!finger) throw new Error("the tap is on the near side");
+  const choice = drawnGlobeTap(finger, seen, NO_PRESS);
+  if (choice?.kind !== "place") throw new Error("a finger on the disc, on no pin, is a place");
+  return choice.tap;
+}
+
+describe("the scripted taps through the drawn globe's own tap (3.3 globe)", () => {
+  it("20 taps near the site's cities: the place under the finger, then the right city, no distance line at rest", () => {
+    const got = TAPS_20.map(({ tap }) => {
+      const t = drawnTapAt(tap);
+      expect(greatCircleKm(t, tap)).toBeLessThan(0.01); // the inverse finds the place the finger is on
+      return exploreTap("rest", t, SITE_CITY_PLACES, HOME_NYC);
+    });
+    expect(got.map((a) => (a?.kind === "open" ? a.place.code : a?.kind))).toEqual(TAPS_20.map((t) => t.expect));
+    expect(got.every((a) => a?.kind === "open" && a.note === null)).toBe(true);
+  });
+
+  it("10 taps over open sea: the calm answer", () => {
+    for (const sea of OCEAN_10) {
+      expect({ sea: sea.name, what: exploreTap("rest", drawnTapAt(sea), SITE_CITY_PLACES, HOME_NYC) }).toEqual({
+        sea: sea.name,
+        what: { kind: "answer", answer: "none" },
+      });
+    }
+  });
+});
+
+describe("exploreTap — what Explore does with a tap on the globe", () => {
+  const rome = SITE_CITY_PLACES.find((p) => p.code === "FCO")!;
+  const near = destination(rome, 200, 300);
+
+  it("only at rest: with a route chosen (13) or every offer raised (16) a tap does nothing", () => {
+    expect(exploreTap("rest", tapAt(near), SITE_CITY_PLACES, HOME_NYC)).toMatchObject({ kind: "open" });
+    expect(exploreTap("route", tapAt(near), SITE_CITY_PLACES, HOME_NYC)).toBeNull();
+    expect(exploreTap("all", tapAt(near), SITE_CITY_PLACES, HOME_NYC)).toBeNull();
+    expect(exploreTap("route", tapAt(OCEAN_10[0]!), SITE_CITY_PLACES, HOME_NYC)).toBeNull();
+  });
+
+  it("opens the city, with the distance line only when the city stands away from the finger", () => {
+    expect(exploreTap("rest", tapAt(near), SITE_CITY_PLACES, null)).toEqual({ kind: "open", place: rome, note: null });
+    expect(exploreTap("rest", tapAt(near, 1 / 12.6), SITE_CITY_PLACES, null)).toEqual({
+      kind: "open",
+      place: rome,
+      note: "Nearest: Rome · 300 km",
+    });
+  });
+
+  it("nothing near, or the member's own city, is an answer; no list is nothing", () => {
+    expect(exploreTap("rest", tapAt(OCEAN_10[0]!), SITE_CITY_PLACES, HOME_NYC)).toEqual({
+      kind: "answer",
+      answer: "none",
+    });
+    expect(exploreTap("rest", tapAt({ lat: 40.758, lng: -73.9855 }), SITE_CITY_PLACES, HOME_NYC)).toEqual({
+      kind: "answer",
+      answer: "home",
+    });
+    expect(exploreTap("rest", tapAt(near), undefined, HOME_NYC)).toBeNull();
   });
 });
 
