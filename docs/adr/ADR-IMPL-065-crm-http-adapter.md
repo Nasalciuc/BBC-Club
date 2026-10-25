@@ -2,8 +2,11 @@
 
 Status: proposed · Date: 2026-10-25 · Scope: `packages/shared/src/env.ts` (`CRM_API_URL`, `CRM_API_SECRET`;
 `CRM_ADAPTER=http` accepted — AGENTS.md rule 9), `integration/crm` (the adapter and its errors), `domain/requests`
-(`send-requests` gives a refused request up at once), `infra/env/*.env.example`, `infra/RUNBOOK.md`,
-`docs/store/data-safety.md` · Amends ADR-IMPL-023 point 1 (`http` no longer throws). No migration.
+(`send-requests` gives a refused request up at once), the app's words for a request not passed on (brief 3.5),
+`infra/env/*.env.example`, `infra/RUNBOOK.md`, `docs/store/data-safety.md` · Amends ADR-IMPL-023 point 1 (`http` no
+longer throws) and ADR-IMPL-042, "The state a member reads" (the six-attempt rule: a request the CRM refuses is given up
+at once; the app offers the call only when the build has the club's general line, and otherwise says the club will try
+again, without asking the member to send the request a second time). No migration.
 
 **Context.**
 
@@ -34,19 +37,30 @@ Status: proposed · Date: 2026-10-25 · Scope: `packages/shared/src/env.ts` (`CR
    | `X-BBC-Timestamp` | Unix time in seconds, as decimal text (`1800000000`)                          |
    | `X-BBC-Signature` | lowercase hex of HMAC-SHA256, key `CRM_API_SECRET`, over `<timestamp>.<body>` |
 
-   `<body>` is the request body's exact bytes, UTF-8, as sent. To check it, the CRM:
+   `<body>` is the request body's exact bytes, UTF-8, as sent. The key is the secret's characters as UTF-8 bytes, as
+   both sides hold it in their settings: never hex- or base64-decoded, even when it looks like hex (the env example
+   suggests `openssl rand -hex 32`, and those 64 characters are the key). Only the timestamp and the body are signed —
+   not the method, the path or another header. To check a call, the CRM:
    - reads the raw body before parsing it;
    - computes `hex(HMAC_SHA256(secret, timestamp + "." + body))`;
    - compares it with `X-BBC-Signature` in constant time;
    - refuses a timestamp more than 300 seconds from its own clock (our suggestion), so a captured call cannot be
-     replayed later.
+     replayed later;
+   - refuses a call whose `Idempotency-Key` differs from the body's `reference` (point 4): the header is not signed, the
+     body is, so a call replayed within the window under another key would otherwise pass its de-duplication.
 
-   Each try signs its own timestamp. The secret never leaves the server. A test vector, with made-up values: key `a`
-   × 32, timestamp `1700000000`, body `{"reference":"R-T001"}` give
-   `e9cac67c8d4e9078b3988338555ba85410dce442215986480495561ecd617a37` (`http-crm.test.ts` holds it).
+   Each try signs its own timestamp. The secret never leaves the server. Test vectors, with made-up values (timestamp
+   `1700000000`, body `{"reference":"R-T001"}`; `http-crm.test.ts` holds them):
+
+   | Key                                               | `X-BBC-Signature`                                                  |
+   | ------------------------------------------------- | ------------------------------------------------------------------ |
+   | `a` × 32                                          | `e9cac67c8d4e9078b3988338555ba85410dce442215986480495561ecd617a37` |
+   | `made-up-signing-key-not-hex-0001`                | `8906ce4ebc5577e87e8fbb382d9639bc868f39eb40c82cbdfa8ee9197aa4d5cb` |
+   | `a` × 32 hex-decoded (16 bytes `0xaa`): **wrong** | `b63f6006d4a8d069d2929ed5c894124a136ba2e4b4ede08b161f1b5972d6de7d` |
 
 4. **Idempotent on the reference.** `Idempotency-Key: <reference>` (`R-` and eight hex digits, unique per request,
-   `requests_reference`). A resend is the same key and the same body: a copy the CRM can drop. One exception: an
+   `requests_reference`), the same value as the signed body's `reference`. A resend is the same key and the same body:
+   a copy the CRM can drop. One exception: an
    offer request's `offer` is read at each try, so a resend after the offer changed carries its new price. A send that
    timed out may have arrived, and its resend is that copy. We expect a 2xx for a key the CRM has already seen.
 5. **5 s per call.** The adapter's own `AbortSignal.timeout` (injectable, so the tests take 200 ms), inside the 5 s
@@ -80,6 +94,12 @@ Status: proposed · Date: 2026-10-25 · Scope: `packages/shared/src/env.ts` (`CR
 8. **The status comes back as it does now.** The CRM calls `POST /v1/internal/requests/<_request_id>/status` with
    `X-Internal-Secret` and `{ "status": "assigned" | "quoted" | "booked" | "closed", "note"?, "agentId"? }`. A step back
    is answered 409. A repeat changes nothing and is answered `unchanged: true`. The `note` is shown to the member.
+   `INTERNAL_API_SECRET` is the system principal's (`packages/shared/src/authz/principal.ts`): besides
+   `requests:update-any` it holds `proposals:ingest`, `proposals:withdraw`, `conversions:ingest`, `jobs:run`,
+   `catalog:import`, `campaigns:manage`, `ops:read` and `ops:act` (`permissions.ts`). Handed to the CRM, it would let
+   the CRM publish and withdraw offers, import fares, run jobs and manage campaigns. The route is kept as it is; before
+   the CRM calls it, it gets a credential of its own (Left to the owner). Narrowing it changes authz, which needs its
+   own ADR (AGENTS.md rule 9).
 
 **Consequences.**
 
@@ -91,8 +111,9 @@ Status: proposed · Date: 2026-10-25 · Scope: `packages/shared/src/env.ts` (`CR
 - The CRM receives the fields the e-mail carried (`docs/store/data-safety.md`), and nothing is logged on the way.
 - Tests:
   - `packages/modules/integration/crm/tests/contract/http-crm.test.ts`, against a fake CRM (`Bun.serve` on port 0):
-    - the signature verifies with the secret, not with another, and not over a changed body;
-    - `Idempotency-Key` is the reference, and a resend sends the same key and body;
+    - the signature verifies with the secret, not with another, and not over a changed body; point 3's vectors, the
+      key never decoded;
+    - `Idempotency-Key` is the reference and the body's `reference`, and a resend sends the same key and body;
     - a hanging CRM is a retryable timeout, within the adapter's ceiling and within `withCrmTimeout`'s;
     - 500, 503, 429 and 408 are retryable; 400, 401, 403, 404, 409, 422 and a redirect are permanent;
     - an unreachable CRM is retryable;
@@ -111,6 +132,9 @@ Status: proposed · Date: 2026-10-25 · Scope: `packages/shared/src/env.ts` (`CR
 
 **Left to the owner.**
 
+- **A credential of its own for the CRM's status calls, before go-live.** Not `INTERNAL_API_SECRET`, which unlocks
+  every system permission (point 8): a separate secret or JWT whose principal holds `requests:update-any` only. Its own
+  ADR (authz, `packages/shared`).
 - **The CRM's real address and authentication.** Is an HMAC signature acceptable to the CRM, or does it need its own
   (an API key in a header, OAuth)? A different scheme changes the adapter.
 - **The payload mapping.** Today the CRM receives `CrmRequestPayload` as it is: snake_case, the fields of
@@ -120,14 +144,16 @@ Status: proposed · Date: 2026-10-25 · Scope: `packages/shared/src/env.ts` (`CR
   1. **Members (`findByEmail`).** Is there a lookup by e-mail, or a read-only export for the mirror? Which fields
      (client id, name, home airport), and how fresh?
   2. **Status callbacks.** Will the CRM call `POST /v1/internal/requests/:id/status` for quoted, booked and closed?
-     Which of its states map to ours? Who keeps `INTERNAL_API_SECRET` on its side? The `note` is shown to the member.
+     Which of its states map to ours? It gets a credential scoped to that route (above), not `INTERNAL_API_SECRET`;
+     who keeps it on its side? The `note` is shown to the member.
   3. **The idempotency window.** How long does the CRM remember an `Idempotency-Key`? What does it answer for a key it
      has seen: we expect a 2xx, and a 409 would give the request up as refused. What happens to a key reused with a
      changed body (an offer repriced between two tries)?
   4. **Rate limits.** How many calls a minute, and does it answer 429 with `Retry-After`? We send at most 20 a minute,
      one at a time.
   5. **The rest of the signature.** Is 300 seconds of clock difference acceptable? Does it answer 401 to a bad
-     signature?
+     signature? Will it key the secret as text (point 3), and refuse an `Idempotency-Key` that is not the body's
+     `reference`? If it would rather have the key signed too, the scheme becomes `<timestamp>.<key>.<body>`.
   6. **Refusals.** Which statuses mean "this request will never be accepted" and which mean "try later"? That decides
      whether point 6's table holds for its 4xx.
   7. **Network.** Does it allow calls only from known addresses? Then it needs the API's outbound address.

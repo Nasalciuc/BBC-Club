@@ -6,7 +6,7 @@ Status: accepted · Date: 2026-09-27 · Amends nothing. `packages/shared` is ADR
 
 **Decision.**
 
-1. `CRM_ADAPTER` may be `email`. It stays `mock` unless env says otherwise. `http` still throws.
+1. `CRM_ADAPTER` may be `email`. It stays `mock` unless env says otherwise. `http` still throws. (Amended by ADR-IMPL-065: `http` is built and no longer throws.)
 2. `OPERATORS_EMAIL` and `OPS_LINK_SECRET` (at least 32 characters) are required when `CRM_ADAPTER=email`.
 3. An operator link is an HMAC over one request id, one status, and a one-week expiry. GET confirms. POST is the only transition.
 

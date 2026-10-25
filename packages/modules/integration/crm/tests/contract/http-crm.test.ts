@@ -137,10 +137,22 @@ describe("http CRM — signed", () => {
     expect(body.client).toEqual({ name: "Alex Example", phone: "+12125550148", email: "alex@example.test" });
   });
 
-  it("signCrmCall is the scheme the CRM checks: the ADR's test vector", () => {
-    // Made-up values (ADR-IMPL-065): the CRM team can check their implementation against this vector.
-    const sig = signCrmCall("a".repeat(32), "1700000000", '{"reference":"R-T001"}');
-    expect(sig).toBe("e9cac67c8d4e9078b3988338555ba85410dce442215986480495561ecd617a37");
+  it("signCrmCall is the scheme the CRM checks: the ADR's test vectors", () => {
+    // Made-up values (ADR-IMPL-065): the CRM team can check their implementation against these vectors.
+    const body = '{"reference":"R-T001"}';
+    expect(signCrmCall("a".repeat(32), "1700000000", body)).toBe(
+      "e9cac67c8d4e9078b3988338555ba85410dce442215986480495561ecd617a37",
+    );
+    // The key is the secret's characters as UTF-8 bytes, never decoded: a key that is not hex signs all the same…
+    expect(signCrmCall("made-up-signing-key-not-hex-0001", "1700000000", body)).toBe(
+      "8906ce4ebc5577e87e8fbb382d9639bc868f39eb40c82cbdfa8ee9197aa4d5cb",
+    );
+    // …and a hex-looking one is not decoded: its decoded bytes give another MAC, which the CRM must not compute.
+    const decoded = createHmac("sha256", Buffer.from("a".repeat(32), "hex"))
+      .update(`1700000000.${body}`)
+      .digest("hex");
+    expect(decoded).toBe("b63f6006d4a8d069d2929ed5c894124a136ba2e4b4ede08b161f1b5972d6de7d");
+    expect(signCrmCall("a".repeat(32), "1700000000", body)).not.toBe(decoded);
   });
 });
 
@@ -152,6 +164,10 @@ describe("http CRM — idempotent on the reference", () => {
     await crm.submitRequest(payload({ _attempt: 2 }));
     expect(seen.map((c) => c.headers.get("idempotency-key"))).toEqual(["R-T001", "R-T001"]);
     expect(seen[1]!.body).toBe(seen[0]!.body);
+    // The key is not signed; the body is, and names the same reference: the CRM refuses a call where they differ.
+    for (const c of seen) {
+      expect((JSON.parse(c.body) as { reference: string }).reference).toBe(c.headers.get("idempotency-key")!);
+    }
     // Each call signs its own time: a captured call cannot be replayed later as a fresh one.
     expect(seen.map((c) => c.headers.get("x-bbc-timestamp"))).toEqual(["1800000000", "1800000001"]);
     expect(seen.every((c) => verifies(SECRET, c))).toBe(true);
