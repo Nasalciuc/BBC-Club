@@ -1,9 +1,9 @@
 /**
  * The company site's deals as Home's "Offers to inspire" (ADR-IMPL-067). The site lists its prices from about 25 US
- * cities (`site_routes`, the nightly snapshot): a member sees the deals from their own airport and its metro first, then
- * — where those run out, or where the site sells nothing from home (Seattle, Toronto, Chișinău) — the deals from the
- * nearest city the site does sell from, by great-circle distance, each saying where it leaves from ("from New York").
- * One deal per destination city: the nearest origin's. Pure: no database, no network.
+ * cities (`site_routes`, the snapshot read twice a day): a member sees the deals from their own airport and its metro
+ * first, then — where those run out, or where the site sells nothing from home (Seattle, Toronto, Chișinău) — the deals
+ * from the nearest city the site does sell from, by great-circle distance, each saying where it leaves from ("from New
+ * York"). One deal per destination city: the nearest origin's. Pure: no database, no network.
  */
 import { SAME_METRO_KM, distanceKm } from "../pricing/estimate";
 import { SITE_ORIGIN_AIRPORTS } from "./site-places";

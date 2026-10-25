@@ -28,15 +28,15 @@ a day; a snapshot row is served for a day) and ADR-IMPL-040 (a demo offer an ope
   it. The site does not say, per deal. (What the read measured about these prices stays with the private evidence.)
 - **Where offers live today.** `proposals.offers`: a broadcast offer becomes a notifications campaign pushed to every
   member (`on-offer-published.ts`); the feed has no origin filter, so a New York member would get Los Angeles' deals;
-  a price change under the same idempotency key is a 409, so a nightly change is a withdraw and a new offer — a new id,
-  old links 410, states lost, another push; `offer_source` knows `crm_agent | marketing_campaign` only, and an offer has
-  no published source, no trip and no origin name; catalog declares `needs: []` and rule 1 allows a call for questions
-  only, so catalog cannot ingest offers. ADR-IMPL-045 already rejected "the site's prices as offers" for the first two
-  reasons. A catalog fare needs a carrier, times and a sourced published price; the deals have none.
+  a price change under the same idempotency key is a 409, so a change at each sync is a withdraw and a new offer — a new
+  id, old links 410, states lost, another push; `offer_source` knows `crm_agent | marketing_campaign` only, and an offer
+  has no published source, no trip and no origin name; catalog declares `needs: []` and rule 1 allows a call for
+  questions only, so catalog cannot ingest offers. ADR-IMPL-045 already rejected "the site's prices as offers" for the
+  first two reasons. A catalog fare needs a carrier, times and a sourced published price; the deals have none.
 
 **Decision.**
 
-1. **Catalog-held site deals.** The nightly snapshot the catalog already keeps — `catalog.site_routes`, one row per
+1. **Catalog-held site deals.** The snapshot the catalog already keeps — `catalog.site_routes`, one row per
    (US airport, site city): the site's deal id, its "Price Today", its "Old Price" — is the deal list. Not broadcast
    offers through `proposals`, not `catalog.fares`. Nothing is pushed, nothing new is written per member, and a deal is
    read by the member's airport.

@@ -2,7 +2,7 @@
  * The company's site (ADR-IMPL-045), read through its own API — buybusinessclass.com/api, the backend the site reads
  * (it answered at weba.buybusinessclass.com until that name stopped resolving; ADR-IMPL-062). Seven regions; each
  * region's countries; each country's cities; a city's page carries its photo, the US cities the site lists a price from,
- * and where it sits (region › country › city). Read-only, once a night, with the club's User-Agent: at most four
+ * and where it sits (region › country › city). Read-only, twice a day, with the club's User-Agent: at most four
  * requests at a time, the API's paced to its rate limit (`API_GAP_MS`). The site has no IATA codes: site-places.ts finds
  * the airports.
  */

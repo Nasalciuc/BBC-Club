@@ -1,4 +1,4 @@
-/** The site's destinations against the database (ADR-IMPL-045): the nightly job, its photos, its pins, its failures. */
+/** The site's destinations against the database (ADR-IMPL-045): the sync job, its photos, its pins, its failures. */
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb } from "@bbc/db/testing/isolated-db";
@@ -97,7 +97,7 @@ const siteUrl = (path: string) => SITE_STORAGE + path;
 /** Where the site served its photos before (ADR-IMPL-062): rows a night wrote then. */
 const legacyUrl = (path: string) => LEGACY_SITE_STORAGE + path;
 
-describe("site destinations — the nightly job", () => {
+describe("site destinations — the sync job", () => {
   it("with its photos and its pins off, it asks the site nothing and hands the site's photos back", async () => {
     const t = await setup("site-off");
     await t.operatorPhoto("LHR", siteUrl("bestDeals/23/image/london01.jpg"));

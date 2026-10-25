@@ -1,6 +1,6 @@
 /**
  * The company site's deals for Home (ADR-IMPL-067) against the database: a recorded read of the site (its 154 cities,
- * made-up prices) through the nightly job, then `siteDeals` — from home and its metro, else the nearest city the site
+ * made-up prices) through the sync job, then `siteDeals` — from home and its metro, else the nearest city the site
  * sells from; one deal per city; a source, an origin and a day of validity on each; nothing once expired, dropped or
  * switched off.
  */

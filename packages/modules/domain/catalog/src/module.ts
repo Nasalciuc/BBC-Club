@@ -284,9 +284,10 @@ export const catalogModule = (
 
     /**
      * ADR-IMPL-067: the site's deals for `home`, at most `limit` — from home and its metro first, then from the nearest
-     * cities the site sells from, one deal per destination city (`application/site-deals.ts`). Read from the nightly
-     * snapshot, never from the site; only deals served `marginS` seconds from now. Two reads (home, the origins), then
-     * one per round of metros — one round unless the nearest metros' deals overlap past what they hold.
+     * cities the site sells from, one deal per destination city (`application/site-deals.ts`). Read from the snapshot
+     * the sync writes twice a day, never from the site; only deals served `marginS` seconds from now. Two reads (home,
+     * the origins), then one per round of metros — one round unless the nearest metros' deals overlap past what they
+     * hold.
      */
     async function loadSiteDeals(
       e: Executor,

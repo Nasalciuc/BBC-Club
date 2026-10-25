@@ -1,11 +1,11 @@
 /**
- * The nightly sync of the site's destinations (ADR-IMPL-045). Reads the site (site-cms.ts), finds each city's airports
- * (site-places.ts), checks each city's own photo answers, then — in one transaction — replaces the snapshot and puts
- * the site's photos on those airports, or takes them back. All or nothing: a site that does not answer, answers with
- * far fewer cities than last night, or whose cities no longer find their airports, changes nothing — except the
- * photos' own switch, which works on any night: off, or a city skipped, takes effect before the site is asked. "Last
- * night" is a snapshot still within its day (ADR-IMPL-067): one at its end holds back no read, so a site that keeps
- * listing fewer cities is taken a day after its last good read rather than never.
+ * The sync of the site's destinations, twice a day (ADR-IMPL-045, ADR-IMPL-067). Reads the site (site-cms.ts), finds
+ * each city's airports (site-places.ts), checks each city's own photo answers, then — in one transaction — replaces the
+ * snapshot and puts the site's photos on those airports, or takes them back. All or nothing: a site that does not
+ * answer, answers with far fewer cities than last night, or whose cities no longer find their airports, changes nothing
+ * — except the photos' own switch, which works on any night: off, or a city skipped, takes effect before the site is
+ * asked. "Last night" is a snapshot still within its day (ADR-IMPL-067): one at its end holds back no read, so a site
+ * that keeps listing fewer cities is taken a day after its last good read rather than never.
  */
 import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";

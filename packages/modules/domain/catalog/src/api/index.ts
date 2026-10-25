@@ -78,9 +78,9 @@ export type CatalogFacade = {
    * on (seeded off; none otherwise): from `home` and its metro first, then from the nearest cities the site sells from
    * by great-circle distance — a home the site sells nothing from (Seattle, Toronto, Chișinău) gets the nearest's — each
    * deal naming the city it leaves from; one deal per destination city, never the member's own; in the pins' order (the
-   * site's home page first, then the busiest). Read from the nightly snapshot (`site_routes`), only deals still served
-   * (`valid_until`, D6); the price is the site's "Price Today", never its "Old Price". Cached a minute with the pins'
-   * generation; with an executor, read now.
+   * site's home page first, then the busiest). Read from the snapshot (`site_routes`, twice a day), only deals still
+   * served (`valid_until`, D6); the price is the site's "Price Today", never its "Old Price". Cached a minute with the
+   * pins' generation; with an executor, read now.
    */
   siteDeals(exec: Executor | undefined, home: string, limit: number): Promise<SiteDeal[]>;
   importCsv(input: unknown): Promise<{ imported: number }>;

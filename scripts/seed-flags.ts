@@ -38,7 +38,7 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
   [
     "catalog.site_photos",
     { enabled: false },
-    "ADR-IMPL-045: the site's city photos on their airports, synced nightly; on once the company confirms the rights; skip: [site ids]",
+    "ADR-IMPL-045: the site's city photos on their airports, synced twice a day; on once the company confirms the rights; skip: [site ids]",
   ],
   [
     "catalog.site_pins",
