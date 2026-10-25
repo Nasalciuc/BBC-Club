@@ -6,7 +6,8 @@ Status: proposed · Date: 2026-10-25 · Scope: `packages/shared/src/env.ts` (`CR
 `infra/env/*.env.example`, `infra/RUNBOOK.md`, `docs/store/data-safety.md` · Amends ADR-IMPL-023 point 1 (`http` no
 longer throws) and ADR-IMPL-042, "The state a member reads" (the six-attempt rule: a request the CRM refuses is given up
 at once; the app offers the call only when the build has the club's general line, and otherwise says the club will try
-again, without asking the member to send the request a second time). No migration.
+again, without asking the member to send the request a second time) and ADR-IMPL-041, "A request that will not go out
+by itself" (the call, its words and the list's hint at it only with the club's general line). No migration.
 
 **Context.**
 

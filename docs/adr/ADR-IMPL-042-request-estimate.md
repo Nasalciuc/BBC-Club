@@ -93,7 +93,9 @@ ended. In production no estimate is stored until the company approves estimates 
 none until the app that says `estimateShown` (A2c) is out. The note and the estimate reach a specialist only with
 `CRM_ADAPTER=email` — the one adapter that writes to a person today (`mock` writes nothing; `http` is not built and stops
 the API at boot, so `infra/env/production.env.example` now says `email`) — from the first deploy; requests made during the deploy, until step 6/8 recreates the worker, are
-still e-mailed by the previous one, without them. A killed catalog still answers its facade: `catalog.estimates` off is
+still e-mailed by the previous one, without them. (Amended by ADR-IMPL-065: `http` is built, behind `CRM_API_URL` and
+`CRM_API_SECRET`, and posts the note and the estimate with the request; the production example still says `email`.)
+A killed catalog still answers its facade: `catalog.estimates` off is
 the switch for estimates. The `requests` module now needs `catalog` (a same-layer port, resolved by the registry like
 `engagement → proposals`). Tests: `requests-estimate.test.ts` (stored, published with the fingerprint, sent; no yes, no
 estimate; flag off; rules missing; a failing catalog gives none and the request still goes through; fares win; outside
