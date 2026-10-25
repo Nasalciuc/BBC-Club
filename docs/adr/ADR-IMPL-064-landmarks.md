@@ -197,8 +197,12 @@ Art License, 2 no usable file at all, 2 a portrait, 1 no author. Raised in this 
      a phone within twelve hours of its landmark, and leaves it — skipped, the flag turned off, the city's own photo
      found or the operator's set — within twelve hours too: the server answers differently within ~35 s, phones that
      already hold the stand-in keep it until their entry ages or the app restarts. A takedown faster than that needs the
-     photos route to revalidate, an app change outside this amendment; a photograph Commons deletes stops loading at
-     once, and the app then shows its own image;
+     photos route to revalidate, an app change outside this amendment. A photograph Commons deletes is not taken down
+     by the deletion: the landmark's row keeps its address until the job's next look (30–33 days) and the route keeps
+     answering it; a phone that has shown it keeps drawing it from its image cache (`Photo` keeps a photograph on disk
+     under its address, across restarts), and only a phone that never loaded it shows the slot's fallback (the club's
+     image, or the light tint). The operator takes it down as any stand-in — its item in `skip`, or the club's photo —
+     and the twelve hours hold, the address having changed;
    - cost: the flag (cached 30 s), read only when a city asked is on its satellite view, and with the flag on one
      `DISTINCT ON` read of `place_landmarks` for those cities, however many — none while the flag is off
      (`query-budget.test.ts`: five satellite cities with landmarks cost one query more than with the flag off, and no

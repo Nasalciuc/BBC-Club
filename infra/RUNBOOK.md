@@ -241,7 +241,11 @@ A stand-in the city should not have: put its `landmark_qid` in the flag's `skip`
 answers with the next landmark, or the satellite view when none is left, within ~35 s — or give the city the club's own
 photo (below). Either way, phones that already show the stand-in keep it for up to twelve hours (or until the app
 restarts): the photos route has no revalidation, so nothing on the server reaches them sooner. A photograph Commons
-deletes stops loading at once (the app then shows its own image); a faster takedown than that is an app change.
+deletes is not taken down by the deletion: the landmark's row keeps its address until the landmarks job looks at the
+place again (30–33 days), so the server keeps answering it; a phone that has shown it keeps drawing it from its image
+cache (a photograph is kept on disk, across restarts), and only a phone that never loaded it shows the slot's fallback
+(the club's image, or the light tint). Take it down as any stand-in — its `landmark_qid` in `skip`, or the club's
+photo: the address changes, and the twelve hours above hold. A faster takedown than that is an app change.
 
 The worker reaches `query.wikidata.org`, `commons.wikimedia.org` and `api.pexels.com` over 443; members' phones load
 the photos from `upload.wikimedia.org` (or Wikimedia's newer thumbnail host) and `images.pexels.com`, and satellite
