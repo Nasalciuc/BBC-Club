@@ -301,6 +301,7 @@ function assertSchemaEnumsHaveZod() {
     "place_photo_source", // catalog.place_photos — the app reads the credit's source (wikimedia, pexels, club)
     "place_landmark_kind", // catalog.place_landmarks — the app reads the landmarks only, never a marker
     "outside_source", // catalog.source_holds — the Wikimedia jobs' bookkeeping, no API carries it
+    "site_price_status", // catalog.site_prices — the app reads EstimateVM.source (site, club); a `none` row is no estimate
   ]);
   const drizzle = new Map<string, string[]>();
   const enumRe = /\.enum\(\s*"([^"]+)"\s*,\s*\[([^\]]+)\]/gs;

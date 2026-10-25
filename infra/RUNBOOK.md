@@ -168,7 +168,8 @@ ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
 
 With estimates on, a quote request whose app showed the estimate (A2c and later) carries it — stored on the request,
 published with the rules' fingerprint and written into the specialist's e-mail as `Indicative estimate shown: $2,055
-round trip, business (formula)` (ADR-IMPL-042). `catalog.estimates` off stops estimates everywhere; `catalog.killed`
+round trip, business (formula)` (ADR-IMPL-042); `(company site)` when the company's site priced it (ADR-IMPL-063, "The
+site's prices" below). `catalog.estimates` off stops estimates everywhere, the site's prices included; `catalog.killed`
 stops Explore but not the estimate a queued request may still ask for.
 
 Which rules are live: `SELECT value->>'fingerprint', value->>'loadedAt' FROM platform.flags WHERE key = 'catalog.pricing_rules';`.
@@ -331,8 +332,8 @@ got), `bbc_place_landmarks_failed{stage}` (`wikidata`, `commons`: the source fai
 
 Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own API
 — `buybusinessclass.com/api` (ADR-IMPL-062; `weba.buybusinessclass.com` until it stopped resolving): regions, their
-countries, their cities, about 240 pages, one starting every 600 ms (the API allows 120 requests a minute per address,
-and staging's night, on this host at the same minute, spends the same 120), then a HEAD request for each city's photo,
+countries, their cities, about 240 pages, one starting every 1.2 s (the API allows 120 requests a minute per address,
+and staging's night, on this host at the same minute, reads beside it: about 50 a minute each), then a HEAD request for each city's photo,
 four at a time — and keeps a snapshot: `catalog.site_places` (each city, its main
 airport, every airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price
 from, and that price — kept, never shown). The site has no airport codes: a city is matched by name inside the country
@@ -353,7 +354,8 @@ the site puts it in; the few names that need help are listed in `SITE_CITY_AIRPO
 - `catalog.site_pins`: after the fares' pins, up to twelve of the site's cities listed from the member's home airport
   (the site's home page first, then the busiest), priced by the formula in the member's cabin (ADR-IMPL-037), so the
   pin, its search's estimate row and the quote show one number. Nothing while `catalog.estimates` is off: no price, no
-  pin.
+  pin. With `catalog.site_prices` on, the pins show the site's stored answers, and `refresh-site-prices` keeps them
+  only while this flag is on too ("The site's prices" below).
 
 All or nothing: a region or a country that does not answer, fewer than 80 % of last night's cities listed or placed on
 their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
@@ -362,9 +364,9 @@ their airports, or more than 10 % (at least three) city pages unanswered, and th
 succeeds. A single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no
 answer, a 5xx) keeps last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
 asks (a minute without one, two at most), then the page is asked again; a second 429 on any page, a city's included,
-fails the night — unlike a city page that merely does not answer (`site getOne?id=…: HTTP 429 again after waiting`). A
-few 429s are expected on a night staging reads the site too: the two reads share the address's 120 a minute and wait
-their turns. The run's counts are in `platform.job_runs`; the log
+fails the night — unlike a city page that merely does not answer (`site getOne?id=…: HTTP 429 again after waiting`). The
+pace leaves room for staging's read at the same minute (about 50 a minute each against the address's 120), so a 429
+means something else asked the site from this address. The run's counts are in `platform.job_runs`; the log
 lines `site: no airport`, `site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`,
 `site: photo does not answer`, `site: photo not checked, kept`, `site: unknown US city` and
 `site: city page did not answer, kept` name the cities. Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is
@@ -372,7 +374,7 @@ Osaka's. A city under `site: main airport by a tie` got the alphabetically first
 `SITE_CITY_AIRPORTS` (a PR), main airport first.
 
 Before turning either on, see what the site holds today, with no database: `bun run scripts/site-destinations-report.ts`
-on any computer with the repository reads the site as the job does (about 400 requests, paced: about four minutes),
+on any computer with the repository reads the site as the job does (about 400 requests, paced: about six minutes),
 prints a summary and writes one HTML page in the temporary folder — every city with its photo, its airports, whether its
 photo answers and how heavy it is (the app shows the site's file as is), and the site's prices.
 
@@ -414,6 +416,72 @@ What the snapshot holds:
 ```sql
 SELECT cms_id, name, country, airport, airports, promoted, image IS NOT NULL AS photo FROM catalog.site_places ORDER BY name;
 SELECT route_from, count(*) FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
+```
+
+## The site's prices (ADR-IMPL-063)
+
+With `catalog.site_prices` on (seeded off; it needs `catalog.estimates`, which stays the master switch), an estimate is
+the company's own price from its site's search (`webapi.buybusinessclass.com/flights/search`) wherever the company
+prices the route: a published fare first, then the site's answer stored less than 24 hours ago
+(`catalog.site_prices`), then — an undated search only — one question to the site within a second, whose answer is
+stored; the formula only where the site could not be asked. Home's site pins and a quote request never ask the site:
+they read the stored answer, else the formula. Off, everything is as before and the site is never asked.
+
+**What a `none` row means.** The site answered that the company has no price for that route — 404 `Offer not found`
+(no end in North America) or `Not found` (an airport code it does not know, such as `DJT`, which it spells `PBI`). The
+member sees no number at all — not the formula — and "Request a quote"; the pin is not shown. It is the company's
+answer, kept 24 hours like a price. An error (a timeout, a 5xx, a 429, a body the club cannot read) stores nothing.
+
+**Turn it on** (staging first: members' numbers change — first class appears on routes the club hid, Cyprus, Russia and
+Kazakhstan get the site's prices, airports the site does not know lose theirs), in that environment's database; off is
+the same with `false`. A flag is read through a cache of about 35 s:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.site_prices','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+```
+
+**The job** `refresh-site-prices` (worker, every ten minutes) keeps the answers for the routes Home's site pins show:
+from each airport `catalog.site_routes` lists, its first 36 cities in the pins' order, round trip. Routes without an
+answer first, then answers 18 hours old or more; at most 150 questions a run, one every 500 ms. It asks only while
+`catalog.estimates`, `catalog.site_prices` and `catalog.site_pins` are all on — without the pins no member sees those
+routes, and a search asks for its own — and reads them again before each question, so turning one off stops a run
+already going (`stopped: 1`, within the flags' cache of about 35 s). With one off it asks nothing (`skipped: 1`) and
+still deletes the expired answers (`purged`). It stops at the site's first 429 (`rateLimited: 1` in its run) and when
+the breaker opens (`breakerOpen: 1`); the next run, ten minutes later, goes on. A route the site could not answer is not
+asked again for an hour (`backingOff` counts them), then after every other route due: one the site keeps failing costs
+at most a question an hour and holds nothing back. The worker remembers those failures until it restarts. Run it now, as
+`sync-site-destinations` above, with `refresh-site-prices` in the path. Its outcome:
+
+```sql
+SELECT status, metrics, duration_ms FROM platform.job_runs
+WHERE job = 'refresh-site-prices' ORDER BY started_at DESC LIMIT 5;
+```
+
+**The breaker** (one per process, the API's and the worker's apart): five failures in a row — timeouts, 5xx, 429s,
+bodies not its shape — open it for a minute; then one question goes, and its answer closes or reopens it. While it is
+open the search shows the formula at once, the job asks nothing, and `bbc_site_prices_unavailable{reason="breaker"}`
+counts it. Nothing to reset: it closes itself when the site answers. If the site stays down, the formula stands in
+everywhere; turning the flag off changes nothing more but stops the questions — a run already going included, before
+its next one.
+
+**Watch:** `bbc_site_prices_answered{status}` (priced, none), `bbc_site_prices_unavailable{reason}` (`breaker`,
+`timeout`, `error`, `invalid` — the site changed its answer's shape, `rate_limited`, `bad_request` — a request of ours
+the site refused: a bug, logged `site price refused our request (400)` with the codes), and
+`bbc_search_site_prices{source,how}`: how each search was priced (`site` stored or asked, `club` fallback, `none` none,
+cabin or guarded). A cold start of the site's host can take seconds: the first search then shows the formula and the
+next one asks again. What is stored:
+
+```sql
+SELECT status, count(*), min(fetched_at), max(fetched_at) FROM catalog.site_prices GROUP BY status;
+SELECT route_from, route_to, status, fetched_at, expires_at FROM catalog.site_prices
+WHERE route_from = 'JFK' ORDER BY route_to;
+```
+
+A wrong row (the company corrected a price): delete it — the next search or run asks again. Never edit a figure by hand.
+
+```sql
+DELETE FROM catalog.site_prices WHERE route_from = 'JFK' AND route_to = 'ZRH';
 ```
 
 ## The queue is stuck (oldest pending > 5 min)

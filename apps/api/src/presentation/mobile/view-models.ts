@@ -65,6 +65,8 @@ export function toDestinationPin(row: DestinationPin, hasOffer: boolean): Destin
     // ADR-IMPL-056: the destination's one line (04), or none — a pin cached before 0031 has no such field.
     description: row.description ?? null,
     fromPrice: row.fromPrice,
+    // ADR-IMPL-063: who priced a site city's pin — the site or the club's formula; none on a fare's pin.
+    ...(row.priceSource ? { priceSource: row.priceSource } : {}),
     hasOffer,
     region: row.region,
   };

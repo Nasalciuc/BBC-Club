@@ -51,6 +51,11 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
     { enabled: false },
     "ADR-IMPL-045: up to 12 of the site's cities as pins from the member's home, priced by the formula; needs catalog.estimates",
   ],
+  [
+    "catalog.site_prices",
+    { enabled: false },
+    "ADR-IMPL-063: the company's site prices indicative fares (its stored answer, else the formula; none where the company has none); needs catalog.estimates",
+  ],
 ];
 
 try {

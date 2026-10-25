@@ -52,17 +52,17 @@ pace of its reads, the job's timeout).
    `SITE_STORAGE` its `/storage/`. `LEGACY_SITE_STORAGE` keeps the old images' address, and the sync's photo rows are
    recognised under either (`SITE_STORAGE_PREFIXES`, `place-photos.repo.ts`): the next night moves a photo stored under
    the old address to the new one, or hands it back — photos off, its city skipped or gone. No migration.
-5. **Paced to the rate limit.** Every API request waits its turn: one start every 600 ms across the pool, about 100 a
+5. **Paced to the rate limit.** Every API request waits its turn: one start every 1.2 s across the pool, about 50 a
    minute. A 429 holds every worker for its `Retry-After` (seconds or an HTTP date; 60 s without one; at most 120 s),
    then that page is asked once more; a second 429 ends the read with a `SiteError` naming the page, and the night
    changes nothing, as any failed night. A read that fails stops its other workers, so none asks the site afterwards.
    Photo checks (HEAD on `/storage`, no stated limit) keep four at a time, unpaced. The clock is injectable
    (`SiteDeps.clock`, `catalogModule({ siteClock })`), so tests take no real time. The 120 a minute are the address's,
    not one read's: staging runs on the production host (ADR-IMPL-010) with the same crontab, so on a night both
-   environments read the site, two reads at 07:40 spend one budget. Simulated against a fixed window of 120 per 60 s,
-   they meet 429s and wait them out — none fails — and each takes about four minutes of pages (about six and a half if
-   the site sent no `Retry-After`) against two and a half alone. `sync-site-destinations`' timeout goes from 100 s to
-   600 s, the platform's default: that worst case, the photo checks and a margin.
+   environments read the site, two reads at 07:40 spend one budget: at about 50 a minute each they stay under it
+   together (a first draft paced 600 ms apart, and two reads met 429s; review asked for the margin). About five minutes
+   of pages a night. `sync-site-destinations`' timeout goes from 100 s to 600 s, the platform's default: the pages, the
+   photo checks and a 429 waited out.
 6. **`scripts/load-pricing-rules.ts --check-site`.** For 24 routes — two per continent pair, both trips; Istanbul,
    Québec (YQB) and Seville (SVQ) among them; from North America, and LAX only as a destination, since the site prices
    LAX's one-way trips abroad its own way — asked one at a time, 500 ms apart, 5 s each, with the club's User-Agent, it

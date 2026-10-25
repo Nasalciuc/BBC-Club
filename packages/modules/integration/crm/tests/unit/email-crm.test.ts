@@ -195,6 +195,42 @@ describe("emailCrm", () => {
     expect(without).not.toContain("Note from the member");
   });
 
+  // ADR-IMPL-063: the specialist knows which kind of number the member saw — the company's site's, or the formula's.
+  it("says whether the company's site or the formula priced the estimate", async () => {
+    const sent: string[] = [];
+    const email: EmailFacade = {
+      async sendOtp() {},
+      async sendOperatorRequest(input) {
+        sent.push(input.text);
+      },
+    };
+    const crm = emailCrm({ email, operatorsEmail: "ops@buybusinessclass.com" });
+    const body = {
+      reference: "R-3",
+      trip_type: "round",
+      cabin_class: "Business Class",
+      client: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
+      flights: [
+        { from: "JFK", to: "ZRH", date: "2026-10-12" },
+        { from: "ZRH", to: "JFK", date: "2026-10-19" },
+      ],
+      passengers: { adult: 1, child: 0, infant: 0 },
+      intent: "quote" as const,
+    };
+    // Made-up amounts.
+    for (const source of ["site", "club", undefined] as const) {
+      await crm.submitRequest({
+        ...body,
+        shown_estimate: { amount: 2222, currency: "USD", cabin: "business", ...(source ? { source } : {}) },
+      });
+    }
+    const line = (text: string | undefined) => text?.split("\n").find((l) => l.startsWith("Indicative estimate"));
+    expect(line(sent[0])).toBe("Indicative estimate shown: $2,222 round trip, business (company site)");
+    expect(line(sent[1])).toBe("Indicative estimate shown: $2,222 round trip, business (formula)");
+    // A request stored before the site priced any, or while its prices are off: the formula, as before.
+    expect(line(sent[2])).toBe("Indicative estimate shown: $2,222 round trip, business (formula)");
+  });
+
   it("quotes every line a mail client may break, strips what could hide or move text, folds long lines", async () => {
     const sent: string[] = [];
     const email: EmailFacade = {

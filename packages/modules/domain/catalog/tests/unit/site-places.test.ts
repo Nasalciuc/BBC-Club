@@ -239,12 +239,12 @@ describe("reading the site at its rate limit (ADR-IMPL-062)", () => {
     await systemClock.sleep(5, new AbortController().signal);
   });
 
-  it("starts one API request every 600 ms across the pool of four, in order, at the site's address", async () => {
+  it("starts one API request every API_GAP_MS (1.2 s) across the pool of four, in order, at the site's address", async () => {
     const clock = fakeClock();
     const starts: Start[] = [];
     const read = await readSite(timedSite(clock, starts));
     expect(read.cities).toHaveLength(7);
-    // 1 list + 1 home page + 3 regions + 5 countries + 7 cities, each 600 ms after the one before.
+    // 1 list + 1 home page + 3 regions + 5 countries + 7 cities, each API_GAP_MS after the one before.
     expect(starts.map((s) => s.t)).toEqual(Array.from({ length: 17 }, (_, i) => i * API_GAP_MS));
     expect(starts.every((s) => s.url.startsWith(`${SITE_API}/api/bestDeals/`))).toBe(true);
   });

@@ -107,9 +107,19 @@ export const AirportVM = z.object({
 export type AirportVM = z.infer<typeof AirportVM>;
 
 /**
+ * Who priced an indicative fare (ADR-IMPL-063): `site`, the company's own site (its search, read at `asOf`); `club`, the
+ * club's copy of the company's formula (ADR-IMPL-037). Both are the company's formula — `basis` stays `formula`, which
+ * shipped apps require. Absent: the club's formula, as every estimate was before the site's prices (and as every
+ * estimate is while `catalog.site_prices` is off). A value this app does not know reads as absent.
+ */
+export const EstimateSource = z.enum(["site", "club"]);
+export type EstimateSource = z.infer<typeof EstimateSource>;
+
+/**
  * An indicative price from the company's formula (ADR-IMPL-037). Never a fare: no carrier, no validity, not bookable —
  * and never a reference price (`PricePair.published` is for FTC-evidenced prices only). Fixed literals, so every other
- * value fails parsing instead of reaching the screen.
+ * value fails parsing instead of reaching the screen. `source` and `asOf` say who priced it and when the site was read
+ * (ADR-IMPL-063): optional both ways, so an app built before them shows the same number under the same words.
  */
 export const EstimateVM = z.object({
   amount: z.number().positive(),
@@ -117,6 +127,9 @@ export const EstimateVM = z.object({
   trip: z.literal("round_trip"),
   cabin: z.enum(["business", "first"]),
   basis: z.literal("formula"),
+  source: EstimateSource.optional().catch(undefined),
+  /** When the company's site gave this price (`source: "site"` only); never more than 24 hours before the answer. */
+  asOf: z.string().datetime().optional().catch(undefined),
 });
 export type EstimateVM = z.infer<typeof EstimateVM>;
 
@@ -124,6 +137,9 @@ export const DestinationPinVM = AirportVM.extend({
   fromPrice: z.number().positive(),
   hasOffer: z.boolean(),
   region: z.string(),
+  /** Who priced a site city's pin (ADR-IMPL-063), as an estimate says it: absent on a fare's pin (a published fare) and
+   *  on every pin while `catalog.site_prices` is off. Optional both ways; a value this app does not know reads as none. */
+  priceSource: EstimateSource.optional().catch(undefined),
 });
 export type DestinationPinVM = z.infer<typeof DestinationPinVM>;
 

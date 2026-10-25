@@ -39,6 +39,8 @@ export const ClaimedRow = z.object({
   note: z.string().nullable(),
   shown_estimate_amount: z.number().int().positive().nullable(),
   shown_estimate_currency: z.literal("USD").nullable(),
+  /** Who priced that estimate (0040, ADR-IMPL-063); null: the formula, as every estimate before the site's. */
+  shown_estimate_source: z.enum(["site", "club"]).nullable(),
   /** What a fare request recorded of its fare (0029, 0030): the price the member saw, the published price and its
    *  source, the airline. The specialist's e-mail names them. */
   price_at_request: z.string().nullable(),
@@ -61,7 +63,8 @@ export function claimUnsentSql(limit: number) {
           ${col(r.legs)}, ${col(r.tripType)}, ${col(r.cabin)}, ${col(r.passengers)}, ${col(r.source)},
           ${col(r.appVersion)}, ${col(r.sendAttempts)}, ${col(r.phoneValid)}, ${col(r.phoneE164)},
           ${col(r.intent)}, ${col(r.replacesFareId)}, ${col(r.fareId)}, ${col(r.offerId)}, ${col(r.note)},
-          ${col(r.shownEstimateAmount)}, ${col(r.shownEstimateCurrency)}, ${col(r.priceAtRequest)},
+          ${col(r.shownEstimateAmount)}, ${col(r.shownEstimateCurrency)}, ${col(r.shownEstimateSource)},
+          ${col(r.priceAtRequest)},
           ${col(r.publishedAtRequest)}, ${col(r.publishedSourceAtRequest)}, ${col(r.carrierAtRequest)},
           ${col(r.carrierNameAtRequest)}
         FROM ${r}
