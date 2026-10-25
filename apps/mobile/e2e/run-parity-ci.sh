@@ -34,15 +34,30 @@ js_error_lines() {
     grep -E 'E/ReactNativeJS|FATAL EXCEPTION' || true
 }
 
+# Explore's sheet as the e2e build saw it (packages/ui/src/layout/sheet-trace.ts): a line on each focus of Explore and
+# on each change while it is on screen — the verdict (drawn, lost, closed, moving, astray, elsewhere, unmeasured), the
+# stop asked for, gorhom's index and position, and the sheet's top as drawn. `lost` is gorhom holding the sheet open
+# while it is drawn a window height down; `closed` is gorhom itself closing it.
+sheet_trace() {
+  adb logcat -d -v time '*:S' ReactNativeJS:V | grep -F '[HomeSheet]' | tail -n 20 || true
+}
+
 status=0
 echo "::group::maestro parity"
+# A larger ring buffer, so the sheet's trace from the first arrival on Explore is still there at the end.
+adb logcat -G 4M || true
 adb logcat -c || true
 if ! maestro test --format junit --output "$OUT/parity.xml" --debug-output "$OUT/debug" \
   "apps/mobile/e2e/parity.yaml"; then
   echo "::error::Maestro flow failed: parity"
   failure_note parity "$OUT/parity.xml" "$OUT/debug"
+  trace=$(sheet_trace)
+  last=$(printf '%s\n' "$trace" | tail -n 1)
+  echo "::error title=Maestro parity: Explore's sheet, last trace line::$(annotation_text "${last:-no [HomeSheet] line in logcat}")"
   status=1
 fi
+echo "-- Explore's sheet (HomeSheet trace, e2e build)"
+printf '%s\n' "${trace:-$(sheet_trace)}"
 errors=$(js_error_lines)
 if [ -n "$errors" ]; then
   while IFS= read -r line; do
