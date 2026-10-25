@@ -98,26 +98,35 @@ describe("requestView — one image per state", () => {
   });
 
   test("not sent by the server, or refused for good: never 'saved on your phone' — call us", () => {
-    for (const status of ["not_sent", "rejected"]) {
+    for (const status of ["not_sent", "rejected"] as const) {
       const v = requestView(status, null, undefined, true);
       expect(v.badge).toBe("not_sent");
-      expect(v.notice).toEqual(notPassedOn(true));
+      expect(v.notice).toEqual(notPassedOn(status, true));
       expect([v.sendNow, v.call, v.titleBadge]).toEqual([false, "us", true]);
+      expect(notPassedOn(status, true)).toEqual({
+        title: "We couldn’t pass this on.",
+        body: "Call us and we’ll take it from here.",
+        icon: "phone",
+      });
     }
-    expect(notPassedOn(true)).toEqual({
-      title: "We couldn’t pass this on.",
-      body: "Call us and we’ll take it from here.",
-      icon: "phone",
-    });
   });
 
-  test("without the club's line, the notice asks the member to send it again — never to call", () => {
-    for (const status of ["not_sent", "rejected"]) {
+  test("without the club's line: never a call, nor the phone glyph that points at one", () => {
+    for (const status of ["not_sent", "rejected"] as const) {
       const v = requestView(status);
-      expect(v.notice).toEqual(notPassedOn(false));
-      expect(v.notice?.body).toBe("Send your request again from Explore.");
+      expect(v.notice).toEqual(notPassedOn(status, false));
+      expect(v.notice?.icon).toBe("info");
       expect(`${v.notice?.title} ${v.notice?.body}`.toLowerCase()).not.toContain("call");
     }
+  });
+
+  test("without the club's line, one the server holds is not asked again: the club sends it once fixed (RUNBOOK)", () => {
+    // A second request would be a second trip for the specialists, under another reference (Idempotency-Key).
+    expect(requestView("not_sent").notice?.body).toBe(
+      "We’ll try again as soon as we can. There’s no need to send it again.",
+    );
+    // One the server never had (400/409 to the phone's copy): only the member can send it.
+    expect(requestView("rejected").notice?.body).toBe("Send your request again from Explore.");
   });
 
   test("a state this app does not know reads as received, with nothing it cannot say", () => {
@@ -314,13 +323,20 @@ describe("listAttention — the card over the list (28)", () => {
     );
   });
 
-  test("without the club's line, it is pointed at asking again — never at a call", () => {
+  test("without the club's line, as each detail says — never at a call, never a resend of what the server holds", () => {
     expect(listAttention([{ status: "not_sent" }])).toEqual({
       title: "One request needs your attention.",
-      body: "Send your request again from Explore.",
+      body: "We’ll try again as soon as we can. There’s no need to send it again.",
     });
-    expect(listAttention([{ status: "rejected" }, { status: "not_sent" }], false)?.body).toBe(
+    expect(listAttention([{ status: "not_sent" }, { status: "not_sent" }])?.body).toBe(
+      "We’ll try again as soon as we can. There’s no need to send them again.",
+    );
+    expect(listAttention([{ status: "rejected" }])?.body).toBe("Send your request again from Explore.");
+    expect(listAttention([{ status: "rejected" }, { status: "rejected" }])?.body).toBe(
       "Send your requests again from Explore.",
+    );
+    expect(listAttention([{ status: "rejected" }, { status: "not_sent" }], false)?.body).toBe(
+      "Open each request to see what to do next.",
     );
   });
 });

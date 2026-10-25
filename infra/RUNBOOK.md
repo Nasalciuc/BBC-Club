@@ -174,13 +174,20 @@ redirect — is given up at once (`refused: true` in the log, `last_error` `CrmH
 (permanent)`); a timeout, a network error, a 408, a 429 or a 5xx is tried again. Then it gives up: the log says
 `request send gave up` (with the request id), `bbc_request_sends_given_up` rises on the worker's metrics,
 `OPS_WEBHOOK` gets one line, and the member reads `Not sent` — with a call button from the A2c app on when the build
-has the general line; older apps still say it is saved on the phone. Nothing resends it by itself. Fix the cause (the
-CRM, its address or secret, `OPERATORS_EMAIL`, Postmark — the log line has the error), then re-queue it; the next
-minute's run sends it:
+has the general line, else that we will try again and that there is no need to send it again; older apps still say it
+is saved on the phone. Nothing resends it by itself. Fix the cause (the CRM, its address or secret, `OPERATORS_EMAIL`,
+Postmark — the log line has the error), then re-queue it; the next minute's run sends it. Before you re-queue, look for
+a newer request from the same member for the same trip (one they sent again, or one a specialist took by phone after
+their call): if there is one, close the older request instead (`POST /v1/internal/requests/<uuid>/status` with
+`X-Internal-Secret` and `{"status":"closed"}`), so the specialists do not get the trip twice under two references.
 
 ```sql
 SELECT id, reference, send_attempts, last_error, created_at FROM requests.requests
 WHERE sent_to_crm = false AND status <> 'closed' AND send_attempts >= 6 ORDER BY created_at;
+-- The member's later requests, with their legs to compare:
+SELECT id, reference, status, legs, created_at FROM requests.requests
+WHERE member_id = (SELECT member_id FROM requests.requests WHERE id = '<uuid>')
+  AND created_at > (SELECT created_at FROM requests.requests WHERE id = '<uuid>') ORDER BY created_at;
 UPDATE requests.requests SET send_attempts = 0, sent_at = NULL WHERE id = '<uuid>' AND sent_to_crm = false;
 ```
 

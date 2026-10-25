@@ -38,14 +38,26 @@ export const NOT_SENT: RequestNotice = {
   icon: "phone",
 };
 
-/** A request that will not go out by itself: the server gave up passing it on (six attempts, ADR-IMPL-042), or refused
- *  the copy on the phone for good. No image draws it; the words point at the one thing left to do — the call when the
- *  club's general line is configured (`canCall`, support-phone.ts), else asking again. */
-export function notPassedOn(canCall: boolean): RequestNotice {
+/** Without the club's line, a request the server holds but gave up passing on: an operator sends it again once the
+ *  cause is fixed (infra/RUNBOOK.md, "A request that was never sent"), so the member is not asked to — a second request
+ *  would reach the specialists as a second trip, under another reference. */
+const HELD_ONE = "We’ll try again as soon as we can. There’s no need to send it again.";
+const HELD_MANY = "We’ll try again as soon as we can. There’s no need to send them again.";
+
+/** A request that will not go out by itself: the server gave up passing it on (`not_sent`: six attempts, or refused by
+ *  the CRM; ADR-IMPL-042, ADR-IMPL-065), or refused the copy on the phone for good (`rejected`: the server never had
+ *  it). No image draws it. With the club's general line configured (`canCall`, support-phone.ts), the call; else, for
+ *  a request the server holds, that the club will try again; for one it never had, asking again. The phone glyph only
+ *  beside a call. */
+export function notPassedOn(status: "not_sent" | "rejected", canCall: boolean): RequestNotice {
   return {
     title: "We couldn’t pass this on.",
-    body: canCall ? "Call us and we’ll take it from here." : "Send your request again from Explore.",
-    icon: "phone",
+    body: canCall
+      ? "Call us and we’ll take it from here."
+      : status === "not_sent"
+        ? HELD_ONE
+        : "Send your request again from Explore.",
+    icon: canCall ? "phone" : "info",
   };
 }
 
@@ -150,7 +162,7 @@ export function requestView(status: string, at?: string | null, timeZone?: strin
       return { ...NONE, badge: "not_sent", titleBadge: true, notice: NOT_SENT, sendNow: true };
     case "not_sent":
     case "rejected":
-      return { ...NONE, badge: "not_sent", titleBadge: true, notice: notPassedOn(canCall), call: "us" };
+      return { ...NONE, badge: "not_sent", titleBadge: true, notice: notPassedOn(status, canCall), call: "us" };
     default:
       return { ...NONE, badge: "received", notice: null };
   }
@@ -243,17 +255,18 @@ function stepStates(state: string, timeline: readonly Timed[]): [StepState, Step
 /**
  * The card over the list (28): requests on the phone or not passed on, which need the member. A request waiting on the
  * phone is pointed at its `Send now`; one that will not go out by itself, at the call when the club's general line is
- * configured (`canCall`), else at asking again. Null otherwise.
+ * configured (`canCall`). Without it, as each one's detail says (`notPassedOn`): those the server holds will be tried
+ * again, those it never had are asked again, and a mix of both is pointed at each request. Null otherwise.
  */
 export function listAttention(
   open: readonly { status: string }[],
   canCall = false,
 ): { title: string; body: string } | null {
   const waiting = open.filter((r) => r.status === "queued").length;
-  const stuck = open.filter((r) => r.status === "not_sent" || r.status === "rejected").length;
-  const total = waiting + stuck;
+  const held = open.filter((r) => r.status === "not_sent").length;
+  const refused = open.filter((r) => r.status === "rejected").length;
+  const total = waiting + held + refused;
   if (total === 0) return null;
-  const again = stuck === 1 ? "Send your request again from Explore." : "Send your requests again from Explore.";
   return {
     title: total === 1 ? "One request needs your attention." : `${total} requests need your attention.`,
     body:
@@ -261,8 +274,17 @@ export function listAttention(
         ? "Open your request to check the details and try again."
         : canCall
           ? "Call us and we’ll take it from here."
-          : again,
+          : withoutLine(held, refused),
   };
+}
+
+/** The banner's words without the club's line, for requests that will not go out by themselves. */
+function withoutLine(held: number, refused: number): string {
+  if (refused === 0) return held === 1 ? HELD_ONE : HELD_MANY;
+  if (held === 0) {
+    return refused === 1 ? "Send your request again from Explore." : "Send your requests again from Explore.";
+  }
+  return "Open each request to see what to do next.";
 }
 
 /** `Closed · Oct 3`, in the phone's own zone — the day the member lived it, not the day in UTC. */
