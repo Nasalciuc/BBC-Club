@@ -8,7 +8,7 @@ an About text, SEO texts, and the prices it lists from US cities ("Old Price", "
 countries. It has no airport codes. The app had none of this: the globe shows only routes with a published fare (none in
 production yet), and a city's photo comes from Wikimedia Commons (ADR-IMPL-043). The owner asked to take what the site
 already has (12 Oct 2026). What was read on 12 Oct: the site shows several prices for one route (London from New York
-$788 on London's page, $2,025 for the United Kingdom on the Europe page, and its search, the formula of ADR-IMPL-037,
+one on London's page, another for the United Kingdom on the Europe page, and its search, the formula of ADR-IMPL-037,
 a third); some pages show another city's photo (Crete shows Santorini's, and seven countries share Spain's); "Victoria"
 is the Seychelles' capital; "Benglaru" is misspelled; Kyoto has no airport of its own. (Amended by ADR-IMPL-062: since
 `weba.` stopped resolving, the same API answers at `buybusinessclass.com/api`, and the photos at its `/storage/`.)

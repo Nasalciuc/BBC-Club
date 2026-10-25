@@ -90,18 +90,29 @@ a day; a snapshot row is served for a day) and ADR-IMPL-040 (a demo offer an ope
    list — inside it, a deal the app cannot read is left out without the others (as `PlacePhotosVM` does).
 7. **What the card prints.** The site gives no trip and no cabin, so the card prints neither: the city, its country,
    `from` and the price — `from $X` is the site's starting price, per person, indicative, as its footnote says ("call
-   for current best prices"); the specialist confirms the fare by phone. No `Save` bar, ever (DESIGN.md's Save rule, and
-   no source). When the deal leaves from another city than the member's — not their airport and not their city — a
-   line under the price names it: `from New York`, in the country's role (`offerCountry` / `offerSmCountry`) and
-   slate, as far below the price as the country is below the city; it wraps rather than cut (`from San Francisco` at
-   the reading size). A screen reader hears the city, the country, `from $X`, `from New York`.
+   for current best prices"); the specialist confirms the fare by phone. The card prints neither `per person` nor
+   `indicative`, though the site states both: no price card in the club says `per person` (an offer's `from $X`, a
+   pin's, a fare's are one traveler's too, and 02 and 16 draw no such word), so the deals alone saying it would read as
+   if the offers beside them were for something else; and no card says `indicative` (the destination's sheet a tap opens
+   does: `Indicative · your specialist confirms the fare.`). Reported below, for the owner and the designer. No `Save`
+   bar, ever (DESIGN.md's Save rule, and no source). When the deal leaves from another city than the member's — not
+   their airport and not their city — a line under the price names it: `from New York`, in the country's role
+   (`offerCountry` / `offerSmCountry`) and slate, as far below the price as the country is below the city; it wraps
+   rather than cut (`from San Francisco` at the reading size). A screen reader hears the city, the country, `from $X`,
+   `from New York`.
 8. **Home's BFF.** "Offers to inspire" is the member's own offers (the inspire section, as before: the first six of
    their feed), then up to 24 site deals (`SITE_DEALS_SHOWN`: twice the pre-registered floor of twelve, a row a thumb
-   still scrolls, about 12 KB) in `HomeVM.deals`. A deal to a city one of the member's offers already goes to from the
-   same metro is left out — any offer Home reads, not only the inspiring six: the others stand in their region's row
-   under the deals (16) — so no city shows twice for one origin, the demo's Tokyo and the site's Tokyo included.
-   `deals` is absent when there is none. The ETag is the body's, whole, so a price, a day or an origin that changes
-   makes a new one.
+   still scrolls, about 12 KB) in `HomeVM.deals`. **The cap does not meet the pre-registered check "3.1 offers" as it is
+   worded** — "Explore lists every live site deal the member's region can see" — for a home with more than 24 (153 for
+   New York, every home in the table below): Explore lists at most 24 of them. The rest of the check holds: at least 12
+   where the site has 12, no city twice for one origin, an offer from another city names it, and each deal has its
+   source, origin and validity. Every deal needs either a Home about five times larger and a row that mounts only the
+   cards on screen (`CarouselRow` is a `ScrollView`: each card mounts, and each photo is asked, at once), or a `See all`
+   over the deals with a read of its own; the owner decides that, or amends the check to a stated cap. Until then 3.1 is
+   not reported as passed. A deal to a city one of the member's offers already goes to from the same metro is left out —
+   any offer Home reads, not only the inspiring six: the others stand in their region's row under the deals (16) — so no
+   city shows twice for one origin, the demo's Tokyo and the site's Tokyo included. `deals` is absent when there is
+   none. The ETag is the body's, whole, so a price, a day or an origin that changes makes a new one.
 9. **The app.** Explore's rest row (02) and the raised sheet's row (16) draw the deals after the offers, as `OfferCard`s
    (`explore.deal.<id>`); `No offers yet.` only when there is neither. A deal has no page of its own: a tap chooses its
    destination as a pin does (`selectDestination`: the route's sheet, its search from the member's airport). The
@@ -135,9 +146,10 @@ No city twice; every deal has its source (`basis: "site"`, the site's deal id), 
 `site`, a feed by origin, a no-push marker on the event, keys per price with withdrawals — is a schema or contract
 change at every step). Catalog fares (above). Only the member's own metro's deals, nothing from elsewhere: Boston would
 see 5, Denver 3, Seattle none — under the floor of twelve the brief sets. Every deal of the member's region on Home (153
-for New York): 60 KB of Home for a row nobody scrolls to its end; the cap is one constant. A deal page of its own: the
-site gives nothing a page could hold that the destination's does not. Showing the "Old Price" with the site as its
-source: a source must say who published that fare and when; "the company's site" says neither.
+for New York) — which check 3.1's wording asks for (§8): 60 KB of Home, and a row that mounts 153 cards and asks their
+photos at once; the cap is one constant, and the owner's call. A deal page of its own: the site gives nothing a page
+could hold that the destination's does not. Showing the "Old Price" with the site as its source: a source must say who
+published that fare and when; "the company's site" says neither.
 
 **Consequences.**
 
@@ -154,6 +166,10 @@ source: a source must say who published that fare and when; "the company's site"
 - DESIGN.md's Product Content: "a fare says what its price covers (`one way` until the catalogue says `round trip`)".
   The site's deals say no trip, so the card cannot say what the price covers, and printing `one way` would be a claim
   the site does not make. The card says `from $X` and nothing about the trip.
+- DESIGN.md's "a fare says what its price covers", beyond the trip: the site does state `per person` and `indicative`,
+  and the card prints neither (§7: no price card in the club says either). For the owner and the designer together:
+  whether a deal card — or every price card — should print `per person`, and whether a deal should carry an
+  indicative mark like the estimates' `INDICATIVE FARE`; 02 and 16 draw room for neither, so either is a new line.
 - design/components.md's OfferCard (02, 16) draws no origin line. The deals need one (the brief: "an offer that leaves
   from another city than the member's home says so"); it is drawn with the card's own country role and colour.
 
@@ -165,6 +181,8 @@ source: a source must say who published that fare and when; "the company's site"
   recorded (and where), `Save X%` could be shown with its source (`BA published · 16 Sep`). Until then it is stored and
   never served.
 - Whether "from New York" should also make the search start from New York (today a tap opens the destination from the
-  member's own airport, as a pin does).
-- The cap of 24 deals on Home (`SITE_DEALS_SHOWN`), and whether region carousels should carry deals too (they carry
-  offers only).
+  member's own airport, as a pin does — so the sheet shows the club's price for that route, not the deal's, and the
+  two can differ).
+- The cap of 24 deals on Home (`SITE_DEALS_SHOWN`) against check 3.1's "every live site deal" (§8): every deal (a
+  larger Home and a row that mounts what is on screen, or a `See all` with its own read), or the check amended to the
+  cap. And whether region carousels should carry deals too (they carry offers only).
