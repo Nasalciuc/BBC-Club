@@ -321,7 +321,7 @@ export const catalogModule = (
         return [...fares, ...added];
       },
       bookable: async (exec, q) => {
-        // The cached flag row first: off (every environment until an operator turns it on), nothing is read.
+        // The cached flag row first: off (every environment until an operator turns it on), nothing of the set is read.
         if (!(await platform.flags.isEnabled("catalog.globe_tap", false))) return null;
         return bookableFrom(await siteBookable(exec), q.home, q.also);
       },

@@ -64,7 +64,8 @@ export type CatalogFacade = {
    * airport) and the US airports the site lists a price from, read from the night's snapshot and cached like the site's
    * pins, with `also` (the arrivals of the fares and offers the caller holds); never `home` itself, nor an airport
    * within 100 km of it when its coordinates are given (one metro: a tap there gets the home answer). A formula price
-   * alone never makes a city bookable. Null while `catalog.globe_tap` is off: nothing is read.
+   * alone never makes a city bookable. Null while `catalog.globe_tap` is off: only the flag's row is read (through the
+   * flags' cache), nothing of the set.
    */
   bookable(
     exec: Executor | undefined,

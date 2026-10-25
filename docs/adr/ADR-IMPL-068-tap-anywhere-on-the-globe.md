@@ -53,13 +53,15 @@ may change any of them**.
    tapped point never leaves the phone. The sources, the flags, the offers' ownership and the price rules stay on the
    server.
 3. **The flag** `catalog.globe_tap`, `{ enabled: false }`, seeded off by `scripts/seed-flags.ts`. Off: `bookable` is
-   absent and nothing is read; a tap off the pins does nothing, as before. On: the catalog facade's `bookable(exec,
-{ home, also })` reads the site's part — main airports and origins, one `UNION` joined to `catalog.airports` — the
-   same for every member, cached a minute like the site's pins (`catalog:bookable:{generation}` with Redis, else in the
-   process) and dropped when the night's sync or an import bumps `catalog:dest:gen`; then, in memory
-   (`application/bookable.ts`), adds the BFF's `also` (the fare pins and the offers' arrivals Home already loaded), one
-   entry per airport, without home or its metro, by code. **The night's sync** (`sync-site-destinations`) also reads the
-   site while this flag is on, as it does for the site's photos and pins: the set is the snapshot.
+   absent and nothing of the set is read — only the flag's own row, through the flags' cache (30 s a process, as every
+   flag: a cold Home runs one query more than before this change); a tap off the pins does nothing, as before. On: the
+   catalog facade's `bookable(exec, { home, also })` reads the site's part — main airports and origins, one `UNION`
+   joined to `catalog.airports` — the same for every member, cached a minute like the site's pins
+   (`catalog:bookable:{generation}` with Redis, else in the process) and dropped when the night's sync or an import
+   bumps `catalog:dest:gen`; then, in memory (`application/bookable.ts`), adds the BFF's `also` (the fare pins and the
+   offers' arrivals Home already loaded), one entry per airport, without home or its metro, by code. **The night's
+   sync** (`sync-site-destinations`) also reads the site while this flag is on, as it does for the site's photos and
+   pins: the set is the snapshot.
 4. **The snap** (`apps/mobile/src/features/globe/globe-tap-logic.ts`). The nearest bookable city to the tapped point by
    great circle, **within 600 km**, ties to the code. Home takes part as a candidate only **within its metro** — a tap
    under 100 km from home, the server's `SAME_METRO_KM`, the airports the list leaves out: when it is nearest there (a
@@ -122,11 +124,16 @@ new design component for the answer: no image draws one; the existing notice hol
 
 **Consequences.**
 
-- Nothing changes until an operator turns `catalog.globe_tap` on — on either globe: without Home's list the drawn globe
-  has no Tap and the pins no guard. Then a member's taps off the pins open cities in Europe almost everywhere on land,
-  elsewhere near the site's cities and the US origins only; the calm answer covers the rest.
+- The tap changes nothing until an operator turns `catalog.globe_tap` on — on either globe: without Home's list the
+  drawn globe has no Tap, the map's press only pauses the turn and the pins have no guard; Home's body and its ETag are
+  as before, and the flag's row is its one read more (3). Then a member's taps off the pins open cities in Europe almost
+  everywhere on land, elsewhere near the site's cities and the US origins only; the calm answer covers the rest.
+- The black globe's floor (8) is not behind the flag: with this release every member on the satellite globe gets the
+  ocean under a missing tile, and the re-probe on return and reconnect, which hands Explore back to the drawn globe for
+  the session when Mapbox refuses the token (401 or 403).
 - The set is only as good as the night's snapshot of the site. With the site unreachable the last snapshot stands; an
-  empty snapshot (a new environment before its first night) sends an empty list, and the app then answers nothing.
+  empty snapshot (a new environment before its first night) sends only the arrivals of the member's fares and offers —
+  an empty list without them, and the app then answers nothing.
 - Home costs one cached read more with the flag on (the query budget test pins it), and about 21 KB of JSON
   (uncompressed).
 - Toronto and Vancouver, which the site lists as origins, are not in the set: the sync's `originAirports` keeps only
@@ -138,6 +145,15 @@ new design component for the answer: no image draws one; the existing notice hol
   (the destination's page with its photo) for a snapped city (4), and kilometres or miles (5).
 - Design: no image draws the calm answer or the distance line; both are proposed with existing components and want a
   frame of their own in `DESIGN.md` 3.0 — reported, not resolved.
+- **The check (3.3), where it stands.** Measured, in logic: 20 of 20 scripted taps near the site's cities open the right
+  city and 10 of 10 over open sea give the calm answer — through the drawn globe's own tap (the finger, `projector`'s
+  inverse, `drawnGlobeTap`) and Explore's choice (`exploreTap`); Mapbox's press is tested apart (`mapboxPress`: the pin,
+  the sky, the place), not over the 30, and on a phone Mapbox resolves the place itself. Not measured: "0 taps during a
+  drag" — the drawn globe's composition is pinned (the Race, the Tap's 8 pt equal to the pan's start, 500 ms), but that
+  the race cancels the tap, and that Mapbox's own recogniser fires no press in a drag, are the libraries' and want a
+  phone. The floor as built over the air is "a missing tile shows the ocean, not black": the drawn globe replaces Mapbox
+  only when the launch probe fails or a re-probe meets 401/403, not on a missing tile (that needs 10.3.8, D4). So 3.3 is
+  not passed yet.
 - **To check on a phone** (not runnable here): Mapbox's `onPress` over the sky, beside the globe at rest and in a corner
   zoomed in, on Android above all (its place is the horizon's, past the near side: `mapTap` ignores it — if the camera's
   horizon stood short of 80° the zoomed-in corner would show it); 10 swipes across the globe fire 0 taps, on both
