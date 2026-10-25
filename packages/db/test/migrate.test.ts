@@ -42,6 +42,7 @@ describe("extras ledger", () => {
         'deliveries_paused',
         'fares_home_destinations',
         'notif_sending_claimed',
+        'place_landmarks_one_marker',
         'place_photos_due',
         'requests_member_list',
         'site_places_airport',
@@ -54,6 +55,7 @@ describe("extras ledger", () => {
       "deliveries_pending_created",
       "fares_home_destinations",
       "notif_sending_claimed",
+      "place_landmarks_one_marker",
       "place_photos_due",
       "requests_member_list",
       "site_places_airport",
@@ -94,6 +96,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog checks applied/);
     expect(second.out).not.toMatch(/notifications campaign not before applied/);
     expect(second.out).not.toMatch(/catalog fares keep live copy/);
+    expect(second.out).not.toMatch(/catalog place landmarks applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -135,6 +138,7 @@ describe("extras ledger", () => {
       "0035_catalog_checks.sql",
       "0036_notifications_campaign_not_before.sql",
       "0037_catalog_fares_keep_live_copy.sql",
+      "0039_catalog_place_landmarks.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

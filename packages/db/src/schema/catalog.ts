@@ -1,4 +1,16 @@
-import { pgSchema, text, char, numeric, integer, boolean, index, unique, check, primaryKey } from "drizzle-orm/pg-core";
+import {
+  pgSchema,
+  text,
+  char,
+  numeric,
+  integer,
+  boolean,
+  index,
+  unique,
+  uniqueIndex,
+  check,
+  primaryKey,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { id, createdAt, updatedAt, tz } from "./_helpers";
 
@@ -247,3 +259,85 @@ export const siteRoutes = catalog.table(
     check("site_routes_published_price", sql`${t.publishedPrice} IS NULL OR ${t.publishedPrice} > 0`),
   ],
 );
+
+/** What a landmark row is (ADR-IMPL-064): a landmark at its rank; `fewer` — the job looked and found fewer than three
+ *  (the marker sits right after the last one found); `failed` — a place never looked at successfully. */
+export const placeLandmarkKind = catalog.enum("place_landmark_kind", ["landmark", "fewer", "failed"]);
+/** The outside sources a Wikimedia job asks and that may answer 429: the Wikidata Query Service and Commons' API. */
+export const outsideSource = catalog.enum("outside_source", ["wikidata", "commons"]);
+
+/**
+ * Up to three landmarks of the city each airport serves (ADR-IMPL-064) — the address of each one's photograph on
+ * Wikimedia Commons with its credit, never the image. Rows per place: ranks 1–3 best first, and a marker after the last
+ * one found when there are fewer than three (`fewer`), or alone at rank 1 when no look has worked yet (`failed`). The
+ * resolve-place-landmarks job writes them; a place is looked at again when its rows expire. Created by
+ * 0039_catalog_place_landmarks.sql (after 0006).
+ */
+export const placeLandmarks = catalog.table(
+  "place_landmarks",
+  {
+    /** The airport the app asks with. */
+    code: char("code", { length: 3 })
+      .notNull()
+      .references(() => airports.code, { onDelete: "cascade" }),
+    rank: integer("rank").notNull(),
+    kind: placeLandmarkKind("kind").notNull(),
+    /** The city's Wikidata item; null only on a marker for a place whose city was not found. */
+    cityQid: text("city_qid"),
+    landmarkQid: text("landmark_qid"),
+    name: text("name"),
+    /** The Commons file the photograph is. */
+    file: text("file"),
+    /** Its 1280-px thumbnail on Wikimedia, and that thumbnail's size. */
+    imageUrl: text("image_url"),
+    width: integer("width"),
+    height: integer("height"),
+    licence: text("licence"),
+    licenceUrl: text("licence_url"),
+    /** Who to credit, as the app prints it before the licence. */
+    credit: text("credit"),
+    fetchedAt: tz("fetched_at").notNull().defaultNow(),
+    /** When the job looks again: a month after a look, six hours after a failed first one. */
+    expiresAt: tz("expires_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.code, t.rank] }),
+    uniqueIndex("place_landmarks_one_marker")
+      .on(t.code)
+      .where(sql`${t.kind} <> 'landmark'`),
+    check("place_landmarks_rank", sql`${t.rank} BETWEEN 1 AND 3`),
+    check(
+      "place_landmarks_landmark",
+      sql`${t.kind} <> 'landmark' OR (${t.cityQid} IS NOT NULL AND ${t.landmarkQid} IS NOT NULL AND ${t.name} IS NOT NULL AND ${t.file} IS NOT NULL AND ${t.imageUrl} IS NOT NULL AND ${t.width} IS NOT NULL AND ${t.height} IS NOT NULL AND ${t.licence} IS NOT NULL AND ${t.credit} IS NOT NULL)`,
+    ),
+    check(
+      "place_landmarks_marker",
+      sql`${t.kind} = 'landmark' OR (${t.landmarkQid} IS NULL AND ${t.name} IS NULL AND ${t.file} IS NULL AND ${t.imageUrl} IS NULL AND ${t.width} IS NULL AND ${t.height} IS NULL AND ${t.licence} IS NULL AND ${t.licenceUrl} IS NULL AND ${t.credit} IS NULL)`,
+    ),
+    check("place_landmarks_failed", sql`${t.kind} <> 'failed' OR ${t.rank} = 1`),
+    check(
+      "place_landmarks_size",
+      sql`(${t.width} IS NULL OR ${t.width} > 0) AND (${t.height} IS NULL OR ${t.height} > 0)`,
+    ),
+    check(
+      "place_landmarks_https",
+      sql`(${t.imageUrl} IS NULL OR ${t.imageUrl} LIKE 'https://%') AND (${t.licenceUrl} IS NULL OR ${t.licenceUrl} LIKE 'https://%')`,
+    ),
+    check(
+      "place_landmarks_qids",
+      sql`(${t.cityQid} IS NULL OR ${t.cityQid} ~ '^Q[1-9][0-9]*$') AND (${t.landmarkQid} IS NULL OR ${t.landmarkQid} ~ '^Q[1-9][0-9]*$')`,
+    ),
+    check("place_landmarks_expiry", sql`${t.expiresAt} > ${t.fetchedAt}`),
+  ],
+);
+
+/**
+ * An outside source that answered 429 (ADR-IMPL-064): until `not_before` (its Retry-After) neither resolve-place-photos
+ * nor resolve-place-landmarks asks it anything. One row a source, moved forward by each 429. Created by 0039.
+ */
+export const sourceHolds = catalog.table("source_holds", {
+  source: outsideSource("source").primaryKey(),
+  notBefore: tz("not_before").notNull(),
+  createdAt: createdAt(),
+});
