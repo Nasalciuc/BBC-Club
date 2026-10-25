@@ -87,7 +87,9 @@ Commons, 117 requests) found:
 - **The job** `resolve-place-landmarks` (worker, every five minutes, singleton, 240 s): nothing while the flag is off or
   a source is held; else up to **two** due places — the airports with a city photo row (the app has shown their city)
   and the site's cities' main airports, new ones first, then the longest due. The city item is the one the place's rows
-  know, else the city photo's lookup (by airport, else by name). One WDQS question per city (65-s timeout; WDQS stops one
+  know, else the city photo's lookup (by airport, else by name); a remembered item that answers nothing at all, not
+  even its own photographs (merged into another since), is looked up again rather than taken for a city without
+  sights. One WDQS question per city (65-s timeout; WDQS stops one
   at 60 s), one Commons question (50 files a question). A 429 holds that source for its Retry-After and stops the run,
   the places untouched. Another failure keeps what a place has (never a downgrade), looks again in six hours (a new
   place gets its `failed` marker) and stops the run. A place without a city found gets a `fewer` marker. Twice is the

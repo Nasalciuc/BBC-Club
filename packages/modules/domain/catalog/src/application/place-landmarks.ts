@@ -58,7 +58,8 @@ type Log = { warn(o: object, m?: string): void; error(o: object, m?: string): vo
  * or the place photos'). Else up to two due places: the city behind each (the one its last look found, else Wikidata's
  * — by its airport, else by its own name, as the city photo finds it), one question to WDQS for its sights, one to
  * Commons for their photographs, and the rows written (a place without a city found gets a `fewer` marker: looked,
- * none). A 429 holds that source for its Retry-After and stops the run, the places untouched; another failure keeps what
+ * none). A remembered city item that answers nothing at all (merged into another since) is found again, never taken
+ * for a city without sights. A 429 holds that source for its Retry-After and stops the run, the places untouched; another failure keeps what
  * the places have, tries them again in six hours, and stops the run. Run twice, it writes the same rows. Every number
  * lands in platform.job_runs.
  */
@@ -92,30 +93,45 @@ export async function resolvePlaceLandmarks(deps: {
     return { ...counts, failed: counts.failed + codes.length };
   };
 
-  const cities = new Map<string, string | null>();
-  for (const d of due) if (d.cityQid !== null) cities.set(d.code, d.cityQid);
+  /** The city item behind each of `codes`, as the city photo finds it (by airport, else by name). Throws SourceError. */
+  const citiesOf = async (codes: string[]): Promise<Map<string, string | null>> => {
+    const airports = await airportsRepo.getMany(deps.db, codes);
+    const places = airports.map((a) => ({ code: a.code.trim(), city: a.city, lat: Number(a.lat), lng: Number(a.lng) }));
+    if (places.length === 0) return new Map();
+    const { facts } = await findCities(deps.sources, places, places.length);
+    return new Map(places.map((p) => [p.code, facts.get(p.code)?.qid ?? null]));
+  };
+
+  const remembered = new Map<string, string>();
+  for (const d of due) if (d.cityQid !== null) remembered.set(d.code, d.cityQid);
+  const cities = new Map<string, string | null>(remembered);
   const unknown = due.filter((d) => d.cityQid === null).map((d) => d.code);
   if (unknown.length > 0) {
-    const airports = await airportsRepo.getMany(deps.db, unknown);
-    const places = airports.map((a) => ({ code: a.code.trim(), city: a.city, lat: Number(a.lat), lng: Number(a.lng) }));
-    if (places.length > 0) {
-      try {
-        const { facts } = await findCities(deps.sources, places, places.length);
-        for (const p of places) cities.set(p.code, facts.get(p.code)?.qid ?? null);
-      } catch (err) {
-        return stop(err, unknown);
-      }
+    try {
+      for (const [code, qid] of await citiesOf(unknown)) cities.set(code, qid);
+    } catch (err) {
+      return stop(err, unknown);
     }
   }
 
   for (const place of due) {
     // No city (Wikidata knows none near the airport, or the airport did not come back): looked, nothing to find.
-    const cityQid = cities.get(place.code) ?? null;
+    let cityQid = cities.get(place.code) ?? null;
     let found: ReturnType<typeof pickLandmarks> = [];
     if (cityQid !== null) {
       let read: ReturnType<typeof readLandmarks>;
       try {
-        read = readLandmarks(await askLandmarks(deps.sources, cityQid), cityQid, deps.skip);
+        let answer = await askLandmarks(deps.sources, cityQid);
+        // The item a place's rows remember answered nothing at all, not even its own photographs: merged into another
+        // or emptied since. The city is found again rather than the place written down to nothing.
+        if (answer.length === 0 && remembered.has(place.code)) {
+          const again = (await citiesOf([place.code])).get(place.code) ?? null;
+          if (again !== cityQid) {
+            cityQid = again;
+            answer = again === null ? [] : await askLandmarks(deps.sources, again);
+          }
+        }
+        read = readLandmarks(answer, cityQid ?? "", deps.skip);
       } catch (err) {
         return stop(err, [place.code]);
       }

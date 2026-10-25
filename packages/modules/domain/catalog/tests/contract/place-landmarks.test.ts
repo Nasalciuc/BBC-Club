@@ -33,13 +33,13 @@ const paris = parisAnswer as Saved;
 const chisinau = chisinauAnswer as Saved;
 
 /** Charles de Gaulle names Paris (Q90); RMO is WDQS's own answer (Chișinău, Q21197). */
-const cdg = binding({
+const cdgFields = {
   iata: "CDG",
   airport: "Q46400",
-  airportCoord: [2.55, 49.009722],
-  city: "Q90",
+  airportCoord: [2.55, 49.009722] as [number, number],
   cityLabel: "Paris",
-});
+};
+const cdg = binding({ ...cdgFields, city: "Q90" });
 const answers = {
   wikidata: [cdg, ...rowsOf(rmoKiv)],
   landmarks: { Q90: rowsOf(paris.wdqs), Q21197: rowsOf(chisinau.wdqs) },
@@ -310,6 +310,28 @@ describe("landmarks", () => {
       [1, "landmark"],
       [2, "landmark"],
       [3, "landmark"],
+    ]);
+    await t.iso.drop();
+  });
+
+  it("a remembered city item that answers nothing (merged since) is found again, not taken for a city without sights", async () => {
+    const t = await setup("landmarks-merged", answers);
+    await t.flag({ enabled: true, skip: [] });
+    await shown(t.iso, "CDG");
+    await t.run();
+    // Wikidata merged Paris into another item: the old one answers no row at all; the airport now names the new one.
+    const merged = binding({ ...cdgFields, city: "Q7777777" });
+    const after = await setup(
+      "",
+      { ...answers, wikidata: [merged], landmarks: { Q90: [], Q7777777: rowsOf(paris.wdqs) } },
+      t.iso,
+    );
+    await t.due();
+    expect(await after.run()).toEqual({ places: 1, landmarks: 3, fewer: 0, failed: 0, held: 0 });
+    expect((await t.rows("CDG")).map((r) => [r.kind, r.city_qid])).toEqual([
+      ["landmark", "Q7777777"],
+      ["landmark", "Q7777777"],
+      ["landmark", "Q7777777"],
     ]);
     await t.iso.drop();
   });
