@@ -114,7 +114,9 @@ by itself" (the call, its words and the list's hint at it only with the club's g
 - A wrong secret makes the CRM answer 401 to everything. Under point 6 every request is then given up at once, with
   one ops line each: loud and quick to see. After the fix, the requests are re-queued (RUNBOOK). Retrying 401s instead
   would only delay the same failure by half an hour.
-- The CRM receives the fields the e-mail carried (`docs/store/data-safety.md`), and nothing is logged on the way.
+- The CRM receives the fields the e-mail carried, and three the e-mail does not: `_request_id` (the key of the status
+  route, point 8), `_source` (the platform, `ios` or `android`) and `_app_version` (`docs/store/data-safety.md`).
+  Nothing is logged on the way.
 - Tests:
   - `packages/modules/integration/crm/tests/contract/http-crm.test.ts`, against a fake CRM (`Bun.serve` on port 0):
     - the signature verifies with the secret, not with another, and not over a changed body; point 3's vectors, the
