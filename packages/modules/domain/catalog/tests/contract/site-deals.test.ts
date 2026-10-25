@@ -148,6 +148,52 @@ describe("site deals — the recorded read", () => {
   }, 60_000);
 });
 
+describe("site deals — further metros", () => {
+  it("when the nearest metros list the same cities, the next metros are read until the limit is met", async () => {
+    const t = await setup("deals-second-round");
+    await t.flags.set("catalog.site_offers", { enabled: true });
+    // A snapshot of its own (made-up prices): Boston and New York list the same five cities; Washington five others;
+    // Chicago five more.
+    await t.iso.db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports, promoted)
+      SELECT 8000 + x.ord, a.city, a.country, 'Europe', a.code, ARRAY[a.code], false
+      FROM unnest(string_to_array('LHR,CDG,FCO,MAD,AMS,ZRH,VIE,PRG,BER,CPH,ATH,LIS,DUB,OSL,ARN', ','))
+        WITH ORDINALITY AS x(code, ord)
+      JOIN catalog.airports a ON a.code = x.code`);
+    await t.iso.db.execute(sql`
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price)
+      SELECT o.origin, p.cms_id, p.cms_id * 10 + o.n, 1001
+      FROM catalog.site_places p
+      JOIN (VALUES ('BOS', 1, 8001, 8005), ('JFK', 2, 8001, 8005), ('IAD', 3, 8006, 8010), ('ORD', 4, 8011, 8015))
+        AS o(origin, n, lo, hi) ON p.cms_id BETWEEN o.lo AND o.hi`);
+    const washington = ["ZRH", "VIE", "PRG", "BER", "CPH"];
+
+    // Providence, eight: Boston (about 70 km) and New York (about 250) hold ten deals between them, so they are read
+    // first — but only five cities. Washington is read next for the three still missing; Chicago never.
+    const deals = await t.deals("PVD", 8);
+    expect(deals).toHaveLength(8);
+    expectOnceEach(deals);
+    expect(deals.map((d) => d.origin.city)).toEqual([
+      ...Array<string>(5).fill("Boston"),
+      ...Array<string>(3).fill("Washington"),
+    ]);
+    expect(new Set(deals.slice(0, 5).map((d) => d.destination.code))).toEqual(
+      new Set(["LHR", "CDG", "FCO", "MAD", "AMS"]),
+    );
+    expect(deals.slice(5).every((d) => washington.includes(d.destination.code))).toBe(true);
+
+    // Twelve: Washington's five are not enough either, so Chicago is read for the last two.
+    const twelve = await t.deals("PVD", 12);
+    expect(twelve.map((d) => d.origin.city)).toEqual([
+      ...Array<string>(5).fill("Boston"),
+      ...Array<string>(5).fill("Washington"),
+      ...Array<string>(2).fill("Chicago"),
+    ]);
+    expectOnceEach(twelve);
+    await t.iso.drop();
+  }, 60_000);
+});
+
 describe("site deals — a day at most (D6)", () => {
   it("an expired deal is not served; a deal the site drops is gone at the next sync", async () => {
     const t = await setup("deals-expiry");
