@@ -130,11 +130,16 @@ describe("Profile's and Settings' own sheets reach the store too", () => {
   it("the offers switch stays on the screen: a load begun before it is not shown, the store is not told", async () => {
     await storeLoaded(row());
     const settings = screen(row());
+    const profile = screen(row());
+    const stop = profile.copy.follow();
     const before = settings.copy.loadBegun();
     settings.copy.change((prev) => (prev ? withOffers(prev, false) : prev));
     expect(before()).toBe(false);
     expect(settings.held()?.notifications?.offers).toBe(false);
     expect(profileSnapshot()?.notifications?.offers).toBe(true);
+    // Profile, under Settings, reads the switch from its own copy too: it takes the change with its next load.
+    expect(profile.held()?.notifications?.offers).toBe(true);
+    stop();
   });
 });
 

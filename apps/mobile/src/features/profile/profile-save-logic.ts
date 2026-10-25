@@ -15,7 +15,11 @@ export type ProfileCopy = {
    * contact never wait for their next load (brief 3.4.1).
    */
   saved: (next: SavedProfile) => void;
-  /** A change this screen keeps to itself (the offers switch, which no other screen reads). */
+  /**
+   * A change kept on this screen's copy only: the offers switch. Profile and Settings each show it from their own copy;
+   * the store is not told (no screen reads the switch from it), and Profile, under Settings, takes a switch changed
+   * there with its next load, when it comes back into view.
+   */
   change: (update: Update) => void;
   /**
    * Profile: every save made on another screen (Edit profile's name, Settings' phone) is taken as its own — the same
