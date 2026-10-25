@@ -20,9 +20,16 @@ const FCO_PLACE: BookablePlaceVM = {
   lat: 41.8003,
   lng: 12.2389,
 };
-/** The same airport as Home's pin: everything a pin carries besides — price, offer, region, source, zone, line (made up). */
+/**
+ * The same airport as Home's pin, named and placed otherwise than the list does — the pins come from Home's rows, the
+ * list from its own cache — and with everything a pin carries besides: price, offer, region, source, zone, line. All
+ * made up, so the test sees which of the two a city opens with.
+ */
 const FCO_PIN: DestinationPinVM = {
   ...FCO_PLACE,
+  name: "Rome Fiumicino",
+  lat: 41.79,
+  lng: 12.25,
   fromPrice: 1234,
   hasOffer: true,
   region: "Europe",
@@ -43,17 +50,28 @@ const LIS_PLACE: BookablePlaceVM = {
 /** A finger 45 km from Rome at rest: the city under it. */
 const NEAR_ROME: GlobeTap = { lat: 41.5, lng: 12.6, x: 200, y: 300, project: () => ({ x: 201, y: 301 }) };
 const SIX = ["city", "code", "countryCode", "lat", "lng", "name"];
+const sixOf = (a: BookablePlaceVM) => ({
+  code: a.code,
+  city: a.city,
+  name: a.name,
+  countryCode: a.countryCode,
+  lat: a.lat,
+  lng: a.lng,
+});
 
 describe("a snapped city opens as a pin's tap does", () => {
   it("the same airport, the same state.to, the same recent search", () => {
     const what = exploreTap("rest", NEAR_ROME, [FCO_PLACE, LIS_PLACE], null);
-    if (what?.kind !== "open") throw new Error("a tap 40 km from Rome opens Rome");
+    if (what?.kind !== "open") throw new Error("a tap 45 km from Rome opens Rome");
     expect(what.place).toBe(FCO_PLACE);
 
     // The two ways Explore opens a city (explore.tsx `openCity`): a pin's tap, and the snap.
     const byPin = cityToOpen("FCO", [FCO_PIN]);
     const bySnap = cityToOpen(what.place.code, [FCO_PIN], what.place);
-    expect(bySnap).toStrictEqual(byPin);
+    // The pin's airport, both ways — not the list's entry the tap snapped to.
+    expect(byPin).toStrictEqual(sixOf(FCO_PIN));
+    expect(bySnap).toStrictEqual(sixOf(FCO_PIN));
+    expect(bySnap).not.toStrictEqual(sixOf(FCO_PLACE));
     expect(Object.keys(byPin!).sort()).toEqual(SIX); // the pin's price, offer, source, zone and line stay on the pin
 
     const to = (airport: typeof byPin) =>
