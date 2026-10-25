@@ -1,7 +1,11 @@
 /**
- * Explore's sheet as e2e builds trace it (HomeSheet's `useSheetTrace`; `apps/mobile/e2e/run-parity-ci.sh` prints the
- * lines): the stop the screen asked for, gorhom's index and position, and where the sheet is drawn. Pure, so the
- * verdict is tested.
+ * Explore's sheet as e2e builds trace it (HomeSheet's `trace`, `useSheetTrace`; `apps/mobile/e2e/run-parity-ci.sh`
+ * prints the lines): the stop the screen asked for, gorhom's index and position, and the sheet's top in the committed
+ * shadow tree. Pure, so the verdict is tested.
+ *
+ * "Drawn" here means the committed transform: Fabric's measureInWindow reads the committed tree with its transforms
+ * (react-native's DOM.cpp, `measureInWindow`), not the opacity and not what the native views show. A `drawn` line says
+ * the committed transform puts the sheet where gorhom holds it; it does not say the sheet is visible.
  */
 
 /** Every trace line starts with it; run-parity-ci.sh greps logcat for it. */
@@ -15,21 +19,33 @@ export type SheetLook = {
   sheetIndex: number;
   /** gorhom's position: the sheet's top, from the top of its container. */
   position: number;
-  /** The sheet's top as drawn, in the window; null when it could not be measured. */
+  /** The sheet's top in the window, from the committed tree with its transforms; null when it could not be measured. */
   drawnTop: number | null;
-  /** The window's height: gorhom's first frame draws the sheet this far down. */
+  /** The window's height: gorhom's first frame puts the sheet this far down. */
   windowHeight: number;
 };
 
 /**
- * - `drawn`: gorhom holds the stop asked for, and the sheet is drawn there.
- * - `lost`: gorhom holds the sheet open, but it is drawn at or under the window's foot — gorhom's first frame, the drawn
- *   view no longer following gorhom (parity's vanished sheet; design/motion.md, resting styles).
+ * The top from measureInWindow's answer, or null when it measured nothing. Fabric answers an empty rect (all zeros)
+ * rather than an error when the surface has no committed revision, the view is not in it, or it has no layout
+ * (react-native's UIManagerBinding.cpp `measureInWindow`, DOM.cpp `measureInWindow`): read as a top, that would be 0.
+ * The sheet's background always has a size, so a rect without one is no measure.
+ */
+export function drawnTopOf(y: number, width: number, height: number): number | null {
+  if (width === 0 && height === 0) return null;
+  return Number.isFinite(y) ? y : null;
+}
+
+/**
+ * - `drawn`: gorhom holds the stop asked for, and the committed transform puts the sheet there.
+ * - `lost`: gorhom holds the sheet open, but the committed transform puts it at or under the window's foot — gorhom's
+ *   first frame, the view no longer following gorhom. design/motion.md (resting styles) reads parity's vanished sheet
+ *   as this; a `lost` line confirms that reading, a `closed` one refutes it.
  * - `closed`: gorhom itself has the sheet closed.
  * - `moving`: between two stops.
  * - `astray`: gorhom holds another stop than the one asked for.
- * - `elsewhere`: gorhom holds the stop; the sheet is drawn on screen, but not where gorhom puts it.
- * - `unmeasured`: gorhom holds the stop; where it is drawn is unknown.
+ * - `elsewhere`: gorhom holds the stop; the committed transform puts the sheet on screen, but not where gorhom does.
+ * - `unmeasured`: gorhom holds the stop; the measure answered nothing (`drawnTopOf`).
  */
 export type SheetVerdict = "drawn" | "lost" | "closed" | "moving" | "astray" | "elsewhere" | "unmeasured";
 

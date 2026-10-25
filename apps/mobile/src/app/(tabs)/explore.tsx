@@ -42,6 +42,7 @@ import { toggleSaved, useIsSaved } from "@/features/saved/saved";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
 import { useProfile } from "@/features/profile/useProfile";
+import { env } from "@/lib/env";
 import { monogram } from "@/lib/monogram";
 
 /** The sheet's stops: at rest (02), a chosen route (13), every offer (16). */
@@ -55,6 +56,8 @@ const BAND_TOP = { rest: 76, route: 8 } as const;
 const ROUND = { top: -3.7, back: { size: 36, left: 14.7 }, save: { size: 35.5, right: 15.2 } } as const;
 /** 13: `Request a quote`'s words 0.83 lower than centred in their pill. */
 const QUOTE_WORDS_DROP = 0.83;
+/** The e2e build logs the sheet's state for parity (HomeSheet's `trace`; e2e/run-parity-ci.sh prints it). */
+const TRACE_SHEET = env.EXPO_PUBLIC_APP_ENV === "e2e";
 
 /**
  * Explore (02, 13, 16, 17, 19): the greeting over the globe on the pale sky, the search bar on the globe's foot and the
@@ -296,6 +299,7 @@ export default function ExploreScreen() {
         onChange={setSheetIndex}
         snapPoints={snaps}
         active={focused}
+        trace={TRACE_SHEET}
         footer={footer}
         accessory={mode === "all" ? <SheetDone onDone={() => setSheetIndex(STOP.rest)} /> : undefined}
         testID="explore.sheet"

@@ -36,8 +36,9 @@ js_error_lines() {
 
 # Explore's sheet as the e2e build saw it (packages/ui/src/layout/sheet-trace.ts): a line on each focus of Explore and
 # on each change while it is on screen — the verdict (drawn, lost, closed, moving, astray, elsewhere, unmeasured), the
-# stop asked for, gorhom's index and position, and the sheet's top as drawn. `lost` is gorhom holding the sheet open
-# while it is drawn a window height down; `closed` is gorhom itself closing it.
+# stop asked for, gorhom's index and position, and the sheet's top in the committed tree. `drawn` means the committed
+# transform matches gorhom's position, not that the sheet is visible (opacity is not measured). `lost` is gorhom
+# holding the sheet open while the committed transform puts it a window height down; `closed` is gorhom closing it.
 sheet_trace() {
   adb logcat -d -v time '*:S' ReactNativeJS:V | grep -F '[HomeSheet]' | tail -n 20 || true
 }

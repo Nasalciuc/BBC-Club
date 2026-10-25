@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { type SheetLook, formatSheetLook, sheetVerdict } from "./sheet-trace";
+import { type SheetLook, drawnTopOf, formatSheetLook, sheetVerdict } from "./sheet-trace";
 
 // Made-up numbers on a 915-pt window: the rest stop's top at 517, the route's at 300.
 const atRest: SheetLook = { index: 0, sheetIndex: 0, position: 517, drawnTop: 517, windowHeight: 915 };
@@ -37,11 +37,30 @@ describe("sheetVerdict", () => {
 
   it("is unmeasured when gorhom holds the stop and the drawn top is unknown", () => {
     expect(sheetVerdict({ ...atRest, drawnTop: null })).toBe("unmeasured");
+    // Fabric's answer when it cannot measure (an empty rect) is no top, not a top of 0.
+    expect(sheetVerdict({ ...atRest, drawnTop: drawnTopOf(0, 0, 0) })).toBe("unmeasured");
   });
 
   it("is elsewhere when the sheet is on screen but not where gorhom puts it", () => {
     expect(sheetVerdict({ ...atRest, drawnTop: 560 })).toBe("elsewhere");
-    expect(sheetVerdict({ ...atRest, drawnTop: 0 })).toBe("elsewhere");
+    expect(sheetVerdict({ ...atRest, drawnTop: 120 })).toBe("elsewhere");
+  });
+});
+
+describe("drawnTopOf", () => {
+  it("is the measured top when the view has a size", () => {
+    expect(drawnTopOf(517, 393, 398)).toBe(517);
+    // A sheet whose top is at the window's top is a measure, not a failure.
+    expect(drawnTopOf(0, 393, 915)).toBe(0);
+  });
+
+  it("is null for the empty rect Fabric answers when it cannot measure", () => {
+    expect(drawnTopOf(0, 0, 0)).toBeNull();
+  });
+
+  it("is null for a top that is not a number", () => {
+    expect(drawnTopOf(Number.NaN, 393, 398)).toBeNull();
+    expect(drawnTopOf(Number.POSITIVE_INFINITY, 393, 398)).toBeNull();
   });
 });
 

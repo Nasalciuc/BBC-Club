@@ -11,7 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 
 import { tokens } from "../tokens";
-import { SHEET_TRACE, useSheetTrace } from "./useSheetTrace";
+import { useSheetTrace } from "./useSheetTrace";
 
 /** 13: `Request a quote`, 40.6 tall, 16.4 and 16.8 from the edges, its foot 13.9 over the sheet's bottom edge (the tab
  *  bar's top, its hairline included). */
@@ -50,13 +50,19 @@ type Props = {
    * When the hosting screen is on screen. Coming back, the sheet is snapped to `index` again: it moves only if gorhom's
    * position strayed from that stop while the screen was away, since gorhom skips a snap to the stop it holds. It never
    * redrew the sheet parity found gone after a tab switch — gorhom held that one at rest; its drawn style was what was
-   * lost (see HomeSheet). e2e builds log the sheet's state while the screen is on screen (useSheetTrace).
+   * lost (see HomeSheet).
    */
   active?: boolean;
+  /**
+   * Logs the sheet's state while the screen is on screen (useSheetTrace, sheet-trace.ts). The app turns it on for its
+   * e2e builds only (`EXPO_PUBLIC_APP_ENV`, read in the app's env loader); off, gorhom gets nothing and nothing is
+   * logged.
+   */
+  trace?: boolean;
   testID?: string;
 };
 const AccessoryContext = createContext<ReactNode>(null);
-/** e2e builds: the sheet's background, measured to see where the sheet is drawn (useSheetTrace). Null otherwise. */
+/** With `trace`: the sheet's background, measured to see where the committed tree puts the sheet (useSheetTrace). */
 const DrawnContext = createContext<RefObject<View | null> | null>(null);
 
 // gorhom mounts `footerComponent` as a component type: a function created per render would remount the footer on every
@@ -134,13 +140,23 @@ function SheetHandle({ animatedIndex }: BottomSheetHandleProps) {
  * (design/motion.md, resting styles). `[...snapPoints]` keeps its identity between renders: the React Compiler memoizes
  * it on `snapPoints`, as it does Explore's `sheetSnaps(height, top)`.
  */
-export function HomeSheet({ index, onChange, snapPoints, children, footer, accessory, active = true, testID }: Props) {
+export function HomeSheet({
+  index,
+  onChange,
+  snapPoints,
+  children,
+  footer,
+  accessory,
+  active = true,
+  trace = false,
+  testID,
+}: Props) {
   const sheet = useRef<BottomSheet>(null);
-  // e2e builds only: gorhom writes its index and position here, and the background is measured (useSheetTrace).
+  // With `trace` only: gorhom writes its index and position here, and the background is measured (useSheetTrace).
   const traceIndex = useSharedValue(-1);
   const tracePosition = useSharedValue(0);
   const drawn = useRef<View>(null);
-  useSheetTrace(active, index, drawn, traceIndex, tracePosition);
+  useSheetTrace(trace && active, index, drawn, traceIndex, tracePosition);
   // The sheet is never closed: three stops and no pan down to close. The library says -1 when a snap lands on none
   // of them — its target moved while it ran, as the screen's height settles after its first layout — and passing
   // that on closed the sheet for good: the screen's index became -1 and nothing raised it again (Android parity on
@@ -158,7 +174,7 @@ export function HomeSheet({ index, onChange, snapPoints, children, footer, acces
     <LookContext.Provider value={index >= 2 ? RAISED.all : RAISED.route}>
       <AccessoryContext.Provider value={accessory ?? null}>
         <FooterContext.Provider value={footer ?? null}>
-          <DrawnContext.Provider value={SHEET_TRACE ? drawn : null}>
+          <DrawnContext.Provider value={trace ? drawn : null}>
             <BottomSheet
               ref={sheet}
               index={index}
@@ -175,8 +191,8 @@ export function HomeSheet({ index, onChange, snapPoints, children, footer, acces
               handleComponent={SheetHandle}
               backgroundComponent={SheetBackground}
               footerComponent={footer ? DockedFooter : undefined}
-              animatedIndex={SHEET_TRACE ? traceIndex : undefined}
-              animatedPosition={SHEET_TRACE ? tracePosition : undefined}
+              animatedIndex={trace ? traceIndex : undefined}
+              animatedPosition={trace ? tracePosition : undefined}
             >
               <BottomSheetScrollView
                 testID={testID}
