@@ -46,6 +46,22 @@ The `preview` profile reads the EAS **preview** environment; `eas.json` sets onl
   Changing it needs an OTA update only, never a new build.
 - `GOOGLE_SERVICES_JSON` — the same Firebase file, for push on a staging APK (a new build).
 
+**Checking the call buttons** (a development build, as in the README; `--clear` because an `EXPO_PUBLIC_*` value is
+written into the bundle; a value set in the shell wins over `apps/mobile/.env`, and an empty one means none):
+
+```bash
+# With a made-up number (the fictional 555 range): every call button is drawn and opens the dialer on it.
+cd apps/mobile && EXPO_PUBLIC_SUPPORT_PHONE=+12125550148 bun run start --clear
+# Without one: no call button anywhere, and no words that ask the member to call.
+cd apps/mobile && EXPO_PUBLIC_SUPPORT_PHONE= bun run start --clear
+```
+
+Look at Profile (`Call us` beside `Edit profile`), a request's detail (`Call your specialist` on a request the club
+holds; `Call us` on one not passed on, whose notice then has a phone glyph — an info glyph and no `call` without the
+number), the Requests banner over a request not passed on, the rate-limit page (`Call your specialist`, else `Done`),
+and the update and maintenance pages (`Call a specialist`). Without the number, a request the server holds but could not
+pass on says the club will try again; the member is not asked to send it again (infra/RUNBOOK.md).
+
 **Native modules change the runtime.** Adding or upgrading one (Mapbox, for instance) needs a new build _and_ a new
 `version` in `app.json`: `runtimeVersion` follows the app version, so OTA updates for the new version never reach an
 older APK that lacks the module — `@rnmapbox/maps` throws on import there.

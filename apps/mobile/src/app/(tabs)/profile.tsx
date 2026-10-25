@@ -180,7 +180,9 @@ export default function ProfileScreen() {
   if (!profile && error) {
     // The settings button stays: Settings keeps Sign out and Delete account, and a profile that keeps failing must not
     // take them away (ADR-IMPL-047). `Call us` beside `Try again` when the club's number is known (F114).
-    const callUs = errorFrameActions("profile", CAN_CALL).includes("call") ? clubCall("profile.error.call") : null;
+    const callUs = errorFrameActions("profile", CAN_CALL).includes("call")
+      ? clubCall("profile.error.call", "Call us")
+      : null;
     return (
       <View testID="profile.root" style={styles.root}>
         <ScreenStatusBar on="light" />
@@ -202,7 +204,7 @@ export default function ProfileScreen() {
                 setReloadToken((n) => n + 1);
               },
             }}
-            secondary={callUs ? { label: "Call us", testID: callUs.testID, onPress: callUs.onPress } : undefined}
+            secondary={callUs ?? undefined}
           />
         </View>
       </View>
@@ -211,7 +213,7 @@ export default function ProfileScreen() {
 
   const displayName = profile?.displayName?.trim() || "Member";
   // The club's general line (support-phone.ts); without one, no `Call us`.
-  const call = clubCall("profile.call");
+  const call = clubCall("profile.call", "Call us");
   const city = home && homeCity?.code === home ? homeCity.city : null;
   // A satellite view is drawn at the band's size: the column (capped on large phones) by the band's height.
   const picture = bandPicture(null, photoFor(home), {
@@ -296,7 +298,7 @@ export default function ProfileScreen() {
             <View style={styles.action}>
               <Button
                 testID={call.testID}
-                label="Call us"
+                label={call.label}
                 icon="phone-fill"
                 iconSize={17.2}
                 iconGap={11.8}

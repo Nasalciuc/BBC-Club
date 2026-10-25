@@ -6,7 +6,7 @@ import { Button, baselineOffset, belowBaseline, rn, tokens } from "@bbc/ui";
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { limitScope, limitedCopy } from "@/features/requests/confirmation-logic";
-import { clubCall } from "@/lib/support-phone";
+import { CAN_CALL, clubCall } from "@/lib/support-phone";
 
 /**
  * 27, measured from the safe area's top (47 on the image): the title centred on 308.41 and 341.15, the words on 380.23
@@ -43,9 +43,9 @@ export default function RequestLimitedScreen() {
   const params = useLocalSearchParams<{ minutes?: string; scope?: string }>();
   const minutes = Number(params.minutes);
   const shown = Number.isFinite(minutes) && minutes > 0 ? minutes : 1;
-  const call = clubCall("request.rateLimited.call");
+  const call = clubCall("request.rateLimited.call", "Call your specialist");
   // The member's own limit blames the member; an address shared with others, or an unknown one, does not (F086).
-  const copy = limitedCopy({ scope: limitScope({ scope: params.scope }), minutes: shown, canCall: call !== null });
+  const copy = limitedCopy({ scope: limitScope({ scope: params.scope }), minutes: shown, canCall: CAN_CALL });
   const g = PAGE;
   return (
     <View style={styles.root} testID="request.rateLimited">
@@ -78,7 +78,7 @@ export default function RequestLimitedScreen() {
         </Text>
         <Button
           testID={call ? call.testID : "request.rateLimited.done"}
-          label={call ? "Call your specialist" : "Done"}
+          label={call ? call.label : "Done"}
           variant="primary"
           icon={call ? "phone-fill" : undefined}
           iconSize={g.pill.icon}

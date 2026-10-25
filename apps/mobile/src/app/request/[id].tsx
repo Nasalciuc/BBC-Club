@@ -356,9 +356,14 @@ export default function RequestDetailScreen() {
         }
       : null;
   const reference = vm.reference.trim();
-  // The club's general line (support-phone.ts); without one, no button.
-  const callSpecialist = view.call === "specialist" ? clubCall("request.call") : null;
-  const callUs = view.call === "us" ? clubCall("request.callUs") : null;
+  // The club's general line (support-phone.ts); without one, no button. A request we could not pass on: `Call us`, the
+  // one thing left.
+  const call =
+    view.call === "specialist"
+      ? clubCall("request.call", "Call your specialist")
+      : view.call === "us"
+        ? clubCall("request.callUs", "Call us")
+        : null;
   // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo.
   const bundled = clubPhoto(to, "any");
   const picture = bandPicture(null, photoFor(to), {
@@ -375,31 +380,17 @@ export default function RequestDetailScreen() {
     ? { ...view.notice, glyph: view.notice.icon === "info" ? ("info-fill" as const) : ("phone-fill" as const) }
     : null;
   // What follows the notice: the line under it, then the fare, the number we call and the booking note, then the call.
-  const pill = callSpecialist ? (
+  const pill = call ? (
     <Button
-      testID={callSpecialist.testID}
-      label="Call your specialist"
+      testID={call.testID}
+      label={call.label}
       icon="phone-fill"
       iconSize={21.4}
       iconGap={14.75}
       variant="primary"
       height={PILL_HEIGHT}
       text="buttonDetail"
-      onPress={callSpecialist.onPress}
-      style={styles.pill}
-    />
-  ) : callUs ? (
-    // A request we could not pass on: the call is the one thing left.
-    <Button
-      testID={callUs.testID}
-      label="Call us"
-      icon="phone-fill"
-      iconSize={21.4}
-      iconGap={14.75}
-      variant="primary"
-      height={PILL_HEIGHT}
-      text="buttonDetail"
-      onPress={callUs.onPress}
+      onPress={call.onPress}
       style={styles.pill}
     />
   ) : null;

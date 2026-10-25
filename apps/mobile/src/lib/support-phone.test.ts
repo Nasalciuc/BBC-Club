@@ -1,8 +1,9 @@
 /**
  * Every call button dials EXPO_PUBLIC_SUPPORT_PHONE — the company's general line — and nothing else (brief 3.5, the D1
  * check). The app is read as source: the number is read in one place, a `tel:` link is built in one place, every call
- * button is made by `clubCall` (null without a number, so the button is not drawn), no number is written in the code,
- * and no words ask the member to call when there is none.
+ * button is made by `clubCall` (null without a number), its words come only with that call (so a screen cannot draw
+ * them without one), no number is written in the code, every copy helper that can ask for a call is handed `CAN_CALL`
+ * by the screens that show its words, and no words ask the member to call when there is no number.
  */
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -17,20 +18,47 @@ import { callFor, telHref } from "./support-phone-logic";
 const ROOT = join(import.meta.dir, "../../../..");
 const SOURCES = ["apps/mobile/src", "packages/ui/src"];
 
-/** Every call button of the app: where it is drawn, and its testID. A new one is made with `clubCall` and named here. */
+/** Every call button of the app: where it is made, its testID and its words. A new one is made with `clubCall` and
+ *  named here. */
 const CALL_SITES = [
-  { file: "apps/mobile/src/components/app-gate.tsx", testID: "appGate.update.call" },
-  { file: "apps/mobile/src/components/app-gate.tsx", testID: "appGate.maintenance.call" },
-  { file: "apps/mobile/src/app/(tabs)/profile.tsx", testID: "profile.call" },
-  { file: "apps/mobile/src/app/(tabs)/profile.tsx", testID: "profile.error.call" },
-  { file: "apps/mobile/src/app/request/[id].tsx", testID: "request.call" },
-  { file: "apps/mobile/src/app/request/[id].tsx", testID: "request.callUs" },
-  { file: "apps/mobile/src/app/request/limited.tsx", testID: "request.rateLimited.call" },
+  { file: "apps/mobile/src/components/app-gate.tsx", testID: "appGate.update.call", label: "Call a specialist" },
+  { file: "apps/mobile/src/components/app-gate.tsx", testID: "appGate.maintenance.call", label: "Call a specialist" },
+  { file: "apps/mobile/src/app/(tabs)/profile.tsx", testID: "profile.call", label: "Call us" },
+  { file: "apps/mobile/src/app/(tabs)/profile.tsx", testID: "profile.error.call", label: "Call us" },
+  { file: "apps/mobile/src/app/request/[id].tsx", testID: "request.call", label: "Call your specialist" },
+  { file: "apps/mobile/src/app/request/[id].tsx", testID: "request.callUs", label: "Call us" },
+  {
+    file: "apps/mobile/src/app/request/limited.tsx",
+    testID: "request.rateLimited.call",
+    label: "Call your specialist",
+  },
 ] as const;
 
-/** Files that draw a call button's words without making the call themselves: the app gate's page (it is handed
- *  `clubCall`'s answer) and the developer gallery (its buttons do nothing). */
-const DRAWS_ONLY = ["apps/mobile/src/components/system-screen.tsx", "apps/mobile/src/app/dev/gallery.tsx"];
+/** The developer gallery draws the buttons' words on buttons that dial nothing. */
+const GALLERY = "apps/mobile/src/app/dev/gallery.tsx";
+/** The words' type (`CallLabel`): the only words clubCall takes. */
+const WORDS_TYPE = "apps/mobile/src/lib/support-phone-logic.ts";
+
+/** The screens that show words a copy helper words as a call when `canCall` is true: each hands it `CAN_CALL`. */
+const SAYS_CALL = [
+  { file: "apps/mobile/src/app/request/[id].tsx", fn: "requestView" },
+  { file: "apps/mobile/src/app/(tabs)/requests.tsx", fn: "listAttention" },
+  { file: "apps/mobile/src/features/profile/DeleteAccountSheet.tsx", fn: "deleteFailureCopy" },
+  { file: "apps/mobile/src/app/(tabs)/profile.tsx", fn: "errorFrameActions" },
+  { file: "apps/mobile/src/app/request/limited.tsx", fn: "limitedCopy" },
+] as const;
+
+/** Each copy helper that takes `canCall`, and where: the argument's position, or the property of its one argument. */
+const CAN_CALL_ARG: Record<string, number | "property"> = {
+  requestView: 3,
+  listAttention: 1,
+  notPassedOn: 1,
+  deleteFailureCopy: 2,
+  deleteRateLimited: 0,
+  stateCopy: 1,
+  errorFrameActions: 1,
+  limitedCopy: "property",
+};
 
 /** The copy that may ask the member to call: each takes `canCall`. The Join page's line (otp-send-logic.ts) belongs to
  *  the entry, which stays as it is (ADR-IMPL-047) — left to the owner, not changed here. */
@@ -69,6 +97,52 @@ function filesWith(re: RegExp): string[] {
   return files.filter((f) => re.test(f.src)).map((f) => f.path);
 }
 
+/** A call button made with its testID and its words: `clubCall("<testID>", "<words>")`. */
+const CLUB_CALL = /\bclubCall\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/g;
+
+/** A button's words, as a string of their own. */
+const CALL_WORDS = /(["'`])Call (us|your specialist|a specialist)\1/;
+
+/** The arguments of each call to `fn` in `src`, as written: split at the top level, nesting and strings respected. A
+ *  definition (`function fn(`) is not a call. */
+function callsOf(src: string, fn: string): string[][] {
+  const out: string[][] = [];
+  for (const m of src.matchAll(new RegExp(`(?<![\\w.])${fn}\\(`, "g"))) {
+    if (/function\s+$/.test(src.slice(Math.max(0, m.index - 20), m.index))) continue;
+    const args: string[] = [];
+    let depth = 0;
+    let quote: string | null = null;
+    let start = m.index + m[0].length;
+    let i = start;
+    for (; i < src.length; i++) {
+      const c = src[i] ?? "";
+      if (quote) {
+        if (c === "\\") i++;
+        else if (c === quote) quote = null;
+      } else if (c === '"' || c === "'" || c === "`") quote = c;
+      else if ("([{".includes(c)) depth++;
+      else if (")]}".includes(c)) {
+        if (depth === 0) break;
+        depth--;
+      } else if (c === "," && depth === 0) {
+        args.push(src.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+    const last = src.slice(start, i).trim();
+    if (last) args.push(last);
+    out.push(args);
+  }
+  return out;
+}
+
+/** The `canCall` a call hands its helper, as written, or null when it leaves it out (the helper then says no call). */
+function canCallOf(fn: string, args: string[]): string | null {
+  const at = CAN_CALL_ARG[fn];
+  if (at === "property") return args[0]?.match(/\bcanCall\s*:\s*([^,}]+)/)?.[1]?.trim() ?? null;
+  return at === undefined ? null : (args[at] ?? null);
+}
+
 describe("one number: EXPO_PUBLIC_SUPPORT_PHONE", () => {
   test("the variable is read once, by lib/env.ts; only lib/support-phone.ts reads it from there", () => {
     expect(filesWith(/process\.env\.EXPO_PUBLIC_SUPPORT_PHONE/)).toEqual(["apps/mobile/src/lib/env.ts"]);
@@ -76,10 +150,18 @@ describe("one number: EXPO_PUBLIC_SUPPORT_PHONE", () => {
       "apps/mobile/src/lib/support-phone.ts",
     ]);
     const dialer = files.find((f) => f.path === "apps/mobile/src/lib/support-phone.ts")?.src ?? "";
-    // The link comes from that value, and every call is made from that link.
+    // The link comes from that value, and every call — and whether the app may say "call" — from that link.
     expect(dialer).toContain("const SUPPORT_TEL: string | null = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);");
-    expect(dialer).toContain("return callFor(SUPPORT_TEL, testID,");
+    expect(dialer).toContain("return callFor(SUPPORT_TEL, testID, label,");
+    expect(dialer).toContain("export const CAN_CALL = SUPPORT_TEL !== null;");
     expect(dialer).not.toMatch(/export const SUPPORT_TEL/);
+    // CAN_CALL is that one, imported: no screen makes its own.
+    expect(filesWith(/\bCAN_CALL\s*=/)).toEqual(["apps/mobile/src/lib/support-phone.ts"]);
+    for (const file of filesWith(/\bCAN_CALL\b/).filter((p) => p !== "apps/mobile/src/lib/support-phone.ts")) {
+      expect(files.find((f) => f.path === file)?.src).toMatch(
+        /import \{[^}]*\bCAN_CALL\b[^}]*\} from "@\/lib\/support-phone";/,
+      );
+    }
   });
 
   test("a tel: link is built in one place, from the configured number's digits", () => {
@@ -111,12 +193,17 @@ describe("one number: EXPO_PUBLIC_SUPPORT_PHONE", () => {
 });
 
 describe("every call button", () => {
-  test(`is one of the ${CALL_SITES.length} made by clubCall, each named once in its file`, () => {
+  test(`is one of the ${CALL_SITES.length} made by clubCall with its testID and its words, each named once`, () => {
     const made = files.flatMap((f) =>
-      [...f.src.matchAll(/\bclubCall\(\s*"([^"]+)"\s*\)/g)].map((m) => ({ file: f.path, testID: m[1] })),
+      [...f.src.matchAll(CLUB_CALL)].map((m) => ({ file: f.path, testID: m[1], label: m[2] })),
     );
-    const key = (s: { file: string; testID?: string }) => `${s.file} ${s.testID}`;
+    const key = (s: { file: string; testID?: string; label?: string }) => `${s.file} ${s.testID} ${s.label}`;
     expect(made.map(key).sort()).toEqual(CALL_SITES.map(key).sort());
+    // Every clubCall( is one of those: none takes its testID or its words from a variable.
+    const calls = files
+      .filter((f) => f.path !== "apps/mobile/src/lib/support-phone.ts")
+      .flatMap((f) => [...f.src.matchAll(/\bclubCall\(/g)]);
+    expect(calls.length).toBe(CALL_SITES.length);
     for (const site of CALL_SITES) {
       const src = files.find((f) => f.path === site.file)?.src ?? "";
       // Its testID appears only inside clubCall(…): the button gets it from the call, which is null without a number.
@@ -124,26 +211,34 @@ describe("every call button", () => {
     }
   });
 
-  test("its words are drawn only where a call is made, or by the page and the gallery that draw them", () => {
-    const labelled = filesWith(/(["'])Call (us|your specialist|a specialist)\1/);
-    const allowed = new Set<string>([...CALL_SITES.map((s) => s.file), ...DRAWS_ONLY]);
-    for (const file of labelled) expect(allowed.has(file)).toBe(true);
+  test("its words come only with the call: no screen writes them outside clubCall(…)", () => {
+    // With each clubCall("…", "…") taken out, no code holds a button's words: a screen draws them from the call
+    // (`call.label`), which is null without a number — so no words without a button, and no button without a number.
+    for (const f of files) {
+      if (f.path === GALLERY || f.path === WORDS_TYPE) continue;
+      expect({ file: f.path, words: f.src.replace(CLUB_CALL, "").match(CALL_WORDS)?.[0] ?? null }).toEqual({
+        file: f.path,
+        words: null,
+      });
+    }
     // The gallery's buttons dial nothing.
-    const gallery = files.find((f) => f.path === "apps/mobile/src/app/dev/gallery.tsx")?.src ?? "";
+    const gallery = files.find((f) => f.path === GALLERY)?.src ?? "";
     expect(gallery).not.toMatch(/Linking|clubCall|support-phone/);
   });
 
-  test("dials exactly the configured number, and is not drawn without one", () => {
+  test("dials exactly the configured number, and is not made without one", () => {
     const opened: string[] = [];
     const open = (url: string) => {
       opened.push(url);
     };
     for (const site of CALL_SITES) {
-      // Unset, empty, or too short to dial: no number, so no button.
-      for (const unset of [undefined, "", "123"]) expect(callFor(telHref(unset), site.testID, open)).toBeNull();
+      // Unset, empty, or too short to dial: no number, so no button and no words.
+      for (const unset of [undefined, "", "123"]) {
+        expect(callFor(telHref(unset), site.testID, site.label, open)).toBeNull();
+      }
       // A made-up number in the fictional 555 range.
-      const call = callFor(telHref("+1 (212) 555-0148"), site.testID, open);
-      expect(call?.testID).toBe(site.testID);
+      const call = callFor(telHref("+1 (212) 555-0148"), site.testID, site.label, open);
+      expect([call?.testID, call?.label]).toEqual([site.testID, site.label]);
       call?.onPress();
     }
     expect(opened).toEqual(CALL_SITES.map(() => "tel:+12125550148"));
@@ -152,9 +247,31 @@ describe("every call button", () => {
 
 describe("words that ask the member to call", () => {
   test("live only in the copy that takes canCall (and the frozen entry)", () => {
-    const asking = filesWith(/["'`][^"'`\n]*\b[Cc]all (us|your specialist)\b[^"'`\n]*["'`]/);
-    const allowed = new Set<string>([...CALL_COPY, ...CALL_SITES.map((s) => s.file), ...DRAWS_ONLY]);
+    const asking = files
+      .filter((f) =>
+        /["'`][^"'`\n]*\b[Cc]all (us|your specialist|a specialist)\b[^"'`\n]*["'`]/.test(f.src.replace(CLUB_CALL, "")),
+      )
+      .map((f) => f.path);
+    const allowed = new Set<string>([...CALL_COPY, GALLERY, WORDS_TYPE]);
     for (const file of asking) expect(allowed.has(file)).toBe(true);
+  });
+
+  test("the screens that show them hand the helper CAN_CALL — never a literal; the helpers pass their own along", () => {
+    const handed: string[] = [];
+    for (const f of files) {
+      for (const fn of Object.keys(CAN_CALL_ARG)) {
+        for (const args of callsOf(f.src, fn)) {
+          const canCall = canCallOf(fn, args);
+          if (canCall === null) continue;
+          // Inside the copy, a helper hands on the `canCall` it was given; everywhere else it is the configured line.
+          const expected = CALL_COPY.includes(f.path) ? /^(s\.)?canCall$/ : /^CAN_CALL$/;
+          expect({ file: f.path, fn, canCall }).toEqual({ file: f.path, fn, canCall: expect.stringMatching(expected) });
+          if (!CALL_COPY.includes(f.path)) handed.push(`${f.path} ${fn}`);
+        }
+      }
+    }
+    // Each screen that shows the words hands it, so a dropped argument is caught as surely as a literal `true`.
+    expect(handed.sort()).toEqual(SAYS_CALL.map((s) => `${s.file} ${s.fn}`).sort());
   });
 
   test("are never said without a number, and are said with one", () => {

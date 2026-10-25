@@ -11,11 +11,20 @@ export function telHref(phone: string | undefined): string | null {
   return digits.length >= 8 ? `tel:${digits}` : null;
 }
 
-/** A call button: its testID and its press. A screen draws the button only from one of these. */
-export type ClubCall = { testID: string; onPress: () => void };
+/** The words a call button carries: the screen's own (12 `Call us`, 11 `Call your specialist`, the system pages'
+ *  `Call a specialist`). They come with the call, so a screen cannot draw them without one. */
+export type CallLabel = "Call us" | "Call your specialist" | "Call a specialist";
 
-/** The call button `testID` dials, or null when the club has no number: the screen then draws no button. The press
- *  opens `tel` — the configured number's link, the only one there is — and nothing else. */
-export function callFor(tel: string | null, testID: string, open: (url: string) => void): ClubCall | null {
-  return tel ? { testID, onPress: () => open(tel) } : null;
+/** A call button: its testID, its words and its press. A screen draws the button only from one of these. */
+export type ClubCall = { testID: string; label: CallLabel; onPress: () => void };
+
+/** The call button `testID` dials, or null when the club has no number: the screen then draws no button and no words.
+ *  The press opens `tel` — the configured number's link, the only one there is — and nothing else. */
+export function callFor(
+  tel: string | null,
+  testID: string,
+  label: CallLabel,
+  open: (url: string) => void,
+): ClubCall | null {
+  return tel ? { testID, label, onPress: () => open(tel) } : null;
 }
