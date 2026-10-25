@@ -869,8 +869,9 @@ export const catalogModule = (
           },
         },
         {
-          // ADR-IMPL-064: two due places every five minutes — one WDQS question each (3–33 s; WDQS stops one at 60 s)
-          // and one Commons question. Nothing while the flag is off or a Wikimedia source holds the club off. A place
+          // ADR-IMPL-064: two due places every five minutes — one WDQS question each (a second when the city item
+          // it remembers answers nothing; 3–33 s, WDQS stops one at 60 s) and Commons once per 50 files, a hundred
+          // at most (two questions). Nothing while the flag is off or a Wikimedia source holds the club off. A place
           // starts only while its slowest look ends within 225 s (LANDMARK_RUN_REQUESTS_MS), its writes inside the 240.
           name: "resolve-place-landmarks",
           spec: {

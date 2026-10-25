@@ -19,7 +19,11 @@ import {
 } from "./landmark-sources";
 import { REQUEST_TIMEOUT_MS, SourceError, findCities, type ImageInfo, type SourceDeps } from "./place-photo-sources";
 
-/** Places looked up in one run: one Wikidata question and one Commons question each (a city found by name, one more). */
+/**
+ * Places looked up in one run. Each: one Wikidata question for its sights (a second when the city item it remembers
+ * answers nothing, after the city is found again) and Commons once per 50 files, a hundred at most (two questions).
+ * Finding a city asks the airports' question (one for the run's places) and, for a city found by its name, a search.
+ */
 export const LANDMARK_PLACES_PER_RUN = 2;
 /** A run's requests end within this long of its start: the job is stopped at 240 s (module.ts), its writes need the
  *  rest. */
@@ -74,8 +78,9 @@ type Log = { warn(o: object, m?: string): void; error(o: object, m?: string): vo
 /**
  * The resolve-place-landmarks job. Nothing while a Wikimedia source holds the club off (a 429's Retry-After, this job's
  * or the place photos'). Else up to two due places: the city behind each (the one its last look found, else Wikidata's
- * — by its airport, else by its own name, as the city photo finds it), one question to WDQS for its sights, one to
- * Commons for their photographs, and the rows written (a place without a city found gets a `fewer` marker: looked,
+ * — by its airport, else by its own name, as the city photo finds it), one question to WDQS for its sights (a second
+ * for a remembered city found again, below), Commons once per 50 of their photographs (a hundred at most, two
+ * questions), and the rows written (a place without a city found gets a `fewer` marker: looked,
  * none). A remembered city item that answers nothing at all (merged into another since) is found again, never taken
  * for a city without sights. A 429 holds that source for its Retry-After and stops the run, the places untouched; another failure keeps what
  * the places have, tries them again in six hours, and stops the run — a search by a city's name that fails is its own

@@ -287,7 +287,8 @@ photo for gets its satellite view, looked at again each day.
 The app asks for a destination's landmarks (`GET /v1/places/:code/landmarks`): up to three, each with its photograph's
 address on Wikimedia, its size and its credit, from `catalog.place_landmarks` at once. `resolve-place-landmarks`
 (worker, every five minutes, two places a run) looks up the cities the app has shown a photo for and the site's
-cities: one WDQS question a city (3–33 s; WDQS stops it at 60 s) and one Commons question. A city is looked at again
+cities: one WDQS question a city (a second when the city item it remembers answers nothing; 3–33 s, WDQS stops one at
+60 s) and Commons once per 50 files, a hundred files at most (two questions). A city is looked at again
 after 30–33 days; a look that failed, after six hours (what the city had stays). Only addresses and credits are stored.
 A place starts only while its slowest look (162 s) can end inside the run's 225 s (the job is stopped at 240): when
 WDQS is slow the second place waits for the next run, untouched (`later` in the run's counts in `platform.job_runs`).

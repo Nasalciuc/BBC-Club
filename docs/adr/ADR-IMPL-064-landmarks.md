@@ -102,9 +102,10 @@ Commons, 117 requests) found:
   know, else the city photo's lookup (by airport, else by name); a remembered item that answers nothing at all, not
   even its own photographs (merged into another since), is looked up again rather than taken for a city without
   sights; a search by name that fails gives its place alone a `failed` marker and stops the run, the other place
-  untouched for the next one. One WDQS question per city (65-s timeout; WDQS stops one at 60 s), one Commons question
-  (50 files a question; a hundred files at most, two questions). A run's requests end within 225 s of its start
-  (`LANDMARK_RUN_REQUESTS_MS`; the writes have the rest of the 240): a place starts only while its slowest look — the
+  untouched for the next one. One WDQS question per city for its sights (a second when a remembered item answers
+  nothing; 65-s timeout, WDQS stops one at 60 s), and Commons once per 50 files (a hundred files at most, two
+  questions). A run's requests end within 225 s of its start (`LANDMARK_RUN_REQUESTS_MS`; the writes have the rest of
+  the 240): a place starts only while its slowest look — the
   landmarks question twice and the city found again (a remembered item that answers nothing), Commons twice, 162 s
   (`LANDMARK_PLACE_MAX_MS`) — still ends inside them; else it waits for the next run, untouched (`later` in the run's
   counts). The cities found first take at most 24 s, so a run's first place always starts. A 429 holds that source
