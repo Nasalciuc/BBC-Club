@@ -60,14 +60,27 @@ const CAN_CALL_ARG: Record<string, number | "property"> = {
   limitedCopy: "property",
 };
 
-/** The copy that may ask the member to call: each takes `canCall`. The Join page's line (otp-send-logic.ts) belongs to
- *  the entry, which stays as it is (ADR-IMPL-047) — left to the owner, not changed here. */
+/** The Join page's line, `… Check it, or call us.`: it belongs to the entry, which stays as it is (ADR-IMPL-047), so it
+ *  asks for a call in every build — left to the owner (ADR-IMPL-065), not changed here. */
+const ENTRY_CALL = "apps/mobile/src/features/auth/otp-send-logic.ts";
+
+/** Where the docs say that, without the number, no words ask the member to call — and the ADR that leaves the entry's
+ *  line to the owner. Each names that one exception. */
+const NO_CALL_PROMISES = [
+  "docs/release.md",
+  "apps/mobile/.env.example",
+  "apps/mobile/src/lib/env.ts",
+  "apps/mobile/src/lib/support-phone-logic.ts",
+  "docs/adr/ADR-IMPL-065-crm-http-adapter.md",
+];
+
+/** The copy that may ask the member to call: each takes `canCall`, but the entry's. */
 const CALL_COPY = [
   "apps/mobile/src/features/requests/request-view-logic.ts",
   "apps/mobile/src/features/requests/confirmation-logic.ts",
   "apps/mobile/src/features/profile/delete-logic.ts",
   "apps/mobile/src/lib/error-context.ts",
-  "apps/mobile/src/features/auth/otp-send-logic.ts",
+  ENTRY_CALL,
 ];
 
 function walk(dir: string): string[] {
@@ -254,6 +267,16 @@ describe("words that ask the member to call", () => {
       .map((f) => f.path);
     const allowed = new Set<string>([...CALL_COPY, GALLERY, WORDS_TYPE]);
     for (const file of asking) expect(allowed.has(file)).toBe(true);
+  });
+
+  test("but the entry's Join line, which every doc that says there are none names", () => {
+    // It still asks for a call; once the owner changes it, it leaves CALL_COPY and these docs.
+    const entry = files.find((f) => f.path === ENTRY_CALL)?.src ?? "";
+    expect(entry).toMatch(/["'`][^"'`\n]*\bcall us\b[^"'`\n]*["'`]/);
+    for (const doc of NO_CALL_PROMISES) {
+      const text = readFileSync(join(ROOT, doc), "utf8");
+      expect({ doc, namesTheEntry: text.includes("otp-send-logic.ts") }).toEqual({ doc, namesTheEntry: true });
+    }
   });
 
   test("the screens that show them hand the helper CAN_CALL — never a literal; the helpers pass their own along", () => {

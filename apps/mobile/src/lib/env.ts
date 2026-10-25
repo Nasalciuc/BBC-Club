@@ -6,7 +6,8 @@ const Schema = z.object({
   /** `e2e`: the emulator build of .github/workflows/e2e-android.yml (cleartext to 10.0.2.2 only). */
   EXPO_PUBLIC_APP_ENV: z.enum(["development", "staging", "production", "e2e"]).default("development"),
   /** The club's general line, E.164 (docs/release.md): every call button dials it (lib/support-phone.ts). Empty → no
-   *  call button anywhere, and no words that ask the member to call. */
+   *  call button anywhere, and no words that ask the member to call but Join's (`otp-send-logic.ts`: the entry stays as
+   *  it is, ADR-IMPL-047). */
   EXPO_PUBLIC_SUPPORT_PHONE: z.string().min(1).optional(),
   EXPO_PUBLIC_PRIVACY_URL: z.string().url().optional(),
   EXPO_PUBLIC_TERMS_URL: z.string().url().optional(),

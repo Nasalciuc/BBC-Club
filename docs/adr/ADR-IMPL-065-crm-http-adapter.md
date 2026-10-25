@@ -141,6 +141,12 @@ again, without asking the member to send the request a second time). No migratio
 - **A credential of its own for the CRM's status calls, before go-live.** Not `INTERNAL_API_SECRET`, which unlocks
   every system permission (point 8): a separate secret or JWT whose principal holds `requests:update-any` only. Its own
   ADR (authz, `packages/shared`).
+- **Join's line.** Without the number, one message still asks the member to call: Join's
+  `We couldn't send a code to that address. Check it, or call us.` (`apps/mobile/src/features/auth/otp-send-logic.ts`,
+  when the mail service refuses the address). It belongs to the entry, which stays exactly as it is (ADR-IMPL-046,
+  ADR-IMPL-047), so it is not changed here; `support-phone.test.ts` lets it through by name, and `docs/release.md`, the
+  app's `.env.example` and `lib/env.ts` name it where they say no words ask for a call. Dropping `or call us` from a
+  build without the line amends ADR-IMPL-047: the owner's decision.
 - **The CRM's real address and authentication.** Is an HMAC signature acceptable to the CRM, or does it need its own
   (an API key in a header, OAuth)? A different scheme changes the adapter.
 - **The payload mapping.** Today the CRM receives `CrmRequestPayload` as it is: snake_case, the fields of

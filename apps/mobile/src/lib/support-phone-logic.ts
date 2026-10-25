@@ -5,7 +5,8 @@
  */
 
 /** The `tel:` link for the configured number — its digits and `+` — or null when it is unset or too short to dial.
- *  Null means no call button anywhere, and no words that ask the member to call (`canCall` false). */
+ *  Null means no call button anywhere, and no words that ask the member to call (`canCall` false) but Join's
+ *  (`otp-send-logic.ts`: the entry stays as it is, ADR-IMPL-047). */
 export function telHref(phone: string | undefined): string | null {
   const digits = phone?.replace(/[^\d+]/g, "") ?? "";
   return digits.length >= 8 ? `tel:${digits}` : null;
