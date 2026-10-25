@@ -433,7 +433,7 @@ SELECT count(DISTINCT route_from) AS origins FROM catalog.site_routes;
 ```
 
 It costs Home one read of the set (cached a minute, and dropped when the night's sync or an import changes it) and
-about 12 KB of JSON inside Home's ETag. Off is the same with `false`, seen within the flags' cache of about 35 s; the
+about 21 KB of JSON (today's 169 airports) inside Home's ETag. Off is the same with `false`, seen within the flags' cache of about 35 s; the
 app keeps the last Home it parsed until its next load.
 
 ## The queue is stuck (oldest pending > 5 min)

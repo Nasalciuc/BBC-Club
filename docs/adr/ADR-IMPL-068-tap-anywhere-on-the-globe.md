@@ -47,7 +47,7 @@ may change any of them**.
    this app cannot read is none — Home still parses. `BookablePlaceVM` is `AirportVM`'s code, city, name, country, lat
    and lng — the brief's four fields plus the airport's name and country, so a snapped city goes through
    `selectDestination` as a pin's airport does (the destination prints its country before its search answers, and the
-   recent searches name the airport). No price. About 12 KB of JSON for 153 cities, inside Home's existing per-member
+   recent searches name the airport). No price. About 21 KB of JSON for the 169 airports of today's site (153 cities, 16 origins; measured), inside Home's existing per-member
    ETag (the tag hashes the body). The nearest search runs on the phone (8 µs for 153 cities): an answer in the same
    frame, offline on the drawn globe, no request per tap, and the tapped point never leaves the phone. The sources, the
    flags, the offers' ownership and the price rules stay on the server.
@@ -106,7 +106,7 @@ new design component for the answer: no image draws one; the existing notice hol
   the rest.
 - The set is only as good as the night's snapshot of the site. With the site unreachable the last snapshot stands; an
   empty snapshot (a new environment before its first night) sends an empty list, and the app then answers nothing.
-- Home costs one cached read more with the flag on (the query budget test pins it), and about 12 KB.
+- Home costs one cached read more with the flag on (the query budget test pins it), and about 21 KB of JSON (uncompressed).
 - Toronto and Vancouver, which the site lists as origins, are not in the set: the sync's `originAirports` keeps only
   US airports (`site-places.ts`), so their routes are dropped. A separate change.
 
