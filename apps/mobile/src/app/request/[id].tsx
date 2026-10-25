@@ -39,7 +39,6 @@ import { isOffline } from "@/features/explore/offline-logic";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { clubPhoto } from "@/features/places/club-photos";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
-import { telHref } from "@/features/requests/confirmation-logic";
 import { detailLines, detailTitle, queuedView, routeCodes } from "@/features/requests/request-card";
 import { isRequestId, requestFailureFrame, type RequestFailureAction } from "@/features/requests/request-failure";
 import { closedAt, progressSteps, requestView, serverState, stepCaption } from "@/features/requests/request-view-logic";
@@ -50,6 +49,7 @@ import { stateCopy } from "@/lib/error-context";
 import { displayPhone } from "@/lib/phone";
 import { getQueued, sendOne } from "@/lib/queue";
 import { savingPercent } from "@/lib/saving";
+import { CAN_CALL, clubCall } from "@/lib/support-phone";
 
 /** 11: the line under the number we call. */
 const BOOKING_NOTE = "Your specialist confirms availability and books by phone.\nNo payment is taken in the app.";
@@ -338,7 +338,7 @@ export default function RequestDetailScreen() {
 
   const vm = current.vm;
   const state = current.kind === "queued" ? (current.rejected ? "rejected" : "queued") : serverState(vm);
-  const view = requestView(state, vm.status === "closed" ? closedAt(vm) : null);
+  const view = requestView(state, vm.status === "closed" ? closedAt(vm) : null, undefined, CAN_CALL);
   const caption = stepCaption(state, view, vm.timeline);
   const steps = progressSteps(state, vm);
   const lines = detailLines(vm);
@@ -356,11 +356,9 @@ export default function RequestDetailScreen() {
         }
       : null;
   const reference = vm.reference.trim();
-  // A call needs the club's verified number (EXPO_PUBLIC_SUPPORT_PHONE, in digits); without one, no button.
-  const call = view.call ? telHref(env.EXPO_PUBLIC_SUPPORT_PHONE) : null;
-  const dial = () => {
-    if (call) Linking.openURL(call).catch(() => undefined);
-  };
+  // The club's general line (support-phone.ts); without one, no button.
+  const callSpecialist = view.call === "specialist" ? clubCall("request.call") : null;
+  const callUs = view.call === "us" ? clubCall("request.callUs") : null;
   // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo.
   const bundled = clubPhoto(to, "any");
   const picture = bandPicture(null, photoFor(to), {
@@ -377,35 +375,34 @@ export default function RequestDetailScreen() {
     ? { ...view.notice, glyph: view.notice.icon === "info" ? ("info-fill" as const) : ("phone-fill" as const) }
     : null;
   // What follows the notice: the line under it, then the fare, the number we call and the booking note, then the call.
-  const pill =
-    view.call === "specialist" && call ? (
-      <Button
-        testID="request.call"
-        label="Call your specialist"
-        icon="phone-fill"
-        iconSize={21.4}
-        iconGap={14.75}
-        variant="primary"
-        height={PILL_HEIGHT}
-        text="buttonDetail"
-        onPress={dial}
-        style={styles.pill}
-      />
-    ) : view.call === "us" && call ? (
-      // A request we could not pass on: the call is the one thing left.
-      <Button
-        testID="request.callUs"
-        label="Call us"
-        icon="phone-fill"
-        iconSize={21.4}
-        iconGap={14.75}
-        variant="primary"
-        height={PILL_HEIGHT}
-        text="buttonDetail"
-        onPress={dial}
-        style={styles.pill}
-      />
-    ) : null;
+  const pill = callSpecialist ? (
+    <Button
+      testID={callSpecialist.testID}
+      label="Call your specialist"
+      icon="phone-fill"
+      iconSize={21.4}
+      iconGap={14.75}
+      variant="primary"
+      height={PILL_HEIGHT}
+      text="buttonDetail"
+      onPress={callSpecialist.onPress}
+      style={styles.pill}
+    />
+  ) : callUs ? (
+    // A request we could not pass on: the call is the one thing left.
+    <Button
+      testID={callUs.testID}
+      label="Call us"
+      icon="phone-fill"
+      iconSize={21.4}
+      iconGap={14.75}
+      variant="primary"
+      height={PILL_HEIGHT}
+      text="buttonDetail"
+      onPress={callUs.onPress}
+      style={styles.pill}
+    />
+  ) : null;
 
   return (
     <View testID="request.root" style={styles.root}>

@@ -39,12 +39,15 @@ export const NOT_SENT: RequestNotice = {
 };
 
 /** A request that will not go out by itself: the server gave up passing it on (six attempts, ADR-IMPL-042), or refused
- *  the copy on the phone for good. No image draws it; the words point at the one thing left to do. */
-export const NOT_PASSED_ON: RequestNotice = {
-  title: "We couldn’t pass this on.",
-  body: "Call us and we’ll take it from here.",
-  icon: "phone",
-};
+ *  the copy on the phone for good. No image draws it; the words point at the one thing left to do — the call when the
+ *  club's general line is configured (`canCall`, support-phone.ts), else asking again. */
+export function notPassedOn(canCall: boolean): RequestNotice {
+  return {
+    title: "We couldn’t pass this on.",
+    body: canCall ? "Call us and we’ll take it from here." : "Send your request again from Explore.",
+    icon: "phone",
+  };
+}
 
 /** When the request was closed: its latest `closed` event (a request reopened and closed again shows the second
  *  date), or null when the timeline has none — the creation date is not a closing date. */
@@ -81,9 +84,10 @@ export function serverState(r: { status: string; reference: string }): string {
 /**
  * The detail of a request in a given state. `just_received` is a request the server holds but has not passed on yet
  * (serverState); `queued` one waiting on the phone; `rejected` one the server refused for good; `not_sent` one the
- * server holds but gave up passing on. `timeZone` is for tests: the phone's own zone otherwise.
+ * server holds but gave up passing on. `timeZone` is for tests: the phone's own zone otherwise. `canCall`: the club's
+ * general line is configured — only then does a notice ask the member to call (the button follows the same number).
  */
-export function requestView(status: string, at?: string | null, timeZone?: string): RequestView {
+export function requestView(status: string, at?: string | null, timeZone?: string, canCall = false): RequestView {
   switch (status) {
     case "just_received":
     case "received":
@@ -146,7 +150,7 @@ export function requestView(status: string, at?: string | null, timeZone?: strin
       return { ...NONE, badge: "not_sent", titleBadge: true, notice: NOT_SENT, sendNow: true };
     case "not_sent":
     case "rejected":
-      return { ...NONE, badge: "not_sent", titleBadge: true, notice: NOT_PASSED_ON, call: "us" };
+      return { ...NONE, badge: "not_sent", titleBadge: true, notice: notPassedOn(canCall), call: "us" };
     default:
       return { ...NONE, badge: "received", notice: null };
   }
@@ -238,17 +242,26 @@ function stepStates(state: string, timeline: readonly Timed[]): [StepState, Step
 
 /**
  * The card over the list (28): requests on the phone or not passed on, which need the member. A request waiting on the
- * phone is pointed at its `Send now`; one that will not go out by itself, at the call. Null otherwise.
+ * phone is pointed at its `Send now`; one that will not go out by itself, at the call when the club's general line is
+ * configured (`canCall`), else at asking again. Null otherwise.
  */
-export function listAttention(open: readonly { status: string }[]): { title: string; body: string } | null {
+export function listAttention(
+  open: readonly { status: string }[],
+  canCall = false,
+): { title: string; body: string } | null {
   const waiting = open.filter((r) => r.status === "queued").length;
   const stuck = open.filter((r) => r.status === "not_sent" || r.status === "rejected").length;
   const total = waiting + stuck;
   if (total === 0) return null;
+  const again = stuck === 1 ? "Send your request again from Explore." : "Send your requests again from Explore.";
   return {
     title: total === 1 ? "One request needs your attention." : `${total} requests need your attention.`,
     body:
-      waiting > 0 ? "Open your request to check the details and try again." : "Call us and we’ll take it from here.",
+      waiting > 0
+        ? "Open your request to check the details and try again."
+        : canCall
+          ? "Call us and we’ll take it from here."
+          : again,
   };
 }
 

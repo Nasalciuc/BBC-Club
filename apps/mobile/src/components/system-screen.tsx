@@ -9,7 +9,7 @@ type Props = {
   title: string;
   body: string;
   primary: { label: string; testID: string; onPress: () => void };
-  /** `Call a specialist`, when the club's number is known (240:5129, 240:5163). */
+  /** `Call a specialist`: the club's general line (`clubCall`, support-phone.ts), null without one (240:5129, 240:5163). */
   call?: { testID: string; onPress: () => void } | null;
 };
 

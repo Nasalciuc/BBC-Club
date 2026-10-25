@@ -44,7 +44,6 @@ import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { useSignOut } from "@/features/profile/useSignOut";
 import { useSaved } from "@/features/saved/saved";
-import { telHref } from "@/features/requests/confirmation-logic";
 import { requestCard } from "@/features/requests/request-card";
 import { recentRequests } from "@/features/requests/request-view-logic";
 import { airportByCode } from "@/lib/airport-by-code";
@@ -54,6 +53,7 @@ import { env } from "@/lib/env";
 import { errorFrameActions, readFailureCopy, stateCopy } from "@/lib/error-context";
 import { monogram } from "@/lib/monogram";
 import { displayPhone } from "@/lib/phone";
+import { CAN_CALL, clubCall } from "@/lib/support-phone";
 
 type Requests = { items: RequestVM[]; hasMore: boolean };
 
@@ -180,9 +180,7 @@ export default function ProfileScreen() {
   if (!profile && error) {
     // The settings button stays: Settings keeps Sign out and Delete account, and a profile that keeps failing must not
     // take them away (ADR-IMPL-047). `Call us` beside `Try again` when the club's number is known (F114).
-    const callUs = errorFrameActions("profile", env.EXPO_PUBLIC_SUPPORT_PHONE).includes("call")
-      ? telHref(env.EXPO_PUBLIC_SUPPORT_PHONE)
-      : null;
+    const callUs = errorFrameActions("profile", CAN_CALL).includes("call") ? clubCall("profile.error.call") : null;
     return (
       <View testID="profile.root" style={styles.root}>
         <ScreenStatusBar on="light" />
@@ -204,17 +202,7 @@ export default function ProfileScreen() {
                 setReloadToken((n) => n + 1);
               },
             }}
-            secondary={
-              callUs
-                ? {
-                    label: "Call us",
-                    testID: "profile.error.call",
-                    onPress: () => {
-                      Linking.openURL(callUs).catch(() => undefined);
-                    },
-                  }
-                : undefined
-            }
+            secondary={callUs ? { label: "Call us", testID: callUs.testID, onPress: callUs.onPress } : undefined}
           />
         </View>
       </View>
@@ -222,7 +210,8 @@ export default function ProfileScreen() {
   }
 
   const displayName = profile?.displayName?.trim() || "Member";
-  const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
+  // The club's general line (support-phone.ts); without one, no `Call us`.
+  const call = clubCall("profile.call");
   const city = home && homeCity?.code === home ? homeCity.city : null;
   // A satellite view is drawn at the band's size: the column (capped on large phones) by the band's height.
   const picture = bandPicture(null, photoFor(home), {
@@ -306,7 +295,7 @@ export default function ProfileScreen() {
           {call ? (
             <View style={styles.action}>
               <Button
-                testID="profile.call"
+                testID={call.testID}
                 label="Call us"
                 icon="phone-fill"
                 iconSize={17.2}
@@ -315,9 +304,7 @@ export default function ProfileScreen() {
                 height={PILL}
                 text="profilePill"
                 style={StyleSheet.flatten([styles.pill, { paddingLeft: 26, paddingRight: 22 }])}
-                onPress={() => {
-                  Linking.openURL(call).catch(() => undefined);
-                }}
+                onPress={call.onPress}
               />
             </View>
           ) : null}
