@@ -9,6 +9,7 @@ import type { GlobeTap } from "@bbc/ui";
 
 import {
   DISTANCE_SHOWN_PT,
+  HOME_METRO_KM,
   TAP_REACH_KM,
   answerTap,
   greatCircleKm,
@@ -156,6 +157,35 @@ describe("nearestBookable — 600 km by great circle", () => {
     // New York's member taps Newark (its metro, left out of the list): home.
     const newark = { lat: 40.7357, lng: -74.1724 };
     expect(nearestBookable(newark, SITE_CITY_PLACES, HOME_NYC)).toMatchObject({ kind: "home" });
+  });
+
+  it("home only within its metro: farther out the tap is somewhere else — the nearest city in reach, or nothing", () => {
+    // The list a member at JFK gets: the site's cities and the US airports it sells from, without New York's three.
+    // Public airport coordinates; which of the 16 origins is a made-up subset, enough for the north-east.
+    const usOrigins = [
+      { code: "BOS", city: "Boston", countryCode: "US", lat: 42.3656, lng: -71.0096 },
+      { code: "IAD", city: "Washington", countryCode: "US", lat: 38.9445, lng: -77.4558 },
+      { code: "ORD", city: "Chicago", countryCode: "US", lat: 41.9786, lng: -87.9048 },
+    ];
+    const fromJfk = [...SITE_CITY_PLACES, ...usOrigins];
+    // Philadelphia is 150 km from JFK: not the member's home airport — Washington, the nearest city in reach.
+    const philadelphia = { lat: 39.9526, lng: -75.1652 };
+    expect(greatCircleKm(philadelphia, HOME_NYC)).toBeGreaterThan(HOME_METRO_KM);
+    expect(nearestBookable(philadelphia, fromJfk, HOME_NYC)).toMatchObject({ kind: "place", place: { code: "IAD" } });
+    // Albany, 225 km up the Hudson: Boston.
+    const albany = { lat: 42.6526, lng: -73.7562 };
+    expect(nearestBookable(albany, fromJfk, HOME_NYC)).toMatchObject({ kind: "place", place: { code: "BOS" } });
+    // Manhattan and Newark stay home.
+    expect(nearestBookable({ lat: 40.758, lng: -73.9855 }, fromJfk, HOME_NYC)).toEqual({
+      kind: "home",
+      km: expect.any(Number),
+    });
+    // Nothing else in reach: under the metro's 100 km home, past it nothing — never the home answer 120 km out.
+    const far = [{ code: "ZZZ", lat: 0, lng: 60 }]; // made up, thousands of km away
+    const home = { code: "AAA", lat: 0, lng: 0 };
+    expect(nearestBookable(destination(home, 90, 99), far, home)).toMatchObject({ kind: "home" });
+    expect(nearestBookable(destination(home, 90, 120), far, home)).toEqual({ kind: "none" });
+    expect(HOME_METRO_KM).toBe(100);
   });
 
   it("no list, or an empty one, answers nothing: a tap off the pins does what it did before", () => {

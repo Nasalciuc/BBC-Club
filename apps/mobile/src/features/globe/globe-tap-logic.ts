@@ -3,7 +3,8 @@
  *
  * The finger lands on a place; the globe snaps to the nearest city the club can sell from the member's home (Home's
  * `bookable`), by great circle, within 600 km. Farther, or over open sea: a calm answer that points to the search. The
- * member's own city (home, whose metro the list leaves out): the home answer. The tapped point never leaves the phone.
+ * member's own city — within 100 km of home, the metro the list leaves out: the home answer. The tapped point never
+ * leaves the phone.
  */
 import type { GlobeTap } from "@bbc/ui";
 
@@ -14,6 +15,12 @@ export const TAP_REACH_KM = 600;
  * line says how far the city is. Measured on screen: at rest 600 km is under 16 pt, so the line shows only zoomed in.
  */
 export const DISTANCE_SHOWN_PT = 22;
+/**
+ * Home's metro: the server leaves out of `bookable` every airport under this distance from the member's home
+ * (catalog's SAME_METRO_KM). A tap this close to home is on the member's own city and gets the home answer; a tap
+ * farther out is somewhere else — the nearest city in reach, or nothing — never "That's your home airport.".
+ */
+export const HOME_METRO_KM = 100;
 
 const EARTH_KM = 6371;
 const RAD = Math.PI / 180;
@@ -31,8 +38,9 @@ export function greatCircleKm(a: { lat: number; lng: number }, b: { lat: number;
 export type Nearest<P> = { kind: "place"; place: P; km: number } | { kind: "home"; km: number } | { kind: "none" };
 
 /**
- * The city nearest `at` within `reachKm`, ties to the code — or home, when home is nearer than every city (the list
- * leaves home and its metro out, so a tap on Newark from New York finds home); or none.
+ * The city nearest `at` within `reachKm`, ties to the code — or home, when the tap is within HOME_METRO_KM of it and
+ * nearer to it than to every city (the list leaves home and its metro out, so a tap on Newark from New York finds home,
+ * while one on Philadelphia, 150 km out, finds the nearest city in reach); or none.
  */
 export function nearestBookable<P extends Spot>(
   at: { lat: number; lng: number },
@@ -42,7 +50,7 @@ export function nearestBookable<P extends Spot>(
 ): Nearest<P> {
   let best: { place: P | null; code: string; km: number } | null = null;
   const candidates: { place: P | null; spot: Spot }[] = places.map((p) => ({ place: p, spot: p }));
-  if (home) candidates.push({ place: null, spot: home });
+  if (home && greatCircleKm(at, home) < HOME_METRO_KM) candidates.push({ place: null, spot: home });
   for (const c of candidates) {
     const km = greatCircleKm(at, c.spot);
     if (!Number.isFinite(km) || km > reachKm) continue;

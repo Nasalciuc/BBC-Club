@@ -419,8 +419,9 @@ may open — the site's cities (by their main airport) and the US airports the s
 snapshot ("The site's destinations" above), with the arrivals of the member's fares and offers; never the member's home
 airport nor another within 100 km of it. A formula price alone never adds a city. The app snaps a tap to the nearest of
 them within 600 km and opens it as a pin's tap does (its search prices it); farther, or over the sea, it says
-`No destination near there.` and points to the search; on the member's own city, the home answer. Off: the field is
-absent and a tap off the pins does nothing, as before — an app built before this ignores the field either way.
+`No destination near there.` and points to the search; within 100 km of the member's home airport, the home answer. Off:
+the field is absent and a tap off the pins does nothing, as before — an app built before this ignores the field either
+way.
 
 The list needs the snapshot: with this flag on, the night's `sync-site-destinations` reads the site even with the site's
 photos and pins off. Turn it on in staging first, then run the night's job (above) if `catalog.site_places` is empty:

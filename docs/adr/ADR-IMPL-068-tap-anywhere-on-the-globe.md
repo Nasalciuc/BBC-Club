@@ -60,13 +60,16 @@ may change any of them**.
    (`application/bookable.ts`), adds the BFF's `also` (the fare pins and the offers' arrivals Home already loaded), one
    entry per airport, without home or its metro, by code. **The night's sync** (`sync-site-destinations`) also reads the
    site while this flag is on, as it does for the site's photos and pins: the set is the snapshot.
-4. **The snap** (`apps/mobile/src/features/globe/globe-tap-logic.ts`). The nearest bookable city to the tapped point
-   by great circle, **within 600 km**, ties to the code. Home takes part as a candidate: when it is nearest (a tap on
-   London from Heathrow, or on Newark from JFK — the list leaves home's metro out), the existing home answer (`That's
-your home airport.` / `Choose another city.`). Nothing within 600 km, or over the sea: the calm answer. Only at rest
-   (02): with a route chosen (13) or every offer raised (16) a tap does what it did. A snapped city opens exactly as a
-   pin's tap does — `selectDestination`, its search (`GET /v1/search`) for the price, the route in place (13); a city
-   with a pin opens with the pin's airport.
+4. **The snap** (`apps/mobile/src/features/globe/globe-tap-logic.ts`). The nearest bookable city to the tapped point by
+   great circle, **within 600 km**, ties to the code. Home takes part as a candidate only **within its metro** — a tap
+   under 100 km from home, the server's `SAME_METRO_KM`, the airports the list leaves out: when it is nearest there (a
+   tap on London from Heathrow, or on Newark from JFK), the existing home answer (`That's your home airport.` /
+   `Choose another city.`). Farther out the tap is somewhere else and the answer says so: a tap on Philadelphia from
+   JFK, 150 km away, opens the nearest city in reach, never "your home airport" (home as a candidate out to 600 km said
+   so at Albany, 224 km out). Nothing within 600 km, or over the sea: the calm answer. Only at rest (02): with a route
+   chosen (13) or every offer raised (16) a tap does what it did. A snapped city opens exactly as a pin's tap does —
+   `selectDestination`, its search (`GET /v1/search`) for the price, the route in place (13); a city with a pin opens
+   with the pin's airport.
 5. **The distance line.** Shown when the city stands **more than 22 pt from the finger on screen** (or out of sight),
    measured in the projection the finger saw: `Nearest: Rome · 180 km`, in kilometres as the brief writes it, rounded
    to 10. A fixed distance in km would print a distance on nearly every tap at rest (600 km is 16 pt there); measured on
