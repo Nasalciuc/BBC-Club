@@ -832,6 +832,24 @@ cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f
 
 It prints `staging demo ready — … dates from <today>`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing. The poster route JFK → ZRH is left without a fare on purpose, so the estimate (ADR-IMPL-037) can be shown there once `catalog.estimates` is on and the rules are loaded.
 
+**Once the site's deals are on in staging (`catalog.site_offers`, ADR-IMPL-067)** the demo's two broadcast offers — Paris
+and Tokyo, seen by every staging member — should not be what members see: withdraw them once, as the internal route
+does it (status `withdrawn` and `offer.withdrawn`, so pending pushes are suppressed). The demo seed keeps a withdrawn
+demo offer withdrawn at every later deploy and writes no inbox item for it; London, the review account's own, stays.
+
+```bash
+# staging: the two ids, then the withdraw route through the staging worker (the secret is read from its environment)
+docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc -Atc \
+  "SELECT id FROM proposals.offers WHERE idempotency_key IN ('staging-demo:paris','staging-demo:tokyo') AND status = 'active'"
+for id in <id-1> <id-2>; do
+  docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
+    bun -e "fetch('http://localhost:8001/v1/internal/offers/$id/withdraw',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET,'Content-Type':'application/json'},body:JSON.stringify({reason:'site deals on'})}).then(async r=>console.log(r.status,await r.text()))"
+done
+```
+
+Each answers `200 {"ok":true}`. To bring them back (the deals off again), set their `status` to `active` in
+`proposals.offers` and run the demo seed: it dates them from today.
+
 ## Redis, Kafka, Streams, and demand
 
 Unset `REDIS_URL` and `KAFKA_BROKERS` and the API stays on Postgres: flags cache in the process for 30 seconds, read and search rate limits use the in-process GCRA store, push dispatch sends inline, and search does not emit events. Kill switches and consumer pause always read Postgres and are never cached.
