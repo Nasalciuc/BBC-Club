@@ -328,24 +328,36 @@ describe("Mapbox's horizon comes nearer as the globe zooms in: the sky beside it
     }
   }
 
+  /**
+   * gl-js eases the globe's scale from 45° to the centre's latitude from zoom 3 + log2(size / 1024), the size the view's
+   * longer side (gl-js `getProjectionInterpolationT`, `Globe.pixelSpaceConversion`): its camera then stands nearer than
+   * `cameraDistance` says — on a view `viewHeight` tall at 3× centred at `lat` — by this scale of the focal length.
+   */
+  const glScaleAt3x = (viewHeight: number, lat: number) => {
+    const from = 3 + Math.log2(viewHeight / 1024);
+    const x = Math.min(1, Math.max(0, (ZOOM_RANGE.max - from) / 2));
+    const t = x * x * (3 - 2 * x);
+    return 1 / ((1 - t) / Math.SQRT1_2 + t / Math.cos(lat * RAD));
+  };
+  const at3x = (lat: number): GlobeCamera => ({ center: [12, lat], zoom: ZOOM_RANGE.max });
+
   it("a camera nearer than gl-js's: its horizon may pass the near side, and the disc stops its sky", () => {
-    // gl-js eases the globe's scale from 45° to the centre's latitude from zoom 3 + log2(size / 1024), the size the
-    // view's longer side: on a 640-pt view that starts at 2.32, so at 3× (2.63) centred at 80°N its camera stands nearer
-    // than `cameraDistance` says (gl-js `getProjectionInterpolationT`, `Globe.pixelSpaceConversion`) and its horizon 2.8°
-    // nearer. Not modelled: the disc is the backstop, as it is for a native camera nearer than gl-js's (here 30 % nearer,
-    // at rest on the 852-pt view).
-    const smoothstep = (a: number, b: number, x: number) => {
-      const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-      return t * t * (3 - 2 * t);
-    };
-    const H = 640;
-    const t = smoothstep(3 + Math.log2(H / 1024), 5 + Math.log2(H / 1024), ZOOM_RANGE.max);
-    expect(t).toBeGreaterThan(0);
-    const glScale = 1 / ((1 - t) / Math.SQRT1_2 + t / Math.cos(80 * RAD));
+    // On a 640-pt view the ease starts at 2.32, so at 3× (2.63) centred at 80°N the horizon comes 2.8° nearer; on a
+    // 667-pt view it starts at 2.38, and centred at 85°N (about as far as the centre goes) the horizon comes 4.2° nearer.
+    // Not modelled: the disc is the backstop, as it is for a native camera nearer than gl-js's (here 30 % nearer, at rest
+    // on the 852-pt view).
+    expect(glScaleAt3x(640, 80)).toBeLessThan(Math.SQRT1_2);
     const cases = [
-      { cam: { center: [12, 80], zoom: ZOOM_RANGE.max } as GlobeCamera, scale: glScale, viewHeight: H },
+      { cam: at3x(80), scale: glScaleAt3x(640, 80), viewHeight: 640 },
+      { cam: at3x(85), scale: glScaleAt3x(667, 85), viewHeight: 667 },
       { cam: camAt(REST_ZOOM), scale: Math.SQRT1_2 * 0.7, viewHeight: VIEW_H },
     ];
+    expect(
+      horizonDeg(ZOOM_RANGE.max, 640) - mapboxCamera(at3x(80), centre, cases[0]!.scale, 640).horizonDeg,
+    ).toBeCloseTo(2.82, 1);
+    expect(
+      horizonDeg(ZOOM_RANGE.max, 667) - mapboxCamera(at3x(85), centre, cases[1]!.scale, 667).horizonDeg,
+    ).toBeCloseTo(4.15, 1);
     for (const { cam, scale, viewHeight } of cases) {
       const mapbox = mapboxCamera(cam, centre, scale, viewHeight);
       expect(mapbox.limb).toBeGreaterThan(limbRadius(cam.zoom, viewHeight));
@@ -360,6 +372,22 @@ describe("Mapbox's horizon comes nearer as the globe zooms in: the sky beside it
           expect({ deg, gap, ios: mapTap(ios, cam, centre, viewHeight) }).toEqual({ deg, gap, ios: null });
           expect({ deg, gap, android: mapTap(android, cam, centre, viewHeight) }).toEqual({ deg, gap, android: null });
         }
+      }
+    }
+  });
+
+  it("on a 667-pt view at 3×, up to about 80°N the margin covers gl-js's nearer camera: its sky's place stays past the near side", () => {
+    const cam = at3x(80);
+    const mapbox = mapboxCamera(cam, centre, glScaleAt3x(667, 80), 667);
+    expect(horizonDeg(cam.zoom, 667) - mapbox.horizonDeg).toBeCloseTo(1.89, 1);
+    expect(horizonDeg(cam.zoom, 667) - mapbox.horizonDeg).toBeLessThan(HORIZON_MARGIN_DEG);
+    for (const deg of AZIMUTHS) {
+      for (const gap of [1, 4, 12, 40]) {
+        const finger = around(mapbox.limb + gap, deg);
+        const place = mapbox.resolve(finger.x, finger.y);
+        expect(fromCentre(place, cam)).toBeGreaterThan(tapNearSideDeg(cam.zoom, 667));
+        // The place alone stops it, wherever the screen point is.
+        expect(mapTap({ ...place, screen: centre }, cam, centre, 667)).toBeNull();
       }
     }
   });

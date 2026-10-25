@@ -1,7 +1,11 @@
 /**
  * Geometry for the Mapbox globe — pure, so it runs under `bun test` like globe-logic.ts.
- * Mapbox draws its globe with radius 512 · 2^zoom / 2π points; every size below is converted through that, so the
- * satellite globe stands where the drawn one does (02, 13 — ADR-IMPL-055).
+ * `radiusAtZoom`, 512 · 2^zoom / 2π points, is the orthographic model the drawn globe shares: the zooms below (the rest
+ * size, the pinch to 3×, a route's framing) are converted through it (02, 13 — ADR-IMPL-055), and `mapPoint` lays out
+ * the pins' labels in it. Mapbox's own camera is a perspective one and draws its globe 1 / cos 45° larger at the
+ * view's centre (`limbRadius`, `cameraPoint`: its limb about 203 pt out at rest on an 852-pt view, not 168); a press is
+ * measured there (`mapTap`, globe-tap.ts `mapboxPress`). That camera is read from mapbox-gl-js and wants a phone to
+ * confirm (ADR-IMPL-068).
  */
 import { geoDistance, geoInterpolate, geoOrthographic } from "d3-geo";
 import type { Feature, LineString } from "geojson";
@@ -18,7 +22,7 @@ const RAD = Math.PI / 180;
 export const radiusAtZoom = (zoom: number): number => (512 * 2 ** zoom) / TAU;
 const zoomForRadius = (radius: number): number => Math.log2((radius * TAU) / 512);
 
-/** The zoom whose globe is the drawn globe at rest: 168 pt (02). */
+/** The zoom whose `radiusAtZoom` is the drawn globe's radius at rest, 168 pt (02); Mapbox's camera draws it larger. */
 export const REST_ZOOM = zoomForRadius(GLOBE_SPEC.radius);
 /** The opening view's centre: Dubai's longitude, 27°N (02). */
 export const OPENING_CENTER: LngLat = [-GLOBE_SPEC.opening[0], -GLOBE_SPEC.opening[1]];
@@ -36,8 +40,10 @@ export const NEAR_SIDE_DEG = 80;
  * camera stands half a view height over tan(fov/2) — 1.5 view heights — above the globe at the view's centre. Below
  * the globe's change to Mercator Mapbox draws the globe at Mercator's scale at 45°, and the camera stands cos 45° of
  * that, in the globe's points: 1.06 view heights. The change starts at zoom 3 on a 1,024-pt view, a little earlier on a
- * smaller one (2.4 on a 667-pt view, where at 3× — 2.63 — it has barely begun: the margin below covers it; on a 640-pt
- * view centred at 80°N it brings the horizon 2.8° nearer, and the disc below stops the sky — `mapTap`).
+ * smaller one (2.4 on a 667-pt view, where at 3× — 2.63 — it has barely begun: the margin below covers it up to about
+ * 80°N; nearer the pole — the horizon 4.2° nearer at 85°N, about as far as the centre goes — the disc below stops the
+ * sky; on a 640-pt view centred at 80°N it brings the horizon 2.8° nearer, and the disc stops the sky there too —
+ * `mapTap`).
  * Read from mapbox-gl-js 2.15 (`Transform._calcMatrices`, `Globe.pixelSpaceConversion`, `GLOBE_SCALE_MATCH_LATITUDE`):
  * the native SDK (11.23.1) is downloaded at build time, not in the repository, and is assumed to draw its globe as
  * gl-js does. Without the 45° factor the camera would stand farther and see more (83° at rest, not 81°) of a globe
