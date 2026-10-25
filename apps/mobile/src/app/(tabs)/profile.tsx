@@ -40,6 +40,7 @@ import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
 import { cabinLabel, openRequestsFor, profileStats, travelersLabel } from "@/features/profile/profile-logic";
+import { subscribeProfileSaves } from "@/features/profile/profile-store";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { useSignOut } from "@/features/profile/useSignOut";
@@ -129,6 +130,17 @@ export default function ProfileScreen() {
       cancelled = true;
     };
   }, [focused, reloadToken]);
+
+  // A save made on Edit profile — the member's name above all — shows here at once, not when Profile next asks: never
+  // `Member` once a name exists (brief 3.4.1). A load that began before it is not shown, as after a sheet here.
+  useEffect(
+    () =>
+      subscribeProfileSaves((next) => {
+        saves.current += 1;
+        setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
+      }),
+    [],
+  );
 
   useEffect(() => {
     if (!home) return;

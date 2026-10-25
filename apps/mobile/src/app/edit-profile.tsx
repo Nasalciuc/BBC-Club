@@ -10,6 +10,7 @@ import { CabinSheet } from "@/features/profile/CabinSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
 import { mergeSavedProfile, type SavedProfile } from "@/features/profile/notifications-logic";
 import { cabinLabel, travelersLabel } from "@/features/profile/profile-logic";
+import { storeSavedProfile } from "@/features/profile/profile-store";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { airportByCode } from "@/lib/airport-by-code";
@@ -59,6 +60,8 @@ export default function EditProfileScreen() {
 
   function onSheetSaved(next: SavedProfile) {
     setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
+    // Every screen shows the save at once — Explore's greeting, Profile's name — not on its next load (profile-store).
+    storeSavedProfile(next);
   }
 
   // The city shown is always the one of the airport shown — never the previous airport's while the new one resolves.
