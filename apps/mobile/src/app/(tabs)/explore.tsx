@@ -133,8 +133,9 @@ export default function ExploreScreen() {
 
   // ADR-IMPL-068: a tap anywhere on the globe at rest snaps to the nearest city the club sells within 600 km, opened as
   // a pin's is; farther or over the sea, the calm answer; the member's own city, the home answer. Without Home's list
-  // (the flag off, an older server) a tap off the pins does nothing, as before. The search stays the screen reader's
-  // way to a city: the globe gains no element.
+  // (the flag off, an older server) the globe gets no handler, so no tap of its own: its pins and gestures are as
+  // before. The search stays the screen reader's way to a city: the globe gains no element.
+  const canTapGlobe = (home?.bookable?.length ?? 0) > 0;
   function onTapGlobe(tap: GlobeTap) {
     if (mode !== "rest") return;
     const homeAirport = home?.home ?? null;
@@ -287,7 +288,7 @@ export default function ExploreScreen() {
         home={homeCoord}
         selected={state.to?.code ?? null}
         onSelect={onSelectPin}
-        onTapPlace={onTapGlobe}
+        onTapPlace={canTapGlobe ? onTapGlobe : undefined}
         offline={offline}
         centreY={centreY}
         band={band}

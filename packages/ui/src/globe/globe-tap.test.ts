@@ -1,4 +1,5 @@
-/** ADR-IMPL-068: a tap anywhere on the globe — where it lands, whether it is a tap at all, and whose it is. */
+/** ADR-IMPL-068: a tap anywhere on the globe — where it lands and whose it is (whether it is a tap at all: the
+ *  engine's gestures, globe-engine.test.ts). */
 import { describe, expect, it } from "bun:test";
 import { geoDistance, geoOrthographic } from "d3-geo";
 
@@ -6,15 +7,11 @@ import { NEAR_SIDE_DEG, REST_ZOOM, mapPoint, mapTap, onGlobeDisc, radiusAtZoom, 
 import {
   GLOBE_SPEC,
   OPENING_VIEW,
-  PAN_START,
   PRESS_GUARD_MS,
-  TAP,
   createPressGuard,
   projector,
   radiusFor,
-  touchKind,
   type LonLat,
-  type TouchPoint,
 } from "./globe-logic";
 import { labelBox, pinAt, pinTarget, type PlacedPin } from "./pin-labels";
 
@@ -129,49 +126,6 @@ describe("a press on Mapbox's map", () => {
     expect(mapTap(paris, cam, centre, placed)).toBeNull();
     expect(mapTap(paris, cam, centre, [])).not.toBeNull();
     expect(mapTap({ lng: Number.NaN, lat: 0, screen: centre }, cam, centre, [])).toBeNull();
-  });
-});
-
-describe("a tap is never a drag", () => {
-  const tap = (dx: number, dy: number, ms: number): TouchPoint[] => [
-    { x: 100, y: 100, t: 0 },
-    { x: 100 + dx / 2, y: 100 + dy / 2, t: ms / 2 },
-    { x: 100 + dx, y: 100 + dy, t: ms },
-  ];
-
-  it("a still finger lifted in time is a tap; one held is nothing; one that moves the pan's start is a drag", () => {
-    expect(TAP.maxDistance).toBe(PAN_START);
-    expect(touchKind(tap(0, 0, 120))).toBe("tap");
-    expect(touchKind(tap(5, 5, 300))).toBe("tap"); // 7.1 pt: still a tap
-    expect(touchKind(tap(0, 0, TAP.maxDurationMs + 1))).toBe("none");
-    expect(touchKind(tap(PAN_START, 0, 80))).toBe("drag");
-    expect(touchKind([])).toBe("none");
-  });
-
-  it("a finger that drags away and comes back is still a drag", () => {
-    expect(
-      touchKind([
-        { x: 0, y: 0, t: 0 },
-        { x: 30, y: 0, t: 60 },
-        { x: 1, y: 0, t: 120 },
-      ]),
-    ).toBe("drag");
-  });
-
-  it("10 swipes across the globe fire 0 taps, however short or quick", () => {
-    const swipes: TouchPoint[][] = Array.from({ length: 10 }, (_, i) => {
-      const angle = (i * 36 * Math.PI) / 180;
-      const length = 12 + i * 20; // 12 to 192 pt
-      const ms = 60 + i * 40;
-      return Array.from({ length: 6 }, (_, k) => ({
-        x: 380 + (Math.cos(angle) * (length * k)) / 5,
-        y: 380 + (Math.sin(angle) * (length * k)) / 5,
-        t: (ms * k) / 5,
-      }));
-    });
-    const kinds = swipes.map(touchKind);
-    expect(kinds.filter((k) => k === "tap")).toHaveLength(0);
-    expect(kinds.every((k) => k === "drag")).toBe(true);
   });
 });
 

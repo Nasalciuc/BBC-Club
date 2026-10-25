@@ -50,7 +50,8 @@ type Props = {
   paused?: boolean;
   /**
    * A tap on the globe that is no pin's (ADR-IMPL-068): the place under the finger. A tap on the sky, beside the disc,
-   * is nothing; a tap on a pin, its label or its 44-pt target is the pin's. Without it a tap off the pins does nothing.
+   * is nothing; a tap on a pin, its label or its 44-pt target is the pin's. Without it the globe has no tap at all: its
+   * pan and pinch, and the pins' own presses, as before.
    */
   onTapPlace?: (tap: GlobeTap) => void;
 };
@@ -127,9 +128,12 @@ export function GlobeFallback({
   const { fontScale } = useWindowDimensions();
   const [reducedMotion, setReducedMotion] = useState(false);
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
-  // One engine per mount: it builds the gesture once, so a re-render never hands GestureDetector a new gesture mid-drag.
+  // ADR-IMPL-068: the globe takes a tap of its own only when a tap off the pins has somewhere to go.
+  const tap = onTapPlace !== undefined;
+  // One engine per mount: it builds its gestures once, so a re-render never hands GestureDetector a new gesture
+  // mid-drag — only a tap gaining or losing somewhere to go swaps one for the other.
   const [engine] = useState(() =>
-    createGlobeEngine({ size, selected, route, reducedMotion: false, holdStill: HOLD_STILL }),
+    createGlobeEngine({ size, selected, route, reducedMotion: false, holdStill: HOLD_STILL, tap }),
   );
   const [frame, setFrame] = useState(() => engine.initialFrame);
   // One choice per touch: a pin's press and the globe's tap may both answer it, in either order.
@@ -148,8 +152,8 @@ export function GlobeFallback({
             from: fromLng === undefined || fromLat === undefined ? null : ([fromLng, fromLat] as const),
             to: [toLng, toLat] as const,
           };
-    engine.update({ size, selected, route: next, reducedMotion });
-  }, [engine, size, selected, fromLng, fromLat, toLng, toLat, reducedMotion]);
+    engine.update({ size, selected, route: next, reducedMotion, tap });
+  }, [engine, size, selected, fromLng, fromLat, toLng, toLat, reducedMotion, tap]);
   useEffect(() => (appActive && !paused ? engine.run() : undefined), [engine, appActive, paused]);
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -187,8 +191,9 @@ export function GlobeFallback({
     }
   }
 
+  // With the globe's tap, a pin's press and the tap may both answer one touch: the guard keeps it to one choice.
   function choosePin(code: string) {
-    if (code !== selected && pressGuard.choose(code)) onSelect(code);
+    if (code !== selected && (!tap || pressGuard.choose(code))) onSelect(code);
   }
 
   // ADR-IMPL-068: a tap, in the view that was on screen. On a pin it is the pin's — chosen here too, for the tap may
@@ -219,7 +224,7 @@ export function GlobeFallback({
   useEffect(() => engine.onTap(onTap), [engine, onTap]);
 
   return (
-    <GestureDetector gesture={engine.gesture}>
+    <GestureDetector gesture={engine.gesture(tap)}>
       <View style={[styles.wrap, { width: size, height: size }]} collapsable={false}>
         <Svg width={size} height={size} style={StyleSheet.absoluteFill} pointerEvents="none">
           <Defs>

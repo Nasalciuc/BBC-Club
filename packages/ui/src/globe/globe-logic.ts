@@ -256,25 +256,11 @@ export const atView = (v: View, target: View) =>
 /**
  * A tap, never a drag (ADR-IMPL-068): the finger lifts within 500 ms having moved less than 8 pt — where the pan starts
  * (`PAN_START`, its minDistance). The gesture library's Tap has no distance limit of its own, so it is given this one,
- * and it races the pan and the pinch: whichever starts first cancels the other.
+ * and it races the pan and the pinch: whichever starts first cancels the other (globe-engine.ts; its test pins the
+ * composition, a phone the behaviour).
  */
 export const TAP = { maxDistance: 8, maxDurationMs: 500 } as const;
 export const PAN_START = TAP.maxDistance;
-
-export type TouchPoint = { x: number; y: number; t: number };
-
-/**
- * What one finger's touch is, as the globe's gestures read it, from where it went down to where it lifted: a drag once it
- * has gone `PAN_START` from where it began (the pan starts there and the tap is cancelled, wherever the finger ends);
- * else a tap if it lifted in time; else nothing (a press held).
- */
-export function touchKind(path: readonly TouchPoint[]): "tap" | "drag" | "none" {
-  const first = path[0];
-  const last = path[path.length - 1];
-  if (!first || !last) return "none";
-  if (path.some((p) => Math.hypot(p.x - first.x, p.y - first.y) >= PAN_START)) return "drag";
-  return last.t - first.t <= TAP.maxDurationMs ? "tap" : "none";
-}
 
 /**
  * A tap on the globe's disc (ADR-IMPL-068): the place under the finger, where the finger was, and where any other place

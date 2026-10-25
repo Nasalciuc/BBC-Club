@@ -411,7 +411,8 @@ export default function MapboxGlobe({
                   pin && pin.code !== selected
                     ? () => {
                         view.current.touchedAt = Date.now();
-                        if (pressGuard.choose(pin.code)) onSelect(pin.code);
+                        // With the globe's tap, the guard tells the map's press of the same touch that it was the pin's.
+                        if (!onTapPlace || pressGuard.choose(pin.code)) onSelect(pin.code);
                       }
                     : undefined
                 }

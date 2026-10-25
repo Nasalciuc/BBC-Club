@@ -47,10 +47,11 @@ may change any of them**.
    this app cannot read is none — Home still parses. `BookablePlaceVM` is `AirportVM`'s code, city, name, country, lat
    and lng — the brief's four fields plus the airport's name and country, so a snapped city goes through
    `selectDestination` as a pin's airport does (the destination prints its country before its search answers, and the
-   recent searches name the airport). No price. About 21 KB of JSON for the 169 airports of today's site (153 cities, 16 origins; measured), inside Home's existing per-member
-   ETag (the tag hashes the body). The nearest search runs on the phone (8 µs for 153 cities): an answer in the same
-   frame, offline on the drawn globe, no request per tap, and the tapped point never leaves the phone. The sources, the
-   flags, the offers' ownership and the price rules stay on the server.
+   recent searches name the airport). No price. About 21 KB of JSON for the 169 airports of today's site (153 cities, 16
+   origins; measured), inside Home's existing per-member ETag (the tag hashes the body). The nearest search runs on the
+   phone (8 µs for 153 cities): an answer in the same frame, offline on the drawn globe, no request per tap, and the
+   tapped point never leaves the phone. The sources, the flags, the offers' ownership and the price rules stay on the
+   server.
 3. **The flag** `catalog.globe_tap`, `{ enabled: false }`, seeded off by `scripts/seed-flags.ts`. Off: `bookable` is
    absent and nothing is read; a tap off the pins does nothing, as before. On: the catalog facade's `bookable(exec,
 { home, also })` reads the site's part — main airports and origins, one `UNION` joined to `catalog.airports` — the
@@ -81,15 +82,20 @@ all`. No image draws the answer or the distance line (`DESIGN.md` has no rule fo
    `Gesture.Race(Gesture.Simultaneous(pan, pinch), tap)` — a drag starts the pan, which cancels the tap: a drag never
    fires one. A tap on a pin, its label or its 44-pt target (`pinAt`, the same box as `GlobePin`'s hit slop) is the
    pin's; since the Tap's activation may also cancel the pin's own press, the tap chooses the pin too, and a press guard
-   keeps one touch to one choice (the second within 400 ms is the same touch). Mapbox (`mapTap`): Mapbox answers a
-   press beside the globe with the nearest place on its horizon, and on Android @rnmapbox/maps 10.3.7 reports as the
-   press's screen point that place reprojected (`pixelForCoordinate`), on the limb — not the finger. So the place
-   decides first: one past the near side (`NEAR_SIDE_DEG`, 80°, where no pin is drawn either) is the sky's. Then the
-   screen point must be on the disc (`onGlobeDisc`: the radius at the camera's zoom around the globe's centre — iOS
-   reports the finger) and on no pin's target; a press within 400 ms of a pin's press is the pin's (Android's map
-   absorbs a press on a MarkerView; iOS is unchecked). Then the place Mapbox gives is the tap. Pins, labels, the route
-   view and reduced motion are unchanged. The globe gains no accessible element: Search stays the screen reader's way
-   to a city.
+   keeps one touch to one choice (the second within 400 ms is the same touch). The drawn globe has that Tap only while
+   Explore has a list to snap to — Explore hands the globes `onTapPlace` only then: with the flag off, an older server
+   or no Home yet, its gestures are the pan and the pinch alone and its pins answer their own presses, exactly as before
+   (the engine builds both gestures once; the detector swaps them only when a list comes or goes). The composition is
+   pinned by `globe-engine.test.ts` against the library's own gesture builders (the Race, the 8-pt `maxDist` equal to
+   the pan's `minDist`, no Tap without a list); that a drag then fires no tap is the library's doing, checked on a
+   phone. Mapbox (`mapTap`): Mapbox answers a press beside the globe with the nearest place on its horizon, and on
+   Android @rnmapbox/maps 10.3.7 reports as the press's screen point that place reprojected (`pixelForCoordinate`), on
+   the limb — not the finger. So the place decides first: one past the near side (`NEAR_SIDE_DEG`, 80°, where no pin is
+   drawn either) is the sky's. Then the screen point must be on the disc (`onGlobeDisc`: the radius at the camera's zoom
+   around the globe's centre — iOS reports the finger) and on no pin's target; a press within 400 ms of a pin's press is
+   the pin's (Android's map absorbs a press on a MarkerView; iOS is unchecked). Then the place Mapbox gives is the tap.
+   Pins, labels, the route view and reduced motion are unchanged. The globe gains no accessible element: Search stays
+   the screen reader's way to a city.
 8. **The black globe's floor, over the air.** Mapbox's `background` layer (`existing`) is recoloured to the drawn
    globe's deep ocean (`globe-ocean-deep`): a missing tile shows the sea, never near-black. The satellite tile probe
    (F107) is asked again when the app comes back to the foreground or the phone comes back online, while Mapbox is the
@@ -108,12 +114,13 @@ new design component for the answer: no image draws one; the existing notice hol
 
 **Consequences.**
 
-- Nothing changes until an operator turns `catalog.globe_tap` on. Then a member's taps off the pins open cities in
-  Europe almost everywhere on land, elsewhere near the site's cities and the US origins only; the calm answer covers
-  the rest.
+- Nothing changes until an operator turns `catalog.globe_tap` on — on either globe: without Home's list the drawn globe
+  has no Tap and the pins no guard. Then a member's taps off the pins open cities in Europe almost everywhere on land,
+  elsewhere near the site's cities and the US origins only; the calm answer covers the rest.
 - The set is only as good as the night's snapshot of the site. With the site unreachable the last snapshot stands; an
   empty snapshot (a new environment before its first night) sends an empty list, and the app then answers nothing.
-- Home costs one cached read more with the flag on (the query budget test pins it), and about 21 KB of JSON (uncompressed).
+- Home costs one cached read more with the flag on (the query budget test pins it), and about 21 KB of JSON
+  (uncompressed).
 - Toronto and Vancouver, which the site lists as origins, are not in the set: the sync's `originAirports` keeps only
   US airports (`site-places.ts`), so their routes are dropped. A separate change.
 
@@ -123,9 +130,10 @@ new design component for the answer: no image draws one; the existing notice hol
   (the destination's page with its photo) for a snapped city (4), and kilometres or miles (5).
 - Design: no image draws the calm answer or the distance line; both are proposed with existing components and want a
   frame of their own in `DESIGN.md` 3.0 — reported, not resolved.
-- **To check on a phone** (not runnable here): Mapbox's `onPress` over the sky, beside the globe at rest and in a
-  corner zoomed in, on Android above all (its place is the horizon's, past the near side: `mapTap` ignores it — if the
-  camera's horizon stood short of 80° the zoomed-in corner would show it); 10 swipes across the globe fire 0 taps, on
-  both globes; a pin's press on iOS is not also a map press (a doubled press would choose once, through the guard); the
-  drawn globe's pins still open on the first tap (the Tap's activation and the pin's press); a missing tile shows the
-  ocean, not black.
+- **To check on a phone** (not runnable here): Mapbox's `onPress` over the sky, beside the globe at rest and in a corner
+  zoomed in, on Android above all (its place is the horizon's, past the near side: `mapTap` ignores it — if the camera's
+  horizon stood short of 80° the zoomed-in corner would show it); 10 swipes across the globe fire 0 taps, on both
+  globes, with the flag on; a pin's press on iOS is not also a map press (a doubled press would choose once, through the
+  guard); with the flag on, the drawn globe's pins still open on the first tap (the Tap's activation and the pin's
+  press); the e2e flows that tap `globe.pin.LHR` run with the flag off, so they keep the drawn globe of before; a
+  missing tile shows the ocean, not black.

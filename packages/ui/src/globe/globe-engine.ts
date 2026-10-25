@@ -36,6 +36,9 @@ export type GlobeSettings = {
   selected: string | null;
   route: Route | null;
   reducedMotion: boolean;
+  /** ADR-IMPL-068: a tap off the pins has somewhere to go (the screen has a list to snap to). Without it the globe has
+   *  no tap at all — its pan and pinch alone, as before. */
+  tap: boolean;
 };
 type Sinks = { frame: (f: Frame) => void };
 /** A tap on the globe (not a drag, not a pinch): where the finger lifted, in the frame's points, and the view that was
@@ -124,25 +127,28 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     if (target) target = { rotation, zoom };
     if (holdStill) paint("still");
   };
-  const pan = Gesture.Pan()
-    .runOnJS(true)
-    .minDistance(PAN_START)
-    .onBegin(begin)
-    .onChange((e) => {
-      ({ rotation, zoom } = panBy({ rotation, zoom }, e.changeX, e.changeY, settings.size));
-      if (holdStill) paint("paused"); // e2e builds have no loop
-    })
-    .onFinalize(end);
-  const pinch = Gesture.Pinch()
-    .runOnJS(true)
-    .onBegin(begin)
-    .onChange((e) => {
-      // A long route frames below the rest size: the pinch starts from there, never jumping up to it.
-      const floor = settings.route ? GLOBE_SPEC.routeZoom.min : GLOBE_SPEC.zoom.min;
-      ({ rotation, zoom } = pinchBy({ rotation, zoom }, e.scaleChange, floor));
-      if (holdStill) paint("paused");
-    })
-    .onFinalize(end);
+  // One pan and one pinch for each of the two gestures below: a gesture object belongs to one detector's set.
+  const pan = () =>
+    Gesture.Pan()
+      .runOnJS(true)
+      .minDistance(PAN_START)
+      .onBegin(begin)
+      .onChange((e) => {
+        ({ rotation, zoom } = panBy({ rotation, zoom }, e.changeX, e.changeY, settings.size));
+        if (holdStill) paint("paused"); // e2e builds have no loop
+      })
+      .onFinalize(end);
+  const pinch = () =>
+    Gesture.Pinch()
+      .runOnJS(true)
+      .onBegin(begin)
+      .onChange((e) => {
+        // A long route frames below the rest size: the pinch starts from there, never jumping up to it.
+        const floor = settings.route ? GLOBE_SPEC.routeZoom.min : GLOBE_SPEC.zoom.min;
+        ({ rotation, zoom } = pinchBy({ rotation, zoom }, e.scaleChange, floor));
+        if (holdStill) paint("paused");
+      })
+      .onFinalize(end);
   // ADR-IMPL-068: a tap anywhere on the globe. It may move less than the pan's start and must lift within 500 ms, and it
   // races the pan and the pinch: a drag starts the pan, which cancels it — a drag never fires a tap. The pan's own
   // begin and end already count the touch, so the turn pauses for a tap too.
@@ -153,6 +159,13 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     .onEnd((e, success) => {
       if (success) tapSink?.(e.x, e.y, { rotation: frame.rotation, zoom: frame.zoom });
     });
+  // Built once each, so a re-render hands the detector the same gesture; it changes only when a tap gains or loses
+  // somewhere to go (`settings.tap`). Without one the globe is touched as it was before the tap: pan and pinch alone,
+  // nothing to cancel a pin's own press.
+  const gestures = {
+    plain: Gesture.Simultaneous(pan(), pinch()),
+    tap: Gesture.Race(Gesture.Simultaneous(pan(), pinch()), tap),
+  };
 
   function step(t: number) {
     const dt = lastStep ? Math.min(t - lastStep, 100) : 16;
@@ -181,7 +194,10 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
   }
 
   return {
-    gesture: Gesture.Race(Gesture.Simultaneous(pan, pinch), tap),
+    /** The gesture for the detector: with the tap only while a tap off the pins has somewhere to go. */
+    gesture(withTap: boolean) {
+      return withTap ? gestures.tap : gestures.plain;
+    },
     initialFrame: frame,
     /** Connect React's setter; returns the disconnect. */
     attach(next: Sinks): () => void {
@@ -200,6 +216,13 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
     update(next: GlobeSettings): void {
       const resized = next.size !== settings.size;
       const rerouted = !sameRoute(next.route, settings.route) || next.selected !== settings.selected;
+      // The detector swapped one gesture for the other and dropped the first: a pan or pinch it was running never
+      // reports its end, so the touch it counted is over.
+      if (next.tap !== settings.tap && touches > 0) {
+        touches = 0;
+        interacting = false;
+        lastInteractionEnd = now;
+      }
       settings = next;
       if (rerouted) {
         target = next.route ? routeView(next.route.from, next.route.to) : null;
