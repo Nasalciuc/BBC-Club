@@ -9,10 +9,12 @@ import {
 
 export type Call = { url: string; method: string; headers: Record<string, string>; body: string | null };
 
-/** One row of a SPARQL answer. Coordinates are [lng, lat], as Wikidata writes them. */
+/** One row of a SPARQL answer. Coordinates are [lng, lat], as Wikidata writes them. A row of the search by a city's
+ *  name (`cityByNameSparql`) carries `code` and no airport. */
 export function binding(o: {
-  iata: string;
-  airport: string;
+  iata?: string;
+  code?: string;
+  airport?: string;
   airportCoord?: [number, number];
   city?: string;
   cityLabel?: string;
@@ -20,10 +22,10 @@ export function binding(o: {
   night?: string;
   image?: string;
 }): Binding {
-  const b: Binding = {
-    iata: { type: "literal", value: o.iata },
-    airport: { type: "uri", value: `http://www.wikidata.org/entity/${o.airport}` },
-  };
+  const b: Binding = {};
+  if (o.iata) b.iata = { type: "literal", value: o.iata };
+  if (o.code) b.code = { type: "literal", value: o.code };
+  if (o.airport) b.airport = { type: "uri", value: `http://www.wikidata.org/entity/${o.airport}` };
   const point = ([lng, lat]: [number, number]) => ({
     type: "literal",
     datatype: "http://www.opengis.net/ont/geosparql#wktLiteral",
@@ -48,6 +50,8 @@ export type CommonsFile = {
   height?: number;
   mime?: string;
   license?: string;
+  /** Commons' LicenseUrl, when it gives one. */
+  licenseUrl?: string;
   artist?: string | null;
   restrictions?: string;
 };
@@ -83,6 +87,7 @@ function imageinfo(name: string, f: CommonsFile, width: number, metadata: boolea
       };
     }
     if (f.restrictions) ext.Restrictions = { value: f.restrictions, source: "commons-desc-page" };
+    if (f.licenseUrl) ext.LicenseUrl = { value: f.licenseUrl, source: "commons-desc-page" };
     info.extmetadata = ext;
   }
   return info;
@@ -110,19 +115,34 @@ export function pexelsPhoto(o: { id: number; alt: string; photographer?: string;
   };
 }
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+/** What Wikimedia says with a 429 (Commons' and the Action API's own words; WDQS sends an HTML page). */
+export const TOO_MANY = "You are making too many requests to the API.";
 
 /**
- * A fetch that answers as the three services do. A number in place of an answer is an HTTP status; `pexels` maps a city
- * to its photos (or a status); `commonsBody` is what Commons answers with HTTP 200 instead (its own errors look so).
+ * A fetch that answers as the three services do. A number in place of an answer is an HTTP status — a 429 comes with
+ * `retryAfter` (default "120") as its Retry-After; `pexels` maps a city to its photos (or a status); `commonsBody` is
+ * what Commons answers with HTTP 200 instead (its own errors look so). Wikidata's three questions: `wikidata` answers
+ * the airports' (filtered by the codes asked), `cities` the search by a city's name (filtered by the code asked), and
+ * `landmarks` the landmarks around a city item (by its QID; none known: no rows).
  */
 export function fakeSources(o: {
   wikidata?: Binding[] | number;
+  cities?: Binding[] | number;
+  landmarks?: Record<string, Binding[] | number>;
   commons?: Record<string, CommonsFile> | number;
+  /** Commons' own imageinfo for a file (at 1280 px, with its metadata), as a saved answer gives it. */
+  commonsInfo?: Record<string, unknown>;
   commonsBody?: unknown;
   pexels?: Record<string, ReturnType<typeof pexelsPhoto>[] | number>;
+  retryAfter?: string;
 }) {
+  const json = (body: unknown, status = 200) =>
+    status === 429
+      ? new Response(TOO_MANY, {
+          status,
+          headers: { "Content-Type": "text/plain", "Retry-After": o.retryAfter ?? "120" },
+        })
+      : new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
   const calls: Call[] = [];
   const fetch: Fetch = async (url, init) => {
     const headers = Object.fromEntries(new Headers(init?.headers).entries());
@@ -133,12 +153,21 @@ export function fakeSources(o: {
       body: typeof init?.body === "string" ? init.body : null,
     });
     if (url === WIKIDATA_SPARQL) {
-      if (typeof o.wikidata === "number") return json({ error: "x" }, o.wikidata);
-      const codes = [...(new URLSearchParams(init?.body as string).get("query") ?? "").matchAll(/"([A-Z]{3})"/g)].map(
-        (m) => m[1],
-      );
-      const bindings = (o.wikidata ?? []).filter((b) => codes.includes(b.iata?.value ?? ""));
-      return json({ head: { vars: [] }, results: { bindings } });
+      const query = new URLSearchParams(init?.body as string).get("query") ?? "";
+      const codes = [...query.matchAll(/"([A-Z]{3})"/g)].map((m) => m[1]);
+      const answer = (rows: Binding[] | number | undefined, keep: (b: Binding) => boolean) =>
+        typeof rows === "number"
+          ? json({ error: "x" }, rows)
+          : json({ head: { vars: [] }, results: { bindings: (rows ?? []).filter(keep) } });
+      if (query.includes("wikibase:around")) {
+        const city = query.match(/wd:(Q\d+) wdt:P625 \?centre/)?.[1] ?? "";
+        return answer(o.landmarks?.[city], () => true);
+      }
+      if (query.includes("EntitySearch")) {
+        if (typeof o.wikidata === "number") return answer(o.wikidata, () => true);
+        return answer(o.cities, (b) => codes.includes(b.code?.value ?? ""));
+      }
+      return answer(o.wikidata, (b) => codes.includes(b.iata?.value ?? ""));
     }
     if (url.startsWith(`${COMMONS_API}?`)) {
       if (typeof o.commons === "number") return json({ error: "x" }, o.commons);
@@ -154,6 +183,8 @@ export function fakeSources(o: {
         const to = title.replace(/^File:(.)/, (_, c: string) => `File:${c.toUpperCase()}`);
         if (to !== title) normalized.push({ from: title, to });
         const name = to.replace(/^File:/, "");
+        const saved = o.commonsInfo?.[name];
+        if (saved) return { ns: 6, title: to, imagerepository: "local", imageinfo: [saved] };
         const file = known[name];
         if (!file) return { ns: 6, title: to, missing: true };
         return { ns: 6, title: to, imagerepository: "local", imageinfo: [imageinfo(name, file, width, metadata)] };

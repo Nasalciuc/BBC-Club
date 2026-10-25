@@ -3,17 +3,25 @@ import { describe, expect, it } from "bun:test";
 
 import { PlacePhotosVM } from "@bbc/shared/api/v1/places";
 import {
+  DEFAULT_RETRY_AFTER_S,
+  MAX_RETRY_AFTER_S,
   SourceError,
   acceptCommons,
-  citySparql,
+  cityByNameSparql,
   cityFacts,
+  cityFactsByName,
+  citySparql,
   commonsFileName,
   metadataText,
   parsePoint,
   pickPexels,
+  retryAfterSeconds,
+  sparqlString,
+  type Binding,
   type ImageInfo,
 } from "../../src/application/place-photo-sources";
 import {
+  CITY_SEARCHES_PER_RUN,
   PEXELS_PER_RUN,
   decidePlaces,
   parseCodes,
@@ -23,6 +31,13 @@ import {
   type Place,
 } from "../../src/application/place-photos";
 import { binding, commonsThumb, fakeSources, pexelsPhoto } from "./place-photos.fixture";
+// WDQS's own answers, 25 Oct 2026 (no person in them): the airports' question for RMO and KIV, and the search by a
+// city's name for Chișinău and for Springfield.
+import rmoKiv from "./wikimedia/wdqs-city-rmo-kiv.json";
+import byNameChisinau from "./wikimedia/wdqs-city-by-name-chisinau.json";
+import byNameSpringfield from "./wikimedia/wdqs-city-by-name-springfield.json";
+
+const rows = (answer: { results: { bindings: unknown[] } }) => answer.results.bindings as Binding[];
 
 const LONDON: Place = { code: "LHR", city: "London", lat: 51.470748, lng: -0.459909 };
 const PARIS: Place = { code: "CDG", city: "Paris", lat: 49.00896, lng: 2.554117 };
@@ -69,7 +84,9 @@ describe("Wikidata", () => {
   it("asks for IATA codes only — anything else cannot reach the query", () => {
     const q = citySparql(["LHR", "CDG"]);
     expect(q).toContain('VALUES ?iata { "LHR" "CDG" }');
-    expect(q).toContain("wdt:P238");
+    // Any rank: `wdt:` reads the best one only, and a code kept beside a newer one (KIV, now RMO) would find nothing.
+    expect(q).toContain("?airport p:P238/ps:P238 ?iata .");
+    expect(q).not.toContain("wdt:P238");
     expect(q).toContain("wdt:P931");
     expect(q).toContain("wdt:P3451");
     expect(q).toContain("wdt:P18");
@@ -104,12 +121,13 @@ describe("Wikidata", () => {
       image: "Elsewhere.jpg",
     });
     expect(cityFacts([far, heathrow({ image: "London Skyline.jpg" })], LONDON).files).toEqual(["London Skyline.jpg"]);
-    expect(cityFacts([far], LONDON)).toEqual({ files: [], centre: null });
+    expect(cityFacts([far], LONDON)).toEqual({ qid: null, files: [], centre: null });
     expect(cityFacts([heathrow({ airportCoord: undefined, image: "x.jpg" })], LONDON)).toEqual({
+      qid: null,
       files: [],
       centre: null,
     });
-    expect(cityFacts([], LONDON)).toEqual({ files: [], centre: null });
+    expect(cityFacts([], LONDON)).toEqual({ qid: null, files: [], centre: null });
   });
 
   it("puts night views first, drops montages, maps and flags, keeps three", () => {
@@ -120,6 +138,7 @@ describe("Wikidata", () => {
       heathrow({ image: "Westminster.jpg" }),
     ];
     expect(cityFacts(rows, LONDON)).toEqual({
+      qid: "Q84",
       files: ["London at night.jpg", "Thames by night.jpg", "City of London skyline.jpg"],
       centre: { lat: 51.507222, lng: -0.1275 },
     });
@@ -161,6 +180,64 @@ describe("Wikidata", () => {
         CHISINAU,
       ).files,
     ).toEqual(["Chisinau.jpg"]);
+  });
+
+  it("finds Chișinău by RMO and by KIV, the code Wikidata keeps at normal rank since 2024 (WDQS's answer)", () => {
+    const answer = rows(rmoKiv);
+    expect(answer.map((b) => b.iata?.value).sort()).toEqual(["KIV", "RMO"]);
+    const cathedral = "Ansamblul Catedralei „Nașterea Domnului” 3.jpg";
+    const arch = "Arch of Triumph, Chisinau, Republic of Moldova (51160304626 cropped).jpg";
+    for (const code of ["RMO", "KIV"]) {
+      expect(cityFacts(answer, { ...CHISINAU, code })).toEqual({
+        qid: "Q21197",
+        files: [cathedral, arch], // the night view first
+        centre: { lat: 47.022777777, lng: 28.835277777 },
+      });
+    }
+  });
+
+  it("finds a city by its own name near the airport: ours by its name, else the nearest, never a namesake far off", () => {
+    // "Chisinau" also finds the Chișinău Ghetto (Q4222668), nearer the airport than the city's centre: the name wins.
+    expect(cityFactsByName(rows(byNameChisinau), CHISINAU)).toMatchObject({
+      qid: "Q21197",
+      centre: { lat: 47.022777777, lng: 28.835277777 },
+    });
+    expect(cityFactsByName(rows(byNameChisinau), { ...CHISINAU, city: "Kishinev" })).toMatchObject({
+      qid: "Q4222668", // no settlement named so: the nearest within 150 km
+    });
+    // Six Springfields; only Missouri's lies within 150 km of Springfield–Branson (SGF).
+    const sgf = { code: "SGF", city: "Springfield", lat: 37.245667, lng: -93.388639 };
+    expect(cityFactsByName(rows(byNameSpringfield), sgf)).toEqual({
+      qid: "Q135615",
+      files: ["ParkCentralSquarefountainbyCVBCS.jpg"],
+      centre: { lat: 37.195, lng: -93.286111111 },
+    });
+    expect(cityFactsByName(rows(byNameSpringfield), { ...sgf, lat: 10, lng: 10 })).toEqual({
+      qid: null,
+      files: [],
+      centre: null,
+    });
+    expect(cityFactsByName(rows(byNameChisinau), sgf)).toEqual({ qid: null, files: [], centre: null }); // RMO's rows
+  });
+
+  it("asks for a city by name with the name as a quoted literal", () => {
+    const q = cityByNameSparql({ code: "RMO", city: "Chișinău" });
+    expect(q).toContain('VALUES (?code ?name) { ("RMO" "Chișinău") }');
+    expect(q).toContain('wikibase:api "EntitySearch"');
+    expect(q).toContain("wdt:P31/wdt:P279* wd:Q486972");
+    expect(sparqlString('Say "hi" \\ bye')).toBe('"Say \\"hi\\" \\\\ bye"');
+    expect(() => sparqlString("two\nlines")).toThrow();
+    expect(() => cityByNameSparql({ code: "R1O", city: "x" })).toThrow();
+  });
+
+  it("reads Retry-After as seconds or a date; five minutes when it is neither; a day at most", () => {
+    const now = Date.parse("2026-10-25T12:00:00Z");
+    expect(retryAfterSeconds("1000", now)).toBe(1000);
+    expect(retryAfterSeconds("0", now)).toBe(1);
+    expect(retryAfterSeconds("Sun, 25 Oct 2026 12:02:00 GMT", now)).toBe(120);
+    expect(retryAfterSeconds(null, now)).toBe(DEFAULT_RETRY_AFTER_S);
+    expect(retryAfterSeconds("soon", now)).toBe(DEFAULT_RETRY_AFTER_S);
+    expect(retryAfterSeconds("9999999", now)).toBe(MAX_RETRY_AFTER_S);
   });
 });
 
@@ -350,11 +427,67 @@ describe("decidePlaces", () => {
     expect(f.calls[0]?.body).toContain("format=json");
   });
 
-  it("no Wikidata airport near ours: the satellite view on our airport", async () => {
+  it("no Wikidata airport near ours and no city by its name: the satellite view on our airport", async () => {
     const f = fakeSources({ wikidata: [] });
     const out = await decidePlaces([ZURICH], { sources: sources(f.fetch), pexelsKey: undefined, logger: quiet });
     expect(out.get("ZRH")).toEqual({ kind: "satellite", centre: { lat: ZURICH.lat, lng: ZURICH.lng } });
-    expect(f.calls).toHaveLength(1); // no file, no Commons question
+    expect(f.calls).toHaveLength(2); // the airports' question, the search by name; no file, no Commons question
+    expect(new URLSearchParams(f.calls[1]?.body ?? "").get("query")).toContain('("ZRH" "Zurich")');
+  });
+
+  it("no Wikidata airport near ours: the city by its own name, with the same tiers and credit rules", async () => {
+    const f = fakeSources({
+      wikidata: [],
+      cities: [
+        binding({
+          code: "ZRH",
+          city: "Q72",
+          cityLabel: "Zürich",
+          cityCoord: [8.540556, 47.374444],
+          image: "Zurich old town.jpg",
+        }),
+      ],
+      commons: { "Zurich old town.jpg": {} },
+    });
+    const out = await decidePlaces([ZURICH], { sources: sources(f.fetch), pexelsKey: undefined, logger: quiet });
+    expect(out.get("ZRH")).toMatchObject({
+      kind: "photo",
+      source: "wikimedia",
+      photo: { heroUrl: commonsThumb("Zurich old town.jpg", 1280), author: "Jane Doe", license: "CC BY-SA 4.0" },
+      centre: { lat: 47.374444, lng: 8.540556 },
+    });
+
+    // Two searches a run: a third city waits for the next run, its look not counted.
+    const many = fakeSources({ wikidata: [] });
+    const three = await decidePlaces([ZURICH, PARIS, TOKYO], {
+      sources: sources(many.fetch),
+      pexelsKey: undefined,
+      logger: quiet,
+    });
+    expect(CITY_SEARCHES_PER_RUN).toBe(2);
+    expect(three.get("NRT")).toEqual({ kind: "deferred" });
+    expect(many.calls).toHaveLength(1 + CITY_SEARCHES_PER_RUN);
+  });
+
+  it("a 429 asks the club to wait: the places wait for its Retry-After, nothing is counted as failed", async () => {
+    const warned: object[] = [];
+    const logger = { warn: (o: object) => warned.push(o), error: (o: object) => warned.push(o) };
+    const wikidata = fakeSources({ wikidata: 429, retryAfter: "1000" });
+    const out = await decidePlaces([LONDON, PARIS], { sources: sources(wikidata.fetch), pexelsKey: undefined, logger });
+    expect([...out.values()]).toEqual([
+      { kind: "deferred", afterS: 1000, heldBy: "wikidata" },
+      { kind: "deferred", afterS: 1000, heldBy: "wikidata" },
+    ]);
+    expect(warned).toEqual([{ stage: "wikidata", retryAfterS: 1000 }]);
+
+    const commons = fakeSources({ wikidata: [london, paris], commons: 429, retryAfter: "57" });
+    const out2 = await decidePlaces([LONDON, PARIS], {
+      sources: sources(commons.fetch),
+      pexelsKey: undefined,
+      logger: quiet,
+    });
+    expect(out2.get("LHR")).toEqual({ kind: "deferred", afterS: 57, heldBy: "commons" });
+    expect(out2.get("CDG")).toMatchObject({ kind: "satellite" }); // nothing to ask Commons about
   });
 
   it("a source that fails leaves the places to a later run — never a downgrade", async () => {
@@ -441,7 +574,9 @@ describe("decidePlaces", () => {
 
   it("a key Pexels refuses (401): photos kept, a day of satellite view for the rest, the operator told", async () => {
     const key = "test".repeat(10); // a stand-in, not a key
-    const f = fakeSources({ wikidata: [], pexels: { Paris: 401 } });
+    // Narita names Tokyo, which has no photo of its own; Paris and Zurich are found by name, with none either.
+    const narita = binding({ iata: "NRT", airport: "Q7", airportCoord: [140.386, 35.765], city: "Q1490" });
+    const f = fakeSources({ wikidata: [narita], pexels: { Paris: 401 } });
     const errors: object[] = [];
     const out = await decidePlaces([PARIS, ZURICH, TOKYO], {
       sources: sources(f.fetch),

@@ -237,6 +237,30 @@ docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file 
 After setting `PEXELS_API_KEY` (restart the worker), let the satellite cities be looked at again now rather than within
 a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`.
 
+A city stuck on an old satellite view (Chișinău, RMO: before ADR-IMPL-064 a code Wikidata had demoted, KIV, found
+nothing, and a city whose airport Wikidata does not know got no photo): read its row, then let the job look again now.
+A `satellite` row resolved before this release waits out its 30–33 days otherwise:
+
+```sql
+SELECT code, status, source, author, license, attempts, resolved_at, expires_at
+FROM catalog.place_photos WHERE code = 'RMO';
+UPDATE catalog.place_photos SET expires_at = now() WHERE code = 'RMO' AND status = 'satellite';
+```
+
+Within a minute (unless a hold is on, below) the row is `photo` with a Wikimedia credit — for RMO the cathedral's night
+view — or `satellite` again if Commons has no photograph that passes. Never on an operator's photo (`source =
+'override'`): that is `DELETE …/photo`'s job.
+
+Wikimedia asks a client it wants slower to wait (429 with `Retry-After`: WDQS up to 1000 s during an outage, Commons
+20–60 s). That is not the city's fault: the cities claimed wait that long, their look not counted, and the source is held
+for both Wikimedia jobs (place photos and landmarks) until `not_before`; a run that claims cities meanwhile asks nothing
+and puts them back. The holds, and ending one early (only when the 429 came from something already fixed):
+
+```sql
+SELECT source, not_before, not_before - now() AS left FROM catalog.source_holds;
+UPDATE catalog.source_holds SET not_before = now() WHERE source = 'wikidata';
+```
+
 Off: the flag row `catalog.place_photos` (seeded on by `scripts/seed-flags.ts`) — `{"enabled":false}` and within ~35 s
 the route answers no photos (the app shows its own image everywhere) and the job asks nothing outside:
 
@@ -250,7 +274,8 @@ Metrics: `bbc_place_photos_resolved{status,source}` (photos and satellite views 
 a day at most; `write`: the database refused a row; `airport`: a claimed city the airports query cannot match — a code
 not in upper case — tried again the same way, log line `place photos: no airport for a claimed city`),
 `bbc_place_photos_requested` (cities asked about for the first time). The log line `place photos: a source failed`
-carries the stage and the error — never the Pexels key. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
+carries the stage and the error — never the Pexels key; `place photos: a source asked the club to wait` carries the stage
+and the seconds, and `bbc_place_photos_held{stage}` counts the holds. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
 means the key is wrong or revoked: until it is replaced, a city that shows a photo keeps it, and one Commons has no
 photo for gets its satellite view, looked at again each day.
 

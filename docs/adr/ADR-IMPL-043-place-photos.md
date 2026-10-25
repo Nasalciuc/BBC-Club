@@ -34,7 +34,9 @@ image.
   1. **Wikidata** (one SPARQL question for the run): the items with the IATA code (P238); ours is the one within 50 km
      of our coordinates (P625) — a code reused elsewhere, or none near, gives nothing. The city it serves (P931): the
      one whose English name is the city we show, else the oldest item. Its night view (P3451) first, then its main
-     image (P18), files named as a montage, map, flag or coat of arms left out, three at most.
+     image (P18), files named as a montage, map, flag or coat of arms left out, three at most. (Amended by
+     ADR-IMPL-064: the code is matched at any rank, so a demoted one — KIV under RMO — still finds its airport; with no
+     airport within 50 km, or one that names no city, the city is found by its own name near the airport, two a run.)
   2. **Commons** (two questions for the run, at 1280 and 500 px — two of Wikimedia's standard thumbnail widths; it
      refuses or slows others): the first file that is a JPEG in landscape (1.2–2.4 wide for 1 high), wider than 1280 px
      (so both widths are real thumbnails, never the original), under CC0, public domain or CC BY / BY-SA, without
@@ -54,7 +56,8 @@ image.
   failures) leaves the row as it was and tries again after
   `least(attempts, 24)` hours — a city keeps the photo it has, and is never downgraded to a satellite view because a
   server was down; a row the database refuses is tried again the same way, without holding the others. Every resolved
-  row is looked at again after 30 days, spread over three more.
+  row is looked at again after 30 days, spread over three more. (Amended by ADR-IMPL-064: a 429 from Wikidata or Commons
+  is not a failure — the cities wait for its Retry-After, uncounted, and the source is held for both Wikimedia jobs.)
 - **The club's own photo** — `PUT /v1/internal/places/:code/photo` (`catalog:import`, the internal secret) sets two
   https addresses and the credit if the photo needs one; it never expires and no job write touches it (each carries
   `source IS DISTINCT FROM 'override'`). `DELETE` hands the city back to the job. For a wrong or poor photo; the RUNBOOK

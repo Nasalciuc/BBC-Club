@@ -228,6 +228,41 @@ describe("place photos", () => {
     await down.iso.drop();
   });
 
+  it("a 429 is not the city's fault: the cities wait out its Retry-After, uncounted, and no run asks before then", async () => {
+    const t = await setup("place-photos-429", { wikidata: 429, retryAfter: "1000" });
+    const waits = async () =>
+      (await t.iso.db.execute(sql`
+        SELECT code, round(extract(epoch FROM expires_at - now()))::int AS seconds
+        FROM catalog.place_photos ORDER BY code`)) as unknown as { code: string; seconds: number }[];
+    const holds = async () =>
+      (await t.iso.db.execute(sql`
+        SELECT source, round(extract(epoch FROM not_before - now()))::int AS seconds
+        FROM catalog.source_holds`)) as unknown as { source: string; seconds: number }[];
+
+    await t.photos("LHR,CDG");
+    expect(await t.run()).toEqual({ claimed: 2, photos: 0, satellites: 0, retries: 0, deferred: 2, held: 1 });
+    expect(await t.row("LHR")).toMatchObject({ status: "pending", attempts: 0 });
+    for (const w of await waits()) expect(Math.abs(w.seconds - 1000)).toBeLessThanOrEqual(5);
+    const [hold] = await holds();
+    expect(hold?.source).toBe("wikidata");
+    expect(Math.abs((hold?.seconds ?? 0) - 1000)).toBeLessThanOrEqual(5);
+
+    // Due again before the hold ends (an operator's UPDATE, say): claimed, nothing asked, back to waiting.
+    await t.due();
+    const asked = t.sources.calls.length;
+    expect(await t.run()).toEqual({ claimed: 2, photos: 0, satellites: 0, retries: 0, deferred: 2, held: 1 });
+    expect(t.sources.calls).toHaveLength(asked);
+    expect(await t.row("CDG")).toMatchObject({ status: "pending", attempts: 0 });
+    for (const w of await waits()) expect(w.seconds).toBeGreaterThan(900);
+
+    // The hold over, the next run asks.
+    await t.iso.db.execute(sql`UPDATE catalog.source_holds SET not_before = now() - interval '1 second'`);
+    const up = await setup("", { wikidata: [london, paris], commons: { "London at night.jpg": {} } }, t.iso);
+    await up.due();
+    expect(await up.run()).toEqual({ claimed: 2, photos: 1, satellites: 1, retries: 0, deferred: 0 });
+    await t.iso.drop();
+  });
+
   it("a claimed city whose airport does not come back waits like a failed source", async () => {
     const t = await setup("place-photos-no-airport", {});
     // A code the job cannot match: it asks for airports by upper-case code, so `ab1` (`AB1`, no airport) never comes back.
