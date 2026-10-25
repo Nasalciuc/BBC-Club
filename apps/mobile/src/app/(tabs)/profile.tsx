@@ -30,6 +30,7 @@ import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhoto
 import { CabinSheet } from "@/features/profile/CabinSheet";
 import { DeleteAccountSheet } from "@/features/profile/DeleteAccountSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
+import { profileName } from "@/features/profile/name-logic";
 import {
   mergeSavedProfile,
   offersSwitchValue,
@@ -233,7 +234,8 @@ export default function ProfileScreen() {
     );
   }
 
-  const displayName = profile?.displayName?.trim() || "Member";
+  // The name as saved; `Member` only while there is none (name-logic.ts says why it is not replaced).
+  const displayName = profileName(profile?.displayName);
   const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
   const city = home && homeCity?.code === home ? homeCity.city : null;
   // A satellite view is drawn at the band's size: the column (capped on large phones) by the band's height.

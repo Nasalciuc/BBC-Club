@@ -8,6 +8,8 @@ import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { CabinSheet } from "@/features/profile/CabinSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
+import { nameRowValue } from "@/features/profile/name-logic";
+import { NameSheet } from "@/features/profile/NameSheet";
 import { mergeSavedProfile, type SavedProfile } from "@/features/profile/notifications-logic";
 import { cabinLabel, travelersLabel } from "@/features/profile/profile-logic";
 import { storeSavedProfile } from "@/features/profile/profile-store";
@@ -18,7 +20,10 @@ import { homeAirportLabel } from "@/lib/airport-search-state";
 import { fetchProfile, type Profile } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 
-/** Edit profile (36): the home airport, the cabin and the travelers a search and a request start from. */
+/**
+ * Edit profile (36): the member's own name (brief 3.4.1 — 36 draws no `Name` row; it comes first, in 36's look), then
+ * the home airport, the cabin and the travelers a search and a request start from.
+ */
 export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -29,6 +34,7 @@ export default function EditProfileScreen() {
   const [reloadToken, setReloadToken] = useState(0);
   // 36 names the home airport's city: `New York (JFK)`.
   const [homeCity, setHomeCity] = useState<{ code: string; city: string } | null>(null);
+  const nameRef = useRef<ProfileSheetHandle>(null);
   const homeAirportRef = useRef<ProfileSheetHandle>(null);
   const cabinRef = useRef<ProfileSheetHandle>(null);
   const travelersRef = useRef<ProfileSheetHandle>(null);
@@ -91,6 +97,14 @@ export default function EditProfileScreen() {
         ) : (
           <RowGroup testID="editProfile.rows" look="edit">
             <ListRow
+              testID="editProfile.name"
+              icon="user-fill"
+              label="Name"
+              value={profile ? nameRowValue(profile.displayName) : undefined}
+              disabled={!profile}
+              onPress={() => nameRef.current?.present()}
+            />
+            <ListRow
               testID="editProfile.homeAirport"
               icon="plane-right-fill"
               label="Home airport"
@@ -120,6 +134,7 @@ export default function EditProfileScreen() {
       <RootTabBar active="profile" />
       {profile ? (
         <>
+          <NameSheet ref={nameRef} profile={profile} onSaved={onSheetSaved} />
           <HomeAirportSheet ref={homeAirportRef} profile={profile} homeCity={city} onSaved={onSheetSaved} />
           <CabinSheet ref={cabinRef} profile={profile} onSaved={onSheetSaved} />
           <TravelersSheet ref={travelersRef} profile={profile} onSaved={onSheetSaved} />
