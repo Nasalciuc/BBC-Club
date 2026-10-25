@@ -219,8 +219,10 @@ export const sitePlaces = catalog.table(
 
 /**
  * The US airports the site lists a price from for each of its cities (ADR-IMPL-045): New York's deal for London is
- * three rows, JFK, EWR and LGA. The site's prices are kept, never shown — a pin is priced by the formula (ADR-IMPL-037).
- * Created by 0028_catalog_site_destinations.sql.
+ * three rows, JFK, EWR and LGA. A pin is priced by the formula (ADR-IMPL-037); with `catalog.site_offers` on, Home's
+ * "Offers to inspire" shows `price` as the site's deal, `from $X` — never `published_price`, which has no source
+ * (ADR-IMPL-067). A row is served until `valid_until`, at most 24 hours after the read that wrote it (D6, CHECK).
+ * Created by 0028_catalog_site_destinations.sql; `valid_until` by 0042_catalog_site_route_validity.sql.
  */
 export const siteRoutes = catalog.table(
   "site_routes",
@@ -237,6 +239,10 @@ export const siteRoutes = catalog.table(
     price: integer("price").notNull(),
     publishedPrice: integer("published_price"),
     syncedAt: tz("synced_at").notNull().defaultNow(),
+    /** Not served from this moment on: the read's time + 24 hours, as the sync writes it (ADR-IMPL-067, D6). */
+    validUntil: tz("valid_until")
+      .notNull()
+      .default(sql`(now() + interval '24 hours')`),
     createdAt: createdAt(),
   },
   (t) => [
@@ -245,6 +251,11 @@ export const siteRoutes = catalog.table(
     check("site_routes_deal", sql`${t.deal} > 0`),
     check("site_routes_price", sql`${t.price} > 0`),
     check("site_routes_published_price", sql`${t.publishedPrice} IS NULL OR ${t.publishedPrice} > 0`),
+    // D6: a deal is shown for at most 24 hours after the site was read.
+    check(
+      "site_routes_validity",
+      sql`${t.validUntil} > ${t.syncedAt} AND ${t.validUntil} <= ${t.syncedAt} + interval '24 hours'`,
+    ),
   ],
 );
 

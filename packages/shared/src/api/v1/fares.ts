@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PhotoCreditVM } from "./places";
 import { PricePair, ProposalCardVM } from "./proposals";
 
 // Prices are numeric(10,2) in Postgres → string from Drizzle → parseFloat in the mapper.
@@ -164,6 +165,47 @@ export const HomePlaceVM = z.object({
 });
 export type HomePlaceVM = z.infer<typeof HomePlaceVM>;
 
+/**
+ * A site deal's photograph (ADR-IMPL-067): the destination's city photo as `GET /v1/places/photos` serves it
+ * (ADR-IMPL-043) — a card's and a full-width address, and the credit it owes (null: the club's own, nothing to credit).
+ */
+export const SiteDealPhotoVM = z.object({
+  card: z.string().max(2048).url().startsWith("https://"),
+  hero: z.string().max(2048).url().startsWith("https://"),
+  credit: PhotoCreditVM.nullable(),
+});
+export type SiteDealPhotoVM = z.infer<typeof SiteDealPhotoVM>;
+
+/**
+ * One of the company site's deals (ADR-IMPL-067): its lowest price for a destination from a US city, `from $X` — whole
+ * USD, per person, indicative (the site's own words: taxes in, "call for current best prices"). The site says no trip,
+ * no cabin, no dates: the card prints none. Never a reference price — the site's "Old Price" has no source per deal, so
+ * there is no `published` and no saving here at all (DESIGN.md: `Save 48%` only where the published fare is on record).
+ * `origin` is the US city the deal leaves from — the member's own airport, or the nearest city the site sells from
+ * ("from New York"). Shown until `validUntil`, at most a day after the site was read (D6).
+ */
+export const SiteDealVM = z.object({
+  /** `site-<the site's deal id>-<origin airport>`: unique on one Home, stable from one read to the next. */
+  id: z.string().min(1).max(64),
+  /** Where the deal goes — an airport as a pin is, so a tap opens it as a pin does — and its city's photo. */
+  destination: AirportVM.extend({
+    /** Null until the city has a photograph (or with `catalog.place_photos` off): the app's own image. A value this app
+     *  cannot read reads as none, and the deal still shows. */
+    photo: SiteDealPhotoVM.nullable().catch(null),
+  }),
+  origin: z.object({ code: z.string().length(3), city: z.string().min(1) }),
+  price: z.object({
+    amount: z.number().int().positive(),
+    currency: z.literal("USD"),
+    /** The company's site, as its deal lists it: neither a fare nor the formula's estimate. */
+    basis: z.literal("site"),
+    /** A starting price: the card says `from`. */
+    from: z.literal(true),
+  }),
+  validUntil: z.string().datetime(),
+});
+export type SiteDealVM = z.infer<typeof SiteDealVM>;
+
 export const HomeVM = z.object({
   home: AirportVM.nullable(),
   destinations: z.array(DestinationPinVM),
@@ -178,5 +220,20 @@ export const HomeVM = z.object({
    *  to a city with no fare from home — so a card names its city, never its title cut short (ADR-IMPL-057). Optional
    *  both ways: a server without it sends none, and the card keeps the title as before. */
   places: z.array(HomePlaceVM).optional(),
+  /**
+   * The company site's deals for "Offers to inspire", after the member's own offers (ADR-IMPL-067; `catalog.site_offers`).
+   * Optional both ways: an app built before them never reads them, a server without them sends none. A deal this app
+   * cannot read is left out, never the others; anything else unreadable reads as none, and Home still parses.
+   */
+  deals: z
+    .array(z.unknown())
+    .transform((items) =>
+      items.flatMap((item) => {
+        const parsed = SiteDealVM.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    )
+    .optional()
+    .catch(undefined),
 });
 export type HomeVM = z.infer<typeof HomeVM>;
