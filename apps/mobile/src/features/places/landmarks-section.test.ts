@@ -1,6 +1,6 @@
 /** The section the destination (04) and Explore's route (13) draw (Landmarks.tsx), as React builds it: every landmark
- *  drawn has its photograph, its name and its credit; a photograph that would not load takes them with it; the credit
- *  opens the photograph's page. Landmarks holds no state, so its element tree is read straight from the function, with
+ *  drawn has its photograph, its name and its credit; a photograph that would not load takes them with it, and so does
+ *  the one 04 already shows as the city's (a landmark standing in for it); the credit opens the photograph's page. Landmarks holds no state, so its element tree is read straight from the function, with
  *  React Native and the club's components stood in for (bun runs no native renderer); bun test does not resolve the
  *  `@/` alias, so the module holding 04's and 13's measures is handed over as itself (`destination-geometry.test.ts`
  *  pins them to the images). */
@@ -40,6 +40,8 @@ const HEADERS = { "User-Agent": "BBCClub/test (https://api.example.test)" };
 mock.module("./usePlacePhotos", () => ({ PICTURE_HEADERS: HEADERS }));
 
 const { Landmarks } = await import("./Landmarks");
+const { photoAddress } = await import("./landmark-logic");
+const { bandPicture } = await import("./place-photo-logic");
 
 type Element = ReactElement<Record<string, unknown>>;
 
@@ -72,12 +74,18 @@ const NONE: ReadonlySet<string> = new Set();
 
 function draw(
   landmarks: readonly LandmarkVM[],
-  over: { failed?: ReadonlySet<string>; look?: "route" | "page"; onPhotoError?: (url: string) => void } = {},
+  over: {
+    failed?: ReadonlySet<string>;
+    cityPhoto?: string | null;
+    look?: "route" | "page";
+    onPhotoError?: (url: string) => void;
+  } = {},
 ) {
   const prefix = over.look === "route" ? "explore" : "destination";
   const tree = Landmarks({
     landmarks,
     failed: over.failed ?? NONE,
+    cityPhoto: over.cityPhoto ?? null,
     onPhotoError: over.onPhotoError ?? (() => undefined),
     look: over.look ?? "page",
     testIDPrefix: prefix,
@@ -145,8 +153,14 @@ describe("Landmarks — what the destination draws", () => {
             credit: credits[(seed + 3 * i) % credits.length]!,
           }),
         );
-        for (const look of ["page", "route"] as const) {
-          const { tree, tiles, photos, credits: shown, prefix } = draw(list, { look });
+        // 04 with no city photograph or with one of these landmarks' standing in for it; 13, which draws none.
+        const standIn = list[seed % Math.max(1, n)]?.imageUrl ?? null;
+        for (const [look, cityPhoto] of [
+          ["page", null],
+          ["page", standIn],
+          ["route", null],
+        ] as const) {
+          const { tree, tiles, photos, credits: shown, prefix } = draw(list, { look, cityPhoto });
           if (tiles.length === 0) {
             expect(tree).toBeNull();
             continue;
@@ -160,6 +174,7 @@ describe("Landmarks — what the destination draws", () => {
             expect(String(credit.props.label)).toStartWith("Photo: ");
             expect(String(credit.props.accessibilityLabel).length).toBeGreaterThan(0);
             expect(typeof photos[i]!.props.onError).toBe("function");
+            expect((photos[i]!.props.source as { uri: string }).uri).not.toBe(cityPhoto);
           });
           drawn += tiles.length;
         }
@@ -171,6 +186,49 @@ describe("Landmarks — what the destination draws", () => {
   it("none, or none that loads: nothing at all — no title, no empty frame", () => {
     expect(draw([]).tree).toBeNull();
     expect(draw([tower], { failed: new Set([tower.imageUrl]) }).tree).toBeNull();
+    // The city's only landmark, already over 04 as its photograph: nothing either.
+    expect(draw([tower], { cityPhoto: tower.imageUrl }).tree).toBeNull();
+  });
+
+  it("04 leaves out the landmark its photograph already is; 13, which draws the globe, keeps it (amendment 1)", () => {
+    // A city on its satellite view, as the server answers it with its first landmark standing in (made-up file).
+    const standIn = {
+      code: "CDG",
+      kind: "photo",
+      card: tower.imageUrl.replace("/1280px-", "/500px-"),
+      hero: tower.imageUrl,
+      credit: { source: "wikimedia", author: "Jane Doe", license: "CC BY-SA 4.0", link: page("Tower.jpg") },
+    } as const;
+    const band = bandPicture(undefined, standIn, {
+      headers: HEADERS,
+      mapboxToken: undefined,
+      size: { width: 393, height: 190 },
+    });
+    // What 04 hands over (`app/destination/[code].tsx`): the photograph over the page — the design's own when it has
+    // one (bundled, a number), else the server's — as `Photo` draws it.
+    const over04 = (bundled: number | null) => photoAddress(bundled ?? band.source);
+    const page04 = draw([tower, louvre, orsay], { look: "page", cityPhoto: over04(null) });
+    expect(page04.tiles.map((t) => [t.props.testID, t.props.accessibilityLabel])).toEqual([
+      ["destination.landmark.1", "Louvre, photo"],
+      ["destination.landmark.2", "Musée d'Orsay, photo"],
+    ]);
+    expect(page04.photos.map((p) => (p.props.source as { uri: string }).uri)).toEqual([
+      louvre.imageUrl,
+      orsay.imageUrl,
+    ]);
+    expect(page04.credits.map((c) => [c.props.testID, c.props.label])).toEqual([
+      ["destination.landmark.1.credit", "Photo: CC0 · Wikimedia Commons"],
+      ["destination.landmark.2.credit", "Photo: Jane Doe · CC BY-SA 4.0 · Wikimedia Commons"],
+    ]);
+    // The design's own photograph of the city over 04: the stand-in is not drawn, so its landmark is.
+    expect(draw([tower, louvre, orsay], { look: "page", cityPhoto: over04(7) }).tiles).toHaveLength(3);
+    // 13 (`app/(tabs)/explore.tsx`) passes none: all three, the stand-in's first.
+    const route13 = draw([tower, louvre, orsay], { look: "route", cityPhoto: null });
+    expect(route13.tiles.map((t) => [t.props.testID, t.props.accessibilityLabel])).toEqual([
+      ["explore.landmark.1", "Eiffel Tower, photo"],
+      ["explore.landmark.2", "Louvre, photo"],
+      ["explore.landmark.3", "Musée d'Orsay, photo"],
+    ]);
   });
 
   it("a photograph that would not load leaves with its name and credit; the others close up", () => {

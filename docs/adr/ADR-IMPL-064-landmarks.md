@@ -142,9 +142,17 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     (a later server's) fills the nearest edge of the band, cropped (`LANDMARK_SHAPE`). Its name under it, then its
     credit as the city photo's reads (`Photo: <author> · <licence> · Wikimedia Commons`), linked to `pageUrl`, else
     to `licenceUrl` (a server before `pageUrl`), else only read. A landmark without a name, without a credit it can
-    print (no one to credit, no licence) or showing a photograph already shown is left out, never replaced. A
-    photograph that will not load leaves with its name and credit, and is tried again when a screen showing landmarks
-    comes back into view or the phone back online. A screen reader hears `<name>, photo`, then the credit. testIDs
+    print (no one to credit, no licence) or showing a photograph already shown is left out; nothing made up takes its
+    place. A photograph already shown includes the city's own over the page: on 04, a landmark whose `imageUrl` is the address
+    the page draws as the city's photograph (`photoAddress`: the place photo's `hero`, exactly as the server sent it,
+    the photo band drawing it unchanged — not the design's own bundled photograph, not the satellite view) is left out,
+    so a landmark standing in for the city's photo (amendment 1, below) is not shown twice; it is left out before the
+    three are counted, so a further landmark the server sent would take its place — today the server keeps three and
+    the contract reads three, so a stand-in's city shows at most two. 13 draws the globe, not the city's photograph,
+    and keeps the stand-in's landmark (`cityPhoto` null: each screen says what it draws). Every landmark shown still
+    has its credit; fewer show what exists; a stand-in's city with no other landmark shows nothing. A photograph that
+    will not load leaves with its name and credit, and is tried again when a screen showing landmarks comes back into
+    view or the phone back online. A screen reader hears `<name>, photo`, then the credit. testIDs
     `destination.landmark.<rank>` and `.credit` (`explore.` on 13).
   - **Asking.** One store for every screen, for the session: a city is asked when a screen showing it comes into view
     or the phone back online, and at each minute's look while it stays in view (as the place photos are), once what
@@ -159,8 +167,10 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     for the city: within a minute of them while a screen showing the city is on screen, else when one next is, or at
     the app's next cold start.
   - Tests (`apps/mobile`): `landmark-logic.test.ts` (reading the answer, the credit, which to show, the shape, the
-    floor over the tiles), `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
-    `landmarks-section.test.ts` (the floor through the element tree the section builds, on both looks),
+    floor over the tiles; the city photograph's address and the stand-in's landmark left out before the three are
+    counted), `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
+    `landmarks-section.test.ts` (the floor through the element tree the section builds, on both looks, with and
+    without a stand-in; 04 leaves the stand-in's landmark out, 13 keeps it),
     `destination-geometry.test.ts` (04's and 13's flight options, the measures the section reads),
     `usePlaceLandmarks.test.ts` (when a screen asks: in view and online, again back online, each minute while in
     view — a skip within a minute of the 12 hours, none yet within five minutes, a failure at the next look),
@@ -192,6 +202,9 @@ licences and restrictions as Commons gave them; authors are made up and files wh
   exception.
 - **The undrawn section.** The images draw no landmarks; the section is the club's own arrangement of drawn parts
   (`design/components.md`, `Landmarks`) until a designer draws it.
+- **A stand-in's city shows two landmarks on 04.** Its first landmark is the photograph over the page (amendment 1), so
+  the list leaves it out; the job keeps three ranks and the contract reads three, so nothing comes up into the third
+  place. A fourth rank — kept by the job, read by the contract (`packages/shared`) — would fill it; not in this change.
 - **More overrides.** The skip list holds one item; the operator adds others as cities are looked at (Hallgrímskirkja
   and Harpa are absent from Reykjavík's answer, which was not investigated; Table Mountain is a `mountain`, so Cape Town
   never gets it). Resort cities like Cancún may have fewer than three.
@@ -259,9 +272,11 @@ Art License, 2 no usable file at all, 2 a portrait, 1 no author. Raised in this 
 
    The 500-px address is derived, not asked: of the 249 files Commons answered at both widths in this measurement's
    saved answers, the 200 with a 1280-px thumbnail had exactly the 500-px address the rule derives (the others were
-   narrower than 1280, or a TIFF's page, which no landmark is). The destination screen (a later step) shows the city
-   photo above the landmarks: when the city photo is a stand-in, its `hero` is the first landmark's `imageUrl`, and that
-   screen leaves it out of the list rather than show one photograph twice.
+   narrower than 1280, or a TIFF's page, which no landmark is). The destination screen (**The app**, above) shows the
+   city photo above the landmarks: when the city photo is a stand-in, its `hero` is the first landmark's `imageUrl`
+   that the route does not skip, and that screen leaves it out of the list rather than show one photograph twice —
+   whichever of the two a phone refreshed last (each is kept up to twelve hours), the one equal to the photograph
+   drawn is the one left out.
 
 2. **The Free Art License** (Commons' `FAL`, "Free Art License 1.3") is accepted as CC BY-SA is. It is a free licence
    that asks for the author and for where to find the licence: the credit names the author and links the photo's

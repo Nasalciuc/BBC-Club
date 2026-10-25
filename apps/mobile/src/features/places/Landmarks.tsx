@@ -29,6 +29,12 @@ type Props = {
   landmarks: readonly LandmarkVM[];
   /** The photographs that would not load, by address: left out with their names and credits until tried again. */
   failed: ReadonlySet<string>;
+  /**
+   * The address of the city's photograph the screen draws above the section (`photoAddress`), null when it draws none:
+   * a landmark showing it — one that stands in for the city's photo (ADR-IMPL-064, amendment 1) — is left out, so one
+   * photograph is never shown twice. Each screen says, so none forgets to.
+   */
+  cityPhoto: string | null;
   /** A photograph would not load. */
   onPhotoError: (imageUrl: string) => void;
   /** The flight options it follows: `page` on the destination's page (04), `route` in Explore's sheet (13). */
@@ -39,11 +45,16 @@ type Props = {
 /**
  * Up to three landmarks of the destination (ADR-IMPL-064), best first: each photograph with its name under it and the
  * credit its licence asks for, linked to the photograph's page. Fewer when fewer exist; none — nothing at all, no
- * title and no empty frame (a photograph that will not load leaves with its name and credit). No skeleton: the images
- * draw no slot for one.
+ * title and no empty frame (a photograph that will not load leaves with its name and credit, and so does the one the
+ * screen already shows as the city's). No skeleton: the images draw no slot for one.
  */
-export function Landmarks({ landmarks, failed, onPhotoError, look, testIDPrefix }: Props) {
-  const tiles = landmarkTiles(landmarks, { headers: PICTURE_HEADERS, photoHeight: LOOK.photo.height, failed });
+export function Landmarks({ landmarks, failed, cityPhoto, onPhotoError, look, testIDPrefix }: Props) {
+  const tiles = landmarkTiles(landmarks, {
+    headers: PICTURE_HEADERS,
+    photoHeight: LOOK.photo.height,
+    failed,
+    cityPhoto,
+  });
   if (tiles.length === 0) return null;
   const column = optionsColumn(look);
   const title = rn(column.title.type) as Role;

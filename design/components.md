@@ -180,7 +180,9 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   photograph (03's city); then its `PhotoCredit`, opening the photograph's page on Commons. The photograph and its
   name are one image for a screen reader (`<name>, photo`), the credit after it. States: fewer than three — what
   exists; none — nothing (no title, no frame); a photograph that will not load leaves with its name and credit until
-  the screen comes back into view or the phone back online; no skeleton, no error, no placeholder.
+  the screen comes back into view or the phone back online; on 04, the landmark whose photograph is already the city's
+  over the page (one standing in for it, ADR-IMPL-064 amendment 1) is left out and the next one sent takes its place
+  (13 draws the globe and keeps it); no skeleton, no error, no placeholder.
 
 ## Feedback (sheet 41)
 

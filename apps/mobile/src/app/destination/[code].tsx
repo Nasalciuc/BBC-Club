@@ -22,6 +22,7 @@ import {
 import { DEFAULT_ORIGIN, profileOrigin } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { clubPhoto } from "@/features/places/club-photos";
+import { photoAddress } from "@/features/places/landmark-logic";
 import { Landmarks } from "@/features/places/Landmarks";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { usePlaceLandmarks } from "@/features/places/usePlaceLandmarks";
@@ -132,6 +133,7 @@ export default function DestinationScreen() {
     mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
     size: { width, height: heroHeight },
   });
+  const hero = bundled ?? band.source;
   const credit = bundled ? null : band.credit;
   const creditLink = credit?.link ?? null;
 
@@ -144,11 +146,11 @@ export default function DestinationScreen() {
 
   return (
     <View style={styles.root} testID="destination.root">
-      <ScreenStatusBar on={statusBarOn({ hasImage: Boolean(bundled ?? band.source), pastHero: false })} />
+      <ScreenStatusBar on={statusBarOn({ hasImage: Boolean(hero), pastHero: false })} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={{ height: heroHeight }}>
           <Photo
-            source={bundled ?? band.source}
+            source={hero}
             fallback={null}
             cachePolicy={bundled ? "memory-disk" : band.cache}
             position="top"
@@ -226,6 +228,9 @@ export default function DestinationScreen() {
             <Landmarks
               landmarks={landmarks.landmarks}
               failed={landmarks.failed}
+              // The photograph over the page: where it is a landmark standing in for the city's (ADR-IMPL-064, amendment
+              // 1), that landmark is left out of the list and the next one takes its place.
+              cityPhoto={photoAddress(hero)}
               onPhotoError={landmarks.onPhotoError}
               look="page"
               testIDPrefix="destination"

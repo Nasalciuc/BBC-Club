@@ -1,7 +1,7 @@
 /**
  * Which landmarks of a destination the app shows, and the credit each one owes (ADR-IMPL-064): up to three, best first
- * as the server ranks them, each with its name and its licence; fewer when fewer exist; none — nothing at all. Pure: no
- * React, no network.
+ * as the server ranks them, each with its name and its licence; fewer when fewer exist; none — nothing at all; never the
+ * photograph the screen already shows as the city's (amendment 1). Pure: no React, no network.
  */
 import {
   PLACE_LANDMARKS_MAX,
@@ -53,16 +53,33 @@ export function landmarkCredit(credit: LandmarkCreditVM): Credit | null {
 }
 
 /**
- * The landmarks to show, in the server's order (best first): at most three; a landmark without a name, without a credit
- * it can print, showing a photograph already shown, or whose photograph would not load (`failed`, by address) is left
- * out — never replaced, never invented.
+ * The address of the photograph a screen draws, as it hands it to `Photo` — a remote one's `uri` — or null: a bundled
+ * image (the design's own photograph of the city) or nothing drawn. A landmark that stands in for the city's photo
+ * (ADR-IMPL-064, amendment 1) comes back from the server with its own address as the city photo's `hero`, and a screen
+ * draws that `hero` as it came (`bandPicture`): this is what `landmarksToShow` compares with.
  */
-export function landmarksToShow(
-  landmarks: readonly LandmarkVM[],
-  failed: ReadonlySet<string> = new Set(),
-): LandmarkVM[] {
+export function photoAddress(source: PictureSource | null | undefined): string | null {
+  return source !== null && typeof source === "object" ? source.uri : null;
+}
+
+/** What else a screen shows beside its landmarks. */
+export type LandmarkContext = {
+  /** The photographs that would not load, by address. */
+  failed?: ReadonlySet<string>;
+  /** The address of the city's photograph the screen draws above them (`photoAddress`); null when it draws none. */
+  cityPhoto?: string | null;
+};
+
+/**
+ * The landmarks to show, in the server's order (best first): at most three; a landmark without a name, without a credit
+ * it can print, showing a photograph already shown — the city's own photograph on the same screen among them: a
+ * landmark standing in for it (ADR-IMPL-064, amendment 1) — or whose photograph would not load (`failed`, by address) is
+ * left out before the three are counted, so the next one the server sent takes its place; never invented.
+ */
+export function landmarksToShow(landmarks: readonly LandmarkVM[], ctx: LandmarkContext = {}): LandmarkVM[] {
   const shown: LandmarkVM[] = [];
-  const images = new Set<string>();
+  const failed = ctx.failed ?? new Set<string>();
+  const images = new Set<string>(ctx.cityPhoto ? [ctx.cityPhoto] : []);
   for (const landmark of landmarks) {
     if (shown.length === PLACE_LANDMARKS_MAX) break;
     const name = landmark.name.trim();
@@ -102,13 +119,14 @@ export type LandmarkTile = {
 
 /**
  * The tiles a destination draws: every one has its name and its credit (the floor ADR-IMPL-064 sets: every shown photo
- * has its credit), Wikimedia's headers on its photograph, numbered in the order shown.
+ * has its credit), Wikimedia's headers on its photograph, numbered in the order shown; never the city photograph the
+ * screen already draws (`cityPhoto`).
  */
 export function landmarkTiles(
   landmarks: readonly LandmarkVM[],
-  ctx: { headers: Record<string, string>; photoHeight: number; failed?: ReadonlySet<string> },
+  ctx: LandmarkContext & { headers: Record<string, string>; photoHeight: number },
 ): LandmarkTile[] {
-  return landmarksToShow(landmarks, ctx.failed).flatMap((landmark, i) => {
+  return landmarksToShow(landmarks, ctx).flatMap((landmark, i) => {
     const credit = landmarkCredit(landmark.credit);
     if (!credit) return [];
     return [

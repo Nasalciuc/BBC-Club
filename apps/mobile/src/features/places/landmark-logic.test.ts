@@ -7,10 +7,11 @@ import {
   landmarkPhotoWidth,
   landmarkTiles,
   landmarksToShow,
+  photoAddress,
   readLandmarks,
   sameLandmarks,
 } from "./landmark-logic";
-import { creditFor, wikimediaHeaders } from "./place-photo-logic";
+import { bandPicture, creditFor, wikimediaHeaders } from "./place-photo-logic";
 
 // Made-up files, authors and sizes; the landmarks' names are the places' own.
 const HEADERS = wikimediaHeaders("1.4.0", "https://api.example.test");
@@ -154,7 +155,7 @@ describe("landmarksToShow — up to three, what exists, never invented", () => {
       "Eiffel Tower",
       "Louvre",
     ]);
-    expect(landmarksToShow([tower, louvre, orsay], new Set([louvre.imageUrl])).map((l) => l.name)).toEqual([
+    expect(landmarksToShow([tower, louvre, orsay], { failed: new Set([louvre.imageUrl]) }).map((l) => l.name)).toEqual([
       "Eiffel Tower",
       "Musée d'Orsay",
     ]);
@@ -162,6 +163,83 @@ describe("landmarksToShow — up to three, what exists, never invented", () => {
 
   it("trims a name", () => {
     expect(landmarksToShow([{ ...tower, name: "  Eiffel Tower " }])[0]?.name).toBe("Eiffel Tower");
+  });
+});
+
+describe("the city's photograph is a landmark standing in for it (ADR-IMPL-064, amendment 1)", () => {
+  // As the server answers a city on its satellite view: its first landmark's 1280-px thumbnail as `hero`, the same file
+  // at 500 px as `card`, the photograph's own credit (made-up file and author).
+  const standIn = {
+    code: "CDG",
+    kind: "photo",
+    card: tower.imageUrl.replace("/1280px-", "/500px-"),
+    hero: tower.imageUrl,
+    credit: { source: "wikimedia", author: "Jane Doe", license: "CC BY-SA 4.0", link: page("Tower.jpg") },
+  } as const;
+  const band = (photo: Parameters<typeof bandPicture>[1]) =>
+    bandPicture(undefined, photo, { headers: HEADERS, mapboxToken: "pk.test", size: { width: 393, height: 190 } });
+
+  it("the address a screen draws: a remote photograph's, as the photo band hands it over; none for a bundled one", () => {
+    expect(photoAddress(band(standIn).source)).toBe(tower.imageUrl);
+    expect(photoAddress({ uri: "https://example.test/a.jpg" })).toBe("https://example.test/a.jpg");
+    expect(photoAddress(7)).toBeNull(); // the design's own photograph, bundled
+    expect(photoAddress(null)).toBeNull();
+    expect(photoAddress(undefined)).toBeNull();
+    expect(photoAddress(band({ code: "CDG", kind: "none" }).source)).toBeNull();
+  });
+
+  it("leaves that landmark out, before the three are counted: the next one the server sent takes its place", () => {
+    const cityPhoto = photoAddress(band(standIn).source);
+    expect(landmarksToShow([tower, louvre, orsay], { cityPhoto }).map((l) => l.name)).toEqual([
+      "Louvre",
+      "Musée d'Orsay",
+    ]);
+    // A fourth (a later server's) comes up into the third place; the contract keeps three today (PLACE_LANDMARKS_MAX).
+    expect(landmarksToShow([tower, louvre, orsay, sacre], { cityPhoto }).map((l) => l.name)).toEqual([
+      "Louvre",
+      "Musée d'Orsay",
+      "Sacré-Cœur",
+    ]);
+    // Wherever it stands in the list (a phone that has the city photo from before a skip, the list from after).
+    expect(landmarksToShow([louvre, orsay, tower], { cityPhoto }).map((l) => l.name)).toEqual([
+      "Louvre",
+      "Musée d'Orsay",
+    ]);
+  });
+
+  it("the floor holds: its only landmark left out is nothing at all; the others keep their credits, renumbered", () => {
+    const cityPhoto = tower.imageUrl;
+    expect(landmarksToShow([tower], { cityPhoto })).toEqual([]);
+    expect(landmarkTiles([tower], { headers: HEADERS, photoHeight: 118, cityPhoto })).toEqual([]);
+    const tiles = landmarkTiles([tower, louvre, orsay], {
+      headers: HEADERS,
+      photoHeight: 118,
+      cityPhoto,
+      failed: new Set([orsay.imageUrl]),
+    });
+    expect(tiles.map((t) => [t.rank, t.name, t.credit.label])).toEqual([
+      [1, "Louvre", "Photo: CC0 · Wikimedia Commons"],
+    ]);
+  });
+
+  it("a city photo that is no landmark's — its own, the design's, the satellite view, none — leaves the list whole", () => {
+    const own = { ...standIn, card: thumb("Paris.jpg").replace("/1280px-", "/500px-"), hero: thumb("Paris.jpg") };
+    const satellite = { code: "CDG", kind: "satellite", lat: 48.85, lng: 2.35 } as const;
+    for (const cityPhoto of [
+      photoAddress(band(own).source),
+      photoAddress(7),
+      photoAddress(band(satellite).source),
+      null,
+      undefined,
+    ]) {
+      expect(landmarksToShow([tower, louvre, orsay], { cityPhoto }).map((l) => l.name)).toEqual([
+        "Eiffel Tower",
+        "Louvre",
+        "Musée d'Orsay",
+      ]);
+    }
+    // The 500-px card is not what the band draws, and no landmark is shown at it.
+    expect(landmarksToShow([tower], { cityPhoto: standIn.card })).toEqual([tower]);
   });
 });
 
@@ -190,7 +268,7 @@ describe("landmarkTiles — what the destination draws", () => {
     expect(tiles[1]?.credit.link).toBeNull();
   });
 
-  it("the floor: every landmark drawn has its name and its credit, with its licence", () => {
+  it("the floor: every landmark drawn has its name and its credit, with its licence; never the city's photograph", () => {
     const credits = [
       {
         text: "Jane Doe · Wikimedia Commons",
@@ -219,22 +297,26 @@ describe("landmarkTiles — what the destination draws", () => {
             credit: credits[(seed + 3 * i) % credits.length]!,
           }),
         );
-        const tiles = landmarkTiles(list, { headers: HEADERS, photoHeight: 118 });
-        expect(tiles.length).toBeLessThanOrEqual(Math.min(3, n));
-        tiles.forEach((tile, i) => {
-          const source = list.find((l) => l.imageUrl === tile.imageUrl)!;
-          expect(tile.rank).toBe(i + 1);
-          expect(tile.name.length).toBeGreaterThan(0);
-          expect(tile.spoken).toBe(`${tile.name}, photo`);
-          // A credit that names someone (or Commons) and a licence: never a blank one.
-          expect(source.credit.text.trim().length).toBeGreaterThan(0);
-          expect(source.credit.licence.trim().length).toBeGreaterThan(0);
-          expect(tile.credit.label.startsWith("Photo: ")).toBe(true);
-          expect(tile.credit.label).toContain(source.credit.licence.trim());
-          expect(tile.credit.spoken.length).toBeGreaterThan(0);
-          expect(tile.credit.link).toBe(source.credit.pageUrl ?? source.credit.licenceUrl ?? null);
-        });
-        drawn += tiles.length;
+        // No city photograph, or one of the landmarks' standing in for it (amendment 1).
+        for (const cityPhoto of [null, list[seed % Math.max(1, n)]?.imageUrl ?? null]) {
+          const tiles = landmarkTiles(list, { headers: HEADERS, photoHeight: 118, cityPhoto });
+          expect(tiles.length).toBeLessThanOrEqual(Math.min(3, n));
+          tiles.forEach((tile, i) => {
+            const source = list.find((l) => l.imageUrl === tile.imageUrl)!;
+            expect(tile.rank).toBe(i + 1);
+            expect(tile.imageUrl).not.toBe(cityPhoto);
+            expect(tile.name.length).toBeGreaterThan(0);
+            expect(tile.spoken).toBe(`${tile.name}, photo`);
+            // A credit that names someone (or Commons) and a licence: never a blank one.
+            expect(source.credit.text.trim().length).toBeGreaterThan(0);
+            expect(source.credit.licence.trim().length).toBeGreaterThan(0);
+            expect(tile.credit.label.startsWith("Photo: ")).toBe(true);
+            expect(tile.credit.label).toContain(source.credit.licence.trim());
+            expect(tile.credit.spoken.length).toBeGreaterThan(0);
+            expect(tile.credit.link).toBe(source.credit.pageUrl ?? source.credit.licenceUrl ?? null);
+          });
+          drawn += tiles.length;
+        }
       }
     }
     expect(drawn).toBeGreaterThan(100);
