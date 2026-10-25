@@ -313,8 +313,9 @@ describe("Mapbox's horizon comes nearer as the globe zooms in: the sky beside it
             const back = mapbox.project(place)!;
             expect(back.x).toBeCloseTo(finger.x, 6); // the place under the finger
             expect(back.y).toBeCloseTo(finger.y, 6);
-            // gl-js's camera at rest and 2×: the finger stands past radiusAtZoom, on the ring that disc took for the sky.
-            if (kind === "nearer" && zoom < ZOOM_RANGE.max && inset < 12) {
+            // gl-js's camera at rest and 2×: the finger stands past radiusAtZoom, on the ring that disc took for the sky —
+            // 12 pt in too (191 pt out at rest, 348 at 2×).
+            if (kind === "nearer" && zoom < ZOOM_RANGE.max) {
               expect(Math.hypot(finger.x - centre.x, finger.y - centre.y)).toBeGreaterThan(radiusAtZoom(zoom));
             }
             for (const screen of [finger, back]) {
