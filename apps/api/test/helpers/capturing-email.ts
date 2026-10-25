@@ -5,14 +5,18 @@ import { rememberDevOtp } from "@bbc/email";
 export function capturingEmail(): EmailFacade & {
   lastOtp(to: string): string;
   sent: { to: string; otp: string; purpose: OtpPurpose }[];
+  /** The specialists' e-mails (the `email` CRM adapter), as the inbox would get them. */
+  operator: Parameters<EmailFacade["sendOperatorRequest"]>[0][];
   /** The next `times` sends throw `error` (default: a Postmark 503), as the Postmark sender does. */
   failNext(times?: number, error?: Error): void;
 } {
   const sent: { to: string; otp: string; purpose: OtpPurpose }[] = [];
+  const operator: Parameters<EmailFacade["sendOperatorRequest"]>[0][] = [];
   let failures = 0;
   let failure: Error | undefined;
   return {
     sent,
+    operator,
     async sendOtp(input) {
       if (failures > 0) {
         failures--;
@@ -21,7 +25,9 @@ export function capturingEmail(): EmailFacade & {
       sent.push(input);
       rememberDevOtp(input.to, input.otp);
     },
-    async sendOperatorRequest() {},
+    async sendOperatorRequest(input) {
+      operator.push(input);
+    },
     lastOtp(to) {
       const m = [...sent].reverse().find((s) => s.to.toLowerCase() === to.toLowerCase() || s.to === to);
       if (!m) throw new Error(`no OTP captured for ${to}`);
