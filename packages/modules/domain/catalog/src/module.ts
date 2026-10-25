@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { desc, gte, sql } from "drizzle-orm";
@@ -12,6 +13,7 @@ import type { AppEnv } from "@bbc/shared/http/app-env";
 import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
+import { placeLandmarksRepo } from "./infrastructure/place-landmarks.repo";
 import { placePhotosRepo } from "./infrastructure/place-photos.repo";
 import { siteRepo } from "./infrastructure/site.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
@@ -20,6 +22,7 @@ import { expireFares } from "./application/expire-fares";
 import { formatInZone } from "./application/flight-local";
 import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody, ImportError } from "./application/import";
+import { readLandmarksFlag, resolvePlaceLandmarks, toPlaceLandmarksVM } from "./application/place-landmarks";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
 import type { SiteClock } from "./application/site-cms";
@@ -51,6 +54,19 @@ function searchWhenInRange(when: Date, now = new Date()): boolean {
 
 /** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
 export const SITE_PINS = 12;
+
+/** A strong ETag over the body as JSON: whatever the answer shows changes it. */
+const etagOf = (value: unknown) => `"${createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 16)}"`;
+
+/** If-None-Match as RFC 9110 §13.1.2 reads it: `*`, or a list of entity tags compared weakly. */
+function ifNoneMatchHits(header: string | undefined, etag: string): boolean {
+  if (!header) return false;
+  const opaque = (tag: string) => tag.trim().replace(/^W\//, "");
+  return header.split(",").some((tag) => tag.trim() === "*" || opaque(tag) === opaque(etag));
+}
+
+/** Kept by the phone, asked again each time (the ETag's 304 spares the body); never by a shared cache. */
+const REVALIDATE = { "Cache-Control": "private, no-cache", Vary: "Cookie, Authorization" } as const;
 
 /** For tests: `fetch` answers for the place-photo sources (Wikidata, Commons, Pexels) and the site; `siteClock` is the
  *  time the site's API pacing waits on, so a test's night takes no real time. */
@@ -128,6 +144,9 @@ export const catalogModule = (
       if (gen == null) return sitePinsCache.get(key, load);
       return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, 60, load);
     }
+
+    /** ADR-IMPL-064: landmarks, off until an operator turns the flag row on; `skip`: landmarks kept out (QIDs). */
+    const landmarksFlag = async () => readLandmarksFlag(await platform.flags.read("catalog.landmarks"));
 
     /** ADR-IMPL-045: the site's photos, and the cities kept out of them (`skip`: the site's ids). Null: off. */
     async function sitePhotos(): Promise<{ skip: ReadonlySet<number> } | null> {
@@ -406,6 +425,33 @@ export const catalogModule = (
       },
     );
 
+    // ADR-IMPL-064: up to three landmarks of the city an airport serves, from the table at once (the job looks them
+    // up); an operator's `skip` takes effect here before the job looks again. An ETag over the body: a 304 when unchanged.
+    registerRoute("GET", "/v1/places/:code/landmarks", "fares:read", "read");
+    routes.get(
+      "/places/:code/landmarks",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const code = c.req.param("code").toUpperCase();
+        if (!IATA.test(code) || !(await airportsRepo.get(conn, code))) {
+          return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+        }
+        const flag = await landmarksFlag();
+        const rows = flag.enabled ? await placeLandmarksRepo.forPlace(conn, code) : [];
+        const body = toPlaceLandmarksVM(code, rows, flag.skip);
+        const etag = etagOf(body);
+        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+          return c.body(null, 304, { ETag: etag, ...REVALIDATE });
+        }
+        return c.json(body, 200, { ETag: etag, ...REVALIDATE });
+      },
+    );
+
     // ADR-IMPL-043: an operator's own photo for a city (a wrong or poor one found automatically): it replaces what the
     // job found, never expires, and DELETE hands the city back to the job.
     registerRoute("PUT", "/v1/internal/places/:code/photo", "catalog:import");
@@ -632,6 +678,32 @@ export const catalogModule = (
                   signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
                 },
                 pexelsKey: env.PEXELS_API_KEY,
+                metrics: platform.metrics,
+                logger: platform.logger,
+              });
+            },
+          },
+        },
+        {
+          // ADR-IMPL-064: two due places every five minutes — one WDQS question each (3–33 s; WDQS stops one at 60 s)
+          // and one Commons question. Nothing while the flag is off or a Wikimedia source holds the club off.
+          name: "resolve-place-landmarks",
+          spec: {
+            cron: "*/5 * * * *",
+            singleton: true,
+            timeoutMs: 240_000,
+            handler: async (ctx) => {
+              const flag = await landmarksFlag();
+              if (!flag.enabled) return { skipped: 1 };
+              return resolvePlaceLandmarks({
+                db: conn,
+                sources: {
+                  fetch: opts.fetch ?? fetch,
+                  // Wikimedia's User-Agent policy: who is asking, and where to reach them.
+                  userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; landmarks)`,
+                  signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                },
+                skip: flag.skip,
                 metrics: platform.metrics,
                 logger: platform.logger,
               });

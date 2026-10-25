@@ -1,0 +1,1451 @@
+{
+  "wdqs": {
+    "head": {
+      "vars": ["item", "itemLabel", "sitelinks", "view", "file"]
+    },
+    "results": {
+      "bindings": [
+        {
+          "view": {
+            "type": "literal",
+            "value": "city"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Eiffel%20Tower%20from%20the%20Tour%20Montparnasse%2C%201%20May%202012%20N2.jpg"
+          }
+        },
+        {
+          "view": {
+            "type": "literal",
+            "value": "city"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/La%20Tour%20Eiffel%20vue%20de%20la%20Tour%20Saint-Jacques%2C%20Paris%20ao%C3%BBt%202014%20%282%29.jpg"
+          }
+        },
+        {
+          "view": {
+            "type": "literal",
+            "value": "city"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Paris%20Night.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q243"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Eiffel Tower"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "191"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Tour%20Eiffel%20Wikimedia%20Commons.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q243"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Eiffel Tower"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "191"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Eiffel%20tower%20night%20illumination.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q243"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Eiffel Tower"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "191"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Eiffel%20Tower%20at%20night%2020150801-2.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q19675"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Louvre Museum"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "170"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cour%20Napol%C3%A9on%20at%20night%20-%20Louvre.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q2981"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Notre-Dame de Paris"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "125"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Notre-Dame%20de%20Paris%202013-07-24.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q2981"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Notre-Dame de Paris"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "125"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/NotreDameDeParis-1.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q23402"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Musée d'Orsay"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "122"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Gare%20d%27Orsay%20%2849570190081%29.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q2946"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Palace of Versailles"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "109"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Vue%20a%C3%A9rienne%20du%20domaine%20de%20Versailles%20-%20083.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q64436"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Arc de Triomphe"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "86"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Arc%20de%20Triomphe%20-%20Ao%C3%BBt%202026.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q13205"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Stade de France"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "72"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/StadeFranceNationsLeague2018.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q311"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Père Lachaise Cemetery"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "71"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Main%20gate%20of%20the%20P%C3%A8re-Lachaise%20Cemetery%2C%20Paris%2013%20June%202014.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q188190"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Élysée Palace"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "66"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/%C3%89lys%C3%A9e%20Palace%20courtyard.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q178065"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Centre Georges Pompidou"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "63"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Paris%20Montmartre%20Blick%20aufs%20Centre%20Georges-Pompidou.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q187840"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Palais Garnier"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "63"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Paris%20Palais%20Garnier%202010-04-06%2016.55.07.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q189503"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "place de la Concorde"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "62"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Place%20de%20la%20Concorde%20from%20the%20Eiffel%20Tower%2C%20Paris%20April%202011.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q188856"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Panthéon"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "61"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Panth%C3%A9on%2C%20Paris%2025%20March%202012.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q28785"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Sacré-Cœur"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "60"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Le%20sacre%20coeur.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q28785"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Sacré-Cœur"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "60"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Basilique%20de%20nuit.JPG"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q28785"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Sacré-Cœur"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "60"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Basilique%20du%20Sacr%C3%A9-Coeur%20%C3%A0%20Montmartre%20la%20nuit.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q184407"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Basilica of Saint-Denis"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "60"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Basilique%20St%20Denis%20fa%C3%A7ade%20ouest%20St%20Denis%20Seine%20St%20Denis%2020.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q273523"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "École Nationale des Ponts et Chaussées"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "60"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ponts-carnot.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q214654"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Sorbonne"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "59"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/P1300735%20Paris%20V%20chapelle%20La%20Sorbonne%20rwk.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q193193"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Sainte Chapelle"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "58"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Paris%20Sainte%20Chapelle%20East%20View%2002.JPG"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q193193"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Sainte Chapelle"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "58"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Szensapel.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q188977"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Les Invalides"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "57"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/H%C3%B4tel%20des%20Invalides%20-%2020150801%2016h09%20%2810630%29.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q217925"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Champ de Mars"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "57"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/MG-Paris-Champ%20de%20Mars.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q329852"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Luxembourg Palace"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "53"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/2017%20-%20Le%20palais%20du%20Luxembourg%2C%20dans%20le%20jardin%20du%20Luxembourg%2C%20Paris%20-%203.jpg"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q1538826"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Musée des Arts et Métiers"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "53"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Mus%C3%A9e%20des%20Arts%20et%20M%C3%A9tiers%20337.jpg"
+          }
+        }
+      ]
+    }
+  },
+  "commons": {
+    "Eiffel tower night illumination.jpg": {
+      "width": 3686,
+      "height": 5529,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Eiffel_tower_night_illumination.jpg/1280px-Eiffel_tower_night_illumination.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 1920,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Eiffel_tower_night_illumination.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 1",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "2017 - Le palais du Luxembourg, dans le jardin du Luxembourg, Paris - 3.jpg": {
+      "width": 4071,
+      "height": 2714,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/2017_-_Le_palais_du_Luxembourg%2C_dans_le_jardin_du_Luxembourg%2C_Paris_-_3.jpg/1280px-2017_-_Le_palais_du_Luxembourg%2C_dans_le_jardin_du_Luxembourg%2C_Paris_-_3.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:2017_-_Le_palais_du_Luxembourg%2C_dans_le_jardin_du_Luxembourg%2C_Paris_-_3.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 2",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Arc de Triomphe - Août 2026.jpg": {
+      "width": 4802,
+      "height": 3203,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Arc_de_Triomphe_-_Ao%C3%BBt_2026.jpg/1280px-Arc_de_Triomphe_-_Ao%C3%BBt_2026.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 854,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Arc_de_Triomphe_-_Ao%C3%BBt_2026.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 3",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Basilique St Denis façade ouest St Denis Seine St Denis 20.jpg": {
+      "width": 3521,
+      "height": 5520,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Basilique_St_Denis_fa%C3%A7ade_ouest_St_Denis_Seine_St_Denis_20.jpg/1280px-Basilique_St_Denis_fa%C3%A7ade_ouest_St_Denis_Seine_St_Denis_20.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 2007,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Basilique_St_Denis_fa%C3%A7ade_ouest_St_Denis_Seine_St_Denis_20.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 4",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Basilique de nuit.JPG": {
+      "width": 2272,
+      "height": 1704,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Basilique_de_nuit.JPG/1280px-Basilique_de_nuit.JPG",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Basilique_de_nuit.JPG",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "Public domain",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 5",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Basilique du Sacré-Coeur à Montmartre la nuit.jpg": {
+      "width": 1489,
+      "height": 1117,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Basilique_du_Sacr%C3%A9-Coeur_%C3%A0_Montmartre_la_nuit.jpg/1280px-Basilique_du_Sacr%C3%A9-Coeur_%C3%A0_Montmartre_la_nuit.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Basilique_du_Sacr%C3%A9-Coeur_%C3%A0_Montmartre_la_nuit.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 6",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Cour Napoléon at night - Louvre.jpg": {
+      "width": 3048,
+      "height": 1209,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Cour_Napol%C3%A9on_at_night_-_Louvre.jpg/1280px-Cour_Napol%C3%A9on_at_night_-_Louvre.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 508,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Cour_Napol%C3%A9on_at_night_-_Louvre.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY 2.5",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 7",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Eiffel Tower at night 20150801-2.jpg": {
+      "width": 5184,
+      "height": 3456,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Eiffel_Tower_at_night_20150801-2.jpg/1280px-Eiffel_Tower_at_night_20150801-2.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Eiffel_Tower_at_night_20150801-2.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 8",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Gare d'Orsay (49570190081).jpg": {
+      "width": 6000,
+      "height": 4000,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Gare_d%27Orsay_%2849570190081%29.jpg/1280px-Gare_d%27Orsay_%2849570190081%29.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Gare_d%27Orsay_%2849570190081%29.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 2.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 9",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Hôtel des Invalides - 20150801 16h09 (10630).jpg": {
+      "width": 3561,
+      "height": 2374,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/H%C3%B4tel_des_Invalides_-_20150801_16h09_%2810630%29.jpg/1280px-H%C3%B4tel_des_Invalides_-_20150801_16h09_%2810630%29.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:H%C3%B4tel_des_Invalides_-_20150801_16h09_%2810630%29.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 10",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Le sacre coeur.jpg": {
+      "width": 2304,
+      "height": 2598,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Le_sacre_coeur.jpg/1280px-Le_sacre_coeur.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 1443,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Le_sacre_coeur.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 3.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 11",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "MG-Paris-Champ de Mars.jpg": {
+      "width": 3777,
+      "height": 7013,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/MG-Paris-Champ_de_Mars.jpg/1280px-MG-Paris-Champ_de_Mars.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 2377,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:MG-Paris-Champ_de_Mars.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 3.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 12",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Main gate of the Père-Lachaise Cemetery, Paris 13 June 2014.jpg": {
+      "width": 4272,
+      "height": 2848,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Main_gate_of_the_P%C3%A8re-Lachaise_Cemetery%2C_Paris_13_June_2014.jpg/1280px-Main_gate_of_the_P%C3%A8re-Lachaise_Cemetery%2C_Paris_13_June_2014.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Main_gate_of_the_P%C3%A8re-Lachaise_Cemetery%2C_Paris_13_June_2014.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 2.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 13",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Musée des Arts et Métiers 337.jpg": {
+      "width": 2048,
+      "height": 1536,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Mus%C3%A9e_des_Arts_et_M%C3%A9tiers_337.jpg/1280px-Mus%C3%A9e_des_Arts_et_M%C3%A9tiers_337.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Mus%C3%A9e_des_Arts_et_M%C3%A9tiers_337.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 14",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Notre-Dame de Paris 2013-07-24.jpg": {
+      "width": 3348,
+      "height": 4519,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Notre-Dame_de_Paris_2013-07-24.jpg/1280px-Notre-Dame_de_Paris_2013-07-24.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 1728,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Notre-Dame_de_Paris_2013-07-24.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 3.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 15",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "NotreDameDeParis-1.jpg": {
+      "width": 2865,
+      "height": 3806,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/NotreDameDeParis-1.jpg/1280px-NotreDameDeParis-1.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 1700,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:NotreDameDeParis-1.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 3.0",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 16",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "P1300735 Paris V chapelle La Sorbonne rwk.jpg": {
+      "width": 1634,
+      "height": 2000,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/P1300735_Paris_V_chapelle_La_Sorbonne_rwk.jpg/1280px-P1300735_Paris_V_chapelle_La_Sorbonne_rwk.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 1567,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:P1300735_Paris_V_chapelle_La_Sorbonne_rwk.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 17",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Panthéon, Paris 25 March 2012.jpg": {
+      "width": 2800,
+      "height": 1900,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Panth%C3%A9on%2C_Paris_25_March_2012.jpg/1280px-Panth%C3%A9on%2C_Paris_25_March_2012.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 869,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Panth%C3%A9on%2C_Paris_25_March_2012.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 3.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 18",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Paris Montmartre Blick aufs Centre Georges-Pompidou.jpg": {
+      "width": 4584,
+      "height": 2509,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Paris_Montmartre_Blick_aufs_Centre_Georges-Pompidou.jpg/1280px-Paris_Montmartre_Blick_aufs_Centre_Georges-Pompidou.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 701,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Paris_Montmartre_Blick_aufs_Centre_Georges-Pompidou.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 19",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Paris Palais Garnier 2010-04-06 16.55.07.jpg": {
+      "width": 4085,
+      "height": 2310,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Paris_Palais_Garnier_2010-04-06_16.55.07.jpg/1280px-Paris_Palais_Garnier_2010-04-06_16.55.07.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 724,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Paris_Palais_Garnier_2010-04-06_16.55.07.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY 3.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 20",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Paris Sainte Chapelle East View 02.JPG": {
+      "width": 3482,
+      "height": 5223,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Paris_Sainte_Chapelle_East_View_02.JPG/1280px-Paris_Sainte_Chapelle_East_View_02.JPG",
+      "thumbwidth": 1280,
+      "thumbheight": 1920,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Paris_Sainte_Chapelle_East_View_02.JPG",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 21",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Place de la Concorde from the Eiffel Tower, Paris April 2011.jpg": {
+      "width": 4752,
+      "height": 3168,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Place_de_la_Concorde_from_the_Eiffel_Tower%2C_Paris_April_2011.jpg/1280px-Place_de_la_Concorde_from_the_Eiffel_Tower%2C_Paris_April_2011.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Place_de_la_Concorde_from_the_Eiffel_Tower%2C_Paris_April_2011.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY 2.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 22",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Ponts-carnot.jpg": {
+      "width": 3840,
+      "height": 2160,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Ponts-carnot.jpg/1280px-Ponts-carnot.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 720,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Ponts-carnot.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 23",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Élysée Palace courtyard.jpg": {
+      "width": 8752,
+      "height": 4459,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/%C3%89lys%C3%A9e_Palace_courtyard.jpg/1280px-%C3%89lys%C3%A9e_Palace_courtyard.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 652,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:%C3%89lys%C3%A9e_Palace_courtyard.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "Public domain",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 24",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "StadeFranceNationsLeague2018.jpg": {
+      "width": 7156,
+      "height": 3894,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/StadeFranceNationsLeague2018.jpg/1280px-StadeFranceNationsLeague2018.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 697,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:StadeFranceNationsLeague2018.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 25",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Szensapel.jpg": {
+      "width": 960,
+      "height": 1280,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Szensapel.jpg",
+      "thumbwidth": 960,
+      "thumbheight": 1280,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Szensapel.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY 2.5",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 26",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Tour Eiffel Wikimedia Commons.jpg": {
+      "width": 2900,
+      "height": 5367,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Tour_Eiffel_Wikimedia_Commons.jpg/1280px-Tour_Eiffel_Wikimedia_Commons.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 2369,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Tour_Eiffel_Wikimedia_Commons.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "Public domain",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 7",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Vue aérienne du domaine de Versailles - 083.jpg": {
+      "width": 4608,
+      "height": 3456,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Vue_a%C3%A9rienne_du_domaine_de_Versailles_-_083.jpg/1280px-Vue_a%C3%A9rienne_du_domaine_de_Versailles_-_083.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Vue_a%C3%A9rienne_du_domaine_de_Versailles_-_083.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 3.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 27",
+          "source": "commons-desc-page"
+        }
+      }
+    }
+  }
+}

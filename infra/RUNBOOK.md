@@ -279,6 +279,50 @@ and the seconds, and `bbc_place_photos_held{stage}` counts the holds. An error `
 means the key is wrong or revoked: until it is replaced, a city that shows a photo keeps it, and one Commons has no
 photo for gets its satellite view, looked at again each day.
 
+## Landmarks (ADR-IMPL-064)
+
+The app asks for a destination's landmarks (`GET /v1/places/:code/landmarks`): up to three, each with its photograph's
+address on Wikimedia, its size and its credit, from `catalog.place_landmarks` at once. `resolve-place-landmarks`
+(worker, every five minutes, two places a run) looks up the cities the app has shown a photo for and the site's
+cities: one WDQS question a city (3–33 s; WDQS stops it at 60 s) and one Commons question. A city is looked at again
+after 30–33 days; a look that failed, after six hours (what the city had stays). Only addresses and credits are stored.
+
+On: the flag row `catalog.landmarks` (seeded off by `scripts/seed-flags.ts`, with the skip list below). Off, the route
+answers no landmarks and the job asks nothing:
+
+```sql
+UPDATE platform.flags SET value = jsonb_set(value, '{enabled}', 'true'), updated_at = now() WHERE key = 'catalog.landmarks';
+```
+
+What a city shows, and how far the job has got:
+
+```sql
+SELECT rank, kind, city_qid, landmark_qid, name, licence, credit, fetched_at, expires_at
+FROM catalog.place_landmarks WHERE code = 'CDG' ORDER BY rank;
+SELECT kind, count(*) FROM catalog.place_landmarks GROUP BY kind;
+```
+
+`landmark` rows are shown, best first; a `fewer` row after them means the job found fewer than three and will not ask
+again for a month (rank 1 and `city_qid` null: no city found for the airport); a `failed` row alone means no look has
+worked yet (the job tries again in six hours).
+
+A wrong or unwanted landmark: add its Wikidata item (`landmark_qid`) to the flag's `skip` list — the route leaves it out
+within ~35 s — then let the city be looked at again so that another takes its place. The seeded list holds Q177174,
+Reykjavík's most written-about sight (the Icelandic Phallological Museum):
+
+```sql
+UPDATE platform.flags SET value = jsonb_set(value, '{skip}', coalesce(value->'skip', '[]') || '["Q243"]'), updated_at = now()
+WHERE key = 'catalog.landmarks';
+UPDATE catalog.place_landmarks SET fetched_at = now() - interval '1 minute', expires_at = now() WHERE code = 'CDG';
+```
+
+A 429 from WDQS or Commons holds that source (`catalog.source_holds`, above) for its Retry-After and stops the run: no
+place is marked for it. Metrics: `bbc_place_landmarks_resolved{found}` (places written, by how many landmarks they
+got), `bbc_place_landmarks_failed{stage}` (`wikidata`, `commons`: the source failed, the places keep what they have;
+`write`: the database refused a row), `bbc_place_landmarks_held{stage}`. Log lines `landmarks: a source failed`,
+`landmarks: a source asked the club to wait`, `landmarks: write refused`. The worker reaches `query.wikidata.org` and
+`commons.wikimedia.org` over 443; phones load the photographs from `upload.wikimedia.org`.
+
 ## The site's destinations (ADR-IMPL-045)
 
 Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own API

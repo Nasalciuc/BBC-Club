@@ -56,3 +56,46 @@ export type PlacePhotosVM = z.output<typeof PlacePhotosVM>;
 
 /** At most this many codes in one question. */
 export const PLACE_PHOTOS_MAX_CODES = 20;
+
+/**
+ * Who took a landmark's photograph and under which licence (ADR-IMPL-064): `text` names who to credit as the app prints
+ * it ("Jane Doe · Wikimedia Commons"), `licence` its short name ("CC BY-SA 4.0"), linked to `licenceUrl` when Commons
+ * gives one.
+ */
+export const LandmarkCreditVM = z.object({
+  text: z.string().min(1),
+  licence: z.string().min(1),
+  licenceUrl: HttpsUrl.optional(),
+});
+export type LandmarkCreditVM = z.infer<typeof LandmarkCreditVM>;
+
+/** A landmark of a destination (ADR-IMPL-064): its name and its photograph — an address on Wikimedia, its size. */
+export const LandmarkVM = z.object({
+  name: z.string().min(1),
+  imageUrl: HttpsUrl,
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  credit: LandmarkCreditVM,
+});
+export type LandmarkVM = z.infer<typeof LandmarkVM>;
+
+/** At most this many landmarks a place. */
+export const PLACE_LANDMARKS_MAX = 3;
+
+/**
+ * GET /v1/places/:code/landmarks — up to three landmarks of the city the airport serves, best first; none until the
+ * club has looked, or where it found none: fewer than three is what exists, never invented. A landmark this app cannot
+ * read is dropped, never the whole answer.
+ */
+export const PlaceLandmarksVM = z.object({
+  code: Iata,
+  landmarks: z.array(z.unknown()).transform((items) =>
+    items
+      .flatMap((item) => {
+        const parsed = LandmarkVM.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      })
+      .slice(0, PLACE_LANDMARKS_MAX),
+  ),
+});
+export type PlaceLandmarksVM = z.output<typeof PlaceLandmarksVM>;
