@@ -215,28 +215,33 @@ image. Every city is looked at again after 30–33 days. Only addresses and cred
 starts no request after its first 32 s (each may take 8; the job is stopped at 50): when the sources are slow, the
 cities it has not reached are put back (`deferred` in the run's counts in `platform.job_runs`), their look not counted.
 
-What Commons may give a city (ADR-IMPL-043, amended by ADR-IMPL-064): a photograph — a JPEG, or a one-page TIFF whose
-thumbnails Commons serves as JPEG (the phones load those) — in landscape (1.2 to 2.4 wide for 1 high), wider than
-1280 px, under CC0, public domain, CC BY / BY-SA or the Free Art License (`FAL`), with its author whenever the licence
-asks. A PNG, SVG or GIF never.
+What Commons may give a city (ADR-IMPL-043, amended by ADR-IMPL-064): a JPEG photograph in landscape (1.2 to 2.4 wide
+for 1 high), wider than 1280 px, under CC0, public domain, CC BY / BY-SA or the Free Art License (`FAL`), with its
+author whenever the licence asks. A TIFF, PNG, SVG or GIF never (on Commons a TIFF is mostly a scan or a satellite
+image: the one a site city had was).
 
 **A landmark stands in** (ADR-IMPL-064, amendment 1): while `catalog.landmarks` is on (Landmarks, below), a city whose
-row is `satellite` — or `pending`, not looked up yet — is answered with its first landmark's photograph instead,
-credited as that photograph (`Photo: <author> · <licence> · Wikimedia Commons`, linked to its Commons page). The route
-composes it on each answer and never stores it: the row stays as it is and the job looks again on its own schedule, so
-a photo the city gets later, or an operator's photo, wins at once. Phones keep what they read for up to twelve hours. To
-see which cities show one (the flag's `skip` aside):
+row is `satellite` is answered with its first landmark's photograph instead, credited as that photograph
+(`Photo: <author> · <licence> · Wikimedia Commons`, linked to its Commons page). A city not looked up yet (`pending`)
+is not: phones ask about it again within a minute, and would keep a stand-in for twelve hours past the city's own photo.
+The route composes it on each answer and never stores it: the row stays as it is and the job looks again on its own
+schedule, so a photo the city gets later, or an operator's photo, wins on the server's next answer. Phones keep a photo
+they have read for up to twelve hours, or until the app restarts: a change reaches a phone that already shows the city
+only then. To see which cities show one (the flag's `skip` aside):
 
 ```sql
 SELECT p.code, p.status, l.rank, l.landmark_qid, l.name, l.licence
 FROM catalog.place_photos p
 JOIN LATERAL (SELECT * FROM catalog.place_landmarks x
               WHERE x.code = p.code AND x.kind = 'landmark' ORDER BY x.rank LIMIT 1) l ON true
-WHERE p.status <> 'photo';
+WHERE p.status = 'satellite';
 ```
 
-A stand-in the city should not have: put its `landmark_qid` in the flag's `skip` (Landmarks, below) — the next
-landmark, or the satellite view when none is left, within ~35 s — or give the city the club's own photo (below).
+A stand-in the city should not have: put its `landmark_qid` in the flag's `skip` (Landmarks, below) — the server then
+answers with the next landmark, or the satellite view when none is left, within ~35 s — or give the city the club's own
+photo (below). Either way, phones that already show the stand-in keep it for up to twelve hours (or until the app
+restarts): the photos route has no revalidation, so nothing on the server reaches them sooner. A photograph Commons
+deletes stops loading at once (the app then shows its own image); a faster takedown than that is an app change.
 
 The worker reaches `query.wikidata.org`, `commons.wikimedia.org` and `api.pexels.com` over 443; members' phones load
 the photos from `upload.wikimedia.org` (or Wikimedia's newer thumbnail host) and `images.pexels.com`, and satellite
@@ -262,8 +267,8 @@ docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file 
 
 After setting `PEXELS_API_KEY` (restart the worker), let the satellite cities be looked at again now rather than within
 a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`. The same line after the release
-that accepted the Free Art License and one-page TIFF photographs (ADR-IMPL-064, amendments 2 and 3): the cities they
-rescue get their own photo within minutes (ten a minute) instead of within a month.
+that accepted the Free Art License (ADR-IMPL-064, amendment 2): the cities it rescues get their own photo within
+minutes (ten a minute) instead of within a month.
 
 A city stuck on an old satellite view: read its row, then let the job look again now. Chișinău (RMO) is one: Wikidata
 answers the club's code, RMO, with the city and its photographs, so its `satellite` row is one resolved before this
@@ -341,8 +346,8 @@ again for a month (rank 1 and `city_qid` null: no city found for the airport); a
 worked yet (the job tries again in six hours).
 
 A wrong or unwanted landmark: add its Wikidata item (`landmark_qid`) to the flag's `skip` list — the route leaves it out
-within ~35 s, and so does the city photo it may stand in for (Place photos, above) — then let the city be looked at again
-so that another takes its place. The seeded list holds Q177174,
+within ~35 s; the server's city photo it may stand in for changes as fast, but phones that already show that photo keep
+it for up to twelve hours (Place photos, above) — then let the city be looked at again so that another takes its place. The seeded list holds Q177174,
 Reykjavík's most written-about sight (the Icelandic Phallological Museum):
 
 ```sql
