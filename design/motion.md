@@ -23,3 +23,15 @@ Principle: motion explains a change of state; it never decorates. Nothing bounce
 | Reduced motion                   | all movement replaced by opacity-only transitions of the same duration                                                                                                                                                                                                                                                                                                                                  |
 
 Implementation: Reanimated 4 (New Architecture). Welcome entrance timing lives in `src/components/animated-entrance.tsx`.
+
+**Resting styles.** A view whose animation has stopped is drawn from the last props Reanimated wrote, which React does
+not hold: React's props for an animated style are its first frame, and Reanimated puts its own back on every React
+commit. Reanimated keeps them for the view's life because its settled-props sync is off
+(`FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS: false` under `reanimated.staticFeatureFlags` in `apps/mobile/package.json`,
+pinned by `src/lib/reanimated-flags.test.ts`; a change needs a new native build). In 4.5.1 that sync erased the props of
+a view settled more than 2 s whether or not React had received them, with a 500 ms JS poll that either missed the
+window (a JS thread busy for a second) or stopped and restarted (its view count drifts on GestureDetector's nested
+animated views). The next React commit then drew the first frame: Explore's sheet went transparent and a window height
+down while gorhom held it at rest (parity, steps 13 and 31). Reduced motion, which lands every snap in its first frame,
+likely made it more frequent; it was never the cause. Turn the sync back on only with a Reanimated that evicts a view's
+props once React has them (4.5.3 does; Expo SDK 57 pins 4.5.1) and green parity runs under reduced motion.
