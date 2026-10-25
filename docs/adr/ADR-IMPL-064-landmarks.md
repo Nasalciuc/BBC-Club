@@ -80,8 +80,8 @@ Commons, 117 requests) found:
   - Commons at 1280 px with the metadata (`Artist|LicenseShortName|LicenseUrl|AttributionRequired|Restrictions`): a
     JPEG **at least 1600 px wide**, landscape as the city photo's band is (**1.2 to 2.4 wide for 1 high** — the Louvre's
     night view, 2.52, is refused), its 1280-px thumbnail a real one, and ADR-IMPL-043's credit rules (`commonsCredit`,
-    shared with the city photo): CC0, public domain or CC BY / BY-SA, no restrictions (`ita-mibac`, `personality`), an
-    author when the licence asks;
+    shared with the city photo): CC0, public domain or CC BY / BY-SA (amended below, amendment 2: and the Free Art
+    License, its address read on https), no restrictions (`ita-mibac`, `personality`), an author when the licence asks;
   - **no duplicate image**: not one of the city's own photographs, not a file another landmark already shows (by name,
     and by its Commons page — a renamed file);
   - **at most three, fewer when fewer qualify; never invented.**

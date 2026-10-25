@@ -600,8 +600,9 @@ export function acceptCommons(hero: ImageInfo | undefined, card: ImageInfo | und
 
 /**
  * The credit a Commons file may be shown with (ADR-IMPL-043): its page on Commons, a free licence (CC0, public domain,
- * CC BY or BY-SA), no restrictions (personality rights, trademarks), and an author — Artist as text, 80 characters at
- * most — whenever the licence asks for one. Null: the file may not be shown.
+ * CC BY or BY-SA, or the Free Art License — ADR-IMPL-064, amendment 2), no restrictions (personality rights,
+ * trademarks), and an author — Artist as text, 80 characters at most — whenever the licence asks for one (all but CC0
+ * and public domain). Shared by the city photo and the landmarks. Null: the file may not be shown.
  */
 export function commonsCredit(info: ImageInfo): { author: string | null; license: string; link: string } | null {
   const link = info.descriptionurl;
