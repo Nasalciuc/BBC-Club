@@ -21,13 +21,12 @@ export const SITE_STORAGE_PREFIXES: readonly string[] = [SITE_STORAGE, LEGACY_SI
 
 /**
  * The site's API answers at most 120 requests a minute per IP (`x-ratelimit-limit: 120`, a 60-s window). The read
- * starts one API request every 600 ms across all its workers — about 100 a minute — so a night's ~240 pages take about
- * two and a half minutes. The budget is the address's, not the read's: staging and production share one host and the
- * same 07:40 cron, so on a night both read the site they spend it together, run into 429s and wait them out (each read
- * then takes about four minutes, six and a half if the site sent no Retry-After; the job's timeout allows for it,
- * module.ts). Photos (`/storage`) have no stated limit and are not paced.
+ * starts one API request every 1.2 s across all its workers — about 50 a minute — so a night's ~240 pages take about
+ * five minutes. The budget is the address's, not the read's: staging and production share one host and the same 07:40
+ * cron, and two reads at about 50 a minute each stay under the 120 together, with no 429 to wait out. Photos
+ * (`/storage`) have no stated limit and are not paced.
  */
-export const API_GAP_MS = 600;
+export const API_GAP_MS = 1200;
 /** A 429 waits what its Retry-After says (seconds or a date), 60 s without one, never more than 120 — then asks once
  *  more. */
 const RETRY_AFTER_DEFAULT_S = 60;

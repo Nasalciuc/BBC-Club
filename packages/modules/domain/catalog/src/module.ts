@@ -582,10 +582,10 @@ export const catalogModule = (
         {
           // ADR-IMPL-045: the site's destinations, once a night. With its photos and its pins off, nothing is asked
           // and the site's photos go back to Wikimedia. ADR-IMPL-062: the site's API allows 120 requests a minute per
-          // IP, so its ~241 pages start 600 ms apart (about 2.5 minutes), then ~150 photo checks four at a time. That
-          // minute is the host's: staging's cron reads the site at the same 07:40 from the same address, and two
-          // reads together hit 429s and wait them out — about four minutes each, six and a half if the site sent no
-          // Retry-After (simulated against a 120-per-60-s limiter). Ten minutes leave room for that and the photos.
+          // IP, so its ~241 pages start 1.2 s apart (about five minutes), then ~150 photo checks four at a time. That
+          // minute is the host's: staging's cron reads the site at the same 07:40 from the same address, and at about
+          // 50 a minute each the two reads stay under the 120 together. Ten minutes leave room for the pages, the
+          // photos and a 429 waited out.
           // Longer than the worker's 120-s HTTP idle timeout: the cron's request is closed while the run goes on, and
           // platform.job_runs holds its outcome (as for `retention`).
           name: "sync-site-destinations",
