@@ -45,6 +45,7 @@ describe("extras ledger", () => {
         'place_photos_due',
         'requests_member_list',
         'site_places_airport',
+        'site_prices_due',
         'site_routes_cms_id'
       )
       ORDER BY indexname`);
@@ -57,6 +58,7 @@ describe("extras ledger", () => {
       "place_photos_due",
       "requests_member_list",
       "site_places_airport",
+      "site_prices_due",
       "site_routes_cms_id",
     ]);
 
@@ -94,6 +96,8 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog checks applied/);
     expect(second.out).not.toMatch(/notifications campaign not before applied/);
     expect(second.out).not.toMatch(/catalog fares keep live copy/);
+    expect(second.out).not.toMatch(/catalog site prices applied/);
+    expect(second.out).not.toMatch(/requests shown estimate source applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -135,6 +139,8 @@ describe("extras ledger", () => {
       "0035_catalog_checks.sql",
       "0036_notifications_campaign_not_before.sql",
       "0037_catalog_fares_keep_live_copy.sql",
+      "0038_catalog_site_prices.sql",
+      "0040_requests_shown_estimate_source.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -167,6 +173,75 @@ describe("extras ledger", () => {
     expect(await insert(2055, null)).toBe("23514");
     expect(await insert(0, "USD")).toBe("23514");
     expect(await insert(2055, "EUR")).toBe("23514");
+  });
+
+  // ADR-IMPL-063: who priced a quote's estimate — only beside an estimate, only the site or the club's formula.
+  it("requests_shown_estimate_source takes site or club beside an estimate, or none", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (amount: number | null, source: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`
+          INSERT INTO requests.requests (id, reference, idempotency_key, trip_type, cabin, legs, passengers,
+            contact_name, contact_phone, contact_email, source, shown_estimate_amount, shown_estimate_currency,
+            shown_estimate_source)
+          VALUES (gen_random_uuid(), ${`R-SRC${n}`}, ${`estimate-source-${n}`}, 'round', 'business',
+            '[{"from":"JFK","to":"ZRH","date":"2027-10-12"}]'::jsonb, '{"adult":1,"child":0,"infant":0}'::jsonb,
+            'Alex Morgan', '+12125550148', 'alex@test.dev', 'ios', ${amount}, ${amount === null ? null : "USD"},
+            ${source})`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null, null)).toBe("ok");
+    expect(await insert(2055, null)).toBe("ok"); // an estimate stored before the site priced any: the formula's
+    expect(await insert(2055, "site")).toBe("ok");
+    expect(await insert(2055, "club")).toBe("ok");
+    expect(await insert(null, "site")).toBe("23514"); // a source without an estimate
+    expect(await insert(2055, "formula")).toBe("23514");
+    expect(await insert(2055, "")).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_shown_estimate_source'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-063, D6: what the site answered, shown for at most 24 hours; a priced row has its business figure.
+  it("catalog.site_prices: priced or none, figures above zero, never the same airport, 24 hours at most", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    const insert = async (
+      row: Partial<{ from: string; to: string; status: string; business: number | null; first: number | null }>,
+      expires = "24 hours",
+    ) => {
+      const r = { from: "JFK", to: "ZRH", status: "priced", business: 2222, first: null, ...row };
+      try {
+        // Made-up figures.
+        await db.execute(sql`
+          INSERT INTO catalog.site_prices (route_from, route_to, trip, status, business, first, fetched_at, expires_at)
+          VALUES (${r.from}, ${r.to}, 'round_trip', ${r.status}::catalog.site_price_status, ${r.business}, ${r.first},
+            now(), now() + ${expires}::interval)
+          ON CONFLICT (route_from, route_to, trip) DO NOTHING`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert({})).toBe("ok");
+    expect(await insert({ to: "CDG", status: "none", business: null })).toBe("ok");
+    expect(await insert({ to: "LHR" }, "25 hours")).toBe("23514"); // D6: older than 24 hours is never shown
+    expect(await insert({ to: "LHR" }, "0 seconds")).toBe("23514");
+    expect(await insert({ to: "LHR", business: null })).toBe("23514"); // priced without its business figure
+    expect(await insert({ to: "LHR", status: "none" })).toBe("23514"); // none with a figure
+    expect(await insert({ to: "LHR", business: 0 })).toBe("23514");
+    expect(await insert({ to: "LHR", first: -5 })).toBe("23514");
+    expect(await insert({ to: "JFK" })).toBe("23514"); // the site prices JFK → JFK; the club never stores it
+    expect(await insert({ to: "LHR", status: "unknown" })).toBe("22P02"); // an enum
+    await db.execute(sql`DELETE FROM catalog.site_prices WHERE route_from = 'JFK'`);
   });
 
   // ADR-IMPL-046: a struck price always carries its source — both or neither, each half tried alone.

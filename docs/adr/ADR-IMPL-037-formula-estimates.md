@@ -45,7 +45,10 @@ hold them (owner, 7 Oct 2026).
 - **Contract** — `SearchResultVM.estimate: EstimateVM | null`, optional; `AirportVM.tz`, optional (local time).
   `EstimateVM` has fixed literals (`USD`, `round_trip`, `formula`), so any other value fails parsing. It never uses
   `PricePair`: `published` is reserved for FTC-evidenced reference prices. Both upgrade orders work: an older app drops
-  the new fields; a newer app accepts their absence from an older server.
+  the new fields; a newer app accepts their absence from an older server. (Amended by ADR-IMPL-063: with
+  `catalog.site_prices` on, the company's site prices the estimate first — its stored answer, or one live call from an
+  undated search — and the formula stands in only where the site cannot be asked; where the company has no price there
+  is no number. `EstimateVM` keeps its literals and gains optional `source` (`site` | `club`) and `asOf`.)
 - **When** — only when an undated search has no fare in the chosen cabin; published fares always win. The app sends a
   date (`when`) only when the member picks a day in the calendar (ADR-IMPL-041); then the route may have fares on other
   days, so there is no estimate, and a quote asked from that search carries none (ADR-IMPL-042, `estimateShown`).
