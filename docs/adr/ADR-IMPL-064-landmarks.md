@@ -156,6 +156,7 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
   - Tests (`apps/mobile`): `landmark-logic.test.ts` (reading the answer, the credit, which to show, the shape, the
     floor over the tiles), `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
     `landmarks-section.test.ts` (the floor through the element tree the section builds, on both looks),
+    `destination-geometry.test.ts` (04's and 13's flight options, the measures the section reads),
     `api-landmarks.test.ts` (the question through `api.ts`: If-None-Match, 304, a body it cannot read, 404, 429).
 
 **Consequences.** A destination shows up to three landmarks a few minutes after its city is first shown (two places

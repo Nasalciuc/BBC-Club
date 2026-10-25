@@ -2,7 +2,7 @@ import { Linking, StyleSheet, Text, type TextStyle, View } from "react-native";
 import type { LandmarkVM } from "@bbc/shared/api/v1/places";
 import { CAROUSEL_PAD, CarouselRow, Photo, PhotoCredit, baselineOffset, belowBaseline, rn, tokens } from "@bbc/ui";
 
-import { optionsColumn } from "@/features/explore/DestinationDetails";
+import { optionsColumn } from "@/features/explore/destination-geometry";
 
 import { landmarkTiles } from "./landmark-logic";
 import { PICTURE_HEADERS } from "./usePlacePhotos";
@@ -46,7 +46,7 @@ export function Landmarks({ landmarks, failed, onPhotoError, look, testIDPrefix 
   const tiles = landmarkTiles(landmarks, { headers: PICTURE_HEADERS, photoHeight: LOOK.photo.height, failed });
   if (tiles.length === 0) return null;
   const column = optionsColumn(look);
-  const title = column.title.role;
+  const title = rn(column.title.type) as Role;
   return (
     <View testID={`${testIDPrefix}.landmarks`}>
       <Text style={[title, styles.navy, { marginLeft: column.title.left - column.inset }]} accessibilityRole="header">

@@ -2,7 +2,8 @@
  *  drawn has its photograph, its name and its credit; a photograph that would not load takes them with it; the credit
  *  opens the photograph's page. Landmarks holds no state, so its element tree is read straight from the function, with
  *  React Native and the club's components stood in for (bun runs no native renderer); bun test does not resolve the
- *  `@/` alias, so DestinationDetails' measures are given as 04's and 13's. */
+ *  `@/` alias, so the module holding 04's and 13's measures is handed over as itself (`destination-geometry.test.ts`
+ *  pins them to the images). */
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { ReactElement, ReactNode } from "react";
 import type { LandmarkVM } from "@bbc/shared/api/v1/places";
@@ -32,14 +33,9 @@ const ui = {
   tokens: { radius: { sm: 10 }, type: { subtitle: { fontSize: 17, lineHeight: 22 } }, colors: { textPrimary: "navy" } },
 };
 mock.module("@bbc/ui", () => ui);
-/** 04's page and 13's sheet, as DestinationDetails measures them. */
-const COLUMNS = {
-  page: { inset: 0, title: { role: { fontSize: 18, lineHeight: 22 }, left: 17.93 }, toCards: 9.5, cardsLeft: 11.2 },
-  route: { inset: 15, title: { role: { fontSize: 17, lineHeight: 21 }, left: 20.4 }, toCards: 13.5, cardsLeft: 16.2 },
-};
-mock.module("@/features/explore/DestinationDetails", () => ({
-  optionsColumn: (look: "route" | "page") => COLUMNS[look],
-}));
+/** 04's page and 13's sheet, as the flight options above the section are measured: the real module. */
+const geometry = await import("../explore/destination-geometry");
+mock.module("@/features/explore/destination-geometry", () => geometry);
 const HEADERS = { "User-Agent": "BBCClub/test (https://api.example.test)" };
 mock.module("./usePlacePhotos", () => ({ PICTURE_HEADERS: HEADERS }));
 
@@ -201,12 +197,22 @@ describe("Landmarks — what the destination draws", () => {
   });
 
   it("lines up under the flight options of its look: 04's page, 13's sheet over its gutter", () => {
+    // Where the title's pen stands inside the component, and how far its photographs are under its baseline: 04 and 13.
+    const drawn = { page: { pen: 17.93, toCards: 9.5 }, route: { pen: 20.4 - 15, toCards: 13.5 } };
     for (const look of ["page", "route"] as const) {
       const { all, row } = draw([tower], { look });
-      const column = COLUMNS[look];
+      const column = geometry.optionsColumn(look);
       const title = all.find((e) => e.props.accessibilityRole === "header");
       expect(title?.props.children).toBe("Landmarks");
-      expect(title?.props.style).toContainEqual({ marginLeft: column.title.left - column.inset });
+      expect(title?.props.style).toContainEqual(geometry.FLIGHT_OPTIONS[look].title.type);
+      const pen = (title?.props.style as object[]).find((s) => "marginLeft" in s) as { marginLeft: number };
+      expect(pen.marginLeft).toBeCloseTo(drawn[look].pen, 9);
+      // `baselineOffset` and `belowBaseline` stand in as 0: the row's pad is all that comes off the drop.
+      const above = all.find((e) => e.props.children === row) as Element;
+      expect((above.props.style as { marginTop: number }).marginTop).toBeCloseTo(
+        drawn[look].toCards - ui.CAROUSEL_PAD,
+        9,
+      );
       expect(row?.props).toMatchObject({ bleed: column.inset, inset: column.cardsLeft, gap: 8.55 });
     }
   });
