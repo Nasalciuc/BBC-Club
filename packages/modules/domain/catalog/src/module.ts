@@ -72,9 +72,14 @@ function searchWhenInRange(when: Date, now = new Date()): boolean {
 export const SITE_PINS = 12;
 /** How long Home's site pins are kept, in seconds (createDestinationsCache's minute, or Redis's). */
 const SITE_PINS_CACHE_S = 60;
-/** ADR-IMPL-067: how long one home's site deals are kept, in seconds — and the margin each read asks of a deal's day,
- *  so none is served past it while kept. */
+/** ADR-IMPL-067: how long one home's site deals are kept, in seconds. */
 const SITE_DEALS_CACHE_S = 60;
+/**
+ * ADR-IMPL-067: what a read kept `ttlS` seconds asks of a route's day (and of a stored answer's), so nothing kept is
+ * served past it: the cache's time, 10 % more since Redis keeps a key up to 1.1 × its TTL (the platform's cache spreads
+ * its expiries), and a few seconds for the read itself — 75 s for a minute.
+ */
+const keptMargin = (ttlS: number) => Math.ceil(ttlS * 1.1) + 9;
 
 /** For tests: `fetch` answers for the place-photo sources (Wikidata, Commons, Pexels) and the site — its API and its
  *  price search (ADR-IMPL-063); `siteClock` is the time the site's API pacing, the price job's pacing and the price
@@ -226,7 +231,7 @@ export const catalogModule = (
       const load = async () => {
         const [homeRow, rows] = await Promise.all([
           airportsRepo.get(conn, home),
-          siteRepo.pinsFrom(conn, home, SITE_PINS * 3),
+          siteRepo.pinsFrom(conn, home, SITE_PINS * 3, keptMargin(SITE_PINS_CACHE_S)),
         ]);
         if (!homeRow) return [];
         // Kept for the pins' minute: an answer that would pass its 24 hours within it is not read.
@@ -236,7 +241,7 @@ export const catalogModule = (
               homeRow.code.trim(),
               rows.map((r) => r.airport.code.trim()),
               "round_trip",
-              SITE_PINS_CACHE_S,
+              keptMargin(SITE_PINS_CACHE_S),
             )
           : null;
         const priced = await Promise.all(
@@ -334,7 +339,7 @@ export const catalogModule = (
       const photos = await placePhotosOn();
       if (exec) return loadSiteDeals(exec, home, limit, photos, 0);
       const key = `${home.toUpperCase()}:${limit}:${photos ? "photos" : "-"}`;
-      const load = () => loadSiteDeals(conn, home, limit, photos, SITE_DEALS_CACHE_S);
+      const load = () => loadSiteDeals(conn, home, limit, photos, keptMargin(SITE_DEALS_CACHE_S));
       const gen = await platform.cache.generation("catalog:dest:gen");
       if (gen == null) return siteDealsCache.get(key, load);
       return platform.cache.getOrLoad(`catalog:deals:${gen}:${key}`, SITE_DEALS_CACHE_S, load);

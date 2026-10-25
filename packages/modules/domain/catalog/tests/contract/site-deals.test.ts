@@ -214,6 +214,13 @@ describe("site deals — a day at most (D6)", () => {
       WHERE route_from = 'JFK' AND cms_id = 23`);
     expect(london(await t.deals("JFK", 500))?.origin.code).toBe("JFK");
     expect(london(await t.cached("JFK", 500))?.origin.code).toBe("EWR");
+    // In its last 70 seconds: still none through Home's read — Redis keeps it up to 66 s (a minute and 10 %).
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes
+      SET synced_at = now() - interval '1438 minutes 50 seconds', valid_until = now() + interval '70 seconds'
+      WHERE route_from = 'JFK' AND cms_id = 23`);
+    expect(london(await t.deals("JFK", 500))?.origin.code).toBe("JFK");
+    expect(london(await t.cached("JFK", 400))?.origin.code).toBe("EWR");
 
     // The site drops London's New York deal: the next sync takes it away, from all three New York airports.
     for (const region of t.site.regions)

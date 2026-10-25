@@ -100,8 +100,9 @@ export const siteRepo = {
 
   /** The question the home screen asks, once a minute at most per home airport and cabin (it is cached): the site's
    *  cities listed from `home`, the ones on the site's home page first, then by their main airport's traffic. Only the
-   *  routes still served (ADR-IMPL-067): a city the site has not listed for a day is no pin either. */
-  pinsSelect(exec: Executor, home: string, limit: number) {
+   *  routes still served `marginS` seconds from now (ADR-IMPL-067): a city the site has not listed for a day is no pin
+   *  either, nor one whose day ends while the pins are kept. */
+  pinsSelect(exec: Executor, home: string, limit: number, marginS = 0) {
     return exec
       .select({
         cmsId: sitePlaces.cmsId,
@@ -111,13 +112,13 @@ export const siteRepo = {
       .from(siteRoutes)
       .innerJoin(sitePlaces, eq(sitePlaces.cmsId, siteRoutes.cmsId))
       .innerJoin(airports, eq(airports.code, sitePlaces.airport))
-      .where(and(eq(siteRoutes.routeFrom, home.toUpperCase()), served()))
+      .where(and(eq(siteRoutes.routeFrom, home.toUpperCase()), served(marginS)))
       .orderBy(desc(sitePlaces.promoted), desc(airports.popularity), asc(airports.code))
       .limit(limit);
   },
 
-  async pinsFrom(exec: Executor, home: string, limit: number) {
-    const rows = await this.pinsSelect(exec, home, limit);
+  async pinsFrom(exec: Executor, home: string, limit: number, marginS = 0) {
+    const rows = await this.pinsSelect(exec, home, limit, marginS);
     return rows.map((r) => ({ ...r, airports: r.airports.map((c) => c.trim()) }));
   },
 

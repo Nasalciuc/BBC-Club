@@ -452,6 +452,24 @@ describe("site destinations — the pins", () => {
     await t.iso.drop();
   });
 
+  it("a route whose day ends while Home keeps its pins is no pin: a minute, up to 66 s under Redis", async () => {
+    const t = await pinsSetup("site-pins-last-minute");
+    // Tokyo's route from JFK has 70 seconds of its day left.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes
+      SET synced_at = now() - interval '1438 minutes 50 seconds', valid_until = now() + interval '70 seconds'
+      WHERE route_from = 'JFK' AND cms_id IN (SELECT cms_id FROM catalog.site_places WHERE airport = 'HND')`);
+    const pins = await t.facade.destinations(undefined, "JFK");
+    expect(pins[0]?.code).toBe("LGW");
+    expect(
+      pins
+        .slice(1)
+        .map((p) => p.code)
+        .sort(),
+    ).toEqual(["HER", "JTR", "SEZ", "VLC"]);
+    await t.iso.drop();
+  });
+
   it("nothing from the site with its pins off, or with estimates off (no price, no pin)", async () => {
     const t = await pinsSetup("site-pins-off");
     await t.flags.set("catalog.estimates", { enabled: false });
