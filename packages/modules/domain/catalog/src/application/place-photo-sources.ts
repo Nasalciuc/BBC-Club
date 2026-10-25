@@ -578,39 +578,17 @@ const FREE_LICENCE =
 export const onWikimedia = (url: string | undefined) =>
   isHttpsOn(url, (h) => h === "wikimedia.org" || h.endsWith(".wikimedia.org"));
 
-/** The address's path ends in a JPEG file name (its query aside). */
-function isJpegAddress(url: string | undefined): boolean {
-  if (!url) return false;
-  try {
-    return /\.jpe?g$/i.test(new URL(url).pathname);
-  } catch {
-    return false;
-  }
-}
-
 /**
- * A photograph the app can load: a JPEG; or a TIFF — an archival or scanned photograph, one page — whose thumbnails
- * Commons serves as JPEG (".../lossy-page1-1280px-Venice.tif.jpg"): the app loads those, never the TIFF
- * (ADR-IMPL-064, amendment 3). PNG, SVG and GIF stay out: drawings, maps and screenshots far more often than photos.
- */
-function isPhotograph(hero: ImageInfo, card: ImageInfo): boolean {
-  if (hero.mime === "image/jpeg") return true;
-  if (hero.mime !== "image/tiff") return false;
-  const pages = hero.pagecount;
-  if (pages !== undefined && pages !== 1) return false;
-  return isJpegAddress(hero.thumburl) && isJpegAddress(card.thumburl);
-}
-
-/**
- * A Commons file the app may show: a photograph (a JPEG, or a one-page TIFF Commons serves as JPEG thumbnails) in
- * landscape, wider than the full-width thumbnail (so both widths are real thumbnails, never the original), under a free
- * licence, without restrictions (personality rights, trademarks), with an author whenever the licence asks for one.
- * `hero` is the answer at 1280 px with the metadata, `card` the answer at 500 px.
+ * A Commons file the app may show: a JPEG photograph in landscape, wider than the full-width thumbnail (so both widths
+ * are real thumbnails, never the original), under a free licence, without restrictions (personality rights,
+ * trademarks), with an author whenever the licence asks for one. `hero` is the answer at 1280 px with the metadata,
+ * `card` the answer at 500 px. A TIFF stays out even when Commons serves its thumbnails as JPEG: on Commons TIFF
+ * originals are mostly scans and remote-sensing products, and the one a site city had was a satellite image
+ * (ADR-IMPL-064, amendment 3, withdrawn). PNG, SVG and GIF stay out: drawings, maps and screenshots.
  */
 export function acceptCommons(hero: ImageInfo | undefined, card: ImageInfo | undefined): FoundPhoto | null {
   if (!hero || !card) return null;
-  if (!hero.width || !hero.height || hero.width <= HERO_WIDTH) return null;
-  if (!isPhotograph(hero, card)) return null;
+  if (hero.mime !== "image/jpeg" || !hero.width || !hero.height || hero.width <= HERO_WIDTH) return null;
   if (!isLandscape(hero.width, hero.height)) return null;
   if (hero.thumbwidth !== HERO_WIDTH || card.thumbwidth !== CARD_WIDTH) return null;
   const heroUrl = hero.thumburl;
