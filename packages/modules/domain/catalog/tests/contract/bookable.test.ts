@@ -2,6 +2,7 @@
  *  home airport and its metro, and the formula's reach, which never counts. */
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
+import type { Executor } from "@bbc/db";
 import { isolatedDb } from "@bbc/db/testing/isolated-db";
 import { airports } from "@bbc/db/schema/catalog";
 import { createPlatform } from "@bbc/platform";
@@ -39,10 +40,30 @@ async function setup(name: string, site: FakeSite = siteFixture()) {
 
 const codes = (list: { code: string }[] | null) => list?.map((p) => p.code) ?? null;
 
+/** An executor that records every use and answers none: what the facade does with it, it does with the database. */
+function watchedExecutor() {
+  const used: string[] = [];
+  const exec = new Proxy(
+    {},
+    {
+      get(_, prop) {
+        used.push(String(prop));
+        return undefined;
+      },
+    },
+  ) as Executor;
+  return { exec, used };
+}
+
 describe("bookable — what a tap on the globe may open", () => {
   it("off: nothing is read and nothing answered; on alone, the night reads the site", async () => {
     const t = await setup("bookable-flag");
     expect(await t.facade.bookable(undefined, { home: t.fromJfk })).toBeNull();
+    // Off, the flag is asked first and nothing else: the caller's executor is never touched — no read of the site's
+    // set on any member's Home while the flag is off.
+    const off = watchedExecutor();
+    expect(await t.facade.bookable(off.exec, { home: t.fromJfk })).toBeNull();
+    expect(off.used).toEqual([]);
     // All three of the site's switches off: the night asks the site nothing.
     await t.run();
     expect(t.calls).toEqual([]);
