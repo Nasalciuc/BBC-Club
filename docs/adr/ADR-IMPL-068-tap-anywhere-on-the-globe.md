@@ -3,7 +3,8 @@
 Status: proposed · Date: 2026-10-25 · Scope: `packages/shared` (`HomeVM.bookable`, `BookablePlaceVM`), `catalog` (the
 facade's `bookable`, `application/bookable.ts`, `site.repo` `bookable`, the night's sync gate), the mobile BFF
 (`GET /v1/home`), `scripts/seed-flags.ts`, `packages/ui` globe (`globe-logic`, `globe-geo`, `pin-labels`,
-`globe-engine`, `GlobeFallback`), the app (`features/globe`, Explore, `DestinationDetails`), `infra/RUNBOOK.md` · Brief
+`globe-engine`, `globe-tap`, `GlobeFallback`), the app (`features/globe`, Explore, `DestinationDetails`),
+`infra/RUNBOOK.md`, `design/components.md` (the Globe's lines, proposed until design draws them) · Brief
 3.3, decision D8, owner item 5 · Amends ADR-IMPL-033 and ADR-IMPL-035 (the globe takes taps off its pins) and
 ADR-IMPL-045 (the night's sync also reads the site for the globe's tap).
 
@@ -79,9 +80,15 @@ may change any of them**.
    the country in the route's sheet (13), in the country's role and slate.
 6. **The calm answer.** `No destination near there.` / `Tap closer to a city, or search for one.`, with the link
    `Search a destination` (17's words) to Search; the home answer carries the same link. The attention `NoticeCard`
-   (sheet 41) under the search bar at rest, a polite live region; it stays until the next choice, the search or `See
-all`. No image draws the answer or the distance line (`DESIGN.md` has no rule for them): both use existing components,
-   roles and tokens, and are reported to design.
+   (sheet 41) under the search bar at rest, a polite live region; it stays until the next choice, the search or
+   `See all`. No image draws the answer or the distance line (`DESIGN.md` has no rule for them): both use existing
+   components, roles and tokens, and are reported to design. Both sit in the sheet's flow, so each moves a measured
+   layout while it shows (the sheet still scrolls to all of it): the answer, about 160 pt with its margin (by its
+   padding and roles; not measured on a phone), pushes 02's `Offers to inspire` down until the offer cards' prices and
+   `Save` bars stand under the tab bar — against the OfferCard `rest` rule (`design/components.md`: "the whole card
+   above the tab bar at rest"); the distance line, a second line under the country, moves 13's chips, summary and first
+   flight down a line, so the first flight no longer stands whole above the docked `Request a quote` (`routeContent`).
+   Reported, not resolved (below).
 7. **The gestures.** The drawn globe: `projector().invert(x, y)` returns null off the disc (the disc is checked before
    d3); a `Gesture.Tap()` with `maxDistance(8)` (the pan's `minDistance`) and `maxDuration(500)`, composed
    `Gesture.Race(Gesture.Simultaneous(pan, pinch), tap)` — a drag starts the pan, which cancels the tap: a drag never
@@ -144,7 +151,15 @@ new design component for the answer: no image draws one; the existing notice hol
 - Every decision above; in particular whether the US origins are bookable (1), 13 (the route in place, chosen) or 04
   (the destination's page with its photo) for a snapped city (4), and kilometres or miles (5).
 - Design: no image draws the calm answer or the distance line; both are proposed with existing components and want a
-  frame of their own in `DESIGN.md` 3.0 — reported, not resolved.
+  frame of their own in `DESIGN.md` 3.0 — reported, not resolved. Until then they break two measured layouts while they
+  show (6): 02's offer cards are no longer whole above the tab bar under the answer (OfferCard `rest`), and 13's first
+  flight goes under the docked pill with the distance line (`routeContent`). Laying the answer over the globe's foot
+  instead of in the sheet would keep 02's measure, but that too is a frame no image draws. The Globe's lines in
+  `design/components.md` describe these proposals, not a drawn design; they follow whatever frame design draws.
+- Accessibility: the globe is now a tap target, but it gets no `accessibilityLabel` and is no element for a screen
+  reader (7) — an exception to `DESIGN.md` · Accessibility ("`accessibilityLabel` on every interactive element"),
+  taken because Search already reaches every city a tap can open, and a globe a screen reader could focus would answer
+  nothing it can aim. Its surfaces carry a testID (`globe.drawn`, `globe.map`) for e2e.
 - **The check (3.3), where it stands.** Measured, in logic: 20 of 20 scripted taps near the site's cities open the right
   city and 10 of 10 over open sea give the calm answer — through the drawn globe's own tap (the finger, `projector`'s
   inverse, `drawnGlobeTap`) and Explore's choice (`exploreTap`); Mapbox's press is tested apart (`mapboxPress`: the pin,
