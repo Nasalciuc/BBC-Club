@@ -319,6 +319,37 @@ describe("landmarks", () => {
     await t.iso.drop();
   });
 
+  it("a place that drops to fewer landmarks loses the ranks past them: the route never serves a stale one", async () => {
+    const t = await setup("landmarks-drop", answers);
+    await t.flag({ enabled: true, skip: [] });
+    await shown(t.iso, "CDG");
+    await t.run();
+    expect((await t.rows("CDG")).map((r) => [r.rank, r.kind])).toEqual([
+      [1, "landmark"],
+      [2, "landmark"],
+      [3, "landmark"],
+    ]);
+
+    // Next month Commons accepts only the Arc de Triomphe's photograph: one landmark, the marker after it, rank 3 gone.
+    const arc = "Arc de Triomphe - Août 2026.jpg";
+    const one = await setup("", { ...answers, commonsInfo: { [arc]: paris.commons[arc] } }, t.iso);
+    await t.due();
+    expect(await one.run()).toEqual({ places: 1, landmarks: 1, fewer: 1, failed: 0, held: 0 });
+    expect((await t.rows("CDG")).map((r) => [r.rank, r.kind, r.name])).toEqual([
+      [1, "landmark", "Arc de Triomphe"],
+      [2, "fewer", null],
+    ]);
+    expect((await t.landmarks("CDG")).landmarks.map((l) => l.name)).toEqual(["Arc de Triomphe"]);
+
+    // Then none: the marker alone, at rank 1.
+    const none = await setup("", { ...answers, commonsInfo: {} }, t.iso);
+    await t.due();
+    expect(await none.run()).toEqual({ places: 1, landmarks: 0, fewer: 1, failed: 0, held: 0 });
+    expect((await t.rows("CDG")).map((r) => [r.rank, r.kind])).toEqual([[1, "fewer"]]);
+    expect((await t.landmarks("CDG")).landmarks).toEqual([]);
+    await t.iso.drop();
+  });
+
   it("a remembered city item that answers nothing (merged since) is found again, not taken for a city without sights", async () => {
     const t = await setup("landmarks-merged", answers);
     await t.flag({ enabled: true, skip: [] });

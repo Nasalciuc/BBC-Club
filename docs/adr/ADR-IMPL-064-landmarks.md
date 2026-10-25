@@ -131,10 +131,10 @@ with the city's next look (the RUNBOOK says how to make that now). Tests: `tests
 by name, Retry-After, the 429 outcomes), `tests/unit/landmarks.test.ts` (the question, reading the answer, D7's filters
 on WDQS's and Commons' saved answers for Paris and Chișinău — the Eiffel Tower and the water tower rescued by their
 aerial views — the city's own item, duplicates, the contract), `tests/contract/place-photos.test.ts` (a 429 defers and
-holds), `tests/contract/place-landmarks.test.ts` (the job twice, a 429, a failure, fewer than three, the site's cities,
-the route, the CHECKs), `apps/api/test/catalog-landmarks.test.ts` (the route through the host). The saved answers keep
-sizes, types, licences and restrictions as Commons gave them; authors are made up and files whose name credits a person
-renamed.
+holds), `tests/contract/place-landmarks.test.ts` (the job twice, a 429, a failure, fewer than three, a drop from three
+to one and to none, the site's cities, the route, the CHECKs), `apps/api/test/catalog-landmarks.test.ts` (the route
+through the host). The saved answers keep sizes, types, licences and restrictions as Commons gave them; authors are
+made up and files whose name credits a person renamed.
 
 **Left to the owner.**
 
