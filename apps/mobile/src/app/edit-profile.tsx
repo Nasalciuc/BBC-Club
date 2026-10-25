@@ -10,9 +10,8 @@ import { CabinSheet } from "@/features/profile/CabinSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
 import { nameRowValue } from "@/features/profile/name-logic";
 import { NameSheet } from "@/features/profile/NameSheet";
-import { mergeSavedProfile, type SavedProfile } from "@/features/profile/notifications-logic";
 import { cabinLabel, travelersLabel } from "@/features/profile/profile-logic";
-import { storeSavedProfile } from "@/features/profile/profile-store";
+import { profileCopy } from "@/features/profile/profile-save-logic";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { airportByCode } from "@/lib/airport-by-code";
@@ -28,6 +27,9 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
+  // Each sheet's save is this page's and every screen's at once — Explore's greeting, Profile's name
+  // (profile-save-logic).
+  const [copy] = useState(() => profileCopy(setProfile));
   // The rows wait for the profile (ADR-IMPL-047): dimmed and without a value while it loads, never a value made up
   // ("Not set", "Business", "1 adult") — and a profile that did not load takes their place, with `Try again`.
   const [loadFailure, setLoadFailure] = useState<{ title: string; body: string } | null>(null);
@@ -63,12 +65,6 @@ export default function EditProfileScreen() {
       cancelled = true;
     };
   }, [homeAirport]);
-
-  function onSheetSaved(next: SavedProfile) {
-    setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
-    // Every screen shows the save at once — Explore's greeting, Profile's name — not on its next load (profile-store).
-    storeSavedProfile(next);
-  }
 
   // The city shown is always the one of the airport shown — never the previous airport's while the new one resolves.
   const city = homeAirport && homeCity?.code === homeAirport ? homeCity.city : null;
@@ -134,10 +130,10 @@ export default function EditProfileScreen() {
       <RootTabBar active="profile" />
       {profile ? (
         <>
-          <NameSheet ref={nameRef} profile={profile} onSaved={onSheetSaved} />
-          <HomeAirportSheet ref={homeAirportRef} profile={profile} homeCity={city} onSaved={onSheetSaved} />
-          <CabinSheet ref={cabinRef} profile={profile} onSaved={onSheetSaved} />
-          <TravelersSheet ref={travelersRef} profile={profile} onSaved={onSheetSaved} />
+          <NameSheet ref={nameRef} profile={profile} onSaved={copy.saved} />
+          <HomeAirportSheet ref={homeAirportRef} profile={profile} homeCity={city} onSaved={copy.saved} />
+          <CabinSheet ref={cabinRef} profile={profile} onSaved={copy.saved} />
+          <TravelersSheet ref={travelersRef} profile={profile} onSaved={copy.saved} />
         </>
       ) : null}
     </View>
