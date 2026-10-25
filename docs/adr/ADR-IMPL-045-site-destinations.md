@@ -37,7 +37,8 @@ is the Seychelles' capital; "Benglaru" is misspelled; Kyoto has no airport of it
   by a no-op `20261012143006_snapshot_sync`): `catalog.site_places` (the site's id, name, country, region, main airport,
   every airport, whether the site's home page shows it, the photo's path when the photo is the city's own) and
   `catalog.site_routes` (US airport → city, the site's price and old price, kept, never shown). Replaced in one
-  transaction. The About and SEO texts are not kept: nothing in Figma shows them.
+  transaction. (Amended by ADR-IMPL-067: each route is served for a day after its read, `valid_until`; the price — never
+  the old price — is shown as a site deal behind `catalog.site_offers`; the job runs at 07:40 and 19:40 UTC.) The About and SEO texts are not kept: nothing in Figma shows them.
 - **The site's photos** (flag `catalog.site_photos`, seeded off): each city's own photo — `bestDeals/<its id>/image/…`,
   answering as an image — on every one of its airports, stored as an operator's photo (`source = override`, no credit
   line, never expiring, untouched by `resolve-place-photos`). The job owns such a photo by its address on the site; an

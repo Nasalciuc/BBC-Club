@@ -50,6 +50,11 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
     { enabled: false },
     "ADR-IMPL-063: the company's site prices indicative fares (its stored answer, else the formula; none where the company has none); needs catalog.estimates",
   ],
+  [
+    "catalog.site_offers",
+    { enabled: false },
+    "ADR-IMPL-067: the site's deals in Explore's Offers to inspire, after the member's own offers (from home, else the nearest city the site sells from); needs neither catalog.site_pins nor catalog.estimates",
+  ],
 ];
 
 try {
