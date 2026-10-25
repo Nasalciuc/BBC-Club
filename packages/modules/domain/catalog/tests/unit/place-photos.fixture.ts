@@ -128,6 +128,8 @@ export const TOO_MANY = "You are making too many requests to the API.";
 export function fakeSources(o: {
   wikidata?: Binding[] | number;
   cities?: Binding[] | number;
+  /** The search by a city's name answering this HTTP status for these codes alone. */
+  cityStatus?: Record<string, number>;
   landmarks?: Record<string, Binding[] | number>;
   commons?: Record<string, CommonsFile> | number;
   /** Commons' own imageinfo for a file (at 1280 px, with its metadata), as a saved answer gives it. */
@@ -165,6 +167,8 @@ export function fakeSources(o: {
       }
       if (query.includes("EntitySearch")) {
         if (typeof o.wikidata === "number") return answer(o.wikidata, () => true);
+        const status = codes.map((c) => o.cityStatus?.[c ?? ""]).find((s) => s !== undefined);
+        if (status !== undefined) return answer(status, () => true);
         return answer(o.cities, (b) => codes.includes(b.code?.value ?? ""));
       }
       return answer(o.wikidata, (b) => codes.includes(b.iata?.value ?? ""));

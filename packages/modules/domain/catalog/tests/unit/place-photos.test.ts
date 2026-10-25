@@ -16,6 +16,7 @@ import {
   parsePoint,
   pickPexels,
   retryAfterSeconds,
+  searchName,
   sparqlString,
   type Binding,
   type ImageInfo,
@@ -228,6 +229,17 @@ describe("Wikidata", () => {
     expect(sparqlString('Say "hi" \\ bye')).toBe('"Say \\"hi\\" \\\\ bye"');
     expect(() => sparqlString("two\nlines")).toThrow();
     expect(() => cityByNameSparql({ code: "R1O", city: "x" })).toThrow();
+  });
+
+  it("searches a name by its words: a tab or a line break the import kept is a space, never a refused question", () => {
+    // The airports' import trims a city's name but keeps a tab inside it (a made-up name).
+    expect(searchName("Saint\tTown")).toBe("Saint Town");
+    expect(searchName(" Saint \r\n\u0085 Town\u007f")).toBe("Saint Town");
+    expect(searchName("\u0001\u0002")).toBe("");
+    expect(searchName("Chișinău")).toBe("Chișinău");
+    expect(cityByNameSparql({ code: "AAQ", city: "Saint\tTown" })).toContain(
+      'VALUES (?code ?name) { ("AAQ" "Saint Town") }',
+    );
   });
 
   it("reads Retry-After as seconds or a date; five minutes when it is neither; a day at most", () => {
@@ -467,6 +479,57 @@ describe("decidePlaces", () => {
     expect(CITY_SEARCHES_PER_RUN).toBe(2);
     expect(three.get("NRT")).toEqual({ kind: "deferred" });
     expect(many.calls).toHaveLength(1 + CITY_SEARCHES_PER_RUN);
+  });
+
+  it("a city whose name holds a control character is searched by its words; one of control characters alone, never", async () => {
+    // Made-up airports and names: the import keeps a tab inside a city's name.
+    const saint: Place = { code: "AAQ", city: "Saint\tTown", lat: 45, lng: 10 };
+    const blank: Place = { code: "AAR", city: "\u0001", lat: 46, lng: 11 };
+    const f = fakeSources({ wikidata: [london], cities: [], commons: { "London at night.jpg": {} } });
+    const out = await decidePlaces([saint, blank, LONDON], {
+      sources: sources(f.fetch),
+      pexelsKey: undefined,
+      logger: quiet,
+    });
+    expect(out.get("AAQ")).toEqual({ kind: "satellite", centre: { lat: 45, lng: 10 } });
+    expect(out.get("AAR")).toEqual({ kind: "satellite", centre: { lat: 46, lng: 11 } });
+    expect(out.get("LHR")).toMatchObject({ kind: "photo", source: "wikimedia" });
+    const searches = f.calls.filter((c) => (c.body ?? "").includes("EntitySearch"));
+    expect(searches).toHaveLength(1); // AAQ's; AAR leaves nothing to search for
+    expect(new URLSearchParams(searches[0]?.body ?? "").get("query")).toContain('("AAQ" "Saint Town")');
+  });
+
+  it("a search by name that fails is its own city's: the others keep their answers, the rest wait uncounted", async () => {
+    const warned: object[] = [];
+    // London is found by its airport; Zurich's search answers 500; Paris would need a search too.
+    const f = fakeSources({ wikidata: [london], cityStatus: { ZRH: 500 }, commons: { "London at night.jpg": {} } });
+    const out = await decidePlaces([LONDON, ZURICH, PARIS], {
+      sources: sources(f.fetch),
+      pexelsKey: undefined,
+      logger: { warn: (o) => warned.push(o), error: (o) => warned.push(o) },
+    });
+    expect(out.get("LHR")).toMatchObject({ kind: "photo", source: "wikimedia" });
+    expect(out.get("ZRH")).toEqual({ kind: "retry", stage: "wikidata" });
+    expect(out.get("CDG")).toEqual({ kind: "deferred" }); // the search is not asked again this run
+    expect(warned).toEqual([{ stage: "wikidata", err: "wikidata: HTTP 500" }]);
+    expect(f.calls.map((c) => `${c.method} ${new URL(c.url).hostname}`)).toEqual([
+      "POST query.wikidata.org",
+      "POST query.wikidata.org",
+      "GET commons.wikimedia.org",
+      "GET commons.wikimedia.org",
+    ]);
+
+    // A 429 from a search still holds the whole run: every city waits for its Retry-After.
+    const limited = fakeSources({ wikidata: [london], cityStatus: { ZRH: 429 }, retryAfter: "60" });
+    const held = await decidePlaces([LONDON, ZURICH], {
+      sources: sources(limited.fetch),
+      pexelsKey: undefined,
+      logger: quiet,
+    });
+    expect([...held.values()]).toEqual([
+      { kind: "deferred", afterS: 60, heldBy: "wikidata" },
+      { kind: "deferred", afterS: 60, heldBy: "wikidata" },
+    ]);
   });
 
   it("a 429 asks the club to wait: the places wait for its Retry-After, nothing is counted as failed", async () => {

@@ -47,7 +47,11 @@ Commons, 117 requests) found:
     show, else the nearest, always within 150 km of the airport (five other Springfields are far from SGF); the oldest
     item on a tie. One question a city — the search reads the first row of a VALUES block only (tried on WDQS) — two a
     run; a third city waits for the next run, its look not counted. The same tiers and credit rules follow (Commons,
-    Pexels, the satellite view).
+    Pexels, the satellite view). A search that fails (a timeout, a 500) is its own city's failure (`retry`): the cities
+    found by their airport keep their answers, and those still waiting for a search wait for the next run, uncounted —
+    the run asks the search nothing more; a 429 still holds the whole run. The name is searched by its words: a tab or
+    another control character (the airports' import keeps one inside a name) is a space, and a name of nothing else is
+    not searched — a name the question cannot carry never stops a run.
   - **A 429 is not the city's fault.** Every Wikimedia request keeps a 429's Retry-After (seconds or a date; five minutes
     when it names neither; a day at most). The claimed cities wait that long, their look not counted (as `writeDeferred`
     does for Pexels' share), and the source is **held**: `catalog.source_holds` (`wikidata` or `commons`, `not_before`)
@@ -89,7 +93,8 @@ Commons, 117 requests) found:
   and the site's cities' main airports, new ones first, then the longest due. The city item is the one the place's rows
   know, else the city photo's lookup (by airport, else by name); a remembered item that answers nothing at all, not
   even its own photographs (merged into another since), is looked up again rather than taken for a city without
-  sights. One WDQS question per city (65-s timeout; WDQS stops one
+  sights; a search by name that fails gives its place alone a `failed` marker and stops the run, the other place
+  untouched for the next one. One WDQS question per city (65-s timeout; WDQS stops one
   at 60 s), one Commons question (50 files a question). A 429 holds that source for its Retry-After and stops the run,
   the places untouched. Another failure keeps what a place has (never a downgrade), looks again in six hours (a new
   place gets its `failed` marker) and stops the run. A place without a city found gets a `fewer` marker. Twice is the

@@ -179,16 +179,28 @@ export function sparqlString(text: string): string {
 }
 
 /**
+ * The words a city is searched by: a control character (a tab or a line break the airports' import kept inside the
+ * name) read as a space, spaces collapsed. Empty: nothing to search for. A person types no tab; the search would not
+ * find one either, and a name the question cannot carry must never stop a run (ADR-IMPL-064).
+ */
+export function searchName(city: string): string {
+  return city
+    .replace(/\p{Cc}+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
  * The places named like this city on Wikidata (its search, as a person would type the name: accents, aliases and other
  * spellings find it — "Chisinau" finds Chișinău), that are a human settlement (P31/P279* Q486972) with a place on Earth:
  * each one's English name, where it is, its night view and its main image. For a place whose airport Wikidata does not
  * know near ours. One question per place: the search service reads the first row of a VALUES block only (tried on
- * WDQS, 25 Oct 2026).
+ * WDQS, 25 Oct 2026). The name is `searchName`'s.
  */
 export function cityByNameSparql(place: { code: string; city: string }): string {
   if (!/^[A-Z]{3}$/.test(place.code)) throw new Error(`not an IATA code: ${place.code}`);
   return `SELECT ?code ?city ?cityLabel ?cityCoord ?night ?image WHERE {
-  VALUES (?code ?name) { (${sparqlString(place.code)} ${sparqlString(place.city)}) }
+  VALUES (?code ?name) { (${sparqlString(place.code)} ${sparqlString(searchName(place.city))}) }
   SERVICE wikibase:mwapi {
     bd:serviceParam wikibase:endpoint "www.wikidata.org" ;
                     wikibase:api "EntitySearch" ;
@@ -353,33 +365,46 @@ export async function askCityByName(
 /**
  * The city behind each place (ADR-IMPL-043, ADR-IMPL-064): by its airport — one question for all of them — else, for at
  * most `searches` places whose airport Wikidata does not know near ours or names no city, by the city's own name near
- * the airport (one question each). A place past the searches is in `later`, not in `facts`; one whose search found
- * nothing has no city. Throws `SourceError` when a question fails — a 429 included, which carries its Retry-After.
+ * the airport (one question each). A place whose name leaves nothing to search for has no city, without a question.
+ * A search that fails is that place's failure alone: the place is in `failed` (`error` says why) and the places still
+ * waiting for a search are in `later`, as are those past the searches — the run asks the search nothing more; none of
+ * these is in `facts`. A place whose search found nothing has no city. Throws `SourceError` when the airports' question
+ * fails, and on a 429 from any question (it carries its Retry-After: the whole run waits for it).
  */
 export async function findCities(
   deps: SourceDeps,
   places: readonly { code: string; city: string; lat: number; lng: number }[],
   searches: number,
-): Promise<{ facts: Map<string, CityFacts>; later: string[] }> {
+): Promise<{ facts: Map<string, CityFacts>; later: string[]; failed: string[]; error?: SourceError }> {
   const bindings = await askWikidata(
     deps,
     places.map((p) => p.code),
   );
   const facts = new Map<string, CityFacts>();
   const later: string[] = [];
+  const failed: string[] = [];
+  let error: SourceError | undefined;
   let searched = 0;
   for (const place of places) {
     const byAirport = cityFacts(bindings, place);
     if (byAirport.qid !== null) {
       facts.set(place.code, byAirport);
-    } else if (searched < searches) {
+    } else if (searchName(place.city) === "") {
+      facts.set(place.code, NO_CITY);
+    } else if (error === undefined && searched < searches) {
       searched += 1;
-      facts.set(place.code, await askCityByName(deps, place));
+      try {
+        facts.set(place.code, await askCityByName(deps, place));
+      } catch (err) {
+        if (!(err instanceof SourceError) || err.retryAfterS !== undefined) throw err;
+        error = err;
+        failed.push(place.code);
+      }
     } else {
       later.push(place.code);
     }
   }
-  return { facts, later };
+  return { facts, later, failed, ...(error === undefined ? {} : { error }) };
 }
 
 // ── Wikimedia Commons ────────────────────────────────────────────────────────────────────────────────────────────────

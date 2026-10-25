@@ -336,6 +336,55 @@ describe("landmarks", () => {
     await t.iso.drop();
   });
 
+  it("a city whose name holds a tab is searched by its words: neither job stops on it", async () => {
+    const t = await setup("landmarks-tab", { ...answers, cities: [] });
+    await t.flag({ enabled: true, skip: [] });
+    // A made-up airport Wikidata does not know; the airports' import keeps a tab inside a city's name.
+    await t.iso.db.execute(sql`
+      INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng)
+      VALUES ('AAQ', 'Saint Field', ${"Saint\tTown"}, 'Nowhere', 'NW', 'europe', 1, 2)`);
+    await shown(t.iso, "AAQ", "CDG");
+    expect(await t.run()).toEqual({ places: 2, landmarks: 3, fewer: 1, failed: 0, held: 0 });
+    expect((await t.rows("AAQ")).map((r) => [r.rank, r.kind, r.city_qid])).toEqual([[1, "fewer", null]]);
+    expect((await t.landmarks("CDG")).landmarks).toHaveLength(3);
+    const search = t.fake.calls.find((c) => (c.body ?? "").includes("EntitySearch"));
+    expect(new URLSearchParams(search?.body ?? "").get("query")).toContain('("AAQ" "Saint Town")');
+
+    // The city photos' job decides both cities too (neither has a photo on Wikidata: satellite views).
+    const photos = (
+      await catalogModule({ fetch: t.fake.fetch }).init({
+        db: t.iso.db,
+        platform: createPlatform(t.iso.db, { level: "silent" }),
+        env: { APP_ORIGIN: "https://api.example.test" } as never,
+        ports: {},
+      })
+    ).jobs?.find((j) => j.name === "resolve-place-photos");
+    expect(await photos?.spec.handler({ signal: new AbortController().signal })).toEqual({
+      claimed: 2,
+      photos: 0,
+      satellites: 2,
+      retries: 0,
+      deferred: 0,
+    });
+    await t.iso.drop();
+  });
+
+  it("a search by name that fails is its own place's: a failed marker, the other place untouched for the next run", async () => {
+    const t = await setup("landmarks-search-failed", { ...answers, cityStatus: { ZZY: 500 } });
+    await t.flag({ enabled: true, skip: [] });
+    // Nowhere: an airport Wikidata does not know by its code (a made-up one); its search answers 500.
+    await t.iso.db.execute(sql`
+      INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng)
+      VALUES ('ZZY', 'Nowhere Field', 'Nowhere', 'Nowhere', 'NW', 'europe', 1, 2)`);
+    await shown(t.iso, "CDG", "ZZY");
+    expect(await t.run()).toEqual({ places: 0, landmarks: 0, fewer: 0, failed: 1, held: 0 });
+    expect((await t.rows("ZZY")).map((r) => [r.rank, r.kind, r.hours])).toEqual([[1, "failed", 6]]);
+    expect(await t.rows("CDG")).toEqual([]); // found by its airport: its look not spent
+    expect(await t.run()).toEqual({ places: 1, landmarks: 3, fewer: 0, failed: 0, held: 0 });
+    expect((await t.rows("CDG")).map((r) => r.kind)).toEqual(["landmark", "landmark", "landmark"]);
+    await t.iso.drop();
+  });
+
   it("the site's cities are looked at too", async () => {
     const t = await setup("landmarks-site", answers);
     await t.flag({ enabled: true, skip: [] });

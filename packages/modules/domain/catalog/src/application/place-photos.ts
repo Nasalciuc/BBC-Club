@@ -118,7 +118,8 @@ const failure = (err: unknown): { stage: Stage; message: string; status?: number
  * Decides each place in order: a Commons photo of the city; else, with a key and while the run's three Pexels questions
  * last, a Pexels photo; else the satellite view. The city is found by its airport, else — for two places a run — by its
  * own name near the airport; a place past those two is `deferred`. A source that fails leaves the place to a later run
- * (`retry`) — never a downgrade to the satellite view because a server was down. A source that answers 429 asked the
+ * (`retry`) — never a downgrade to the satellite view because a server was down; a search by name that fails is its own
+ * city's (`retry`), and the places still waiting for one are `deferred`. A source that answers 429 asked the
  * club to wait: the places that needed it are `deferred` until its Retry-After has passed, the look not counted
  * (ADR-IMPL-064). A place still waiting for Pexels when the run's share is spent is `deferred`: due again at once. A
  * key Pexels refuses (401) counts as none for the run, and a city's photo stays: a city that `holding` says has one
@@ -141,6 +142,11 @@ export async function decidePlaces(
     const found = await findCities(deps.sources, askable, CITY_SEARCHES_PER_RUN);
     facts = found.facts;
     for (const code of found.later) out.set(code, { kind: "deferred" });
+    // A search that failed is its own city's: the others found keep their answer.
+    if (found.error) {
+      deps.logger.warn({ stage: found.error.stage, err: found.error.message }, "place photos: a source failed");
+      for (const code of found.failed) out.set(code, { kind: "retry", stage: "wikidata" });
+    }
   } catch (err) {
     const f = failure(err);
     if (f.retryAfterS !== undefined) {
@@ -187,7 +193,7 @@ export async function decidePlaces(
     deps.holding?.has(place.code) ? { kind: "retry", stage: "pexels" } : { kind: "satellite", centre, soon: true };
   for (const place of askable) {
     const known = facts.get(place.code);
-    if (!known) continue; // past the run's searches: deferred above
+    if (!known) continue; // past the run's searches, or its search failed: decided above
     const centre = known.centre ?? { lat: place.lat, lng: place.lng };
     if (known.files.length > 0 && commonsDown) {
       out.set(

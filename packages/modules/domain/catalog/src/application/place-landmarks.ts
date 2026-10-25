@@ -16,6 +16,7 @@ import { SourceError, findCities, type ImageInfo, type SourceDeps } from "./plac
 export const LANDMARK_PLACES_PER_RUN = 2;
 
 const QID = /^Q[1-9]\d*$/;
+const IATA = /^[A-Z]{3}$/;
 
 /** The flag row `catalog.landmarks` (seeded off): `skip` lists the landmarks an operator keeps out, by Wikidata item. */
 export function readLandmarksFlag(value: Record<string, unknown> | null): {
@@ -60,8 +61,8 @@ type Log = { warn(o: object, m?: string): void; error(o: object, m?: string): vo
  * Commons for their photographs, and the rows written (a place without a city found gets a `fewer` marker: looked,
  * none). A remembered city item that answers nothing at all (merged into another since) is found again, never taken
  * for a city without sights. A 429 holds that source for its Retry-After and stops the run, the places untouched; another failure keeps what
- * the places have, tries them again in six hours, and stops the run. Run twice, it writes the same rows. Every number
- * lands in platform.job_runs.
+ * the places have, tries them again in six hours, and stops the run — a search by a city's name that fails is its own
+ * place's, the others left untouched. Run twice, it writes the same rows. Every number lands in platform.job_runs.
  */
 export async function resolvePlaceLandmarks(deps: {
   db: Executor;
@@ -93,13 +94,27 @@ export async function resolvePlaceLandmarks(deps: {
     return { ...counts, failed: counts.failed + codes.length };
   };
 
-  /** The city item behind each of `codes`, as the city photo finds it (by airport, else by name). Throws SourceError. */
-  const citiesOf = async (codes: string[]): Promise<Map<string, string | null>> => {
+  /**
+   * The city item behind each of `codes`, as the city photo finds it (by airport, else by name); a code that is not
+   * IATA's (Wikidata is asked about those only) or whose airport did not come back has none. A search by name that
+   * failed is in `error`, its place in `failed`; the places it left unsearched have no entry. Throws SourceError when
+   * the airports' question fails, and on a 429.
+   */
+  const citiesOf = async (
+    codes: string[],
+  ): Promise<{ cities: Map<string, string | null>; failed: string[]; error?: SourceError }> => {
     const airports = await airportsRepo.getMany(deps.db, codes);
-    const places = airports.map((a) => ({ code: a.code.trim(), city: a.city, lat: Number(a.lat), lng: Number(a.lng) }));
-    if (places.length === 0) return new Map();
-    const { facts } = await findCities(deps.sources, places, places.length);
-    return new Map(places.map((p) => [p.code, facts.get(p.code)?.qid ?? null]));
+    const places = airports
+      .map((a) => ({ code: a.code.trim(), city: a.city, lat: Number(a.lat), lng: Number(a.lng) }))
+      .filter((p) => IATA.test(p.code));
+    if (places.length === 0) return { cities: new Map(), failed: [] };
+    const found = await findCities(deps.sources, places, places.length);
+    const cities = new Map<string, string | null>();
+    for (const p of places) {
+      const facts = found.facts.get(p.code);
+      if (facts) cities.set(p.code, facts.qid);
+    }
+    return { cities, failed: found.failed, ...(found.error ? { error: found.error } : {}) };
   };
 
   const remembered = new Map<string, string>();
@@ -107,11 +122,15 @@ export async function resolvePlaceLandmarks(deps: {
   const cities = new Map<string, string | null>(remembered);
   const unknown = due.filter((d) => d.cityQid === null).map((d) => d.code);
   if (unknown.length > 0) {
+    let found: Awaited<ReturnType<typeof citiesOf>>;
     try {
-      for (const [code, qid] of await citiesOf(unknown)) cities.set(code, qid);
+      found = await citiesOf(unknown);
     } catch (err) {
       return stop(err, unknown);
     }
+    // A search that failed is its own place's: the run stops, the other places untouched for the next one.
+    if (found.error) return stop(found.error, found.failed);
+    for (const [code, qid] of found.cities) cities.set(code, qid);
   }
 
   for (const place of due) {
@@ -125,7 +144,9 @@ export async function resolvePlaceLandmarks(deps: {
         // The item a place's rows remember answered nothing at all, not even its own photographs: merged into another
         // or emptied since. The city is found again rather than the place written down to nothing.
         if (answer.length === 0 && remembered.has(place.code)) {
-          const again = (await citiesOf([place.code])).get(place.code) ?? null;
+          const found = await citiesOf([place.code]);
+          if (found.error) throw found.error;
+          const again = found.cities.get(place.code) ?? null;
           if (again !== cityQid) {
             cityQid = again;
             answer = again === null ? [] : await askLandmarks(deps.sources, again);
