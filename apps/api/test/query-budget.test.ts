@@ -167,7 +167,7 @@ describe("query budget per route", () => {
         (283, 'Tokyo', 'Japan', 'Asia', 'HND', ARRAY['HND'], true),
         (512, 'Dubai', 'United Arab Emirates', 'Middle East', 'DXB', ARRAY['DXB'], false)`);
     await t.db.execute(sql`
-      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price) VALUES ('JFK', 283, 1508, 1745), ('JFK', 512, 1, 1365)`);
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price) VALUES ('JFK', 283, 9103, 1301), ('JFK', 512, 9104, 1401)`);
     await t.flags.set("catalog.site_pins", { enabled: true });
     const siteHome = await queriesFor("/v1/home", cookie);
     expect(
@@ -178,6 +178,24 @@ describe("query budget per route", () => {
       siteHome.length,
       "the site's pins cost at most four reads over the home screen without them",
     ).toBeLessThanOrEqual(home.length + 4);
+
+    // ADR-IMPL-067: with the site's deals on (the pins off), the home screen adds them — the home airport, the origins and
+    // one read of the deals for the nearest metros, whatever their number — then keeps them a minute.
+    await t.flags.set("catalog.site_pins", { enabled: false });
+    await t.flags.set("catalog.site_offers", { enabled: true });
+    const dealsHome = await queriesFor("/v1/home", cookie);
+    expect(
+      dealsHome.length,
+      `home with the site's deals ran ${dealsHome.length} queries (budget ${BUDGET["GET /v1/home"]}):\n${dealsHome.join("\n")}`,
+    ).toBeLessThanOrEqual(BUDGET["GET /v1/home"]!);
+    expect(
+      dealsHome.length,
+      "the site's deals cost at most four reads over the home screen without them",
+    ).toBeLessThanOrEqual(home.length + 4);
+    const dealsAgain = await queriesFor("/v1/home", cookie);
+    expect(dealsAgain.length, "kept a minute: the next home screen reads none of them").toBeLessThanOrEqual(
+      home.length,
+    );
 
     await t.seedMoreJfkLhrFares();
     const largerSearch = await queriesFor("/v1/search?from=JFK&to=LHR&cabin=business", cookie);
