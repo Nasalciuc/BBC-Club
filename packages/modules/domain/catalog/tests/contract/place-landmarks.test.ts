@@ -11,13 +11,14 @@ import { createPlatform } from "@bbc/platform";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { PlaceLandmarksVM } from "@bbc/shared/api/v1/places";
 import type { AppEnv } from "@bbc/shared/http/app-env";
-import type { Binding, Fetch } from "../../src/application/place-photo-sources";
+import { DEFAULT_RETRY_AFTER_S, type Binding, type Fetch } from "../../src/application/place-photo-sources";
 import {
   LANDMARK_PLACE_MAX_MS,
   LANDMARK_RUN_REQUESTS_MS,
   resolvePlaceLandmarks,
 } from "../../src/application/place-landmarks";
 import { placeLandmarksRepo } from "../../src/infrastructure/place-landmarks.repo";
+import { sourceHoldsRepo } from "../../src/infrastructure/source-holds.repo";
 import { catalogModule } from "../../src/module";
 import { binding, fakeSources } from "../unit/place-photos.fixture";
 import parisAnswer from "../unit/wikimedia/landmarks-paris.json";
@@ -266,6 +267,35 @@ describe("landmarks", () => {
     }[];
     expect(commons.map((h) => h.source)).toEqual(["commons"]);
     await t.iso.drop();
+  });
+
+  it("a second 429 never shortens a hold already longer; a longer one lengthens it", async () => {
+    const iso = await isolatedDb("landmarks-hold-longer");
+    const left = async () =>
+      (
+        (await iso.db.execute(sql`
+          SELECT source, round(extract(epoch FROM not_before - now()))::int AS seconds
+          FROM catalog.source_holds ORDER BY source::text`)) as unknown as { source: string; seconds: number }[]
+      ).map((h) => [h.source, h.seconds] as const);
+    const about = (seconds: number | undefined, expected: number) =>
+      expect(Math.abs((seconds ?? 0) - expected)).toBeLessThanOrEqual(5);
+
+    // The landmarks' job is held off WDQS for 1000 s; the place photos' job, already running beside it, then gets a 429
+    // it cannot read the wait of (its default): the 1000 s stay, whichever job writes last.
+    await sourceHoldsRepo.hold(iso.db, "wikidata", 1000);
+    await sourceHoldsRepo.hold(iso.db, "wikidata", DEFAULT_RETRY_AFTER_S);
+    let holds = await left();
+    expect(holds.map(([source]) => source)).toEqual(["wikidata"]);
+    about(holds[0]?.[1], 1000);
+
+    // The other way round: a longer wait lengthens the hold.
+    await sourceHoldsRepo.hold(iso.db, "commons", 40);
+    await sourceHoldsRepo.hold(iso.db, "commons", 1000);
+    holds = await left();
+    expect(holds.map(([source]) => source)).toEqual(["commons", "wikidata"]);
+    about(holds[0]?.[1], 1000);
+    about((await sourceHoldsRepo.heldFor(iso.db)) ?? 0, 1000);
+    await iso.drop();
   });
 
   it("a failed look keeps what a place has and tries again in six hours; a new place gets a failed marker", async () => {
