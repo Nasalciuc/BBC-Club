@@ -288,6 +288,7 @@ export default function ExploreScreen() {
         selected={state.to?.code ?? null}
         onSelect={onSelectPin}
         onTapPlace={onTapGlobe}
+        offline={offline}
         centreY={centreY}
         band={band}
         sheetTop={sheetTop(sheetIndex, height, insets.top)}

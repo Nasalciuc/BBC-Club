@@ -6,7 +6,16 @@
  * then served from Mapbox's cache — on the pale sky (02). Our pins and their labels are React views on the map
  * (MarkerView); a chosen route is a white line with its plane, framed over the sheet (13).
  */
-import Mapbox, { Atmosphere, Camera, LineLayer, MapView, MarkerView, ShapeSource, type MapState } from "@rnmapbox/maps";
+import Mapbox, {
+  Atmosphere,
+  BackgroundLayer,
+  Camera,
+  LineLayer,
+  MapView,
+  MarkerView,
+  ShapeSource,
+  type MapState,
+} from "@rnmapbox/maps";
 import { type ComponentRef, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -57,6 +66,12 @@ Mapbox.setTelemetryEnabled(false);
 /** The Earth as photographed, without names (the owner's reference, 13 Oct 2026). A map that cannot load falls back to
  *  the drawn globe. */
 const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-v9";
+/**
+ * The black globe's floor (ADR-IMPL-068, over the air): satellite-v9 paints its background layer, rgb(4,7,14), wherever
+ * a tile is missing — a sphere of near-black where the imagery did not come. Recoloured to the drawn globe's deep ocean,
+ * a missing tile shows the sea instead.
+ */
+const BACKGROUND = { backgroundColor: tokens.colors.globeOceanDeep } as const;
 /** 02: the globe on the pale sky, a white haze at its rim, no stars. */
 const ATMOSPHERE = {
   color: tokens.colors.surfaceCard,
@@ -323,6 +338,7 @@ export default function MapboxGlobe({
         }}
         onPress={onMapPress}
       >
+        <BackgroundLayer id="background" existing style={BACKGROUND} />
         <Atmosphere style={ATMOSPHERE} />
         <Camera
           ref={camera}

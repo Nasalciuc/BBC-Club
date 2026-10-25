@@ -7,15 +7,15 @@
  * drawn one leaves when the fade is done. Both stand where the screen asks — centred at rest under the greeting (02),
  * lifted over the sheet once a route is chosen (13).
  */
-import { Component, type ReactNode, Suspense, lazy, useEffect, useState } from "react";
-import { NativeModules, StyleSheet } from "react-native";
+import { Component, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from "react";
+import { AppState, NativeModules, StyleSheet } from "react-native";
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { GLOBE_SPEC, GlobeFallback, routeView, tokens } from "@bbc/ui";
 
 import { env } from "@/lib/env";
 
-import { type TileProbe, satelliteTileProbe, shouldShowMapbox } from "./mapbox-ready-logic";
+import { type TileProbe, cameBack, satelliteTileProbe, shouldReprobe, shouldShowMapbox } from "./mapbox-ready-logic";
 import type { MapboxGlobeProps } from "./MapboxGlobe";
 
 export const MAPBOX_READY =
@@ -30,6 +30,8 @@ const FRAME = GLOBE_SPEC.frame;
 type Props = Omit<MapboxGlobeProps, "onFailed" | "onReady"> & {
   /** The screen's width: the drawn globe's frame is centred on it. */
   width: number;
+  /** The phone is offline (NetInfo): coming back online asks for the satellite imagery again (ADR-IMPL-068). */
+  offline?: boolean;
 };
 
 class DrawnGlobeOnError extends Component<{ onFail: () => void; children: ReactNode }, { failed: boolean }> {
@@ -50,7 +52,19 @@ class DrawnGlobeOnError extends Component<{ onFail: () => void; children: ReactN
 }
 
 export function Globe(props: Props) {
-  const { pins, home, selected, onSelect, onTapPlace, centreY, band, paused = false, width, ...mapProps } = props;
+  const {
+    pins,
+    home,
+    selected,
+    onSelect,
+    onTapPlace,
+    centreY,
+    band,
+    paused = false,
+    width,
+    offline = false,
+    ...mapProps
+  } = props;
   // Mapbox reports a map that cannot load (bad token, style error) without throwing: switch to the drawn globe.
   const [mapFailed, setMapFailed] = useState(false);
   // Mapbox has loaded and drawn: fade it in over the drawn globe, then let the drawn one go.
@@ -75,7 +89,7 @@ export function Globe(props: Props) {
     frameTop.value = withTiming(frameCentre - FRAME / 2, { duration: reducedMotion ? 0 : tokens.motion.panel * 2 });
   }, [frameCentre, reducedMotion, frameTop]);
 
-  // One tile of the imagery, asked once per session; without it the drawn globe stays.
+  // One tile of the imagery, asked once per session (and again on return, below); without it the drawn globe stays.
   useEffect(() => {
     if (!MAPBOX_READY) return;
     let cancelled = false;
@@ -91,6 +105,34 @@ export function Globe(props: Props) {
       cancelled = true;
     };
   }, []);
+
+  // ADR-IMPL-068: the black globe's floor. While the satellite globe is shown, its imagery is asked for again when the app
+  // comes back to the foreground or the phone comes back online (at most once a minute); if it no longer comes, the
+  // drawn globe takes Explore back for the session — never a sphere of the style's background.
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
+  useEffect(() => {
+    const app = AppState.addEventListener("change", (s) => setAppActive(s === "active"));
+    return () => app.remove();
+  }, []);
+  const before = useRef({ active: appActive, offline });
+  const lastAskedAt = useRef<number | null>(null);
+  useEffect(() => {
+    const came = cameBack(before.current, { active: appActive, offline });
+    before.current = { active: appActive, offline };
+    const now = Date.now();
+    if (
+      !MAPBOX_READY ||
+      !shouldReprobe({ came, mapboxShown: show, failed: mapFailed, lastAskedAt: lastAskedAt.current, now })
+    ) {
+      return;
+    }
+    lastAskedAt.current = now;
+    void satelliteTileProbe(env.EXPO_PUBLIC_MAPBOX_TOKEN, undefined, { fresh: true }).then((probe) => {
+      if (probe !== "failed") return;
+      console.warn("Mapbox imagery no longer loads; drawing GlobeFallback instead.");
+      setMapFailed(true);
+    });
+  }, [appActive, offline, show, mapFailed]);
 
   useEffect(() => {
     if (!show) return;

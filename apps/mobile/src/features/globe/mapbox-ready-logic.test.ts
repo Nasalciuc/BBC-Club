@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 
 import {
+  REPROBE_MIN_GAP_MS,
   TILE_PROBE_TIMEOUT_MS,
+  cameBack,
   probeSatelliteTile,
   readTileProbe,
   resetTileProbe,
   satelliteTileProbe,
+  shouldReprobe,
   shouldShowMapbox,
   tileProbeUrl,
 } from "./mapbox-ready-logic";
@@ -60,5 +63,41 @@ describe("the satellite globe fades in only over imagery (F107)", () => {
     expect([a, b]).toEqual(["ok", "ok"]);
     expect(await satelliteTileProbe("pk.x", { fetch })).toBe("ok");
     expect(asked).toBe(1);
+  });
+});
+
+describe("the imagery is asked again on return and on reconnect (ADR-IMPL-068)", () => {
+  it("the app coming back to the foreground, or the phone back online, is a reason; nothing else is", () => {
+    const at = (active: boolean, offline: boolean) => ({ active, offline });
+    expect(cameBack(at(false, false), at(true, false))).toBe("foreground");
+    expect(cameBack(at(true, true), at(true, false))).toBe("online");
+    expect(cameBack(at(true, false), at(true, true))).toBeNull(); // going offline: nothing to ask
+    expect(cameBack(at(true, false), at(false, false))).toBeNull(); // leaving
+    expect(cameBack(at(true, false), at(true, false))).toBeNull();
+  });
+
+  it("only while the satellite globe is shown and has not failed, at most once a minute", () => {
+    const base = { came: "foreground" as const, mapboxShown: true, failed: false, lastAskedAt: null, now: 100_000 };
+    expect(shouldReprobe(base)).toBe(true);
+    expect(shouldReprobe({ ...base, came: null })).toBe(false);
+    expect(shouldReprobe({ ...base, mapboxShown: false })).toBe(false); // the drawn globe stands: no black sphere
+    expect(shouldReprobe({ ...base, failed: true })).toBe(false); // handed back for the session
+    expect(shouldReprobe({ ...base, lastAskedAt: base.now - REPROBE_MIN_GAP_MS + 1 })).toBe(false);
+    expect(shouldReprobe({ ...base, came: "online", lastAskedAt: base.now - REPROBE_MIN_GAP_MS })).toBe(true);
+  });
+
+  it("asked again, the answer replaces the session's", async () => {
+    let tile = answer(200, "image/jpeg");
+    let asked = 0;
+    const fetch = async () => {
+      asked += 1;
+      return tile;
+    };
+    expect(await satelliteTileProbe("pk.x", { fetch })).toBe("ok");
+    tile = answer(401, "application/json"); // the token revoked meanwhile
+    expect(await satelliteTileProbe("pk.x", { fetch })).toBe("ok"); // the session's answer
+    expect(await satelliteTileProbe("pk.x", { fetch }, { fresh: true })).toBe("failed");
+    expect(await satelliteTileProbe("pk.x", { fetch })).toBe("failed");
+    expect(asked).toBe(2);
   });
 });
