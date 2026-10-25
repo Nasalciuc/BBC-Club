@@ -105,6 +105,22 @@ export function horizonDeg(zoom: number, viewHeight: number): number {
 }
 
 /**
+ * Whether the place `mapPoint` puts at `at` stands past Mapbox's horizon at a zoom: hidden behind the globe, so no pin
+ * there is a target (ADR-IMPL-068). `mapPoint` keeps places to NEAR_SIDE_DEG, which zoomed in is past the horizon (74°
+ * at 2× on an 852-pt view); their 44-pt targets would reach out over the sky. Its point is R·sin α from the centre,
+ * α ≤ NEAR_SIDE_DEG, so the angle is read back from it.
+ */
+export function pastHorizon(
+  at: { x: number; y: number },
+  zoom: number,
+  centre: { x: number; y: number },
+  viewHeight: number,
+): boolean {
+  const sin = Math.min(1, Math.hypot(at.x - centre.x, at.y - centre.y) / radiusAtZoom(zoom));
+  return Math.asin(sin) / RAD > horizonDeg(zoom, viewHeight);
+}
+
+/**
  * How far inside the horizon a pressed place must stand to be the globe's (ADR-IMPL-068): Mapbox answers a press on the
  * sky with a place on its horizon. The 2° cover the camera Explore holds being a frame behind Mapbox's (the slow turn,
  * a fling); at the limb they are under half a point on screen.

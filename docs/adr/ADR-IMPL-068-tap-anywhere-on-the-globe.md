@@ -139,7 +139,10 @@ may change any of them**.
    f·R·sin α / (d + R − R·cos α) out, α the place's angle from the view's centre) before `pinAt`, and gives the place
    under the finger and the city it snaps to in the same projection, so the distance line's 22 pt is measured as they
    are drawn. Without it, a press beside a pin on the outer ring, which the disc now takes, reached the snap: the calm
-   answer or a neighbouring city where it had done nothing. Tested at rest, 2× and 3× with gl-js's camera and one at
+   answer or a neighbouring city where it had done nothing. A pin past the horizon (`pastHorizon`: `mapPoint` keeps
+   places to 80°, zoomed in beyond the horizon — 74° at 2×, 69° at 3× on an 852-pt view) is behind the globe and no
+   target, so its 44-pt ring never answers a press on the sky beside the limb (tested at 2× and 3×; a pin 5° inside the
+   horizon keeps its target). Tested at rest, 2× and 3× with gl-js's camera and one at
    1.5 view heights: presses 1, 4, 12 and 40 pt beside the limb on eight bearings are no tap on iOS (the finger) or
    Android (the place reprojected); presses 4 and 12 pt inside either camera's limb, and 1 pt inside gl-js's, are a tap
    where the place is — at rest and 2× with gl-js's camera all three stand past `radiusAtZoom`; with a nearer camera

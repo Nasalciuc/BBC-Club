@@ -531,6 +531,31 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
       }
     });
 
+    it("a pin past the horizon is no target: a press on the sky beside the limb opens nothing, at 2× and 3×", () => {
+      // `mapPoint` keeps places to 80°; zoomed in, Mapbox's horizon is nearer (74° at 2×, 69° at 3× on an 852-pt view),
+      // so a pin between the two stands behind the globe — its 44-pt target would reach out over the sky.
+      for (const zoom of [REST_ZOOM + 1, ZOOM_RANGE.max]) {
+        const camera: GlobeCamera = { ...cam, zoom };
+        const mb = mapboxCamera(camera, centre, Math.SQRT1_2);
+        const press = (x: number, y: number) => ({ ...mb.resolve(x, y), screen: { x, y } });
+        const horizon = horizonDeg(zoom, VIEW_H);
+        const behind = { lng: Math.min(79, horizon + 3), lat: 0 };
+        const front = { lng: horizon - 5, lat: 0 };
+        const limb = limbRadius(zoom, VIEW_H);
+        const sky = { x: centre.x + limb + 10, y: centre.y };
+        const pins = (p: { lng: number; lat: number }) => {
+          const at = mapPoint(p, camera, centre)!;
+          return { ...seen({ placed: [{ code: "XXX", x: at.x, y: at.y, lines: [], label: null }] }), camera };
+        };
+        expect({ zoom, choice: mapboxPress(press(sky.x, sky.y), pins(behind), never) }).toEqual({ zoom, choice: null });
+        // A pin on the near side of the horizon keeps its target, here as everywhere.
+        const pin = mb.project(front)!;
+        const frame = pinUnion(pin.x, pin.y, null);
+        const beside = { x: frame.left - 6, y: (frame.top + frame.bottom) / 2 };
+        expect(mapboxPress(press(beside.x, beside.y), pins(front), never)).toEqual({ kind: "pin", code: "XXX" });
+      }
+    });
+
     it("elsewhere on the disc, the place Mapbox gives, where it stands on screen", () => {
       const finger = { x: centre.x + 40, y: centre.y - 30 };
       const tap = placeOf(mapboxPress(ios(finger.x, finger.y), seen(), never))!;
