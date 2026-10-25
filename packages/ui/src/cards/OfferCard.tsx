@@ -16,6 +16,12 @@ type Props = {
   savePercent?: number | null;
   /** `4.8`, as whoever made the offer gave it (ADR-IMPL-056); none — no star. */
   rating?: string | null;
+  /**
+   * Where the price leaves from, when it is not the member's own airport (`from New York`): a deal of the company's site
+   * from the nearest city it sells from (ADR-IMPL-067). A line under the price, in the country's role and slate — 02
+   * and 16 draw none (a deviation, reported in the ADR); none — no line.
+   */
+  origin?: string | null;
   /** The offer's own picture, else its city's photo (ADR-IMPL-043, ADR-IMPL-056); null — the fallback. */
   image: PhotoSource | null;
   fallback: PhotoSource | null;
@@ -130,7 +136,8 @@ function SaveBar({ percent, height, role }: { percent: number; height: number; r
 
 /**
  * The offer card (02, 16; sheet 40): a tall daylight photo, then the city with its rating at the right, the country in
- * slate, `from` and the price, and the `Save 54%` pill across the foot. White with the card shadow.
+ * slate, `from` and the price, and the `Save 54%` pill across the foot. White with the card shadow. A deal of the
+ * company's site (ADR-IMPL-067) has no pill — no saving is on record — and may name its origin under the price.
  */
 export function OfferCard({
   city,
@@ -138,6 +145,7 @@ export function OfferCard({
   fromPrice,
   savePercent,
   rating,
+  origin,
   image,
   fallback,
   onPress,
@@ -150,6 +158,7 @@ export function OfferCard({
     rating ? `rated ${rating}` : null,
     country,
     fromPrice ? `from ${fromPrice}` : null,
+    origin,
     savePercent ? `save ${savePercent}%` : null,
   ]
     .filter(Boolean)
@@ -233,8 +242,21 @@ export function OfferCard({
       Explore
     </Text>
   );
-  const lastBaseline = fromPrice ? g.price.baseline : g.from.baseline;
-  const lastRole = fromPrice ? g.price.role : g.from.role;
+  const priceBaseline = fromPrice ? g.price.baseline : g.from.baseline;
+  const priceRole = fromPrice ? g.price.role : g.from.role;
+  // ADR-IMPL-067: the origin's line under the price, as far below it as the country is below the city. It may wrap
+  // (`from San Francisco` at the reading size): the card grows, nothing is cut.
+  const originPitch = g.country.baseline - g.city.baseline;
+  const originLine = origin ? (
+    <Text
+      style={[g.country.role, styles.slate, { marginTop: after(originPitch, priceRole, g.country.role) }]}
+      testID={`${testID}.origin`}
+    >
+      {origin}
+    </Text>
+  ) : null;
+  const lastBaseline = origin ? priceBaseline + originPitch : priceBaseline;
+  const lastRole = origin ? g.country.role : priceRole;
   return (
     <Pressable
       testID={testID}
@@ -284,6 +306,7 @@ export function OfferCard({
           {country ?? " "}
         </Text>
         {priceLines}
+        {originLine}
       </View>
       {savePercent ? (
         <View
