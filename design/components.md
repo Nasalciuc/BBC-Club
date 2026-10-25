@@ -162,8 +162,9 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   `text-on-tint`; `settings` (34) radius 9, rows 47.1 (34 draws Phone 45.4, Password 48, Privacy policy 46.6, Terms of
   use 48.4 and `Delete account` 46.8 — the screen passes each), the icon 19.4, `settingsRow` / `settingsValue` navy;
   `edit` (36) radius 11, rows 48.2, the icon 21, `text-on-tint`; `fare` (05) radius 9, rows 37, `fareRow`, `rule-line`
-  rules, a hairline and the soft shadow, the value in slate. `danger`: the trash and the words in red. `stacked` (the
-  label small over the value) and the 56-pt rows are 1.0's.
+  rules, a hairline and the soft shadow, the value in slate. A value too long for its line (a member's own name) wraps
+  and its row grows, never cut. `danger`: the trash and the words in red. `stacked` (the label small over the value)
+  and the 56-pt rows are 1.0's.
 - **StatusBadge** (sheet 41) — `Quote ready` navy fill (`badgeStrong`), `Received` light blue, `Booked` navy outline
   with a check, `Closed` on `surface-closed` with `text-on-closed` words, `Not sent` on a 0.9 `border-strong` ring; the
   others' words in `badge`; 25 tall (26.7 beside a title, in `badgeTitle`; 23 small).

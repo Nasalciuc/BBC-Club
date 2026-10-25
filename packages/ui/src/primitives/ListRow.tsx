@@ -270,7 +270,8 @@ export function ListRow({
  * A row in a screen's look (12, 34, 36), as measured: the mark centred in its column, the label from where the words
  * start, the value ending where the screen ends it, the thin chevron at its inset; everything centred on the row. With
  * a subtitle (34's Notifications), the label's baseline 25.9 pt under the row's top, the subtitle 16.6 under it, the
- * row's foot 16.6 under that.
+ * row's foot 16.6 under that. A value too long for its line (a member's own name, any value at 1.3× text) wraps and the
+ * row grows — nothing is cut (DESIGN.md, Layout).
  */
 function LookRow({
   look,
@@ -343,11 +344,7 @@ function LookRow({
           </Text>
         ) : null}
       </View>
-      {value ? (
-        <Text style={[look.value, lookStyles.value, { color: look.valueColor }]} numberOfLines={1}>
-          {value}
-        </Text>
-      ) : null}
+      {value ? <Text style={[look.value, lookStyles.value, { color: look.valueColor }]}>{value}</Text> : null}
       {toggle ? (
         <Toggle
           value={toggle.value}
@@ -470,7 +467,9 @@ const lookStyles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
   icon: { position: "absolute", alignItems: "center" },
   text: { flex: 1 },
-  value: { flexShrink: 1, maxWidth: "55%", textAlign: "right" },
+  // A wrapped value keeps clear of the rules; one line, up to 1.3× text, still fits every look's drawn height (12's
+  // 29.65: 17 × 1.3 + 2 × 2).
+  value: { flexShrink: 1, maxWidth: "55%", textAlign: "right", marginVertical: tokens.space.hair },
   chevron: { position: "absolute" },
   rule: { position: "absolute", top: 0, height: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderFaint },
 });
