@@ -25,9 +25,12 @@ import {
   OPENING_CENTER,
   REST_ZOOM,
   ZOOM_RANGE,
+  createPressGuard,
   globePadding,
   labelScale,
   mapPoint,
+  onGlobeDisc,
+  pinAt,
   pinFrame,
   pinPriority,
   placeLabels,
@@ -37,6 +40,7 @@ import {
   routeMiddle,
   tokens,
   type GlobeCamera,
+  type GlobeTap,
   type LngLat,
   type Pin,
   type PinToPlace,
@@ -69,6 +73,11 @@ const TURN_DEG_PER_S = 360 / (GLOBE_SPEC.periodMs / 1000);
 const MOVE_MS = { frame: 900, flight: 950, arc: 600 } as const;
 const ARC_TICK_MS = 30;
 
+/** The globe was touched now: the slow turn waits 4 s from here. */
+function touched(view: { touchedAt: number }) {
+  view.touchedAt = Date.now();
+}
+
 export type MapboxGlobeProps = {
   pins: Pin[];
   home: { lat: number; lng: number; code?: string } | null;
@@ -89,6 +98,8 @@ export type MapboxGlobeProps = {
   onFailed: () => void;
   /** The map has loaded and drawn: Globe fades it in over the drawn globe. */
   onReady: () => void;
+  /** A press on the globe that is no pin's, at rest (ADR-IMPL-068): the place under the finger. The sky is nothing. */
+  onTapPlace?: (tap: GlobeTap) => void;
 };
 
 export default function MapboxGlobe({
@@ -102,6 +113,7 @@ export default function MapboxGlobe({
   paused = false,
   onFailed,
   onReady,
+  onTapPlace,
 }: MapboxGlobeProps) {
   const camera = useRef<ComponentRef<typeof Camera>>(null);
   const view = useRef({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM, touchedAt: 0 });
@@ -118,6 +130,9 @@ export default function MapboxGlobe({
   const [arc, setArc] = useState(1);
   // Where the camera stands, for the labels: which pins are on the near side, and on which side each label fits.
   const [seen, setSeen] = useState<GlobeCamera>({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM });
+  // ADR-IMPL-068: a pin's press, so a map press of the same touch is not taken for a tap beside it (Android's map
+  // absorbs a press on a MarkerView; iOS is unchecked).
+  const [pressGuard] = useState(() => createPressGuard());
 
   const moving = appActive && !paused && !reducedMotion;
 
@@ -253,6 +268,25 @@ export default function MapboxGlobe({
 
   const line = dest && home ? routeLine(home, dest) : null;
   const middle = dest && home ? routeMiddle(home, dest) : null;
+  // ADR-IMPL-068: a press at rest on the globe's disc, on no pin, is a tap on the place under it. A press on the sky
+  // (Mapbox may answer it with a place, unchecked) or on a pin's target — the pin's own press answers that — is not.
+  function onMapPress(feature: {
+    geometry: { coordinates: number[] };
+    properties: { screenPointX: number; screenPointY: number };
+  }) {
+    touched(view.current); // a press is a touch: the slow turn pauses for it too
+    if (!onTapPlace || selected !== null || pressGuard.pressedLately()) return;
+    const [lng, lat] = feature.geometry.coordinates;
+    const finger = { x: feature.properties.screenPointX, y: feature.properties.screenPointY };
+    if (lng === undefined || lat === undefined || !Number.isFinite(lng) || !Number.isFinite(lat)) return;
+    const cam: GlobeCamera = { center: [...view.current.center] as LngLat, zoom: view.current.zoom };
+    if (!onGlobeDisc(finger, cam.zoom, centre)) return;
+    if (pinAt(finger.x, finger.y, placed) !== null) return;
+    // The finger and the city in one projection, so how far apart they stand on screen is measured alike.
+    const at = mapPoint({ lng, lat }, cam, centre) ?? finger;
+    onTapPlace({ lng, lat, x: at.x, y: at.y, project: (p) => mapPoint(p, cam, centre) });
+  }
+
   // Mapbox's terms: logo and attribution always visible — just above the sheet.
   const ornament = { bottom: Math.max(8, size.height - sheetTop + 8) };
 
@@ -287,10 +321,7 @@ export default function MapboxGlobe({
           setMapReady(true);
           onReady();
         }}
-        // A tap on the ocean moves nothing, but it is a touch: the slow turn pauses for it too.
-        onPress={() => {
-          view.current.touchedAt = Date.now();
-        }}
+        onPress={onMapPress}
       >
         <Atmosphere style={ATMOSPHERE} />
         <Camera
@@ -365,7 +396,7 @@ export default function MapboxGlobe({
                   pin && pin.code !== selected
                     ? () => {
                         view.current.touchedAt = Date.now();
-                        onSelect(pin.code);
+                        if (pressGuard.choose(pin.code)) onSelect(pin.code);
                       }
                     : undefined
                 }

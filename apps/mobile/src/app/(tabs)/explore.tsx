@@ -14,11 +14,13 @@ import {
   RoundButton,
   SearchField,
   tokens,
+  type GlobeTap,
 } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { DestinationDetails } from "@/features/explore/DestinationDetails";
+import { HOME_AIRPORT_MESSAGE } from "@/features/explore/discovery-logic";
 import { globeCentreY, sheetSnaps, sheetTop } from "@/features/explore/explore-layout";
 import { firstName } from "@/features/explore/greeting";
 import { GreetingHeader } from "@/features/explore/GreetingHeader";
@@ -36,6 +38,7 @@ import { SkyBackdrop, SkyClouds } from "@/features/explore/SkyBackdrop";
 import { useExploreHome } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
+import { NOTHING_NEAR, answerTap, nearestLine } from "@/features/globe/globe-tap-logic";
 import { useDestinations } from "@/features/globe/useDestinations";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
@@ -103,9 +106,17 @@ export default function ExploreScreen() {
     if (state.to) setSheetIndex(STOP.route);
   }, [state.to, choices]);
 
+  // ADR-IMPL-068: what the last tap on the globe off the pins answered — nothing near there, or the member's own city —
+  // shown at rest under the search bar until the next choice; and the distance to the city a tap snapped to, shown under
+  // its country while that city is the one chosen.
+  const [tapAnswer, setTapAnswer] = useState<"none" | "home" | null>(null);
+  const [tapNote, setTapNote] = useState<{ code: string; line: string } | null>(null);
+  const nearest = tapNote && tapNote.code === state.to?.code ? tapNote.line : undefined;
+
   // The destination chosen on the globe comes with the dates it was last searched for, as from Search's recent list
   // (03, 04): Search and the globe keep one list.
   function selectDestination(airport: AirportVM) {
+    setTapAnswer(null);
     const dates = rememberSearch(airport)[0]?.dates;
     dispatch({ type: "selectDestination", airport });
     if (dates?.depart) {
@@ -117,6 +128,32 @@ export default function ExploreScreen() {
   function clearDestination() {
     dispatch({ type: "clearDestination" });
     setSheetIndex(STOP.rest);
+    setTapNote(null);
+  }
+
+  // ADR-IMPL-068: a tap anywhere on the globe at rest snaps to the nearest city the club sells within 600 km, opened as
+  // a pin's is; farther or over the sea, the calm answer; the member's own city, the home answer. Without Home's list
+  // (the flag off, an older server) a tap off the pins does nothing, as before. The search stays the screen reader's
+  // way to a city: the globe gains no element.
+  function onTapGlobe(tap: GlobeTap) {
+    if (mode !== "rest") return;
+    const homeAirport = home?.home ?? null;
+    const answer = answerTap(tap, home?.bookable, homeAirport);
+    if (!answer) return;
+    if (answer.kind !== "place") {
+      setTapNote(null);
+      setTapAnswer(answer.kind);
+      return;
+    }
+    const { place } = answer;
+    setTapNote(answer.showDistance ? { code: place.code, line: nearestLine(place.city, answer.km) } : null);
+    // A city with a pin opens as its pin does, with everything the pin knows (its zone, its line).
+    selectDestination(pinToAirport(place.code) ?? place);
+  }
+
+  function openSearch() {
+    setTapAnswer(null);
+    router.push("/search" as Href);
   }
 
   useEffect(() => {
@@ -141,6 +178,7 @@ export default function ExploreScreen() {
   function onSelectPin(code: string) {
     const pin = pinToAirport(code);
     if (!pin) return;
+    setTapNote(null);
     selectDestination({
       code: pin.code,
       city: pin.city,
@@ -249,6 +287,7 @@ export default function ExploreScreen() {
         home={homeCoord}
         selected={state.to?.code ?? null}
         onSelect={onSelectPin}
+        onTapPlace={onTapGlobe}
         centreY={centreY}
         band={band}
         sheetTop={sheetTop(sheetIndex, height, insets.top)}
@@ -304,6 +343,7 @@ export default function ExploreScreen() {
           <DestinationDetails
             look="route"
             testIDPrefix="explore"
+            nearest={nearest}
             state={state}
             offline={offline}
             onRetry={retrySearch}
@@ -369,15 +409,31 @@ export default function ExploreScreen() {
                 testID="explore.search"
                 tone="bar"
                 placeholder="Where would you like to go?"
-                onPress={() => router.push("/search" as Href)}
+                onPress={openSearch}
               />
             </View>
+            {/* ADR-IMPL-068: the answer to a tap that found no city to open. No image draws it: the attention notice
+                of sheet 41, read out as it appears. */}
+            {tapAnswer ? (
+              <View style={styles.answer}>
+                <NoticeCard
+                  testID={`explore.tap.${tapAnswer}`}
+                  tone="attention"
+                  title={tapAnswer === "home" ? HOME_AIRPORT_MESSAGE.title : NOTHING_NEAR.title}
+                  body={tapAnswer === "home" ? HOME_AIRPORT_MESSAGE.body : NOTHING_NEAR.body}
+                  link={{ label: NOTHING_NEAR.link, onPress: openSearch, testID: "explore.tap.search" }}
+                />
+              </View>
+            ) : null}
             <SheetRest
               home={home}
               homeLoading={homeLoading}
               onOpenOffer={onOpenOffer}
-              onSeeAll={() => setSheetIndex(STOP.all)}
-              onSearch={() => router.push("/search" as Href)}
+              onSeeAll={() => {
+                setTapAnswer(null);
+                setSheetIndex(STOP.all);
+              }}
+              onSearch={openSearch}
             />
           </View>
         )}
@@ -415,4 +471,6 @@ const styles = StyleSheet.create({
   // 02: the bar 18.6 from the left and 18.7 from the right, a little inside the sheet's gutter.
   bar: { marginLeft: 18.6 - tokens.space.gutter, marginRight: 18.7 - tokens.space.gutter },
   rest: { gap: tokens.space.lg },
+  // The answer under the search bar, inside the sheet's gutter as the bar is.
+  answer: { marginTop: tokens.space.md },
 });

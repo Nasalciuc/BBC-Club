@@ -27,6 +27,12 @@ type Props = {
   look: "route" | "page";
   /** `explore` in Explore's sheet (13), `destination` on the destination's page (04). */
   testIDPrefix: "explore" | "destination";
+  /**
+   * ADR-IMPL-068: how far the city a tap on the globe snapped to is from where the finger fell (`Nearest: Rome · 180
+   * km`), under its country in the route's sheet (13) — no image draws it, so it takes the country's line and role.
+   * None: no line.
+   */
+  nearest?: string;
 };
 
 type Role = TextStyle & { fontSize: number; lineHeight: number };
@@ -191,13 +197,18 @@ export function DestinationDetails({
   onOpenFare,
   look,
   testIDPrefix,
+  nearest,
 }: Props) {
   const g = look === "route" ? ROUTE : PAGE;
   const to = state.route?.to ?? state.to;
   const city = to?.city ?? "";
   const country = countryName(to?.countryCode);
   // 04 writes the destination's line from the catalogue under its name; 13 its country — and 04 too, without a line.
-  const line = look === "page" ? (to?.description ?? country) : country;
+  // 13 after a tap on the globe: the distance under the country, a second line of the same role.
+  const line =
+    look === "page"
+      ? (to?.description ?? country)
+      : [country, nearest].filter((l): l is string => Boolean(l)).join("\n");
   const fares = (state.status === "done" || state.status === "paused") && state.results ? state.results : [];
   const clock = useLocalTime(city, state.route?.to.tz);
   const x = (screen: number) => screen - g.inset;
