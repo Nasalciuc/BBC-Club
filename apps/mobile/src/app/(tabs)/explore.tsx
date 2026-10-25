@@ -2,7 +2,7 @@ import { type Href, useIsFocused, useLocalSearchParams, useRouter } from "expo-r
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, type LayoutChangeEvent, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, BookablePlaceVM, FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import {
   BackButton,
@@ -39,6 +39,7 @@ import { useExploreHome } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
 import { NOTHING_NEAR, exploreTap } from "@/features/globe/globe-tap-logic";
+import { cityToOpen } from "@/features/globe/open-city";
 import { useDestinations } from "@/features/globe/useDestinations";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
@@ -86,7 +87,7 @@ export default function ExploreScreen() {
   const { offline, refresh } = useOffline();
   const { home, homeLoading, homeError, defaultFrom, retryHome } = useExploreHome();
   const { state, dispatch, retry } = useSearch({ defaultFrom });
-  const { pins, homeCoord, pinToAirport } = useDestinations(home, state.to);
+  const { pins, homeCoord } = useDestinations(home, state.to);
 
   // The member's usual cabin and travelers (Profile → Edit profile) are where a search starts, until a chip is touched.
   const usualCabin = profile?.preferences.cabin;
@@ -125,6 +126,16 @@ export default function ExploreScreen() {
     setChoices((n) => n + 1);
   }
 
+  // A pin's tap and a tap on the globe that snapped to a city open the city one way (ADR-IMPL-068, decision 4): the same
+  // airport (`cityToOpen`: a city with a pin opens with its pin's), so the same search, `state.to` and recent search. A
+  // snap brings its distance line, when it has one; a pin's tap clears the last.
+  function openCity(code: string, snap: { place: BookablePlaceVM; note: string | null } | null) {
+    const airport = cityToOpen(code, home?.destinations ?? [], snap?.place ?? null);
+    if (!airport) return;
+    setTapNote(snap?.note ? { code: airport.code, line: snap.note } : null);
+    selectDestination(airport);
+  }
+
   function clearDestination() {
     dispatch({ type: "clearDestination" });
     setSheetIndex(STOP.rest);
@@ -144,10 +155,8 @@ export default function ExploreScreen() {
       setTapAnswer(what.answer);
       return;
     }
-    const { place, note } = what;
-    setTapNote(note ? { code: place.code, line: note } : null);
-    // A city with a pin opens as its pin does, with everything the pin knows (its zone, its line).
-    selectDestination(pinToAirport(place.code) ?? place);
+    // Opened as a pin's tap opens it.
+    openCity(what.place.code, { place: what.place, note: what.note });
   }
 
   function openSearch() {
@@ -175,17 +184,7 @@ export default function ExploreScreen() {
   }, [focused, mode]);
 
   function onSelectPin(code: string) {
-    const pin = pinToAirport(code);
-    if (!pin) return;
-    setTapNote(null);
-    selectDestination({
-      code: pin.code,
-      city: pin.city,
-      name: pin.name,
-      countryCode: pin.countryCode,
-      lat: pin.lat,
-      lng: pin.lng,
-    });
+    openCity(code, null);
   }
 
   const search: SearchContext = { dates: state.dates, cabin: state.cabin, passengers: state.passengers };
