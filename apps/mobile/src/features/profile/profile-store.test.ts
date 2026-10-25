@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 
 import type { Profile } from "@/lib/api";
 
+import type { SavedProfile } from "./notifications-logic";
 import {
   loadProfile,
   profileSnapshot,
@@ -182,8 +183,123 @@ describe("a save is every screen's at once (brief 3.4.1)", () => {
     const s = server();
     // Explore's airport waits on the first question (useExploreHome): dropping it would start the search from New York.
     const waiting = loadProfile(s.fetchProfile);
-    storeSavedProfile(renamed("m1", "Dana Ives"));
+    // PATCH's row carries the member's airport as the server holds it: the same as the answer's here.
+    storeSavedProfile(patchRow("m1", "Dana Ives", { homeAirport: "BOS" }));
     s.answer({ ok: true, data: { ...renamed("m1", null), homeAirport: "BOS" } as Profile });
     expect((await waiting)?.homeAirport).toBe("BOS");
+  });
+});
+
+/** PATCH /v1/profile's answer: the raw row, without `notifications`. */
+function patchRow(memberId: string, displayName: string | null, over: Partial<Profile> = {}): SavedProfile {
+  const row: Partial<Profile> = { ...renamed(memberId, displayName), ...over };
+  delete row.notifications;
+  return row as SavedProfile;
+}
+
+describe("a save made while the store holds no profile and a question is on its way (review of 7d849c6)", () => {
+  it("the answer to the question asked before the save does not bring the old name back", async () => {
+    const s = server();
+    // Explore's first GET /v1/profile is on its way; Edit profile's Name sheet saves before it answers.
+    const first = refreshProfile(s.fetchProfile);
+    storeSavedProfile(patchRow("m1", "Dana Ives"));
+    // A reader asking now joins the question on its way.
+    const joined = loadProfile(s.fetchProfile);
+    expect(s.asked()).toBe(1);
+    s.answer({
+      ok: true,
+      data: { ...renamed("m1", null), notifications: { requestUpdates: true, offers: false } } as Profile,
+    });
+    expect((await first)?.displayName).toBe("Dana Ives");
+    expect((await joined)?.displayName).toBe("Dana Ives");
+    expect(profileSnapshot()?.displayName).toBe("Dana Ives");
+    // PATCH's row has no notifications: the answer's stay.
+    expect(profileSnapshot()?.notifications).toEqual({ requestUpdates: true, offers: false });
+  });
+
+  it("a home airport saved meanwhile is the airport Explore's search starts from", async () => {
+    const s = server();
+    const waiting = loadProfile(s.fetchProfile);
+    storeSavedProfile(patchRow("m1", null, { homeAirport: "BOS" }));
+    s.answer({ ok: true, data: renamed("m1", null) });
+    expect((await waiting)?.homeAirport).toBe("BOS");
+  });
+
+  it("another member's save is never laid over the answer", async () => {
+    const s = server();
+    const first = refreshProfile(s.fetchProfile);
+    storeSavedProfile(patchRow("m1", "Dana Ives"));
+    s.answer({ ok: true, data: renamed("m2", null) });
+    await first;
+    expect(profileSnapshot()?.memberId).toBe("m2");
+    expect(profileSnapshot()?.displayName).toBeNull();
+  });
+
+  it("a change of member drops the save with the question it waited on", async () => {
+    const s = server();
+    const before = refreshProfile(s.fetchProfile);
+    storeSavedProfile(patchRow("m1", "Dana Ives"));
+    resetProfile();
+    // The same member signs in again; the server holds another name by then (made up).
+    const after = refreshProfile(s.fetchProfile);
+    expect(s.asked()).toBe(2);
+    s.answer({ ok: true, data: renamed("m1", null) });
+    s.answer({ ok: true, data: renamed("m1", "Robin Hale") });
+    await Promise.all([before, after]);
+    expect(profileSnapshot()?.displayName).toBe("Robin Hale");
+  });
+
+  it("a later save replaces an earlier one", async () => {
+    const s = server();
+    const first = refreshProfile(s.fetchProfile);
+    storeSavedProfile(patchRow("m1", "Dana Ives"));
+    storeSavedProfile(patchRow("m1", "Dana Ives-Hale"));
+    s.answer({ ok: true, data: renamed("m1", null) });
+    expect((await first)?.displayName).toBe("Dana Ives-Hale");
+  });
+
+  it("the save is laid over that one answer only: the next question's answer is shown as it comes", async () => {
+    const s = server();
+    const first = refreshProfile(s.fetchProfile);
+    storeSavedProfile(patchRow("m1", "Dana Ives"));
+    s.answer({ ok: true, data: renamed("m1", null) });
+    await first;
+    // Changed on the server since (made up): the next question, asked after the save, is the truth.
+    const next = refreshProfile(s.fetchProfile);
+    s.answer({ ok: true, data: renamed("m1", "Dana Hale") });
+    expect((await next)?.displayName).toBe("Dana Hale");
+  });
+
+  it("a failed answer drops the save with its question; the next question, asked after the save, brings it", async () => {
+    const s = server();
+    const first = refreshProfile(s.fetchProfile);
+    storeSavedProfile(patchRow("m1", "Dana Ives"));
+    s.answer({ ok: false });
+    await first;
+    expect(profileSnapshot()).toBeNull();
+    const next = refreshProfile(s.fetchProfile);
+    s.answer({ ok: true, data: renamed("m1", "Dana Hale") });
+    expect((await next)?.displayName).toBe("Dana Hale");
+  });
+
+  it("the screens with their own copy hear each save once; the store's readers hear the answer once", async () => {
+    const s = server();
+    const saves: (string | null)[] = [];
+    let heard = 0;
+    const stopSaves = subscribeProfileSaves((p) => saves.push(p.displayName));
+    const stopSnapshot = subscribeProfile(() => {
+      heard += 1;
+    });
+    const first = refreshProfile(s.fetchProfile);
+    storeSavedProfile(patchRow("m1", "Dana Ives"));
+    storeSavedProfile(patchRow("m1", "Dana Ives-Hale"));
+    expect(saves).toEqual(["Dana Ives", "Dana Ives-Hale"]);
+    expect(heard).toBe(0);
+    s.answer({ ok: true, data: renamed("m1", null) });
+    await first;
+    expect(saves).toEqual(["Dana Ives", "Dana Ives-Hale"]);
+    expect(heard).toBe(1);
+    stopSaves();
+    stopSnapshot();
   });
 });

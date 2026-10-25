@@ -17,9 +17,13 @@ import { mergeSavedProfile, type SavedProfile } from "./notifications-logic";
 type Answer = { ok: true; data: Profile } | { ok: false };
 
 let current: Profile | null = null;
-/** Moves on with every change of member and every save: an answer to an older question is dropped. */
+/** Moves on with every change of member and every save over the profile held: an older question's answer is dropped. */
 let generation = 0;
-let inFlight: { generation: number; run: Promise<Profile | null> } | null = null;
+/**
+ * The question on its way, and the latest save made while it was and the store held no profile (`storeSavedProfile`):
+ * laid over its answer, it goes with the question.
+ */
+let inFlight: { generation: number; run: Promise<Profile | null>; saved: SavedProfile | null } | null = null;
 const listeners = new Set<() => void>();
 const saveListeners = new Set<(next: SavedProfile) => void>();
 
@@ -43,16 +47,23 @@ export function subscribeProfile(listener: () => void): () => void {
 export function refreshProfile(fetchProfile: () => Promise<Answer>): Promise<Profile | null> {
   if (inFlight && inFlight.generation === generation) return inFlight.run;
   const asked = generation;
+  // This question's slot: `storeSavedProfile` fills it through `inFlight`, the answer reads it here.
+  const slot: { saved: SavedProfile | null } = { saved: null };
   const run: Promise<Profile | null> = (async () => {
     const result = await fetchProfile();
     if (asked !== generation) return current;
-    if (result.ok) publish(result.data);
+    if (result.ok) publish(withSaveMeanwhile(result.data, slot.saved));
     return current;
   })().finally(() => {
     if (inFlight?.run === run) inFlight = null;
   });
-  inFlight = { generation: asked, run };
+  inFlight = Object.assign(slot, { generation: asked, run });
   return run;
+}
+
+/** An answer to a question asked before a save: the save laid over it if it is the same member's. */
+function withSaveMeanwhile(answer: Profile, saved: SavedProfile | null): Profile {
+  return saved !== null && saved.memberId === answer.memberId ? mergeSavedProfile(answer, saved) : answer;
 }
 
 /** The profile already loaded, else one question (joined if one is on its way). */
@@ -75,11 +86,16 @@ export function resetProfile(): void {
  *
  * The screens that keep their own copy (`subscribeProfileSaves`) hear every save, whether or not a profile was loaded
  * here: Explore's question may have failed (offline, the club not answering) while Profile holds its own, and Profile
- * must not say `Member` once a name is saved. Each copy takes only its own member's (profile-save-logic.ts). The store
- * itself keeps the save only over the profile it holds. With none loaded it holds no half profile (PATCH's answer has
- * no `notifications`) and drops no question — a reader waiting on one (Explore's airport) still gets its answer — and
- * Explore's next question, each time it comes into view, brings the save. A save that answers after a change of member
- * (the store holds another member) is nobody's: no screen hears it.
+ * must not say `Member` once a name is saved. Each copy takes only its own member's (profile-save-logic.ts).
+ *
+ * With no profile loaded the store holds no half profile (PATCH's answer has no `notifications`) and drops no
+ * question: a reader waiting on one (Explore's airport) still gets a profile. But that question was asked before the
+ * save, and its answer may hold the old name or airport: the save waits with it and is laid over its answer if that is
+ * the same member's, the answer's `notifications` kept. A later save replaces an earlier one (PATCH answers with the
+ * whole row); the save goes with its question — answered, failed, or dropped by a change of member (`resetProfile`) —
+ * so it is never laid over an answer to a question asked after it. With no question on its way, Explore's next one,
+ * each time it comes into view, brings the save. A save that answers after a change of member (the store holds another
+ * member) is nobody's: no screen hears it.
  */
 export function storeSavedProfile(next: SavedProfile): void {
   if (current !== null) {
@@ -87,6 +103,8 @@ export function storeSavedProfile(next: SavedProfile): void {
     generation += 1;
     inFlight = null;
     publish(mergeSavedProfile(current, next));
+  } else if (inFlight !== null && inFlight.generation === generation) {
+    inFlight.saved = next;
   }
   for (const listener of saveListeners) listener(next);
 }

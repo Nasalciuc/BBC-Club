@@ -82,6 +82,16 @@ describe("a name saved on Edit profile is every screen's at once (D1)", () => {
     expect(profile.held()?.displayName).toBeNull();
     expect(profileSnapshot()?.displayName).toBe("Dana Ives");
   });
+
+  it("Explore's first load, on its way when the name is saved, answers with the saved name, not `Member`", async () => {
+    let answer: (a: { ok: true; data: Profile }) => void = () => undefined;
+    const explore = refreshProfile(() => new Promise((resolve) => (answer = resolve)));
+    screen(row()).copy.saved(row({ displayName: "Dana Ives" }));
+    // Asked before the PATCH: the server's answer holds no name.
+    answer({ ok: true, data: row() });
+    await explore;
+    expect(firstName(profileSnapshot()?.displayName)).toBe("Dana");
+  });
 });
 
 describe("Profile's and Settings' own sheets reach the store too", () => {
