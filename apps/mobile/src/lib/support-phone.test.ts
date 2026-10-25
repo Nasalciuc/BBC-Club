@@ -246,7 +246,7 @@ describe("every call button", () => {
     };
     for (const site of CALL_SITES) {
       // Unset, empty, or too short to dial: no number, so no button and no words.
-      for (const unset of [undefined, "", "123"]) {
+      for (const unset of [undefined, "", " ", "+4412345"]) {
         expect(callFor(telHref(unset), site.testID, site.label, open)).toBeNull();
       }
       // A made-up number in the fictional 555 range.
@@ -258,18 +258,32 @@ describe("every call button", () => {
   });
 
   test("reads the number before its formatting goes: an extension, a second `+` or no `+` dials nothing", () => {
-    // Made-up numbers in the fictional 555 range. Each would have dialled a different number once stripped.
+    // Made-up numbers (the fictional 555 range; Ofcom's drama range for London). Each would have dialled a different
+    // number once stripped.
     for (const wrong of [
       "+1 212 555 0148 ext 2",
       "+1 212 555 0148 x2",
+      "+1 212 555 0148 22",
+      "+1 212 555 0148 (22)",
       "+1 212+555 0148",
       "1 212 555 0148",
       "+1-800-FLY-0148",
       "+1 212 555 0148 0148 01",
+      "+44 (0)20 7946 0018",
     ]) {
       expect({ wrong, tel: telHref(wrong) }).toEqual({ wrong, tel: null });
     }
     expect(telHref(" +1.212.555.0148 ")).toBe("tel:+12125550148");
+    expect(telHref("+44 20 7946 0018")).toBe("tel:+442079460018");
+    // 8 digits is the shortest dialled; 7 is too short.
+    expect([telHref("+44123456"), telHref("+4412345")]).toEqual(["tel:+44123456", null]);
+  });
+
+  test("a number copied with what it carries unseen dials as its plain form", () => {
+    // A no-break space (a web page), a non-breaking hyphen and direction marks (a phone's contacts), an en dash.
+    for (const copied of ["+1 212 555 0148", "‭+1 (212) 555‑0148‬", "‪+1 212-555-0148‬", "+1 212–555–0148"]) {
+      expect({ copied, tel: telHref(copied) }).toEqual({ copied, tel: "tel:+12125550148" });
+    }
   });
 });
 

@@ -17,7 +17,9 @@ Set these on the EAS **production** environment (dashboard or `eas env:create`),
   button of the app dials it and nothing else (`apps/mobile/src/lib/support-phone.ts`; `support-phone.test.ts` holds the
   seven buttons to it): Profile's `Call us`, a request's `Call your specialist` and `Call us`, the rate-limit page's
   `Call your specialist`, and the update and maintenance pages' `Call a specialist`. The company's phone system routes
-  the call to a free specialist; the app has no telephony of its own. Set it for production: the build still passes
+  the call to a free specialist; the app has no telephony of its own. A set number must be one the app can dial: a
+  production or staging build or update refuses one with an extension, a national `(0)`, a missing `+` or the wrong
+  number of digits (`assertProductionEnv`, `assertStagingEnv`). Set it for production: the build still passes
   without it, but then no call button is drawn anywhere, and one message only still asks the member to call: Join's
   `We couldn't send a code to that address. Check it, or call us.` (`apps/mobile/src/features/auth/otp-send-logic.ts`,
   when the mail service refuses the address). It belongs to the entry, which stays exactly as it is (ADR-IMPL-047),
