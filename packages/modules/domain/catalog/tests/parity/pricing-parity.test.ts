@@ -1,9 +1,11 @@
 /**
- * Parity with the company's formula as the marketing agent implements it (which states it is identical to the BBC
- * site), ADR-IMPL-037. The rules are not in this repository: CI passes them in the PRICING_RULES_JSON secret — the
- * reference set the golden was generated from. With them, this engine must reproduce all 15,128 Python results (every
- * ordered pair of the agent's 62 airports, both trips, business and first), compared by SHA-256 only. Nothing here
- * prints a price, a rule or the secret. Without the secret the suite is skipped — unless PRICING_PARITY_REQUIRED=1 (CI).
+ * Parity with the company's formula (ADR-IMPL-037): first the marketing agent's Python engine, since 2026-10-25 the
+ * club's engine with the continents the company's site prices by (ADR-IMPL-062: Turkey as Asia, so the Istanbul routes
+ * differ from the Python results by design). The rules are not in this repository: CI passes them in the
+ * PRICING_RULES_JSON secret — the reference set the golden was generated from. With them, this engine must reproduce all
+ * 15,128 golden results (every ordered pair of the agent's 62 airports, both trips, business and first), compared by
+ * SHA-256 only. Nothing here prints a price, a rule or the secret. Without the secret the suite is skipped — unless
+ * PRICING_PARITY_REQUIRED=1 (CI).
  */
 import { describe, expect, it } from "bun:test";
 import { createHash } from "node:crypto";
@@ -24,7 +26,7 @@ function parseSecret(): unknown {
   }
 }
 
-describe.skipIf(!secret && !required)("formula parity with the Python engine", () => {
+describe.skipIf(!secret && !required)("formula parity with the reference results", () => {
   const input = secret ? parseSecret() : undefined;
 
   it("has the reference rules (repository secret PRICING_RULES_JSON)", () => {
@@ -65,6 +67,6 @@ describe.skipIf(!secret && !required)("formula parity with the Python engine", (
     lines.sort();
     expect(lines.length).toBe(golden.routes);
     const sha256 = createHash("sha256").update(lines.join("\n")).digest("hex");
-    expect(sha256, "the engine no longer reproduces the Python results").toBe(golden.sha256);
+    expect(sha256, "the engine no longer reproduces the reference results").toBe(golden.sha256);
   });
 });

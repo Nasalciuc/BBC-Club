@@ -1,6 +1,6 @@
 {
-  "source": "Nasalciuc/BBC-Marketing-Agent@747b5c7 services/pricing_engine.py, generated 2026-10-07",
-  "note": "every ordered pair of the agent's 62 airports, both trips, business and first; lines 'FROM-TO|trip|cabin|price' sorted, joined by \\n, SHA-256. No price is stored here: the rules come from the PRICING_RULES_JSON secret (ADR-IMPL-037).",
+  "source": "the club's engine (catalog/src/pricing/estimate.ts formulaPrice) with the reference rules, continents as the company's site prices them (ADR-IMPL-062), regenerated 2026-10-25; it replaces the Python engine's results of 2026-10-07, which priced Istanbul as Europe",
+  "note": "every ordered pair of the marketing agent's 62 airports, both trips, business and first; lines 'FROM-TO|trip|cabin|price' sorted, joined by \\n, SHA-256. No price is stored here: the rules come from the PRICING_RULES_JSON secret (ADR-IMPL-037).",
   "rulesFingerprint": "1f0e97176944a1ab",
   "airports": [
     ["AKL", "NZ"],
@@ -67,5 +67,5 @@
     ["ZRH", "CH"]
   ],
   "routes": 15128,
-  "sha256": "11b2d5ac8bd19f31e84f7eb91ef86a6cbfb0bfe511abb81deaf7fa76bc787ae5"
+  "sha256": "7bbfdfc9eccf30e435646dd57679ea24d8ef29a6aa4ab96191e4deb656190634"
 }

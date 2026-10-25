@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { UNCONFIRMED_COUNTRIES } from "../../src/pricing/continents";
 import { SAME_METRO_KM, distanceKm, estimateFare, formulaPrice } from "../../src/pricing/estimate";
 import {
   readStoredRules,
@@ -13,7 +14,7 @@ import { FIXTURE_RULES as R } from "./pricing-rules.fixture";
 const at = (code: string, countryCode: string) => ({ code, countryCode });
 const JFK = at("JFK", "US");
 const ZRH = at("ZRH", "CH");
-/** Every continent, the Hawaii and Istanbul cases, Mexico and the Caribbean, and countries without a price. */
+/** Every continent, the Hawaii and Istanbul cases, Mexico and the Caribbean, Cyprus, and countries without a price. */
 const SPREAD = [
   ["JFK", "US"],
   ["LAX", "US"],
@@ -79,9 +80,17 @@ describe("formulaPrice — the formula, on made-up rules", () => {
     expect(formulaPrice(R, at("HNL", "US"), at("YVR", "CA"), "round_trip", "business")).toBe(400 + 61 + 92);
   });
 
-  it("prices Istanbul — both airports — as Europe, as the BBC site does", () => {
-    expect(formulaPrice(R, JFK, at("IST", "TR"), "round_trip", "business")).toBe(1500 + 54 + 75);
-    expect(formulaPrice(R, JFK, at("SAW", "TR"), "round_trip", "business")).toBe(1500 + 54 + 70);
+  it("prices Istanbul — both airports — as Asia, as the BBC site does", () => {
+    expect(formulaPrice(R, JFK, at("IST", "TR"), "round_trip", "business")).toBe(1800 + 54 + 75);
+    expect(formulaPrice(R, JFK, at("SAW", "TR"), "round_trip", "business")).toBe(1800 + 54 + 70);
+  });
+
+  it("prices the countries the site files elsewhere than OurAirports on the site's continent (ADR-IMPL-062)", () => {
+    // Cyprus, St Barthélemy and Ascension (Saint Helena) as Europe; Timor-Leste as Oceania.
+    expect(formulaPrice(R, JFK, at("LCA", "CY"), "round_trip", "business")).toBe(1500 + 54 + 43);
+    expect(formulaPrice(R, JFK, at("SBH", "BL"), "round_trip", "business")).toBe(1500 + 54 + 56);
+    expect(formulaPrice(R, JFK, at("ASI", "SH"), "round_trip", "business")).toBe(1500 + 54 + 56);
+    expect(formulaPrice(R, JFK, at("DIL", "TL"), "round_trip", "business")).toBe(2300 + 54 + 52);
   });
 });
 
@@ -130,12 +139,22 @@ describe("estimateFare — never where it would mislead (7 Oct review)", () => {
     expect(estimateFare(R, jfk, bos, "business")).toEqual({ amount: 517, currency: "USD" });
   });
 
-  it("shows nothing for a country whose continent the site has not confirmed — Cyprus could be Asia or Europe", () => {
+  it("prices the countries the site confirmed on 2026-10-25 on its continent — none is refused any more", () => {
+    expect([...UNCONFIRMED_COUNTRIES]).toEqual([]);
+    expect(estimateFare(R, JFK, at("LCA", "CY"), "business")).toEqual({ amount: 1500 + 54 + 43, currency: "USD" });
+    // XXA: 33 + 33 + 10. Armenia, Azerbaijan, Georgia, Kazakhstan: Asia; Greenland: North America; Russia: Europe.
+    const site = { AM: 1800, AZ: 1800, GE: 1800, KZ: 1800, GL: 400, RU: 1500 } as const;
+    for (const [cc, base] of Object.entries(site))
+      expect(`${cc} ${estimateFare(R, JFK, at("XXA", cc), "business")?.amount}`).toBe(`${cc} ${base + 54 + 76}`);
+  });
+
+  it("still shows nothing for a country put back in the unconfirmed set — the formula would only guess", () => {
     const lca = at("LCA", "CY");
+    const unconfirmed = new Set(["CY"]);
     expect(formulaPrice(R, JFK, lca, "round_trip", "business")).not.toBeNull(); // the formula has a guess
-    expect(estimateFare(R, JFK, lca, "business")).toBeNull(); // the member does not see it
-    for (const cc of ["AM", "AZ", "GE", "GL", "KZ", "RU"])
-      expect(estimateFare(R, JFK, at("XXA", cc), "business")).toBeNull();
+    expect(estimateFare(R, JFK, lca, "business", "round_trip", unconfirmed)).toBeNull(); // the member does not see it
+    expect(estimateFare(R, lca, JFK, "first", "round_trip", unconfirmed)).toBeNull(); // either end, any cabin
+    expect(estimateFare(R, JFK, ZRH, "business", "round_trip", unconfirmed)).toEqual({ amount: 1633, currency: "USD" });
   });
 
   it("reads country codes in any case — an import that writes 'us' still prices", () => {
