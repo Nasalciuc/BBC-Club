@@ -19,9 +19,9 @@ function isHttpsUrl(value: string | undefined): boolean {
  *  two to the same answer for every number either test names. */
 export function dialable(phone: string): boolean {
   const raw = phone
-    .replace(/[­​-‏‪-‮⁠-⁤﻿]/g, "")
-    .replace(/[   -   　]/g, " ")
-    .replace(/[‐-―−﹘﹣－]/g, "-")
+    .replace(/[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, "")
+    .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ")
+    .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-")
     .trim();
   if (!/^\+[\d ().-]+$/.test(raw) || /\(\s*0\s*\)/.test(raw)) return false;
   const digits = raw.replace(/\D/g, "");

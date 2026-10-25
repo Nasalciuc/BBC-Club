@@ -281,7 +281,12 @@ describe("every call button", () => {
 
   test("a number copied with what it carries unseen dials as its plain form", () => {
     // A no-break space (a web page), a non-breaking hyphen and direction marks (a phone's contacts), an en dash.
-    for (const copied of ["+1 212 555 0148", "‭+1 (212) 555‑0148‬", "‪+1 212-555-0148‬", "+1 212–555–0148"]) {
+    for (const copied of [
+      "+1\u00A0212\u00A0555\u00A00148",
+      "\u202D+1 (212) 555\u20110148\u202C",
+      "\u202A+1 212-555-0148\u202C",
+      "+1 212\u2013555\u20130148",
+    ]) {
       expect({ copied, tel: telHref(copied) }).toEqual({ copied, tel: "tel:+12125550148" });
     }
   });
