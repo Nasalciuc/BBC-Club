@@ -11,7 +11,7 @@ import type { ProposalsFacade } from "@bbc/proposals";
 import type { EngagementFacade } from "@bbc/engagement";
 import type { CatalogFacade } from "@bbc/catalog";
 import { toAirportVM } from "@bbc/catalog";
-import { toCard, toDetail, toDestinationPin, toProfileVM } from "./view-models";
+import { toBookablePlace, toCard, toDetail, toDestinationPin, toProfileVM } from "./view-models";
 import { PER_MEMBER_CACHE, etagOf, ifNoneMatchHits } from "./http-cache";
 
 type Ports = {
@@ -131,11 +131,20 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
           return { key, title, items };
         }).filter((s) => s.items.length > 0 || s.key === "inspire");
 
+        // ADR-IMPL-068: what a tap anywhere on the globe may open — the site's cities and origins, with the arrivals of
+        // the fares and offers above; never home or its metro. Absent while `catalog.globe_tap` is off.
+        const homeVM = homeRow ? toAirportVM(homeRow) : null;
+        const bookable = await ports.catalog.bookable(undefined, {
+          home: homeVM ? { code: homeCode, lat: homeVM.lat, lng: homeVM.lng } : { code: homeCode },
+          also: [...destRows, ...missing.flatMap((code) => byCode.get(code) ?? [])].map(toBookablePlace),
+        });
+
         const body = {
-          home: homeRow ? toAirportVM(homeRow) : null,
+          home: homeVM,
           destinations,
           sections,
           places,
+          ...(bookable ? { bookable } : {}),
         };
 
         // The tag is the body's, whole: a pin's price, city, name or place (ADR-IMPL-045), a destination's line

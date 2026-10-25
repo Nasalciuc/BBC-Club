@@ -179,6 +179,24 @@ describe("query budget per route", () => {
       "the site's pins cost at most four reads over the home screen without them",
     ).toBeLessThanOrEqual(home.length + 4);
 
+    // ADR-IMPL-068: with the globe's tap on, Home adds the site's set — one read (the cities and the origins in one
+    // UNION) beside the flag row, however many cities — then cached for a minute like the pins: the next Home reads
+    // none of it.
+    await t.flags.set("catalog.globe_tap", { enabled: true });
+    const tapHome = await queriesFor("/v1/home", cookie);
+    expect(
+      tapHome.length,
+      `home with the globe's tap ran ${tapHome.length} queries (budget ${BUDGET["GET /v1/home"]}):\n${tapHome.join("\n")}`,
+    ).toBeLessThanOrEqual(BUDGET["GET /v1/home"]!);
+    const setReads = (qs: string[]) => qs.filter((q) => /site_places/.test(q) && /\bunion\b/i.test(q));
+    expect(setReads(tapHome).length, `the set is one read:\n${tapHome.join("\n")}`).toBe(1);
+    expect(
+      tapHome.length,
+      "the globe's tap costs at most two reads over Home with the site's pins",
+    ).toBeLessThanOrEqual(siteHome.length + 2);
+    const tapAgain = setReads(await queriesFor("/v1/home", cookie));
+    expect(tapAgain, `the set was read again within its minute:\n${tapAgain.join("\n")}`).toEqual([]);
+
     await t.seedMoreJfkLhrFares();
     const largerSearch = await queriesFor("/v1/search?from=JFK&to=LHR&cabin=business", cookie);
     expect(

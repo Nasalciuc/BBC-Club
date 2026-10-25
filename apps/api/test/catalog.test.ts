@@ -956,6 +956,60 @@ describe("GET /v1/home — the site's pins", () => {
   });
 });
 
+// ADR-IMPL-068: the cities a tap anywhere on the globe may open — sent only with `catalog.globe_tap` on, and in the ETag.
+describe("GET /v1/home — what a tap on the globe may open", () => {
+  it("absent while the flag is off; on, the site's cities and origins with the fares' and offers' arrivals, never home or its metro", async () => {
+    const t = await testApp({ suite: "catalog-home-tap" });
+    await t.seedCatalogBasics();
+    // Rome has no fare from JFK in the basics: an offer brings it in.
+    await t.seedBroadcastOffer({ routeFrom: "JFK", routeTo: "FCO", title: "Easter in Rome" });
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports, promoted, image) VALUES
+        (283, 'Tokyo', 'Japan', 'Asia', 'HND', ARRAY['HND'], true, NULL),
+        (1201, 'Zurich', 'Switzerland', 'Europe', 'ZRH', ARRAY['ZRH'], false, NULL)`);
+    // Made-up prices: the set never reads them.
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price, published_price) VALUES
+        ('JFK', 283, 1, 1000, NULL), ('EWR', 283, 2, 1000, NULL), ('ORD', 1201, 3, 1000, NULL)`);
+
+    const home = async () => {
+      const r = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie } });
+      expect(r.status).toBe(200);
+      const raw = (await r.json()) as Record<string, unknown>;
+      return { raw, body: HomeVM.parse(raw), etag: r.headers.get("ETag") };
+    };
+
+    const off = await home();
+    expect("bookable" in off.raw).toBe(false);
+    expect(off.body.bookable).toBeUndefined();
+
+    await t.flags.set("catalog.globe_tap", { enabled: true });
+    const on = await home();
+    // Paris and London by their fares, Rome by its offer, Tokyo and Zurich by the site, Chicago as a city the site
+    // sells from; never New York (home) nor Newark (its metro), though the site sells from both.
+    expect(on.body.bookable?.map((p) => p.code)).toEqual(["CDG", "FCO", "HND", "LHR", "ORD", "ZRH"]);
+    expect(on.body.bookable?.find((p) => p.code === "FCO")).toMatchObject({
+      city: "Rome",
+      countryCode: "IT",
+    });
+    for (const p of on.body.bookable ?? []) {
+      expect(Object.keys(p).sort()).toEqual(["city", "code", "countryCode", "lat", "lng", "name"]);
+    }
+    // The list is the body's: the ETag follows it.
+    expect(on.etag).not.toBe(off.etag);
+    const again = await t.app.request("/v1/home", {
+      headers: { Cookie: t.memberA.cookie, "If-None-Match": on.etag! },
+    });
+    expect(again.status).toBe(304);
+
+    await t.flags.set("catalog.globe_tap", { enabled: false });
+    const offAgain = await home();
+    expect("bookable" in offAgain.raw).toBe(false);
+    expect(offAgain.etag).toBe(off.etag);
+    await t.close();
+  });
+});
+
 describe("fare parity", () => {
   it("fixture fare round-trips through toFareVM", () => {
     const f = fixture.fares[0]!;

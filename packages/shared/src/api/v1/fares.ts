@@ -164,6 +164,21 @@ export const HomePlaceVM = z.object({
 });
 export type HomePlaceVM = z.infer<typeof HomePlaceVM>;
 
+/**
+ * A city a tap on Explore's globe may open (ADR-IMPL-068): the code, the city and where it is — and the airport's name
+ * and country, so the city opens as a pin's does (the destination prints its country before its search answers).
+ * No price: the city's search prices it, as a pin's search does.
+ */
+export const BookablePlaceVM = AirportVM.pick({
+  code: true,
+  city: true,
+  name: true,
+  countryCode: true,
+  lat: true,
+  lng: true,
+});
+export type BookablePlaceVM = z.infer<typeof BookablePlaceVM>;
+
 export const HomeVM = z.object({
   home: AirportVM.nullable(),
   destinations: z.array(DestinationPinVM),
@@ -178,5 +193,12 @@ export const HomeVM = z.object({
    *  to a city with no fare from home — so a card names its city, never its title cut short (ADR-IMPL-057). Optional
    *  both ways: a server without it sends none, and the card keeps the title as before. */
   places: z.array(HomePlaceVM).optional(),
+  /**
+   * The cities a tap anywhere on the globe may snap to (ADR-IMPL-068, `catalog.globe_tap`): the company's site's cities,
+   * the arrivals of the fares and offers Home holds, and the US airports the site sells from — never the member's home
+   * airport or another of its metro. Absent while the flag is off; optional both ways, and a list this app cannot read
+   * reads as none — Home still parses, and a tap off the pins does nothing, as before.
+   */
+  bookable: z.array(BookablePlaceVM).optional().catch(undefined),
 });
 export type HomeVM = z.infer<typeof HomeVM>;

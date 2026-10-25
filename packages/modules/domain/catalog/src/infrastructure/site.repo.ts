@@ -2,6 +2,7 @@ import type { Executor } from "@bbc/db";
 import { asc, desc, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import { airports, sitePlaces, siteRoutes } from "@bbc/db/schema/catalog";
 
+import type { BookablePlace } from "../api";
 import type { MappingAirport, SitePlace, SiteRoute } from "../application/site-places";
 
 /** ADR-IMPL-045. The site's destinations as the last night's read left them. */
@@ -93,5 +94,31 @@ export const siteRepo = {
   async pinsFrom(exec: Executor, home: string, limit: number) {
     const rows = await this.pinsSelect(exec, home, limit);
     return rows.map((r) => ({ ...r, airports: r.airports.map((c) => c.trim()) }));
+  },
+
+  /** ADR-IMPL-068: the airports a tap on the globe may open — every city's main airport and every US airport the site
+   *  lists a price from — with their names and places, in one round trip (UNION drops an airport listed twice). */
+  async bookable(exec: Executor): Promise<BookablePlace[]> {
+    const columns = {
+      code: airports.code,
+      name: airports.name,
+      city: airports.city,
+      countryCode: airports.countryCode,
+      lat: airports.lat,
+      lng: airports.lng,
+    };
+    const rows = await exec
+      .select(columns)
+      .from(sitePlaces)
+      .innerJoin(airports, eq(airports.code, sitePlaces.airport))
+      .union(exec.select(columns).from(siteRoutes).innerJoin(airports, eq(airports.code, siteRoutes.routeFrom)));
+    return rows.map((r) => ({
+      code: r.code.trim(),
+      name: r.name,
+      city: r.city,
+      countryCode: r.countryCode,
+      lat: Number(r.lat),
+      lng: Number(r.lng),
+    }));
   },
 };

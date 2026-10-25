@@ -44,7 +44,8 @@ import {
 } from "./application/to-fare-vm";
 import { estimateFare } from "./pricing/estimate";
 import { estimateSources as readEstimateSources, type StoredRules } from "./pricing/estimate-rules";
-import type { CatalogFacade, DestinationPin } from "./api";
+import { bookableFrom } from "./application/bookable";
+import type { BookablePlace, CatalogFacade, DestinationPin } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
   return row.published && row.validFrom <= now && row.validUntil > now;
@@ -86,9 +87,11 @@ export const catalogModule = (
     const placePhotosOn = () => platform.flags.isEnabled("catalog.place_photos", true);
     const destinationsCache = createDestinationsCache();
     const sitePinsCache = createDestinationsCache<DestinationPin & { airports: string[] }>();
+    const bookableCache = createDestinationsCache<BookablePlace>();
     const invalidateMaps = async () => {
       destinationsCache.clear();
       sitePinsCache.clear();
+      bookableCache.clear();
       await platform.cache.bump("catalog:dest:gen");
       await platform.cache.bump("catalog:airports:gen");
     };
@@ -271,6 +274,19 @@ export const catalogModule = (
       return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, SITE_PINS_CACHE_S, load);
     }
 
+    /**
+     * ADR-IMPL-068: the site's part of what a tap on the globe may open — the same for every member (home is taken out
+     * per call), so one entry, cached like the site's pins: a minute, dropped when the sync or an import bumps the
+     * generation. `exec` (a caller's transaction) reads it uncached.
+     */
+    async function siteBookable(exec: Executor | undefined): Promise<BookablePlace[]> {
+      if (exec) return siteRepo.bookable(exec);
+      const load = () => siteRepo.bookable(conn);
+      const gen = await platform.cache.generation("catalog:dest:gen");
+      if (gen == null) return bookableCache.get("ALL", load);
+      return platform.cache.getOrLoad(`catalog:bookable:${gen}`, SITE_PINS_CACHE_S, load);
+    }
+
     /** ADR-IMPL-045: the site's photos, and the cities kept out of them (`skip`: the site's ids). Null: off. */
     async function sitePhotos(): Promise<{ skip: ReadonlySet<number> } | null> {
       const v = await platform.flags.read("catalog.site_photos");
@@ -303,6 +319,11 @@ export const catalogModule = (
           added.push(pin);
         }
         return [...fares, ...added];
+      },
+      bookable: async (exec, q) => {
+        // The cached flag row first: off (every environment until an operator turns it on), nothing is read.
+        if (!(await platform.flags.isEnabled("catalog.globe_tap", false))) return null;
+        return bookableFrom(await siteBookable(exec), q.home, q.also);
       },
       searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
@@ -735,8 +756,9 @@ export const catalogModule = (
           },
         },
         {
-          // ADR-IMPL-045: the site's destinations, once a night. With its photos and its pins off, nothing is asked
-          // and the site's photos go back to Wikimedia. ADR-IMPL-062: the site's API allows 120 requests a minute per
+          // ADR-IMPL-045: the site's destinations, once a night. With its photos, its pins and the globe's tap
+          // (ADR-IMPL-068: what a tap may open is the site's cities) off, nothing is asked and the site's photos go back
+          // to Wikimedia. ADR-IMPL-062: the site's API allows 120 requests a minute per
           // IP, so its ~241 pages start 1.2 s apart (about five minutes), then ~150 photo checks four at a time. That
           // minute is the host's: staging's cron reads the site at the same 07:40 from the same address, and at about
           // 50 a minute each the two reads stay under the 120 together. Ten minutes leave room for the pages, the
@@ -751,6 +773,7 @@ export const catalogModule = (
             handler: async (ctx) => {
               const photos = await sitePhotos();
               const pins = await platform.flags.isEnabled("catalog.site_pins", false);
+              const tap = await platform.flags.isEnabled("catalog.globe_tap", false);
               const report = await syncSite(
                 {
                   db: conn,
@@ -762,7 +785,7 @@ export const catalogModule = (
                   },
                   logger: platform.logger,
                 },
-                { read: photos !== null || pins, photos },
+                { read: photos !== null || pins || tap, photos },
               );
               if (report.read) await invalidateMaps();
               return report;

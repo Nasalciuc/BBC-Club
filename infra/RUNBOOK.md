@@ -265,7 +265,8 @@ four at a time — and keeps a snapshot: `catalog.site_places` (each city, its m
 airport, every airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price
 from, and that price — kept, never shown). The site has no airport codes: a city is matched by name inside the country
 the site puts it in; the few names that need help are listed in `SITE_CITY_AIRPORTS` (catalog
-`application/site-places.ts`). Two flags, both seeded off; with both off the job asks the site nothing.
+`application/site-places.ts`). Two flags, both seeded off; with both off — and `catalog.globe_tap` off, whose cities are
+the site's (ADR-IMPL-068, "Tap anywhere on the globe" below) — the job asks the site nothing.
 
 - `catalog.site_photos`: each city's own photo on all its airports, stored as an operator's photo (it never expires, has
   no credit line, and `resolve-place-photos` never touches it). An operator's own photo from anywhere else stays; one
@@ -410,6 +411,30 @@ A wrong row (the company corrected a price): delete it — the next search or ru
 ```sql
 DELETE FROM catalog.site_prices WHERE route_from = 'JFK' AND route_to = 'ZRH';
 ```
+
+## Tap anywhere on the globe (ADR-IMPL-068)
+
+With `catalog.globe_tap` on (seeded off), `GET /v1/home` sends `bookable`: the cities a tap anywhere on Explore's globe
+may open — the site's cities (by their main airport) and the US airports the site lists a price from, from the night's
+snapshot ("The site's destinations" above), with the arrivals of the member's fares and offers; never the member's home
+airport nor another within 100 km of it. A formula price alone never adds a city. The app snaps a tap to the nearest of
+them within 600 km and opens it as a pin's tap does (its search prices it); farther, or over the sea, it says
+`No destination near there.` and points to the search; on the member's own city, the home answer. Off: the field is
+absent and a tap off the pins does nothing, as before — an app built before this ignores the field either way.
+
+The list needs the snapshot: with this flag on, the night's `sync-site-destinations` reads the site even with the site's
+photos and pins off. Turn it on in staging first, then run the night's job (above) if `catalog.site_places` is empty:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.globe_tap','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+SELECT count(*) AS cities FROM catalog.site_places;
+SELECT count(DISTINCT route_from) AS origins FROM catalog.site_routes;
+```
+
+It costs Home one read of the set (cached a minute, and dropped when the night's sync or an import changes it) and
+about 12 KB of JSON inside Home's ETag. Off is the same with `false`, seen within the flags' cache of about 35 s; the
+app keeps the last Home it parsed until its next load.
 
 ## The queue is stuck (oldest pending > 5 min)
 
