@@ -169,7 +169,7 @@ describe("a save is every screen's at once (brief 3.4.1)", () => {
     s.answer({ ok: false });
     await failed;
     storeSavedProfile(renamed("m1", "Dana Ives"));
-    // The store holds no half profile (PATCH's answer has no notifications); Profile's copy has the name.
+    // No profile from a save alone (an older server's has no notifications); Profile's copy has the name.
     expect(profileSnapshot()).toBeNull();
     expect(saves).toEqual(["Dana Ives"]);
     // Explore's next question brings it.
@@ -183,14 +183,17 @@ describe("a save is every screen's at once (brief 3.4.1)", () => {
     const s = server();
     // Explore's airport waits on the first question (useExploreHome): dropping it would start the search from New York.
     const waiting = loadProfile(s.fetchProfile);
-    // PATCH's row carries the member's airport as the server holds it: the same as the answer's here.
+    // PATCH's answer carries the member's airport as the server holds it: the same as the GET answer's here.
     storeSavedProfile(patchRow("m1", "Dana Ives", { homeAirport: "BOS" }));
     s.answer({ ok: true, data: { ...renamed("m1", null), homeAirport: "BOS" } as Profile });
     expect((await waiting)?.homeAirport).toBe("BOS");
   });
 });
 
-/** PATCH /v1/profile's answer: the raw row, without `notifications`. */
+/**
+ * An older server's PATCH /v1/profile answer: the raw row, without `notifications`. Today's answers the whole profile,
+ * as GET does (ADR-IMPL-025), as `renamed(...)` builds it.
+ */
 function patchRow(memberId: string, displayName: string | null, over: Partial<Profile> = {}): SavedProfile {
   const row: Partial<Profile> = { ...renamed(memberId, displayName), ...over };
   delete row.notifications;
@@ -213,8 +216,25 @@ describe("a save made while the store holds no profile and a question is on its 
     expect((await first)?.displayName).toBe("Dana Ives");
     expect((await joined)?.displayName).toBe("Dana Ives");
     expect(profileSnapshot()?.displayName).toBe("Dana Ives");
-    // PATCH's row has no notifications: the answer's stay.
+    // An older server's PATCH answer has no notifications: the answer's stay.
     expect(profileSnapshot()?.notifications).toEqual({ requestUpdates: true, offers: false });
+  });
+
+  it("today's PATCH answer is the whole profile (ADR-IMPL-025): laid over the old answer, the save wins whole", async () => {
+    const s = server();
+    const first = refreshProfile(s.fetchProfile);
+    // The offers switch turned off before the name was saved (made-up values): PATCH answers with both.
+    storeSavedProfile({
+      ...renamed("m1", "Dana Ives"),
+      homeAirport: "BOS",
+      notifications: { requestUpdates: true, offers: false },
+    });
+    // Asked before both: the old name, airport and switch.
+    s.answer({ ok: true, data: renamed("m1", null) });
+    const shown = await first;
+    expect(shown?.displayName).toBe("Dana Ives");
+    expect(shown?.homeAirport).toBe("BOS");
+    expect(shown?.notifications).toEqual({ requestUpdates: true, offers: false });
   });
 
   it("a home airport saved meanwhile is the airport Explore's search starts from", async () => {

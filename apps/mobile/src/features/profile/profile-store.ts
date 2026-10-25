@@ -80,22 +80,24 @@ export function resetProfile(): void {
 
 /**
  * A sheet saved the profile and PATCH /v1/profile answered: that answer is the member's profile now, on every screen
- * at once — Explore's greeting, Profile's name, the request sheet's contact (brief 3.4.1). A question asked before the
- * save may bring the profile back as it was: its answer is dropped, and the next reader asks again. An answer without
- * `notifications` (an older server) keeps the ones known.
+ * at once — Explore's greeting, Profile's name, the request sheet's contact (brief 3.4.1). With a profile held, a
+ * question asked before the save may bring it back as it was: its answer is dropped, and the next reader asks again.
+ * PATCH answers with the whole profile, as GET does, `notifications` included (ADR-IMPL-025), so the save wins whole;
+ * an answer without them (an older server's, the raw row) keeps the ones known (`mergeSavedProfile`).
  *
  * The screens that keep their own copy (`subscribeProfileSaves`) hear every save, whether or not a profile was loaded
  * here: Explore's question may have failed (offline, the club not answering) while Profile holds its own, and Profile
  * must not say `Member` once a name is saved. Each copy takes only its own member's (profile-save-logic.ts).
  *
- * With no profile loaded the store holds no half profile (PATCH's answer has no `notifications`) and drops no
- * question: a reader waiting on one (Explore's airport) still gets a profile. But that question was asked before the
- * save, and its answer may hold the old name or airport: the save waits with it and is laid over its answer if that is
- * the same member's, the answer's `notifications` kept. A later save replaces an earlier one (PATCH answers with the
- * whole row); the save goes with its question — answered, failed, or dropped by a change of member (`resetProfile`) —
- * so it is never laid over an answer to a question asked after it. With no question on its way, Explore's next one,
- * each time it comes into view, brings the save. A save that answers after a change of member (the store holds another
- * member) is nobody's: no screen hears it.
+ * With no profile loaded the store makes none from a save alone (an older server's has no `notifications`) and drops
+ * no question: a reader waiting on one (Explore's airport) still gets a profile. But that question was asked before
+ * the save, and its answer may hold the old name or airport: the save waits with it and is laid over its answer if
+ * that is the same member's (`mergeSavedProfile`, as above: the save's fields win; the answer's `notifications` stay
+ * only where the save has none). A later save replaces an earlier one (each answer is the whole profile); the save
+ * goes with its question — answered, failed, or dropped by a change of member (`resetProfile`) — so it is never laid
+ * over an answer to a question asked after it. With no question on its way, Explore's next one, each time it comes
+ * into view, brings the save. A save that answers after a change of member (the store holds another member) is
+ * nobody's: no screen hears it.
  */
 export function storeSavedProfile(next: SavedProfile): void {
   if (current !== null) {
