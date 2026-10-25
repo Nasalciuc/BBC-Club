@@ -8,9 +8,18 @@ import Svg, { Circle, ClipPath, Defs, G, Path, RadialGradient, Stop } from "reac
 import { Icon } from "../icons";
 import { tokens } from "../tokens";
 import { createGlobeEngine, type Route } from "./globe-engine";
-import { GLOBE_SPEC, greatCircle, planeOnRoute, projector, radiusFor } from "./globe-logic";
+import {
+  GLOBE_SPEC,
+  type GlobeTap,
+  type View as GlobeView,
+  createPressGuard,
+  greatCircle,
+  planeOnRoute,
+  projector,
+  radiusFor,
+} from "./globe-logic";
 import { GlobePin, RouteEnd } from "./GlobePin";
-import { type PinToPlace, type Rect, labelScale, pinPriority, placeLabels } from "./pin-labels";
+import { type PinToPlace, type Rect, labelScale, pinAt, pinPriority, placeLabels } from "./pin-labels";
 
 /**
  * A destination on the globe. `fromPrice` is the formatted starting fare (`$3,900`), empty for a destination chosen
@@ -39,10 +48,36 @@ type Props = {
   avoid?: readonly Rect[];
   /** Its screen is not in view or the sheet covers it: drawn as it was, nothing runs. */
   paused?: boolean;
+  /**
+   * A tap on the globe that is no pin's (ADR-IMPL-068): the place under the finger. A tap on the sky, beside the disc,
+   * is nothing; a tap on a pin, its label or its 44-pt target is the pin's. Without it a tap off the pins does nothing.
+   */
+  onTapPlace?: (tap: GlobeTap) => void;
 };
 
 /** e2e builds hold still: Maestro taps globe.pin.LHR, and parity compares the stills. */
 const HOLD_STILL = process.env.EXPO_PUBLIC_APP_ENV === "e2e";
+
+/**
+ * The pins drawn at rest (02) in one view — each with its city and price, its label where it fits — or none once a
+ * route is chosen (13: its two ends are drawn apart, and are no target). Render draws them; a tap asks which one it
+ * fell on, in the view that was on screen.
+ */
+function pinsInView(
+  pins: readonly Pin[],
+  proj: ReturnType<typeof projector>,
+  frame: { bounds: Rect; avoid: readonly Rect[]; scale: number },
+) {
+  const shown: (PinToPlace & { pin: Pin })[] = [];
+  for (const p of pins) {
+    const at = proj.point([p.lng, p.lat]);
+    if (!at) continue; // the far hemisphere
+    const lines = [p.city ?? p.code, p.fromPrice].filter((l) => l.length > 0);
+    const priority = pinPriority({ selected: false, home: false, hasOffer: p.hasOffer, price: p.price ?? 0 });
+    shown.push({ code: p.code, x: at[0], y: at[1], lines, priority, pin: p });
+  }
+  return { shown, placed: placeLabels(shown, frame.bounds, frame.avoid, frame.scale) };
+}
 
 const circle = (lng: number, lat: number, radius: number) =>
   geoCircle().center([lng, lat]).radius(radius).precision(3)().coordinates;
@@ -85,6 +120,7 @@ export function GlobeFallback({
   bounds,
   avoid = [],
   paused = false,
+  onTapPlace,
 }: Props) {
   const sel = pins.find((p) => p.code === selected) ?? null;
   const route: Route | null = sel ? { from: home ? [home.lng, home.lat] : null, to: [sel.lng, sel.lat] } : null;
@@ -96,6 +132,8 @@ export function GlobeFallback({
     createGlobeEngine({ size, selected, route, reducedMotion: false, holdStill: HOLD_STILL }),
   );
   const [frame, setFrame] = useState(() => engine.initialFrame);
+  // One choice per touch: a pin's press and the globe's tap may both answer it, in either order.
+  const [pressGuard] = useState(() => createPressGuard());
 
   useEffect(() => engine.attach({ frame: setFrame }), [engine]);
   const fromLng = route?.from?.[0];
@@ -133,8 +171,13 @@ export function GlobeFallback({
 
   // At rest every destination, each with its city and price (02); once a route is chosen, its two ends with their codes
   // (13), drawn apart below.
-  const shown: (PinToPlace & { pin: Pin | null })[] = [];
+  const labels = {
+    bounds: bounds ?? { left: 0, top: 0, right: size, bottom: size },
+    avoid,
+    scale: labelScale(fontScale),
+  };
   const ends: { code: string; x: number; y: number; end: "origin" | "destination"; testID: string }[] = [];
+  const { shown, placed } = sel ? { shown: [], placed: [] } : pinsInView(pins, proj, labels);
   if (sel) {
     const at = proj.point([sel.lng, sel.lat]);
     if (at) ends.push({ code: sel.code, x: at[0], y: at[1], end: "destination", testID: `globe.pin.${sel.code}` });
@@ -142,21 +185,38 @@ export function GlobeFallback({
     if (home && homeAt && home.code) {
       ends.push({ code: home.code, x: homeAt[0], y: homeAt[1], end: "origin", testID: "globe.home" });
     }
-  } else {
-    for (const p of pins) {
-      const at = proj.point([p.lng, p.lat]);
-      if (!at) continue; // the far hemisphere
-      const lines = [p.city ?? p.code, p.fromPrice].filter((l) => l.length > 0);
-      const priority = pinPriority({ selected: false, home: false, hasOffer: p.hasOffer, price: p.price ?? 0 });
-      shown.push({ code: p.code, x: at[0], y: at[1], lines, priority, pin: p });
-    }
   }
-  const placed = placeLabels(
-    shown,
-    bounds ?? { left: 0, top: 0, right: size, bottom: size },
-    avoid,
-    labelScale(fontScale),
-  );
+
+  function choosePin(code: string) {
+    if (code !== selected && pressGuard.choose(code)) onSelect(code);
+  }
+
+  // ADR-IMPL-068: a tap, in the view that was on screen. On a pin it is the pin's — chosen here too, for the tap may
+  // cancel the pin's own press (the guard keeps it to one choice); on the sky it is nothing; elsewhere on the disc it
+  // is the place under the finger. A chosen route's view takes no tap: its ends are no targets.
+  function onTap(x: number, y: number, view: GlobeView) {
+    if (sel) return;
+    const seen = projector(size, view.rotation, view.zoom);
+    const hit = pinAt(x, y, pinsInView(pins, seen, labels).placed);
+    if (hit) {
+      choosePin(hit);
+      return;
+    }
+    if (!onTapPlace || pressGuard.pressedLately()) return;
+    const at = seen.invert(x, y);
+    if (!at) return;
+    onTapPlace({
+      lng: at[0],
+      lat: at[1],
+      x,
+      y,
+      project: (p) => {
+        const xy = seen.point([p.lng, p.lat]);
+        return xy ? { x: xy[0], y: xy[1] } : null;
+      },
+    });
+  }
+  useEffect(() => engine.onTap(onTap), [engine, onTap]);
 
   return (
     <GestureDetector gesture={engine.gesture}>
@@ -249,7 +309,7 @@ export function GlobeFallback({
           <RouteEnd key={e.testID} testID={e.testID} x={e.x} y={e.y} code={e.code} end={e.end} />
         ))}
         {placed.map((p) => {
-          const pin = shown.find((s) => s.code === p.code)?.pin ?? null;
+          const pin: Pin | null = shown.find((s) => s.code === p.code)?.pin ?? null;
           const name = pin?.city ?? pin?.code ?? home?.code ?? "Home";
           return (
             <GlobePin
@@ -260,7 +320,7 @@ export function GlobeFallback({
               lines={p.lines}
               label={p.label?.box ?? null}
               accessibilityLabel={pin ? (pin.fromPrice ? `${name}, from ${pin.fromPrice}` : name) : `Home, ${name}`}
-              onPress={pin && pin.code !== selected ? () => onSelect(pin.code) : undefined}
+              onPress={pin && pin.code !== selected ? () => choosePin(pin.code) : undefined}
             />
           );
         })}

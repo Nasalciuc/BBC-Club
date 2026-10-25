@@ -117,3 +117,12 @@ export function mapPoint(
     .rotate([-camera.center[0], -camera.center[1]])([p.lng, p.lat]);
   return xy ? { x: xy[0], y: xy[1] } : null;
 }
+
+/**
+ * Whether a point on the map view is on Mapbox's globe (ADR-IMPL-068): within the globe's radius at the camera's zoom
+ * of its centre on screen. Mapbox may answer a press on the sky with a place (unchecked on a phone), and d3 clamps one to
+ * the limb: the disc decides, as on the drawn globe.
+ */
+export function onGlobeDisc(point: { x: number; y: number }, zoom: number, centre: { x: number; y: number }): boolean {
+  return Math.hypot(point.x - centre.x, point.y - centre.y) <= radiusAtZoom(zoom);
+}

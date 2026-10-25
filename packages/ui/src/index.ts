@@ -88,10 +88,18 @@ export { TopBar } from "./layout/TopBar";
 export { GlobeFallback, type Pin } from "./globe/GlobeFallback";
 export { GlobePin, RouteEnd, pinFrame } from "./globe/GlobePin";
 export { RouteMap } from "./globe/RouteMap";
-export { GLOBE_SPEC, OPENING_VIEW, routeView, type RouteFrame } from "./globe/globe-logic";
+export {
+  GLOBE_SPEC,
+  OPENING_VIEW,
+  createPressGuard,
+  routeView,
+  type GlobeTap,
+  type RouteFrame,
+} from "./globe/globe-logic";
 export {
   MAX_LABEL_SCALE,
   labelScale,
+  pinAt,
   pinPriority,
   placeLabels,
   routeEndFrame,
@@ -106,6 +114,7 @@ export {
   ZOOM_RANGE,
   globePadding,
   mapPoint,
+  onGlobeDisc,
   radiusAtZoom,
   routeCamera,
   routeLine,

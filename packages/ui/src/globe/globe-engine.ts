@@ -7,6 +7,8 @@ import { Gesture } from "react-native-gesture-handler";
 import {
   GLOBE_SPEC,
   OPENING_VIEW,
+  PAN_START,
+  TAP,
   approach,
   atView,
   detailFor,
@@ -36,6 +38,9 @@ export type GlobeSettings = {
   reducedMotion: boolean;
 };
 type Sinks = { frame: (f: Frame) => void };
+/** A tap on the globe (not a drag, not a pinch): where the finger lifted, in the frame's points, and the view that was
+ *  on screen then — the last frame painted. */
+export type TapSink = (x: number, y: number, view: View) => void;
 
 /** Repaint cadence. Idle rotation is 3°/s, so 50 ms moves the centre 0.15° (under 1 px); fingers and framing every frame. */
 const CADENCE_MS: Record<GlobeMode | "gesture", number> = {
@@ -76,6 +81,7 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
   let costMs = 0;
   let frame: Frame = { rotation, zoom, detail: "high", land: drawLand(initial.size, rotation, zoom, "high") };
   let sinks: Sinks | null = null;
+  let tapSink: TapSink | null = null;
 
   const modeAt = (t: number): GlobeMode =>
     globeMode({
@@ -120,7 +126,7 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
   };
   const pan = Gesture.Pan()
     .runOnJS(true)
-    .minDistance(8)
+    .minDistance(PAN_START)
     .onBegin(begin)
     .onChange((e) => {
       ({ rotation, zoom } = panBy({ rotation, zoom }, e.changeX, e.changeY, settings.size));
@@ -137,6 +143,16 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
       if (holdStill) paint("paused");
     })
     .onFinalize(end);
+  // ADR-IMPL-068: a tap anywhere on the globe. It may move less than the pan's start and must lift within 500 ms, and it
+  // races the pan and the pinch: a drag starts the pan, which cancels it — a drag never fires a tap. The pan's own
+  // begin and end already count the touch, so the turn pauses for a tap too.
+  const tap = Gesture.Tap()
+    .runOnJS(true)
+    .maxDistance(TAP.maxDistance)
+    .maxDuration(TAP.maxDurationMs)
+    .onEnd((e, success) => {
+      if (success) tapSink?.(e.x, e.y, { rotation: frame.rotation, zoom: frame.zoom });
+    });
 
   function step(t: number) {
     const dt = lastStep ? Math.min(t - lastStep, 100) : 16;
@@ -165,13 +181,20 @@ export function createGlobeEngine(initial: GlobeSettings & { holdStill: boolean 
   }
 
   return {
-    gesture: Gesture.Simultaneous(pan, pinch),
+    gesture: Gesture.Race(Gesture.Simultaneous(pan, pinch), tap),
     initialFrame: frame,
     /** Connect React's setter; returns the disconnect. */
     attach(next: Sinks): () => void {
       sinks = next;
       return () => {
         sinks = null;
+      };
+    },
+    /** Connect the tap's handler (the component's, which changes with its props); returns the disconnect. */
+    onTap(handler: TapSink): () => void {
+      tapSink = handler;
+      return () => {
+        if (tapSink === handler) tapSink = null;
       };
     },
     update(next: GlobeSettings): void {

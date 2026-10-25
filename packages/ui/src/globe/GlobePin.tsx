@@ -4,19 +4,20 @@ import Svg, { Circle, Defs, Path, RadialGradient, Stop } from "react-native-svg"
 import { rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { GLOBE_SPEC } from "./globe-logic";
-import { LABEL, MAX_LABEL_SCALE, ROUTE_END, type Rect, type RouteEndKind, pinBox, routeEndFrame } from "./pin-labels";
+import {
+  LABEL,
+  MAX_LABEL_SCALE,
+  ROUTE_END,
+  type Rect,
+  type RouteEndKind,
+  pinBox,
+  pinUnion,
+  routeEndFrame,
+} from "./pin-labels";
 
 /** The pin and its label as one box, and where the tip sits in it — a MarkerView anchors on the tip. */
 export function pinFrame(x: number, y: number, label: Rect | null) {
-  const pin = pinBox(x, y);
-  const box = label
-    ? {
-        left: Math.min(pin.left, label.left),
-        top: Math.min(pin.top, label.top),
-        right: Math.max(pin.right, label.right),
-        bottom: Math.max(pin.bottom, label.bottom),
-      }
-    : pin;
+  const box = pinUnion(x, y, label);
   const width = box.right - box.left;
   const height = box.bottom - box.top;
   return { left: box.left, top: box.top, width, height, tip: { x: x - box.left, y: y - box.top } };
