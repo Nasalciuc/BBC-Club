@@ -24,7 +24,7 @@ import { importCatalog, ImportBody, ImportError } from "./application/import";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
 import { systemClock, type SiteClock } from "./application/site-cms";
-import { refreshSitePrices } from "./application/refresh-site-prices";
+import { refreshSitePrices, type FailedRoutes } from "./application/refresh-site-prices";
 import {
   SEARCH_TIMEOUT_MS,
   resolveIndicative,
@@ -101,6 +101,9 @@ export const catalogModule = (
       clock: siteClock,
     });
 
+    /** ADR-IMPL-063: the routes the site failed the refresh job, remembered from run to run in this process (as the
+     *  breaker is), so a route it keeps failing waits its hour and goes last. */
+    const siteFailures: FailedRoutes = new Map();
     /** ADR-IMPL-063: the refresh job asks the site only while estimates (the master switch), the site's prices and
      *  Home's site pins — the routes it keeps are theirs — are all on. Read before each question (cached, ~35 s to
      *  reach every replica): one turned off stops a run already going. */
@@ -789,6 +792,7 @@ export const catalogModule = (
                 metrics: platform.metrics,
                 logger: platform.logger,
                 stillOn: refreshSitePricesOn,
+                failed: siteFailures,
               });
             },
           },

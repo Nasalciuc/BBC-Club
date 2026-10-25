@@ -375,8 +375,10 @@ answer first, then answers 18 hours old or more; at most 150 questions a run, on
 routes, and a search asks for its own — and reads them again before each question, so turning one off stops a run
 already going (`stopped: 1`, within the flags' cache of about 35 s). With one off it asks nothing (`skipped: 1`) and
 still deletes the expired answers (`purged`). It stops at the site's first 429 (`rateLimited: 1` in its run) and when
-the breaker opens (`breakerOpen: 1`); the next run, ten minutes later, goes on. Run it now, as `sync-site-destinations`
-above, with `refresh-site-prices` in the path. Its outcome:
+the breaker opens (`breakerOpen: 1`); the next run, ten minutes later, goes on. A route the site could not answer is not
+asked again for an hour (`backingOff` counts them), then after every other route due: one the site keeps failing costs
+at most a question an hour and holds nothing back. The worker remembers those failures until it restarts. Run it now, as
+`sync-site-destinations` above, with `refresh-site-prices` in the path. Its outcome:
 
 ```sql
 SELECT status, metrics, duration_ms FROM platform.job_runs

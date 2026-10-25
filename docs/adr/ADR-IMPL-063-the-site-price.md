@@ -76,16 +76,22 @@ e-mail's line) · Brief 3.1 step 2, decision D6.
    exactly the pins a member whose home it is can be shown — round trip, the only trip an estimate shows; the guarded
    routes never. Routes with no stored answer first, then those answered 18 hours ago or more, the soonest to expire
    first; at most **150 questions a run, one starting every 500 ms** (about two a second). It stops at the site's first
-   429 and when the breaker opens (nothing is asked while it is open); an error stores nothing. Then it deletes the
-   expired rows. Its counts go to `platform.job_runs` (`due`, `asked`, `priced`, `none`, `failed`, `rateLimited`,
-   `breakerOpen`, `stopped`, `purged`). Run twice, the second run asks nothing and changes no row. Routes searched
-   outside the pins are not refreshed: their answer expires and the next search asks again — the set the job keeps is
-   the pins', not every route ever searched. It asks only while `catalog.site_pins` is on as well as the two flags
-   below: the routes it keeps are the pins', and without the pins no member sees them — a search asks for its own route.
-   Its flags are read again before each question (they are cached), so turning one off stops a run already going
-   (`stopped: 1`; AGENTS rule 3). With any of them off it asks nothing and still deletes the expired rows
-   (`{ skipped: 1, purged }`), so no answer outlives its day once the feature is off — platform's `retention` does not
-   know this table.
+   429 and when the breaker opens (nothing is asked while it is open); an error stores nothing. A route the site could
+   not answer (a timeout, a 5xx, a failed connection, a body not its shape, our request refused — not a 429, which is
+   the site's limit, not the route's) is not asked again for an hour, then goes after every route never asked and every
+   due one, the oldest failure first: a route the site keeps failing can neither hold back the routes after it nor
+   reopen the breaker at the head of every run (the half-open breaker's one question would otherwise be that route's,
+   run after run). The job remembers those failures in its process, as it keeps its breaker — a restart forgets them,
+   and each such route is asked once more — rather than in a column or table of their own: the club shows nothing of a
+   failure, and the stored rows stay what the site answered. Then it deletes the expired rows. Its counts go to
+   `platform.job_runs` (`due`, `asked`, `priced`, `none`, `failed`, `rateLimited`, `breakerOpen`, `stopped`,
+   `backingOff`, `purged`). Run twice, the second run asks nothing and changes no row. Routes searched outside the pins
+   are not refreshed: their answer expires and the next search asks again — the set the job keeps is the pins', not
+   every route ever searched. It asks only while `catalog.site_pins` is on as well as the two flags below: the routes it
+   keeps are the pins', and without the pins no member sees them — a search asks for its own route. Its flags are read
+   again before each question (they are cached), so turning one off stops a run already going (AGENTS rule 3;
+   `stopped: 1`). With any of them off it asks nothing and still deletes the expired rows (`{ skipped: 1, purged }`), so
+   no answer outlives its day once the feature is off — platform's `retention` does not know this table.
 6. **The flag** `catalog.site_prices`, `{ enabled: false }`, seeded off by `scripts/seed-flags.ts`, read under
    `catalog.estimates`, which stays the master switch: with estimates off nothing is read or asked, whatever this flag
    says. With the site's prices off, the search, the pins and the quote behave exactly as before — no row read, no

@@ -288,6 +288,56 @@ describe("site prices — the refresh job", () => {
     await t.iso.drop();
   });
 
+  it("a route the site keeps failing waits an hour, then goes last: it never holds back the routes after it", async () => {
+    const t = await setup("site-prices-job-backoff");
+    // From JFK, eight cities: the five the site's home page promotes come first in the pins' order and answer 503 every
+    // time; the three after them are priced (made-up figures).
+    await t.iso.db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports, promoted) VALUES
+        (301, 'Zurich', 'Switzerland', 'Europe', 'ZRH', ARRAY['ZRH'], true),
+        (302, 'Paris', 'France', 'Europe', 'CDG', ARRAY['CDG'], true),
+        (303, 'London', 'United Kingdom', 'Europe', 'LHR', ARRAY['LHR'], true),
+        (304, 'Rome', 'Italy', 'Europe', 'FCO', ARRAY['FCO'], true),
+        (305, 'Madrid', 'Spain', 'Europe', 'MAD', ARRAY['MAD'], true),
+        (306, 'Athens', 'Greece', 'Europe', 'ATH', ARRAY['ATH'], false),
+        (307, 'Lisbon', 'Portugal', 'Europe', 'LIS', ARRAY['LIS'], false),
+        (308, 'Amsterdam', 'Netherlands', 'Europe', 'AMS', ARRAY['AMS'], false)`);
+    await t.iso.db.execute(sql`
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price)
+      SELECT 'JFK', cms_id, cms_id, 1000 FROM generate_series(301, 308) AS cms_id`);
+    const failing = ["ZRH", "CDG", "LHR", "FCO", "MAD"];
+    for (const to of failing) t.site.routes[`JFK-${to} ${RT}`] = { status: 503 };
+    t.site.routes[`JFK-ATH ${RT}`] = { business: 2444, first: 3555, premium_economy: 1222 };
+    t.site.routes[`JFK-LIS ${RT}`] = { business: 2333, first: 3444, premium_economy: 1111 };
+    t.site.routes[`JFK-AMS ${RT}`] = { business: 2111, first: 3222, premium_economy: 1000 };
+    await t.estimatesOn(true);
+    await t.flags.set("catalog.site_pins", { enabled: true });
+    const later = (ms: number) => t.clock.sleep(ms, new AbortController().signal);
+
+    // The five failures in a row open the breaker: the run stops before the routes after them.
+    expect(await t.run()).toMatchObject({ due: 8, asked: 5, failed: 5, breakerOpen: 1, backingOff: 0 });
+    expect(t.site.calls.map((c) => c.slice(4, 7)).sort()).toEqual([...failing].sort());
+
+    // Ten minutes on, the breaker lets one question through: the five wait their hour, so it is Athens', which closes
+    // the breaker, and the routes after it are asked and stored.
+    await later(10 * 60_000);
+    expect(await t.run()).toMatchObject({ due: 3, asked: 3, priced: 3, failed: 0, breakerOpen: 0, backingOff: 5 });
+    expect((await t.rows()).map((r) => `${r.route_to} ${r.status}`)).toEqual([
+      "AMS priced",
+      "ATH priced",
+      "LIS priced",
+    ]);
+
+    // An hour after they failed, the five are asked again — after every other route due (none is), oldest failure first.
+    await later(60 * 60_000);
+    const asked = t.site.calls.length;
+    expect(await t.run()).toMatchObject({ due: 5, asked: 5, failed: 5, backingOff: 0 });
+    expect(t.site.calls.slice(asked).map((c) => c.slice(4, 7))).toEqual(
+      t.site.calls.slice(0, 5).map((c) => c.slice(4, 7)),
+    );
+    await t.iso.drop();
+  });
+
   it("asks nothing without Home's site pins: the routes it keeps are theirs, and no member sees them", async () => {
     const t = await setup("site-prices-job-no-pins", {
       [`JFK-ZRH ${RT}`]: { business: 2222, first: 3333, premium_economy: 1111 },

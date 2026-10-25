@@ -2,7 +2,7 @@
  *  job's choice of routes. No network: the site is a fake `fetch`. Every price is made up. */
 import { describe, expect, it } from "bun:test";
 
-import { dueRoutes, type PinRoute } from "../../src/application/refresh-site-prices";
+import { FAILED_RETRY_MS, dueRoutes, type PinRoute } from "../../src/application/refresh-site-prices";
 import {
   BREAKER_OPEN_MS,
   BREAKER_THRESHOLD,
@@ -303,7 +303,7 @@ describe("the job's routes", () => {
       ["JFK-NRT", { expiresAt: new Date(4_000), due: true }],
       ["MIA-HND", { expiresAt: new Date(9_000), due: false }],
     ]);
-    expect(dueRoutes(routes, stored).map((r) => `${r.from.code}-${r.to.code}`)).toEqual([
+    expect(dueRoutes(routes, stored).routes.map((r) => `${r.from.code}-${r.to.code}`)).toEqual([
       "JFK-LHR",
       "JFK-NRT",
       "JFK-CDG",
@@ -312,16 +312,39 @@ describe("the job's routes", () => {
 
   it("each home's first candidates only, as its pins read them; within the budget", () => {
     // Rows for JFK: LHR, CDG, LHR again (two cities on one airport), NRT; with three a home, NRT is not a candidate.
-    expect(dueRoutes(routes, new Map(), { perHome: 3 }).map((r) => `${r.from.code}-${r.to.code}`)).toEqual([
+    expect(dueRoutes(routes, new Map(), { perHome: 3 }).routes.map((r) => `${r.from.code}-${r.to.code}`)).toEqual([
       "JFK-LHR",
       "JFK-CDG",
       "MIA-HND",
     ]);
-    expect(dueRoutes(routes, new Map(), { budget: 2 })).toHaveLength(2);
+    expect(dueRoutes(routes, new Map(), { budget: 2 }).routes).toHaveLength(2);
   });
 
   it("never a route the club does not price", () => {
     const odd = [route("JFK", at("JFK")), route("JFK", at("EWR", "US", 40.69, -74.17)), route("JFK", LHR_)];
-    expect(dueRoutes(odd, new Map()).map((r) => r.to.code)).toEqual(["LHR"]);
+    expect(dueRoutes(odd, new Map()).routes.map((r) => r.to.code)).toEqual(["LHR"]);
+  });
+
+  it("a route the site failed waits its hour, then goes after the missing and the due, the oldest failure first", () => {
+    const now = 10 * FAILED_RETRY_MS;
+    const stored = new Map([
+      ["JFK-CDG", { expiresAt: new Date(5_000), due: true }],
+      ["MIA-HND", { expiresAt: new Date(9_000), due: false }],
+    ]);
+    const failed = new Map([
+      ["JFK-LHR", now - FAILED_RETRY_MS], // its hour is up: asked, last
+      ["JFK-NRT", now - FAILED_RETRY_MS - 1], // failed before LHR: before it
+      ["JFK-CDG", now - 1], // due, but failed a moment ago: waits
+      ["MIA-HND", now - 2 * FAILED_RETRY_MS], // a search stored it since: fresh, not asked
+    ]);
+    const out = dueRoutes(routes, stored, { failed, now });
+    expect(out.routes.map((r) => `${r.from.code}-${r.to.code}`)).toEqual(["JFK-NRT", "JFK-LHR"]);
+    expect(out.backingOff).toBe(1);
+    // Nothing failed: as before — the missing, then the due.
+    expect(dueRoutes(routes, stored, { now }).routes.map((r) => `${r.from.code}-${r.to.code}`)).toEqual([
+      "JFK-LHR",
+      "JFK-NRT",
+      "JFK-CDG",
+    ]);
   });
 });
