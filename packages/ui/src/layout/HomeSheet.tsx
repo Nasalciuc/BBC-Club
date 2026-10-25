@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useEffect, useRef } from "react";
+import { createContext, type ReactNode, type RefObject, useContext, useEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import BottomSheet, {
   type BottomSheetBackgroundProps,
@@ -8,9 +8,10 @@ import BottomSheet, {
   BottomSheetScrollView,
 } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, { Extrapolation, interpolate, useAnimatedStyle } from "react-native-reanimated";
+import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 
 import { tokens } from "../tokens";
+import { SHEET_TRACE, useSheetTrace } from "./useSheetTrace";
 
 /** 13: `Request a quote`, 40.6 tall, 16.4 and 16.8 from the edges, its foot 13.9 over the sheet's bottom edge (the tab
  *  bar's top, its hairline included). */
@@ -46,13 +47,17 @@ type Props = {
    */
   accessory?: ReactNode;
   /**
-   * When the hosting screen is on screen. After a tab switch Android can leave the sheet closed while React's index
-   * stays at rest (parity: `explore.search` gone); becoming active snaps it back to `index`.
+   * When the hosting screen is on screen. Coming back, the sheet is snapped to `index` again: it moves only if gorhom's
+   * position strayed from that stop while the screen was away, since gorhom skips a snap to the stop it holds. It never
+   * redrew the sheet parity found gone after a tab switch — gorhom held that one at rest; its drawn style was what was
+   * lost (see HomeSheet). e2e builds log the sheet's state while the screen is on screen (useSheetTrace).
    */
   active?: boolean;
   testID?: string;
 };
 const AccessoryContext = createContext<ReactNode>(null);
+/** e2e builds: the sheet's background, measured to see where the sheet is drawn (useSheetTrace). Null otherwise. */
+const DrawnContext = createContext<RefObject<View | null> | null>(null);
 
 // gorhom mounts `footerComponent` as a component type: a function created per render would remount the footer on every
 // render. One module-level component reads the node from context instead.
@@ -81,8 +86,9 @@ function cardness(index: number) {
 function SheetBackground({ animatedIndex, style, pointerEvents }: BottomSheetBackgroundProps) {
   const card = useAnimatedStyle(() => ({ opacity: cardness(animatedIndex.value) }));
   const look = useContext(LookContext);
+  const drawn = useContext(DrawnContext);
   return (
-    <View style={style} pointerEvents={pointerEvents}>
+    <View ref={drawn ?? undefined} style={style} pointerEvents={pointerEvents}>
       <View style={StyleSheet.absoluteFill}>
         <LinearGradient colors={[`${tokens.colors.surfacePage}00`, tokens.colors.surfacePage]} style={styles.haze} />
         <View style={styles.page} />
@@ -117,10 +123,24 @@ function SheetHandle({ animatedIndex }: BottomSheetHandleProps) {
   );
 }
 
-/** Explore's sheet over the globe, at three stops (02, 13, 16). BottomSheetScrollView, never ScrollView — the content's
- *  gesture must not fight the sheet's. */
+/**
+ * Explore's sheet over the globe, at three stops (02, 13, 16). BottomSheetScrollView, never ScrollView — the content's
+ * gesture must not fight the sheet's.
+ *
+ * gorhom draws the whole sheet in one Animated.View whose first frame is a window height down and, on Android,
+ * transparent. At rest nothing writes that style again, so the sheet stays drawn only while Reanimated keeps the last
+ * props it wrote: Reanimated 4.5.1's settled-props sync could erase them before React had them, and the next React
+ * commit drew the first frame — Explore without its sheet while gorhom held it at rest (parity). That sync is off
+ * (design/motion.md, resting styles). `[...snapPoints]` keeps its identity between renders: the React Compiler memoizes
+ * it on `snapPoints`, as it does Explore's `sheetSnaps(height, top)`.
+ */
 export function HomeSheet({ index, onChange, snapPoints, children, footer, accessory, active = true, testID }: Props) {
   const sheet = useRef<BottomSheet>(null);
+  // e2e builds only: gorhom writes its index and position here, and the background is measured (useSheetTrace).
+  const traceIndex = useSharedValue(-1);
+  const tracePosition = useSharedValue(0);
+  const drawn = useRef<View>(null);
+  useSheetTrace(active, index, drawn, traceIndex, tracePosition);
   // The sheet is never closed: three stops and no pan down to close. The library says -1 when a snap lands on none
   // of them — its target moved while it ran, as the screen's height settles after its first layout — and passing
   // that on closed the sheet for good: the screen's index became -1 and nothing raised it again (Android parity on
@@ -129,8 +149,8 @@ export function HomeSheet({ index, onChange, snapPoints, children, footer, acces
     if (next >= 0) onChange(next);
     else sheet.current?.snapToIndex(index);
   }
-  // A tab that was off-screen can leave the sheet closed while `index` stays at rest — controlled `index={0}` then
-  // changes nothing. Snap again when the host comes back.
+  // Coming back, the stop is asked for again: gorhom moves only if its position strayed while the screen was away (a
+  // snap to the stop it holds is skipped, so this cannot redraw a sheet whose drawn style was lost — see above).
   useEffect(() => {
     if (active) sheet.current?.snapToIndex(index);
   }, [active, index]);
@@ -138,30 +158,34 @@ export function HomeSheet({ index, onChange, snapPoints, children, footer, acces
     <LookContext.Provider value={index >= 2 ? RAISED.all : RAISED.route}>
       <AccessoryContext.Provider value={accessory ?? null}>
         <FooterContext.Provider value={footer ?? null}>
-          <BottomSheet
-            ref={sheet}
-            index={index}
-            snapPoints={[...snapPoints]}
-            // v5 sizes to content by default and inserts that height as an extra snap, shifting every index: keep exactly
-            // these three.
-            enableDynamicSizing={false}
-            onChange={settle}
-            // The index follows a snap as it starts, not only when it lands: a city chosen while a dragged sheet is still
-            // settling must find the index already down, or raising it again would change nothing.
-            onAnimate={(_from, to) => settle(to)}
-            enablePanDownToClose={false}
-            animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
-            handleComponent={SheetHandle}
-            backgroundComponent={SheetBackground}
-            footerComponent={footer ? DockedFooter : undefined}
-          >
-            <BottomSheetScrollView
-              testID={testID}
-              contentContainerStyle={[styles.content, footer ? styles.contentAboveFooter : null]}
+          <DrawnContext.Provider value={SHEET_TRACE ? drawn : null}>
+            <BottomSheet
+              ref={sheet}
+              index={index}
+              snapPoints={[...snapPoints]}
+              // v5 sizes to content by default and inserts that height as an extra snap, shifting every index: keep
+              // exactly these three.
+              enableDynamicSizing={false}
+              onChange={settle}
+              // The index follows a snap as it starts, not only when it lands: a city chosen while a dragged sheet is
+              // still settling must find the index already down, or raising it again would change nothing.
+              onAnimate={(_from, to) => settle(to)}
+              enablePanDownToClose={false}
+              animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
+              handleComponent={SheetHandle}
+              backgroundComponent={SheetBackground}
+              footerComponent={footer ? DockedFooter : undefined}
+              animatedIndex={SHEET_TRACE ? traceIndex : undefined}
+              animatedPosition={SHEET_TRACE ? tracePosition : undefined}
             >
-              {children}
-            </BottomSheetScrollView>
-          </BottomSheet>
+              <BottomSheetScrollView
+                testID={testID}
+                contentContainerStyle={[styles.content, footer ? styles.contentAboveFooter : null]}
+              >
+                {children}
+              </BottomSheetScrollView>
+            </BottomSheet>
+          </DrawnContext.Provider>
         </FooterContext.Provider>
       </AccessoryContext.Provider>
     </LookContext.Provider>
