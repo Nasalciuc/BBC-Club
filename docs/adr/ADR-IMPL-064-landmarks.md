@@ -35,7 +35,8 @@ Commons, 117 requests) found:
   `hint:Query hint:optimizer "None"` and the class closures as named subqueries; earlier drafts got 504 after 65 s and a
   `TimeoutException` after 60 s. 15 of 29 WDQS requests answered 429 (Retry-After 1000) on a shared egress; Commons
   answered 429 to 25 of 35 (Retry-After 20–57 s). On 25 Oct this step asked four WDQS questions (0.6–4.2 s, all 200 —
-  the job's own landmark question for Chișinău in 0.75 s) and Commons twice (both 429, Retry-After 21 and 32 s).
+  the job's own landmark question for Chișinău in 0.75 s) and Commons twice (both 429, Retry-After 21 and 32 s); its
+  review asked WDQS once more (the search for "Kishinev" with the search's order, 200 in 3.0 s).
 
 **Decision.**
 
@@ -43,9 +44,11 @@ Commons, 117 requests) found:
   - The IATA code is matched at any rank (`?airport p:P238/ps:P238 ?iata`): KIV finds Chișinău as RMO does.
   - **By its own name.** When Wikidata knows no airport within 50 km of ours, or the airport names no city, the city is
     looked up by its name: Wikidata's search (`wikibase:mwapi`, `EntitySearch`; accents and aliases find it —
-    "Chisinau" finds Chișinău), human settlements (P31/P279\* Q486972) only; the one whose English name is the city we
-    show, else the nearest, always within 150 km of the airport (five other Springfields are far from SGF); the oldest
-    item on a tie. One question a city — the search reads the first row of a VALUES block only (tried on WDQS) — two a
+    "Chisinau" finds Chișinău), human settlements (P31/P279\* Q486972) only, always within 150 km of the airport (five
+    other Springfields are far from SGF): the one whose English name is the city we show; else the one the search puts
+    first (its own order, `wikibase:apiOrdinal`: an alias matched whole comes before a name that only starts with it —
+    "Kishinev" finds Chișinău first and the Chișinău Ghetto third, though the Ghetto lies nearer the airport); then the
+    nearest, then the oldest item. One question a city — the search reads the first row of a VALUES block only (tried on WDQS) — two a
     run; a third city waits for the next run, its look not counted. The same tiers and credit rules follow (Commons,
     Pexels, the satellite view). A search that fails (a timeout, a 500) is its own city's failure (`retry`): the cities
     found by their airport keep their answers, and those still waiting for a search wait for the next run, uncounted —

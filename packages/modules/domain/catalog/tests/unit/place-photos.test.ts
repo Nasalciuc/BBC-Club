@@ -33,12 +33,15 @@ import {
 } from "../../src/application/place-photos";
 import { binding, commonsThumb, fakeSources, pexelsPhoto } from "./place-photos.fixture";
 // WDQS's own answers, 25 Oct 2026 (no person in them): the airports' question for RMO and KIV, and the search by a
-// city's name for Chișinău and for Springfield.
+// city's name for Chișinău, for Kishinev (with the search's order) and for Springfield.
 import rmoKiv from "./wikimedia/wdqs-city-rmo-kiv.json";
 import byNameChisinau from "./wikimedia/wdqs-city-by-name-chisinau.json";
+import byNameKishinev from "./wikimedia/wdqs-city-by-name-kishinev.json";
 import byNameSpringfield from "./wikimedia/wdqs-city-by-name-springfield.json";
 
 const rows = (answer: { results: { bindings: unknown[] } }) => answer.results.bindings as Binding[];
+/** The search's order as WDQS writes it. */
+const rank = (n: number) => ({ type: "literal", datatype: "http://www.w3.org/2001/XMLSchema#int", value: String(n) });
 
 const LONDON: Place = { code: "LHR", city: "London", lat: 51.470748, lng: -0.459909 };
 const PARIS: Place = { code: "CDG", city: "Paris", lat: 49.00896, lng: 2.554117 };
@@ -197,15 +200,33 @@ describe("Wikidata", () => {
     }
   });
 
-  it("finds a city by its own name near the airport: ours by its name, else the nearest, never a namesake far off", () => {
+  it("finds a city by its own name near the airport: ours by its name, else the search's first, never a namesake far off", () => {
     // "Chisinau" also finds the Chișinău Ghetto (Q4222668), nearer the airport than the city's centre: the name wins.
     expect(cityFactsByName(rows(byNameChisinau), CHISINAU)).toMatchObject({
       qid: "Q21197",
       centre: { lat: 47.022777777, lng: 28.835277777 },
     });
-    expect(cityFactsByName(rows(byNameChisinau), { ...CHISINAU, city: "Kishinev" })).toMatchObject({
-      qid: "Q4222668", // no settlement named so: the nearest within 150 km
-    });
+    // "Kishinev" is no settlement's English name: the search puts Chișinău first (its alias) and the Ghetto third —
+    // the order wins over the Ghetto's being nearer the airport.
+    const kishinev = { ...CHISINAU, city: "Kishinev" };
+    expect(rows(byNameKishinev).map((b) => [b.city?.value.split("/").pop(), b.rank?.value])).toEqual([
+      ["Q21197", "0"],
+      ["Q4222668", "2"],
+    ]);
+    expect(cityFactsByName(rows(byNameKishinev), kishinev)).toEqual(cityFactsByName(rows(byNameChisinau), CHISINAU));
+    // Made up: two settlements none of whose names is ours — the search's first, though farther; no order: the nearest.
+    const near = binding({ code: "RMO", city: "Q8", cityLabel: "Near", cityCoord: [28.93, 46.93] });
+    const far = binding({ code: "RMO", city: "Q9", cityLabel: "Far", cityCoord: [28.83, 47.02] });
+    expect(
+      cityFactsByName(
+        [
+          { ...near, rank: rank(3) },
+          { ...far, rank: rank(0) },
+        ],
+        kishinev,
+      ).qid,
+    ).toBe("Q9");
+    expect(cityFactsByName([near, far], kishinev).qid).toBe("Q8");
     // Six Springfields; only Missouri's lies within 150 km of Springfield–Branson (SGF).
     const sgf = { code: "SGF", city: "Springfield", lat: 37.245667, lng: -93.388639 };
     expect(cityFactsByName(rows(byNameSpringfield), sgf)).toEqual({
@@ -225,6 +246,7 @@ describe("Wikidata", () => {
     const q = cityByNameSparql({ code: "RMO", city: "Chișinău" });
     expect(q).toContain('VALUES (?code ?name) { ("RMO" "Chișinău") }');
     expect(q).toContain('wikibase:api "EntitySearch"');
+    expect(q).toContain("?rank wikibase:apiOrdinal true .");
     expect(q).toContain("wdt:P31/wdt:P279* wd:Q486972");
     expect(sparqlString('Say "hi" \\ bye')).toBe('"Say \\"hi\\" \\\\ bye"');
     expect(() => sparqlString("two\nlines")).toThrow();

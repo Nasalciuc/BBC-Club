@@ -193,13 +193,14 @@ export function searchName(city: string): string {
 /**
  * The places named like this city on Wikidata (its search, as a person would type the name: accents, aliases and other
  * spellings find it — "Chisinau" finds Chișinău), that are a human settlement (P31/P279* Q486972) with a place on Earth:
- * each one's English name, where it is, its night view and its main image. For a place whose airport Wikidata does not
- * know near ours. One question per place: the search service reads the first row of a VALUES block only (tried on
- * WDQS, 25 Oct 2026). The name is `searchName`'s.
+ * each one's English name, where it is, its night view and its main image, and its place in the search's own order
+ * (`?rank`, 0 first: a name or an alias that matches whole comes before one that only starts with it). For a place
+ * whose airport Wikidata does not know near ours. One question per place: the search service reads the first row of a
+ * VALUES block only (tried on WDQS, 25 Oct 2026). The name is `searchName`'s.
  */
 export function cityByNameSparql(place: { code: string; city: string }): string {
   if (!/^[A-Z]{3}$/.test(place.code)) throw new Error(`not an IATA code: ${place.code}`);
-  return `SELECT ?code ?city ?cityLabel ?cityCoord ?night ?image WHERE {
+  return `SELECT ?code ?city ?cityLabel ?cityCoord ?night ?image ?rank WHERE {
   VALUES (?code ?name) { (${sparqlString(place.code)} ${sparqlString(searchName(place.city))}) }
   SERVICE wikibase:mwapi {
     bd:serviceParam wikibase:endpoint "www.wikidata.org" ;
@@ -208,6 +209,7 @@ export function cityByNameSparql(place: { code: string; city: string }): string 
                     mwapi:search ?name ;
                     mwapi:language "en" .
     ?city wikibase:apiOutputItem mwapi:item .
+    ?rank wikibase:apiOrdinal true .
   }
   ?city wdt:P625 ?cityCoord .
   FILTER EXISTS { ?city wdt:P31/wdt:P279* wd:Q486972 . }
@@ -240,6 +242,8 @@ export function commonsFileName(uri: string | undefined): string | null {
 }
 
 const qNumber = (uri: string) => Number(uri.match(/\/Q(\d+)$/)?.[1] ?? Number.MAX_SAFE_INTEGER);
+/** Lower first; a city without a rank after those with one, two without a rank equal. */
+const byRank = (a: number, b: number) => (a === b ? 0 : a < b ? -1 : 1);
 
 /** Files whose name says they are not a photograph of the city: a montage, a map, a flag, a coat of arms… */
 const NOT_A_VIEW =
@@ -314,16 +318,31 @@ export function cityFacts(
   return qid ? factsOf(qid, chosen[1], place) : NO_CITY;
 }
 
-type CityRows = { label: string | null; centre: Centre | null; nights: Set<string>; images: Set<string> };
+type CityRows = {
+  label: string | null;
+  centre: Centre | null;
+  nights: Set<string>;
+  images: Set<string>;
+  /** Its place in the search's order (0 first); none outside a search's answer. */
+  rank: number;
+};
 
-/** The cities in a SPARQL answer, by item: the name, the centre and the files their rows carry. */
+/** The cities in a SPARQL answer, by item: the name, the centre, the search's order and the files their rows carry. */
 function citiesIn(rows: readonly Binding[]): Map<string, CityRows> {
   const cities = new Map<string, CityRows>();
   for (const b of rows) {
     if (!b.city?.value) continue;
-    const city = cities.get(b.city.value) ?? { label: null, centre: null, nights: new Set(), images: new Set() };
+    const city = cities.get(b.city.value) ?? {
+      label: null,
+      centre: null,
+      nights: new Set(),
+      images: new Set(),
+      rank: Infinity,
+    };
     city.label ??= b.cityLabel?.value ?? null;
     city.centre ??= parsePoint(b.cityCoord?.value);
+    const rank = b.rank?.value === undefined ? NaN : Number(b.rank.value);
+    if (Number.isInteger(rank) && rank >= 0) city.rank = Math.min(city.rank, rank);
     const night = commonsFileName(b.night?.value);
     if (night) city.nights.add(night);
     const image = commonsFileName(b.image?.value);
@@ -334,9 +353,11 @@ function citiesIn(rows: readonly Binding[]): Map<string, CityRows> {
 }
 
 /**
- * The city behind a place found by its name (`cityByNameSparql`): among the settlements the search gave, the one whose
- * English name is the city we show, else the nearest — always within 150 km of the airport (a "Springfield" a thousand
- * kilometres away is another city); the oldest item on a tie. Nothing when none lies that near.
+ * The city behind a place found by its name (`cityByNameSparql`): among the settlements the search gave within 150 km
+ * of the airport (a "Springfield" a thousand kilometres away is another city), the one whose English name is the city
+ * we show; else the one the search put first — a name kept as an alias ("Kishinev") finds the city before a place
+ * whose name only starts with it (the Chișinău Ghetto, nearer the airport); then the nearest, then the oldest item.
+ * Nothing when none lies that near.
  */
 export function cityFactsByName(
   bindings: readonly Binding[],
@@ -349,7 +370,13 @@ export function cityFactsByName(
       const km = city.centre ? distanceKm(city.centre, place) : Infinity;
       return km <= CITY_NEAR_KM ? [{ id, city, km }] : [];
     })
-    .sort((a, b) => ours(a.city.label) - ours(b.city.label) || a.km - b.km || qNumber(a.id) - qNumber(b.id));
+    .sort(
+      (a, b) =>
+        ours(a.city.label) - ours(b.city.label) ||
+        byRank(a.city.rank, b.city.rank) ||
+        a.km - b.km ||
+        qNumber(a.id) - qNumber(b.id),
+    );
   const chosen = near[0];
   const qid = chosen ? qidOf(chosen.id) : null;
   return chosen && qid ? factsOf(qid, chosen.city, place) : NO_CITY;
