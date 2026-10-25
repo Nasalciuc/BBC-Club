@@ -4,9 +4,11 @@ Status: proposed · Date: 2026-10-25 · Scope: `catalog` (`application/place-pho
 `landmark-sources.ts` and `place-landmarks.ts`, `infrastructure/place-photos.repo.ts`, the new `place-landmarks.repo.ts`
 and `source-holds.repo.ts`, the new job `resolve-place-landmarks`, the new route `GET /v1/places/:code/landmarks`),
 `packages/db` (`0039_catalog_place_landmarks.sql`, `20261025133511_snapshot_sync`), `packages/shared/src/api/v1/places.ts`
-(additive: `PlaceLandmarksVM`), `scripts/seed-flags.ts`, `infra/cron/crontab`, `infra/RUNBOOK.md` · Amends decision D7
-(brief 3.2: landmarks) and ADR-IMPL-043 (the city photo: the IATA lookup, a city found by its name, a 429). The app's
-destination screen that draws the landmarks is a later step.
+(additive: `PlaceLandmarksVM`), `scripts/seed-flags.ts`, `infra/cron/crontab`, `infra/RUNBOOK.md`, and the app
+(`apps/mobile/src/features/places/` `landmark-logic.ts`, `landmark-store.ts`, `usePlaceLandmarks.ts`, `Landmarks.tsx`;
+`app/destination/[code].tsx`, `app/(tabs)/explore.tsx`; `design/components.md`) · Amends decision D7 (brief 3.2:
+landmarks) and ADR-IMPL-043 (the city photo: the IATA lookup, a city found by its name, a 429). The app draws them on
+the destination's page (04) and Explore's chosen route (13): **The app** below.
 
 **Context.** The owner asked for a real photograph of every city and three real landmarks of every destination, each
 with its name and its licence (brief 3.2, requests 2 and 6). The research of 25 Oct 2026 (12 cities, WDQS, QLever and
@@ -126,11 +128,41 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
   change to shared this ADR covers) drops a landmark an app cannot read, never the whole answer, and keeps three.
 - **Metrics** `bbc_place_landmarks_resolved{found}`, `bbc_place_landmarks_failed{stage}`,
   `bbc_place_landmarks_held{stage}`, `bbc_place_photos_held{stage}`.
+- **The app** (brief 3.2 step 2).
+  - **Where.** The images draw no landmarks. They show on the destination's page (04), under its flight options and
+    the city photo's credit (not on its home-airport message), and in Explore's sheet at a chosen route (13), under its
+    flight options — below the first flight, so the sheet's stops do not move. 05's strip of thumbnails stays the
+    fare's (the city, the seat, the lounge, as `REFERENCE-SPEC.md` fixes it). The section is built from what 04, 13,
+    03, 05 and 08 already draw and reads 04's and 13's own measures (`optionsColumn`); `design/components.md`
+    (`Landmarks`) holds its anatomy, pending a designer.
+  - **What.** Up to three, in the server's order; fewer when fewer exist; none — nothing at all (no title, no frame,
+    no skeleton, no error: a decoration). Each photograph at its own shape within the 1.2–2.4 band; a shape outside it
+    (a later server's) fills the nearest edge of the band, cropped (`LANDMARK_SHAPE`). Its name under it, then its
+    credit as the city photo's reads (`Photo: <author> · <licence> · Wikimedia Commons`), linked to `pageUrl`, else
+    to `licenceUrl` (a server before `pageUrl`), else only read. A landmark without a name, without a credit it can
+    print (no one to credit, no licence) or showing a photograph already shown is left out, never replaced. A
+    photograph that will not load leaves with its name and credit, and is tried again when a screen showing landmarks
+    comes back into view or the phone back online. A screen reader hears `<name>, photo`, then the credit. testIDs
+    `destination.landmark.<rank>` and `.credit` (`explore.` on 13).
+  - **Asking.** One store for every screen, for the session: a city is asked when a screen showing it comes into view
+    and what the app knows has aged — landmarks after 12 hours (the place photos' own window), none yet after five
+    minutes (the job reaches a new city within a few), a code that is no airport or an answer the app cannot read
+    after an hour — with the ETag it holds (`If-None-Match`; a 304 keeps what it has). A failed question (offline, a
+    timeout, an error, a 429) changes nothing; the next view asks again. A landmark the app cannot read is dropped by
+    the contract, never the list; a body of another shape or for another code is unreadable: nothing shown.
+  - **Skips.** An operator's `skip` reaches the route within about 35 s (the flag's cache); an app that already
+    showed the city drops the landmark at its next question for it — within 12 hours of its last answer, or at its
+    next cold start.
+  - Tests (`apps/mobile`): `landmark-logic.test.ts` (reading the answer, the credit, which to show, the shape, the
+    floor over the tiles), `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
+    `landmarks-section.test.ts` (the floor through the element tree the section builds, on both looks),
+    `api-landmarks.test.ts` (the question through `api.ts`: If-None-Match, 304, a body it cannot read, 404, 429).
 
 **Consequences.** A destination shows up to three landmarks a few minutes after its city is first shown (two places
 every five minutes, about 576 a day). Under a WDQS outage rule (one request a minute) the first 429 holds both jobs for
-its Retry-After instead of retrying every minute. A skipped landmark leaves the answer at once; its replacement comes
-with the city's next look (the RUNBOOK says how to make that now). Tests: `tests/unit/place-photos.test.ts` (any rank,
+its Retry-After instead of retrying every minute. A skipped landmark leaves the answer at once (an app already showing
+it, at its next question: within 12 hours); its replacement comes with the city's next look (the RUNBOOK says how to
+make that now). Tests: `tests/unit/place-photos.test.ts` (any rank,
 by name, Retry-After, the 429 outcomes), `tests/unit/landmarks.test.ts` (the question, reading the answer, D7's filters
 on WDQS's and Commons' saved answers for Paris and Chișinău — the Eiffel Tower and the water tower rescued by their
 aerial views — the city's own item, duplicates, the contract), `tests/contract/place-photos.test.ts` (a 429 defers and
@@ -143,8 +175,14 @@ licences and restrictions as Commons gave them; authors are made up and files wh
 
 - **The radius.** 20 km brings Versailles (18 km) and the Stade de France into Paris; a smaller one loses sights filed
   outside a city's centre. One constant (`LANDMARK_RADIUS_KM`).
-- **Portrait icons.** Notre-Dame, Big Ben, Tokyo Skytree and Tokyo Tower have no landscape view at all; the app could
-  crop a portrait photograph instead (the destination screen's step), which would also need the 1.2–2.4 band relaxed.
+- **Portrait icons.** Notre-Dame, Big Ben, Tokyo Skytree and Tokyo Tower have no landscape view at all. The app now
+  shows a shape outside 1.2–2.4 at the band's nearest edge, cropped, so relaxing the job's band to admit portraits
+  needs no app change; whether to relax it (a portrait cropped to 1.2 wide loses most of a tower) stays open.
+- **Skips in an open app.** The app revalidates a city it found landmarks for after 12 hours, as the brief asks (no
+  more often than the place photos). If skips must leave open apps sooner, a found city can be revalidated on each
+  view after a shorter window — a 304 costs little — as a deliberate exception.
+- **The undrawn section.** The images draw no landmarks; the section is the club's own arrangement of drawn parts
+  (`design/components.md`, `Landmarks`) until a designer draws it.
 - **More overrides.** The skip list holds one item; the operator adds others as cities are looked at (Hallgrímskirkja
   and Harpa are absent from Reykjavík's answer, which was not investigated; Table Mountain is a `mountain`, so Cape Town
   never gets it). Resort cities like Cancún may have fewer than three.

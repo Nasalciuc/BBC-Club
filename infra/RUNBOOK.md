@@ -316,7 +316,8 @@ again for a month (rank 1 and `city_qid` null: no city found for the airport); a
 worked yet (the job tries again in six hours).
 
 A wrong or unwanted landmark: add its Wikidata item (`landmark_qid`) to the flag's `skip` list — the route leaves it out
-within ~35 s — then let the city be looked at again so that another takes its place. The seeded list holds Q177174,
+within ~35 s; an app that already showed the city drops it at its next question for it, within 12 hours of its last
+answer (or at its next cold start) — then let the city be looked at again so that another takes its place. The seeded list holds Q177174,
 Reykjavík's most written-about sight (the Icelandic Phallological Museum):
 
 ```sql
