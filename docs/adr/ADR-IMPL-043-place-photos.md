@@ -41,7 +41,9 @@ image.
      refuses or slows others): the first file that is a JPEG in landscape (1.2–2.4 wide for 1 high), wider than 1280 px
      (so both widths are real thumbnails, never the original), under CC0, public domain or CC BY / BY-SA, without
      restrictions (personality rights, trademarks), with an author when the licence asks for one. The credit is its
-     Artist and LicenseShortName as text (80 characters at most) and its Commons page.
+     Artist and LicenseShortName as text (80 characters at most) and its Commons page. (Amended by ADR-IMPL-064,
+     amendments 2 and 3: the Free Art License is accepted as CC BY / BY-SA is, an author still required; a one-page
+     TIFF whose thumbnails Commons serves as JPEG counts as a JPEG. PNG, SVG and GIF stay out.)
   3. **Pexels**, only with `PEXELS_API_KEY` and three cities a run at most (60 runs an hour stay under Pexels' 200; its
      month allows 20,000): `<city> skyline`, landscape; the first photo whose description names the city and no person
      (Pexels answers every search with something, and people are not the club's material). Credit: the photographer,
@@ -50,6 +52,9 @@ image.
      gets its satellite view for a day, and the log has an error for an operator to replace the key. A 403 may come
      from the network in front of Pexels: it counts as down.
   4. **Satellite**: the city's centre from Wikidata when it lies within 150 km of the airport, else the airport.
+     (Amended by ADR-IMPL-064, amendment 1: with `catalog.landmarks` on, the route answers a city on its satellite
+     view — or not looked up yet — with its first landmark's photograph and that photograph's credit instead, composed
+     when it reads; the row and this order are unchanged.)
 - **Politely, and never downgraded** — the club's User-Agent goes with every request
   (`BBCClub/1.0 (<APP_ORIGIN>; place photos)`, Wikimedia's policy), eight seconds each. A source that fails (an error,
   a timeout, a shape other than its documentation's — Commons' own errors come with HTTP 200 and no pages, and count as

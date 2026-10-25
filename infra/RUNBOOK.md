@@ -215,6 +215,29 @@ image. Every city is looked at again after 30–33 days. Only addresses and cred
 starts no request after its first 32 s (each may take 8; the job is stopped at 50): when the sources are slow, the
 cities it has not reached are put back (`deferred` in the run's counts in `platform.job_runs`), their look not counted.
 
+What Commons may give a city (ADR-IMPL-043, amended by ADR-IMPL-064): a photograph — a JPEG, or a one-page TIFF whose
+thumbnails Commons serves as JPEG (the phones load those) — in landscape (1.2 to 2.4 wide for 1 high), wider than
+1280 px, under CC0, public domain, CC BY / BY-SA or the Free Art License (`FAL`), with its author whenever the licence
+asks. A PNG, SVG or GIF never.
+
+**A landmark stands in** (ADR-IMPL-064, amendment 1): while `catalog.landmarks` is on (Landmarks, below), a city whose
+row is `satellite` — or `pending`, not looked up yet — is answered with its first landmark's photograph instead,
+credited as that photograph (`Photo: <author> · <licence> · Wikimedia Commons`, linked to its Commons page). The route
+composes it on each answer and never stores it: the row stays as it is and the job looks again on its own schedule, so
+a photo the city gets later, or an operator's photo, wins at once. Phones keep what they read for up to twelve hours. To
+see which cities show one (the flag's `skip` aside):
+
+```sql
+SELECT p.code, p.status, l.rank, l.landmark_qid, l.name, l.licence
+FROM catalog.place_photos p
+JOIN LATERAL (SELECT * FROM catalog.place_landmarks x
+              WHERE x.code = p.code AND x.kind = 'landmark' ORDER BY x.rank LIMIT 1) l ON true
+WHERE p.status <> 'photo';
+```
+
+A stand-in the city should not have: put its `landmark_qid` in the flag's `skip` (Landmarks, below) — the next
+landmark, or the satellite view when none is left, within ~35 s — or give the city the club's own photo (below).
+
 The worker reaches `query.wikidata.org`, `commons.wikimedia.org` and `api.pexels.com` over 443; members' phones load
 the photos from `upload.wikimedia.org` (or Wikimedia's newer thumbnail host) and `images.pexels.com`, and satellite
 views from `api.mapbox.com`.
@@ -238,7 +261,9 @@ docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file 
 ```
 
 After setting `PEXELS_API_KEY` (restart the worker), let the satellite cities be looked at again now rather than within
-a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`.
+a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`. The same line after the release
+that accepted the Free Art License and one-page TIFF photographs (ADR-IMPL-064, amendments 2 and 3): the cities they
+rescue get their own photo within minutes (ten a minute) instead of within a month.
 
 A city stuck on an old satellite view: read its row, then let the job look again now. Chișinău (RMO) is one: Wikidata
 answers the club's code, RMO, with the city and its photographs, so its `satellite` row is one resolved before this
@@ -297,7 +322,7 @@ A place starts only while its slowest look (162 s) can end inside the run's 225 
 WDQS is slow the second place waits for the next run, untouched (`later` in the run's counts in `platform.job_runs`).
 
 On: the flag row `catalog.landmarks` (seeded off by `scripts/seed-flags.ts`, with the skip list below). Off, the route
-answers no landmarks and the job asks nothing:
+answers no landmarks, the job asks nothing, and no landmark stands in for a city photo:
 
 ```sql
 UPDATE platform.flags SET value = jsonb_set(value, '{enabled}', 'true'), updated_at = now() WHERE key = 'catalog.landmarks';
@@ -316,7 +341,8 @@ again for a month (rank 1 and `city_qid` null: no city found for the airport); a
 worked yet (the job tries again in six hours).
 
 A wrong or unwanted landmark: add its Wikidata item (`landmark_qid`) to the flag's `skip` list — the route leaves it out
-within ~35 s — then let the city be looked at again so that another takes its place. The seeded list holds Q177174,
+within ~35 s, and so does the city photo it may stand in for (Place photos, above) — then let the city be looked at again
+so that another takes its place. The seeded list holds Q177174,
 Reykjavík's most written-about sight (the Icelandic Phallological Museum):
 
 ```sql
