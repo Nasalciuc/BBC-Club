@@ -130,12 +130,12 @@ describe("site destinations — the nightly job", () => {
 
     // New York's price lands on its three airports; a US city without an airport (Atlantis) and Boston (no price) don't.
     expect(await t.routes(23)).toEqual([
-      { from: "EWR", price: 788, published: 2288 },
-      { from: "JAX", price: 1083, published: 1740 },
-      { from: "JFK", price: 788, published: 2288 },
-      { from: "LGA", price: 788, published: 2288 },
-      { from: "MDW", price: 1250, published: 2258 },
-      { from: "ORD", price: 1250, published: 2258 },
+      { from: "EWR", price: 801, published: 2101 },
+      { from: "JAX", price: 1101, published: 1801 },
+      { from: "JFK", price: 801, published: 2101 },
+      { from: "LGA", price: 801, published: 2101 },
+      { from: "MDW", price: 1301, published: 2401 },
+      { from: "ORD", price: 1301, published: 2401 },
     ]);
 
     // The site's photo, as an operator's: no expiry, no credit line.

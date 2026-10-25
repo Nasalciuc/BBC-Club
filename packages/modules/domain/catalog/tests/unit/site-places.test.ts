@@ -73,9 +73,9 @@ const deps = (calls: string[] = [], site = siteFixture()): SiteDeps => ({
 
 describe("reading the site", () => {
   it("dollars: whole and positive, from a number or a numeric string", () => {
-    expect(dollars(788)).toBe(788);
-    expect(dollars("1250")).toBe(1250);
-    expect(dollars(1082.6)).toBe(1083);
+    expect(dollars(801)).toBe(801);
+    expect(dollars("1301")).toBe(1301);
+    expect(dollars(1100.6)).toBe(1101);
     expect(dollars(0)).toBeNull();
     expect(dollars(-5)).toBeNull();
     expect(dollars("")).toBeNull();
@@ -99,7 +99,7 @@ describe("reading the site", () => {
     expect([...read.promoted]).toEqual([283]);
     const london = read.cities.find((c) => c.id === 23)!;
     expect(london).toMatchObject({ name: "London", country: "United Kingdom", region: "Europe" });
-    expect(london.deals[0]).toEqual({ id: 54, from: "New York", price: 788, publishedPrice: 2288 });
+    expect(london.deals[0]).toEqual({ id: 54, from: "New York", price: 801, publishedPrice: 2101 });
     expect(london.deals.find((d) => d.from === "Boston")?.price).toBeNull();
     // 1 list + 1 home page + 3 regions + 5 countries + 7 cities.
     expect(calls.length).toBe(17);
@@ -433,12 +433,12 @@ describe("the night's snapshot", () => {
 
     const london = plan.routes.filter((r) => r.cmsId === 23).map((r) => [r.routeFrom, r.price, r.publishedPrice]);
     expect(london).toEqual([
-      ["JFK", 788, 2288],
-      ["EWR", 788, 2288],
-      ["LGA", 788, 2288],
-      ["ORD", 1250, 2258],
-      ["MDW", 1250, 2258],
-      ["JAX", 1083, 1740],
+      ["JFK", 801, 2101],
+      ["EWR", 801, 2101],
+      ["LGA", 801, 2101],
+      ["ORD", 1301, 2401],
+      ["MDW", 1301, 2401],
+      ["JAX", 1101, 1801],
     ]);
     // A price without a number (Boston) is no route.
     expect(plan.routes.some((r) => r.cmsId === 23 && r.price === null)).toBe(false);
