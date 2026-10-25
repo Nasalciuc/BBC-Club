@@ -259,8 +259,8 @@ photo for gets its satellite view, looked at again each day.
 
 Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own API
 — `buybusinessclass.com/api` (ADR-IMPL-062; `weba.buybusinessclass.com` until it stopped resolving): regions, their
-countries, their cities, about 240 pages, one starting every 600 ms (the API allows 120 requests a minute per address,
-and staging's night, on this host at the same minute, spends the same 120), then a HEAD request for each city's photo,
+countries, their cities, about 240 pages, one starting every 1.2 s (the API allows 120 requests a minute per address,
+and staging's night, on this host at the same minute, reads beside it: about 50 a minute each), then a HEAD request for each city's photo,
 four at a time — and keeps a snapshot: `catalog.site_places` (each city, its main
 airport, every airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price
 from, and that price — kept, never shown). The site has no airport codes: a city is matched by name inside the country
@@ -291,9 +291,9 @@ their airports, or more than 10 % (at least three) city pages unanswered, and th
 succeeds. A single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no
 answer, a 5xx) keeps last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
 asks (a minute without one, two at most), then the page is asked again; a second 429 on any page, a city's included,
-fails the night — unlike a city page that merely does not answer (`site getOne?id=…: HTTP 429 again after waiting`). A
-few 429s are expected on a night staging reads the site too: the two reads share the address's 120 a minute and wait
-their turns. The run's counts are in `platform.job_runs`; the log
+fails the night — unlike a city page that merely does not answer (`site getOne?id=…: HTTP 429 again after waiting`). The
+pace leaves room for staging's read at the same minute (about 50 a minute each against the address's 120), so a 429
+means something else asked the site from this address. The run's counts are in `platform.job_runs`; the log
 lines `site: no airport`, `site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`,
 `site: photo does not answer`, `site: photo not checked, kept`, `site: unknown US city` and
 `site: city page did not answer, kept` name the cities. Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is
@@ -301,7 +301,7 @@ Osaka's. A city under `site: main airport by a tie` got the alphabetically first
 `SITE_CITY_AIRPORTS` (a PR), main airport first.
 
 Before turning either on, see what the site holds today, with no database: `bun run scripts/site-destinations-report.ts`
-on any computer with the repository reads the site as the job does (about 400 requests, paced: about four minutes),
+on any computer with the repository reads the site as the job does (about 400 requests, paced: about six minutes),
 prints a summary and writes one HTML page in the temporary folder — every city with its photo, its airports, whether its
 photo answers and how heavy it is (the app shows the site's file as is), and the site's prices.
 
