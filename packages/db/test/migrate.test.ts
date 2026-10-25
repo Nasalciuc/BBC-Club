@@ -177,6 +177,7 @@ describe("extras ledger", () => {
 
   // ADR-IMPL-063: who priced a quote's estimate — only beside an estimate, only the site or the club's formula.
   it("requests_shown_estimate_source takes site or club beside an estimate, or none", async () => {
+    // Made-up amounts.
     expect((await runMigrate()).code).toBe(0);
     let n = 0;
     const insert = async (amount: number | null, source: string | null) => {
@@ -197,12 +198,12 @@ describe("extras ledger", () => {
       }
     };
     expect(await insert(null, null)).toBe("ok");
-    expect(await insert(2055, null)).toBe("ok"); // an estimate stored before the site priced any: the formula's
-    expect(await insert(2055, "site")).toBe("ok");
-    expect(await insert(2055, "club")).toBe("ok");
+    expect(await insert(2222, null)).toBe("ok"); // an estimate stored before the site priced any: the formula's
+    expect(await insert(2222, "site")).toBe("ok");
+    expect(await insert(2222, "club")).toBe("ok");
     expect(await insert(null, "site")).toBe("23514"); // a source without an estimate
-    expect(await insert(2055, "formula")).toBe("23514");
-    expect(await insert(2055, "")).toBe("23514");
+    expect(await insert(2222, "formula")).toBe("23514");
+    expect(await insert(2222, "")).toBe("23514");
     // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
     const [validated] = (await db.execute(
       sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_shown_estimate_source'`,
