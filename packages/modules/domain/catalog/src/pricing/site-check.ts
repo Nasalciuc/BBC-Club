@@ -5,7 +5,8 @@
  * America. For a fixed sample of routes — two per continent pair, both trips, Istanbul and two codes with a Q among them —
  * it is asked one route at a time, and its business and first are compared with formulaPrice(rules, …). The result holds
  * counts and the routes that differ, never a price: the rules and the site's figures stay out of every log
- * (scripts/load-pricing-rules.ts `--check-site`).
+ * (scripts/load-pricing-rules.ts `--check-site`). The rules pass only when no route differs and every route got the
+ * site's business figure (`siteCheckVerdict`): a check the site half answered proves nothing.
  */
 import { z } from "zod";
 
@@ -126,4 +127,23 @@ export function siteCheckLines(result: SiteCheckResult): string[] {
     const head = `site check — ${cabin}: ${t.matched} matched · ${t.differed} differed · ${t.noAnswer} no answer`;
     return result.differs[cabin].length > 0 ? [head, `  differ: ${result.differs[cabin].join(", ")}`] : [head];
   });
+}
+
+/**
+ * Whether the rules pass: no route differs in either cabin, and the site gave its business figure for every route —
+ * the site prices business on every route of the sample, so a route without it is one the check did not cover, and a
+ * stale set could hide there (a timeout, a 404, the rate limit). First may go unanswered: a cabin the site does not
+ * price is no difference. `problems` says why it fails, in counts — never a price.
+ */
+export function siteCheckVerdict(result: SiteCheckResult): { pass: boolean; problems: string[] } {
+  const problems: string[] = [];
+  const differed = result.business.differed + result.first.differed;
+  const routes = result.business.matched + result.business.differed + result.business.noAnswer;
+  if (routes === 0) problems.push("no route was asked — nothing compared");
+  if (differed > 0) problems.push("these rules do not give the site's prices on the routes above");
+  if (result.business.noAnswer > 0)
+    problems.push(
+      `the site gave no business figure for ${result.business.noAnswer} of ${routes} routes — not a pass; run it again`,
+    );
+  return { pass: problems.length === 0, problems };
 }

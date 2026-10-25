@@ -1,4 +1,4 @@
-/** The rules against the company's site (ADR-IMPL-062): the sample, the comparison, what the loader prints. */
+/** The rules against the company's site (ADR-IMPL-062): the sample, the comparison, what the loader prints, its verdict. */
 import { describe, expect, it } from "bun:test";
 
 import { CONTINENT_OF } from "../../src/pricing/continents";
@@ -10,6 +10,7 @@ import {
   SITE_SEARCH,
   checkRulesAgainstSite,
   siteCheckLines,
+  siteCheckVerdict,
   type SiteCheckRoute,
 } from "../../src/pricing/site-check";
 import { FIXTURE_RULES as R } from "./pricing-rules.fixture";
@@ -143,5 +144,58 @@ describe("checkRulesAgainstSite", () => {
     ]);
     const printed = lines.join("\n");
     for (const v of seen) expect(printed.includes(String(v)) ? v : null).toBeNull();
+  });
+});
+
+describe("siteCheckVerdict — what makes the loader exit 1", () => {
+  /** The check against a site answering through `answer`, with no waits. */
+  const check = (answer: (key: string, route: SiteCheckRoute) => Response | Promise<Response>) =>
+    checkRulesAgainstSite(R, { fetch: fakeSearch(answer).fetch, userAgent: "BBCClub/test", sleep: async () => {} });
+
+  it("passes when every route matches in both cabins", async () => {
+    expect(siteCheckVerdict(await check((_, route) => json(figures(route))))).toEqual({ pass: true, problems: [] });
+  });
+
+  it("passes when only first goes unanswered — a cabin the site does not price is no difference", async () => {
+    const result = await check((key, route) =>
+      json(key === "MIA-YQB round_trip" ? { ...figures(route), first: null } : figures(route)),
+    );
+    expect(result.first.noAnswer).toBe(1);
+    expect(siteCheckVerdict(result)).toEqual({ pass: true, problems: [] });
+  });
+
+  it("fails when a route differs", async () => {
+    const result = await check((key, route) => {
+      const f = figures(route);
+      return json(key === "JFK-IST round_trip" ? { ...f, business: f.business! + 7 } : f);
+    });
+    expect(siteCheckVerdict(result)).toEqual({
+      pass: false,
+      problems: ["these rules do not give the site's prices on the routes above"],
+    });
+  });
+
+  it("fails when the site gave no business figure for a route, though every answer matched — a half check is no pass", async () => {
+    // The two routes with a Q time out and are rate-limited: a set wrong only there must not pass.
+    const result = await check((key, route) => {
+      if (key === "MIA-YQB round_trip") return Promise.reject(new Error("The operation timed out."));
+      if (key === "ORD-SVQ one_way") return json({ message: "Too Many Requests" }, 429);
+      return json(figures(route));
+    });
+    expect(result.business).toEqual({ matched: 22, differed: 0, noAnswer: 2 });
+    expect(siteCheckVerdict(result)).toEqual({
+      pass: false,
+      problems: ["the site gave no business figure for 2 of 24 routes — not a pass; run it again"],
+    });
+  });
+
+  it("fails when the site answered nothing, and when nothing was asked", async () => {
+    const none = await check(() => json({ error: "Offer not found" }, 404));
+    expect(siteCheckVerdict(none)).toEqual({
+      pass: false,
+      problems: ["the site gave no business figure for 24 of 24 routes — not a pass; run it again"],
+    });
+    const empty = await checkRulesAgainstSite(R, { fetch: fakeSearch(() => json({})).fetch, userAgent: "x" }, []);
+    expect(siteCheckVerdict(empty).pass).toBe(false);
   });
 });

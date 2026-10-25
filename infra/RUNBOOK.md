@@ -152,9 +152,10 @@ bun run scripts/load-pricing-rules.ts --check-site < pricing-rules.json
 
 It asks the site's own search for 24 routes (two per continent pair, both trips; Istanbul, Québec and Seville among
 them), one at a time, half a second apart, and prints per cabin how many matched, differed or got no answer, and the
-routes that differ — never a price. It writes nothing. Exit 1: a route differs (or the site answered none): those rules
-are not the ones the site prices by. With the reference set it is expected to fail on the routes with a Q and on first
-class; the company's current rules should pass.
+routes that differ — never a price. It writes nothing. Exit 1: a route differs — those rules are not the ones the site
+prices by — or the site gave no business figure for a route (a timeout, a 404, its rate limit): the check did not cover
+it, so it is not a pass; run it again. A route without a first-class figure does not fail it. With the reference set it
+is expected to fail on the routes with a Q and on first class; the company's current rules should pass.
 
 The poster check must equal the poster (JFK → ZRH, business, round trip). Searches use the new rules within ~35 s. Then
 estimates on, in that environment's database (staging: `docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`;

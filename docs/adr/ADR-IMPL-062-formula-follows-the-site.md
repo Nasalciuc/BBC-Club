@@ -67,9 +67,10 @@ pace of its reads, the job's timeout).
    Québec (YQB) and Seville (SVQ) among them; from North America, and LAX only as a destination, since the site prices
    LAX's one-way trips abroad its own way — asked one at a time, 500 ms apart, 5 s each, with the club's User-Agent, it
    compares the site's business and first with `formulaPrice(rules, …)`. It prints per cabin how many matched, differed
-   or got no answer, and the routes that differ — never a price — writes nothing, and exits 1 when any route differs
-   (or when the site answered none). The comparison is `catalog/src/pricing/site-check.ts`, unit-tested with a fake
-   `fetch`; without the flag the loader behaves as before.
+   or got no answer, and the routes that differ — never a price — writes nothing, and exits 1 when any route differs or
+   when the site gave no business figure for a route (`siteCheckVerdict`: a check the site half answered is no pass, as
+   a stale set could hide on the routes it left out; a missing first-class figure does not fail it). The comparison is
+   `catalog/src/pricing/site-check.ts`, unit-tested with a fake `fetch`; without the flag the loader behaves as before.
 
 **Consequences.**
 

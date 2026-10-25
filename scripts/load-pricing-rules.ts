@@ -6,8 +6,8 @@
  * Searches use the new rules within ~35 s. `--dry-run` checks and prints only — no database needed.
  * `--check-site` also compares the rules with the company's site (ADR-IMPL-062): 24 routes of every continent pair, both
  * trips, asked one at a time from its own search, business and first. It prints per cabin how many matched, differed or
- * got no answer, and the routes that differ — never a price — writes nothing, and exits 1 when any differ (or when the
- * site answered none).
+ * got no answer, and the routes that differ — never a price — writes nothing, and exits 1 when any differ or when the
+ * site gave no business figure for a route (a check it half answered is not a pass; first may go unanswered).
  * It never prints a rule: only the fingerprint and the poster's public figure.
  */
 import { createDb } from "@bbc/db";
@@ -19,7 +19,11 @@ import {
   rulesProblems,
   storedPricingRules,
 } from "../packages/modules/domain/catalog/src/pricing/rules";
-import { checkRulesAgainstSite, siteCheckLines } from "../packages/modules/domain/catalog/src/pricing/site-check";
+import {
+  checkRulesAgainstSite,
+  siteCheckLines,
+  siteCheckVerdict,
+} from "../packages/modules/domain/catalog/src/pricing/site-check";
 
 const KEY = "catalog.pricing_rules";
 const DESCRIPTION =
@@ -64,12 +68,10 @@ if (checkSite) {
     userAgent: "BBCClub/1.0 (pricing rules check)",
   });
   for (const line of siteCheckLines(result)) console.log(line);
-  const differed = result.business.differed + result.first.differed;
-  const compared = differed + result.business.matched + result.first.matched;
-  if (compared === 0) console.error("site check: the site answered no route — nothing compared");
-  else if (differed > 0) console.error("site check: these rules do not give the site's prices on the routes above");
+  const verdict = siteCheckVerdict(result);
+  for (const problem of verdict.problems) console.error(`site check: ${problem}`);
   console.log("site check: nothing written");
-  process.exit(differed > 0 || compared === 0 ? 1 : 0);
+  process.exit(verdict.pass ? 0 : 1);
 }
 if (dryRun) {
   console.log("dry run: nothing written");
