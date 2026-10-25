@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { LandmarkVM } from "@bbc/shared/api/v1/places";
 
+import { landmarkTiles } from "./landmark-logic";
 import {
   LANDMARKS_FRESH_MS,
   createLandmarkStore,
+  createLoadFailures,
   landmarksAnswerOf,
   landmarksIn,
   type LandmarksAnswer,
@@ -176,5 +178,55 @@ describe("landmarksAnswerOf — the API's answer as the store reads it", () => {
         reason: "failed",
       });
     }
+  });
+});
+
+describe("createLoadFailures — a photograph that would not load is never left out for good", () => {
+  const tiles = (failed: ReadonlySet<string>) =>
+    landmarkTiles([tower, louvre], { headers: {}, photoHeight: 118, failed }).map((t) => t.name);
+
+  it("leaves a photograph out, with its name and credit, until the photographs are tried again", () => {
+    const loads = createLoadFailures();
+    let notified = 0;
+    loads.subscribe(() => {
+      notified += 1;
+    });
+    const none = loads.snapshot();
+    expect(tiles(none)).toEqual(["Eiffel Tower", "Louvre"]);
+
+    // Wikimedia timed out on the tower's photograph (a weak connection, a 429): the tower leaves the row.
+    loads.fail(tower.imageUrl);
+    expect(tiles(loads.snapshot())).toEqual(["Louvre"]);
+    // Failing again changes nothing: the same snapshot, no new render.
+    const once = loads.snapshot();
+    loads.fail(tower.imageUrl);
+    expect(loads.snapshot()).toBe(once);
+    expect(notified).toBe(1);
+
+    // The screen back in view, or the phone back online: the tower is tried again; failing again, it leaves again.
+    loads.retry();
+    expect(tiles(loads.snapshot())).toEqual(["Eiffel Tower", "Louvre"]);
+    expect(notified).toBe(2);
+    loads.fail(tower.imageUrl);
+    expect(tiles(loads.snapshot())).toEqual(["Louvre"]);
+
+    // Nothing left out: trying again changes nothing.
+    loads.retry();
+    const cleared = loads.snapshot();
+    loads.retry();
+    expect(loads.snapshot()).toBe(cleared);
+    expect(notified).toBe(4);
+  });
+
+  it("stops telling a screen that has gone", () => {
+    const loads = createLoadFailures();
+    let notified = 0;
+    const stop = loads.subscribe(() => {
+      notified += 1;
+    });
+    stop();
+    loads.fail(louvre.imageUrl);
+    expect(notified).toBe(0);
+    expect(loads.snapshot().has(louvre.imageUrl)).toBe(true);
   });
 });

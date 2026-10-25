@@ -1,7 +1,8 @@
-import { useState } from "react";
 import { Linking, StyleSheet, Text, type TextStyle, View } from "react-native";
 import type { LandmarkVM } from "@bbc/shared/api/v1/places";
 import { CAROUSEL_PAD, CarouselRow, Photo, PhotoCredit, baselineOffset, belowBaseline, rn, tokens } from "@bbc/ui";
+
+import { optionsColumn } from "@/features/explore/DestinationDetails";
 
 import { landmarkTiles } from "./landmark-logic";
 import { PICTURE_HEADERS } from "./usePlacePhotos";
@@ -9,38 +10,55 @@ import { PICTURE_HEADERS } from "./usePlacePhotos";
 type Role = TextStyle & { fontSize: number; lineHeight: number };
 
 /**
- * The images draw no landmarks (ADR-IMPL-064 adds them after 3.0's design): the section takes its measures from what
- * the destination's page (04) and its neighbours already draw — the title as 04's `Flight options` (its role, 17.93
- * in) with the photographs 9.5 under its baseline as 04's cards are; the row from 04's cards' left edge (11.2), the
- * photographs 8.55 apart as 08's three fares are, running to the screen's edge (`CarouselRow`); each photograph 118
- * tall as 03's popular photographs, radius 10 as 05's thumbnails, as wide as its own shape; its name under it as 03's
- * city is (`subtitle`, its baseline 18.7 under the photograph), then the credit (`PhotoCredit`).
+ * The images draw no landmarks (ADR-IMPL-064 adds them after 3.0's design; design/components.md, `Landmarks`): the
+ * section lines up under the flight options of the look it follows (`optionsColumn`: 04's page, 13's sheet) — its
+ * title in their title's role and pen, the photographs as far under its baseline as their cards are, the row from
+ * their cards' left edge to the screen's edge (`CarouselRow`) — and takes the rest from its neighbours: the
+ * photographs 8.55 apart as 08's three fares, 118 tall as 03's popular photographs, radius 10 as 05's thumbnails, as
+ * wide as their own shape; each name under its photograph as 03's city is (`subtitle`, its baseline 18.7 under it),
+ * then the credit (`PhotoCredit`).
  */
 const LOOK = {
-  title: { role: rn(tokens.type.placeOptions) as Role, left: 17.93, toPhotos: 9.5 },
-  row: { inset: 11.2, gap: 8.55 },
+  row: { gap: 8.55 },
   photo: { height: 118, radius: tokens.radius.sm },
   name: { role: rn(tokens.type.subtitle) as Role, baseline: 18.7 },
 } as const;
+
+type Props = {
+  /** The city's landmarks as the server answered them (`usePlaceLandmarks`). */
+  landmarks: readonly LandmarkVM[];
+  /** The photographs that would not load, by address: left out with their names and credits until tried again. */
+  failed: ReadonlySet<string>;
+  /** A photograph would not load. */
+  onPhotoError: (imageUrl: string) => void;
+  /** The flight options it follows: `page` on the destination's page (04), `route` in Explore's sheet (13). */
+  look: "route" | "page";
+  testIDPrefix: "explore" | "destination";
+};
 
 /**
  * Up to three landmarks of the destination (ADR-IMPL-064), best first: each photograph with its name under it and the
  * credit its licence asks for, linked to the photograph's page. Fewer when fewer exist; none — nothing at all, no
  * title and no empty frame (a photograph that will not load leaves with its name and credit). No skeleton: the images
- * draw no slot.
+ * draw no slot for one.
  */
-export function Landmarks({ landmarks, testIDPrefix }: { landmarks: readonly LandmarkVM[]; testIDPrefix: string }) {
-  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
+export function Landmarks({ landmarks, failed, onPhotoError, look, testIDPrefix }: Props) {
   const tiles = landmarkTiles(landmarks, { headers: PICTURE_HEADERS, photoHeight: LOOK.photo.height, failed });
   if (tiles.length === 0) return null;
-  const title = LOOK.title.role;
+  const column = optionsColumn(look);
+  const title = column.title.role;
   return (
     <View testID={`${testIDPrefix}.landmarks`}>
-      <Text style={[title, styles.navy, { marginLeft: LOOK.title.left }]} accessibilityRole="header">
+      <Text style={[title, styles.navy, { marginLeft: column.title.left - column.inset }]} accessibilityRole="header">
         Landmarks
       </Text>
-      <View style={{ marginTop: LOOK.title.toPhotos - belowBaseline(title) - CAROUSEL_PAD }}>
-        <CarouselRow testID={`${testIDPrefix}.landmarks.row`} bleed={0} inset={LOOK.row.inset} gap={LOOK.row.gap}>
+      <View style={{ marginTop: column.toCards - belowBaseline(title) - CAROUSEL_PAD }}>
+        <CarouselRow
+          testID={`${testIDPrefix}.landmarks.row`}
+          bleed={column.inset}
+          inset={column.cardsLeft}
+          gap={LOOK.row.gap}
+        >
           {tiles.map((tile) => {
             const link = tile.credit.link;
             return (
@@ -55,7 +73,7 @@ export function Landmarks({ landmarks, testIDPrefix }: { landmarks: readonly Lan
                     source={tile.source}
                     fallback={null}
                     style={styles.photo}
-                    onError={() => setFailed((before) => new Set(before).add(tile.imageUrl))}
+                    onError={() => onPhotoError(tile.imageUrl)}
                   />
                   <Text
                     style={[

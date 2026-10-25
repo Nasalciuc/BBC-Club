@@ -110,3 +110,45 @@ export function createLandmarkStore(
     },
   };
 }
+
+const NO_FAILURES: ReadonlySet<string> = new Set();
+
+/**
+ * The landmark photographs that would not load, by address: each leaves the screen with its name and credit — no empty
+ * frame — until it is tried again, when a screen showing landmarks comes back into view or the phone back online (a
+ * weak connection, a timeout or Wikimedia's 429 is never for good); one that fails again leaves again. Shared by every
+ * screen, as the landmarks are. The snapshot is immutable and replaced only when it changes.
+ */
+export function createLoadFailures() {
+  let failed: ReadonlySet<string> = NO_FAILURES;
+  const listeners = new Set<() => void>();
+
+  function set(next: ReadonlySet<string>) {
+    failed = next;
+    for (const listener of listeners) listener();
+  }
+
+  return {
+    /** The same object until a photograph fails or every one is tried again (for useSyncExternalStore). */
+    snapshot(): ReadonlySet<string> {
+      return failed;
+    },
+
+    /** A photograph that would not load: left out from now on. */
+    fail(imageUrl: string): void {
+      if (!failed.has(imageUrl)) set(new Set([...failed, imageUrl]));
+    },
+
+    /** Every photograph left out is tried again. */
+    retry(): void {
+      if (failed.size > 0) set(NO_FAILURES);
+    },
+
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}

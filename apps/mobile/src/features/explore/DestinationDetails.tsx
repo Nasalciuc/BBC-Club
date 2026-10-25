@@ -155,6 +155,26 @@ const PAGE: Geometry = {
 };
 
 /**
+ * Where a look's flight options stand, for a section that lines up under them (the landmarks, ADR-IMPL-064): the
+ * component's own left edge on screen (`inset`), the title's role and its pen on screen, the title's baseline to the
+ * cards' top, and the cards' left edge on screen — 04's or 13's own measures, so a re-measured look moves both.
+ */
+export function optionsColumn(look: "route" | "page"): {
+  inset: number;
+  title: { role: Role; left: number };
+  toCards: number;
+  cardsLeft: number;
+} {
+  const g = look === "route" ? ROUTE : PAGE;
+  return {
+    inset: g.inset,
+    title: { role: g.options.role, left: g.options.left },
+    toCards: g.cards.top - g.options.baseline,
+    cardsLeft: g.cards.left,
+  };
+}
+
+/**
  * 19: a message in the summary's place — its title on 30.9 from the summary's top, its words from 48.6 every 15.7 (205
  * wide there; at the reading sizes they take the summary's column, ADR-IMPL-057), `Try again` on 81.6 — 21.6 in; the
  * summary then 91.7 tall.

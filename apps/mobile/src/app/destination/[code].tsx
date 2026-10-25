@@ -83,7 +83,7 @@ export default function DestinationScreen() {
   const { state, dispatch, retry } = useSearch({ defaultFrom: given ?? found });
   const photoFor = usePlacePhotos([chosen?.airport.code]);
   // Up to three landmarks of the city, each with its name and credit (ADR-IMPL-064); none — nothing at all.
-  const landmarks = usePlaceLandmarks(chosen?.airport.code);
+  const landmarks = usePlaceLandmarks(chosen?.airport.code, offline);
 
   // The member's usual cabin and travelers first, then the destination with the dates it was last searched for.
   const usualCabin = profile?.preferences.cabin;
@@ -222,7 +222,15 @@ export default function DestinationScreen() {
               }
             />
           ) : null}
-          {ownAirport ? null : <Landmarks landmarks={landmarks} testIDPrefix="destination" />}
+          {ownAirport ? null : (
+            <Landmarks
+              landmarks={landmarks.landmarks}
+              failed={landmarks.failed}
+              onPhotoError={landmarks.onPhotoError}
+              look="page"
+              testIDPrefix="destination"
+            />
+          )}
         </View>
       </ScrollView>
       {ownAirport ? null : (
