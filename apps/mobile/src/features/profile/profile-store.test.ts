@@ -148,16 +148,42 @@ describe("a save is every screen's at once (brief 3.4.1)", () => {
     expect(profileSnapshot()?.notifications).toEqual({ requestUpdates: true, offers: true });
   });
 
-  it("a save for another member, or before any profile was loaded, is not shown", async () => {
+  it("a save for another member is nobody's: the store keeps its own and no screen hears it", async () => {
     const s = server();
+    await loaded(s, "m2");
     const saves: string[] = [];
     const stop = subscribeProfileSaves((p) => saves.push(p.memberId));
     storeSavedProfile(renamed("m1", "Dana Ives"));
-    expect(profileSnapshot()).toBeNull();
-    await loaded(s, "m2");
-    storeSavedProfile(renamed("m1", "Dana Ives"));
+    expect(profileSnapshot()?.memberId).toBe("m2");
     expect(profileSnapshot()?.displayName).toBeNull();
     expect(saves).toEqual([]);
     stop();
+  });
+
+  it("with no profile loaded here (Explore's question failed), the screens with their own copy still hear the save", async () => {
+    const s = server();
+    const saves: (string | null)[] = [];
+    const stop = subscribeProfileSaves((p) => saves.push(p.displayName));
+    const failed = refreshProfile(s.fetchProfile);
+    s.answer({ ok: false });
+    await failed;
+    storeSavedProfile(renamed("m1", "Dana Ives"));
+    // The store holds no half profile (PATCH's answer has no notifications); Profile's copy has the name.
+    expect(profileSnapshot()).toBeNull();
+    expect(saves).toEqual(["Dana Ives"]);
+    // Explore's next question brings it.
+    const next = refreshProfile(s.fetchProfile);
+    s.answer({ ok: true, data: renamed("m1", "Dana Ives") });
+    expect((await next)?.displayName).toBe("Dana Ives");
+    stop();
+  });
+
+  it("with no profile loaded here, a question on its way is not dropped: a reader waiting on it gets its answer", async () => {
+    const s = server();
+    // Explore's airport waits on the first question (useExploreHome): dropping it would start the search from New York.
+    const waiting = loadProfile(s.fetchProfile);
+    storeSavedProfile(renamed("m1", "Dana Ives"));
+    s.answer({ ok: true, data: { ...renamed("m1", null), homeAirport: "BOS" } as Profile });
+    expect((await waiting)?.homeAirport).toBe("BOS");
   });
 });

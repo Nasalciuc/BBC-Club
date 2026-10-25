@@ -17,7 +17,10 @@ export type ProfileCopy = {
   saved: (next: SavedProfile) => void;
   /** A change this screen keeps to itself (the offers switch, which no other screen reads). */
   change: (update: Update) => void;
-  /** Profile: every save made on another screen (Edit profile's name, Settings' phone) is taken as its own. */
+  /**
+   * Profile: every save made on another screen (Edit profile's name, Settings' phone) is taken as its own — the same
+   * member's, whether or not the shared store holds a profile (Explore's load may have failed).
+   */
   follow: () => () => void;
   /**
    * At a load's start: whether, when its answer comes, nothing was saved or changed here since. A load begun before a
@@ -39,8 +42,9 @@ export function profileCopy(setCopy: SetCopy): ProfileCopy {
     changes += 1;
     setCopy(update);
   }
+  // A save is taken by the copy of the same member only: the store tells every copy, loaded there or not.
   function take(next: SavedProfile): void {
-    change((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
+    change((prev) => (prev && prev.memberId === next.memberId ? mergeSavedProfile(prev, next) : prev));
   }
   return {
     saved(next) {

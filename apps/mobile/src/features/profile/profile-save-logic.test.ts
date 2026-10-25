@@ -11,7 +11,7 @@ import { firstName } from "../explore/greeting";
 import { profileName } from "./name-logic";
 import { withOffers, type SavedProfile } from "./notifications-logic";
 import { profileCopy } from "./profile-save-logic";
-import { loadProfile, profileSnapshot, resetProfile } from "./profile-store";
+import { loadProfile, profileSnapshot, refreshProfile, resetProfile } from "./profile-store";
 
 /** A member as GET /v1/profile and PATCH answer them; with CRM_ADAPTER=email a new member has no name. */
 function row(over: Partial<Profile> = {}): Profile {
@@ -136,11 +136,33 @@ describe("Profile's and Settings' own sheets reach the store too", () => {
     expect(settings.held()?.notifications?.offers).toBe(false);
     expect(profileSnapshot()?.notifications?.offers).toBe(true);
   });
+});
 
-  it("before the store holds a profile, a save is the screen's own; the next load brings it everywhere", () => {
-    const edit = screen(row());
-    edit.copy.saved(row({ displayName: "Dana Ives" }));
-    expect(edit.held()?.displayName).toBe("Dana Ives");
+describe("a name saved while the store holds no profile (Explore's load failed) is Profile's at once", () => {
+  it("Profile's copy shows it at once; the store, holding no half profile, takes it on Explore's next load", async () => {
+    // Explore's GET /v1/profile at launch failed (offline, 5xx, 429): the store holds nothing.
+    await refreshProfile(() => Promise.resolve({ ok: false as const }));
     expect(profileSnapshot()).toBeNull();
+    const profile = screen(row());
+    const stop = profile.copy.follow();
+    const edit = screen(row());
+
+    edit.copy.saved(row({ displayName: "Dana Ives" }));
+
+    expect(edit.held()?.displayName).toBe("Dana Ives");
+    // Back on Profile, a focus load that fails keeps this copy on screen ((tabs)/profile.tsx): the name, not `Member`.
+    expect(profileName(profile.held()?.displayName)).toBe("Dana Ives");
+    expect(profileSnapshot()).toBeNull();
+    await refreshProfile(() => Promise.resolve({ ok: true as const, data: row({ displayName: "Dana Ives" }) }));
+    expect(firstName(profileSnapshot()?.displayName)).toBe("Dana");
+    stop();
+  });
+
+  it("a copy takes only its own member's save", () => {
+    const profile = screen(row({ memberId: "m2", displayName: "Lee Park" }));
+    const stop = profile.copy.follow();
+    screen(row()).copy.saved(row({ displayName: "Dana Ives" }));
+    expect(profile.held()?.displayName).toBe("Lee Park");
+    stop();
   });
 });

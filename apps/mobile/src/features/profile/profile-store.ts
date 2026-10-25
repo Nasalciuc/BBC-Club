@@ -70,21 +70,31 @@ export function resetProfile(): void {
 /**
  * A sheet saved the profile and PATCH /v1/profile answered: that answer is the member's profile now, on every screen
  * at once — Explore's greeting, Profile's name, the request sheet's contact (brief 3.4.1). A question asked before the
- * save may bring the profile back as it was: its answer is dropped, and the next reader asks again. Kept only for the
- * member the store holds — a save that answers after a change of member, or before any profile was loaded here, is not
- * shown (the next load brings it). An answer without `notifications` (an older server) keeps the ones known.
+ * save may bring the profile back as it was: its answer is dropped, and the next reader asks again. An answer without
+ * `notifications` (an older server) keeps the ones known.
+ *
+ * The screens that keep their own copy (`subscribeProfileSaves`) hear every save, whether or not a profile was loaded
+ * here: Explore's question may have failed (offline, the club not answering) while Profile holds its own, and Profile
+ * must not say `Member` once a name is saved. Each copy takes only its own member's (profile-save-logic.ts). The store
+ * itself keeps the save only over the profile it holds. With none loaded it holds no half profile (PATCH's answer has
+ * no `notifications`) and drops no question — a reader waiting on one (Explore's airport) still gets its answer — and
+ * Explore's next question, each time it comes into view, brings the save. A save that answers after a change of member
+ * (the store holds another member) is nobody's: no screen hears it.
  */
 export function storeSavedProfile(next: SavedProfile): void {
-  if (current === null || current.memberId !== next.memberId) return;
-  generation += 1;
-  inFlight = null;
-  publish(mergeSavedProfile(current, next));
+  if (current !== null) {
+    if (current.memberId !== next.memberId) return;
+    generation += 1;
+    inFlight = null;
+    publish(mergeSavedProfile(current, next));
+  }
   for (const listener of saveListeners) listener(next);
 }
 
 /**
  * A screen that keeps its own copy of the profile (Profile) hears each save made elsewhere (Edit profile, Settings):
- * PATCH's answer as it came, which it merges into its own copy — an answer without `notifications` keeps its own.
+ * PATCH's answer as it came, which it merges into its own copy if it is the same member's — an answer without
+ * `notifications` keeps its own.
  */
 export function subscribeProfileSaves(listener: (next: SavedProfile) => void): () => void {
   saveListeners.add(listener);
