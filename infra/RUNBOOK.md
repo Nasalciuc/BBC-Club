@@ -168,7 +168,8 @@ ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
 
 With estimates on, a quote request whose app showed the estimate (A2c and later) carries it — stored on the request,
 published with the rules' fingerprint and written into the specialist's e-mail as `Indicative estimate shown: $2,055
-round trip, business (formula)` (ADR-IMPL-042). `catalog.estimates` off stops estimates everywhere; `catalog.killed`
+round trip, business (formula)` (ADR-IMPL-042); `(company site)` when the company's site priced it (ADR-IMPL-063, "The
+site's prices" below). `catalog.estimates` off stops estimates everywhere, the site's prices included; `catalog.killed`
 stops Explore but not the estimate a queued request may still ask for.
 
 Which rules are live: `SELECT value->>'fingerprint', value->>'loadedAt' FROM platform.flags WHERE key = 'catalog.pricing_rules';`.
@@ -341,6 +342,66 @@ What the snapshot holds:
 ```sql
 SELECT cms_id, name, country, airport, airports, promoted, image IS NOT NULL AS photo FROM catalog.site_places ORDER BY name;
 SELECT route_from, count(*) FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
+```
+
+## The site's prices (ADR-IMPL-063)
+
+With `catalog.site_prices` on (seeded off; it needs `catalog.estimates`, which stays the master switch), an estimate is
+the company's own price from its site's search (`webapi.buybusinessclass.com/flights/search`) wherever the company
+prices the route: a published fare first, then the site's answer stored less than 24 hours ago
+(`catalog.site_prices`), then — an undated search only — one question to the site within a second, whose answer is
+stored; the formula only where the site could not be asked. Home's site pins and a quote request never ask the site:
+they read the stored answer, else the formula. Off, everything is as before and the site is never asked.
+
+**What a `none` row means.** The site answered that the company has no price for that route — 404 `Offer not found`
+(no end in North America) or `Not found` (an airport code it does not know, such as `DJT`, which it spells `PBI`). The
+member sees no number at all — not the formula — and "Request a quote"; the pin is not shown. It is the company's
+answer, kept 24 hours like a price. An error (a timeout, a 5xx, a 429, a body the club cannot read) stores nothing.
+
+**Turn it on** (staging first: members' numbers change — first class appears on routes the club hid, Cyprus, Russia and
+Kazakhstan get the site's prices, airports the site does not know lose theirs), in that environment's database; off is
+the same with `false`. A flag is read through a cache of about 35 s:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.site_prices','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+```
+
+**The job** `refresh-site-prices` (worker, every ten minutes) keeps the answers for the routes Home's site pins show:
+from each airport `catalog.site_routes` lists, its first 36 cities in the pins' order, round trip. Routes without an
+answer first, then answers 18 hours old or more; at most 150 questions a run, one every 500 ms; nothing asked with
+either flag off. It stops at the site's first 429 (`rateLimited: 1` in its run) and when the breaker opens
+(`breakerOpen: 1`); the next run, ten minutes later, goes on. Run it now, as `sync-site-destinations` above, with
+`refresh-site-prices` in the path. Its outcome:
+
+```sql
+SELECT status, metrics, duration_ms FROM platform.job_runs
+WHERE job = 'refresh-site-prices' ORDER BY started_at DESC LIMIT 5;
+```
+
+**The breaker** (one per process, the API's and the worker's apart): five failures in a row — timeouts, 5xx, 429s,
+bodies not its shape — open it for a minute; then one question goes, and its answer closes or reopens it. While it is
+open the search shows the formula at once, the job asks nothing, and `bbc_site_prices_unavailable{reason="breaker"}`
+counts it. Nothing to reset: it closes itself when the site answers. If the site stays down, the formula stands in
+everywhere; turning the flag off changes nothing more but stops the questions.
+
+**Watch:** `bbc_site_prices_answered{status}` (priced, none), `bbc_site_prices_unavailable{reason}` (`breaker`,
+`timeout`, `error`, `invalid` — the site changed its answer's shape, `rate_limited`, `bad_request` — a request of ours
+the site refused: a bug, logged `site price refused our request (400)` with the codes), and
+`bbc_search_site_prices{source,how}`: how each search was priced (`site` stored or asked, `club` fallback, `none` none,
+cabin or guarded). A cold start of the site's host can take seconds: the first search then shows the formula and the
+next one asks again. What is stored:
+
+```sql
+SELECT status, count(*), min(fetched_at), max(fetched_at) FROM catalog.site_prices GROUP BY status;
+SELECT route_from, route_to, status, fetched_at, expires_at FROM catalog.site_prices
+WHERE route_from = 'JFK' ORDER BY route_to;
+```
+
+A wrong row (the company corrected a price): delete it — the next search or run asks again. Never edit a figure by hand.
+
+```sql
+DELETE FROM catalog.site_prices WHERE route_from = 'JFK' AND route_to = 'ZRH';
 ```
 
 ## The queue is stuck (oldest pending > 5 min)
