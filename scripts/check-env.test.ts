@@ -37,11 +37,29 @@ describe("checkEnv", () => {
     expect(result.reason).not.toContain(SECRET);
   });
 
-  it("refuses what used to stop the API only inside a module: the CRM http adapter", () => {
+  it("names what the CRM http adapter lacks, and never prints its secret (ADR-IMPL-065)", () => {
     expect(checkEnv({ ...production, CRM_ADAPTER: "http" })).toEqual({
       ok: false,
-      reason: "CRM_ADAPTER=http is not built yet (stage 5): use email or mock",
+      reason: "CRM_ADAPTER=http: requires CRM_API_URL; requires CRM_API_SECRET (at least 32 characters)",
     });
+    const plain = checkEnv({
+      ...production,
+      CRM_ADAPTER: "http",
+      CRM_API_URL: "http://crm.example.com/requests",
+      CRM_API_SECRET: SECRET,
+    });
+    expect(plain).toEqual({
+      ok: false,
+      reason: "CRM_ADAPTER=http: CRM_API_URL must be https (http only to localhost, outside production)",
+    });
+    expect(
+      checkEnv({
+        ...production,
+        CRM_ADAPTER: "http",
+        CRM_API_URL: "https://crm.example.com/requests",
+        CRM_API_SECRET: SECRET,
+      }),
+    ).toEqual({ ok: true, summary: "NODE_ENV production, APP_ROLE api, CRM http, push recording" });
   });
 
   it("refuses live push without FCM, by name", () => {

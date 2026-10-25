@@ -25,6 +25,12 @@ export const ServerEnv = z.object({
   OPERATORS_EMAIL: z.string().email().optional(),
   /** HMAC for operator action links. Required when CRM_ADAPTER=email. */
   OPS_LINK_SECRET: z.string().min(32).optional(),
+  /** Where the http adapter POSTs each request (ADR-IMPL-065). Required when CRM_ADAPTER=http: https, or http to this
+   *  machine (localhost) outside production. */
+  CRM_API_URL: z.string().url().optional(),
+  /** Signs every call to the CRM: HMAC-SHA256, at least 32 characters (ADR-IMPL-065). Required when CRM_ADAPTER=http.
+   *  Never sent, never logged. */
+  CRM_API_SECRET: z.string().min(32).optional(),
   PUSH_ADAPTER: z.enum(["recording", "live"]).default("recording"),
   APNS_P8_BASE64: z.string().optional(),
   APNS_KEY_ID: z.string().optional(),
@@ -115,6 +121,7 @@ const SECRETS = [
   "INTERNAL_API_SECRET",
   "INTERNAL_API_SECRET_NEXT",
   "OPS_LINK_SECRET",
+  "CRM_API_SECRET",
   "REVIEW_ACCOUNT_PASSWORD",
 ] as const;
 
@@ -168,6 +175,32 @@ function livePushProblems(env: ServerEnv): string[] {
   return problems;
 }
 
+/** Loopback only: a CRM on this machine (a test's fake, a local stub). */
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+/**
+ * CRM_ADAPTER=http (ADR-IMPL-065): the address and the secret, both. The address is https — the requests carry the
+ * member's name, phone and e-mail — or http to this machine outside production, for a test's fake CRM. It carries no
+ * credentials: the secret signs each call instead, and an address may reach a log.
+ */
+function httpCrmProblems(env: ServerEnv): string[] {
+  const problems: string[] = [];
+  const raw = env.CRM_API_URL;
+  if (!raw) problems.push("requires CRM_API_URL");
+  else {
+    const url = new URL(raw);
+    const local = url.protocol === "http:" && isLoopbackHost(url.hostname) && env.NODE_ENV !== "production";
+    if (url.protocol !== "https:" && !local) {
+      problems.push("CRM_API_URL must be https (http only to localhost, outside production)");
+    }
+    if (url.username || url.password) problems.push("CRM_API_URL must not carry credentials (CRM_API_SECRET signs)");
+  }
+  if (!env.CRM_API_SECRET) problems.push("requires CRM_API_SECRET (at least 32 characters)");
+  return problems;
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
   const comments = SECRETS.filter((key) => isTemplateComment(source[key]));
   if (comments.length > 0) {
@@ -181,8 +214,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
     throw new Error(`Invalid environment:\n  ${missing}`);
   }
   if (parsed.data.CRM_ADAPTER === "http") {
-    // integration/crm refuses it as well; here, scripts/check-env.ts names it before a deploy starts anything.
-    throw new Error("CRM_ADAPTER=http is not built yet (stage 5): use email or mock");
+    // Here, scripts/check-env.ts names what is missing before a deploy starts anything; integration/crm checks again.
+    const problems = httpCrmProblems(parsed.data);
+    if (problems.length > 0) throw new Error(`CRM_ADAPTER=http: ${problems.join("; ")}`);
   }
   if (parsed.data.CRM_ADAPTER === "email") {
     if (!parsed.data.OPERATORS_EMAIL) {
