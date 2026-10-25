@@ -80,6 +80,62 @@ describe("CRM_ADAPTER via loadEnv", () => {
     );
   });
 
+  it("in production the address is public: never this machine, a private network or a link (no SSRF inside)", () => {
+    const production = { ...http, NODE_ENV: "production", POSTMARK_SERVER_TOKEN: "postmark-made-up-token" };
+    const internal = [
+      "https://169.254.169.254/latest/meta-data", // a cloud's metadata service
+      "https://127.0.0.1:8001/v1/internal/run/send-requests",
+      "https://127.1.2.3/requests",
+      "https://2130706433/requests", // 127.0.0.1 written as a number
+      "https://0x7f.1/requests", // and in hex
+      "https://0.0.0.0/requests",
+      "https://localhost/requests",
+      "https://LOCALHOST./requests",
+      "https://crm.localhost/requests",
+      "https://10.0.0.5/requests",
+      "https://172.16.0.1/requests",
+      "https://172.31.255.255/requests",
+      "https://192.168.1.10/requests",
+      "https://100.64.0.1/requests",
+      "https://[::1]/requests",
+      "https://[::]/requests",
+      "https://[fd12:3456::1]/requests",
+      "https://[fe80::1]/requests",
+      "https://[::ffff:127.0.0.1]/requests",
+      "https://[::ffff:169.254.169.254]/requests",
+    ];
+    for (const address of internal) {
+      let message = "";
+      try {
+        loadEnv({ ...production, CRM_API_URL: address });
+      } catch (err) {
+        message = err instanceof Error ? err.message : String(err);
+      }
+      expect({ address, message }).toEqual({
+        address,
+        message:
+          "CRM_ADAPTER=http: CRM_API_URL must be a public address in production (not loopback, private or link-local)",
+      });
+    }
+    // Public addresses, including those that only look near a private range.
+    for (const address of [
+      "https://crm.example.test/requests",
+      "https://8.8.8.8/requests",
+      "https://172.32.0.1/requests",
+      "https://100.128.0.1/requests",
+      "https://169.255.0.1/requests",
+      "https://192.169.0.1/requests",
+      "https://[2001:db8::1]/requests",
+      "https://[::ffff:8.8.8.8]/requests",
+    ]) {
+      expect(loadEnv({ ...production, CRM_API_URL: address }).CRM_API_URL).toBe(address);
+    }
+    // Outside production a test's fake CRM may still listen on this machine, over https too.
+    expect(loadEnv({ ...http, CRM_API_URL: "https://127.0.0.1:4010/requests" }).CRM_API_URL).toBe(
+      "https://127.0.0.1:4010/requests",
+    );
+  });
+
   it("crm module refuses http without the address and the secret (a host built without loadEnv)", () => {
     expect(() =>
       crmModule().init({

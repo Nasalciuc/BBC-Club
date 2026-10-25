@@ -60,6 +60,15 @@ describe("checkEnv", () => {
         CRM_API_SECRET: SECRET,
       }),
     ).toEqual({ ok: true, summary: "NODE_ENV production, APP_ROLE api, CRM http, push recording" });
+    // An address inside — a cloud's metadata service, this machine, a private network — would receive every member's
+    // details: refused before the deploy starts anything.
+    for (const inside of ["https://169.254.169.254/latest", "https://127.0.0.1/requests", "https://[fd00::1]/r"]) {
+      expect(checkEnv({ ...production, CRM_ADAPTER: "http", CRM_API_URL: inside, CRM_API_SECRET: SECRET })).toEqual({
+        ok: false,
+        reason:
+          "CRM_ADAPTER=http: CRM_API_URL must be a public address in production (not loopback, private or link-local)",
+      });
+    }
   });
 
   it("refuses live push without FCM, by name", () => {

@@ -26,7 +26,8 @@ export const ServerEnv = z.object({
   /** HMAC for operator action links. Required when CRM_ADAPTER=email. */
   OPS_LINK_SECRET: z.string().min(32).optional(),
   /** Where the http adapter POSTs each request (ADR-IMPL-065). Required when CRM_ADAPTER=http: https, or http to this
-   *  machine (localhost) outside production. */
+   *  machine (localhost) outside production; in production a public address, never a loopback, private or link-local
+   *  one. */
   CRM_API_URL: z.string().url().optional(),
   /** Signs every call to the CRM: HMAC-SHA256, at least 32 characters (ADR-IMPL-065). Required when CRM_ADAPTER=http.
    *  Never sent, never logged. */
@@ -180,10 +181,71 @@ function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
 
+/** An IPv4 address as the URL parser writes it (`0x7f.1` and `2130706433` already read `127.0.0.1`), else null. */
+function ipv4Octets(host: string): number[] | null {
+  const parts = host.split(".");
+  if (parts.length !== 4 || !parts.every((p) => /^\d{1,3}$/.test(p))) return null;
+  const octets = parts.map(Number);
+  return octets.every((n) => n <= 255) ? octets : null;
+}
+
+/** 0/8 (0.0.0.0 reaches this machine), 10/8, 100.64/10 (carrier NAT), 127/8, 169.254/16 (link-local: a cloud's
+ *  metadata service), 172.16/12, 192.168/16. */
+function isInternalIpv4([a = 0, b = 0]: number[]): boolean {
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+/** An IPv6 address as the URL parser writes it (lower-case hex groups, `::` once, no dotted quad) as its 8 groups. */
+function ipv6Groups(host: string): number[] | null {
+  const [head = "", tail, extra] = host.split("::");
+  if (extra !== undefined) return null;
+  const read = (s: string) =>
+    s === "" ? [] : s.split(":").map((g) => (/^[0-9a-f]{1,4}$/.test(g) ? parseInt(g, 16) : NaN));
+  const front = read(head);
+  const back = tail === undefined ? [] : read(tail);
+  const zeros = 8 - front.length - back.length;
+  if ((tail === undefined ? zeros !== 0 : zeros < 1) || [...front, ...back].some(Number.isNaN)) return null;
+  return [...front, ...Array<number>(zeros).fill(0), ...back];
+}
+
+/** Unspecified (`::`), loopback (`::1`), unique-local (fc00::/7), link-local (fe80::/10), or an IPv4 address mapped
+ *  into IPv6 (`::ffff:a.b.c.d`) that is internal. */
+function isInternalIpv6(g: number[]): boolean {
+  const [g0 = 0, , , , , g5 = 0, g6 = 0, g7 = 0] = g;
+  if (g.slice(0, 7).every((n) => n === 0) && (g7 === 0 || g7 === 1)) return true;
+  if ((g0 & 0xfe00) === 0xfc00 || (g0 & 0xffc0) === 0xfe80) return true;
+  return g.slice(0, 5).every((n) => n === 0) && g5 === 0xffff && isInternalIpv4([g6 >> 8, g6 & 0xff]);
+}
+
+/**
+ * Not on the public internet, as written: `localhost` (and `*.localhost`), or an IP literal on this machine, a private
+ * network or a link (`isInternalIpv4`, `isInternalIpv6`). A name is not resolved here: one that points inside is the
+ * operator's to avoid (ADR-IMPL-065).
+ */
+function isInternalHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (host === "localhost" || host.endsWith(".localhost")) return true;
+  const v4 = ipv4Octets(host);
+  if (v4) return isInternalIpv4(v4);
+  if (!host.startsWith("[") || !host.endsWith("]")) return false;
+  const v6 = ipv6Groups(host.slice(1, -1));
+  // A bracketed host the parser wrote is IPv6; one this cannot read is refused rather than trusted.
+  return v6 === null || isInternalIpv6(v6);
+}
+
 /**
  * CRM_ADAPTER=http (ADR-IMPL-065): the address and the secret, both. The address is https — the requests carry the
- * member's name, phone and e-mail — or http to this machine outside production, for a test's fake CRM. It carries no
- * credentials: the secret signs each call instead, and an address may reach a log.
+ * member's name, phone and e-mail — or http to this machine outside production, for a test's fake CRM. In production it
+ * is a public address: never this machine, a private network or a cloud's metadata service, which would receive every
+ * member's details. It carries no credentials: the secret signs each call instead, and an address may reach a log.
  */
 function httpCrmProblems(env: ServerEnv): string[] {
   const problems: string[] = [];
@@ -194,6 +256,9 @@ function httpCrmProblems(env: ServerEnv): string[] {
     const local = url.protocol === "http:" && isLoopbackHost(url.hostname) && env.NODE_ENV !== "production";
     if (url.protocol !== "https:" && !local) {
       problems.push("CRM_API_URL must be https (http only to localhost, outside production)");
+    }
+    if (env.NODE_ENV === "production" && isInternalHost(url.hostname)) {
+      problems.push("CRM_API_URL must be a public address in production (not loopback, private or link-local)");
     }
     if (url.username || url.password) problems.push("CRM_API_URL must not carry credentials (CRM_API_SECRET signs)");
   }

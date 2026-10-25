@@ -24,8 +24,13 @@ again, without asking the member to send the request a second time). No migratio
 1. **Settings, through `loadEnv` only.** `CRM_API_URL` and `CRM_API_SECRET` (at least 32 characters) are required when
    `CRM_ADAPTER=http`; `loadEnv` (so `scripts/check-env.ts`, before a deploy) names each one missing. The address is
    https: the requests carry the member's name, phone and e-mail. Plain http is accepted only to localhost and never in
-   production, for a test's fake CRM. The address carries no credentials. `CRM_API_SECRET` is one of the secrets a
-   template comment cannot stand in for. The env examples drop `CRM_DB_URL` and `CRM_API_TOKEN`, which no code read.
+   production, for a test's fake CRM. In production (staging too, which runs as production) the address is also
+   public: `localhost`, `*.localhost` and an IP literal in a loopback, private, carrier-NAT or link-local range are
+   refused — IPv4 0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.168/16; IPv6 `::`, `::1`, fc00::/7,
+   fe80::/10, and those ranges mapped from IPv4 — so the members' details never go to this machine, a private network
+   or a cloud's metadata service. A name is checked as written, not resolved: one whose DNS points inside is the
+   operator's to avoid, as the setting is the operator's alone (no request can change it). The address carries no
+   credentials. `CRM_API_SECRET` is one of the secrets a template comment cannot stand in for. The env examples drop `CRM_DB_URL` and `CRM_API_TOKEN`, which no code read.
 2. **One call per request.** `POST <CRM_API_URL>`, `Content-Type: application/json`. The body is the
    `CrmRequestPayload` that `send-requests` built, minus two fields. `_actions` goes because the operator links act on
    the request, and over http the CRM reports through the status route instead. `_attempt` goes so that a resend is the
@@ -120,7 +125,8 @@ again, without asking the member to send the request a second time). No migratio
     - no body, secret or member's detail is in an error;
     - no call for `findByEmail`.
   - `crm-adapter-env.test.ts` and `scripts/check-env.test.ts`: both settings are required, a short or commented-out
-    secret is refused, https only, no credentials in the address.
+    secret is refused, https only, no credentials in the address, and in production no loopback, private or
+    link-local address (the metadata service, `127.0.0.1` written as a number, an IPv4-mapped IPv6 among them).
   - `domain/requests/tests/contract/send-requests.test.ts`: a 400 is given up after one attempt, and a re-queue sends
     it; a 503, a 429, a timeout and a plain error are tried again.
   - `apps/api/test/crm-delivery.test.ts`, with the host built from env:
