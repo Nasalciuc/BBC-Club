@@ -9,6 +9,7 @@ import {
   REST_ZOOM,
   ZOOM_RANGE,
   cameraDistance,
+  cameraPoint,
   horizonDeg,
   limbRadius,
   mapPoint,
@@ -247,6 +248,37 @@ describe("Mapbox's horizon comes nearer as the globe zooms in: the sky beside it
     expect(limbRadius(REST_ZOOM + 1, VIEW_H)).toBeGreaterThan(radiusAtZoom(REST_ZOOM + 1));
   });
 
+  it("a place stands where that camera draws it: 60° from the centre at rest, 188 pt out — not mapPoint's 146", () => {
+    const ahead: GlobeCamera = { center: [0, 0], zoom: REST_ZOOM };
+    const at = mapPoint({ lng: 60, lat: 0 }, ahead, centre)!;
+    expect(at.x - centre.x).toBeCloseTo(145.49, 1);
+    expect(cameraPoint(at, REST_ZOOM, centre, VIEW_H).x - centre.x).toBeCloseTo(188.26, 1);
+    // Near the view's centre the camera draws the globe 1 / cos 45° larger; its centre stays put.
+    const centred = cameraPoint({ x: centre.x + 1, y: centre.y }, REST_ZOOM, centre, VIEW_H);
+    expect(centred.x - centre.x).toBeCloseTo(Math.SQRT2, 4);
+    expect(cameraPoint(centre, REST_ZOOM, centre, VIEW_H)).toEqual(centre);
+    for (const [, zoom] of ZOOMS) {
+      const cam = camAt(zoom);
+      const mapbox = mapboxCamera(cam, centre, Math.SQRT1_2);
+      for (const p of [
+        { lng: 12, lat: 38 },
+        { lng: 40, lat: 52 },
+        { lng: -31, lat: 9 },
+        { lng: 75, lat: 20 },
+        { lng: 20, lat: -25 },
+      ]) {
+        const there = cameraPoint(mapPoint(p, cam, centre)!, zoom, centre, VIEW_H);
+        const want = mapbox.project(p)!;
+        expect({ zoom, p, x: there.x, y: there.y }).toEqual({
+          zoom,
+          p,
+          x: expect.closeTo(want.x, 6),
+          y: expect.closeTo(want.y, 6),
+        });
+      }
+    }
+  });
+
   for (const [name, zoom] of ZOOMS) {
     for (const [kind, scale] of CAMERAS) {
       it(`${name}, ${kind} camera: a press on the sky beside the limb is no tap, on iOS and on Android`, () => {
@@ -385,15 +417,15 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
     const centre = { x: 196.5, y: 266 };
     const cam: GlobeCamera = { center: [0, 0], zoom: REST_ZOOM };
     const r = radiusAtZoom(REST_ZOOM);
+    /** Mapbox as gl-js's camera draws it (`mapboxCamera`): where it shows a pin, and the place under a finger. */
+    const mapbox = mapboxCamera(cam, centre, Math.SQRT1_2);
     /** As iOS reports a press: the finger itself, and the place Mapbox resolved under it. */
-    const ios = (x: number, y: number) => {
-      const [lng, lat] = geoOrthographic()
-        .scale(r)
-        .translate([centre.x, centre.y])
-        .rotate([-cam.center[0], -cam.center[1]]).invert!([x, y])!;
-      return { lng, lat, screen: { x, y } };
-    };
-    const paris = mapPoint({ lng: 2.55, lat: 49.01 }, cam, centre)!;
+    const ios = (x: number, y: number) => ({ ...mapbox.resolve(x, y), screen: { x, y } });
+    const PARIS = { lng: 2.55, lat: 49.01 };
+    // MapboxGlobe places its pins with `mapPoint` (which labels fit, on which side); Mapbox draws Paris's MarkerView
+    // where its camera shows Paris — 41 pt farther out, 49° from the view's centre at rest.
+    const paris = mapPoint(PARIS, cam, centre)!;
+    const shown = mapbox.project(PARIS)!;
     const placed: PlacedPin[] = [{ code: "CDG", x: paris.x, y: paris.y, lines: [], label: null }];
     const seen = (over: { placed?: PlacedPin[]; route?: boolean } = {}) => ({
       camera: cam,
@@ -405,28 +437,81 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
     });
 
     it("a press in a pin's 44-pt target, outside its MarkerView, opens the pin: the map is the only one to get it", () => {
-      // The MarkerView is the pin's own frame (pinFrame: the pin and its label, `pinUnion`); @rnmapbox/maps 10.3.7 hands
-      // a press outside it to the map — the pin's hit slop never sees it.
-      const frame = pinUnion(paris.x, paris.y, null);
-      const target = pinTarget(paris.x, paris.y, null);
+      // The MarkerView is the pin's own frame (pinFrame: the pin and its label, `pinUnion`), where Mapbox shows it;
+      // @rnmapbox/maps 10.3.7 hands a press outside it to the map — the pin's hit slop never sees it.
+      expect(Math.hypot(shown.x - paris.x, shown.y - paris.y)).toBeGreaterThan(40);
+      const frame = pinUnion(shown.x, shown.y, null);
+      const target = pinTarget(shown.x, shown.y, null);
       const ring = { x: frame.right + 6, y: (frame.top + frame.bottom) / 2 };
       expect(ring.x).toBeGreaterThan(frame.right);
       expect(ring.x).toBeLessThan(target.right);
       expect(mapboxPress(ios(ring.x, ring.y), seen(), never)).toEqual({ kind: "pin", code: "CDG" });
-      expect(mapboxPress(ios(paris.x - 9 - 12, paris.y + 8), seen(), never)).toEqual({ kind: "pin", code: "CDG" });
+      expect(mapboxPress(ios(shown.x - 9 - 12, shown.y + 8), seen(), never)).toEqual({ kind: "pin", code: "CDG" });
       // The pin's own press answered first (Android may send both): still the pin's — the guard chooses once.
       expect(mapboxPress(ios(ring.x, ring.y), seen(), lately)).toEqual({ kind: "pin", code: "CDG" });
       // Past the target, the place.
       expect(mapboxPress(ios(target.right + 2, ring.y), seen(), never)?.kind).toBe("place");
+      // Where `mapPoint` puts Paris, 41 pt inside the pin Mapbox shows, is the globe's: no pin is there.
+      expect(mapboxPress(ios(paris.x, paris.y), seen(), never)?.kind).toBe("place");
+    });
+
+    it("a pin on the globe's outer ring keeps its 44-pt target where Mapbox shows it, at rest and 2×", () => {
+      // 60° from the view's centre: shown 188 pt out at rest (`mapPoint`: 146), 347 at 2× (291) — at rest on the ring a
+      // disc of radiusAtZoom took for the sky, where a press beside the pin would now snap to another city.
+      const FAR = { lng: 60, lat: 0 };
+      const lines = ["Somewhere", "$1,234"]; // made up
+      for (const zoom of [REST_ZOOM, REST_ZOOM + 1]) {
+        const camera: GlobeCamera = { ...cam, zoom };
+        const mb = mapboxCamera(camera, centre, Math.SQRT1_2);
+        const press = (x: number, y: number) => ({ ...mb.resolve(x, y), screen: { x, y } });
+        const at = mapPoint(FAR, camera, centre)!;
+        const pin = mb.project(FAR)!;
+        expect(pin.x - at.x).toBeGreaterThan(40);
+        if (zoom === REST_ZOOM) expect(pin.x - centre.x).toBeGreaterThan(radiusAtZoom(zoom));
+        const view = (p: PlacedPin[]) => ({ ...seen({ placed: p }), camera });
+        // A pin alone: a press 6 pt beside its MarkerView, on each side, is the pin's.
+        const bare = view([{ code: "XXX", x: at.x, y: at.y, lines: [], label: null }]);
+        const frame = pinUnion(pin.x, pin.y, null);
+        const midY = (frame.top + frame.bottom) / 2;
+        for (const finger of [
+          { x: frame.right + 6, y: midY },
+          { x: frame.left - 6, y: midY },
+          { x: pin.x, y: frame.bottom + 6 },
+        ]) {
+          expect({ zoom, finger, choice: mapboxPress(press(finger.x, finger.y), bare, never) }).toEqual({
+            zoom,
+            finger,
+            choice: { kind: "pin", code: "XXX" },
+          });
+        }
+        expect(mapboxPress(press(at.x, at.y), bare, never)?.kind).toBe("place");
+        // With its label: the pin and the label are one MarkerView, shown together — the ring over the label is the pin's.
+        const box = labelBox(at.x, at.y, lines, "right");
+        const labelled = view([{ code: "XXX", x: at.x, y: at.y, lines, label: { side: "right", box } }]);
+        const shownBox = {
+          left: box.left + pin.x - at.x,
+          right: box.right + pin.x - at.x,
+          top: box.top + pin.y - at.y,
+          bottom: box.bottom + pin.y - at.y,
+        };
+        const whole = pinUnion(pin.x, pin.y, shownBox);
+        const target = pinTarget(pin.x, pin.y, shownBox);
+        expect(target.top).toBeLessThan(whole.top - 1);
+        const over = { x: (shownBox.left + shownBox.right) / 2, y: whole.top - 1 };
+        expect(mapboxPress(press(over.x, over.y), labelled, never)).toEqual({ kind: "pin", code: "XXX" });
+      }
     });
 
     it("elsewhere on the disc, the place Mapbox gives, where it stands on screen", () => {
-      const tap = placeOf(mapboxPress(ios(centre.x + 40, centre.y - 30), seen(), never))!;
-      expect(tap.x).toBeCloseTo(centre.x + 40, 6);
-      expect(tap.y).toBeCloseTo(centre.y - 30, 6);
-      const p = tap.project({ lng: 2.55, lat: 49.01 })!;
-      expect(p.x).toBeCloseTo(paris.x, 6);
-      expect(p.y).toBeCloseTo(paris.y, 6);
+      const finger = { x: centre.x + 40, y: centre.y - 30 };
+      const tap = placeOf(mapboxPress(ios(finger.x, finger.y), seen(), never))!;
+      expect(tap.x).toBeCloseTo(finger.x, 6);
+      expect(tap.y).toBeCloseTo(finger.y, 6);
+      // The city where Mapbox shows it, as the finger: how far apart they stand is measured as they are drawn.
+      const p = tap.project(PARIS)!;
+      expect(p.x).toBeCloseTo(shown.x, 6);
+      expect(p.y).toBeCloseTo(shown.y, 6);
+      expect(tap.project({ lng: 120, lat: 0 })).toBeNull(); // past the near side: out of sight
     });
 
     it("the sky, a chosen route and a touch a pin's press answered are nothing", () => {
@@ -436,7 +521,7 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
         mapboxPress({ lng: 30, lat: 10, screen: { x: centre.x + limb + 30, y: centre.y } }, seen(), never),
       ).toBeNull();
       expect(mapboxPress(ios(centre.x, centre.y), seen({ route: true }), never)).toBeNull();
-      expect(mapboxPress(ios(paris.x, paris.y - 10), seen({ route: true }), never)).toBeNull();
+      expect(mapboxPress(ios(shown.x, shown.y - 10), seen({ route: true }), never)).toBeNull();
       expect(mapboxPress(ios(centre.x, centre.y), seen(), lately)).toBeNull();
     });
   });

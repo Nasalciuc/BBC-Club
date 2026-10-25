@@ -6,7 +6,7 @@
  * the pin's — pins keep priority, whatever else the touch could be; a touch a pin's own press already answered (the
  * press guard) is nothing more; the sky is nothing; anywhere else on the disc is the place under the finger.
  */
-import { type GlobeCamera, mapPoint, mapTap } from "./globe-geo";
+import { type GlobeCamera, cameraPoint, mapPoint, mapTap } from "./globe-geo";
 import { type GlobeTap, type View, projector } from "./globe-logic";
 import { type PlacedPin, pinAt } from "./pin-labels";
 
@@ -59,6 +59,11 @@ export function drawnGlobeTap(
  * map's press is the only one to answer it. Where the pin's press answers too (Android may), the guard keeps the touch
  * to one choice. Then `mapTap` decides between the sky and the place, at the camera's zoom on a map view `viewHeight`
  * points tall.
+ *
+ * `placed` is where `mapPoint` puts the pins (which labels fit, on which side); Mapbox shows each MarkerView where its
+ * perspective camera draws the place (`cameraPoint`: 60° from the view's centre at rest, 188 pt out, not 146). The pins'
+ * targets, the place under the finger and the city it snaps to are measured there, as the member sees them: on the
+ * globe's outer ring, which the disc now takes, a press beside a pin is the pin's, not a city 40 pt nearer the centre.
  */
 export function mapboxPress(
   press: { lng: number; lat: number; screen: { x: number; y: number } },
@@ -72,15 +77,48 @@ export function mapboxPress(
   guard: Guard,
 ): TapChoice | null {
   if (seen.route) return null;
-  const pin = pinAt(press.screen.x, press.screen.y, seen.placed);
+  const { camera, centre, viewHeight } = seen;
+  const shown = (at: { x: number; y: number }) => cameraPoint(at, camera.zoom, centre, viewHeight);
+  const pin = pinAt(
+    press.screen.x,
+    press.screen.y,
+    seen.placed.map((p) => moved(p, shown(p))),
+  );
   if (pin !== null) return { kind: "pin", code: pin };
   if (guard.pressedLately()) return null;
-  const at = mapTap(press, seen.camera, seen.centre, seen.viewHeight);
+  const at = mapTap(press, camera, centre, viewHeight);
   if (!at) return null;
-  const { camera, centre } = seen;
-  // The finger and the city in one projection, so how far apart they stand on screen is measured alike.
+  const here = shown(at);
+  // The finger and the city in one projection, the camera's, so how far apart they stand on screen is measured alike.
   return {
     kind: "place",
-    tap: { lng: press.lng, lat: press.lat, x: at.x, y: at.y, project: (p) => mapPoint(p, camera, centre) },
+    tap: {
+      lng: press.lng,
+      lat: press.lat,
+      x: here.x,
+      y: here.y,
+      project: (p) => {
+        const there = mapPoint(p, camera, centre);
+        return there ? shown(there) : null;
+      },
+    },
   };
+}
+
+/** A pin and its label — one MarkerView — moved whole from where `mapPoint` put the pin to where Mapbox shows it. */
+function moved(p: Placed[number], to: { x: number; y: number }): Placed[number] {
+  const dx = to.x - p.x;
+  const dy = to.y - p.y;
+  const label = p.label
+    ? {
+        ...p.label,
+        box: {
+          left: p.label.box.left + dx,
+          top: p.label.box.top + dy,
+          right: p.label.box.right + dx,
+          bottom: p.label.box.bottom + dy,
+        },
+      }
+    : null;
+  return { code: p.code, x: to.x, y: to.y, label };
 }

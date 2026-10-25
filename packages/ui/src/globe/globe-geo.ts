@@ -68,6 +68,27 @@ export function limbRadius(zoom: number, viewHeight: number): number {
 }
 
 /**
+ * Where that camera draws the place `mapPoint` puts at `at` (ADR-IMPL-068): on the same bearing from the globe's centre
+ * on screen, f·R·sin α / (d + R − R·cos α) out instead of `mapPoint`'s R·sin α — α the place's angle from the view's
+ * centre. The perspective draws a place farther out: 1 / cos 45° near the view's centre, and on an 852-pt view at rest
+ * 188 pt instead of 146 at 60° from it. Mapbox shows its pins (MarkerView) there, so `mapboxPress` measures a press
+ * against them, and the city against the finger, there.
+ */
+export function cameraPoint(
+  at: { x: number; y: number },
+  zoom: number,
+  centre: { x: number; y: number },
+  viewHeight: number,
+): { x: number; y: number } {
+  const r = radiusAtZoom(zoom);
+  const dx = at.x - centre.x;
+  const dy = at.y - centre.y;
+  const sin = Math.min(1, Math.hypot(dx, dy) / r);
+  const k = focalLength(viewHeight) / (cameraDistance(viewHeight) + r - r * Math.sqrt(1 - sin * sin));
+  return { x: centre.x + dx * k, y: centre.y + dy * k };
+}
+
+/**
  * Mapbox's horizon at a zoom: how far from the view's centre, in degrees, its camera sees the globe — acos(R / (R + d)),
  * R the globe's radius, d the camera's distance. On an 852-pt view about 81° at rest, 74° at 2×, 69° at 3×: zooming in
  * brings it nearer, under the fixed NEAR_SIDE_DEG from about 1.1×.

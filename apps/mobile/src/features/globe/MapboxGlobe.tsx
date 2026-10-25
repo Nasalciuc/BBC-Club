@@ -298,7 +298,8 @@ export default function MapboxGlobe({
     if (lng === undefined || lat === undefined) return;
     const cam: GlobeCamera = { center: [...view.current.center] as LngLat, zoom: view.current.zoom };
     const screen = { x: feature.properties.screenPointX, y: feature.properties.screenPointY };
-    // The map view's height: how far Mapbox's camera stands, so where its horizon is at this zoom.
+    // The map view's height: how far Mapbox's camera stands, so where its horizon is at this zoom and where it shows the
+    // pins `placed` puts with `mapPoint` (their targets are measured there: `mapboxPress`).
     const seenThen = { camera: cam, centre, viewHeight: size.height, placed, route: selected !== null };
     const choice = mapboxPress({ lng, lat, screen }, seenThen, pressGuard);
     if (choice?.kind === "pin") {
