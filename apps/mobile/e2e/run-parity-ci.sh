@@ -29,20 +29,49 @@ adb shell date
 
 JS_ERROR_ALLOWLIST=()
 
+# As run-android-ci.sh: E/ReactNativeJS is the app's own JS. A FATAL EXCEPTION counts only when the line after it names
+# the app's process ($APP, launcher-guard.sh): disabling the launcher can crash com.android.systemui, which is not under
+# test. Another process's crash is shown, never counted.
 js_error_lines() {
-  adb logcat -d -v brief '*:S' ReactNativeJS:E AndroidRuntime:E |
-    grep -E 'E/ReactNativeJS|FATAL EXCEPTION' || true
+  adb logcat -d -v brief '*:S' ReactNativeJS:E AndroidRuntime:E | tr -d '\r' |
+    awk -v app="$APP" '
+      /E\/ReactNativeJS/ { print; next }
+      /FATAL EXCEPTION/ { fatal = $0; next }
+      fatal != "" {
+        if (index($0, "Process: " app ",") > 0) print fatal " (" app ")"
+        else print "  not under test: " $0 > "/dev/stderr"
+        fatal = ""
+      }' || true
+}
+
+# Explore's sheet as the e2e build saw it (packages/ui/src/layout/sheet-trace.ts): a line on each focus of Explore and
+# on each change while it is on screen — the verdict (drawn, lost, closed, moving, astray, elsewhere, unmeasured), the
+# stop asked for, gorhom's index and position, and the sheet's top in the committed tree. `drawn` means the committed
+# transform matches gorhom's position, not that the sheet is visible (opacity is not measured). `lost` is gorhom
+# holding the sheet open while the committed transform puts it a window height down; `closed` is gorhom closing it.
+# Each line ends with `sync=`, Reanimated's settled-props sync as this APK was compiled: `off` (ADR-IMPL-069). There,
+# a run that loses the sheet is a failed fix whatever the verdict, and `lost` means the props were lost some other way
+# than the sync; `sync=on` means the flag did not reach the build.
+sheet_trace() {
+  adb logcat -d -v time '*:S' ReactNativeJS:V | grep -F '[HomeSheet]' | tail -n 20 || true
 }
 
 status=0
 echo "::group::maestro parity"
+# A larger ring buffer, so the sheet's trace from the first arrival on Explore is still there at the end.
+adb logcat -G 4M || true
 adb logcat -c || true
 if ! maestro test --format junit --output "$OUT/parity.xml" --debug-output "$OUT/debug" \
   "apps/mobile/e2e/parity.yaml"; then
   echo "::error::Maestro flow failed: parity"
   failure_note parity "$OUT/parity.xml" "$OUT/debug"
+  trace=$(sheet_trace)
+  last=$(printf '%s\n' "$trace" | tail -n 1)
+  echo "::error title=Maestro parity: Explore's sheet, last trace line::$(annotation_text "${last:-no [HomeSheet] line in logcat}")"
   status=1
 fi
+echo "-- Explore's sheet (HomeSheet trace, e2e build)"
+printf '%s\n' "${trace:-$(sheet_trace)}"
 errors=$(js_error_lines)
 if [ -n "$errors" ]; then
   while IFS= read -r line; do
