@@ -7,6 +7,8 @@ import { createPlatform } from "@bbc/platform";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { PlacePhotosVM } from "@bbc/shared/api/v1/places";
 import type { AppEnv } from "@bbc/shared/http/app-env";
+import type { Fetch } from "../../src/application/place-photo-sources";
+import { PLACE_PHOTOS_REQUESTS_MS, resolvePlacePhotos } from "../../src/application/place-photos";
 import { placePhotosRepo } from "../../src/infrastructure/place-photos.repo";
 import { catalogModule } from "../../src/module";
 import { binding, commonsThumb, fakeSources } from "../unit/place-photos.fixture";
@@ -260,6 +262,34 @@ describe("place photos", () => {
     const up = await setup("", { wikidata: [london, paris], commons: { "London at night.jpg": {} } }, t.iso);
     await up.due();
     expect(await up.run()).toEqual({ claimed: 2, photos: 1, satellites: 1, retries: 0, deferred: 0 });
+    await t.iso.drop();
+  });
+
+  it("a slow run stops asking at its budget: the cities left wait uncounted, never cut off by the job's timeout", async () => {
+    const t = await setup("place-photos-budget", { wikidata: [], cities: [] });
+    await t.photos("LHR,CDG,ZRH,NRT");
+    // Every answer takes twelve seconds (made up): the airports' question and two searches end at 36 s; a Pexels
+    // question would end past the run's 40 s.
+    const clock = { now: 0 };
+    const fetch: Fetch = async (url, init) => {
+      clock.now += 12_000;
+      return t.sources.fetch(url, init);
+    };
+    const platform = createPlatform(t.iso.db, { level: "silent" });
+    const counts = await resolvePlacePhotos({
+      db: t.iso.db,
+      sources: { fetch, userAgent: "BBCClub/1.0 (test)", signal: new AbortController().signal },
+      pexelsKey: "test".repeat(10), // a stand-in, not a key
+      metrics: platform.metrics,
+      logger: platform.logger,
+      now: () => clock.now,
+    });
+    expect(counts).toEqual({ claimed: 4, photos: 0, satellites: 0, retries: 0, deferred: 4 });
+    expect(t.sources.calls).toHaveLength(3); // no Pexels question
+    expect(clock.now).toBeLessThanOrEqual(PLACE_PHOTOS_REQUESTS_MS);
+    for (const code of ["LHR", "CDG", "ZRH", "NRT"]) {
+      expect(await t.row(code)).toMatchObject({ status: "pending", attempts: 0 });
+    }
     await t.iso.drop();
   });
 

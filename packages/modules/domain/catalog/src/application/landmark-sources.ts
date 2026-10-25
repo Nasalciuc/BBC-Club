@@ -32,6 +32,9 @@ export const LANDMARKS_PER_PLACE = 3;
 export const LANDMARK_MIN_WIDTH = 1600;
 /** WDQS stops a question at 60 s; one city's took 3–33 s (Paris 25 s) on 25 Oct 2026. */
 export const LANDMARK_QUESTION_TIMEOUT_MS = 65_000;
+/** Files asked about for one city: two Commons questions (50 titles each) at most. Twenty items with a main image, a
+ *  night view and an aerial view are sixty. */
+export const LANDMARK_FILES_MAX = 100;
 /** The metadata a landmark's photograph is judged and credited by: the city photo's, and its licence's address. */
 export const LANDMARK_METADATA = "Artist|LicenseShortName|LicenseUrl|AttributionRequired|Restrictions";
 
@@ -166,7 +169,8 @@ export function readLandmarks(
   return { candidates, cityFiles };
 }
 
-/** The files to ask Commons about: those of the first twenty candidates that are not the city's own. */
+/** The files to ask Commons about: those of the first twenty candidates that are not the city's own, a hundred at most
+ *  (best first). */
 export function landmarkFiles(read: { candidates: LandmarkCandidate[]; cityFiles: ReadonlySet<string> }): string[] {
   return [
     ...new Set(
@@ -175,7 +179,7 @@ export function landmarkFiles(read: { candidates: LandmarkCandidate[]; cityFiles
         .flatMap((c) => c.files)
         .filter((f) => !read.cityFiles.has(sameFile(f))),
     ),
-  ];
+  ].slice(0, LANDMARK_FILES_MAX);
 }
 
 export function askLandmarkFiles(deps: SourceDeps, files: readonly string[]): Promise<Map<string, ImageInfo>> {

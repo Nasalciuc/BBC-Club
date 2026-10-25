@@ -9,11 +9,28 @@ import { PLACE_LANDMARKS_MAX, type PlaceLandmarksVM } from "@bbc/shared/api/v1/p
 import { airportsRepo } from "../infrastructure/airports.repo";
 import { placeLandmarksRepo, type PlaceLandmarkRow } from "../infrastructure/place-landmarks.repo";
 import { sourceHoldsRepo } from "../infrastructure/source-holds.repo";
-import { askLandmarkFiles, askLandmarks, landmarkFiles, pickLandmarks, readLandmarks } from "./landmark-sources";
-import { SourceError, findCities, type ImageInfo, type SourceDeps } from "./place-photo-sources";
+import {
+  LANDMARK_QUESTION_TIMEOUT_MS,
+  askLandmarkFiles,
+  askLandmarks,
+  landmarkFiles,
+  pickLandmarks,
+  readLandmarks,
+} from "./landmark-sources";
+import { REQUEST_TIMEOUT_MS, SourceError, findCities, type ImageInfo, type SourceDeps } from "./place-photo-sources";
 
 /** Places looked up in one run: one Wikidata question and one Commons question each (a city found by name, one more). */
 export const LANDMARK_PLACES_PER_RUN = 2;
+/** A run's requests end within this long of its start: the job is stopped at 240 s (module.ts), its writes need the
+ *  rest. */
+export const LANDMARK_RUN_REQUESTS_MS = 225_000;
+/**
+ * The longest one place's look can take, every answer as slow as its timeout allows: its landmarks' question twice (a
+ * remembered city item that answers nothing, then the one found again), the city found again (the airports' question
+ * and a search), and Commons twice (`LANDMARK_FILES_MAX`) — 162 s. A place starts only while that much is left; the
+ * cities found first take at most 24 s, so a run's first place always does.
+ */
+export const LANDMARK_PLACE_MAX_MS = 2 * LANDMARK_QUESTION_TIMEOUT_MS + 4 * REQUEST_TIMEOUT_MS;
 
 const QID = /^Q[1-9]\d*$/;
 const IATA = /^[A-Z]{3}$/;
@@ -62,7 +79,9 @@ type Log = { warn(o: object, m?: string): void; error(o: object, m?: string): vo
  * none). A remembered city item that answers nothing at all (merged into another since) is found again, never taken
  * for a city without sights. A 429 holds that source for its Retry-After and stops the run, the places untouched; another failure keeps what
  * the places have, tries them again in six hours, and stops the run — a search by a city's name that fails is its own
- * place's, the others left untouched. Run twice, it writes the same rows. Every number lands in platform.job_runs.
+ * place's, the others left untouched. A place starts only while its slowest look still ends inside the run's 225 s;
+ * else it waits for the next run, untouched (`later`). Run twice, it writes the same rows. Every number lands in
+ * platform.job_runs.
  */
 export async function resolvePlaceLandmarks(deps: {
   db: Executor;
@@ -70,7 +89,11 @@ export async function resolvePlaceLandmarks(deps: {
   skip: ReadonlySet<string>;
   metrics: { inc(name: string, labels?: Record<string, string>, by?: number): void };
   logger: Log;
+  /** The clock (a test's own). */
+  now?: () => number;
 }): Promise<Record<string, number>> {
+  const now = deps.now ?? Date.now;
+  const deadline = now() + LANDMARK_RUN_REQUESTS_MS;
   const counts = { places: 0, landmarks: 0, fewer: 0, failed: 0, held: 0 };
   if ((await sourceHoldsRepo.heldFor(deps.db)) !== null) return { ...counts, held: 1 };
   const due = await placeLandmarksRepo.due(deps.db, LANDMARK_PLACES_PER_RUN);
@@ -133,7 +156,10 @@ export async function resolvePlaceLandmarks(deps: {
     for (const [code, qid] of found.cities) cities.set(code, qid);
   }
 
-  for (const place of due) {
+  for (const [i, place] of due.entries()) {
+    // Too little of the run left for this place's slowest look: it and those after it wait for the next run, untouched
+    // (`later`) — never cut off by the job's timeout half-way.
+    if (now() + LANDMARK_PLACE_MAX_MS > deadline) return { ...counts, later: due.length - i };
     // No city (Wikidata knows none near the airport, or the airport did not come back): looked, nothing to find.
     let cityQid = cities.get(place.code) ?? null;
     let found: ReturnType<typeof pickLandmarks> = [];

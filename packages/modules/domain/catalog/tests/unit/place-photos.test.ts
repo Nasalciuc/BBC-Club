@@ -3,8 +3,10 @@ import { describe, expect, it } from "bun:test";
 
 import { PlacePhotosVM } from "@bbc/shared/api/v1/places";
 import {
+  COMMONS_API,
   DEFAULT_RETRY_AFTER_S,
   MAX_RETRY_AFTER_S,
+  REQUEST_TIMEOUT_MS,
   SourceError,
   acceptCommons,
   cityByNameSparql,
@@ -19,11 +21,13 @@ import {
   searchName,
   sparqlString,
   type Binding,
+  type Fetch,
   type ImageInfo,
 } from "../../src/application/place-photo-sources";
 import {
   CITY_SEARCHES_PER_RUN,
   PEXELS_PER_RUN,
+  PLACE_PHOTOS_REQUESTS_MS,
   decidePlaces,
   parseCodes,
   toPlacePhotoVM,
@@ -699,6 +703,67 @@ describe("decidePlaces", () => {
     });
     expect(out.get("X1Y")).toEqual({ kind: "satellite", centre: { lat: 1, lng: 2 } });
     expect(f.calls).toHaveLength(0);
+  });
+
+  it("no request starts that could end past the run's budget: the cities that needed one wait, uncounted", async () => {
+    const key = "test".repeat(10); // a stand-in, not a key
+    // The slowest run: every answer takes the eight seconds a request may (Commons' two at once, eight together).
+    const slowly = (f: ReturnType<typeof fakeSources>) => {
+      const clock = { now: 0 };
+      const fetch: Fetch = async (url, init) => {
+        clock.now += url.startsWith(COMMONS_API) ? REQUEST_TIMEOUT_MS / 2 : REQUEST_TIMEOUT_MS;
+        return f.fetch(url, init);
+      };
+      return { clock, fetch };
+    };
+    const f = fakeSources({
+      wikidata: [london],
+      cities: [],
+      pexels: { London: [pexelsPhoto({ id: 1, alt: "London skyline" })] },
+    });
+    const slow = slowly(f);
+    const out = await decidePlaces([LONDON, ZURICH, PARIS, TOKYO], {
+      sources: sources(slow.fetch),
+      pexelsKey: key,
+      logger: quiet,
+      deadline: PLACE_PHOTOS_REQUESTS_MS,
+      now: () => slow.clock.now,
+    });
+    // The airports' question (8 s), two searches (24 s), Commons for London's night view (32 s), one Pexels question
+    // (40 s): a second would end at 48 s.
+    expect(out.get("LHR")).toMatchObject({ kind: "photo", source: "pexels" });
+    expect(out.get("ZRH")).toEqual({ kind: "deferred" });
+    expect(out.get("CDG")).toEqual({ kind: "deferred" });
+    expect(out.get("NRT")).toEqual({ kind: "deferred" }); // past the run's two searches
+    expect(f.calls.filter((c) => c.url.includes("pexels"))).toHaveLength(1);
+    expect(slow.clock.now).toBe(PLACE_PHOTOS_REQUESTS_MS);
+
+    // Less time still: no Commons question (London waits for it), Zurich's search alone; Paris, past the budget, waits.
+    const g = fakeSources({ wikidata: [london], cities: [] });
+    const tight = slowly(g);
+    const out2 = await decidePlaces([LONDON, ZURICH, PARIS], {
+      sources: sources(tight.fetch),
+      pexelsKey: undefined,
+      logger: quiet,
+      deadline: 2 * REQUEST_TIMEOUT_MS + 1,
+      now: () => tight.clock.now,
+    });
+    expect(out2.get("LHR")).toEqual({ kind: "deferred" });
+    expect(out2.get("ZRH")).toEqual({ kind: "satellite", centre: { lat: ZURICH.lat, lng: ZURICH.lng } });
+    expect(out2.get("CDG")).toEqual({ kind: "deferred" });
+    expect(g.calls).toHaveLength(2);
+
+    // No time at all: nothing asked, every city waits.
+    const none = fakeSources({});
+    const out3 = await decidePlaces([LONDON], {
+      sources: sources(none.fetch),
+      pexelsKey: undefined,
+      logger: quiet,
+      deadline: REQUEST_TIMEOUT_MS - 1,
+      now: () => 0,
+    });
+    expect(out3.get("LHR")).toEqual({ kind: "deferred" });
+    expect(none.calls).toHaveLength(0);
   });
 
   it("Commons' capitalised titles still answer for the name asked", async () => {

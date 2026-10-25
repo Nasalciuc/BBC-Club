@@ -9,6 +9,7 @@ import { describe, expect, it } from "bun:test";
 
 import { PlaceLandmarksVM } from "@bbc/shared/api/v1/places";
 import {
+  LANDMARK_FILES_MAX,
   LANDMARK_MIN_WIDTH,
   acceptLandmarkPhoto,
   askLandmarkFiles,
@@ -157,6 +158,19 @@ describe("reading the answer", () => {
     ];
     const read = readLandmarks(answer, "Q9");
     expect(landmarkFiles(read)).toEqual(["Fort at night.jpg"]);
+  });
+
+  it("asks Commons twice at most for a city: a hundred files, best first (made-up items with six views each)", () => {
+    const many = Array.from({ length: 20 }, (_, i) =>
+      Array.from({ length: 6 }, (_, j) =>
+        row(`Q${100 + i}`, `Sight ${i}`, 100 - i, "image", `Sight ${i} view ${j}.jpg`),
+      ),
+    ).flat();
+    const files = landmarkFiles(readLandmarks(many, "Q9"));
+    expect(LANDMARK_FILES_MAX).toBe(100);
+    expect(files).toHaveLength(LANDMARK_FILES_MAX);
+    expect(files[0]).toBe("Sight 0 view 0.jpg");
+    expect(files.at(-1)).toBe("Sight 16 view 3.jpg");
   });
 });
 

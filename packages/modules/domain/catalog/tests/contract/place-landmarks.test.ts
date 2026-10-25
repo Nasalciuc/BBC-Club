@@ -11,7 +11,12 @@ import { createPlatform } from "@bbc/platform";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { PlaceLandmarksVM } from "@bbc/shared/api/v1/places";
 import type { AppEnv } from "@bbc/shared/http/app-env";
-import type { Binding } from "../../src/application/place-photo-sources";
+import type { Binding, Fetch } from "../../src/application/place-photo-sources";
+import {
+  LANDMARK_PLACE_MAX_MS,
+  LANDMARK_RUN_REQUESTS_MS,
+  resolvePlaceLandmarks,
+} from "../../src/application/place-landmarks";
 import { placeLandmarksRepo } from "../../src/infrastructure/place-landmarks.repo";
 import { catalogModule } from "../../src/module";
 import { binding, fakeSources } from "../unit/place-photos.fixture";
@@ -382,6 +387,37 @@ describe("landmarks", () => {
     expect(await t.rows("CDG")).toEqual([]); // found by its airport: its look not spent
     expect(await t.run()).toEqual({ places: 1, landmarks: 3, fewer: 0, failed: 0, held: 0 });
     expect((await t.rows("CDG")).map((r) => r.kind)).toEqual(["landmark", "landmark", "landmark"]);
+    await t.iso.drop();
+  });
+
+  it("a place starts only while its slowest look can end inside the run: the next one waits, untouched", async () => {
+    const t = await setup("landmarks-budget", answers);
+    await shown(t.iso, "CDG", "RMO");
+    // Each landmarks question takes seventy seconds (made up; WDQS stops one at 60 s, the job waits 65): after Paris's,
+    // Chișinău's slowest look (162 s) would end past the run's 225 s.
+    expect(LANDMARK_PLACE_MAX_MS).toBe(162_000);
+    const clock = { now: 0 };
+    const fetch: Fetch = async (url, init) => {
+      const query = new URLSearchParams(typeof init?.body === "string" ? init.body : "").get("query") ?? "";
+      if (query.includes("wikibase:around")) clock.now += 70_000;
+      return t.fake.fetch(url, init);
+    };
+    const platform = createPlatform(t.iso.db, { level: "silent" });
+    const run = () =>
+      resolvePlaceLandmarks({
+        db: t.iso.db,
+        sources: { fetch, userAgent: "BBCClub/1.0 (test)", signal: new AbortController().signal },
+        skip: new Set(),
+        metrics: platform.metrics,
+        logger: platform.logger,
+        now: () => clock.now,
+      });
+    expect(await run()).toEqual({ places: 1, landmarks: 3, fewer: 0, failed: 0, held: 0, later: 1 });
+    expect(clock.now + LANDMARK_PLACE_MAX_MS).toBeGreaterThan(LANDMARK_RUN_REQUESTS_MS);
+    expect((await t.rows("CDG")).map((r) => r.kind)).toEqual(["landmark", "landmark", "landmark"]);
+    expect(await t.rows("RMO")).toEqual([]); // untouched: first in the next run
+    expect(await run()).toEqual({ places: 1, landmarks: 3, fewer: 0, failed: 0, held: 0 });
+    expect((await t.rows("RMO")).map((r) => r.kind)).toEqual(["landmark", "landmark", "landmark"]);
     await t.iso.drop();
   });
 

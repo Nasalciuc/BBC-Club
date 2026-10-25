@@ -48,9 +48,9 @@ Commons, 117 requests) found:
     other Springfields are far from SGF): the one whose English name is the city we show; else the one the search puts
     first (its own order, `wikibase:apiOrdinal`: an alias matched whole comes before a name that only starts with it —
     "Kishinev" finds Chișinău first and the Chișinău Ghetto third, though the Ghetto lies nearer the airport); then the
-    nearest, then the oldest item. One question a city — the search reads the first row of a VALUES block only (tried on WDQS) — two a
-    run; a third city waits for the next run, its look not counted. The same tiers and credit rules follow (Commons,
-    Pexels, the satellite view). A search that fails (a timeout, a 500) is its own city's failure (`retry`): the cities
+    nearest, then the oldest item. One question a city — the search reads the first row of a VALUES block only (tried
+    on WDQS) — two a run; a third city waits for the next run, its look not counted. The same tiers and credit rules
+    follow (Commons, Pexels, the satellite view). A search that fails (a timeout, a 500) is its own city's failure (`retry`): the cities
     found by their airport keep their answers, and those still waiting for a search wait for the next run, uncounted —
     the run asks the search nothing more; a 429 still holds the whole run. The name is searched by its words: a tab or
     another control character (the airports' import keeps one inside a name) is a space, and a name of nothing else is
@@ -60,6 +60,11 @@ Commons, 117 requests) found:
     does for Pexels' share), and the source is **held**: `catalog.source_holds` (`wikidata` or `commons`, `not_before`)
     — while any hold is on, `resolve-place-photos` asks nothing (the cities it claims wait for the hold) and neither does
     `resolve-place-landmarks`. Another failure still retries after `least(attempts, 24)` hours.
+  - **A run inside its time.** Each request may take eight seconds; a run can ask the airports' question, two searches,
+    Commons (two at once) and three Pexels questions — 56 s if each took its eight, past the job's 50 s, where the
+    job's abort cut the Pexels question in flight and the cities left were counted as failed. A run's requests now end
+    within 40 s of its start (`PLACE_PHOTOS_REQUESTS_MS`; the writes have the rest): a request starts only while it
+    can end inside them, and a city that needed one waits for the next run, uncounted (`deferred`).
   - The city's Wikidata item (`qid`) is part of what the lookup returns; the landmarks start from it.
 - **Landmarks (D7 as the evidence refined it).** The sights around the city item, for WDQS (`landmarkSparql`): items
   within **20 km** of the city item's P625, with an image and at least two sitelinks; an instance of a subclass of
@@ -97,10 +102,15 @@ Commons, 117 requests) found:
   know, else the city photo's lookup (by airport, else by name); a remembered item that answers nothing at all, not
   even its own photographs (merged into another since), is looked up again rather than taken for a city without
   sights; a search by name that fails gives its place alone a `failed` marker and stops the run, the other place
-  untouched for the next one. One WDQS question per city (65-s timeout; WDQS stops one
-  at 60 s), one Commons question (50 files a question). A 429 holds that source for its Retry-After and stops the run,
-  the places untouched. Another failure keeps what a place has (never a downgrade), looks again in six hours (a new
-  place gets its `failed` marker) and stops the run. A place without a city found gets a `fewer` marker. Twice is the
+  untouched for the next one. One WDQS question per city (65-s timeout; WDQS stops one at 60 s), one Commons question
+  (50 files a question; a hundred files at most, two questions). A run's requests end within 225 s of its start
+  (`LANDMARK_RUN_REQUESTS_MS`; the writes have the rest of the 240): a place starts only while its slowest look — the
+  landmarks question twice and the city found again (a remembered item that answers nothing), Commons twice, 162 s
+  (`LANDMARK_PLACE_MAX_MS`) — still ends inside them; else it waits for the next run, untouched (`later` in the run's
+  counts). The cities found first take at most 24 s, so a run's first place always starts. A 429 holds that source
+  for its Retry-After and stops the run, the places untouched. Another failure keeps what a place has (never a
+  downgrade), looks again in six hours (a new place gets its `failed` marker) and stops the run. A place without a
+  city found gets a `fewer` marker. Twice is the
   same rows: each is upserted by its rank (`created_at` kept), ranks past the new ones go, the old marker leaves before
   the new one comes (in one transaction). User-Agent `BBCClub/1.0 (<APP_ORIGIN>; landmarks)`.
 - **The flag** `catalog.landmarks`, seeded `{ "enabled": false, "skip": ["Q177174"] }` (the Icelandic Phallological

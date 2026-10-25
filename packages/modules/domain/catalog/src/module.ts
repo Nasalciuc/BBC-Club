@@ -661,7 +661,8 @@ export const catalogModule = (
           },
         },
         {
-          // ADR-IMPL-043: ten due airports a minute — new ones first. Nothing due: one query, no request outside.
+          // ADR-IMPL-043: ten due airports a minute — new ones first. Nothing due: one query, no request outside. Its
+          // requests end within 40 s (PLACE_PHOTOS_REQUESTS_MS), its writes inside the 50 (ADR-IMPL-064).
           name: "resolve-place-photos",
           spec: {
             cron: "* * * * *",
@@ -686,7 +687,8 @@ export const catalogModule = (
         },
         {
           // ADR-IMPL-064: two due places every five minutes — one WDQS question each (3–33 s; WDQS stops one at 60 s)
-          // and one Commons question. Nothing while the flag is off or a Wikimedia source holds the club off.
+          // and one Commons question. Nothing while the flag is off or a Wikimedia source holds the club off. A place
+          // starts only while its slowest look ends within 225 s (LANDMARK_RUN_REQUESTS_MS), its writes inside the 240.
           name: "resolve-place-landmarks",
           spec: {
             cron: "*/5 * * * *",

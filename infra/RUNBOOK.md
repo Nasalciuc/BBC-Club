@@ -210,7 +210,9 @@ time gets a row in `catalog.place_photos`, and `resolve-place-photos` (worker, e
 first) looks it up: Wikimedia Commons through Wikidata; then Pexels, only when `PEXELS_API_KEY` is set (three
 questions a run at most — Pexels allows 200 an hour, 20,000 a month); else the satellite view, which the app draws
 from Mapbox with its `pk.` token. Until a city is looked up, and whenever a photo does not load, the app shows its own
-image. Every city is looked at again after 30–33 days. Only addresses and credits are stored — never an image.
+image. Every city is looked at again after 30–33 days. Only addresses and credits are stored — never an image. A run
+starts no request after its first 32 s (each may take 8; the job is stopped at 50): when the sources are slow, the
+cities it has not reached are put back (`deferred` in the run's counts in `platform.job_runs`), their look not counted.
 
 The worker reaches `query.wikidata.org`, `commons.wikimedia.org` and `api.pexels.com` over 443; members' phones load
 the photos from `upload.wikimedia.org` (or Wikimedia's newer thumbnail host) and `images.pexels.com`, and satellite
@@ -286,6 +288,8 @@ address on Wikimedia, its size and its credit, from `catalog.place_landmarks` at
 (worker, every five minutes, two places a run) looks up the cities the app has shown a photo for and the site's
 cities: one WDQS question a city (3–33 s; WDQS stops it at 60 s) and one Commons question. A city is looked at again
 after 30–33 days; a look that failed, after six hours (what the city had stays). Only addresses and credits are stored.
+A place starts only while its slowest look (162 s) can end inside the run's 225 s (the job is stopped at 240): when
+WDQS is slow the second place waits for the next run, untouched (`later` in the run's counts in `platform.job_runs`).
 
 On: the flag row `catalog.landmarks` (seeded off by `scripts/seed-flags.ts`, with the skip list below). Off, the route
 answers no landmarks and the job asks nothing:

@@ -15,6 +15,7 @@ import { sourceHoldsRepo } from "../infrastructure/source-holds.repo";
 import {
   CARD_WIDTH,
   HERO_WIDTH,
+  REQUEST_TIMEOUT_MS,
   SourceError,
   acceptCommons,
   askCommons,
@@ -35,6 +36,13 @@ export const PLACE_PHOTOS_BATCH = 10;
 export const CITY_SEARCHES_PER_RUN = 2;
 /** Pexels questions in one run. 60 runs an hour stay under Pexels' 200 an hour. */
 export const PEXELS_PER_RUN = 3;
+/**
+ * A run's requests end within this long of its start: the job is stopped at 50 s (module.ts) and its writes need the
+ * rest. A request (eight seconds at most) starts only while it can end inside it; a city that needed one waits for the
+ * next run, its look not counted (`deferred`). Before, a run whose every answer was slow went to 56 s, the job's abort
+ * cut the Pexels question in flight, and the cities left were counted as failed.
+ */
+export const PLACE_PHOTOS_REQUESTS_MS = 40_000;
 
 /** `codes=LHR,cdg, LHR` → ["LHR", "CDG"]; null unless 1–20 IATA codes. */
 export function parseCodes(raw: string | undefined): string[] | null {
@@ -123,23 +131,37 @@ const failure = (err: unknown): { stage: Stage; message: string; status?: number
  * club to wait: the places that needed it are `deferred` until its Retry-After has passed, the look not counted
  * (ADR-IMPL-064). A place still waiting for Pexels when the run's share is spent is `deferred`: due again at once. A
  * key Pexels refuses (401) counts as none for the run, and a city's photo stays: a city that `holding` says has one
- * keeps it; one that has none gets its satellite view for a day.
+ * keeps it; one that has none gets its satellite view for a day. With a `deadline` (ms, on `now`'s clock), no request
+ * starts that could end after it: a city that needed one is `deferred`.
  */
 export async function decidePlaces(
   places: readonly Place[],
-  deps: { sources: SourceDeps; pexelsKey: string | undefined; logger: Log; holding?: ReadonlySet<string> },
+  deps: {
+    sources: SourceDeps;
+    pexelsKey: string | undefined;
+    logger: Log;
+    holding?: ReadonlySet<string>;
+    deadline?: number;
+    now?: () => number;
+  },
 ): Promise<Map<string, Outcome>> {
   const out = new Map<string, Outcome>();
+  const now = deps.now ?? Date.now;
+  const canAsk = () => deps.deadline === undefined || now() + REQUEST_TIMEOUT_MS <= deps.deadline;
   // Wikidata is asked about IATA codes only; an airport whose code is something else gets its satellite view.
   const askable = places.filter((p) => /^[A-Z]{3}$/.test(p.code));
   for (const p of places) {
     if (!askable.includes(p)) out.set(p.code, { kind: "satellite", centre: { lat: p.lat, lng: p.lng } });
   }
   if (askable.length === 0) return out;
+  if (!canAsk()) {
+    for (const p of askable) out.set(p.code, { kind: "deferred" });
+    return out;
+  }
 
   let facts: Map<string, CityFacts>;
   try {
-    const found = await findCities(deps.sources, askable, CITY_SEARCHES_PER_RUN);
+    const found = await findCities(deps.sources, askable, CITY_SEARCHES_PER_RUN, canAsk);
     facts = found.facts;
     for (const code of found.later) out.set(code, { kind: "deferred" });
     // A search that failed is its own city's: the others found keep their answer.
@@ -164,7 +186,9 @@ export async function decidePlaces(
   let cards = new Map<string, ImageInfo>();
   let commonsDown = false;
   let commonsWait: number | undefined;
-  if (files.length > 0) {
+  /** No time left in the run to ask Commons: the cities with files wait for the next run. */
+  const commonsLate = files.length > 0 && !canAsk();
+  if (files.length > 0 && !commonsLate) {
     try {
       [heroes, cards] = await Promise.all([
         askCommons(deps.sources, files, HERO_WIDTH, true),
@@ -195,6 +219,10 @@ export async function decidePlaces(
     const known = facts.get(place.code);
     if (!known) continue; // past the run's searches, or its search failed: decided above
     const centre = known.centre ?? { lat: place.lat, lng: place.lng };
+    if (known.files.length > 0 && commonsLate) {
+      out.set(place.code, { kind: "deferred" });
+      continue;
+    }
     if (known.files.length > 0 && commonsDown) {
       out.set(
         place.code,
@@ -221,7 +249,7 @@ export async function decidePlaces(
       out.set(place.code, { kind: "retry", stage: "pexels" });
       continue;
     }
-    if (pexelsAsked >= PEXELS_PER_RUN) {
+    if (pexelsAsked >= PEXELS_PER_RUN || !canAsk()) {
       out.set(place.code, { kind: "deferred" });
       continue;
     }
@@ -258,14 +286,18 @@ export function withoutOutcome(claimed: readonly { code: string }[], outcomes: R
   return [...new Set(claimed.map((c) => c.code.trim()))].filter((code) => !outcomes.has(code));
 }
 
-/** The resolve-place-photos job: claim what is due, decide it, write it. Every number lands in platform.job_runs. */
+/** The resolve-place-photos job: claim what is due, decide it — its requests ending within `PLACE_PHOTOS_REQUESTS_MS`
+ *  of the start (`now`: the clock, a test's own) — and write it. Every number lands in platform.job_runs. */
 export async function resolvePlacePhotos(deps: {
   db: Executor;
   sources: SourceDeps;
   pexelsKey: string | undefined;
   metrics: { inc(name: string, labels?: Record<string, string>, by?: number): void };
   logger: Log;
+  now?: () => number;
 }): Promise<Record<string, number>> {
+  const now = deps.now ?? Date.now;
+  const deadline = now() + PLACE_PHOTOS_REQUESTS_MS;
   const claimed = await placePhotosRepo.claimDue(deps.db, PLACE_PHOTOS_BATCH);
   if (claimed.length === 0) return { claimed: 0 };
   // Wikimedia asked the club to wait (a 429, this job's or the landmarks' — ADR-IMPL-064): nothing is asked before the
@@ -287,7 +319,7 @@ export async function resolvePlacePhotos(deps: {
     lng: Number(a.lng),
   }));
   const holding = new Set(claimed.filter((c) => c.status === "photo").map((c) => c.code.trim()));
-  const outcomes = await decidePlaces(places, { ...deps, holding });
+  const outcomes = await decidePlaces(places, { ...deps, holding, deadline, now });
 
   const counts = { claimed: claimed.length, photos: 0, satellites: 0, retries: 0, deferred: 0 };
   const retry: string[] = [];

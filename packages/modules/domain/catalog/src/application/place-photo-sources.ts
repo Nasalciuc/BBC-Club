@@ -39,8 +39,12 @@ export class SourceError extends Error {
   }
 }
 
-/** Eight seconds a request: Wikidata, Commons (two at once) and three Pexels questions end inside the job's 50 s. */
-const TIMEOUT_MS = 8_000;
+/**
+ * Eight seconds a request unless the caller says. A city photo run asks at most the airports' question, two searches by
+ * name, Commons (two at once) and three Pexels questions — 56 s if each took its eight, past the job's 50 s: the run
+ * starts a request only while it can end inside its budget (`PLACE_PHOTOS_REQUESTS_MS`, place-photos.ts).
+ */
+export const REQUEST_TIMEOUT_MS = 8_000;
 
 /** A 429 without a Retry-After the club can read waits five minutes; one asking for more than a day waits a day. */
 export const DEFAULT_RETRY_AFTER_S = 300;
@@ -68,7 +72,7 @@ async function getJson(
       method: init.method ?? "GET",
       headers: { "User-Agent": deps.userAgent, Accept: "application/json", ...init.headers },
       ...(init.body === undefined ? {} : { body: init.body }),
-      signal: AbortSignal.any([deps.signal, AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS)]),
+      signal: AbortSignal.any([deps.signal, AbortSignal.timeout(init.timeoutMs ?? REQUEST_TIMEOUT_MS)]),
     });
   } catch (err) {
     throw new SourceError(stage, err instanceof Error ? err.message : String(err));
@@ -395,13 +399,15 @@ export async function askCityByName(
  * the airport (one question each). A place whose name leaves nothing to search for has no city, without a question.
  * A search that fails is that place's failure alone: the place is in `failed` (`error` says why) and the places still
  * waiting for a search are in `later`, as are those past the searches — the run asks the search nothing more; none of
- * these is in `facts`. A place whose search found nothing has no city. Throws `SourceError` when the airports' question
+ * these is in `facts`. A place whose search found nothing has no city. A search starts only while `canAsk` says one can
+ * still end inside the run's budget; a place it cannot is in `later`. Throws `SourceError` when the airports' question
  * fails, and on a 429 from any question (it carries its Retry-After: the whole run waits for it).
  */
 export async function findCities(
   deps: SourceDeps,
   places: readonly { code: string; city: string; lat: number; lng: number }[],
   searches: number,
+  canAsk: () => boolean = () => true,
 ): Promise<{ facts: Map<string, CityFacts>; later: string[]; failed: string[]; error?: SourceError }> {
   const bindings = await askWikidata(
     deps,
@@ -418,7 +424,7 @@ export async function findCities(
       facts.set(place.code, byAirport);
     } else if (searchName(place.city) === "") {
       facts.set(place.code, NO_CITY);
-    } else if (error === undefined && searched < searches) {
+    } else if (error === undefined && searched < searches && canAsk()) {
       searched += 1;
       try {
         facts.set(place.code, await askCityByName(deps, place));
