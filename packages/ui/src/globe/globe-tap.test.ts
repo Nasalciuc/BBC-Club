@@ -10,6 +10,7 @@ import {
   ZOOM_RANGE,
   cameraDistance,
   horizonDeg,
+  limbRadius,
   mapPoint,
   mapTap,
   onGlobeDisc,
@@ -90,22 +91,26 @@ describe("the drawn globe's inverse: the place under a finger, or nothing off th
   });
 });
 
-describe("Mapbox's disc", () => {
-  it("a press is on the globe within its radius at the camera's zoom of its centre on screen", () => {
-    const centre = { x: 196.5, y: 300 };
-    const zoom = 1.04;
-    const r = radiusAtZoom(zoom);
-    expect(onGlobeDisc(centre, zoom, centre)).toBe(true);
-    expect(onGlobeDisc({ x: centre.x + r - 1, y: centre.y }, zoom, centre)).toBe(true);
-    expect(onGlobeDisc({ x: centre.x + r + 1, y: centre.y }, zoom, centre)).toBe(false);
-    expect(onGlobeDisc({ x: centre.x, y: centre.y - r - 30 }, zoom, centre)).toBe(false); // the sky over the globe
-    // Zoomed in, the same press is on it.
-    expect(onGlobeDisc({ x: centre.x + r + 1, y: centre.y }, zoom + 1, centre)).toBe(true);
-  });
-});
-
 /** A map view 852 pt tall (a 6.1-inch phone's screen; made up for the tests). */
 const VIEW_H = 852;
+
+describe("Mapbox's disc", () => {
+  it("a press is on the globe within the limb Mapbox's camera draws at the zoom, around its centre on screen", () => {
+    const centre = { x: 196.5, y: 300 };
+    const zoom = REST_ZOOM;
+    const limb = limbRadius(zoom, VIEW_H);
+    expect(onGlobeDisc(centre, zoom, centre, VIEW_H)).toBe(true);
+    expect(onGlobeDisc({ x: centre.x + limb - 1, y: centre.y }, zoom, centre, VIEW_H)).toBe(true);
+    expect(onGlobeDisc({ x: centre.x + limb + 1, y: centre.y }, zoom, centre, VIEW_H)).toBe(false);
+    expect(onGlobeDisc({ x: centre.x, y: centre.y - limb - 30 }, zoom, centre, VIEW_H)).toBe(false); // the sky over it
+    // The ring between radiusAtZoom and the limb is the globe's: Mapbox draws it there.
+    expect(onGlobeDisc({ x: centre.x + radiusAtZoom(zoom) + 20, y: centre.y }, zoom, centre, VIEW_H)).toBe(true);
+    // Zoomed in, the same press is on it.
+    expect(onGlobeDisc({ x: centre.x + limb + 1, y: centre.y }, zoom + 1, centre, VIEW_H)).toBe(true);
+    // Without the view's height there is no disc.
+    expect(onGlobeDisc(centre, zoom, centre, Number.NaN)).toBe(false);
+  });
+});
 
 describe("a press on Mapbox's map", () => {
   const centre = { x: 196.5, y: 266 };
@@ -125,7 +130,7 @@ describe("a press on Mapbox's map", () => {
     // A press beside the globe: Mapbox answers with the nearest place on its horizon, short of 90° from the camera's
     // centre, and Android reprojects it onto the limb, where the disc alone would take it.
     const horizon = { lng: 90, lat: 0, screen: { x: centre.x + r, y: centre.y } };
-    expect(onGlobeDisc(horizon.screen, cam.zoom, centre)).toBe(true);
+    expect(onGlobeDisc(horizon.screen, cam.zoom, centre, VIEW_H)).toBe(true);
     expect(mapTap(horizon, cam, centre, VIEW_H)).toBeNull();
     // Past the near side at this zoom — 2° inside the horizon — is the sky too; just inside it, the globe.
     const near = tapNearSideDeg(cam.zoom, VIEW_H);
@@ -135,7 +140,14 @@ describe("a press on Mapbox's map", () => {
   });
 
   it("the sky on iOS — the finger itself off the disc — is no tap, whatever place Mapbox gives", () => {
-    expect(mapTap({ lng: 30, lat: 10, screen: { x: centre.x + r + 30, y: centre.y } }, cam, centre, VIEW_H)).toBeNull();
+    const limb = limbRadius(cam.zoom, VIEW_H);
+    expect(
+      mapTap({ lng: 30, lat: 10, screen: { x: centre.x + limb + 30, y: centre.y } }, cam, centre, VIEW_H),
+    ).toBeNull();
+    // The same place under a finger on the globe's outer ring, past radiusAtZoom, is a tap.
+    expect(
+      mapTap({ lng: 30, lat: 10, screen: { x: centre.x + r + 20, y: centre.y } }, cam, centre, VIEW_H),
+    ).not.toBeNull();
   });
 
   it("a place that is no number is nothing; so is any place without the view's height", () => {
@@ -146,17 +158,17 @@ describe("a press on Mapbox's map", () => {
 
 /**
  * Mapbox's camera, drawn as mapbox-gl-js draws its globe (pitch 0, no bearing): the camera `d` above the globe's surface
- * at the view's centre, along the axis through the globe's centre; a place is drawn where its ray from the camera
- * crosses the screen (Android's `pixelForCoordinate`); a press resolves to the first place its ray meets — or, when the
- * ray passes beside the globe, to the place on the horizon in the press's direction (gl-js `globePointCoordinate`).
- * `nearer` is gl-js's camera (1.5 view heights × cos 45°, the globe at Mercator's 45° scale, the centre `1 / cos 45°`
- * screen points to the globe's point); `farther`, the camera at 1.5 view heights, the centre at one point to the point.
+ * at the view's centre, along the axis through the globe's centre, with the focal length `f` of its 0.6435-rad field of
+ * view (1.5 view heights); a place is drawn where its ray from the camera crosses the screen (Android's
+ * `pixelForCoordinate`); a press resolves to the first place its ray meets — or, when the ray passes beside the globe, to
+ * the place on the horizon in the press's direction (gl-js `globePointCoordinate`). `d` is f × `scale`: gl-js's camera
+ * (`nearer`) is cos 45° (the globe at Mercator's 45° scale), `farther` the camera at f itself; a smaller scale is a
+ * camera nearer than gl-js's.
  */
-function mapboxCamera(cam: GlobeCamera, centre: { x: number; y: number }, kind: "nearer" | "farther") {
+function mapboxCamera(cam: GlobeCamera, centre: { x: number; y: number }, scale: number, viewHeight: number = VIEW_H) {
   const R = radiusAtZoom(cam.zoom);
-  const k = kind === "nearer" ? Math.SQRT1_2 : 1;
-  const d = 1.5 * VIEW_H * k;
-  const focal = d / k; // screen points per unit across, one unit away
+  const focal = 1.5 * viewHeight; // screen points per unit across, one unit away
+  const d = focal * scale;
   const sphere = geoOrthographic().scale(1).translate([0, 0]).rotate([-cam.center[0], -cam.center[1]]);
   const horizon = Math.acos(R / (R + d));
   const place = (ux: number, uy: number) => {
@@ -166,7 +178,7 @@ function mapboxCamera(cam: GlobeCamera, centre: { x: number; y: number }, kind: 
   return {
     horizonDeg: horizon / RAD,
     /** The globe's limb on screen: its distance from the globe's centre. */
-    limb: (R * d) / Math.sqrt(d * d + 2 * d * R) / k,
+    limb: (R * focal) / Math.sqrt(d * d + 2 * d * R),
     project(p: { lng: number; lat: number }) {
       const u = sphere([p.lng, p.lat]);
       if (!u) return null;
@@ -188,6 +200,10 @@ function mapboxCamera(cam: GlobeCamera, centre: { x: number; y: number }, kind: 
     },
   };
 }
+const CAMERAS = [
+  ["nearer", Math.SQRT1_2],
+  ["farther", 1],
+] as const;
 
 describe("Mapbox's horizon comes nearer as the globe zooms in: the sky beside it is no tap at any zoom", () => {
   const centre = { x: 196.5, y: 300 };
@@ -220,11 +236,22 @@ describe("Mapbox's horizon comes nearer as the globe zooms in: the sky beside it
     expect(tapNearSideDeg(REST_ZOOM, 4000)).toBe(NEAR_SIDE_DEG); // a camera far enough to see past 82°
   });
 
+  it("the disc is the limb that camera draws: 203, 360 and 490 pt out — past radiusAtZoom at rest and 2×", () => {
+    expect(limbRadius(REST_ZOOM, VIEW_H)).toBeCloseTo(202.85, 1);
+    expect(limbRadius(REST_ZOOM + 1, VIEW_H)).toBeCloseTo(359.86, 1);
+    expect(limbRadius(ZOOM_RANGE.max, VIEW_H)).toBeCloseTo(490.06, 1);
+    for (const [, zoom] of ZOOMS) {
+      expect(limbRadius(zoom, VIEW_H)).toBeCloseTo(mapboxCamera(camAt(zoom), centre, Math.SQRT1_2).limb, 9);
+    }
+    expect(limbRadius(REST_ZOOM, VIEW_H)).toBeGreaterThan(radiusAtZoom(REST_ZOOM));
+    expect(limbRadius(REST_ZOOM + 1, VIEW_H)).toBeGreaterThan(radiusAtZoom(REST_ZOOM + 1));
+  });
+
   for (const [name, zoom] of ZOOMS) {
-    for (const kind of ["nearer", "farther"] as const) {
+    for (const [kind, scale] of CAMERAS) {
       it(`${name}, ${kind} camera: a press on the sky beside the limb is no tap, on iOS and on Android`, () => {
         const cam = camAt(zoom);
-        const mapbox = mapboxCamera(cam, centre, kind);
+        const mapbox = mapboxCamera(cam, centre, scale);
         for (const deg of AZIMUTHS) {
           for (const gap of [1, 4, 12, 40]) {
             const finger = around(mapbox.limb + gap, deg);
@@ -240,34 +267,70 @@ describe("Mapbox's horizon comes nearer as the globe zooms in: the sky beside it
           }
         }
       });
-    }
 
-    it(`${name}: a real press just inside the limb is a tap there, on iOS and on Android`, () => {
-      const cam = camAt(zoom);
-      // The farther camera: 4 pt inside its limb, which stands inside radiusAtZoom on screen.
-      const farther = mapboxCamera(cam, centre, "farther");
-      expect(farther.limb).toBeLessThan(radiusAtZoom(zoom));
+      // gl-js's camera loses the last 2° of the globe to the margin: under half a point. The farther camera, whose
+      // horizon stands past gl-js's, loses more of its rim — under 3 pt at 3×: 4 pt in is a tap for both.
+      const insets = kind === "nearer" ? [1, 4, 12] : [4, 12];
+      it(`${name}, ${kind} camera: a real press ${insets.join(", ")} pt inside the limb is a tap there, on iOS and on Android`, () => {
+        const cam = camAt(zoom);
+        const mapbox = mapboxCamera(cam, centre, scale);
+        for (const deg of AZIMUTHS) {
+          for (const inset of insets) {
+            const finger = around(mapbox.limb - inset, deg);
+            const place = mapbox.resolve(finger.x, finger.y);
+            const back = mapbox.project(place)!;
+            expect(back.x).toBeCloseTo(finger.x, 6); // the place under the finger
+            expect(back.y).toBeCloseTo(finger.y, 6);
+            // gl-js's camera at rest and 2×: the finger stands past radiusAtZoom, on the ring that disc took for the sky.
+            if (kind === "nearer" && zoom < ZOOM_RANGE.max && inset < 12) {
+              expect(Math.hypot(finger.x - centre.x, finger.y - centre.y)).toBeGreaterThan(radiusAtZoom(zoom));
+            }
+            for (const screen of [finger, back]) {
+              const at = mapTap({ ...place, screen }, cam, centre, VIEW_H);
+              expect({ deg, inset, at }).toEqual({ deg, inset, at: mapPoint(place, cam, centre) });
+              expect(at).not.toBeNull();
+            }
+          }
+        }
+      });
+    }
+  }
+
+  it("a camera nearer than gl-js's: its horizon may pass the near side, and the disc stops its sky", () => {
+    // gl-js eases the globe's scale from 45° to the centre's latitude from zoom 3 + log2(size / 1024), the size the
+    // view's longer side: on a 640-pt view that starts at 2.32, so at 3× (2.63) centred at 80°N its camera stands nearer
+    // than `cameraDistance` says (gl-js `getProjectionInterpolationT`, `Globe.pixelSpaceConversion`) and its horizon 2.8°
+    // nearer. Not modelled: the disc is the backstop, as it is for a native camera nearer than gl-js's (here 30 % nearer,
+    // at rest on the 852-pt view).
+    const smoothstep = (a: number, b: number, x: number) => {
+      const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    };
+    const H = 640;
+    const t = smoothstep(3 + Math.log2(H / 1024), 5 + Math.log2(H / 1024), ZOOM_RANGE.max);
+    expect(t).toBeGreaterThan(0);
+    const glScale = 1 / ((1 - t) / Math.SQRT1_2 + t / Math.cos(80 * RAD));
+    const cases = [
+      { cam: { center: [12, 80], zoom: ZOOM_RANGE.max } as GlobeCamera, scale: glScale, viewHeight: H },
+      { cam: camAt(REST_ZOOM), scale: Math.SQRT1_2 * 0.7, viewHeight: VIEW_H },
+    ];
+    for (const { cam, scale, viewHeight } of cases) {
+      const mapbox = mapboxCamera(cam, centre, scale, viewHeight);
+      expect(mapbox.limb).toBeGreaterThan(limbRadius(cam.zoom, viewHeight));
       for (const deg of AZIMUTHS) {
-        const finger = around(farther.limb - 4, deg);
-        const place = farther.resolve(finger.x, finger.y);
-        const back = farther.project(place)!;
-        expect(back.x).toBeCloseTo(finger.x, 6); // the place under the finger
-        expect(back.y).toBeCloseTo(finger.y, 6);
-        for (const screen of [finger, back]) {
-          const at = mapTap({ ...place, screen }, cam, centre, VIEW_H);
-          expect({ deg, at }).toEqual({ deg, at: mapPoint(place, cam, centre) });
-          expect(at).not.toBeNull();
+        for (const gap of [1, 4, 12, 40]) {
+          const finger = around(mapbox.limb + gap, deg);
+          const place = mapbox.resolve(finger.x, finger.y);
+          // The sky's place passes the near side: the place alone would take it for the globe.
+          expect(fromCentre(place, cam)).toBeLessThan(tapNearSideDeg(cam.zoom, viewHeight));
+          const ios = { ...place, screen: finger };
+          const android = { ...place, screen: mapbox.project(place)! };
+          expect({ deg, gap, ios: mapTap(ios, cam, centre, viewHeight) }).toEqual({ deg, gap, ios: null });
+          expect({ deg, gap, android: mapTap(android, cam, centre, viewHeight) }).toEqual({ deg, gap, android: null });
         }
       }
-      // gl-js's nearer camera: 1 pt inside its limb is still short of the near side.
-      const nearer = mapboxCamera(cam, centre, "nearer");
-      for (const deg of AZIMUTHS) {
-        const finger = around(nearer.limb - 1, deg);
-        const place = nearer.resolve(finger.x, finger.y);
-        expect(fromCentre(place, cam)).toBeLessThan(tapNearSideDeg(zoom, VIEW_H));
-      }
-    });
-  }
+    }
+  });
 });
 
 describe("whose a touch on the globe is (globe-tap.ts)", () => {
@@ -368,8 +431,9 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
 
     it("the sky, a chosen route and a touch a pin's press answered are nothing", () => {
       expect(mapboxPress({ lng: 90, lat: 0, screen: { x: centre.x + r, y: centre.y } }, seen(), never)).toBeNull();
+      const limb = limbRadius(cam.zoom, VIEW_H);
       expect(
-        mapboxPress({ lng: 30, lat: 10, screen: { x: centre.x + r + 30, y: centre.y } }, seen(), never),
+        mapboxPress({ lng: 30, lat: 10, screen: { x: centre.x + limb + 30, y: centre.y } }, seen(), never),
       ).toBeNull();
       expect(mapboxPress(ios(centre.x, centre.y), seen({ route: true }), never)).toBeNull();
       expect(mapboxPress(ios(paris.x, paris.y - 10), seen({ route: true }), never)).toBeNull();

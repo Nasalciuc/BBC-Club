@@ -36,18 +36,35 @@ export const NEAR_SIDE_DEG = 80;
  * camera stands half a view height over tan(fov/2) — 1.5 view heights — above the globe at the view's centre. Below
  * the globe's change to Mercator Mapbox draws the globe at Mercator's scale at 45°, and the camera stands cos 45° of
  * that, in the globe's points: 1.06 view heights. The change starts at zoom 3 on a 1,024-pt view, a little earlier on a
- * smaller one (2.4 on a 667-pt view, where at 3× — 2.63 — it has barely begun: the margin below covers it).
+ * smaller one (2.4 on a 667-pt view, where at 3× — 2.63 — it has barely begun: the margin below covers it; on a 640-pt
+ * view centred at 80°N it brings the horizon 2.8° nearer, and the disc below stops the sky — `mapTap`).
  * Read from mapbox-gl-js 2.15 (`Transform._calcMatrices`, `Globe.pixelSpaceConversion`, `GLOBE_SCALE_MATCH_LATITUDE`):
  * the native SDK (11.23.1) is downloaded at build time, not in the repository, and is assumed to draw its globe as
- * gl-js does. Without the 45° factor the camera would stand farther and see more (83° at rest, not 81°): the nearer
- * camera sees less, so the horizon below holds either way.
+ * gl-js does. Without the 45° factor the camera would stand farther and see more (83° at rest, not 81°) of a globe
+ * drawn smaller (its limb 149 pt out at rest, not 203): the nearer camera sees less, so the horizon below holds either
+ * way, and the farther one's limb stands inside the disc below.
  */
 const MAPBOX_FOV = 0.6435011087932844;
 const GLOBE_SCALE_MATCH = Math.cos(45 * RAD);
 
+/** Mapbox's focal length: half the view's height over tan(fov/2) — 1.5 view heights, in screen points. */
+const focalLength = (viewHeight: number): number => (0.5 * viewHeight) / Math.tan(MAPBOX_FOV / 2);
+
 /** How far Mapbox's camera stands above the globe's surface at the view's centre, in the globe's points. */
 export function cameraDistance(viewHeight: number): number {
-  return ((0.5 * viewHeight) / Math.tan(MAPBOX_FOV / 2)) * GLOBE_SCALE_MATCH;
+  return focalLength(viewHeight) * GLOBE_SCALE_MATCH;
+}
+
+/**
+ * Where that camera draws the globe's limb at a zoom: its distance on screen from the globe's centre, R·f / √(d² + 2dR)
+ * — R the globe's radius, f the focal length, d the camera's distance. Seen from cos 45° of the focal length, the globe
+ * is drawn 1 / cos 45° larger at the view's centre than `radiusAtZoom`: on an 852-pt view the limb stands about 203 pt
+ * out at rest (radiusAtZoom: 168), 360 at 2× (336) and 490 at 3× (504).
+ */
+export function limbRadius(zoom: number, viewHeight: number): number {
+  const r = radiusAtZoom(zoom);
+  const d = cameraDistance(viewHeight);
+  return (r * focalLength(viewHeight)) / Math.sqrt(d * d + 2 * d * r);
 }
 
 /**
@@ -160,11 +177,16 @@ export function mapPoint(
 }
 
 /**
- * Whether a point on the map view is on Mapbox's globe (ADR-IMPL-068): within the globe's radius at the camera's zoom
- * of its centre on screen.
+ * Whether a point on the map view is on Mapbox's globe (ADR-IMPL-068): within the limb its camera draws at the zoom
+ * (`limbRadius`, on a map view `viewHeight` points tall) of the globe's centre on screen.
  */
-export function onGlobeDisc(point: { x: number; y: number }, zoom: number, centre: { x: number; y: number }): boolean {
-  return Math.hypot(point.x - centre.x, point.y - centre.y) <= radiusAtZoom(zoom);
+export function onGlobeDisc(
+  point: { x: number; y: number },
+  zoom: number,
+  centre: { x: number; y: number },
+  viewHeight: number,
+): boolean {
+  return Math.hypot(point.x - centre.x, point.y - centre.y) <= limbRadius(zoom, viewHeight);
 }
 
 /**
@@ -178,7 +200,11 @@ export function onGlobeDisc(point: { x: number; y: number }, zoom: number, centr
  *   screen point that place reprojected (`pixelForCoordinate`), on the limb — not the finger. The disc alone would
  *   compare that point with itself, and a fixed limit (80°) let the horizon's place through once zooming in brought the
  *   horizon nearer than it; the place decides, at the zoom the press was made at, whatever the screen point says.
- * - The screen point off the disc (iOS reports the finger itself) is the sky's too.
+ * - The screen point off the disc (iOS reports the finger itself) is the sky's too. The disc is the limb the same camera
+ *   draws (`onGlobeDisc`), so the two tests cover each other: a camera at least as far as this one puts the sky's place
+ *   past the near side (its horizon is farther), and a nearer one draws a larger limb, its sky — the finger, or the
+ *   place reprojected — off this disc. Measured against `radiusAtZoom`, the disc took the globe's outer ring for the
+ *   sky (168 to 203 pt out at rest, 336 to 360 at 2×); the 2° margin costs the rim under half a point.
  */
 export function mapTap(
   press: { lng: number; lat: number; screen: { x: number; y: number } },
@@ -192,6 +218,6 @@ export function mapTap(
   if (!(geoDistance([press.lng, press.lat], camera.center) <= nearSide)) return null;
   const at = mapPoint(press, camera, centre);
   if (!at) return null;
-  if (!onGlobeDisc(press.screen, camera.zoom, centre)) return null;
+  if (!onGlobeDisc(press.screen, camera.zoom, centre, viewHeight)) return null;
   return at;
 }
