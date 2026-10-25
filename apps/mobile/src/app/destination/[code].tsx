@@ -22,7 +22,7 @@ import {
 import { DEFAULT_ORIGIN, profileOrigin } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { clubPhoto } from "@/features/places/club-photos";
-import { photoAddress } from "@/features/places/landmark-logic";
+import { destinationPhoto } from "@/features/places/landmark-logic";
 import { Landmarks } from "@/features/places/Landmarks";
 import { bandPicture } from "@/features/places/place-photo-logic";
 import { usePlaceLandmarks } from "@/features/places/usePlaceLandmarks";
@@ -126,15 +126,17 @@ export default function DestinationScreen() {
   // Opened on the member's own airport (a link, a list from before): no search and no quote for a trip to itself.
   const ownAirport = isHomeAirport(chosen.airport.code, state.from);
   const heroHeight = insets.top + PAGE.sheetTop + PAGE.corner;
-  // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo.
-  const bundled = clubPhoto(chosen.airport.code, "any");
-  const band = bandPicture(undefined, photoFor(chosen.airport.code), {
-    headers: PICTURE_HEADERS,
-    mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
-    size: { width, height: heroHeight },
-  });
-  const hero = bundled ?? band.source;
-  const credit = bundled ? null : band.credit;
+  // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo — and the
+  // address its landmarks leave out (`destinationPhoto`: one choice for both).
+  const hero = destinationPhoto(
+    clubPhoto(chosen.airport.code, "any"),
+    bandPicture(undefined, photoFor(chosen.airport.code), {
+      headers: PICTURE_HEADERS,
+      mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
+      size: { width, height: heroHeight },
+    }),
+  );
+  const credit = hero.credit;
   const creditLink = credit?.link ?? null;
 
   function retrySearch() {
@@ -146,13 +148,13 @@ export default function DestinationScreen() {
 
   return (
     <View style={styles.root} testID="destination.root">
-      <ScreenStatusBar on={statusBarOn({ hasImage: Boolean(hero), pastHero: false })} />
+      <ScreenStatusBar on={statusBarOn({ hasImage: Boolean(hero.source), pastHero: false })} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={{ height: heroHeight }}>
           <Photo
-            source={hero}
+            source={hero.source}
             fallback={null}
-            cachePolicy={bundled ? "memory-disk" : band.cache}
+            cachePolicy={hero.cache}
             position="top"
             style={StyleSheet.absoluteFill}
             testID="destination.photo"
@@ -230,7 +232,7 @@ export default function DestinationScreen() {
               failed={landmarks.failed}
               // The photograph over the page: where it is a landmark standing in for the city's (ADR-IMPL-064, amendment
               // 1), that landmark is left out of the list and the next one takes its place.
-              cityPhoto={photoAddress(hero)}
+              cityPhoto={hero.cityPhoto}
               onPhotoError={landmarks.onPhotoError}
               look="page"
               testIDPrefix="destination"

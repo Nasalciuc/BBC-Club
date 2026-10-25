@@ -40,7 +40,7 @@ const HEADERS = { "User-Agent": "BBCClub/test (https://api.example.test)" };
 mock.module("./usePlacePhotos", () => ({ PICTURE_HEADERS: HEADERS }));
 
 const { Landmarks } = await import("./Landmarks");
-const { photoAddress } = await import("./landmark-logic");
+const { destinationPhoto } = await import("./landmark-logic");
 const { bandPicture } = await import("./place-photo-logic");
 
 type Element = ReactElement<Record<string, unknown>>;
@@ -204,9 +204,9 @@ describe("Landmarks — what the destination draws", () => {
       mapboxToken: undefined,
       size: { width: 393, height: 190 },
     });
-    // What 04 hands over (`app/destination/[code].tsx`): the photograph over the page — the design's own when it has
-    // one (bundled, a number), else the server's — as `Photo` draws it.
-    const over04 = (bundled: number | null) => photoAddress(bundled ?? band.source);
+    // What 04 hands over (`app/destination/[code].tsx`, `destinationPhoto`): the address of the photograph over the
+    // page — the design's own when it has one (bundled, a number), else the server's — as `Photo` draws it.
+    const over04 = (bundled: number | null) => destinationPhoto(bundled, band).cityPhoto;
     const page04 = draw([tower, louvre, orsay], { look: "page", cityPhoto: over04(null) });
     expect(page04.tiles.map((t) => [t.props.testID, t.props.accessibilityLabel])).toEqual([
       ["destination.landmark.1", "Louvre, photo"],
@@ -222,6 +222,18 @@ describe("Landmarks — what the destination draws", () => {
     ]);
     // The design's own photograph of the city over 04: the stand-in is not drawn, so its landmark is.
     expect(draw([tower, louvre, orsay], { look: "page", cityPhoto: over04(7) }).tiles).toHaveLength(3);
+    // The satellite view over 04: no landmark's photograph, all three.
+    const satellite = bandPicture(undefined, { code: "CDG", kind: "satellite", lat: 48.85, lng: 2.35 } as const, {
+      headers: HEADERS,
+      mapboxToken: "pk.test",
+      size: { width: 393, height: 190 },
+    });
+    const sky = draw([tower, louvre, orsay], { look: "page", cityPhoto: destinationPhoto(null, satellite).cityPhoto });
+    expect(sky.tiles.map((t) => t.props.accessibilityLabel)).toEqual([
+      "Eiffel Tower, photo",
+      "Louvre, photo",
+      "Musée d'Orsay, photo",
+    ]);
     // 13 (`app/(tabs)/explore.tsx`) passes none: all three, the stand-in's first.
     const route13 = draw([tower, louvre, orsay], { look: "route", cityPhoto: null });
     expect(route13.tiles.map((t) => [t.props.testID, t.props.accessibilityLabel])).toEqual([

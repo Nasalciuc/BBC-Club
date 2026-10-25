@@ -3,6 +3,7 @@ import type { LandmarkVM } from "@bbc/shared/api/v1/places";
 
 import {
   LANDMARK_SHAPE,
+  destinationPhoto,
   landmarkCredit,
   landmarkPhotoWidth,
   landmarkTiles,
@@ -240,6 +241,40 @@ describe("the city's photograph is a landmark standing in for it (ADR-IMPL-064, 
     }
     // The 500-px card is not what the band draws, and no landmark is shown at it.
     expect(landmarksToShow([tower], { cityPhoto: standIn.card })).toEqual([tower]);
+  });
+
+  it("04's photograph and the address its landmarks leave out are one choice (`destinationPhoto`)", () => {
+    const satellite = { code: "CDG", kind: "satellite", lat: 48.85, lng: 2.35 } as const;
+    // The design's own photograph over the page (bundled): drawn, no credit, kept on disk, and no landmark left out —
+    // even where the server's answer is a stand-in, which the page does not draw.
+    expect(destinationPhoto(7, band(standIn))).toEqual({
+      source: 7,
+      credit: null,
+      cache: "memory-disk",
+      cityPhoto: null,
+    });
+    // The server's stand-in: drawn as it came, with its credit, and its landmark left out of the list.
+    const page = destinationPhoto(null, band(standIn));
+    expect(page).toEqual({ ...band(standIn), cityPhoto: tower.imageUrl });
+    expect(page.source).toEqual({ uri: tower.imageUrl, headers: HEADERS });
+    expect(page.credit?.link).toBe(standIn.credit.link);
+    expect(landmarksToShow([tower, louvre, orsay], { cityPhoto: page.cityPhoto }).map((l) => l.name)).toEqual([
+      "Louvre",
+      "Musée d'Orsay",
+    ]);
+    // The satellite view: Mapbox's picture, kept in memory only — its address is no landmark's.
+    const sky = destinationPhoto(null, band(satellite));
+    expect(sky).toEqual({ ...band(satellite), cityPhoto: (band(satellite).source as { uri: string }).uri });
+    expect(sky.cityPhoto).toStartWith("https://api.mapbox.com/");
+    expect(sky.cache).toBe("memory");
+    expect(landmarksToShow([tower, louvre, orsay], { cityPhoto: sky.cityPhoto })).toHaveLength(3);
+    // Nothing to draw: nothing left out.
+    expect(destinationPhoto(null, band(undefined))).toEqual({
+      source: null,
+      credit: null,
+      cache: "disk",
+      cityPhoto: null,
+    });
   });
 });
 

@@ -10,7 +10,7 @@ import {
   type LandmarkVM,
 } from "@bbc/shared/api/v1/places";
 
-import { creditFor, remote, type Credit, type PictureSource } from "./place-photo-logic";
+import { creditFor, remote, type Credit, type Picture, type PictureSource } from "./place-photo-logic";
 
 /**
  * The answer's landmarks, read leniently: a landmark this app cannot read (a field added later, an address that is not
@@ -60,6 +60,27 @@ export function landmarkCredit(credit: LandmarkCreditVM): Credit | null {
  */
 export function photoAddress(source: PictureSource | null | undefined): string | null {
   return source !== null && typeof source === "object" ? source.uri : null;
+}
+
+/** The photograph over the destination's page (04), the credit it owes, how it is kept, and what its landmarks skip. */
+export type DestinationPhoto = {
+  source: PictureSource | null;
+  credit: Credit | null;
+  /** The design's bundled photograph is kept in memory and on disk; the server's as its photo band says. */
+  cache: "memory-disk" | Picture["cache"];
+  /** `photoAddress(source)`: what the page hands its landmarks as the city's photograph (`cityPhoto`). */
+  cityPhoto: string | null;
+};
+
+/**
+ * 04's photograph: the design's own of the city where it has one (`clubPhoto`, ADR-IMPL-056) — bundled, no credit, no
+ * address, so no landmark is left out — else the server's (`bandPicture`), whose address is a stand-in landmark's own
+ * (ADR-IMPL-064, amendment 1). One choice for the photograph drawn and the one its landmarks leave out, so the page
+ * never shows a photograph twice nor hides a landmark whose photograph is not over it.
+ */
+export function destinationPhoto(bundled: number | null, band: Picture): DestinationPhoto {
+  if (bundled !== null) return { source: bundled, credit: null, cache: "memory-disk", cityPhoto: null };
+  return { ...band, cityPhoto: photoAddress(band.source) };
 }
 
 /** What else a screen shows beside its landmarks. */

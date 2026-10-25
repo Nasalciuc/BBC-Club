@@ -143,10 +143,11 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     credit as the city photo's reads (`Photo: <author> · <licence> · Wikimedia Commons`), linked to `pageUrl`, else
     to `licenceUrl` (a server before `pageUrl`), else only read. A landmark without a name, without a credit it can
     print (no one to credit, no licence) or showing a photograph already shown is left out; nothing made up takes its
-    place. A photograph already shown includes the city's own over the page: on 04, a landmark whose `imageUrl` is the address
-    the page draws as the city's photograph (`photoAddress`: the place photo's `hero`, exactly as the server sent it,
-    the photo band drawing it unchanged — not the design's own bundled photograph, not the satellite view) is left out,
-    so a landmark standing in for the city's photo (amendment 1, below) is not shown twice; it is left out before the
+    place. A photograph already shown includes the city's own over the page: on 04, a landmark whose `imageUrl` is
+    the address the page draws as the city's photograph (`photoAddress`: the place photo's `hero`, exactly as the
+    server sent it, the photo band drawing it unchanged — not the design's own bundled photograph, not the satellite
+    view; chosen with the photograph itself, `destinationPhoto`, so the two cannot differ) is left out, so a landmark
+    standing in for the city's photo (amendment 1, below) is not shown twice; it is left out before the
     three are counted, so a further landmark the server sent would take its place — today the server keeps three and
     the contract reads three, so a stand-in's city shows at most two. 13 draws the globe, not the city's photograph,
     and keeps the stand-in's landmark (`cityPhoto` null: each screen says what it draws). Every landmark shown still
@@ -168,7 +169,8 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     the app's next cold start.
   - Tests (`apps/mobile`): `landmark-logic.test.ts` (reading the answer, the credit, which to show, the shape, the
     floor over the tiles; the city photograph's address and the stand-in's landmark left out before the three are
-    counted), `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
+    counted; 04's photograph and that address as one choice — the design's, a stand-in, the satellite view, none),
+    `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
     `landmarks-section.test.ts` (the floor through the element tree the section builds, on both looks, with and
     without a stand-in; 04 leaves the stand-in's landmark out, 13 keeps it),
     `destination-geometry.test.ts` (04's and 13's flight options, the measures the section reads),
