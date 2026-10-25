@@ -64,6 +64,22 @@ describe("readLandmarks — what an app reads of the answer", () => {
     ]);
   });
 
+  it("drops a landmark whose credit would open anything but an https page (the credit's link), never the list", () => {
+    const linked = (over: { pageUrl?: string; licenceUrl?: string }) => ({
+      ...tower,
+      credit: { ...tower.credit, ...over },
+    });
+    const landmarks = [
+      linked({ pageUrl: "http://commons.wikimedia.org/wiki/File:Tower.jpg" }),
+      linked({ pageUrl: "javascript:alert(1)" }),
+      linked({ pageUrl: "intent://commons.wikimedia.org#Intent;end" }),
+      linked({ licenceUrl: "http://creativecommons.org/licenses/by-sa/4.0" }),
+      louvre,
+      orsay,
+    ];
+    expect(readLandmarks({ code: "CDG", landmarks }, "CDG")).toEqual([louvre, orsay]);
+  });
+
   it("a body that is not the contract's shape, or another city's, shows nothing", () => {
     expect(readLandmarks(null, "CDG")).toBeNull();
     expect(readLandmarks("<html>", "CDG")).toBeNull();

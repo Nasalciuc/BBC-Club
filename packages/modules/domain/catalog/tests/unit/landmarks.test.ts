@@ -344,6 +344,26 @@ describe("what the app receives", () => {
     expect(PlaceLandmarksVM.safeParse({ code: "cdg", landmarks: [] }).success).toBe(false);
   });
 
+  it("a credit whose page or licence is not an https address takes its landmark out, never the list", () => {
+    // The app opens the credit's link (Linking.openURL): only an https address may reach it.
+    const good = toPlaceLandmarksVM("CDG", rows, new Set()).landmarks[0]!;
+    const linked = (over: { pageUrl?: string; licenceUrl?: string }) => ({
+      ...good,
+      credit: { ...good.credit, ...over },
+    });
+    const parsed = PlaceLandmarksVM.parse({
+      code: "CDG",
+      landmarks: [
+        linked({ pageUrl: "http://commons.wikimedia.org/wiki/File:S1.jpg" }),
+        linked({ pageUrl: "javascript:alert(1)" }),
+        linked({ pageUrl: "commons.wikimedia.org/wiki/File:S1.jpg" }),
+        linked({ licenceUrl: "http://creativecommons.org/licenses/by-sa/4.0" }),
+        good,
+      ],
+    });
+    expect(parsed.landmarks).toEqual([good]);
+  });
+
   it("the flag: off unless on; skip holds Wikidata items only", () => {
     expect(readLandmarksFlag(null)).toEqual({ enabled: false, skip: new Set() });
     expect(readLandmarksFlag({ enabled: true, skip: ["Q177174", "x", 3, "Q0"] })).toEqual({
