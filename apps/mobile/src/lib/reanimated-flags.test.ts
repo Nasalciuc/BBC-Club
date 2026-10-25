@@ -67,7 +67,9 @@ describe("Reanimated's static flags (ADR-IMPL-069; design/motion.md, resting sty
       { cwd: APP, encoding: "utf8" },
     );
     expect(run.status).toBe(0);
-    const patterns = AppleResolve.parse(JSON.parse(run.stdout)).configuration?.buildFromSource ?? [];
+    const resolved = AppleResolve.safeParse(JSON.parse(run.stdout));
+    expect(resolved.success).toBe(true);
+    const patterns = resolved.data?.configuration?.buildFromSource ?? [];
     // Each entry is a whole-name pattern against the pod or its npm package, as precompiled_modules.rb builds it.
     const fromSource = REANIMATED_IOS.filter((name) => patterns.some((p) => new RegExp(`^${p}$`).test(name)));
     expect(fromSource).not.toEqual([]);
