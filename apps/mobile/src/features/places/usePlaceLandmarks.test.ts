@@ -84,6 +84,9 @@ function landmark(name: string, file: string): LandmarkVM {
 }
 const tower = landmark("Eiffel Tower", "Tower.jpg");
 const louvre = landmark("Louvre", "Louvre.jpg");
+const orsay = landmark("Musée d'Orsay", "Orsay.jpg");
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 const found = (landmarks: LandmarkVM[], etag: string | null = '"a"'): Answer => ({
   ok: true,
   data: { notModified: false, landmarks, etag },
@@ -141,5 +144,71 @@ describe("usePlaceLandmarks — when a screen asks about its city", () => {
     await settle();
     expect(questions("AMS")).toHaveLength(1);
     expect(render("ams", false).landmarks).toEqual([tower]);
+  });
+});
+
+describe("usePlaceLandmarks — a screen left in view", () => {
+  it("drops a skipped landmark within a minute of the 12 hours after its last answer, not before", async () => {
+    answer = () => found([tower, louvre, orsay], '"v1"');
+    render("nrt", false);
+    await settle();
+    expect(render("nrt", false).landmarks).toEqual([tower, louvre, orsay]);
+
+    // An operator skips the Louvre; the screen stays in view (Explore is the home tab).
+    answer = () => found([tower, orsay], '"v2"');
+    jest.advanceTimersByTime(12 * HOUR - MINUTE);
+    await settle();
+    expect(questions("NRT")).toHaveLength(1);
+    expect(render("nrt", false).landmarks).toEqual([tower, louvre, orsay]);
+
+    jest.advanceTimersByTime(MINUTE);
+    await settle();
+    expect(questions("NRT")).toEqual([
+      { code: "NRT", etag: null },
+      { code: "NRT", etag: '"v1"' },
+    ]);
+    expect(render("nrt", false).landmarks).toEqual([tower, orsay]);
+  });
+
+  it("a city with none yet: its landmarks show within five minutes of the job finding them", async () => {
+    answer = () => found([], null);
+    render("bcn", false);
+    await settle();
+    answer = () => found([tower], '"a"');
+    jest.advanceTimersByTime(5 * MINUTE);
+    await settle();
+    expect(questions("BCN")).toHaveLength(2);
+    expect(render("bcn", false).landmarks).toEqual([tower]);
+  });
+
+  it("a question that failed is asked again at the next minute's look", async () => {
+    answer = () => ({ ok: false, status: 503, message: "Unavailable." });
+    render("fco", false);
+    await settle();
+    answer = () => found([tower]);
+    jest.advanceTimersByTime(MINUTE);
+    await settle();
+    expect(questions("FCO")).toHaveLength(2);
+    expect(render("fco", false).landmarks).toEqual([tower]);
+  });
+
+  it("out of view or offline, the looks stop; back in view and online, an aged city is asked at once", async () => {
+    answer = () => found([], null);
+    render("jfk", false);
+    await settle();
+    focused = false;
+    render("jfk", false);
+    jest.advanceTimersByTime(HOUR);
+    focused = true;
+    render("jfk", true);
+    jest.advanceTimersByTime(HOUR);
+    await settle();
+    expect(questions("JFK")).toHaveLength(1);
+
+    render("jfk", false);
+    expect(questions("JFK")).toHaveLength(2);
+    unmount();
+    jest.advanceTimersByTime(HOUR);
+    expect(questions("JFK")).toHaveLength(2);
   });
 });

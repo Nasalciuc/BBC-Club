@@ -145,27 +145,30 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     comes back into view or the phone back online. A screen reader hears `<name>, photo`, then the credit. testIDs
     `destination.landmark.<rank>` and `.credit` (`explore.` on 13).
   - **Asking.** One store for every screen, for the session: a city is asked when a screen showing it comes into view
-    or the phone back online, and what the app knows has aged — landmarks after 12 hours (the place photos' own
-    window), none yet after five minutes (the job reaches a new city within a few), a code that is no airport or an
-    answer the app cannot read after an hour — with the ETag it holds (`If-None-Match`; a 304 keeps what it has).
-    Offline, nothing is asked. A failed question (a timeout, an error, a 429, the network gone) changes nothing; the
-    next view, or the phone back online, asks again. A landmark the app cannot read is dropped by the contract, never
-    the list; a body of another shape or for another code is unreadable: nothing shown.
+    or the phone back online, and at each minute's look while it stays in view (as the place photos are), once what
+    the app knows has aged — landmarks after 12 hours (the place photos' own window), none yet after five minutes (the
+    job reaches a new city within a few), a code that is no airport or an answer the app cannot read after an hour —
+    with the ETag it holds (`If-None-Match`; a 304 keeps what it has). A look before then asks nothing; offline,
+    nothing is asked. A failed question (a timeout, an error, a 429, the network gone) changes nothing; the next look
+    asks again. A landmark the app cannot read is dropped by the contract, never the list; a body of another shape or
+    for another code is unreadable: nothing shown.
   - **Skips.** An operator's `skip` reaches the route within about 35 s (the flag's cache); an app that already
-    showed the city drops the landmark at its next question for it — within 12 hours of its last answer, or at its
-    next cold start.
+    showed the city drops the landmark at its next question for it — never sooner than 12 hours after its last answer
+    for the city: within a minute of them while a screen showing the city is on screen, else when one next is, or at
+    the app's next cold start.
   - Tests (`apps/mobile`): `landmark-logic.test.ts` (reading the answer, the credit, which to show, the shape, the
     floor over the tiles), `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
     `landmarks-section.test.ts` (the floor through the element tree the section builds, on both looks),
     `destination-geometry.test.ts` (04's and 13's flight options, the measures the section reads),
-    `usePlaceLandmarks.test.ts` (when a screen asks: in view and online, again back online),
+    `usePlaceLandmarks.test.ts` (when a screen asks: in view and online, again back online, each minute while in
+    view — a skip within a minute of the 12 hours, none yet within five minutes, a failure at the next look),
     `api-landmarks.test.ts` (the question through `api.ts`: If-None-Match, 304, a body it cannot read, 404, 429).
 
 **Consequences.** A destination shows up to three landmarks a few minutes after its city is first shown (two places
 every five minutes, about 576 a day). Under a WDQS outage rule (one request a minute) the first 429 holds both jobs for
 its Retry-After instead of retrying every minute. A skipped landmark leaves the answer at once (an app already showing
-it, at its next question: within 12 hours); its replacement comes with the city's next look (the RUNBOOK says how to
-make that now). Tests: `tests/unit/place-photos.test.ts` (any rank,
+it, at its next question: 12 hours after its last answer for the city, within a minute of them while the city is on
+screen); its replacement comes with the city's next look (the RUNBOOK says how to make that now). Tests: `tests/unit/place-photos.test.ts` (any rank,
 by name, Retry-After, the 429 outcomes), `tests/unit/landmarks.test.ts` (the question, reading the answer, D7's filters
 on WDQS's and Commons' saved answers for Paris and Chișinău — the Eiffel Tower and the water tower rescued by their
 aerial views — the city's own item, duplicates, the contract), `tests/contract/place-photos.test.ts` (a 429 defers and
@@ -182,8 +185,9 @@ licences and restrictions as Commons gave them; authors are made up and files wh
   shows a shape outside 1.2–2.4 at the band's nearest edge, cropped, so relaxing the job's band to admit portraits
   needs no app change; whether to relax it (a portrait cropped to 1.2 wide loses most of a tower) stays open.
 - **Skips in an open app.** The app revalidates a city it found landmarks for after 12 hours, as the brief asks (no
-  more often than the place photos). If skips must leave open apps sooner, a found city can be revalidated on each
-  view after a shorter window — a 304 costs little — as a deliberate exception.
+  more often than the place photos; a screen left open, within a minute of them). If skips must leave open apps
+  sooner, a found city can be revalidated on each view after a shorter window — a 304 costs little — as a deliberate
+  exception.
 - **The undrawn section.** The images draw no landmarks; the section is the club's own arrangement of drawn parts
   (`design/components.md`, `Landmarks`) until a designer draws it.
 - **More overrides.** The skip list holds one item; the operator adds others as cities are looked at (Hallgrímskirkja

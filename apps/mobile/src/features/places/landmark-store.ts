@@ -1,11 +1,11 @@
 /**
  * The landmarks of the destinations the app has shown, for this session (ADR-IMPL-064), one question a city: GET
  * /v1/places/:code/landmarks with the ETag of what the app holds, so an unchanged answer is a 304. A city is asked
- * about again — when a screen showing it comes into view — only once what the app knows has aged: landmarks after
- * twelve hours (the place photos' own), none yet after five minutes (the server's job looks at a new city within a few),
- * a code the server does not know or an answer this app cannot read after an hour. A failed question (a timeout, the
- * server's error, a 429, the network gone) changes nothing: the screen shows what it showed, and the next view — or the
- * phone back online — asks again.
+ * about again — when a screen showing it comes into view or the phone back online, and at each minute's look while it
+ * stays in view (`LANDMARKS_LOOK_MS`) — only once what the app knows has aged: landmarks after twelve hours (the place
+ * photos' own), none yet after five minutes (the server's job looks at a new city within a few), a code the server does
+ * not know or an answer this app cannot read after an hour. A failed question (a timeout, the server's error, a 429,
+ * the network gone) changes nothing: the screen shows what it showed, and the next look asks again.
  * The snapshot is immutable and replaced only when a city's landmarks change. Pure: the question is passed in.
  */
 import type { LandmarkVM } from "@bbc/shared/api/v1/places";
@@ -22,6 +22,10 @@ export type LandmarkSnapshot = ReadonlyMap<string, readonly LandmarkVM[]>;
 
 /** How long what the app knows about a city stays fresh. */
 export const LANDMARKS_FRESH_MS = { found: 12 * 3_600_000, none: 5 * 60_000, unknown: 3_600_000 } as const;
+
+/** While a screen shows a city, the app looks again this often, as for the place photos: a question goes out only once
+ *  what it knows has aged, so a screen left open (Explore is the home tab) picks up a change within a minute of it. */
+export const LANDMARKS_LOOK_MS = 60_000;
 
 type Kind = keyof typeof LANDMARKS_FRESH_MS;
 type Known = { etag: string | null; at: number; kind: Kind };
