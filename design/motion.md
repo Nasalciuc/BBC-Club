@@ -23,3 +23,23 @@ Principle: motion explains a change of state; it never decorates. Nothing bounce
 | Reduced motion                   | all movement replaced by opacity-only transitions of the same duration                                                                                                                                                                                                                                                                                                                                  |
 
 Implementation: Reanimated 4 (New Architecture). Welcome entrance timing lives in `src/components/animated-entrance.tsx`.
+
+**Resting styles** (ADR-IMPL-069). A view whose animation has stopped is drawn from the last props Reanimated wrote,
+which React does not hold: React's props for an animated style are its first frame, and Reanimated puts its own back on
+every React commit. Reanimated keeps them for the view's life because its settled-props sync is off
+(`FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS: false` under `reanimated.staticFeatureFlags` in `apps/mobile/package.json`,
+pinned by `src/lib/reanimated-flags.test.ts`; a change needs a new native build). The flag holds only where Reanimated
+is built from source. SDK 57's Podfile turns Expo's precompiled modules on by default, and Expo's precompiled iOS
+Reanimated is built with the sync on and ignores the app's file; so the same file keeps Reanimated from source on iOS
+(`expo.autolinking.ios.buildFromSource`, pinned by the same test), and that entry goes only with the flag, when
+ADR-IMPL-069 lets the sync be turned back on. Read from 4.5.1's sources, not reproduced on a device: the sync erased the
+props of a view settled more than 2 s whether or not React had received them, after a 500 ms JS poll that could miss the
+window (a JS thread busy for a second) or stop and restart (its view count drifts on GestureDetector's nested animated
+views). The next React commit would then draw the first frame: Explore's sheet transparent and a window height down
+while gorhom holds it at rest, as parity saw at steps 13 and 31. With the sync off, parity cannot confirm that reading:
+a run that loses the sheet again is a failed fix, and its HomeSheet trace (`sync=off`) says how — `lost`, the props lost
+some other way; `closed`, gorhom closed the sheet; `drawn`, a loss below the committed tree. Only a traced build with
+the sync on could confirm it (ADR-IMPL-069, what a run can show); none is planned. Reduced motion lands every snap in
+its first frame; whether it makes the loss more frequent is not known. Turn the sync back on only with a Reanimated that
+evicts a view's props once React has them (4.5.3 does; Expo SDK 57 pins 4.5.1) and green parity runs under reduced
+motion, on a build with the sync on, whose traces say `drawn` and `sync=on`.
