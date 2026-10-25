@@ -63,7 +63,8 @@ export function drawnGlobeTap(
  * `placed` is where `mapPoint` puts the pins (which labels fit, on which side); Mapbox shows each MarkerView where its
  * perspective camera draws the place (`cameraPoint`: 60° from the view's centre at rest, 188 pt out, not 146). The pins'
  * targets, the place under the finger and the city it snaps to are measured there, as the member sees them: on the
- * globe's outer ring, which the disc now takes, a press beside a pin is the pin's, not a city 40 pt nearer the centre.
+ * globe's outer ring, which the disc takes, a press beside a pin is the pin's — measured at `mapPoint`'s place, about
+ * 40 pt nearer the centre, it snapped to the calm answer or another city.
  */
 export function mapboxPress(
   press: { lng: number; lat: number; screen: { x: number; y: number } },

@@ -104,7 +104,8 @@ may change any of them**.
    (the engine builds both gestures once; the detector swaps them only when a list comes or goes). The composition is
    pinned by `globe-engine.test.ts` against the library's own gesture builders (the Race, the 8-pt `maxDist` equal to
    the pan's `minDist`, no Tap without a list); that a drag then fires no tap is the library's doing, checked on a
-   phone. Mapbox (`mapboxPress`, then `mapTap`): a press on a pin's 44-pt target is the pin's. @rnmapbox/maps 10.3.7
+   phone. Mapbox (`mapboxPress`, then `mapTap`): a press on a pin's 44-pt target, where Mapbox shows the pin (below),
+   is the pin's. @rnmapbox/maps 10.3.7
    keeps a press on a MarkerView from the map (iOS's map ignores a touch whose view is in one, Android's absorbs a press
    inside one), but a MarkerView is the pin's own frame, without the hit slop that grows it to 44 pt: a press in that
    ring reaches the map, and on iOS the map alone — so the map's press chooses the pin, through the guard (Android may
@@ -117,7 +118,7 @@ may change any of them**.
    globe is drawn at Mercator's 45° scale (below zoom 3; the pinch stops at 2.63) — read from mapbox-gl-js 2.15, since
    the native SDK (11.23.1) is downloaded at build time and not in the repository, and taken to draw its globe as gl-js
    does. Zooming in brings the horizon nearer — on an 852-pt map view 81° from the view's centre at rest, 74° at 2×, 69°
-   at 3× — so past about 1.1× (1.7× with a camera at 1.5 view heights) a fixed 80° no longer told the horizon's place
+   at 3× — so past about 1.1× (1.6× with a camera at 1.5 view heights) a fixed 80° no longer told the horizon's place
    from the globe's, and where the screen point was on the disc below too, a press on the sky beside the zoomed-in globe
    opened a city near the limb or gave the calm answer. The nearer camera sees less, so its horizon holds for the
    farther one too; the 2° cover Explore's camera being a frame behind Mapbox's, and cost under half a point of the
@@ -129,16 +130,28 @@ may change any of them**.
    2× for the sky. The two tests cover each other: a camera at least as far as this one puts the sky's place past the
    near side; a nearer one draws a larger limb, and its sky stands off this disc — so gl-js's own camera on a 640-pt
    view at 3× centred at 80°N, where its scale eases toward the centre's latitude and brings the horizon 2.8° nearer,
-   is stopped by the disc (that camera's outer ring, off the screen at that zoom, is lost with its sky). Tested at
-   rest, 2× and 3× with gl-js's camera and one at 1.5 view heights: presses 1 to 40 pt beside the limb on eight
-   bearings are no tap on iOS (the finger) or Android (the place reprojected); presses 4 and 12 pt inside either
-   camera's limb, and 1 pt inside gl-js's, are a tap where the place is — at rest and 2× with gl-js's camera they stand
-   past `radiusAtZoom`; with a nearer camera (that 640-pt case, and one 30 % nearer at rest) the sky's place passes the
-   near side and the disc stops it. A press within 400 ms of a pin's press is that pin's. Then the place Mapbox gives
-   is the tap. Each globe's choice is one pure function (`globe-tap.ts`:
-   `drawnGlobeTap`, `mapboxPress`; Explore's `exploreTap`), tested for the pin first, the sky, the route view, the
-   guard and the rest stop. Pins, labels, the route view and reduced motion are unchanged. The globe gains no
-   accessible element: Search stays the screen reader's way to a city.
+   is stopped by the disc (that camera's outer ring, off the screen at that zoom, is lost with its sky); so is it on a
+   667-pt view at 3× centred at 85°N, about as far as the centre goes (4.2° nearer; up to about 80°N there, 1.9° at
+   most, the margin covers it). The pins are measured where that camera shows them too: `placed` is where `mapPoint`
+   puts each pin (it lays out the labels), but Mapbox draws a pin's MarkerView through its camera, about 43 pt farther
+   out 60° from the centre at rest (188 pt out, not 146) and 12 pt at 10°. So `mapboxPress` moves each pin with its
+   label — one MarkerView — to where the camera draws its place (`cameraPoint`: the same bearing,
+   f·R·sin α / (d + R − R·cos α) out, α the place's angle from the view's centre) before `pinAt`, and gives the place
+   under the finger and the city it snaps to in the same projection, so the distance line's 22 pt is measured as they
+   are drawn. Without it, a press beside a pin on the outer ring, which the disc now takes, reached the snap: the calm
+   answer or a neighbouring city where it had done nothing. Tested at rest, 2× and 3× with gl-js's camera and one at
+   1.5 view heights: presses 1, 4, 12 and 40 pt beside the limb on eight bearings are no tap on iOS (the finger) or
+   Android (the place reprojected); presses 4 and 12 pt inside either camera's limb, and 1 pt inside gl-js's, are a tap
+   where the place is — at rest and 2× with gl-js's camera all three stand past `radiusAtZoom`; with a nearer camera
+   (that 640-pt case, the 667-pt one at 85°N, and one 30 % nearer at rest) the sky's place passes the near side and the
+   disc stops it, and on the 667-pt view at 80°N the sky's place stays past the near side. Under gl-js's camera, a press
+   6 pt beside a pin's MarkerView (Paris, 49° out at rest; a pin 60° out at rest and at 2×, on three sides and over its
+   label) is the pin's, where `mapPoint` puts the pin is the globe's, and `cameraPoint` is where that camera draws a
+   place at each zoom. A press within 400 ms of a pin's press is that pin's. Then the place Mapbox gives is the tap.
+   Each globe's choice is one pure function (`globe-tap.ts`: `drawnGlobeTap`, `mapboxPress`; Explore's `exploreTap`),
+   tested for the pin first, the sky, the route view, the guard and the rest stop. Where the pins and their labels are
+   laid out (`mapPoint`, `placeLabels`), the drawn globe's pins, the route view and reduced motion are unchanged. The
+   globe gains no accessible element: Search stays the screen reader's way to a city.
 8. **The black globe's floor, over the air.** Mapbox's `background` layer (`existing`) is recoloured to the drawn
    globe's deep ocean (`globe-ocean-deep`): a missing tile shows the sea, never near-black. The satellite tile probe
    (F107) is asked again when the app comes back to the foreground or the phone comes back online, while Mapbox is the
@@ -198,13 +211,15 @@ new design component for the answer: no image draws one; the existing notice hol
 - **To check on a phone** (not runnable here): Mapbox's `onPress` over the sky, beside the globe at rest, at 2× and at
   3×, on Android above all (its place is the horizon's: `mapTap` takes no place within 2° of the horizon at the
   camera's zoom), and a press on the globe's rim at each, which is a tap; Mapbox's camera itself — the constants
-  above, and so the near side and the disc, are gl-js's: if the native globe is drawn as gl-js draws it, its limb at
-  rest on an 852-pt view is about 203 pt from its centre, not `radiusAtZoom`'s 168, and a place stands where the
-  perspective puts it, not where `mapPoint`'s orthographic projection does (60° from the centre at rest: 188 pt out,
-  not 146; even with a camera at 1.5 view heights the two part by 9 pt there and by 48 pt 50° out at 3×). Then a Mapbox
-  pin's 44-pt ring (`pinAt` over `mapPoint`) and the distance line's 22 pt are measured off where Mapbox draws them —
-  reported, not changed here: a measurement on a phone first, then a change of its own; 10 swipes across the globe
-  fire 0 taps, on both
+  above, and so the near side, the disc and where a press finds a pin, are gl-js's: if the native globe is drawn as
+  gl-js draws it, its limb at rest on an 852-pt view is about 203 pt from its centre, not `radiusAtZoom`'s 168, and a
+  place stands where the perspective puts it (`cameraPoint`), not where `mapPoint`'s orthographic projection does (60°
+  from the centre at rest: 188 pt out, not 146). The near side and the disc hold for a camera at 1.5 view heights
+  too; the pins' targets and the distance line's 22 pt do not — that camera draws a place 12 pt nearer the centre than
+  `cameraPoint` 10° out at rest, 52 pt 60° out, and 36 to 118 pt at 3× — so a press just beside a Mapbox pin, near
+  the view's centre and far out, at rest and at 3×, opening the pin is what tells the two cameras apart. The labels'
+  layout (`placeLabels` over `mapPoint`: which labels fit, on which side) stays orthographic — reported, not changed
+  here: a measurement on a phone first, then a change of its own; 10 swipes across the globe fire 0 taps, on both
   globes, with the flag on; with the flag on, a press just beside a Mapbox pin, inside its 44-pt target, opens the pin
   once on both platforms; with the flag on, the drawn globe's pins still open on the first tap (the Tap's activation and
   the pin's press); the e2e flows that tap `globe.pin.LHR` run with the flag off, so they keep the drawn globe of
