@@ -143,18 +143,18 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     credit as the city photo's reads (`Photo: <author> · <licence> · Wikimedia Commons`), linked to `pageUrl`, else
     to `licenceUrl` (a server before `pageUrl`), else only read. A landmark without a name, without a credit it can
     print (no one to credit, no licence) or showing a photograph already shown is left out; nothing made up takes its
-    place. A photograph already shown includes the city's own over the page: on 04, a landmark whose `imageUrl` is
-    the address the page draws as the city's photograph (`photoAddress`: the place photo's `hero`, exactly as the
-    server sent it, the photo band drawing it unchanged — not the design's own bundled photograph, not the satellite
-    view; chosen with the photograph itself, `destinationPhoto`, so the two cannot differ) is left out, so a landmark
-    standing in for the city's photo (amendment 1, below) is not shown twice; it is left out before the
-    three are counted, so a further landmark the server sent would take its place — today the server keeps three and
-    the contract reads three, so a stand-in's city shows at most two. 13 draws the globe, not the city's photograph,
-    and keeps the stand-in's landmark (`cityPhoto` null: each screen says what it draws). Every landmark shown still
-    has its credit; fewer show what exists; a stand-in's city with no other landmark shows nothing. A photograph that
-    will not load leaves with its name and credit, and is tried again when a screen showing landmarks comes back into
-    view or the phone back online. A screen reader hears `<name>, photo`, then the credit. testIDs
-    `destination.landmark.<rank>` and `.credit` (`explore.` on 13).
+    place. A photograph already shown includes the city's own over the page: on 04, a landmark whose `imageUrl` is the
+    address the page draws as the city's photograph (`photoAddress`: the place photo's `hero`, exactly as the server
+    sent it, the photo band drawing it unchanged — not the design's own bundled photograph, not the satellite view;
+    chosen with the photograph itself, `destinationPhoto`, so the two cannot differ) is left out, so the photograph of a
+    landmark standing in for the city's photo (amendment 1, below) is not shown twice; it is left out before the three
+    are counted, so a further landmark the server sent would take its place — today the server keeps three and the
+    contract reads three, so a stand-in's city shows at most two. 13 draws the globe, not the city's photograph, and
+    keeps the stand-in's landmark (`cityPhoto` null: each screen says what it draws). Every landmark shown still has its
+    credit; fewer show what exists; a stand-in's city with no other landmark shows nothing. A photograph that will not
+    load leaves with its name and credit, and is tried again when a screen showing landmarks comes back into view or the
+    phone back online. A screen reader hears `<name>, photo`, then the credit. testIDs `destination.landmark.<rank>` and
+    `.credit` (`explore.` on 13).
   - **Asking.** One store for every screen, for the session: a city is asked when a screen showing it comes into view
     or the phone back online, and at each minute's look while it stays in view (as the place photos are), once what
     the app knows has aged — landmarks after 12 hours (the place photos' own window), none yet after five minutes (the
@@ -207,6 +207,11 @@ licences and restrictions as Commons gave them; authors are made up and files wh
 - **A stand-in's city shows two landmarks on 04.** Its first landmark is the photograph over the page (amendment 1), so
   the list leaves it out; the job keeps three ranks and the contract reads three, so nothing comes up into the third
   place. A fourth rank — kept by the job, read by the contract (`packages/shared`) — would fill it; not in this change.
+- **The same landmark in two photographs.** 04 compares photographs, not landmarks: the place photo carries no
+  landmark's item. A look that gives the stand-in's landmark another file (Wikidata's image for it changed) rewrites its
+  rank, and a phone holding the city photo from before it (up to twelve hours) shows that landmark over the page in the
+  old file and in the list in the new one until the photo ages. Carrying the item in the place photo (`packages/shared`)
+  would close it; not in this change.
 - **More overrides.** The skip list holds one item; the operator adds others as cities are looked at (Hallgrímskirkja
   and Harpa are absent from Reykjavík's answer, which was not investigated; Table Mountain is a `mountain`, so Cape Town
   never gets it). Resort cities like Cancún may have fewer than three.
