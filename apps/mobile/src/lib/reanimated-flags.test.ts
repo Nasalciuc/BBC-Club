@@ -37,7 +37,8 @@ describe("Reanimated's static flags (ADR-IMPL-069; design/motion.md, resting sty
   it("keeps a view's last animated props for its life: the settled-props sync stays off", () => {
     // On, Reanimated 4.5.1's sources read as able to erase them before React had them; the next React commit would
     // then draw gorhom's first frame again: Explore's sheet transparent and a window height down while gorhom held it
-    // at rest. Not reproduced on a device: parity's HomeSheet trace confirms (`lost`) or refutes (`closed`) it.
+    // at rest. Not reproduced on a device, and parity cannot confirm it while this holds: a `lost` HomeSheet trace from
+    // a build with the sync off (`sync=off`) means the props were lost some other way (ADR-IMPL-069, what a run shows).
     expect(read.data?.reanimated?.staticFeatureFlags?.FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS).toBe(false);
   });
 

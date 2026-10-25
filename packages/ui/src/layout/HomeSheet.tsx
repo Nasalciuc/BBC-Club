@@ -50,13 +50,13 @@ type Props = {
    * When the hosting screen is on screen. Coming back, the sheet is snapped to `index` again: it moves only if gorhom's
    * position strayed from that stop while the screen was away, since gorhom skips a snap to the stop it holds. So it
    * cannot redraw a sheet gorhom holds at rest whose drawn style was lost: the installed code's reading of parity's
-   * sheet gone after a tab switch (see HomeSheet; not reproduced on a device, `trace` confirms or refutes it).
+   * sheet gone after a tab switch (see HomeSheet; not reproduced on a device).
    */
   active?: boolean;
   /**
-   * Logs the sheet's state while the screen is on screen (useSheetTrace, sheet-trace.ts). The app turns it on for its
-   * e2e builds only (`EXPO_PUBLIC_APP_ENV`, read in the app's env loader); off, gorhom gets nothing and nothing is
-   * logged.
+   * Logs the sheet's state while the screen is on screen (useSheetTrace, sheet-trace.ts), with Reanimated's
+   * settled-props sync as the build was compiled. The app turns it on for its e2e builds only (`EXPO_PUBLIC_APP_ENV`,
+   * read in the app's env loader); off, gorhom gets nothing and nothing is logged.
    */
   trace?: boolean;
   testID?: string;
@@ -137,9 +137,10 @@ function SheetHandle({ animatedIndex }: BottomSheetHandleProps) {
  * transparent. At rest nothing writes that style again, so the sheet stays drawn only while Reanimated keeps the last
  * props it wrote. Read from Reanimated 4.5.1's sources, its settled-props sync could erase them before React had them,
  * and the next React commit would draw the first frame: Explore without its sheet while gorhom holds it at rest, as
- * parity saw. Not reproduced on a device; the e2e trace (`trace`) says `lost` if that is what happens. The sync is off
- * (ADR-IMPL-069; design/motion.md, resting styles). `[...snapPoints]` keeps its identity between renders: the React
- * Compiler memoizes it on `snapPoints`, as it does Explore's `sheetSnaps(height, top)`.
+ * parity saw. Not reproduced on a device. The sync is off (ADR-IMPL-069; design/motion.md, resting styles), so these
+ * builds cannot confirm that reading: the e2e trace (`trace`, `sync=off`) saying `lost` would mean the style was lost
+ * some other way. `[...snapPoints]` keeps its identity between renders: the React Compiler memoizes it on
+ * `snapPoints`, as it does Explore's `sheetSnaps(height, top)`.
  */
 export function HomeSheet({
   index,

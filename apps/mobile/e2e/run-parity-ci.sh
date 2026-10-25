@@ -49,6 +49,9 @@ js_error_lines() {
 # stop asked for, gorhom's index and position, and the sheet's top in the committed tree. `drawn` means the committed
 # transform matches gorhom's position, not that the sheet is visible (opacity is not measured). `lost` is gorhom
 # holding the sheet open while the committed transform puts it a window height down; `closed` is gorhom closing it.
+# Each line ends with `sync=`, Reanimated's settled-props sync as this APK was compiled: `off` (ADR-IMPL-069). There,
+# a run that loses the sheet is a failed fix whatever the verdict, and `lost` means the props were lost some other way
+# than the sync; `sync=on` means the flag did not reach the build.
 sheet_trace() {
   adb logcat -d -v time '*:S' ReactNativeJS:V | grep -F '[HomeSheet]' | tail -n 20 || true
 }

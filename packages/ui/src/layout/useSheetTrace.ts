@@ -1,6 +1,6 @@
 import { type RefObject, useEffect } from "react";
 import { Dimensions, type View } from "react-native";
-import type { SharedValue } from "react-native-reanimated";
+import { getStaticFeatureFlag, type SharedValue } from "react-native-reanimated";
 
 import { drawnTopOf, formatSheetLook } from "./sheet-trace";
 
@@ -12,6 +12,8 @@ const LOOK_EVERY_MS = 1000;
  * where gorhom holds the sheet and where the committed tree puts it, once on focus and then on each change
  * (sheet-trace.ts). Read-only: a measure and two shared-value reads, no render, no snap — it never hides what it
  * reports. `drawn` is a view inside gorhom's animated body (the sheet's background), so its transform is the sheet's.
+ * Each line also says whether Reanimated's settled-props sync is compiled in, as the native module answers: the
+ * build ADR-IMPL-069's flag reached, or did not.
  */
 export function useSheetTrace(
   enabled: boolean,
@@ -22,6 +24,7 @@ export function useSheetTrace(
 ) {
   useEffect(() => {
     if (!enabled) return;
+    const settledSync = getStaticFeatureFlag("FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS");
     let live = true;
     let last = "";
     function log(drawnTop: number | null) {
@@ -32,6 +35,7 @@ export function useSheetTrace(
         position: position.get(),
         drawnTop,
         windowHeight: Dimensions.get("window").height,
+        settledSync,
       });
       if (line === last) return;
       last = line;

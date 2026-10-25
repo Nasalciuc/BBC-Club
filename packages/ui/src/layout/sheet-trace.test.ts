@@ -2,8 +2,15 @@ import { describe, expect, it } from "bun:test";
 
 import { type SheetLook, drawnTopOf, formatSheetLook, sheetVerdict } from "./sheet-trace";
 
-// Made-up numbers on a 915-pt window: the rest stop's top at 517, the route's at 300.
-const atRest: SheetLook = { index: 0, sheetIndex: 0, position: 517, drawnTop: 517, windowHeight: 915 };
+// Made-up numbers on a 915-pt window: the rest stop's top at 517, the route's at 300. The sync off (ADR-IMPL-069).
+const atRest: SheetLook = {
+  index: 0,
+  sheetIndex: 0,
+  position: 517,
+  drawnTop: 517,
+  windowHeight: 915,
+  settledSync: false,
+};
 
 describe("sheetVerdict", () => {
   it("is drawn when gorhom holds the stop asked for and the sheet is drawn there", () => {
@@ -67,16 +74,31 @@ describe("drawnTopOf", () => {
 describe("formatSheetLook", () => {
   it("prints the verdict, then the numbers rounded to the point", () => {
     expect(formatSheetLook({ ...atRest, position: 516.6, drawnTop: 516.7, windowHeight: 914.9 })).toBe(
-      "[HomeSheet] drawn index=0 sheet=0.00 position=517 top=517 window=915",
+      "[HomeSheet] drawn index=0 sheet=0.00 position=517 top=517 window=915 sync=off",
     );
     expect(formatSheetLook({ ...atRest, drawnTop: 915 })).toBe(
-      "[HomeSheet] lost index=0 sheet=0.00 position=517 top=915 window=915",
+      "[HomeSheet] lost index=0 sheet=0.00 position=517 top=915 window=915 sync=off",
     );
   });
 
   it("prints an unknown drawn top as ?", () => {
     expect(formatSheetLook({ ...atRest, sheetIndex: 0.25, drawnTop: null })).toBe(
-      "[HomeSheet] moving index=0 sheet=0.25 position=517 top=? window=915",
+      "[HomeSheet] moving index=0 sheet=0.25 position=517 top=? window=915 sync=off",
     );
+  });
+
+  it("prints Reanimated's settled-props sync as the build was compiled: a line says which build it is from", () => {
+    // ADR-IMPL-069: with the sync off a `lost` line is a failed fix, not the reading confirmed; `sync=on` in a build
+    // that sets the flag off says the flag did not reach it.
+    expect(formatSheetLook({ ...atRest, drawnTop: 915 })).toEndWith(" sync=off");
+    expect(formatSheetLook({ ...atRest, drawnTop: 915, settledSync: true })).toBe(
+      "[HomeSheet] lost index=0 sheet=0.00 position=517 top=915 window=915 sync=on",
+    );
+  });
+
+  it("gives the verdict the same way whichever the sync", () => {
+    for (const look of [atRest, { ...atRest, drawnTop: 915 }, { ...atRest, sheetIndex: -1, position: 915 }]) {
+      expect(sheetVerdict({ ...look, settledSync: true })).toBe(sheetVerdict(look));
+    }
   });
 });

@@ -6,6 +6,9 @@
  * "Drawn" here means the committed transform: Fabric's measureInWindow reads the committed tree with its transforms
  * (react-native's DOM.cpp, `measureInWindow`), not the opacity and not what the native views show. A `drawn` line says
  * the committed transform puts the sheet where gorhom holds it; it does not say the sheet is visible.
+ *
+ * Every line ends with `sync=`: Reanimated's settled-props sync (FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS) as the
+ * native build was compiled. ADR-IMPL-069 turns it off, and a line is read against the build it comes from (`lost`).
  */
 
 /** Every trace line starts with it; run-parity-ci.sh greps logcat for it. */
@@ -23,6 +26,8 @@ export type SheetLook = {
   drawnTop: number | null;
   /** The window's height: gorhom's first frame puts the sheet this far down. */
   windowHeight: number;
+  /** Reanimated's settled-props sync as the native build was compiled (`getStaticFeatureFlag`, read on the device). */
+  settledSync: boolean;
 };
 
 /**
@@ -40,7 +45,9 @@ export function drawnTopOf(y: number, width: number, height: number): number | n
  * - `drawn`: gorhom holds the stop asked for, and the committed transform puts the sheet there.
  * - `lost`: gorhom holds the sheet open, but the committed transform puts it at or under the window's foot — gorhom's
  *   first frame, the view no longer following gorhom. design/motion.md (resting styles) reads parity's vanished sheet
- *   as this; a `lost` line confirms that reading, a `closed` one refutes it.
+ *   as this, caused by the settled-props sync. With the sync off (`sync=off`, every ADR-IMPL-069 build) that cause
+ *   cannot happen, so a `lost` line there says the props were lost some other way: the fix failed and the reading is
+ *   not the cause. Only a `lost` line from a build with the sync on (`sync=on`) fits the reading.
  * - `closed`: gorhom itself has the sheet closed.
  * - `moving`: between two stops.
  * - `astray`: gorhom holds another stop than the one asked for.
@@ -64,7 +71,7 @@ export function sheetVerdict(look: SheetLook): SheetVerdict {
   return Math.abs(look.drawnTop - look.position) <= DRAWN_WITHIN ? "drawn" : "elsewhere";
 }
 
-/** `[HomeSheet] lost index=0 sheet=0.00 position=517 top=915 window=915` */
+/** `[HomeSheet] lost index=0 sheet=0.00 position=517 top=915 window=915 sync=off` */
 export function formatSheetLook(look: SheetLook): string {
   const top = look.drawnTop === null ? "?" : String(Math.round(look.drawnTop));
   return [
@@ -75,5 +82,6 @@ export function formatSheetLook(look: SheetLook): string {
     `position=${Math.round(look.position)}`,
     `top=${top}`,
     `window=${Math.round(look.windowHeight)}`,
+    `sync=${look.settledSync ? "on" : "off"}`,
   ].join(" ");
 }

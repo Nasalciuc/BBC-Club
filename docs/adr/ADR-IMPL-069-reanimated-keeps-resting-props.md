@@ -22,8 +22,21 @@ build on iOS and Android.
     commit would then draw the first frame while gorhom holds the sheet at rest. A snap to the stop gorhom holds is
     skipped, so the focus re-snap cannot redraw it.
   - Reduced motion lands every snap in its first frame. Whether that raises the odds is not known.
-- **What would confirm it.** A failing parity run whose trace says `lost` (gorhom holds the sheet open; the committed
-  transform puts it a window height down) confirms the reading. `closed` (gorhom itself closed the sheet) refutes it.
+- **What a run can show.** Every build that carries the trace also has the sync off (Decision 1), and with it off the
+  erase the reading blames never runs: Reanimated stamps a view's props and hands the view to its settled-props
+  collector only with the flag on (`AnimatedPropsRegistry.cpp`, `AnimatedComponent.tsx`), so a view's props leave the
+  registry only when it unmounts. In these builds:
+  - a green run shows the committed transform where gorhom holds the sheet in that run; it does not show the race gone;
+  - a red run that loses the sheet again is a failed fix, whatever its trace says. `lost` (gorhom holds the sheet
+    open; the committed transform puts it a window height down) means the first frame came back some other way, so
+    the reading is not the cause: re-open this record. `closed` means gorhom itself closed the sheet. `drawn` means
+    the loss is below the committed tree (the opacity, or the native views);
+  - each line ends with `sync=`, the flag as the native build was compiled (`getStaticFeatureFlag`). `sync=on` in one
+    of these builds means the flag did not reach it.
+
+  No parity outcome here confirms the reading. That would take a traced build with the sync on (a throwaway branch
+  with the flag true, its flag test red as it should be, run with `attempts`) failing with `lost`, beside green runs
+  with it off. None is planned: the reading stays unconfirmed, and only parity staying green over time supports it.
 
 **Decision.**
 
@@ -43,7 +56,8 @@ build on iOS and Android.
    the entry no longer reaches it. The entry stays while the sync is off. Android has no precompiled Reanimated: its
    Gradle script compiles the flag in.
 3. **e2e builds trace Explore's sheet.** Explore passes HomeSheet `trace` in its e2e build only. The trace logs, once on
-   focus and on each change, gorhom's index and position and the sheet's top in the committed tree.
+   focus and on each change, gorhom's index and position, the sheet's top in the committed tree and the sync as
+   compiled (`sync=`).
    `run-parity-ci.sh` prints the lines. The trace is read-only: no render, no snap. `drawn` means the committed transform
    matches gorhom's position; the opacity is not measured.
 4. **Reduced motion stays on in CI.** `transition_animation_scale=0` is a member's setting to cover.
@@ -65,10 +79,11 @@ build on iOS and Android.
   line at rest. Each React commit re-applies them, which costs more `ShadowNode` clones per commit. The flag was there
   to save that.
 - The change reaches members only with a new native build (both platforms). An OTA update does not carry it.
-- Parity's runs are the proof. A green run shows the sheet's committed transform where gorhom holds it in that run. It
-  does not show that the race is gone. A failure now prints the trace, which tells the two causes apart.
+- Parity's runs are the only evidence, and they cut one way (Context, what a run can show): a green run does not show
+  the race gone, and a red one is a failed fix whose trace says how it failed.
 
-**Turning the sync back on.** Only with a Reanimated that erases a view's props once React has them (4.5.3 as read),
-and only after green parity runs under reduced motion whose traces say `drawn`. The flag and the `buildFromSource`
-entry go together: Expo's precompiled iOS Reanimated is the sync on, so dropping the entry earlier would turn it back
-on for iOS alone. `reanimated-flags.test.ts` fails on a version change, so an upgrade re-reads this record.
+**Turning the sync back on.** Only with a Reanimated that erases a view's props once React has them (4.5.3 as read), and
+only after green parity runs under reduced motion on a build with the sync on whose traces say `drawn` and `sync=on`.
+The flag and the `buildFromSource` entry go together: Expo's precompiled iOS Reanimated is the sync on, so dropping the
+entry earlier would turn it back on for iOS alone. `reanimated-flags.test.ts` fails on a version change, so an upgrade
+re-reads this record.
