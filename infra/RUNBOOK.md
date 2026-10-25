@@ -143,6 +143,19 @@ ssh <server> 'cd <checkout> && docker compose -f infra/docker-compose.yml -f inf
 
 Windows PowerShell has no `<`: `Get-Content -Raw pricing-rules.json | ssh <server> '…'` does the same.
 
+Before loading a new file, compare it with the company's site (ADR-IMPL-062) — on any computer with the repository, or
+on the server as above with `--check-site` in place of `--dry-run`:
+
+```bash
+bun run scripts/load-pricing-rules.ts --check-site < pricing-rules.json
+```
+
+It asks the site's own search for 24 routes (two per continent pair, both trips; Istanbul, Québec and Seville among
+them), one at a time, half a second apart, and prints per cabin how many matched, differed or got no answer, and the
+routes that differ — never a price. It writes nothing. Exit 1: a route differs (or the site answered none): those rules
+are not the ones the site prices by. With the reference set it is expected to fail on the routes with a Q and on first
+class; the company's current rules should pass.
+
 The poster check must equal the poster (JFK → ZRH, business, round trip). Searches use the new rules within ~35 s. Then
 estimates on, in that environment's database (staging: `docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`;
 production only after the company's written approval). Off is the same with `false` (~35 s):
@@ -242,13 +255,14 @@ photo for gets its satellite view, looked at again each day.
 
 ## The site's destinations (ADR-IMPL-045)
 
-Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own
-API — `weba.buybusinessclass.com`: regions, their countries, their cities, about 240 pages, then a HEAD request for each
-city's photo, four requests at a time — and keeps a snapshot: `catalog.site_places` (each city, its main airport, every
-airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price from, and that
-price — kept, never shown). The site has no airport codes: a city is matched by name inside the country the site puts
-it in; the few names that need help are listed in `SITE_CITY_AIRPORTS` (catalog `application/site-places.ts`). Two
-flags, both seeded off; with both off the job asks the site nothing.
+Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own API
+— `buybusinessclass.com/api` (ADR-IMPL-062; `weba.buybusinessclass.com` until it stopped resolving): regions, their
+countries, their cities, about 240 pages, one starting every 600 ms (the API allows 120 requests a minute), then a HEAD
+request for each city's photo, four at a time — and keeps a snapshot: `catalog.site_places` (each city, its main
+airport, every airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price
+from, and that price — kept, never shown). The site has no airport codes: a city is matched by name inside the country
+the site puts it in; the few names that need help are listed in `SITE_CITY_AIRPORTS` (catalog
+`application/site-places.ts`). Two flags, both seeded off; with both off the job asks the site nothing.
 
 - `catalog.site_photos`: each city's own photo on all its airports, stored as an operator's photo (it never expires, has
   no credit line, and `resolve-place-photos` never touches it). An operator's own photo from anywhere else stays; one
@@ -259,7 +273,8 @@ flags, both seeded off; with both off the job asks the site nothing.
   about twenty minutes for all of them, the club's image meanwhile; off and `skip` work even on a night the site does
   not answer. An operator's `DELETE …/photo` on a site photo lasts until the next night: keep a city off with `skip`,
   or give it the club's own photo (`PUT …/photo` with an address elsewhere), which the job never touches. Members'
-  phones load these photos from `weba.buybusinessclass.com`.
+  phones load these photos from `buybusinessclass.com/storage/`. A photo stored under `weba.buybusinessclass.com` is
+  still the site's: the next run moves it to the new address, or hands it back.
 - `catalog.site_pins`: after the fares' pins, up to twelve of the site's cities listed from the member's home airport
   (the site's home page first, then the busiest), priced by the formula in the member's cabin (ADR-IMPL-037), so the
   pin, its search's estimate row and the quote show one number. Nothing while `catalog.estimates` is off: no price, no
@@ -268,19 +283,21 @@ flags, both seeded off; with both off the job asks the site nothing.
 All or nothing: a region or a country that does not answer, fewer than 80 % of last night's cities listed or placed on
 their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
 `platform.job_runs` says `failed` and why, and the worker's `/metrics` counts it in
-`bbc_job_failed{job="sync-site-destinations"}`, and `/status` turns red with the job in `failingJobs` until a run succeeds. A
-single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no answer, a 5xx)
-keeps last night's verdict. The run's counts are in `platform.job_runs`; the log lines `site: no airport`,
-`site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`, `site: photo does not answer`,
-`site: photo not checked, kept`, `site: unknown US city` and `site: city page did not answer, kept` name the cities.
-Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is Osaka's. A city
-under `site: main airport by a tie` got the alphabetically first of its busiest airports: list it in
+`bbc_job_failed{job="sync-site-destinations"}`, and `/status` turns red with the job in `failingJobs` until a run
+succeeds. A single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no
+answer, a 5xx) keeps last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
+asks (a minute without one, two at most), then the page is asked again; a second 429 fails the night like any page that
+does not answer (`site getOne?id=…: HTTP 429 again after waiting`). The run's counts are in `platform.job_runs`; the log
+lines `site: no airport`, `site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`,
+`site: photo does not answer`, `site: photo not checked, kept`, `site: unknown US city` and
+`site: city page did not answer, kept` name the cities. Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is
+Osaka's. A city under `site: main airport by a tie` got the alphabetically first of its busiest airports: list it in
 `SITE_CITY_AIRPORTS` (a PR), main airport first.
 
 Before turning either on, see what the site holds today, with no database: `bun run scripts/site-destinations-report.ts`
-on any computer with the repository reads the site as the job does (about 400 requests, a minute or two), prints a
-summary and writes one HTML page in the temporary folder — every city with its photo, its airports, whether its photo
-answers and how heavy it is (the app shows the site's file as is), and the site's prices.
+on any computer with the repository reads the site as the job does (about 400 requests, paced: about four minutes),
+prints a summary and writes one HTML page in the temporary folder — every city with its photo, its airports, whether its
+photo answers and how heavy it is (the app shows the site's file as is), and the site's prices.
 
 Turn one on (or off) in that environment's database (staging:
 `docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`), wait a minute (a flag is read through a cache of about
@@ -301,9 +318,18 @@ docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
   bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET}}).then(async r=>console.log(r.status,await r.text()))"
 ```
 
-It answers `200` with the run: `"status":"succeeded"` and its counts under `metrics` (`read`, `cities`, `places`,
-`photosSet`, …); `"failed"` changed nothing, and its `error` says why; `"skipped"` — a run was already going: try again
-in two minutes.
+A night's run takes three to five minutes, longer than the worker's HTTP idle timeout (120 s): the command above then
+ends with the connection closed while the run goes on (the cron's own call logs `FAIL` the same way). Its outcome is in
+`platform.job_runs`, a few minutes later:
+
+```sql
+SELECT status, error, metrics, duration_ms FROM platform.job_runs
+WHERE job = 'sync-site-destinations' ORDER BY started_at DESC LIMIT 1;
+```
+
+`succeeded` with its counts under `metrics` (`read`, `cities`, `places`, `photosSet`, …); `failed` changed nothing, and
+its `error` says why; `skipped` — a run was already going: try again in five minutes. A run that ends within 120 s (the
+flags off) still answers `200` with the same fields.
 
 What the snapshot holds:
 
