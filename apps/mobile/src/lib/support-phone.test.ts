@@ -180,7 +180,7 @@ describe("one number: EXPO_PUBLIC_SUPPORT_PHONE", () => {
   test("a tel: link is built in one place, from the configured number's digits", () => {
     expect(filesWith(/["'`]tel:/)).toEqual(["apps/mobile/src/lib/support-phone-logic.ts"]);
     const logic = files.find((f) => f.path === "apps/mobile/src/lib/support-phone-logic.ts")?.src ?? "";
-    expect(logic.match(/["'`]tel:[^"'`]*["'`]/g)).toEqual(["`tel:${digits}`"]);
+    expect(logic.match(/["'`]tel:[^"'`]*["'`]/g)).toEqual(["`tel:+${digits}`"]);
   });
 
   test("no number is written in the code", () => {
@@ -255,6 +255,21 @@ describe("every call button", () => {
       call?.onPress();
     }
     expect(opened).toEqual(CALL_SITES.map(() => "tel:+12125550148"));
+  });
+
+  test("reads the number before its formatting goes: an extension, a second `+` or no `+` dials nothing", () => {
+    // Made-up numbers in the fictional 555 range. Each would have dialled a different number once stripped.
+    for (const wrong of [
+      "+1 212 555 0148 ext 2",
+      "+1 212 555 0148 x2",
+      "+1 212+555 0148",
+      "1 212 555 0148",
+      "+1-800-FLY-0148",
+      "+1 212 555 0148 0148 01",
+    ]) {
+      expect({ wrong, tel: telHref(wrong) }).toEqual({ wrong, tel: null });
+    }
+    expect(telHref(" +1.212.555.0148 ")).toBe("tel:+12125550148");
   });
 });
 

@@ -4,12 +4,16 @@
  * are tested without React Native: `support-phone.ts` reads the variable once (from `lib/env.ts`) and dials.
  */
 
-/** The `tel:` link for the configured number — its digits and `+` — or null when it is unset or too short to dial.
+/** The `tel:` link for the configured number — `+` and its digits — or null when it is unset, not one number in
+ *  E.164 (one leading `+`; spaces, brackets, dots and dashes between the digits are let pass), or not 8 to 15 digits
+ *  long. The value is read before its formatting goes, so an extension or a second `+` never joins the digits dialled.
  *  Null means no call button anywhere, and no words that ask the member to call (`canCall` false) but Join's
  *  (`otp-send-logic.ts`: the entry stays as it is, ADR-IMPL-047). */
 export function telHref(phone: string | undefined): string | null {
-  const digits = phone?.replace(/[^\d+]/g, "") ?? "";
-  return digits.length >= 8 ? `tel:${digits}` : null;
+  const raw = phone?.trim() ?? "";
+  if (!/^\+[\d ().-]+$/.test(raw)) return null;
+  const digits = raw.replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15 ? `tel:+${digits}` : null;
 }
 
 /** The words a call button carries: the screen's own (12 `Call us`, 11 `Call your specialist`, the system pages'
