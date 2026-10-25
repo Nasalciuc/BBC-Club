@@ -1,24 +1,106 @@
 /**
- * The company's site (ADR-IMPL-045), read through its own API — weba.buybusinessclass.com, the backend the site and its
- * new version both read. Seven regions; each region's countries; each country's cities; a city's page carries its photo,
- * the US cities the site lists a price from, and where it sits (region › country › city). Read-only, once a night, at
- * most four requests at a time, with the club's User-Agent. The site has no IATA codes: site-places.ts finds the
- * airports.
+ * The company's site (ADR-IMPL-045), read through its own API — buybusinessclass.com/api, the backend the site reads
+ * (it answered at weba.buybusinessclass.com until that name stopped resolving; ADR-IMPL-062). Seven regions; each
+ * region's countries; each country's cities; a city's page carries its photo, the US cities the site lists a price from,
+ * and where it sits (region › country › city). Read-only, once a night, with the club's User-Agent: at most four
+ * requests at a time, the API's paced to its rate limit (`API_GAP_MS`). The site has no IATA codes: site-places.ts finds
+ * the airports.
  */
 import { z } from "zod";
 
 import type { Fetch } from "./place-photo-sources";
 
-export const SITE_API = "https://weba.buybusinessclass.com";
+export const SITE_API = "https://buybusinessclass.com";
 /** Where the site serves its images: a city's photo is `${SITE_STORAGE}bestDeals/<id>/image/<file>`. */
 export const SITE_STORAGE = `${SITE_API}/storage/`;
+/** Where it served them before (ADR-IMPL-062): photo rows stored under it are still the site's, for the sync to replace
+ *  or hand back — never an operator's photo. */
+export const LEGACY_SITE_STORAGE = "https://weba.buybusinessclass.com/storage/";
+/** Every address a site photo row may start with: today's first. */
+export const SITE_STORAGE_PREFIXES: readonly string[] = [SITE_STORAGE, LEGACY_SITE_STORAGE];
+
+/**
+ * The site's API answers at most 120 requests a minute per IP (`x-ratelimit-limit: 120`, a 60-s window). The read
+ * starts one API request every 600 ms across all its workers — about 100 a minute, room left for anyone else on the
+ * same address — so a night's ~240 pages take about two and a half minutes. Photos (`/storage`) have no stated limit
+ * and are not paced.
+ */
+export const API_GAP_MS = 600;
+/** A 429 waits what its Retry-After says (seconds or a date), 60 s without one, never more than 120 — then asks once
+ *  more. */
+const RETRY_AFTER_DEFAULT_S = 60;
+const RETRY_AFTER_MAX_S = 120;
+
+/** Time, for the API's pacing. The system's by default; tests pass their own, so nothing really waits. */
+export type SiteClock = {
+  now(): number;
+  /** Resolves after `ms`; rejects with the signal's reason when it aborts first. */
+  sleep(ms: number, signal: AbortSignal): Promise<void>;
+};
+
+export const systemClock: SiteClock = {
+  now: () => Date.now(),
+  sleep: (ms, signal) =>
+    new Promise<void>((resolve, reject) => {
+      const stop = () => reject(signal.reason ?? new Error("aborted"));
+      if (signal.aborted) return stop();
+      const onAbort = () => {
+        clearTimeout(timer);
+        stop();
+      };
+      const timer = setTimeout(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+      signal.addEventListener("abort", onAbort, { once: true });
+    }),
+};
+
+/** One API request start every `gapMs`, whichever worker asks; `hold` keeps every worker back until then (a 429). */
+export type SitePacer = { wait(signal: AbortSignal): Promise<void>; hold(ms: number): void };
+
+export function sitePacer(clock: SiteClock = systemClock, gapMs = API_GAP_MS): SitePacer {
+  let next = Number.NEGATIVE_INFINITY;
+  return {
+    async wait(signal) {
+      // A worker that wakes to find the slot taken (or a hold since) waits again: starts never come closer than gapMs.
+      for (;;) {
+        const now = clock.now();
+        if (now >= next) {
+          next = now + gapMs;
+          return;
+        }
+        await clock.sleep(next - now, signal);
+      }
+    },
+    hold(ms) {
+      next = Math.max(next, clock.now() + ms);
+    },
+  };
+}
+
+/** How long a 429 asks to wait, in ms: Retry-After in seconds or as an HTTP date; 60 s without a readable one; at most
+ *  120 s. */
+export function retryAfterMs(header: string | null, now: number): number {
+  const value = header?.trim() ?? "";
+  let seconds = RETRY_AFTER_DEFAULT_S;
+  if (/^\d+$/.test(value)) {
+    seconds = Number(value);
+  } else if (/^[a-z]{3}/i.test(value) && Number.isFinite(Date.parse(value))) {
+    // An HTTP date starts with its day's name (RFC 9110: "Sun, 06 Nov 1994 08:49:37 GMT", and the two older forms).
+    seconds = Math.max(0, (Date.parse(value) - now) / 1000);
+  }
+  return Math.min(seconds, RETRY_AFTER_MAX_S) * 1000;
+}
 
 export type SiteDeps = {
   fetch: Fetch;
   userAgent: string;
   signal: AbortSignal;
-  /** Requests in flight at once: four by default — the night's ~240 pages and ~150 photos take well under a minute. */
+  /** Requests in flight at once: four by default. The API's are paced besides (`API_GAP_MS`); photos are not. */
   concurrency?: number;
+  /** The clock the API's pacing waits on: the system's by default. */
+  clock?: SiteClock;
 };
 
 /** The site did not answer, or answered something other than its shape. Names the page, never a header. */
@@ -111,20 +193,35 @@ export async function inPool<T, R>(items: readonly T[], n: number, fn: (item: T)
   return out;
 }
 
-async function getJson<T extends z.ZodTypeAny>(
-  deps: SiteDeps,
-  page: string,
-  url: string,
-  shape: T,
-): Promise<z.infer<T>> {
-  let res: Response;
+/** One night's read of the API: the deps, the clock and the one pacer every worker shares. */
+type Api = SiteDeps & { clock: SiteClock; pacer: SitePacer };
+
+/** One API request, in its turn (the pacer). */
+async function ask(api: Api, page: string, url: string): Promise<Response> {
+  await api.pacer.wait(api.signal);
   try {
-    res = await deps.fetch(url, {
-      headers: { "User-Agent": deps.userAgent, Accept: "application/json" },
-      signal: AbortSignal.any([deps.signal, AbortSignal.timeout(TIMEOUT_MS)]),
+    return await api.fetch(url, {
+      headers: { "User-Agent": api.userAgent, Accept: "application/json" },
+      signal: AbortSignal.any([api.signal, AbortSignal.timeout(TIMEOUT_MS)]),
     });
   } catch (err) {
     throw new SiteError(page, err instanceof Error ? err.message : String(err));
+  }
+}
+
+async function getJson<T extends z.ZodTypeAny>(api: Api, page: string, url: string, shape: T): Promise<z.infer<T>> {
+  let res = await ask(api, page, url);
+  if (res.status === 429) {
+    // Over the site's rate limit: every worker waits what it asks (at most two minutes), then this page is asked once
+    // more. A second 429 ends the read (readSite).
+    const wait = retryAfterMs(res.headers.get("retry-after"), api.clock.now());
+    await res.text().catch(() => "");
+    api.pacer.hold(wait);
+    res = await ask(api, page, url);
+    if (res.status === 429) {
+      await res.text().catch(() => "");
+      throw new SiteError(page, "HTTP 429 again after waiting: the site's rate limit", 429);
+    }
   }
   if (!res.ok) {
     await res.text().catch(() => "");
@@ -141,8 +238,8 @@ async function getJson<T extends z.ZodTypeAny>(
   return parsed.data;
 }
 
-const pageOf = (deps: SiteDeps, id: number): Promise<Page> =>
-  getJson(deps, `getOne?id=${id}`, `${SITE_API}/api/bestDeals/getOne?id=${id}`, Page).then((r) => r.data);
+const pageOf = (api: Api, id: number): Promise<Page> =>
+  getJson(api, `getOne?id=${id}`, `${SITE_API}/api/bestDeals/getOne?id=${id}`, Page).then((r) => r.data);
 
 /** A city's page as the sync keeps it; null when the page is not a city with its region and country. The bloodline
  *  runs region › country › city: the first is the region, the last the city, the one before it the country. */
@@ -168,25 +265,39 @@ export function toSiteCity(id: number, page: Page): SiteCity | null {
 }
 
 /**
- * Regions → countries → cities, as the site lists them, then each city's own page. A region or a country that does not
- * answer stops the read (which cities are gone could not be told from which are missing); a city that does not answer is
- * listed in `failed`, and the sync keeps what it had for it.
+ * Regions → countries → cities, as the site lists them, then each city's own page — every API request in its turn
+ * (`API_GAP_MS`). A region or a country that does not answer stops the read (which cities are gone could not be told
+ * from which are missing), and so does the site's rate limit twice on one page; a city that does not answer otherwise
+ * is listed in `failed`, and the sync keeps what it had for it.
  */
 export async function readSite(deps: SiteDeps): Promise<SiteRead> {
-  const n = deps.concurrency ?? CONCURRENCY;
-  const regions = (await getJson(deps, "getAllDeals", `${SITE_API}/api/bestDeals/getAllDeals`, List)).data.filter(
+  const clock = deps.clock ?? systemClock;
+  // A read that fails stops its other workers with it: one still waiting its turn must not ask the site afterwards.
+  const over = new AbortController();
+  const signal = AbortSignal.any([deps.signal, over.signal]);
+  const api: Api = { ...deps, signal, clock, pacer: sitePacer(clock) };
+  try {
+    return await readPages(api, deps.concurrency ?? CONCURRENCY, deps.signal);
+  } finally {
+    over.abort(new Error("the site's read is over"));
+  }
+}
+
+/** readSite's pages, `n` workers at a time. `job` is the caller's own signal: a city page stopped by it stops the read. */
+async function readPages(api: Api, n: number, job: AbortSignal): Promise<SiteRead> {
+  const regions = (await getJson(api, "getAllDeals", `${SITE_API}/api/bestDeals/getAllDeals`, List)).data.filter(
     (e) => e.type === "region",
   );
   if (regions.length === 0) throw new SiteError("getAllDeals", "the site lists no region");
-  const main = (await getJson(deps, "getMain", `${SITE_API}/api/bestDeals/getMain`, List)).data;
+  const main = (await getJson(api, "getMain", `${SITE_API}/api/bestDeals/getMain`, List)).data;
   const promoted = new Set(main.filter((e) => e.type === "city").map((e) => e.id));
 
-  const regionPages = await inPool(regions, n, async (r) => ({ id: r.id, page: await pageOf(deps, r.id) }));
+  const regionPages = await inPool(regions, n, async (r) => ({ id: r.id, page: await pageOf(api, r.id) }));
   const countries = regionPages.flatMap(({ id, page }) => {
     if (page.type !== "region") throw new SiteError(`getOne?id=${id}`, "a region's page is not a region");
     return (page.bestDeals ?? []).filter((e) => e.type === "country");
   });
-  const countryPages = await inPool(countries, n, async (c) => ({ id: c.id, page: await pageOf(deps, c.id) }));
+  const countryPages = await inPool(countries, n, async (c) => ({ id: c.id, page: await pageOf(api, c.id) }));
   const listed = new Set<number>();
   countryPages.forEach(({ id, page }) => {
     if (page.type !== "country") throw new SiteError(`getOne?id=${id}`, "a country's page is not a country");
@@ -196,9 +307,9 @@ export async function readSite(deps: SiteDeps): Promise<SiteRead> {
   const ids = [...listed];
   const pages = await inPool(ids, n, async (id) => {
     try {
-      return toSiteCity(id, await pageOf(deps, id));
+      return toSiteCity(id, await pageOf(api, id));
     } catch (err) {
-      if (deps.signal.aborted) throw err;
+      if (job.aborted || (err instanceof SiteError && err.status === 429)) throw err;
       return null;
     }
   });

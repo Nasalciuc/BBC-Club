@@ -22,6 +22,7 @@ import { homeSuggestion, homeZones, popularFrom } from "./application/discovery"
 import { importCatalog, ImportBody, ImportError } from "./application/import";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
+import type { SiteClock } from "./application/site-cms";
 import { syncSite } from "./application/site-sync";
 import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
 import { estimateRules as readEstimateRules } from "./pricing/estimate-rules";
@@ -51,9 +52,10 @@ function searchWhenInRange(when: Date, now = new Date()): boolean {
 /** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
 export const SITE_PINS = 12;
 
-/** `fetch` is for tests: the place-photo sources (Wikidata, Commons, Pexels) and the site answered by fixtures. */
+/** For tests: `fetch` answers for the place-photo sources (Wikidata, Commons, Pexels) and the site; `siteClock` is the
+ *  time the site's API pacing waits on, so a test's night takes no real time. */
 export const catalogModule = (
-  opts: { fetch?: Fetch } = {},
+  opts: { fetch?: Fetch; siteClock?: SiteClock } = {},
 ): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
   name: "catalog",
   layer: "domain",
@@ -579,12 +581,16 @@ export const catalogModule = (
         },
         {
           // ADR-IMPL-045: the site's destinations, once a night. With its photos and its pins off, nothing is asked
-          // and the site's photos go back to Wikimedia. Four requests at a time end well inside the worker's 120 s.
+          // and the site's photos go back to Wikimedia. ADR-IMPL-062: the site's API allows 120 requests a minute, so
+          // its ~241 pages start 600 ms apart (about 2.5 minutes), then ~150 photo checks four at a time, and a 429
+          // may hold the read for up to two minutes: seven minutes leave room for that. Longer than the worker's
+          // 120-s HTTP idle timeout: the cron's request is closed while the run goes on, and platform.job_runs holds
+          // its outcome (as for `retention`).
           name: "sync-site-destinations",
           spec: {
             cron: "40 7 * * *",
             singleton: true,
-            timeoutMs: 100_000,
+            timeoutMs: 420_000,
             handler: async (ctx) => {
               const photos = await sitePhotos();
               const pins = await platform.flags.isEnabled("catalog.site_pins", false);
@@ -595,6 +601,7 @@ export const catalogModule = (
                     fetch: opts.fetch ?? fetch,
                     userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; site destinations)`,
                     signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                    clock: opts.siteClock,
                   },
                   logger: platform.logger,
                 },
