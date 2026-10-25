@@ -1,8 +1,9 @@
 # ADR-IMPL-069 — Reanimated keeps a view's last animated props; parity traces Explore's sheet
 
-Status: proposed · Date: 2026-10-25 · Scope: `apps/mobile/package.json` (`reanimated.staticFeatureFlags`), its test
-`apps/mobile/src/lib/reanimated-flags.test.ts`, `design/motion.md` (resting styles), HomeSheet's `trace`
-(`packages/ui/src/layout`), `apps/mobile/e2e/run-parity-ci.sh`. Needs a new native build on iOS and Android.
+Status: proposed · Date: 2026-10-25 · Scope: `apps/mobile/package.json` (`reanimated.staticFeatureFlags`,
+`expo.autolinking.ios.buildFromSource`), its test `apps/mobile/src/lib/reanimated-flags.test.ts`, `design/motion.md`
+(resting styles), HomeSheet's `trace` (`packages/ui/src/layout`), `apps/mobile/e2e/run-parity-ci.sh`. Needs a new native
+build on iOS and Android.
 
 **Context.**
 
@@ -31,11 +32,16 @@ Status: proposed · Date: 2026-10-25 · Scope: `apps/mobile/package.json` (`rean
    (`reanimated_utils.rb`) scripts read it at build time. The registry then keeps a view's last props for its life, and
    every React commit re-applies them. `reanimated-flags.test.ts` pins the flag and the Reanimated version it was decided
    for.
-2. **Only source builds of Reanimated.** Expo's precompiled iOS XCFramework (`EXPO_USE_PRECOMPILED_MODULES=1`) is built
-   with the sync on and never reads the app's `package.json` (`expo-modules-autolinking`'s
-   `external-configs/ios/react-native-reanimated/spm.config.json`). The variable stays unset while this decision holds.
-   The test fails if `eas.json` or a workflow sets it. An EAS environment variable set on the server is outside its
-   reach.
+2. **Reanimated is built from source on iOS.** Precompiled modules are on by default: SDK 57's prebuild Podfile
+   (`expo/template.tgz`) sets `EXPO_USE_PRECOMPILED_MODULES` to `1` unless it is set otherwise, and EAS Build may
+   export it. Reanimated then comes as Expo's XCFramework whenever a tarball resolves (a local build, or a download
+   from `EXPO_PRECOMPILED_MODULES_BASE_URL`). That XCFramework is compiled with the sync on and never reads the app's
+   `package.json` (`expo-modules-autolinking`'s `external-configs/ios/react-native-reanimated/spm.config.json`). So
+   `apps/mobile/package.json` also sets `expo.autolinking.ios.buildFromSource: ["react-native-reanimated"]`, which
+   decides before any variable or tarball is looked at (`precompiled_modules.rb`, `build_from_source?`); RNWorklets
+   follows it to source. `reanimated-flags.test.ts` runs the autolinking command `use_expo_modules!` runs and fails if
+   the entry no longer reaches it. The entry stays while the sync is off. Android has no precompiled Reanimated: its
+   Gradle script compiles the flag in.
 3. **e2e builds trace Explore's sheet.** Explore passes HomeSheet `trace` in its e2e build only. The trace logs, once on
    focus and on each change, gorhom's index and position and the sheet's top in the committed tree.
    `run-parity-ci.sh` prints the lines. The trace is read-only: no render, no snap. `drawn` means the committed transform
@@ -63,5 +69,6 @@ Status: proposed · Date: 2026-10-25 · Scope: `apps/mobile/package.json` (`rean
   does not show that the race is gone. A failure now prints the trace, which tells the two causes apart.
 
 **Turning the sync back on.** Only with a Reanimated that erases a view's props once React has them (4.5.3 as read),
-and only after green parity runs under reduced motion whose traces say `drawn`. `reanimated-flags.test.ts` fails on a
-version change, so an upgrade re-reads this record.
+and only after green parity runs under reduced motion whose traces say `drawn`. The flag and the `buildFromSource`
+entry go together: Expo's precompiled iOS Reanimated is the sync on, so dropping the entry earlier would turn it back
+on for iOS alone. `reanimated-flags.test.ts` fails on a version change, so an upgrade re-reads this record.
