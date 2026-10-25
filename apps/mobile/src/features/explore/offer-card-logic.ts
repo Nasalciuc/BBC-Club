@@ -68,6 +68,22 @@ export function homeDeals(home: Pick<HomeVM, "deals"> | null): SiteDealVM[] {
   return home?.deals ?? [];
 }
 
+/** A site deal still within its day at `now` (D6); one whose `validUntil` cannot be read is not. */
+export function dealLive(deal: Pick<SiteDealVM, "validUntil">, now: number): boolean {
+  return Date.parse(deal.validUntil) > now;
+}
+
+/**
+ * Home without the site's deals past their day at `now` (ADR-IMPL-067, D6) — the very same Home when none is, so nothing
+ * draws again. The server sends only deals within their day; this is for a Home the app has held longer than that (a
+ * phone that kept the app a day in the background), read when the app comes back, never while it draws.
+ */
+export function withLiveDeals<H extends Pick<HomeVM, "deals">>(home: H | null, now: number): H | null {
+  const deals = home?.deals;
+  if (!home || !deals || deals.every((deal) => dealLive(deal, now))) return home;
+  return { ...home, deals: deals.filter((deal) => dealLive(deal, now)) };
+}
+
 /**
  * Every offer (16): what the raised sheet shows — the offers once Home has some (the member's own, or the site's deals,
  * ADR-IMPL-067); the cards' places while Home is on its way; `No offers yet.` only once Home answered without one,
