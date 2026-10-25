@@ -100,3 +100,90 @@ describe("send-requests — a resend says which try it is", () => {
     expect(row?.sent_to_crm).toBe(true);
   });
 });
+
+describe("send-requests — a CRM refusal is given up at once; anything else is tried again (ADR-IMPL-065)", () => {
+  /** What @bbc/crm throws: an error that says whether sending again can help. */
+  const crmError = (status: number, retryable: boolean) =>
+    Object.assign(new Error(`CRM submitRequest answered ${status} (${retryable ? "retryable" : "permanent"})`), {
+      name: "CrmHttpError",
+      code: "CRM_HTTP",
+      retryable,
+      status,
+    });
+
+  async function state(id: string) {
+    const [row] = (await db.execute(
+      sql`SELECT sent_to_crm, send_attempts::int AS attempts, last_error FROM requests.requests WHERE id = ${id}`,
+    )) as unknown as { sent_to_crm: boolean; attempts: number; last_error: string | null }[];
+    return row;
+  }
+
+  function jobWith(crm: { submitRequest(payload: unknown): Promise<{ crmRequestId: string }> }) {
+    const posted: string[] = [];
+    const logged: object[] = [];
+    const run = createSendRequestsJob({
+      db,
+      repo: createRequestsRepo(db),
+      crm,
+      logger: { warn: (o: object) => logged.push(o), error: (o: object) => logged.push(o) },
+      metrics: { inc: () => undefined },
+      notifyOps: async (text) => {
+        posted.push(text);
+      },
+      appOrigin: "http://localhost:8000",
+      opsLinkSecret: "s".repeat(32),
+    });
+    return { run, posted, logged };
+  }
+
+  it("a 400: one attempt, given up — the member reads not_sent, ops are told, nothing resends it", async () => {
+    const id = await insert("R-REFUSED");
+    await only(id);
+    let calls = 0;
+    const { run, posted } = jobWith({
+      async submitRequest() {
+        calls++;
+        throw crmError(400, false);
+      },
+    });
+    await run();
+    const row = await state(id);
+    expect(row?.sent_to_crm).toBe(false);
+    expect(row?.attempts).toBe(6);
+    expect(row?.last_error).toBe("CrmHttpError: CRM submitRequest answered 400 (permanent)");
+    expect(posted).toEqual([
+      "request R-REFUSED was refused by the CRM (the log says why) — fix the cause, then re-queue it (RUNBOOK)",
+    ]);
+    // Past the retry delay, the job does not claim it again.
+    await db.execute(sql`UPDATE requests.requests SET sent_at = now() - interval '10 minutes' WHERE id = ${id}`);
+    await run();
+    expect(calls).toBe(1);
+    // The operator's re-queue (RUNBOOK) sends it again once the cause is fixed.
+    await db.execute(sql`UPDATE requests.requests SET send_attempts = 0, sent_at = NULL WHERE id = ${id}`);
+    const fixed = jobWith({ submitRequest: async () => ({ crmRequestId: "http:R-REFUSED" }) });
+    await fixed.run();
+    expect((await state(id))?.sent_to_crm).toBe(true);
+  });
+
+  it("a 503, a 429, a timeout: one failed attempt each, tried again later — never given up early", async () => {
+    for (const [ref, err] of [
+      ["R-RETRY-503", crmError(503, true)],
+      ["R-RETRY-429", crmError(429, true)],
+      ["R-RETRY-TIMEOUT", Object.assign(new Error("CRM submitRequest timed out after 5000ms"), { retryable: true })],
+      ["R-RETRY-PLAIN", new Error("Postmark 503")],
+    ] as const) {
+      const id = await insert(ref);
+      await only(id);
+      const { run, posted } = jobWith({
+        async submitRequest() {
+          throw err;
+        },
+      });
+      await run();
+      const row = await state(id);
+      expect(row?.attempts).toBe(1);
+      expect(row?.sent_to_crm).toBe(false);
+      expect(posted).toEqual([]);
+    }
+  });
+});

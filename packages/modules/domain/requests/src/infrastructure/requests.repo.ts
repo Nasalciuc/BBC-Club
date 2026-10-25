@@ -191,6 +191,23 @@ export function createRequestsRepo(db: Executor) {
       return row?.attempts ?? 0;
     },
 
+    /** A failed attempt that ends the sending: the CRM refused the request as it is (ADR-IMPL-065), so sending it again
+     *  would be refused again. Counted as the last of MAX_SEND_ATTEMPTS — the member reads `not_sent`, nothing resends
+     *  it, and an operator re-queues it once the cause is fixed (RUNBOOK). Returns the attempts, as markFailed does. */
+    async markGivenUp(tx: Executor, id: string, error: string): Promise<number> {
+      const [row] = await tx
+        .update(requests)
+        .set({
+          lastError: error,
+          sentAt: sql`now()`,
+          sendAttempts: sql`GREATEST(${requests.sendAttempts} + 1, ${MAX_SEND_ATTEMPTS})`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(requests.id, id))
+        .returning({ attempts: requests.sendAttempts });
+      return row?.attempts ?? 0;
+    },
+
     /** Moves the request from `from` to `status` and writes the step; null when it is no longer at `from`. */
     async setStatus(tx: Executor, id: string, from: Status, status: Status, note: string | null, actor: string | null) {
       const [row] = await tx

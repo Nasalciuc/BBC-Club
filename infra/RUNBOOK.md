@@ -169,9 +169,13 @@ Never edit that row by hand; never paste the file into a chat, an issue or a log
 ## A request that was never sent (ADR-IMPL-042)
 
 `send-requests` passes each request to the CRM within a minute; a failure is tried again every five minutes, six times.
-Then it gives up: the log says `request send gave up` (with the request id), `bbc_request_sends_given_up` rises on the
-worker's metrics, `OPS_WEBHOOK` gets one line, and the member reads `Not sent` — with a call button from the A2c app
-on; older apps still say it is saved on the phone. Nothing resends it by itself. Fix the cause (the CRM, `OPERATORS_EMAIL`, Postmark — the log line has the error), then re-queue it; the next
+With `CRM_ADAPTER=http` (ADR-IMPL-065) a request the CRM refused as it is — a 4xx other than 408 and 429, or a
+redirect — is given up at once (`refused: true` in the log, `last_error` `CrmHttpError: CRM submitRequest answered 400
+(permanent)`); a timeout, a network error, a 408, a 429 or a 5xx is tried again. Then it gives up: the log says
+`request send gave up` (with the request id), `bbc_request_sends_given_up` rises on the worker's metrics,
+`OPS_WEBHOOK` gets one line, and the member reads `Not sent` — with a call button from the A2c app on when the build
+has the general line; older apps still say it is saved on the phone. Nothing resends it by itself. Fix the cause (the
+CRM, its address or secret, `OPERATORS_EMAIL`, Postmark — the log line has the error), then re-queue it; the next
 minute's run sends it:
 
 ```sql
