@@ -254,7 +254,6 @@ describe("D7's filters through Commons", () => {
     expect(acceptLandmarkPhoto(info({ thumburl: "http://upload.wikimedia.org/x.jpg" }))).toBeNull();
     expect(acceptLandmarkPhoto(info({ restrictions: "ita-mibac" }))).toBeNull(); // the Colosseum's
     expect(acceptLandmarkPhoto(info({ restrictions: "personality" }))).toBeNull();
-    expect(acceptLandmarkPhoto(info({ license: "FAL" }))).toBeNull();
     expect(acceptLandmarkPhoto(info({ license: "Attribution" }))).toBeNull();
     expect(acceptLandmarkPhoto(info({ license: "GFDL" }))).toBeNull();
     expect(acceptLandmarkPhoto(info({ artist: null }))).toBeNull(); // CC BY-SA asks for an author
@@ -263,6 +262,21 @@ describe("D7's filters through Commons", () => {
       "https://creativecommons.org/licenses/by/2.0",
     );
     expect(acceptLandmarkPhoto(info({ licenseUrl: "ftp://example.org/licence" }))?.licenceUrl).toBeNull();
+  });
+
+  it("the Free Art License as CC BY-SA: an author and the licence's own address on https (amendment 2)", () => {
+    // As Commons answers for a FAL file (LicenseShortName "FAL", LicenseUrl on http); the author is made up.
+    expect(
+      acceptLandmarkPhoto(
+        info({ license: "FAL", licenseUrl: "http://artlibre.org/licence/lal/en", artist: "Ana Pop" }),
+      ),
+    ).toMatchObject({
+      licence: "FAL",
+      licenceUrl: "https://artlibre.org/licence/lal/en",
+      credit: "Ana Pop · Wikimedia Commons",
+    });
+    expect(acceptLandmarkPhoto(info({ license: "Free Art License 1.3" }))?.licence).toBe("Free Art License 1.3");
+    expect(acceptLandmarkPhoto(info({ license: "FAL", artist: null }))).toBeNull(); // FAL asks for an author
   });
 });
 

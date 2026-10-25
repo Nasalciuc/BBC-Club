@@ -198,11 +198,12 @@ export type LandmarkPhoto = {
   page: string;
 };
 
-/** A licence's address as Commons gives it, on https: Creative Commons' own pages answer both ways. */
+/** A licence's address as Commons gives it, on https: Creative Commons' and the Free Art License's own pages
+ *  (artlibre.org) answer both ways. */
 function licenceAddress(info: ImageInfo): string | null {
   const raw = metadataText(info, "LicenseUrl");
   if (!raw) return null;
-  const url = raw.replace(/^http:\/\/creativecommons\.org\//i, "https://creativecommons.org/");
+  const url = raw.replace(/^http:\/\/(creativecommons\.org|artlibre\.org)\//i, "https://$1/");
   try {
     return new URL(url).protocol === "https:" && url.length <= 2048 ? url : null;
   } catch {

@@ -339,6 +339,66 @@ describe("Commons", () => {
     expect(acceptCommons(info().hero, undefined)).toBeNull();
   });
 
+  it("accepts the Free Art License as CC BY-SA is accepted: with an author, never without (ADR-IMPL-064, amendment 2)", () => {
+    // Commons calls it "FAL" (LicenseShortName), sometimes with its version or its full name.
+    for (const license of ["FAL", "FAL 1.3", "Free Art License", "Free Art License 1.3", "free art licence 1.3"]) {
+      const { hero, card } = info({ license });
+      expect(acceptCommons(hero, card)).toMatchObject({ author: "Jane Doe", license });
+    }
+    const anonymous = info({ license: "FAL", artist: null });
+    expect(acceptCommons(anonymous.hero, anonymous.card)).toBeNull();
+    for (const license of ["FAL or GFDL", "Free Art", "FAL-like"]) {
+      const { hero, card } = info({ license });
+      expect(acceptCommons(hero, card)).toBeNull();
+    }
+  });
+
+  it("accepts a one-page TIFF whose thumbnails Commons serves as JPEG; PNG, SVG and GIF stay out (amendment 3)", () => {
+    // Commons' own answer for a TIFF original (25 Oct 2026; the file renamed, the author made up): the thumbnails on
+    // its newer host, page 1, as JPEG, with its tracking query.
+    const thumb = (width: number, kind = "lossy", ext = "jpg") =>
+      `https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/Harbour_at_dusk.tif/${kind}-page1-${width}px-Harbour_at_dusk.tif.${ext}?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail`;
+    const tiff = (o: Parameters<typeof info>[0] = {}, cardThumb = thumb(500)) => {
+      const { hero } = info({
+        mime: "image/tiff",
+        width: 5172,
+        height: 3084,
+        pagecount: 1,
+        thumburl: thumb(1280),
+        thumbheight: 763,
+        descriptionurl: "https://commons.wikimedia.org/wiki/File:Harbour_at_dusk.tif",
+        license: "CC BY-SA 3.0 igo",
+        ...o,
+      });
+      return { hero, card: { thumburl: cardThumb, thumbwidth: 500, thumbheight: 298 } satisfies ImageInfo };
+    };
+    const ok = tiff();
+    expect(acceptCommons(ok.hero, ok.card)).toEqual({
+      cardUrl: thumb(500),
+      heroUrl: thumb(1280),
+      author: "Jane Doe",
+      license: "CC BY-SA 3.0 igo",
+      link: "https://commons.wikimedia.org/wiki/File:Harbour_at_dusk.tif",
+    });
+    const noPageCount = tiff({ pagecount: undefined });
+    expect(acceptCommons(noPageCount.hero, noPageCount.card)).not.toBeNull();
+    const refused = [
+      tiff({ thumburl: thumb(1280, "lossless", "png") }, thumb(500, "lossless", "png")), // its thumbnails are PNG
+      tiff({}, thumb(500, "lossless", "png")),
+      tiff({ pagecount: 12 }), // a scanned document, not a photograph
+      tiff({ width: 1200, height: 800 }), // the full width would be the original
+      tiff({ width: 6000, height: 2000 }), // a panorama
+      tiff({ artist: null }), // CC BY-SA without an author
+      tiff({ mime: "image/png" }),
+      tiff({ mime: "image/gif" }),
+      tiff({ mime: "image/svg+xml" }),
+    ];
+    for (const { hero, card } of refused) expect(acceptCommons(hero, card)).toBeNull();
+    // A PNG photograph stays out even with JPEG-named thumbnails.
+    const png = info({ mime: "image/png" });
+    expect(acceptCommons(png.hero, png.card)).toBeNull();
+  });
+
   it("reads metadata as text: tags out, entities once, spaces collapsed, long credits cut", () => {
     const text = (value: unknown) => metadataText({ extmetadata: { Artist: { value } } }, "Artist");
     expect(text("<span>Ana &amp; <b>Ion</b></span>")).toBe("Ana & Ion");

@@ -565,22 +565,52 @@ export function metadataText(info: ImageInfo, field: string): string | null {
   return text.length > 0 ? text : null;
 }
 
-/** Free licences whose terms a credit line meets. GFDL alone asks for the whole licence text beside the photo: no. */
-const FREE_LICENCE = /^(CC0( 1\.0)?|Public domain|CC BY(-SA)? \d(\.\d)?( [A-Za-z-]+)?)$/i;
+/**
+ * Free licences whose terms a credit line meets: CC0, public domain, CC BY / BY-SA, and the Free Art License (Commons'
+ * `FAL`, "Free Art License 1.3"), which asks what CC BY-SA asks — the author, and where to find the licence (the photo's
+ * Commons page names both; a landmark's credit carries the licence's address too) — ADR-IMPL-064, amendment 2. GFDL
+ * alone asks for the whole licence text beside the photo: no.
+ */
+const FREE_LICENCE =
+  /^(CC0( 1\.0)?|Public domain|CC BY(-SA)? \d(\.\d)?( [A-Za-z-]+)?|FAL( \d(\.\d)?)?|Free Art Licen[cs]e( \d(\.\d)?)?)$/i;
 
 /** On Wikimedia's own hosts, over https. */
 export const onWikimedia = (url: string | undefined) =>
   isHttpsOn(url, (h) => h === "wikimedia.org" || h.endsWith(".wikimedia.org"));
 
+/** The address's path ends in a JPEG file name (its query aside). */
+function isJpegAddress(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    return /\.jpe?g$/i.test(new URL(url).pathname);
+  } catch {
+    return false;
+  }
+}
+
 /**
- * A Commons file the app may show: a JPEG photograph in landscape, wider than the full-width thumbnail (so both widths
- * are real thumbnails, never the original), under a free licence, without restrictions (personality rights,
- * trademarks), with an author whenever the licence asks for one. `hero` is the answer at 1280 px with the metadata,
- * `card` the answer at 500 px.
+ * A photograph the app can load: a JPEG; or a TIFF — an archival or scanned photograph, one page — whose thumbnails
+ * Commons serves as JPEG (".../lossy-page1-1280px-Venice.tif.jpg"): the app loads those, never the TIFF
+ * (ADR-IMPL-064, amendment 3). PNG, SVG and GIF stay out: drawings, maps and screenshots far more often than photos.
+ */
+function isPhotograph(hero: ImageInfo, card: ImageInfo): boolean {
+  if (hero.mime === "image/jpeg") return true;
+  if (hero.mime !== "image/tiff") return false;
+  const pages = hero.pagecount;
+  if (pages !== undefined && pages !== 1) return false;
+  return isJpegAddress(hero.thumburl) && isJpegAddress(card.thumburl);
+}
+
+/**
+ * A Commons file the app may show: a photograph (a JPEG, or a one-page TIFF Commons serves as JPEG thumbnails) in
+ * landscape, wider than the full-width thumbnail (so both widths are real thumbnails, never the original), under a free
+ * licence, without restrictions (personality rights, trademarks), with an author whenever the licence asks for one.
+ * `hero` is the answer at 1280 px with the metadata, `card` the answer at 500 px.
  */
 export function acceptCommons(hero: ImageInfo | undefined, card: ImageInfo | undefined): FoundPhoto | null {
   if (!hero || !card) return null;
-  if (hero.mime !== "image/jpeg" || !hero.width || !hero.height || hero.width <= HERO_WIDTH) return null;
+  if (!hero.width || !hero.height || hero.width <= HERO_WIDTH) return null;
+  if (!isPhotograph(hero, card)) return null;
   if (!isLandscape(hero.width, hero.height)) return null;
   if (hero.thumbwidth !== HERO_WIDTH || card.thumbwidth !== CARD_WIDTH) return null;
   const heroUrl = hero.thumburl;
