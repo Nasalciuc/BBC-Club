@@ -57,6 +57,18 @@ describe("what the CRM receives over http", () => {
   });
 });
 
+describe("data-safety.md", () => {
+  it("cites the line of the production example that holds the adapter it names", () => {
+    const cite = read("docs/store/data-safety.md").match(
+      /The production example is `([^`]+)` \(`infra\/env\/production\.env\.example:(\d+)`\)/,
+    );
+    expect(cite).not.toBeNull();
+    const [, setting = "", line = "0"] = cite ?? [];
+    const lines = read("infra/env/production.env.example").split("\n");
+    expect({ line, holds: lines[Number(line) - 1] }).toEqual({ line, holds: setting });
+  });
+});
+
 describe("crm MODULE.md", () => {
   it("does not put out of scope the request the http adapter writes to the CRM", () => {
     // The adapter POSTs each request to the CRM: writing it is in scope.
