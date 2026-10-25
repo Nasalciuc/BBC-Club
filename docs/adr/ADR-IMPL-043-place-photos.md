@@ -26,7 +26,8 @@ image.
   from the table at once: `photo` (`card`, `hero`, `credit`), `satellite` (`lat`, `lng`) or `none` (not looked up yet).
   A known airport never asked about gets a `pending` row in the same request (one insert from `catalog.airports`; a
   row another request added a moment ago comes back unchanged, so it is answered too); an unknown code is left out. Two queries in steady state, three when a city is new, however many
-  codes (`query-budget.test.ts`). The contract (`packages/shared/src/api/v1/places.ts`, a change to shared this ADR covers)
+  codes (`query-budget.test.ts`). (Amended by ADR-IMPL-064, amendment 1: when a city asked is on its satellite view,
+  the landmarks flag is read too, cached 30 s, and with it on one more read for all such cities, however many.) The contract (`packages/shared/src/api/v1/places.ts`, a change to shared this ADR covers)
   drops an item an app cannot read — a later kind, an address that is not https — never the whole answer.
 - **Looked up by a job, ten cities a minute** — `resolve-place-photos` (worker, every minute, singleton, 50 s) claims
   up to ten due rows, new ones first (`FOR UPDATE SKIP LOCKED`, held ten minutes so a run that dies leaves them to the
@@ -41,7 +42,9 @@ image.
      refuses or slows others): the first file that is a JPEG in landscape (1.2–2.4 wide for 1 high), wider than 1280 px
      (so both widths are real thumbnails, never the original), under CC0, public domain or CC BY / BY-SA, without
      restrictions (personality rights, trademarks), with an author when the licence asks for one. The credit is its
-     Artist and LicenseShortName as text (80 characters at most) and its Commons page.
+     Artist and LicenseShortName as text (80 characters at most) and its Commons page. (Amended by ADR-IMPL-064,
+     amendment 2: the Free Art License is accepted as CC BY / BY-SA is, an author still required. Its amendment 3, a
+     one-page TIFF with JPEG thumbnails, was withdrawn: the city photo stays JPEG only.)
   3. **Pexels**, only with `PEXELS_API_KEY` and three cities a run at most (60 runs an hour stay under Pexels' 200; its
      month allows 20,000): `<city> skyline`, landscape; the first photo whose description names the city and no person
      (Pexels answers every search with something, and people are not the club's material). Credit: the photographer,
@@ -50,6 +53,9 @@ image.
      gets its satellite view for a day, and the log has an error for an operator to replace the key. A 403 may come
      from the network in front of Pexels: it counts as down.
   4. **Satellite**: the city's centre from Wikidata when it lies within 150 km of the airport, else the airport.
+     (Amended by ADR-IMPL-064, amendment 1: with `catalog.landmarks` on, the route answers a city on its satellite
+     view with its first landmark's photograph and that photograph's credit instead, composed when it reads; a city not
+     looked up yet stays `none`; the row and this order are unchanged.)
 - **Politely, and never downgraded** — the club's User-Agent goes with every request
   (`BBCClub/1.0 (<APP_ORIGIN>; place photos)`, Wikimedia's policy), eight seconds each. A source that fails (an error,
   a timeout, a shape other than its documentation's — Commons' own errors come with HTTP 200 and no pages, and count as

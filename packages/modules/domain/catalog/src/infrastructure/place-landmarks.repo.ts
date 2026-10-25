@@ -1,5 +1,5 @@
 import type { Executor } from "@bbc/db";
-import { and, asc, count, eq, gt, inArray, min, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, min, notInArray, sql } from "drizzle-orm";
 import { placeLandmarks, placePhotos, sitePlaces } from "@bbc/db/schema/catalog";
 
 /** A landmark as the route reads it. */
@@ -16,6 +16,9 @@ export type PlaceLandmarkRow = {
   licenceUrl: string | null;
   credit: string;
 };
+
+/** A landmark whose photograph may stand in for its city's (ADR-IMPL-064, amendment 1). */
+export type LandmarkStandIn = { file: string; imageUrl: string; licence: string; credit: string };
 
 /** A landmark found, as it is stored. */
 export type StoredLandmark = {
@@ -97,6 +100,44 @@ export const placeLandmarksRepo = {
             },
           ]
         : [],
+    );
+  },
+
+  /**
+   * For each of `codes`, the first landmark the landmarks route would show — the lowest rank among those the operator
+   * does not keep out (`skip`, Wikidata items) — whose photograph stands in for a city without one of its own. One
+   * query however many codes; a place without such a landmark is absent.
+   */
+  async standIns(
+    exec: Executor,
+    codes: readonly string[],
+    skip: ReadonlySet<string>,
+  ): Promise<Map<string, LandmarkStandIn>> {
+    if (codes.length === 0) return new Map();
+    const rows = await exec
+      .selectDistinctOn([placeLandmarks.code], {
+        code: placeLandmarks.code,
+        file: placeLandmarks.file,
+        imageUrl: placeLandmarks.imageUrl,
+        licence: placeLandmarks.licence,
+        credit: placeLandmarks.credit,
+      })
+      .from(placeLandmarks)
+      .where(
+        and(
+          inArray(placeLandmarks.code, [...codes]),
+          eq(placeLandmarks.kind, "landmark"),
+          skip.size > 0 ? notInArray(placeLandmarks.landmarkQid, [...skip]) : undefined,
+        ),
+      )
+      .orderBy(placeLandmarks.code, asc(placeLandmarks.rank));
+    // The CHECK place_landmarks_landmark keeps every one of these set on a landmark row.
+    return new Map(
+      rows.flatMap((r) =>
+        r.file && r.imageUrl && r.licence && r.credit
+          ? [[r.code.trim(), { file: r.file, imageUrl: r.imageUrl, licence: r.licence, credit: r.credit }] as const]
+          : [],
+      ),
     );
   },
 

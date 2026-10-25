@@ -565,8 +565,14 @@ export function metadataText(info: ImageInfo, field: string): string | null {
   return text.length > 0 ? text : null;
 }
 
-/** Free licences whose terms a credit line meets. GFDL alone asks for the whole licence text beside the photo: no. */
-const FREE_LICENCE = /^(CC0( 1\.0)?|Public domain|CC BY(-SA)? \d(\.\d)?( [A-Za-z-]+)?)$/i;
+/**
+ * Free licences whose terms a credit line meets: CC0, public domain, CC BY / BY-SA, and the Free Art License (Commons'
+ * `FAL`, "Free Art License 1.3"), which asks what CC BY-SA asks — the author, and where to find the licence (the photo's
+ * Commons page names both; a landmark's credit carries the licence's address too) — ADR-IMPL-064, amendment 2. GFDL
+ * alone asks for the whole licence text beside the photo: no.
+ */
+const FREE_LICENCE =
+  /^(CC0( 1\.0)?|Public domain|CC BY(-SA)? \d(\.\d)?( [A-Za-z-]+)?|FAL( \d(\.\d)?)?|Free Art Licen[cs]e( \d(\.\d)?)?)$/i;
 
 /** On Wikimedia's own hosts, over https. */
 export const onWikimedia = (url: string | undefined) =>
@@ -576,7 +582,9 @@ export const onWikimedia = (url: string | undefined) =>
  * A Commons file the app may show: a JPEG photograph in landscape, wider than the full-width thumbnail (so both widths
  * are real thumbnails, never the original), under a free licence, without restrictions (personality rights,
  * trademarks), with an author whenever the licence asks for one. `hero` is the answer at 1280 px with the metadata,
- * `card` the answer at 500 px.
+ * `card` the answer at 500 px. A TIFF stays out even when Commons serves its thumbnails as JPEG: on Commons TIFF
+ * originals are mostly scans and remote-sensing products, and the one a site city had was a satellite image
+ * (ADR-IMPL-064, amendment 3, withdrawn). PNG, SVG and GIF stay out: drawings, maps and screenshots.
  */
 export function acceptCommons(hero: ImageInfo | undefined, card: ImageInfo | undefined): FoundPhoto | null {
   if (!hero || !card) return null;
@@ -592,8 +600,9 @@ export function acceptCommons(hero: ImageInfo | undefined, card: ImageInfo | und
 
 /**
  * The credit a Commons file may be shown with (ADR-IMPL-043): its page on Commons, a free licence (CC0, public domain,
- * CC BY or BY-SA), no restrictions (personality rights, trademarks), and an author — Artist as text, 80 characters at
- * most — whenever the licence asks for one. Null: the file may not be shown.
+ * CC BY or BY-SA, or the Free Art License — ADR-IMPL-064, amendment 2), no restrictions (personality rights,
+ * trademarks), and an author — Artist as text, 80 characters at most — whenever the licence asks for one (all but CC0
+ * and public domain). Shared by the city photo and the landmarks. Null: the file may not be shown.
  */
 export function commonsCredit(info: ImageInfo): { author: string | null; license: string; link: string } | null {
   const link = info.descriptionurl;
@@ -606,6 +615,24 @@ export function commonsCredit(info: ImageInfo): { author: string | null; license
   const free = /^(CC0|Public domain)/i.test(license);
   if (!free && !author) return null;
   return { author, license, link };
+}
+
+/** A Commons file's own page, from its name: "Eiffel Tower.jpg" → ".../wiki/File:Eiffel_Tower.jpg" on Commons. */
+export function commonsPage(file: string): string {
+  return `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file.trim().replace(/ /g, "_"))}`;
+}
+
+/**
+ * The same Commons thumbnail at another of Wikimedia's standard widths — ".../thumb/a/ab/X.jpg/1280px-X.jpg" at 500 is
+ * ".../thumb/a/ab/X.jpg/500px-X.jpg", its query kept. Null for an address on no Wikimedia host or not shaped so.
+ */
+export function commonsThumbAt(url: string, width: number): string | null {
+  if (!onWikimedia(url)) return null;
+  const u = new URL(url);
+  const m = u.pathname.match(/^(\/(?:[^/]+\/)*thumb\/[0-9a-f]\/[0-9a-f]{2}\/[^/]+\/)\d+px-([^/]+)$/);
+  if (!m) return null;
+  u.pathname = `${m[1]}${width}px-${m[2]}`;
+  return u.toString();
 }
 
 // ── Pexels ───────────────────────────────────────────────────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ import { Hono } from "hono";
 import { isolatedDb } from "@bbc/db/testing/isolated-db";
 import { createPlatform } from "@bbc/platform";
 import type { Principal } from "@bbc/shared/authz/principal";
-import { PlaceLandmarksVM } from "@bbc/shared/api/v1/places";
+import { PlaceLandmarksVM, PlacePhotosVM, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { DEFAULT_RETRY_AFTER_S, type Binding, type Fetch } from "../../src/application/place-photo-sources";
 import {
@@ -18,6 +18,7 @@ import {
   resolvePlaceLandmarks,
 } from "../../src/application/place-landmarks";
 import { placeLandmarksRepo } from "../../src/infrastructure/place-landmarks.repo";
+import { placePhotosRepo } from "../../src/infrastructure/place-photos.repo";
 import { sourceHoldsRepo } from "../../src/infrastructure/source-holds.repo";
 import { catalogModule } from "../../src/module";
 import { binding, fakeSources } from "../unit/place-photos.fixture";
@@ -89,6 +90,12 @@ async function setup(
       expect(res.status).toBe(200);
       return PlaceLandmarksVM.parse(await res.json());
     },
+    /** GET /v1/places/photos — the city photos, a landmark standing in where a city has none (amendment 1). */
+    photos: async (codes: string) => {
+      const res = await app.request(`/v1/places/photos?codes=${codes}`);
+      expect(res.status).toBe(200);
+      return PlacePhotosVM.parse(await res.json()).items;
+    },
     /** The flag row, through this platform: its 30-s cache is dropped at once. */
     flag: (value: { enabled: boolean; skip: string[] }) => platform.flags.set("catalog.landmarks", value),
     rows: async (code: string) =>
@@ -101,6 +108,10 @@ async function setup(
         city_qid: string | null;
         landmark_qid: string | null;
         name: string | null;
+        file: string | null;
+        image_url: string | null;
+        licence: string | null;
+        credit: string | null;
         created_at: Date;
         hours: number;
       }[],
@@ -495,6 +506,105 @@ describe("landmarks", () => {
       INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports)
       VALUES (7, 'Paris', 'France', 'Europe', 'CDG', '{CDG}')`);
     expect(await t.run()).toMatchObject({ places: 1, landmarks: 3 });
+    await t.iso.drop();
+  });
+
+  it("a city on its satellite view shows its first landmark's photograph, credited as that photograph (amendment 1)", async () => {
+    const t = await setup("landmarks-stand-in", answers);
+    // Paris's city photo is its satellite view (nothing the photo job may show); Chișinău's is not looked up yet.
+    await t.iso.db.execute(sql`
+      INSERT INTO catalog.place_photos (code, status, lat, lng, expires_at)
+      VALUES ('CDG', 'satellite', 48.856944, 2.351389, now() + interval '30 days')`);
+    await shown(t.iso, "RMO");
+    const satellite = { code: "CDG", kind: "satellite", lat: 48.856944, lng: 2.351389 } as const;
+
+    // The flag off (as seeded): nothing changes, and no landmark is read.
+    expect(await t.photos("CDG,RMO")).toEqual([satellite, { code: "RMO", kind: "none" }]);
+
+    await t.flag({ enabled: true, skip: [] });
+    expect(await t.photos("CDG,RMO")).toEqual([satellite, { code: "RMO", kind: "none" }]); // none found yet
+    expect(await t.run()).toMatchObject({ places: 2, landmarks: 6 });
+    const cdg = await t.rows("CDG");
+    const rmo = await t.rows("RMO");
+    /** What the app receives for a landmark row: its 1280-px thumbnail, the same at 500 px, its own credit and page. */
+    const asPhoto = (code: string, r: (typeof cdg)[number]): PlacePhotoVM => ({
+      code,
+      kind: "photo",
+      card: String(r.image_url).replace("/1280px-", "/500px-"),
+      hero: String(r.image_url),
+      credit: {
+        source: "wikimedia",
+        author: String(r.credit).replace(/ · Wikimedia Commons$/, ""),
+        license: r.licence,
+        link: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(String(r.file).replace(/ /g, "_"))}`,
+      },
+    });
+    expect(cdg[0]?.landmark_qid).toBe("Q243"); // the Eiffel Tower
+    expect(cdg[0]?.image_url).toContain("/1280px-");
+    expect(rmo.map((r) => r.kind)).toEqual(["landmark", "landmark", "landmark"]);
+    const photos = await t.photos("CDG,RMO,LHR");
+    // RMO is not looked up yet: `none` though it has landmarks — phones ask again within a minute, and would keep a
+    // stand-in for twelve hours past the city's own photo. LHR has no landmark: nothing yet, as before.
+    expect(photos).toEqual([asPhoto("CDG", cdg[0]!), { code: "RMO", kind: "none" }, { code: "LHR", kind: "none" }]);
+    expect(photos[0]).toMatchObject({ credit: { license: "CC BY-SA 4.0" } });
+    // Composed by the route, never written: the city photo rows are as they were, for the photo job to look again.
+    expect(
+      await t.iso.db.execute(sql`
+        SELECT code, status, source FROM catalog.place_photos WHERE code IN ('CDG', 'RMO') ORDER BY code`),
+    ).toEqual([
+      { code: "CDG", status: "satellite", source: null },
+      { code: "RMO", status: "pending", source: null },
+    ] as never);
+
+    // The operator keeps the Eiffel Tower out: the next landmark at once; all three out: the satellite view again.
+    await t.flag({ enabled: true, skip: ["Q243"] });
+    expect((await t.photos("CDG"))[0]).toEqual(asPhoto("CDG", cdg[1]!)); // Musée d'Orsay
+    await t.flag({ enabled: true, skip: ["Q243", "Q23402", "Q2946"] });
+    expect(await t.photos("CDG")).toEqual([satellite]);
+
+    // A photo of the city's own stays first: one the photo job found, or the operator's.
+    await t.flag({ enabled: true, skip: [] });
+    await placePhotosRepo.writePhoto(
+      t.iso.db,
+      "RMO",
+      {
+        source: "wikimedia",
+        cardUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/C.jpg/500px-C.jpg",
+        heroUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/C.jpg/1280px-C.jpg",
+        author: "Ion Pop",
+        license: "CC BY-SA 4.0",
+        link: "https://commons.wikimedia.org/wiki/File:C.jpg",
+      },
+      { lat: 47.0105, lng: 28.8638 },
+    );
+    await placePhotosRepo.setOverride(t.iso.db, "CDG", {
+      cardUrl: "https://cdn.example.test/paris-card.jpg",
+      heroUrl: "https://cdn.example.test/paris.jpg",
+      author: null,
+      license: null,
+      link: null,
+    });
+    expect(await t.photos("CDG,RMO")).toEqual([
+      {
+        code: "CDG",
+        kind: "photo",
+        card: "https://cdn.example.test/paris-card.jpg",
+        hero: "https://cdn.example.test/paris.jpg",
+        credit: null,
+      },
+      {
+        code: "RMO",
+        kind: "photo",
+        card: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/C.jpg/500px-C.jpg",
+        hero: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/C.jpg/1280px-C.jpg",
+        credit: {
+          source: "wikimedia",
+          author: "Ion Pop",
+          license: "CC BY-SA 4.0",
+          link: "https://commons.wikimedia.org/wiki/File:C.jpg",
+        },
+      },
+    ]);
     await t.iso.drop();
   });
 

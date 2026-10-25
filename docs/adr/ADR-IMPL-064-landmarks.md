@@ -8,7 +8,9 @@ and `source-holds.repo.ts`, the new job `resolve-place-landmarks`, the new route
 (`apps/mobile/src/features/places/` `landmark-logic.ts`, `landmark-store.ts`, `usePlaceLandmarks.ts`, `Landmarks.tsx`;
 `app/destination/[code].tsx`, `app/(tabs)/explore.tsx`; `design/components.md`) · Amends decision D7 (brief 3.2:
 landmarks) and ADR-IMPL-043 (the city photo: the IATA lookup, a city found by its name, a 429). The app draws them on
-the destination's page (04) and Explore's chosen route (13): **The app** below.
+the destination's page (04) and Explore's chosen route (13): **The app** below. Amended the same day (G3a, the city
+photo's coverage: a landmark stands in for a city on its satellite view, and the Free Art License; a one-page TIFF was
+weighed and withdrawn — below).
 
 **Context.** The owner asked for a real photograph of every city and three real landmarks of every destination, each
 with its name and its licence (brief 3.2, requests 2 and 6). The research of 25 Oct 2026 (12 cities, WDQS, QLever and
@@ -80,8 +82,8 @@ Commons, 117 requests) found:
   - Commons at 1280 px with the metadata (`Artist|LicenseShortName|LicenseUrl|AttributionRequired|Restrictions`): a
     JPEG **at least 1600 px wide**, landscape as the city photo's band is (**1.2 to 2.4 wide for 1 high** — the Louvre's
     night view, 2.52, is refused), its 1280-px thumbnail a real one, and ADR-IMPL-043's credit rules (`commonsCredit`,
-    shared with the city photo): CC0, public domain or CC BY / BY-SA, no restrictions (`ita-mibac`, `personality`), an
-    author when the licence asks;
+    shared with the city photo): CC0, public domain or CC BY / BY-SA (amended below, amendment 2: and the Free Art
+    License, its address read on https), no restrictions (`ita-mibac`, `personality`), an author when the licence asks;
   - **no duplicate image**: not one of the city's own photographs, not a file another landmark already shows (by name,
     and by its Commons page — a renamed file);
   - **at most three, fewer when fewer qualify; never invented.**
@@ -202,3 +204,122 @@ licences and restrictions as Commons gave them; authors are made up and files wh
 three as WDQS wherever both answered) — another provider's availability for a production job; WDQS stays the source, and
 the question is plain SPARQL apart from its hints. Asking at request time — a member's screen would wait on WDQS.
 Counting a 429 as a failure — it pushed cities back a day for an outage rule.
+
+## Amendment — 25 Oct 2026: the city photo's coverage (G3a)
+
+**Context.** The pre-registered check 3.2 — "of the site's 154 cities at least 95 % have a city photo" — failed: this
+branch's own code, against live Wikimedia, gave 118 of 154 (76.6 %). 35 cities fell to the satellite view and Kyoto has
+no airport. What each of the 35 has on its city item, judged by `acceptCommons` (a city can fail several ways): 18 a file
+no wider than 1280 px, 9 a panorama (wider than 2.4 for 1), 3 a file that is not a JPEG (one TIFF, two PNG), 3 the Free
+Art License, 2 no usable file at all, 2 a portrait, 1 no author. Raised in this order, without lowering any rule:
+
+1. **A landmark stands in for the city photo.** With `catalog.landmarks` on, where `GET /v1/places/photos` would answer
+   a city's satellite view, it answers `photo` with the first landmark the landmarks route shows for the place (the
+   lowest rank among its `landmark` rows, without the flag's `skip`): the landmark's 1280-px thumbnail as `hero`, the
+   same file at 500 px as `card` (Wikimedia's standard width, the address's `1280px-` made `500px-`; the 1280-px
+   address when it is no standard thumbnail's), and that photograph's own credit (source `wikimedia`, its author — the
+   credit line read back —, its licence, its Commons page from the file's name). Its photograph already passed D7,
+   stricter than the city photo's rules (at least 1600 px, 1.2–2.4, JPEG, the same credit rules). A photo of the city's
+   own — Commons', Pexels', the club's — stays first. The contract keeps its shape: `packages/shared` is not touched.
+
+   **Only the satellite view, not a city not looked up yet (`none`).** The satellite view is the photo job's answer
+   that the city has no photograph of its own; `none` is a city it has not decided yet, usually within a minute.
+   Phones ask about a `none` again after 50 s but keep a photo for twelve hours (`place-photo-store.ts`), and the
+   landmarks job may already hold rows for a city whose photo row is pending: a site city asked about for the first
+   time (the job covers the site's cities' airports), a city an operator handed back (`DELETE …/photo`), or one a site
+   sync cleared. A stand-in there would hide the city's own photo, found a minute later, for twelve hours. The task
+   named both; `none` was left out in review the same day and is listed for the owner below.
+
+   **Composed when the route reads, not written by the photo job**, because:
+
+   - the server's next answer follows the flag and its `skip`: off, the answer is exactly what it was (no landmark is
+     read); a skipped landmark gives way to the next rank, and to the satellite view when none is left. A written
+     stand-in would outlive both for up to 33 days. A phone that already holds a stand-in keeps it (below);
+   - landmarks come after the city photo: `resolve-place-landmarks` looks up the cities the app has shown, two every
+     five minutes, while the photo job decides a city within a minute. A stand-in the photo job wrote would wait for the
+     row's next look, 30–33 days later; read, it shows as soon as the landmark is found;
+   - the photo row stays `satellite` and the photo job keeps looking on its own schedule: a photo the city gets later,
+     or the operator's (`PUT …/photo`), wins on the next answer with no new guard;
+   - caching: the photos route sends no ETag and no revalidation (the landmarks route's ETag is unchanged), and a
+     phone keeps a photo or a satellite view for twelve hours in memory, until the app restarts. So a stand-in reaches
+     a phone within twelve hours of its landmark, and leaves it — skipped, the flag turned off, the city's own photo
+     found or the operator's set — within twelve hours too: the server answers differently within ~35 s, phones that
+     already hold the stand-in keep it until their entry ages or the app restarts. A takedown faster than that needs the
+     photos route to revalidate, an app change outside this amendment. A photograph Commons deletes is not taken down
+     by the deletion: the landmark's row keeps its address until the job's next look (30–33 days) and the route keeps
+     answering it; a phone that has shown it keeps drawing it from its image cache (`Photo` keeps a photograph on disk
+     under its address, across restarts), and only a phone that never loaded it shows the slot's fallback (the club's
+     image, or the light tint). The operator takes it down as any stand-in — its item in `skip`, or the club's photo —
+     and the twelve hours hold, the address having changed;
+   - cost: the flag (cached 30 s), read only when a city asked is on its satellite view, and with the flag on one
+     `DISTINCT ON` read of `place_landmarks` for those cities, however many — none while the flag is off
+     (`query-budget.test.ts`: five satellite cities with landmarks cost one query more than with the flag off, and no
+     more than one).
+
+   The 500-px address is derived, not asked: of the 249 files Commons answered at both widths in this measurement's
+   saved answers, the 200 with a 1280-px thumbnail had exactly the 500-px address the rule derives (the others were
+   narrower than 1280, or a TIFF's page, which no landmark is). The destination screen (a later step) shows the city
+   photo above the landmarks: when the city photo is a stand-in, its `hero` is the first landmark's `imageUrl`, and that
+   screen leaves it out of the list rather than show one photograph twice.
+
+2. **The Free Art License** (Commons' `FAL`, "Free Art License 1.3") is accepted as CC BY-SA is. It is a free licence
+   that asks for the author and for where to find the licence: the credit names the author and links the photo's
+   Commons page, which names the licence; a landmark's credit carries the licence's address too (Commons' `LicenseUrl`,
+   `http://artlibre.org/…` read on https as Creative Commons' is). ADR-IMPL-043 gives no reason against it — it refuses
+   GFDL for asking its whole text beside the photo; FAL asks for a copy or the place to find one. An author is still
+   required. `commonsCredit` is shared, so landmarks accept it too.
+3. **A TIFF original whose thumbnails Commons serves as JPEG — weighed and withdrawn.** Accepted at first as a
+   photograph (one page, both thumbnails JPEG, `…/lossy-page1-1280px-<name>.tif.jpg`), then withdrawn in review the
+   same day: the one TIFF any of the 154 cities had on its item, Venice's, is a space agency's satellite image of the
+   lagoon (its credit names the agency; its 500-px thumbnail, looked at once, shows the islands from orbit). Written as
+   Venice's city photo, it would have been credited as a photograph and, as a photo of the city's own, kept Venice's
+   landmark from standing in. On Commons TIFF originals are mostly scans and
+   remote-sensing products; nothing in Commons' answer tells a photograph taken there from either. The city photo stays
+   JPEG only, as ADR-IMPL-043 had it; PNG, SVG and GIF stay refused; landmarks stay JPEG only (D7).
+
+**Measured** (25 Oct 2026, 16:55–17:07 UTC, and Venice's landmarks at 17:29–17:32 after the review; the same harness,
+outside the repository, with this branch's code). The city items' files came from the first run's saved answers; the
+landmarks of the 35 were asked again live — GET only, one request at a time, WDQS at least 2 s apart, Commons at least
+60 s apart, every Retry-After waited out — until Commons answered 429 three times in a row (17:07), where the etiquette
+stops a run; Venice's were asked alone afterwards (two 429s, each waited out, then the answer).
+
+|                                                                                                     | cities  | share of 154 |
+| --------------------------------------------------------------------------------------------------- | ------- | ------------ |
+| a photo before                                                                                      | 118     | 76.6 %       |
+| + the Free Art License (DEL, LCA, SEZ)                                                              | 3       |              |
+| + a landmark standing in (BHX, VCE, LIS, HKT, CNX, MAA, AYT, LXR, APW)                              | 9       |              |
+| **a photo now, measured**                                                                           | **130** | **84.4 %**   |
+| the satellite view, measured (DPS, AUH, NAN: no landmark)                                           | 3       |              |
+| not measured: their landmarks not asked before the stop (19), or WDQS answered 502 after 30 s (DXB) | 20      |              |
+| none: Kyoto (no airport)                                                                            | 1       |              |
+
+The landmarks found for the 35: three for 8 places, two for none, one for 1 (APW), none for 3 (DPS, AUH, NAN); 23 not
+asked — the 3 that now have their own photo were asked last, by design, and 20 were cut by the stop. The 9 stand-ins'
+licences: CC BY-SA (2.0, 2.5, 3.0, 4.0) 6, CC BY (3.0, 4.0) 2, public domain 1. **Check 3.2 is not yet met:** 130
+measured leaves it between 130 and 150 of 154 (84.4–97.4 %); it passes only if 17 of the 20 not measured have a
+landmark (9 of the 12 measured had one). The same measurement, outside the repository, can resume with those 20: CHC,
+PPT, POM, PLS, MRS, BRS, FLR, RTM, SUB, AMD, TFS, HER, CEB, DVO, GVA, GOA, HRE, PHC, BDQ and DXB.
+
+**Left to the owner** (not in this change). Each option measured on the 23 cities still on the satellite view — 20 of
+them not yet measured for a landmark, so each count is the most it can add:
+
+- **The 1280-px rule** (a city photo wider than 1280 px, so both widths are real thumbnails): 13 cities have a file
+  whose only fault is its width — exactly 1280 px for AUH, PPT and CEB (the original would be the hero), 1000–1215 for
+  2, 800–904 for 6, under 800 for 2. Accepting the original at 1280 adds at most 3; at 1000, 5; at 800, 11.
+- **The panorama band** (1.2 to 2.4 wide for 1): 7 cities have a file whose only fault is being wider — up to 2.5 for
+  DXB and RTM (2.42, 2.47), 2.92 for HER, 3.28–3.79 for MRS, FLR, GVA and GOA. 2.5 adds at most 2; 3.0, 3; 4.2, 7. The
+  app's photo band would crop them.
+- **Portraits** (TFS 1.0, PHC 0.56 wide for 1): 2 cities, only with the app cropping (as for the portrait icons above).
+- **A stand-in for a city not looked up yet** (`none`): about a minute of a landmark's photograph in place of the club's
+  image, for the cost above (a city's own photo hidden for up to twelve hours); it adds no city to check 3.2.
+- Nothing here rescues DPS (its one file has no author, and is 1071 px wide), PLS (a 324-px PNG) or BRS (no file on
+  its city item): the club's own photo (`PUT …/photo`) does.
+
+**Tests.** `tests/unit/place-photos.test.ts` (the Free Art License with an author, never without; a one-page TIFF with
+JPEG thumbnails, shaped as Commons answers, refused, as are PNG, SVG and GIF; a file's page and its 500-px thumbnail; a
+stand-in's photo and credit, only for a satellite view — any photo of the city's own first, a city not looked up yet
+left `none`, an unreadable one left out), `tests/unit/landmarks.test.ts` (FAL with its https address; the credit line
+read back), `tests/contract/place-landmarks.test.ts` (the stand-in through the route: the flag off, none found yet,
+the first landmark, a pending city with landmarks still `none`, a skipped one and all three skipped, a Commons photo and
+the operator's first, the rows never written), `apps/api/test/catalog-landmarks.test.ts` (through the host),
+`apps/api/test/query-budget.test.ts` (one read for the stand-ins, however many cities; none with the flag off).

@@ -213,11 +213,27 @@ export type LandmarkPhoto = {
   page: string;
 };
 
-/** A licence's address as Commons gives it, on https: Creative Commons' own pages answer both ways. */
+/** Who hosts every landmark's photograph: the credit line's last words. */
+const CREDIT_HOST = "Wikimedia Commons";
+const CREDIT_SUFFIX = ` · ${CREDIT_HOST}`;
+
+/** The credit line a landmark is shown with: "<author> · Wikimedia Commons", else "Wikimedia Commons". */
+export const landmarkCredit = (author: string | null) => (author ? `${author}${CREDIT_SUFFIX}` : CREDIT_HOST);
+
+/** The author a credit line names (`landmarkCredit` read back); null when it names Commons alone. */
+export function landmarkAuthor(credit: string): string | null {
+  const text = credit.trim();
+  if (text === CREDIT_HOST) return null;
+  const author = text.endsWith(CREDIT_SUFFIX) ? text.slice(0, -CREDIT_SUFFIX.length).trim() : text;
+  return author.length > 0 ? author : null;
+}
+
+/** A licence's address as Commons gives it, on https: Creative Commons' and the Free Art License's own pages
+ *  (artlibre.org) answer both ways. */
 function licenceAddress(info: ImageInfo): string | null {
   const raw = metadataText(info, "LicenseUrl");
   if (!raw) return null;
-  const url = raw.replace(/^http:\/\/creativecommons\.org\//i, "https://creativecommons.org/");
+  const url = raw.replace(/^http:\/\/(creativecommons\.org|artlibre\.org)\//i, "https://$1/");
   try {
     return new URL(url).protocol === "https:" && url.length <= 2048 ? url : null;
   } catch {
@@ -248,7 +264,7 @@ export function acceptLandmarkPhoto(info: ImageInfo | undefined): LandmarkPhoto 
     height,
     licence: credit.license,
     licenceUrl: licenceAddress(info),
-    credit: credit.author ? `${credit.author} · Wikimedia Commons` : "Wikimedia Commons",
+    credit: landmarkCredit(credit.author),
     page: credit.link,
   };
 }
