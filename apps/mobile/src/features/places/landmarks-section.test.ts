@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 import type { ReactElement, ReactNode } from "react";
 import type { LandmarkVM } from "@bbc/shared/api/v1/places";
 
+import type { DestinationPhoto } from "./landmark-logic";
+
 const opened: string[] = [];
 const View = (props: { children?: ReactNode }) => props.children ?? null;
 const Text = (props: { children?: ReactNode }) => props.children ?? null;
@@ -72,24 +74,37 @@ const orsay = landmark("Musée d'Orsay", "Orsay.jpg", { width: 1280, height: 100
 
 const NONE: ReadonlySet<string> = new Set();
 
+/** 04's photograph as `destinationPhoto` hands it to the section: the server's at `address`, or none drawn. */
+function over04At(address: string | null): DestinationPhoto {
+  return destinationPhoto(null, {
+    source: address ? { uri: address, headers: HEADERS } : null,
+    credit: null,
+    cache: "disk",
+  });
+}
+
 function draw(
   landmarks: readonly LandmarkVM[],
   over: {
     failed?: ReadonlySet<string>;
-    cityPhoto?: string | null;
+    /** 04's photograph (`look` "page"); none drawn when not given. 13 takes none. */
+    photo?: DestinationPhoto;
     look?: "route" | "page";
     onPhotoError?: (url: string) => void;
   } = {},
 ) {
-  const prefix = over.look === "route" ? "explore" : "destination";
-  const tree = Landmarks({
+  const look = over.look ?? "page";
+  const prefix = look === "route" ? "explore" : "destination";
+  const shared = {
     landmarks,
     failed: over.failed ?? NONE,
-    cityPhoto: over.cityPhoto ?? null,
     onPhotoError: over.onPhotoError ?? (() => undefined),
-    look: over.look ?? "page",
-    testIDPrefix: prefix,
-  });
+  };
+  if (look === "route" && over.photo) throw new Error("13 draws no city photograph");
+  const tree =
+    look === "route"
+      ? Landmarks({ ...shared, look, testIDPrefix: "explore" })
+      : Landmarks({ ...shared, look, testIDPrefix: "destination", photo: over.photo ?? over04At(null) });
   const all = elements(tree);
   const tileRe = new RegExp(`^${prefix}\\.landmark\\.(\\d+)$`);
   return {
@@ -155,12 +170,13 @@ describe("Landmarks — what the destination draws", () => {
         );
         // 04 with no city photograph or with one of these landmarks' standing in for it; 13, which draws none.
         const standIn = list[seed % Math.max(1, n)]?.imageUrl ?? null;
-        for (const [look, cityPhoto] of [
-          ["page", null],
-          ["page", standIn],
-          ["route", null],
+        for (const [look, photo] of [
+          ["page", over04At(null)],
+          ["page", over04At(standIn)],
+          ["route", undefined],
         ] as const) {
-          const { tree, tiles, photos, credits: shown, prefix } = draw(list, { look, cityPhoto });
+          const cityPhoto = photo?.cityPhoto ?? null;
+          const { tree, tiles, photos, credits: shown, prefix } = draw(list, { look, photo });
           if (tiles.length === 0) {
             expect(tree).toBeNull();
             continue;
@@ -187,7 +203,7 @@ describe("Landmarks — what the destination draws", () => {
     expect(draw([]).tree).toBeNull();
     expect(draw([tower], { failed: new Set([tower.imageUrl]) }).tree).toBeNull();
     // The city's only landmark, already over 04 as its photograph: nothing either.
-    expect(draw([tower], { cityPhoto: tower.imageUrl }).tree).toBeNull();
+    expect(draw([tower], { photo: over04At(tower.imageUrl) }).tree).toBeNull();
   });
 
   it("04 leaves out the landmark its photograph already is; 13, which draws the globe, keeps it (amendment 1)", () => {
@@ -204,10 +220,10 @@ describe("Landmarks — what the destination draws", () => {
       mapboxToken: undefined,
       size: { width: 393, height: 190 },
     });
-    // What 04 hands over (`app/destination/[code].tsx`, `destinationPhoto`): the address of the photograph over the
-    // page — the design's own when it has one (bundled, a number), else the server's — as `Photo` draws it.
-    const over04 = (bundled: number | null) => destinationPhoto(bundled, band).cityPhoto;
-    const page04 = draw([tower, louvre, orsay], { look: "page", cityPhoto: over04(null) });
+    // What 04 hands over (`app/destination/[code].tsx`, `destinationPhoto`): the photograph over the page — the
+    // design's own when it has one (bundled, a number), else the server's — as `Photo` draws it.
+    const over04 = (bundled: number | null) => destinationPhoto(bundled, band);
+    const page04 = draw([tower, louvre, orsay], { look: "page", photo: over04(null) });
     expect(page04.tiles.map((t) => [t.props.testID, t.props.accessibilityLabel])).toEqual([
       ["destination.landmark.1", "Louvre, photo"],
       ["destination.landmark.2", "Musée d'Orsay, photo"],
@@ -221,26 +237,52 @@ describe("Landmarks — what the destination draws", () => {
       ["destination.landmark.2.credit", "Photo: Jane Doe · CC BY-SA 4.0 · Wikimedia Commons"],
     ]);
     // The design's own photograph of the city over 04: the stand-in is not drawn, so its landmark is.
-    expect(draw([tower, louvre, orsay], { look: "page", cityPhoto: over04(7) }).tiles).toHaveLength(3);
+    expect(draw([tower, louvre, orsay], { look: "page", photo: over04(7) }).tiles).toHaveLength(3);
     // The satellite view over 04: no landmark's photograph, all three.
     const satellite = bandPicture(undefined, { code: "CDG", kind: "satellite", lat: 48.85, lng: 2.35 } as const, {
       headers: HEADERS,
       mapboxToken: "pk.test",
       size: { width: 393, height: 190 },
     });
-    const sky = draw([tower, louvre, orsay], { look: "page", cityPhoto: destinationPhoto(null, satellite).cityPhoto });
+    const sky = draw([tower, louvre, orsay], { look: "page", photo: destinationPhoto(null, satellite) });
     expect(sky.tiles.map((t) => t.props.accessibilityLabel)).toEqual([
       "Eiffel Tower, photo",
       "Louvre, photo",
       "Musée d'Orsay, photo",
     ]);
-    // 13 (`app/(tabs)/explore.tsx`) passes none: all three, the stand-in's first.
-    const route13 = draw([tower, louvre, orsay], { look: "route", cityPhoto: null });
+    // 13 (`app/(tabs)/explore.tsx`) has none to pass: all three, the stand-in's first.
+    const route13 = draw([tower, louvre, orsay], { look: "route" });
     expect(route13.tiles.map((t) => [t.props.testID, t.props.accessibilityLabel])).toEqual([
       ["explore.landmark.1", "Eiffel Tower, photo"],
       ["explore.landmark.2", "Louvre, photo"],
       ["explore.landmark.3", "Musée d'Orsay, photo"],
     ]);
+  });
+
+  it("each screen says what is over the section, or does not compile: 04 its photograph, 13 none", () => {
+    // Held by the app's typecheck (`tsc -p tsconfig.test.json`) as much as by this run: 04 hands the section the
+    // photograph it draws, as `destinationPhoto` chose it — never none, never left unsaid, never a bare address — and 13,
+    // over the globe, has none to hand. A screen that drops it is a type error, not a landmark shown twice.
+    const shared = { landmarks: [tower, louvre], failed: NONE, onPhotoError: () => undefined };
+    const hero = over04At(tower.imageUrl);
+    const screens = [
+      () => Landmarks({ ...shared, look: "page", testIDPrefix: "destination", photo: hero }),
+      () => Landmarks({ ...shared, look: "route", testIDPrefix: "explore" }),
+      // @ts-expect-error 04 hands the photograph over the page, never none
+      () => Landmarks({ ...shared, look: "page", testIDPrefix: "destination", photo: null }),
+      // @ts-expect-error nor leaves it unsaid
+      () => Landmarks({ ...shared, look: "page", testIDPrefix: "destination" }),
+      // @ts-expect-error nor an address in its place
+      () => Landmarks({ ...shared, look: "page", testIDPrefix: "destination", photo: hero.cityPhoto }),
+      // @ts-expect-error 13 draws the globe: it has no photograph to hand
+      () => Landmarks({ ...shared, look: "route", testIDPrefix: "explore", photo: hero }),
+    ];
+    const label = (tree: unknown) =>
+      elements(tree)
+        .map((e) => e.props.accessibilityLabel)
+        .filter((l) => typeof l === "string" && l.endsWith(", photo"));
+    expect(label(screens[0]!())).toEqual(["Louvre, photo"]);
+    expect(label(screens[1]!())).toEqual(["Eiffel Tower, photo", "Louvre, photo"]);
   });
 
   it("a photograph that would not load leaves with its name and credit; the others close up", () => {

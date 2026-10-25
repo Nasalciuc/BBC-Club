@@ -347,9 +347,8 @@ export default function ExploreScreen() {
             <Landmarks
               landmarks={landmarks.landmarks}
               failed={landmarks.failed}
-              // 13 draws the globe, not the city's photograph: no landmark is shown twice, so none is left out.
-              cityPhoto={null}
               onPhotoError={landmarks.onPhotoError}
+              // 13 draws the globe, not the city's photograph: the route look takes none, so no landmark is left out.
               look="route"
               testIDPrefix="explore"
             />

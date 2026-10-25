@@ -230,9 +230,10 @@ export default function DestinationScreen() {
             <Landmarks
               landmarks={landmarks.landmarks}
               failed={landmarks.failed}
-              // The photograph over the page: where it is a landmark standing in for the city's (ADR-IMPL-064, amendment
-              // 1), that landmark is left out of the list and the next one takes its place.
-              cityPhoto={hero.cityPhoto}
+              // The photograph over the page, as drawn above: where it is a landmark standing in for the city's
+              // (ADR-IMPL-064, amendment 1), that landmark is left out before the three are counted — the server sends
+              // three, so such a city shows at most two here.
+              photo={hero}
               onPhotoError={landmarks.onPhotoError}
               look="page"
               testIDPrefix="destination"

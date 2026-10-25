@@ -4,7 +4,7 @@ import { CAROUSEL_PAD, CarouselRow, Photo, PhotoCredit, baselineOffset, belowBas
 
 import { optionsColumn } from "@/features/explore/destination-geometry";
 
-import { landmarkTiles } from "./landmark-logic";
+import { type DestinationPhoto, landmarkTiles } from "./landmark-logic";
 import { PICTURE_HEADERS } from "./usePlacePhotos";
 
 type Role = TextStyle & { fontSize: number; lineHeight: number };
@@ -29,18 +29,26 @@ type Props = {
   landmarks: readonly LandmarkVM[];
   /** The photographs that would not load, by address: left out with their names and credits until tried again. */
   failed: ReadonlySet<string>;
-  /**
-   * The address of the city's photograph the screen draws above the section (`photoAddress`), null when it draws none:
-   * a landmark showing it — one that stands in for the city's photo (ADR-IMPL-064, amendment 1) — is left out, so one
-   * photograph is never shown twice. Each screen says, so none forgets to.
-   */
-  cityPhoto: string | null;
   /** A photograph would not load. */
   onPhotoError: (imageUrl: string) => void;
-  /** The flight options it follows: `page` on the destination's page (04), `route` in Explore's sheet (13). */
-  look: "route" | "page";
   testIDPrefix: "explore" | "destination";
-};
+} & (
+  | {
+      /** The flight options it follows: the destination's page (04). */
+      look: "page";
+      /**
+       * The photograph over the page, as 04 chose it (`destinationPhoto`): a landmark showing it — one that stands in
+       * for the city's photo (ADR-IMPL-064, amendment 1) — is left out (its `cityPhoto`), so one photograph is never
+       * shown twice. The choice itself, not an address: the page cannot hand none, nor leave it unsaid, and compile.
+       */
+      photo: DestinationPhoto;
+    }
+  | {
+      /** The flight options it follows: Explore's sheet at a chosen route (13), over the globe — no city photograph. */
+      look: "route";
+      photo?: never;
+    }
+);
 
 /**
  * Up to three landmarks of the destination (ADR-IMPL-064), best first: each photograph with its name under it and the
@@ -48,12 +56,13 @@ type Props = {
  * title and no empty frame (a photograph that will not load leaves with its name and credit, and so does the one the
  * screen already shows as the city's). No skeleton: the images draw no slot for one.
  */
-export function Landmarks({ landmarks, failed, cityPhoto, onPhotoError, look, testIDPrefix }: Props) {
+export function Landmarks({ landmarks, failed, onPhotoError, look, testIDPrefix, photo }: Props) {
   const tiles = landmarkTiles(landmarks, {
     headers: PICTURE_HEADERS,
     photoHeight: LOOK.photo.height,
     failed,
-    cityPhoto,
+    // 04 leaves out the photograph over it; 13 draws the globe and leaves out none.
+    cityPhoto: photo?.cityPhoto ?? null,
   });
   if (tiles.length === 0) return null;
   const column = optionsColumn(look);

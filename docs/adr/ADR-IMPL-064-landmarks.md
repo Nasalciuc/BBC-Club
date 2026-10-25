@@ -150,11 +150,12 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     landmark standing in for the city's photo (amendment 1, below) is not shown twice; it is left out before the three
     are counted, so a further landmark the server sent would take its place — today the server keeps three and the
     contract reads three, so a stand-in's city shows at most two. 13 draws the globe, not the city's photograph, and
-    keeps the stand-in's landmark (`cityPhoto` null: each screen says what it draws). Every landmark shown still has its
-    credit; fewer show what exists; a stand-in's city with no other landmark shows nothing. A photograph that will not
-    load leaves with its name and credit, and is tried again when a screen showing landmarks comes back into view or the
-    phone back online. A screen reader hears `<name>, photo`, then the credit. testIDs `destination.landmark.<rank>` and
-    `.credit` (`explore.` on 13).
+    keeps the stand-in's landmark. Each screen says what it draws, or the app does not compile: the section's `page`
+    look requires 04's photograph as `destinationPhoto` chose it (`photo`, not an address, never none), and its `route`
+    look takes none. Every landmark shown still has its credit; fewer show what exists; a stand-in's city with no other
+    landmark shows nothing. A photograph that will not load leaves with its name and credit, and is tried again when a
+    screen showing landmarks comes back into view or the phone back online. A screen reader hears `<name>, photo`, then
+    the credit. testIDs `destination.landmark.<rank>` and `.credit` (`explore.` on 13).
   - **Asking.** One store for every screen, for the session: a city is asked when a screen showing it comes into view
     or the phone back online, and at each minute's look while it stays in view (as the place photos are), once what
     the app knows has aged — landmarks after 12 hours (the place photos' own window), none yet after five minutes (the
@@ -172,7 +173,8 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     counted; 04's photograph and that address as one choice — the design's, a stand-in, the satellite view, none),
     `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
     `landmarks-section.test.ts` (the floor through the element tree the section builds, on both looks, with and
-    without a stand-in; 04 leaves the stand-in's landmark out, 13 keeps it),
+    without a stand-in; 04 leaves the stand-in's landmark out, 13 keeps it; the types that make 04 hand its photograph
+    and 13 none, checked by the app's typecheck),
     `destination-geometry.test.ts` (04's and 13's flight options, the measures the section reads),
     `usePlaceLandmarks.test.ts` (when a screen asks: in view and online, again back online, each minute while in
     view — a skip within a minute of the 12 hours, none yet within five minutes, a failure at the next look),
