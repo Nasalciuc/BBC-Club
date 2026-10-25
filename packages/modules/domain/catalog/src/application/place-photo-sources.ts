@@ -617,11 +617,6 @@ export function commonsCredit(info: ImageInfo): { author: string | null; license
   return { author, license, link };
 }
 
-/** A Commons file's own page, from its name: "Eiffel Tower.jpg" → ".../wiki/File:Eiffel_Tower.jpg" on Commons. */
-export function commonsPage(file: string): string {
-  return `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file.trim().replace(/ /g, "_"))}`;
-}
-
 /**
  * The same Commons thumbnail at another of Wikimedia's standard widths — ".../thumb/a/ab/X.jpg/1280px-X.jpg" at 500 is
  * ".../thumb/a/ab/X.jpg/500px-X.jpg", its query kept. Null for an address on no Wikimedia host or not shaped so.

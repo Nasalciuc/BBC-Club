@@ -125,8 +125,10 @@ const WIKI_PLAIN: Record<string, string> = { "%3B": ";", "%40": "@", "%24": "$",
 
 /**
  * A file's own page on Commons — its author, its source and its licence — written as MediaWiki writes a page's address
- * (`https://commons.wikimedia.org/wiki/File:Gare_d%27Orsay_(1).jpg`): the page a landmark's credit links to, as the
- * city photo's credit links Commons' `descriptionurl` (ADR-IMPL-043). The table keeps the file's name, not its page.
+ * (`https://commons.wikimedia.org/wiki/File:Gare_d%27Orsay_(1).jpg`): the page a landmark's credit links to (`pageUrl`),
+ * and the one a landmark standing in for its city's photo is credited with (`landmarkAsPhoto`, ADR-IMPL-064 amendment
+ * 1), as the city photo's credit links Commons' `descriptionurl` (ADR-IMPL-043). The table keeps the file's name, not
+ * its page.
  */
 export function commonsPage(file: string): string {
   const title = encodeURIComponent(sameFile(file).replace(/ /g, "_"))

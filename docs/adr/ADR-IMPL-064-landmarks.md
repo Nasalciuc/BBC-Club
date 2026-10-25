@@ -218,7 +218,8 @@ Art License, 2 no usable file at all, 2 a portrait, 1 no author. Raised in this 
    lowest rank among its `landmark` rows, without the flag's `skip`): the landmark's 1280-px thumbnail as `hero`, the
    same file at 500 px as `card` (Wikimedia's standard width, the address's `1280px-` made `500px-`; the 1280-px
    address when it is no standard thumbnail's), and that photograph's own credit (source `wikimedia`, its author — the
-   credit line read back —, its licence, its Commons page from the file's name). Its photograph already passed D7,
+   credit line read back —, its licence, its Commons page from the file's name: `commonsPage`, the one that writes the
+   landmarks route's `pageUrl`, so both link the photograph to one address). Its photograph already passed D7,
    stricter than the city photo's rules (at least 1600 px, 1.2–2.4, JPEG, the same credit rules). A photo of the city's
    own — Commons', Pexels', the club's — stays first. The contract keeps its shape: `packages/shared` is not touched.
 
