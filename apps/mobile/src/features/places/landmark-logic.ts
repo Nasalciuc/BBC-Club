@@ -68,15 +68,17 @@ export type DestinationPhoto = {
   credit: Credit | null;
   /** The design's bundled photograph is kept in memory and on disk; the server's as its photo band says. */
   cache: "memory-disk" | Picture["cache"];
-  /** `photoAddress(source)`: what the page hands its landmarks as the city's photograph (`cityPhoto`). */
+  /** `photoAddress(source)`: the address its landmarks leave out (`Landmarks` reads it from 04's `photo`). */
   cityPhoto: string | null;
 };
 
 /**
  * 04's photograph: the design's own of the city where it has one (`clubPhoto`, ADR-IMPL-056) — bundled, no credit, no
- * address, so no landmark is left out — else the server's (`bandPicture`), whose address is a stand-in landmark's own
- * (ADR-IMPL-064, amendment 1). One choice for the photograph drawn and the one its landmarks leave out, so the page
- * never shows a photograph twice nor hides a landmark whose photograph is not over it.
+ * address, so no landmark is left out — else the server's (`bandPicture`) with the address it draws: the city's own
+ * photo's, a stand-in landmark's own (ADR-IMPL-064, amendment 1) — the only one a landmark can share — or the
+ * satellite view's Mapbox address, which none has; none when nothing is drawn. One choice for the photograph drawn and
+ * the one its landmarks leave out, so the page never shows a photograph twice nor hides a landmark whose photograph is
+ * not over it.
  */
 export function destinationPhoto(bundled: number | null, band: Picture): DestinationPhoto {
   if (bundled !== null) return { source: bundled, credit: null, cache: "memory-disk", cityPhoto: null };

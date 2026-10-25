@@ -144,18 +144,19 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     to `licenceUrl` (a server before `pageUrl`), else only read. A landmark without a name, without a credit it can
     print (no one to credit, no licence) or showing a photograph already shown is left out; nothing made up takes its
     place. A photograph already shown includes the city's own over the page: on 04, a landmark whose `imageUrl` is the
-    address the page draws as the city's photograph (`photoAddress`: the place photo's `hero`, exactly as the server
-    sent it, the photo band drawing it unchanged — not the design's own bundled photograph, not the satellite view;
-    chosen with the photograph itself, `destinationPhoto`, so the two cannot differ) is left out, so the photograph of a
-    landmark standing in for the city's photo (amendment 1, below) is not shown twice; it is left out before the three
-    are counted, so a further landmark the server sent would take its place — today the server keeps three and the
-    contract reads three, so a stand-in's city shows at most two. 13 draws the globe, not the city's photograph, and
-    keeps the stand-in's landmark. Each screen says what it draws, or the app does not compile: the section's `page`
-    look requires 04's photograph as `destinationPhoto` chose it (`photo`, not an address, never none), and its `route`
-    look takes none. Every landmark shown still has its credit; fewer show what exists; a stand-in's city with no other
-    landmark shows nothing. A photograph that will not load leaves with its name and credit, and is tried again when a
-    screen showing landmarks comes back into view or the phone back online. A screen reader hears `<name>, photo`, then
-    the credit. testIDs `destination.landmark.<rank>` and `.credit` (`explore.` on 13).
+    address the page draws as the city's photograph (`photoAddress`: the address the photo band hands `Photo` — the
+    place photo's `hero` exactly as the server sent it, which for a stand-in is that landmark's own `imageUrl`, or the
+    satellite view's Mapbox address, which no landmark has; none for the design's own bundled photograph or for no
+    photograph; chosen with the photograph itself, `destinationPhoto`, so the two cannot differ) is left out, so the
+    photograph of a landmark standing in for the city's photo (amendment 1, below) is not shown twice; it is left out
+    before the three are counted, so a further landmark the server sent would take its place — today the server keeps
+    three and the contract reads three, so a stand-in's city shows at most two. 13 draws the globe, not the city's
+    photograph, and keeps the stand-in's landmark. Each screen says what it draws, or the app does not compile: the
+    section's `page` look requires 04's photograph as `destinationPhoto` chose it (`photo`, not an address, never none),
+    and its `route` look takes none. Every landmark shown still has its credit; fewer show what exists; a stand-in's
+    city with no other landmark shows nothing. A photograph that will not load leaves with its name and credit, and is
+    tried again when a screen showing landmarks comes back into view or the phone back online. A screen reader hears
+    `<name>, photo`, then the credit. testIDs `destination.landmark.<rank>` and `.credit` (`explore.` on 13).
   - **Asking.** One store for every screen, for the session: a city is asked when a screen showing it comes into view
     or the phone back online, and at each minute's look while it stays in view (as the place photos are), once what
     the app knows has aged — landmarks after 12 hours (the place photos' own window), none yet after five minutes (the
