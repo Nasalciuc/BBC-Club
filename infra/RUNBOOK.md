@@ -240,9 +240,12 @@ docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file 
 After setting `PEXELS_API_KEY` (restart the worker), let the satellite cities be looked at again now rather than within
 a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`.
 
-A city stuck on an old satellite view (Chișinău, RMO: before ADR-IMPL-064 a code Wikidata had demoted, KIV, found
-nothing, and a city whose airport Wikidata does not know got no photo): read its row, then let the job look again now.
-A `satellite` row resolved before this release waits out its 30–33 days otherwise:
+A city stuck on an old satellite view: read its row, then let the job look again now. Chișinău (RMO) is one: Wikidata
+answers the club's code, RMO, with the city and its photographs, so its `satellite` row is one resolved before this
+release (it waits out its 30–33 days otherwise) or one whose look a 429 cut short (before ADR-IMPL-064 that put it off
+for up to a day). The same lines, with the city's own code, also bring back now the cities that got no photo before
+ADR-IMPL-064 for reasons it fixed: an airport the club keeps under a code Wikidata has since demoted (now matched at
+any rank), and a city whose airport Wikidata does not know (now found by its name):
 
 ```sql
 SELECT code, status, source, author, license, attempts, resolved_at, expires_at
