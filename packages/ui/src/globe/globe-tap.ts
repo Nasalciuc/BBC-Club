@@ -57,18 +57,25 @@ export function drawnGlobeTap(
  * own frame — the pin and its label, without the slop that grows them to 44 pt (iOS's map ignores a touch whose view is
  * in a MarkerView, Android's absorbs a press inside one) — so a press in that ring reaches the map, not the pin, and the
  * map's press is the only one to answer it. Where the pin's press answers too (Android may), the guard keeps the touch
- * to one choice. Then `mapTap` decides between the sky and the place.
+ * to one choice. Then `mapTap` decides between the sky and the place, at the camera's zoom on a map view `viewHeight`
+ * points tall.
  */
 export function mapboxPress(
   press: { lng: number; lat: number; screen: { x: number; y: number } },
-  seen: { camera: GlobeCamera; centre: { x: number; y: number }; placed: Placed; route: boolean },
+  seen: {
+    camera: GlobeCamera;
+    centre: { x: number; y: number };
+    viewHeight: number;
+    placed: Placed;
+    route: boolean;
+  },
   guard: Guard,
 ): TapChoice | null {
   if (seen.route) return null;
   const pin = pinAt(press.screen.x, press.screen.y, seen.placed);
   if (pin !== null) return { kind: "pin", code: pin };
   if (guard.pressedLately()) return null;
-  const at = mapTap(press, seen.camera, seen.centre);
+  const at = mapTap(press, seen.camera, seen.centre, seen.viewHeight);
   if (!at) return null;
   const { camera, centre } = seen;
   // The finger and the city in one projection, so how far apart they stand on screen is measured alike.

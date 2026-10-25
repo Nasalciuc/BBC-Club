@@ -32,6 +32,47 @@ export const ZOOM_RANGE = {
 export const NEAR_SIDE_DEG = 80;
 
 /**
+ * Mapbox's camera (ADR-IMPL-068). Its field of view is 0.6435 rad (36.87°; the tangent of its half is 1/3), so the
+ * camera stands half a view height over tan(fov/2) — 1.5 view heights — above the globe at the view's centre. Below
+ * the globe's change to Mercator Mapbox draws the globe at Mercator's scale at 45°, and the camera stands cos 45° of
+ * that, in the globe's points: 1.06 view heights. The change starts at zoom 3 on a 1,024-pt view, a little earlier on a
+ * smaller one (2.4 on a 667-pt view, where at 3× — 2.63 — it has barely begun: the margin below covers it).
+ * Read from mapbox-gl-js 2.15 (`Transform._calcMatrices`, `Globe.pixelSpaceConversion`, `GLOBE_SCALE_MATCH_LATITUDE`):
+ * the native SDK (11.23.1) is downloaded at build time, not in the repository, and is assumed to draw its globe as
+ * gl-js does. Without the 45° factor the camera would stand farther and see more (83° at rest, not 81°): the nearer
+ * camera sees less, so the horizon below holds either way.
+ */
+const MAPBOX_FOV = 0.6435011087932844;
+const GLOBE_SCALE_MATCH = Math.cos(45 * RAD);
+
+/** How far Mapbox's camera stands above the globe's surface at the view's centre, in the globe's points. */
+export function cameraDistance(viewHeight: number): number {
+  return ((0.5 * viewHeight) / Math.tan(MAPBOX_FOV / 2)) * GLOBE_SCALE_MATCH;
+}
+
+/**
+ * Mapbox's horizon at a zoom: how far from the view's centre, in degrees, its camera sees the globe — acos(R / (R + d)),
+ * R the globe's radius, d the camera's distance. On an 852-pt view about 81° at rest, 74° at 2×, 69° at 3×: zooming in
+ * brings it nearer, under the fixed NEAR_SIDE_DEG from about 1.1×.
+ */
+export function horizonDeg(zoom: number, viewHeight: number): number {
+  const r = radiusAtZoom(zoom);
+  return Math.acos(r / (r + cameraDistance(viewHeight))) / RAD;
+}
+
+/**
+ * How far inside the horizon a pressed place must stand to be the globe's (ADR-IMPL-068): Mapbox answers a press on the
+ * sky with a place on its horizon. The 2° cover the camera Explore holds being a frame behind Mapbox's (the slow turn,
+ * a fling); at the limb they are under half a point on screen.
+ */
+export const HORIZON_MARGIN_DEG = 2;
+
+/** The near side a press may land on at a zoom: HORIZON_MARGIN_DEG inside the horizon, and never past NEAR_SIDE_DEG. */
+export function tapNearSideDeg(zoom: number, viewHeight: number): number {
+  return Math.min(NEAR_SIDE_DEG, horizonDeg(zoom, viewHeight) - HORIZON_MARGIN_DEG);
+}
+
+/**
  * The route as a great circle. Longitudes are unwrapped (they may pass ±180) so the line never jumps across the map
  * where it meets the antimeridian; Mapbox draws unwrapped coordinates continuously.
  */
@@ -131,18 +172,24 @@ export function onGlobeDisc(point: { x: number; y: number }, zoom: number, centr
  * the projection `mapPoint` uses — or null, when the press is on the sky. Whose the press is — a pin's first — is
  * `mapboxPress`'s (globe-tap.ts).
  *
- * - A place past the near side (NEAR_SIDE_DEG, where no pin is drawn either) is the sky's. Mapbox answers a press
+ * - A place past the near side at the camera's zoom is the sky's (`tapNearSideDeg`: the horizon less 2° — the horizon
+ *   81° from the view's centre at rest, 69° at 3×, on a map view `viewHeight` = 852 pt tall). Mapbox answers a press
  *   beside the globe with the nearest place on its horizon, and on Android @rnmapbox/maps 10.3.7 reports as the press's
  *   screen point that place reprojected (`pixelForCoordinate`), on the limb — not the finger. The disc alone would
- *   compare that point with itself; the place decides, whatever the screen point says.
+ *   compare that point with itself, and a fixed limit (80°) let the horizon's place through once zooming in brought the
+ *   horizon nearer than it; the place decides, at the zoom the press was made at, whatever the screen point says.
  * - The screen point off the disc (iOS reports the finger itself) is the sky's too.
  */
 export function mapTap(
   press: { lng: number; lat: number; screen: { x: number; y: number } },
   camera: GlobeCamera,
   centre: { x: number; y: number },
+  viewHeight: number,
 ): { x: number; y: number } | null {
   if (!Number.isFinite(press.lng) || !Number.isFinite(press.lat)) return null;
+  // Written so that a limit that is no number (no view height) leaves the press to the sky.
+  const nearSide = tapNearSideDeg(camera.zoom, viewHeight) * RAD;
+  if (!(geoDistance([press.lng, press.lat], camera.center) <= nearSide)) return null;
   const at = mapPoint(press, camera, centre);
   if (!at) return null;
   if (!onGlobeDisc(press.screen, camera.zoom, centre)) return null;
