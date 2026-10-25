@@ -49,6 +49,16 @@ const SECTION_ORDER: Array<{ key: string; title: string; holds: ((place: Place) 
  */
 export const SITE_DEALS_SHOWN = 24;
 
+/** How many of the member's offers Home reads: the inspiring six, the rest in their region's rows. */
+const HOME_OFFERS_READ = 50;
+
+/**
+ * How many site deals Home asks the catalog for: SITE_DEALS_SHOWN, and one more for each offer Home reads. The catalog
+ * gives one deal per city, so an offer takes at most one deal off (its city's, from its own metro), and Home still has
+ * SITE_DEALS_SHOWN after them wherever the site has that many — asked beside the feed, and one cached read per home.
+ */
+const SITE_DEALS_ASKED = SITE_DEALS_SHOWN + HOME_OFFERS_READ;
+
 /** The mobile BFF. Composes proposals + engagement + catalog → view-models. /v1/app-config stays in the host. */
 export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => ({
   name: "mobile-bff",
@@ -97,9 +107,9 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const [destRows, offerRows, siteDeals] = await Promise.all([
           // ADR-IMPL-045: the site's pins are priced in the cabin the member's search starts in.
           ports.catalog.destinations(undefined, homeCode, { cabin: profile?.preferences.cabin ?? "business" }),
-          ports.proposals.feed(undefined, actor, null, 50),
+          ports.proposals.feed(undefined, actor, null, HOME_OFFERS_READ),
           // ADR-IMPL-067: none while catalog.site_offers is off.
-          ports.catalog.siteDeals(undefined, homeCode, SITE_DEALS_SHOWN),
+          ports.catalog.siteDeals(undefined, homeCode, SITE_DEALS_ASKED),
         ]);
 
         const offerRouteTos = new Set(offerRows.map((o) => String(o.routeTo).toUpperCase()));
@@ -142,7 +152,8 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         // ADR-IMPL-067: "Offers to inspire" is the member's own offers, then the site's deals — a deal to a city one of
         // the member's offers already goes to from the same city leaves it, so no city shows twice for one origin.
         // Every offer, not only the inspiring six: the others stand in their region's row (16, `To Asia`) under the
-        // deals, and at rest (02) the member would see the site's price for a city their own offer goes to.
+        // deals, and at rest (02) the member would see the site's price for a city their own offer goes to. Capped after
+        // the filter, so the offers do not cost the member deals the site has.
         const deals = siteDeals
           .filter(
             (deal) =>
@@ -152,6 +163,7 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
                   deal.airports.includes(card.route.to.toUpperCase()),
               ),
           )
+          .slice(0, SITE_DEALS_SHOWN)
           .map(toSiteDealVM);
 
         const body = {

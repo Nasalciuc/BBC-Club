@@ -148,6 +148,36 @@ describe("GET /v1/home — the site's deals (ADR-IMPL-067)", () => {
     await t.close();
   });
 
+  it(`still ${SITE_DEALS_SHOWN} deals when the member's offers take some off: the cap comes after them`, async () => {
+    const t = await testApp({ suite: "home-site-deals-cap" });
+    await t.seedCatalogBasics();
+    await t.flags.set("catalog.site_offers", { enabled: true });
+    // One more city from New York than Home shows; Rome on the site's home page, so its deal comes first.
+    const cities = ["FCO", "MAD", "BCN", "AMS", "ZRH", "SIN", "ATH", "LIS", "VIE", "PRG", "BER", "CPH", "OSL"];
+    cities.push("ARN", "HEL", "DUB", "EDI", "IST", "DOH", "BKK", "ICN", "SYD", "MEX", "GRU", "CPT");
+    expect(cities).toHaveLength(SITE_DEALS_SHOWN + 1);
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports, promoted)
+      SELECT 9000 + x.ord, a.city, a.country, 'Somewhere', a.code, ARRAY[a.code], x.ord = 1
+      FROM unnest(string_to_array(${cities.join(",")}, ',')) WITH ORDINALITY AS x(code, ord) JOIN catalog.airports a ON a.code = x.code`);
+    // Made-up prices.
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price)
+      SELECT 'JFK', cms_id, cms_id, 1001 FROM catalog.site_places`);
+
+    const before = HomeVM.parse((await home(t)).json);
+    expect(before.deals).toHaveLength(SITE_DEALS_SHOWN);
+    expect(before.deals?.[0]?.destination.code).toBe("FCO");
+
+    // The member's own Rome from New York takes the site's Rome off — and the city after the cap comes in.
+    await t.seedBroadcastOffer({ routeTo: "FCO", title: "Rome in winter" });
+    const after = HomeVM.parse((await home(t)).json);
+    expect(after.deals).toHaveLength(SITE_DEALS_SHOWN);
+    expect(after.deals?.some((d) => d.destination.code === "FCO")).toBe(false);
+    expect(new Set(after.deals?.map((d) => d.destination.code))).toEqual(new Set(cities.slice(1)));
+    await t.close();
+  });
+
   it("an offer to a deal's city from another origin leaves the deal on Home; one from the deal's origin takes it off", async () => {
     const t = await testApp({ suite: "home-site-deals-origin" });
     await seedSiteDeals(t);

@@ -111,8 +111,10 @@ a day; a snapshot row is served for a day) and ADR-IMPL-040 (a demo offer an ope
    over the deals with a read of its own; the owner decides that, or amends the check to a stated cap. Until then 3.1 is
    not reported as passed. A deal to a city one of the member's offers already goes to from the same metro is left out —
    any offer Home reads, not only the inspiring six: the others stand in their region's row under the deals (16) — so no
-   city shows twice for one origin, the demo's Tokyo and the site's Tokyo included. `deals` is absent when there is
-   none. The ETag is the body's, whole, so a price, a day or an origin that changes makes a new one.
+   city shows twice for one origin, the demo's Tokyo and the site's Tokyo included. The cap comes after that: Home asks
+   the catalog for 24 deals and one more per offer it reads (50), since an offer takes at most one deal off (one deal
+   per city), so a member's own offers never leave them fewer than 24 where the site has them. `deals` is absent when
+   there is none. The ETag is the body's, whole, so a price, a day or an origin that changes makes a new one.
 9. **The app.** Explore's rest row (02) and the raised sheet's row (16) draw the deals after the offers, as `OfferCard`s
    (`explore.deal.<id>`); `No offers yet.` only when there is neither. A deal has no page of its own: a tap chooses its
    destination as a pin does (`selectDestination`: the route's sheet, its search from the member's airport). The
