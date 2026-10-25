@@ -85,13 +85,16 @@ e-mail's line) · Brief 3.1 step 2, decision D6.
    and each such route is asked once more — rather than in a column or table of their own: the club shows nothing of a
    failure, and the stored rows stay what the site answered. Then it deletes the expired rows. Its counts go to
    `platform.job_runs` (`due`, `asked`, `priced`, `none`, `failed`, `rateLimited`, `breakerOpen`, `stopped`,
-   `backingOff`, `purged`). Run twice, the second run asks nothing and changes no row. Routes searched outside the pins
-   are not refreshed: their answer expires and the next search asks again — the set the job keeps is the pins', not
-   every route ever searched. It asks only while `catalog.site_pins` is on as well as the two flags below: the routes it
-   keeps are the pins', and without the pins no member sees them — a search asks for its own route. Its flags are read
-   again before each question (they are cached), so turning one off stops a run already going (AGENTS rule 3;
-   `stopped: 1`). With any of them off it asks nothing and still deletes the expired rows (`{ skipped: 1, purged }`), so
-   no answer outlives its day once the feature is off — platform's `retention` does not know this table.
+   `backingOff`, `purged`). A route the job stored is not asked again until it is due (answered 18 hours ago or more),
+   so repeating a run rewrites no answer that is not due; but it is not done in one run: while more than 150 routes need
+   asking (an environment's first runs — the pins' routes are hundreds, below), each run takes the next 150, and a run
+   stopped by a 429, the breaker or a flag leaves the rest to the next. Routes searched outside the pins are not
+   refreshed: their answer expires and the next search asks again — the set the job keeps is the pins', not every route
+   ever searched. It asks only while `catalog.site_pins` is on as well as the two flags below: the routes it keeps are
+   the pins', and without the pins no member sees them — a search asks for its own route. Its flags are read again
+   before each question (they are cached), so turning one off stops a run already going (AGENTS rule 3; `stopped: 1`).
+   With any of them off it asks nothing and still deletes the expired rows (`{ skipped: 1, purged }`), so no answer
+   outlives its day once the feature is off — platform's `retention` does not know this table.
 6. **The flag** `catalog.site_prices`, `{ enabled: false }`, seeded off by `scripts/seed-flags.ts`, read under
    `catalog.estimates`, which stays the master switch: with estimates off nothing is read or asked, whatever this flag
    says. With the site's prices off, the search, the pins and the quote behave exactly as before — no row read, no

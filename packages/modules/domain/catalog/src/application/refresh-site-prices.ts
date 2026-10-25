@@ -17,7 +17,10 @@
  * asked and every due one — so a route the site keeps failing never holds back the routes after it, nor reopens the
  * breaker at the head of each run. Then it deletes the expired answers (the module's handler deletes them too while a
  * flag is off, without asking anything).
- * Running it twice changes nothing the second time: every route it asked is fresh.
+ * What it stores is idempotent: a route it stored is not asked again until it is due (answered
+ * `SITE_PRICE_REFRESH_HOURS` or more ago), so repeating a run rewrites no answer that is not due. It is not done in one
+ * run: while more than `REFRESH_BUDGET` routes need asking (an environment's first runs: the pins' routes are hundreds),
+ * each run takes the next ones, and a run stopped by a 429, the breaker or a flag leaves the rest to the next.
  */
 import type { Executor } from "@bbc/db";
 

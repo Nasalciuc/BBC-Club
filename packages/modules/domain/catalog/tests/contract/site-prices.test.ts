@@ -197,10 +197,37 @@ describe("site prices — a quote and Home's pins read, never ask", () => {
     expect(t.site.calls).toEqual([]);
     await t.iso.drop();
   });
+
+  it("Home keeps its pins a minute: an answer that passes its 24 hours within it is not shown on them", async () => {
+    const t = await setup("site-prices-pins-minute");
+    await t.seedSiteRoutes();
+    await t.estimatesOn(true);
+    await t.flags.set("catalog.site_pins", { enabled: true });
+    for (const [to, business] of [
+      ["ZRH", 2222],
+      ["HND", 2400],
+    ] as const) {
+      await sitePricesRepo.store(
+        t.iso.db,
+        { from: "JFK", to, trip: RT },
+        { kind: "priced", figures: { business, first: business + 1000, premiumEconomy: null } },
+      );
+    }
+    // Zurich's answer has 30 seconds left of its day: cached for a minute, its pin would show it past 24 hours.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_prices SET fetched_at = now() - interval '23 hours 59 minutes 30 seconds',
+        expires_at = now() + interval '30 seconds'
+      WHERE route_to = 'ZRH'`);
+    const pins = await t.facade.destinations(undefined, "JFK");
+    expect(pins.find((p) => p.code === "ZRH")).toMatchObject({ fromPrice: FORMULA_ZRH.business, priceSource: "club" });
+    expect(pins.find((p) => p.code === "HND")).toMatchObject({ fromPrice: 2400, priceSource: "site" });
+    expect(t.site.calls).toEqual([]);
+    await t.iso.drop();
+  });
 });
 
 describe("site prices — the refresh job", () => {
-  it("asks for the pins' routes once, about two a second; run twice, the same rows and no second question", async () => {
+  it("asks for the pins' routes once, about two a second; a route it stored is not asked again until it is due", async () => {
     const t = await setup("site-prices-job", {
       [`JFK-ZRH ${RT}`]: { business: 2222, first: 3333, premium_economy: 1111 },
       [`JFK-CDG ${RT}`]: { business: 2100, first: 3100, premium_economy: 1000 },
