@@ -1,0 +1,130 @@
+/**
+ * Which landmarks of a destination the app shows, and the credit each one owes (ADR-IMPL-064): up to three, best first
+ * as the server ranks them, each with its name and its licence; fewer when fewer exist; none — nothing at all. Pure: no
+ * React, no network.
+ */
+import {
+  PLACE_LANDMARKS_MAX,
+  PlaceLandmarksVM,
+  type LandmarkCreditVM,
+  type LandmarkVM,
+} from "@bbc/shared/api/v1/places";
+
+import { creditFor, remote, type Credit, type PictureSource } from "./place-photo-logic";
+
+/**
+ * The answer's landmarks, read leniently: a landmark this app cannot read (a field added later, an address that is not
+ * https) is dropped by the contract, never the list; a body that is not the contract's shape at all (a later server,
+ * another code) is null — the app shows nothing.
+ */
+export function readLandmarks(raw: unknown, code: string): LandmarkVM[] | null {
+  const parsed = PlaceLandmarksVM.safeParse(raw);
+  if (!parsed.success) return null;
+  if (parsed.data.code !== code.trim().toUpperCase()) return null;
+  return parsed.data.landmarks;
+}
+
+const COMMONS = "Wikimedia Commons";
+const AFTER_AUTHOR = ` · ${COMMONS}`;
+
+/**
+ * The credit line under a landmark, as the city photo's reads (`creditFor`): `Photo: Jane Doe · CC BY-SA 4.0 ·
+ * Wikimedia Commons`, or `Photo: CC0 · Wikimedia Commons` when the licence needs no author — the server's `text` is
+ * "<author> · Wikimedia Commons" or "Wikimedia Commons" alone. Another `text` (a later server's) is printed as it came,
+ * the licence after it. Linked to the licence's page when the server gives one (the contract carries no file page).
+ * Null when the credit says nothing — no one to credit or no licence: such a photograph is not shown.
+ */
+export function landmarkCredit(credit: LandmarkCreditVM): Credit | null {
+  const text = credit.text.trim();
+  const licence = credit.licence.trim();
+  if (text.length === 0 || licence.length === 0) return null;
+  const link = credit.licenceUrl ?? null;
+  if (text === COMMONS) return creditFor({ source: "wikimedia", author: null, license: licence, link });
+  if (text.endsWith(AFTER_AUTHOR)) {
+    const author = text.slice(0, -AFTER_AUTHOR.length).trim();
+    if (author.length > 0) return creditFor({ source: "wikimedia", author, license: licence, link });
+  }
+  return {
+    label: `Photo: ${text} · ${licence}`,
+    spoken: ["Photo", ...text.split(" · "), licence].join(", "),
+    link,
+  };
+}
+
+/**
+ * The landmarks to show, in the server's order (best first): at most three; a landmark without a name, without a credit
+ * it can print, showing a photograph already shown, or whose photograph would not load (`failed`, by address) is left
+ * out — never replaced, never invented.
+ */
+export function landmarksToShow(
+  landmarks: readonly LandmarkVM[],
+  failed: ReadonlySet<string> = new Set(),
+): LandmarkVM[] {
+  const shown: LandmarkVM[] = [];
+  const images = new Set<string>();
+  for (const landmark of landmarks) {
+    if (shown.length === PLACE_LANDMARKS_MAX) break;
+    const name = landmark.name.trim();
+    if (name.length === 0 || images.has(landmark.imageUrl) || failed.has(landmark.imageUrl)) continue;
+    if (!landmarkCredit(landmark.credit)) continue;
+    images.add(landmark.imageUrl);
+    shown.push({ ...landmark, name });
+  }
+  return shown;
+}
+
+/**
+ * The band of shapes a landmark's photograph is shown in: ADR-IMPL-064's landscape band, 1.2 to 2.4 wide for 1 high. A
+ * photograph outside it (a later server's portrait) fills the nearest shape, cropped, rather than a strip of odd widths.
+ */
+export const LANDMARK_SHAPE = { min: 1.2, max: 2.4 } as const;
+
+/** A landmark's photograph as wide as its own shape makes it at this height (to a tenth of a point). */
+export function landmarkPhotoWidth(size: { width: number; height: number }, photoHeight: number): number {
+  const ratio = size.width / size.height;
+  const shape = Number.isFinite(ratio) && ratio > 0 ? ratio : LANDMARK_SHAPE.min;
+  const clamped = Math.min(LANDMARK_SHAPE.max, Math.max(LANDMARK_SHAPE.min, shape));
+  return Math.round(photoHeight * clamped * 10) / 10;
+}
+
+/** One landmark as the screen draws it: its place in the row (1, 2, 3), its photograph and its credit. */
+export type LandmarkTile = {
+  rank: number;
+  imageUrl: string;
+  name: string;
+  /** What a screen reader says for the photograph and its name. */
+  spoken: string;
+  source: PictureSource;
+  photoWidth: number;
+  credit: Credit;
+};
+
+/**
+ * The tiles a destination draws: every one has its name and its credit (the floor ADR-IMPL-064 sets: every shown photo
+ * has its credit), Wikimedia's headers on its photograph, numbered in the order shown.
+ */
+export function landmarkTiles(
+  landmarks: readonly LandmarkVM[],
+  ctx: { headers: Record<string, string>; photoHeight: number; failed?: ReadonlySet<string> },
+): LandmarkTile[] {
+  return landmarksToShow(landmarks, ctx.failed).flatMap((landmark, i) => {
+    const credit = landmarkCredit(landmark.credit);
+    if (!credit) return [];
+    return [
+      {
+        rank: i + 1,
+        imageUrl: landmark.imageUrl,
+        name: landmark.name,
+        spoken: `${landmark.name}, photo`,
+        source: remote(landmark.imageUrl, ctx.headers),
+        photoWidth: landmarkPhotoWidth(landmark, ctx.photoHeight),
+        credit,
+      },
+    ];
+  });
+}
+
+/** Whether two answers show the same landmarks (a 200 that changed nothing leaves the screen alone). */
+export function sameLandmarks(a: readonly LandmarkVM[], b: readonly LandmarkVM[]): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b);
+}
