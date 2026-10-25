@@ -503,7 +503,7 @@ describe("landmarks", () => {
     await t.iso.drop();
   });
 
-  it("a city without a photograph of its own shows its first landmark's, credited as that photograph (amendment 1)", async () => {
+  it("a city on its satellite view shows its first landmark's photograph, credited as that photograph (amendment 1)", async () => {
     const t = await setup("landmarks-stand-in", answers);
     // Paris's city photo is its satellite view (nothing the photo job may show); Chișinău's is not looked up yet.
     await t.iso.db.execute(sql`
@@ -535,9 +535,11 @@ describe("landmarks", () => {
     });
     expect(cdg[0]?.landmark_qid).toBe("Q243"); // the Eiffel Tower
     expect(cdg[0]?.image_url).toContain("/1280px-");
+    expect(rmo.map((r) => r.kind)).toEqual(["landmark", "landmark", "landmark"]);
     const photos = await t.photos("CDG,RMO,LHR");
-    // LHR has no landmark: nothing yet, as before.
-    expect(photos).toEqual([asPhoto("CDG", cdg[0]!), asPhoto("RMO", rmo[0]!), { code: "LHR", kind: "none" }]);
+    // RMO is not looked up yet: `none` though it has landmarks — phones ask again within a minute, and would keep a
+    // stand-in for twelve hours past the city's own photo. LHR has no landmark: nothing yet, as before.
+    expect(photos).toEqual([asPhoto("CDG", cdg[0]!), { code: "RMO", kind: "none" }, { code: "LHR", kind: "none" }]);
     expect(photos[0]).toMatchObject({ credit: { license: "CC BY-SA 4.0" } });
     // Composed by the route, never written: the city photo rows are as they were, for the photo job to look again.
     expect(

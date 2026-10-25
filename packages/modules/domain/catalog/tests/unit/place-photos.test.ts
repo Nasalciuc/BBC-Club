@@ -542,7 +542,7 @@ describe("a landmark stands in for a city without a photograph (ADR-IMPL-064, am
     expect(landmarkAsPhoto("RMO", { ...tower, imageUrl: "http://upload.wikimedia.org/x.jpg" })).toBeNull();
   });
 
-  it("only where the city has its satellite view or nothing yet: any photo of its own stays first", () => {
+  it("only where the city has its satellite view: any photo of its own stays first, nothing yet stays nothing", () => {
     const commons: PlacePhotoVM = {
       code: "LHR",
       kind: "photo",
@@ -571,7 +571,9 @@ describe("a landmark stands in for a city without a photograph (ADR-IMPL-064, am
     ];
     const standIns = new Map(["LHR", "ZRH", "RMO", "CDG"].map((code) => [code, tower]));
     const out = withLandmarkPhotos(items, standIns);
-    expect(out).toEqual([commons, club, asPhoto, { ...asPhoto, code: "CDG" }, items[4]!]);
+    // CDG is not looked up yet: `none`, which phones ask about again within a minute — a photo they would keep for
+    // twelve hours, hiding the city's own photo the job finds a minute later.
+    expect(out).toEqual([commons, club, asPhoto, items[3]!, items[4]!]);
     expect(PlacePhotosVM.parse({ items: out }).items).toEqual(out);
     // No landmark (the flag off, none found, all kept out): the answer as it was.
     expect(withLandmarkPhotos(items, new Map())).toEqual(items);

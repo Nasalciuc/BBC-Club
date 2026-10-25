@@ -582,13 +582,15 @@ export const catalogModule = (
           if (vm) return [vm];
           return added.has(code) ? [{ code, kind: "none" }] : [];
         });
-        // ADR-IMPL-064, amendment 1: where a city has no photograph of its own (its satellite view, or nothing yet), its
-        // first landmark's stands in — composed here, at read time, so the flag and its `skip` act at once and an
-        // operator's photo stays first. With `catalog.landmarks` off nothing is read and nothing changes.
-        const without = items.filter((i) => i.kind !== "photo").map((i) => i.code);
-        const flag = without.length > 0 ? await landmarksFlag() : null;
+        // ADR-IMPL-064, amendment 1: where the photo job found a city no photograph of its own (its satellite view), its
+        // first landmark's stands in — composed here, at read time, so the next answer follows the flag and its `skip`,
+        // and a photo of the city's own (the operator's included) stays first. A city not looked up yet stays `none`:
+        // phones ask again within a minute, but keep a photo for twelve hours. With `catalog.landmarks` off nothing is
+        // read and nothing changes.
+        const onSatellite = items.filter((i) => i.kind === "satellite").map((i) => i.code);
+        const flag = onSatellite.length > 0 ? await landmarksFlag() : null;
         if (!flag?.enabled) return c.json({ items });
-        const standIns = await placeLandmarksRepo.standIns(conn, without, flag.skip);
+        const standIns = await placeLandmarksRepo.standIns(conn, onSatellite, flag.skip);
         return c.json({ items: withLandmarkPhotos(items, standIns) });
       },
     );

@@ -110,17 +110,19 @@ export function landmarkAsPhoto(code: string, landmark: LandmarkStandIn): PlaceP
 }
 
 /**
- * The answer with a landmark standing in where a city has no photograph of its own — its satellite view, or nothing
- * yet (ADR-IMPL-064, amendment 1). A photo of any source (Commons, Pexels, the club's own) stays first. `standIns` is
- * the first landmark the route may show for each place (`placeLandmarksRepo.standIns`: rank order, the flag's `skip`
- * left out); empty while `catalog.landmarks` is off — then nothing changes.
+ * The answer with a landmark standing in where the photo job found a city no photograph of its own: its satellite view
+ * (ADR-IMPL-064, amendment 1). A photo of any source (Commons, Pexels, the club's own) stays first, and a city not
+ * looked up yet stays `none` — phones ask again within a minute but keep a photo for twelve hours, so a stand-in there
+ * would hide the city's own photo found a minute later. `standIns` is the first landmark the route may show for each
+ * place (`placeLandmarksRepo.standIns`: rank order, the flag's `skip` left out); empty while `catalog.landmarks` is off
+ * — then nothing changes.
  */
 export function withLandmarkPhotos(
   items: readonly PlacePhotoVM[],
   standIns: ReadonlyMap<string, LandmarkStandIn>,
 ): PlacePhotoVM[] {
   return items.map((item) => {
-    if (item.kind === "photo") return item;
+    if (item.kind !== "satellite") return item;
     const landmark = standIns.get(item.code);
     return (landmark && landmarkAsPhoto(item.code, landmark)) ?? item;
   });
