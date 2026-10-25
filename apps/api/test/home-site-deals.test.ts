@@ -90,6 +90,45 @@ describe("GET /v1/home — the site's deals (ADR-IMPL-067)", () => {
     await t.close();
   });
 
+  it("an offer past the inspiring six still keeps its city's deal off Home: no city twice for one origin", async () => {
+    const t = await testApp({ suite: "home-site-deals-seventh" });
+    await seedSiteDeals(t);
+    await t.flags.set("catalog.site_offers", { enabled: true });
+    // Seven offers from New York, newest first in the feed: Tokyo's is the oldest, the seventh — in no inspiring card,
+    // but in its region's row (16, `To Asia`). Made-up prices.
+    const hour = 3_600_000;
+    const validUntil = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    await t.seedBroadcastOffer({
+      routeTo: "HND",
+      title: "Tokyo in spring",
+      price: "4650.00",
+      publishedPrice: "8100.00",
+      publishAt: new Date(Date.now() - 7 * hour).toISOString(),
+      validUntil,
+    });
+    const others = ["FCO", "MAD", "BCN", "AMS", "ZRH", "SIN"];
+    for (const [i, to] of others.entries()) {
+      await t.seedBroadcastOffer({
+        routeTo: to,
+        title: `Offer ${i + 1}`,
+        publishAt: new Date(Date.now() - (6 - i) * hour).toISOString(),
+        validUntil,
+      });
+    }
+
+    const body = HomeVM.parse((await home(t)).json);
+    const inspire = body.sections.find((s) => s.key === "inspire")?.items ?? [];
+    expect(inspire).toHaveLength(6);
+    expect(inspire.some((i) => i.route.to === "HND")).toBe(false);
+    expect(body.sections.find((s) => s.key === "asia")?.items.map((i) => [i.route.from, i.route.to])).toContainEqual([
+      "JFK",
+      "HND",
+    ]);
+    // The site's Tokyo from New York is left out: the member's own Tokyo offer stands on Home already.
+    expect(body.deals?.map((d) => d.destination.code)).toEqual(["LHR", "CDG", "DXB"]);
+    await t.close();
+  });
+
   it("a home the site sells nothing from: the nearest city's deals first, each naming it", async () => {
     const t = await testApp({ suite: "home-site-deals-nearest" });
     await seedSiteDeals(t);

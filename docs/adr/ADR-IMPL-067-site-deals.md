@@ -97,9 +97,11 @@ a day; a snapshot row is served for a day) and ADR-IMPL-040 (a demo offer an ope
    the reading size). A screen reader hears the city, the country, `from $X`, `from New York`.
 8. **Home's BFF.** "Offers to inspire" is the member's own offers (the inspire section, as before: the first six of
    their feed), then up to 24 site deals (`SITE_DEALS_SHOWN`: twice the pre-registered floor of twelve, a row a thumb
-   still scrolls, about 12 KB) in `HomeVM.deals`. A deal to a city an inspiring offer already goes to from the same
-   metro is left out — no city twice for one origin, the demo's Tokyo and the site's Tokyo included. `deals` is absent
-   when there is none. The ETag is the body's, whole, so a price, a day or an origin that changes makes a new one.
+   still scrolls, about 12 KB) in `HomeVM.deals`. A deal to a city one of the member's offers already goes to from the
+   same metro is left out — any offer Home reads, not only the inspiring six: the others stand in their region's row
+   under the deals (16) — so no city shows twice for one origin, the demo's Tokyo and the site's Tokyo included.
+   `deals` is absent when there is none. The ETag is the body's, whole, so a price, a day or an origin that changes
+   makes a new one.
 9. **The app.** Explore's rest row (02) and the raised sheet's row (16) draw the deals after the offers, as `OfferCard`s
    (`explore.deal.<id>`); `No offers yet.` only when there is neither. A deal has no page of its own: a tap chooses its
    destination as a pin does (`selectDestination`: the route's sheet, its search from the member's airport). The

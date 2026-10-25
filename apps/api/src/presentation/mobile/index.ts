@@ -139,13 +139,14 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
           return { key, title, items };
         }).filter((s) => s.items.length > 0 || s.key === "inspire");
 
-        // ADR-IMPL-067: "Offers to inspire" is the member's own offers, then the site's deals — a deal to a city an
-        // offer there already goes to from the same city leaves it, so no city shows twice for one origin.
-        const inspire = sections.find((s) => s.key === "inspire")?.items ?? [];
+        // ADR-IMPL-067: "Offers to inspire" is the member's own offers, then the site's deals — a deal to a city one of
+        // the member's offers already goes to from the same city leaves it, so no city shows twice for one origin.
+        // Every offer, not only the inspiring six: the others stand in their region's row (16, `To Asia`) under the
+        // deals, and at rest (02) the member would see the site's price for a city their own offer goes to.
         const deals = siteDeals
           .filter(
             (deal) =>
-              !inspire.some(
+              !cards.some(
                 (card) =>
                   deal.originAirports.includes(card.route.from.toUpperCase()) &&
                   deal.airports.includes(card.route.to.toUpperCase()),
