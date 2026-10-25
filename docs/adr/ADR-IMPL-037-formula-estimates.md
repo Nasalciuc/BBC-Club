@@ -34,7 +34,8 @@ hold them (owner, 7 Oct 2026).
   CI keeps the reference set; an environment may run a newer set without a CI change, as the engine is the same
   function. That engine _states_ it matches the site; the approval pack's routes are what confirm it before production.
   No Python enters this repository. (Amended by ADR-IMPL-062: the golden is now the club's engine's, recomputed the
-  same way with Turkey in Asia; the Python results differ on the 32 Istanbul routes.)
+  same way with Turkey in Asia; the Python results differ on the 32 Istanbul routes. Their hash stays beside it, and the
+  engine must still reproduce it with Turkey back in Europe.)
 - **Logic tests** run on made-up rules of the same shape (`tests/unit/pricing-rules.fixture.ts`), chosen so that every
   display rule has a case.
 - **What a member sees** (owner, 7 Oct 2026) — the estimate follows the chosen cabin: business whenever positive; first

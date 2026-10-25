@@ -143,8 +143,10 @@ describe("estimateFare — never where it would mislead (7 Oct review)", () => {
     expect([...UNCONFIRMED_COUNTRIES]).toEqual([]);
     expect(estimateFare(R, JFK, at("LCA", "CY"), "business")).toEqual({ amount: 1500 + 54 + 43, currency: "USD" });
     // XXA: 33 + 33 + 10. Armenia, Azerbaijan, Georgia, Kazakhstan: Asia; Greenland: North America; Russia: Europe.
-    const site = { AM: 1800, AZ: 1800, GE: 1800, KZ: 1800, GL: 400, RU: 1500 } as const;
-    for (const [cc, base] of Object.entries(site))
+    // The bases are the made-up fixture's (pricing-rules.fixture.ts) for each country's pair with JFK — NA-AS, LOCAL,
+    // NA-EU — not anyone's price.
+    const fixtureBase = { AM: 1800, AZ: 1800, GE: 1800, KZ: 1800, GL: 400, RU: 1500 } as const;
+    for (const [cc, base] of Object.entries(fixtureBase))
       expect(`${cc} ${estimateFare(R, JFK, at("XXA", cc), "business")?.amount}`).toBe(`${cc} ${base + 54 + 76}`);
   });
 

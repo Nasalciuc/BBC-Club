@@ -5,7 +5,7 @@
  * company's site prices by (continents.ts, ADR-IMPL-062). The rules are a parameter — their values are not in this
  * repository; the parity test (tests/parity) pins this engine's results with the reference rules.
  */
-import { CONTINENT_OF, UNCONFIRMED_COUNTRIES } from "./continents";
+import { CONTINENT_OF, UNCONFIRMED_COUNTRIES, type Continent } from "./continents";
 import type { PricingRules, RuleCabin, RuleTrip } from "./rules";
 
 /** Coordinates are optional: without them the same-metro guard cannot apply, everything else does. */
@@ -22,16 +22,18 @@ function lettersValue(rules: PricingRules, code: string, cabin: RuleCabin): numb
   return sum;
 }
 
-/** The raw formula, any cabin, before the display rules. null wherever the formula has no price — never a guess. */
+/** The raw formula, any cabin, before the display rules. null wherever the formula has no price — never a guess.
+ *  `continents` is the site's table (continents.ts); the parity test passes the Python engine's, to check its results. */
 export function formulaPrice(
   rules: PricingRules,
   from: PricedAirport,
   to: PricedAirport,
   trip: RuleTrip,
   cabin: RuleCabin,
+  continents: Readonly<Record<string, Continent>> = CONTINENT_OF,
 ): number | null {
-  const a = CONTINENT_OF[from.countryCode.toUpperCase()];
-  const b = CONTINENT_OF[to.countryCode.toUpperCase()];
+  const a = continents[from.countryCode.toUpperCase()];
+  const b = continents[to.countryCode.toUpperCase()];
   if (!a || !b || from.code === to.code) return null;
   if (a !== "NA" && b !== "NA") return null;
   const pair = a === "NA" && b === "NA" ? "LOCAL" : `NA-${a === "NA" ? b : a}`;

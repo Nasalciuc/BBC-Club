@@ -44,8 +44,10 @@ pace of its reads, the job's timeout).
 3. **The golden is the club's engine's.** With Turkey in Asia the engine no longer gives the Python engine's results on
    the golden's 32 Istanbul routes (128 of 15,128 lines), by design. The hash is recomputed exactly as the parity test
    computes it — the club's `formulaPrice`, the reference rules, the same 62 airports, lines and order — and the
-   golden's `source` and `note` say so. Fingerprint, airports and count are unchanged; no price is stored; CI's step is
-   unchanged.
+   golden's `source` and `note` say so. The Python engine's hash stays beside it (`python`), with the one continent it
+   filed otherwise: `formulaPrice` takes the continent table as a parameter (the site's by default), and the parity test
+   also recomputes the lines with Turkey in Europe and must give that hash — so CI still checks every other line against
+   an independent engine. Fingerprint, airports and count are unchanged; no price is stored; CI's step is unchanged.
 4. **The site at its new address** (`application/site-cms.ts`): `SITE_API` is `https://buybusinessclass.com`,
    `SITE_STORAGE` its `/storage/`. `LEGACY_SITE_STORAGE` keeps the old images' address, and the sync's photo rows are
    recognised under either (`SITE_STORAGE_PREFIXES`, `place-photos.repo.ts`): the next night moves a photo stored under
@@ -70,10 +72,14 @@ pace of its reads, the job's timeout).
 
 - With estimates on (staging; production only after the company's approval, ADR-IMPL-037), trips between North America
   and Turkey show the site's figure; Cyprus, Russia, Kazakhstan, Armenia, Azerbaijan, Georgia and Greenland get an
-  estimate where they had none; St Barthélemy, Ascension and Timor-Leste are priced on the site's continent. In
-  production `catalog.estimates` is off: no member sees a change today.
-- The golden no longer pins the Python engine; it pins the club's engine as compared with the site. A later change of
-  continents changes the golden again, by the same recomputation.
+  estimate where they had none; St Barthélemy, Ascension and Timor-Leste are priced on the site's continent. One of
+  those new estimates is not the site's: Ganja is `GNJ` in the club and `KVD` on the site, and the formula prices the
+  letters of the code, so the club's figure for `GNJ` is one the site does not show (below). In production
+  `catalog.estimates` is off: no member sees a change today.
+- The golden pins the club's engine with the reference rules, not the site: only business round trip was compared
+  with the site, and its first-class lines carry the reference set's first-class values, which the site does not use.
+  The Python engine's hash, checked with Turkey in Europe, keeps an independent engine behind every other line. A later
+  change of continents changes the golden again, by the same recomputation, and adds its country to `python`'s.
 - With the reference set, `--check-site` is expected to exit 1: the routes with a Q differ in business, and first
   differs on almost every route. That is the set's values, not the engine.
 - A night's sync takes about three to five minutes, longer than the worker's 120-s HTTP idle timeout: the cron's
@@ -83,8 +89,10 @@ pace of its reads, the job's timeout).
   club's User-Agent (every route differed, as made-up rules must).
 
 **Not in this change.** Codes the site spells differently (West Palm Beach `DJT` / `PBI`, Bishkek `BSZ` / `FRU`, Ganja
-`GNJ` / `KVD`) and the 19 airports the site does not price at all still get the club's estimate; the site's own price
-as the estimate's source, which removes them with the Q and first-class gaps, is the next step.
+`GNJ` / `KVD`) and the 19 airports the site does not price at all get the club's estimate — as before, except Ganja,
+which Azerbaijan's place in the unconfirmed set kept without one until now: emptying the set gives `GNJ` a figure the
+site does not show under that code, as `DJT` and `BSZ` already had. A refusal by airport was not added for it alone; the
+site's own price as the estimate's source, which removes all of them with the Q and first-class gaps, is the next step.
 
 **Left to the owner.**
 
