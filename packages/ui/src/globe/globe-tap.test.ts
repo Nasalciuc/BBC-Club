@@ -2,7 +2,7 @@
 import { describe, expect, it } from "bun:test";
 import { geoDistance, geoOrthographic } from "d3-geo";
 
-import { radiusAtZoom, onGlobeDisc } from "./globe-geo";
+import { NEAR_SIDE_DEG, REST_ZOOM, mapPoint, mapTap, onGlobeDisc, radiusAtZoom, type GlobeCamera } from "./globe-geo";
 import {
   GLOBE_SPEC,
   OPENING_VIEW,
@@ -90,6 +90,45 @@ describe("Mapbox's disc", () => {
     expect(onGlobeDisc({ x: centre.x, y: centre.y - r - 30 }, zoom, centre)).toBe(false); // the sky over the globe
     // Zoomed in, the same press is on it.
     expect(onGlobeDisc({ x: centre.x + r + 1, y: centre.y }, zoom + 1, centre)).toBe(true);
+  });
+});
+
+describe("a press on Mapbox's map", () => {
+  const centre = { x: 196.5, y: 266 };
+  const cam: GlobeCamera = { center: [0, 0], zoom: REST_ZOOM };
+  const r = radiusAtZoom(REST_ZOOM);
+  /** As Android reports a press (@rnmapbox/maps 10.3.7): its screen point is the place reprojected, not the finger. */
+  const android = (lng: number, lat: number) => ({ lng, lat, screen: mapPoint({ lng, lat }, cam, centre)! });
+
+  it("a place on the near side, under the finger, is a tap there", () => {
+    const at = mapTap(android(30, 10), cam, centre, []);
+    expect(at).not.toBeNull();
+    expect(at!.x).toBeCloseTo(android(30, 10).screen.x, 6);
+    expect(mapTap({ lng: 0, lat: 0, screen: centre }, cam, centre, [])).toEqual(centre);
+  });
+
+  it("the sky on Android — the horizon's place, its screen point on the limb — is no tap", () => {
+    // A press beside the globe: Mapbox answers with the nearest place on its horizon, 90° from the camera's centre, and
+    // Android reprojects it onto the limb, where the disc alone would take it.
+    const horizon = { lng: 90, lat: 0, screen: { x: centre.x + r, y: centre.y } };
+    expect(onGlobeDisc(horizon.screen, cam.zoom, centre)).toBe(true);
+    expect(mapTap(horizon, cam, centre, [])).toBeNull();
+    // The camera's horizon may stand short of 90°: past the near side, where no pin is drawn, is the sky too.
+    expect(mapTap(android(NEAR_SIDE_DEG + 2, 0), cam, centre, [])).toBeNull();
+    expect(mapTap(android(0, -(NEAR_SIDE_DEG + 2)), cam, centre, [])).toBeNull();
+    expect(mapTap(android(NEAR_SIDE_DEG - 2, 0), cam, centre, [])).not.toBeNull();
+  });
+
+  it("the sky on iOS — the finger itself off the disc — is no tap, whatever place Mapbox gives", () => {
+    expect(mapTap({ lng: 30, lat: 10, screen: { x: centre.x + r + 30, y: centre.y } }, cam, centre, [])).toBeNull();
+  });
+
+  it("a press on a pin's target is the pin's; a place that is no number is nothing", () => {
+    const paris = android(2.55, 49.01);
+    const placed: PlacedPin[] = [{ code: "CDG", x: paris.screen.x, y: paris.screen.y, lines: [], label: null }];
+    expect(mapTap(paris, cam, centre, placed)).toBeNull();
+    expect(mapTap(paris, cam, centre, [])).not.toBeNull();
+    expect(mapTap({ lng: Number.NaN, lat: 0, screen: centre }, cam, centre, [])).toBeNull();
   });
 });
 

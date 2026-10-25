@@ -7,6 +7,7 @@ import { geoDistance, geoInterpolate, geoOrthographic } from "d3-geo";
 import type { Feature, LineString } from "geojson";
 
 import { GLOBE_SPEC, normalizeLambda, routeView } from "./globe-logic";
+import { type PlacedPin, pinAt } from "./pin-labels";
 
 export type LngLat = [number, number];
 export type GeoPoint = { lat: number; lng: number };
@@ -120,9 +121,33 @@ export function mapPoint(
 
 /**
  * Whether a point on the map view is on Mapbox's globe (ADR-IMPL-068): within the globe's radius at the camera's zoom
- * of its centre on screen. Mapbox may answer a press on the sky with a place (unchecked on a phone), and d3 clamps one to
- * the limb: the disc decides, as on the drawn globe.
+ * of its centre on screen.
  */
 export function onGlobeDisc(point: { x: number; y: number }, zoom: number, centre: { x: number; y: number }): boolean {
   return Math.hypot(point.x - centre.x, point.y - centre.y) <= radiusAtZoom(zoom);
+}
+
+/**
+ * A press on Mapbox's map as a tap on the globe (ADR-IMPL-068): where the place Mapbox resolved stands on screen, in the
+ * projection `mapPoint` uses — or null, when the press is not a tap on the globe.
+ *
+ * - A place past the near side (NEAR_SIDE_DEG, where no pin is drawn either) is the sky's. Mapbox answers a press
+ *   beside the globe with the nearest place on its horizon, and on Android @rnmapbox/maps 10.3.7 reports as the press's
+ *   screen point that place reprojected (`pixelForCoordinate`), on the limb — not the finger. The disc alone would
+ *   compare that point with itself; the place decides, whatever the screen point says.
+ * - The screen point off the disc (iOS reports the finger itself) is the sky's too.
+ * - A press on a pin's target is the pin's: its own press answers it.
+ */
+export function mapTap(
+  press: { lng: number; lat: number; screen: { x: number; y: number } },
+  camera: GlobeCamera,
+  centre: { x: number; y: number },
+  placed: readonly Pick<PlacedPin, "code" | "x" | "y" | "label">[],
+): { x: number; y: number } | null {
+  if (!Number.isFinite(press.lng) || !Number.isFinite(press.lat)) return null;
+  const at = mapPoint(press, camera, centre);
+  if (!at) return null;
+  if (!onGlobeDisc(press.screen, camera.zoom, centre)) return null;
+  if (pinAt(press.screen.x, press.screen.y, placed) !== null) return null;
+  return at;
 }

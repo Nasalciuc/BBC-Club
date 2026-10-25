@@ -38,8 +38,7 @@ import {
   globePadding,
   labelScale,
   mapPoint,
-  onGlobeDisc,
-  pinAt,
+  mapTap,
   pinFrame,
   pinPriority,
   placeLabels,
@@ -283,8 +282,9 @@ export default function MapboxGlobe({
 
   const line = dest && home ? routeLine(home, dest) : null;
   const middle = dest && home ? routeMiddle(home, dest) : null;
-  // ADR-IMPL-068: a press at rest on the globe's disc, on no pin, is a tap on the place under it. A press on the sky
-  // (Mapbox may answer it with a place, unchecked) or on a pin's target — the pin's own press answers that — is not.
+  // ADR-IMPL-068: a press at rest on the globe, on no pin, is a tap on the place under it (`mapTap`). A press on the sky
+  // — Mapbox answers it with a place on its horizon, which Android reports reprojected onto the limb, not where the finger
+  // was — or on a pin's target, which the pin's own press answers, is not.
   function onMapPress(feature: {
     geometry: { coordinates: number[] };
     properties: { screenPointX: number; screenPointY: number };
@@ -292,13 +292,12 @@ export default function MapboxGlobe({
     touched(view.current); // a press is a touch: the slow turn pauses for it too
     if (!onTapPlace || selected !== null || pressGuard.pressedLately()) return;
     const [lng, lat] = feature.geometry.coordinates;
-    const finger = { x: feature.properties.screenPointX, y: feature.properties.screenPointY };
-    if (lng === undefined || lat === undefined || !Number.isFinite(lng) || !Number.isFinite(lat)) return;
+    if (lng === undefined || lat === undefined) return;
     const cam: GlobeCamera = { center: [...view.current.center] as LngLat, zoom: view.current.zoom };
-    if (!onGlobeDisc(finger, cam.zoom, centre)) return;
-    if (pinAt(finger.x, finger.y, placed) !== null) return;
+    const screen = { x: feature.properties.screenPointX, y: feature.properties.screenPointY };
     // The finger and the city in one projection, so how far apart they stand on screen is measured alike.
-    const at = mapPoint({ lng, lat }, cam, centre) ?? finger;
+    const at = mapTap({ lng, lat, screen }, cam, centre, placed);
+    if (!at) return;
     onTapPlace({ lng, lat, x: at.x, y: at.y, project: (p) => mapPoint(p, cam, centre) });
   }
 

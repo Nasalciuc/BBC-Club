@@ -99,7 +99,6 @@ export {
 export {
   MAX_LABEL_SCALE,
   labelScale,
-  pinAt,
   pinPriority,
   placeLabels,
   routeEndFrame,
@@ -114,7 +113,7 @@ export {
   ZOOM_RANGE,
   globePadding,
   mapPoint,
-  onGlobeDisc,
+  mapTap,
   radiusAtZoom,
   routeCamera,
   routeLine,
