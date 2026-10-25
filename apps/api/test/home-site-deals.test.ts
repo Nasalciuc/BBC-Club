@@ -147,4 +147,33 @@ describe("GET /v1/home — the site's deals (ADR-IMPL-067)", () => {
     expect(body.deals?.length).toBeLessThanOrEqual(SITE_DEALS_SHOWN);
     await t.close();
   });
+
+  it("an offer to a deal's city from another origin leaves the deal on Home; one from the deal's origin takes it off", async () => {
+    const t = await testApp({ suite: "home-site-deals-origin" });
+    await seedSiteDeals(t);
+    await t.flags.set("catalog.site_offers", { enabled: true });
+    await t.db.execute(sql`UPDATE members.profile SET home_airport = 'PVD' WHERE member_id = ${t.memberA.id}`);
+
+    // Providence: Paris is Boston's deal. The member's Paris offer leaves from New York — another origin, so both stand:
+    // the offer from New York, the site's deal from Boston.
+    await t.seedBroadcastOffer({ routeFrom: "JFK", routeTo: "CDG", title: "Autumn in Paris" });
+    const fromNewYork = HomeVM.parse((await home(t)).json);
+    expect(fromNewYork.sections.find((s) => s.key === "inspire")?.items.map((i) => i.route.from)).toEqual(["JFK"]);
+    expect(fromNewYork.deals?.map((d) => [d.destination.code, d.origin.city])).toEqual([
+      ["CDG", "Boston"],
+      ["HND", "New York"],
+      ["LHR", "New York"],
+      ["DXB", "New York"],
+    ]);
+
+    // An offer to Paris from Boston: the site's Paris from Boston leaves, and no other origin's Paris takes its place.
+    await t.seedBroadcastOffer({ routeFrom: "BOS", routeTo: "CDG", title: "Paris from Boston" });
+    const fromBoston = HomeVM.parse((await home(t)).json);
+    expect(fromBoston.deals?.map((d) => [d.destination.code, d.origin.city])).toEqual([
+      ["HND", "New York"],
+      ["LHR", "New York"],
+      ["DXB", "New York"],
+    ]);
+    await t.close();
+  });
 });
