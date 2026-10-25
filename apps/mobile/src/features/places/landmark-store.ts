@@ -3,8 +3,9 @@
  * /v1/places/:code/landmarks with the ETag of what the app holds, so an unchanged answer is a 304. A city is asked
  * about again — when a screen showing it comes into view — only once what the app knows has aged: landmarks after
  * twelve hours (the place photos' own), none yet after five minutes (the server's job looks at a new city within a few),
- * a code the server does not know or an answer this app cannot read after an hour. A failed question (offline, a
- * timeout, the server's error, a 429) changes nothing: the screen shows what it showed, and the next view asks again.
+ * a code the server does not know or an answer this app cannot read after an hour. A failed question (a timeout, the
+ * server's error, a 429, the network gone) changes nothing: the screen shows what it showed, and the next view — or the
+ * phone back online — asks again.
  * The snapshot is immutable and replaced only when a city's landmarks change. Pure: the question is passed in.
  */
 import type { LandmarkVM } from "@bbc/shared/api/v1/places";

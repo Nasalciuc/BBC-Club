@@ -145,11 +145,12 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     comes back into view or the phone back online. A screen reader hears `<name>, photo`, then the credit. testIDs
     `destination.landmark.<rank>` and `.credit` (`explore.` on 13).
   - **Asking.** One store for every screen, for the session: a city is asked when a screen showing it comes into view
-    and what the app knows has aged — landmarks after 12 hours (the place photos' own window), none yet after five
-    minutes (the job reaches a new city within a few), a code that is no airport or an answer the app cannot read
-    after an hour — with the ETag it holds (`If-None-Match`; a 304 keeps what it has). A failed question (offline, a
-    timeout, an error, a 429) changes nothing; the next view asks again. A landmark the app cannot read is dropped by
-    the contract, never the list; a body of another shape or for another code is unreadable: nothing shown.
+    or the phone back online, and what the app knows has aged — landmarks after 12 hours (the place photos' own
+    window), none yet after five minutes (the job reaches a new city within a few), a code that is no airport or an
+    answer the app cannot read after an hour — with the ETag it holds (`If-None-Match`; a 304 keeps what it has).
+    Offline, nothing is asked. A failed question (a timeout, an error, a 429, the network gone) changes nothing; the
+    next view, or the phone back online, asks again. A landmark the app cannot read is dropped by the contract, never
+    the list; a body of another shape or for another code is unreadable: nothing shown.
   - **Skips.** An operator's `skip` reaches the route within about 35 s (the flag's cache); an app that already
     showed the city drops the landmark at its next question for it — within 12 hours of its last answer, or at its
     next cold start.
@@ -157,6 +158,7 @@ no-cache`; 404 for a code that is no airport (or not three letters). The contrac
     floor over the tiles), `landmark-store.test.ts` (the windows, the ETag, a failure, the photographs tried again),
     `landmarks-section.test.ts` (the floor through the element tree the section builds, on both looks),
     `destination-geometry.test.ts` (04's and 13's flight options, the measures the section reads),
+    `usePlaceLandmarks.test.ts` (when a screen asks: in view and online, again back online),
     `api-landmarks.test.ts` (the question through `api.ts`: If-None-Match, 304, a body it cannot read, 404, 429).
 
 **Consequences.** A destination shows up to three landmarks a few minutes after its city is first shown (two places
