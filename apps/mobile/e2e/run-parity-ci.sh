@@ -31,7 +31,8 @@ JS_ERROR_ALLOWLIST=()
 
 # As run-android-ci.sh: E/ReactNativeJS is the app's own JS. A FATAL EXCEPTION counts only when the line after it names
 # the app's process ($APP, launcher-guard.sh): disabling the launcher can crash com.android.systemui, which is not under
-# test. Another process's crash is shown, never counted.
+# test. Another process's crash is shown, never counted. A logcat that cannot be read fails the run: no line must mean
+# no crash, never no look.
 js_error_lines() {
   adb logcat -d -v brief '*:S' ReactNativeJS:E AndroidRuntime:E | tr -d '\r' |
     awk -v app="$APP" '
@@ -41,7 +42,7 @@ js_error_lines() {
         if (index($0, "Process: " app ",") > 0) print fatal " (" app ")"
         else print "  not under test: " $0 > "/dev/stderr"
         fatal = ""
-      }' || true
+      }'
 }
 
 # Explore's sheet as the e2e build saw it (packages/ui/src/layout/sheet-trace.ts): a line on each focus of Explore and
@@ -72,7 +73,11 @@ if ! maestro test --format junit --output "$OUT/parity.xml" --debug-output "$OUT
 fi
 echo "-- Explore's sheet (HomeSheet trace, e2e build)"
 printf '%s\n' "${trace:-$(sheet_trace)}"
-errors=$(js_error_lines)
+if ! errors=$(js_error_lines); then
+  echo "::error::Could not read logcat for the parity crash check"
+  status=1
+  errors=""
+fi
 if [ -n "$errors" ]; then
   while IFS= read -r line; do
     [ -z "$line" ] && continue
