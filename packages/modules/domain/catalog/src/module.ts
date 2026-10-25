@@ -14,6 +14,7 @@ import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
 import { placePhotosRepo } from "./infrastructure/place-photos.repo";
 import { siteRepo } from "./infrastructure/site.repo";
+import { sitePricesRepo } from "./infrastructure/site-prices.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
@@ -22,10 +23,27 @@ import { homeSuggestion, homeZones, popularFrom } from "./application/discovery"
 import { importCatalog, ImportBody, ImportError } from "./application/import";
 import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
-import type { SiteClock } from "./application/site-cms";
+import { systemClock, type SiteClock } from "./application/site-cms";
+import { refreshSitePrices } from "./application/refresh-site-prices";
+import {
+  SEARCH_TIMEOUT_MS,
+  resolveIndicative,
+  sitePriceClient,
+  type Resolution,
+  type SiteUnavailable,
+  type StoredSitePrice,
+} from "./application/site-prices";
 import { syncSite } from "./application/site-sync";
-import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
-import { estimateRules as readEstimateRules } from "./pricing/estimate-rules";
+import {
+  pricedAirport,
+  sourcedEstimateVM,
+  toAirportVM,
+  toEstimateVM,
+  toFareVM,
+  type AirportRow,
+} from "./application/to-fare-vm";
+import { estimateFare } from "./pricing/estimate";
+import { estimateSources as readEstimateSources, type StoredRules } from "./pricing/estimate-rules";
 import type { CatalogFacade, DestinationPin } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
@@ -51,9 +69,12 @@ function searchWhenInRange(when: Date, now = new Date()): boolean {
 
 /** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
 export const SITE_PINS = 12;
+/** How long Home's site pins are kept, in seconds (createDestinationsCache's minute, or Redis's). */
+const SITE_PINS_CACHE_S = 60;
 
-/** For tests: `fetch` answers for the place-photo sources (Wikidata, Commons, Pexels) and the site; `siteClock` is the
- *  time the site's API pacing waits on, so a test's night takes no real time. */
+/** For tests: `fetch` answers for the place-photo sources (Wikidata, Commons, Pexels) and the site — its API and its
+ *  price search (ADR-IMPL-063); `siteClock` is the time the site's API pacing, the price job's pacing and the price
+ *  breaker wait on, so a test's night takes no real time. */
 export const catalogModule = (
   opts: { fetch?: Fetch; siteClock?: SiteClock } = {},
 ): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
@@ -71,43 +92,152 @@ export const catalogModule = (
       await platform.cache.bump("catalog:dest:gen");
       await platform.cache.bump("catalog:airports:gen");
     };
-    const estimateRules = (metric: "search" | "request" | "home") => readEstimateRules(platform, metric);
+    const estimateSources = (metric: "search" | "request" | "home") => readEstimateSources(platform, metric);
+    const siteClock = opts.siteClock ?? systemClock;
+    /** ADR-IMPL-063: the company's site's price search — one client, and one breaker, per process. */
+    const sitePrices = sitePriceClient({
+      fetch: (url, init) => (opts.fetch ?? fetch)(url, init),
+      userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; site prices)`,
+      clock: siteClock,
+    });
+
+    /** The search's one live question to the site (ADR-IMPL-063), within a second; what it learns is stored, so Home's
+     *  pins and the quote that follows show the same number. An error stores nothing: the formula stands in. */
+    async function askSiteNow(q: {
+      from: string;
+      to: string;
+    }): Promise<{ row: StoredSitePrice } | { unavailable: SiteUnavailable }> {
+      const route = { ...q, trip: "round_trip" as const };
+      const answer = await sitePrices.ask(route, { timeoutMs: SEARCH_TIMEOUT_MS });
+      if (answer.kind === "unavailable") {
+        platform.metrics.inc("site_prices_unavailable", { reason: answer.reason });
+        // Codes and the reason only — never a price. While the breaker is open every search would say it: not logged.
+        if (answer.reason === "bad_request") {
+          platform.logger.error({ from: q.from, to: q.to }, "site price refused our request (400)");
+        } else if (answer.reason !== "breaker") {
+          platform.logger.warn({ reason: answer.reason }, "site price unavailable, the formula stands in");
+        }
+        return { unavailable: answer.reason };
+      }
+      platform.metrics.inc("site_prices_answered", { status: answer.kind });
+      try {
+        return { row: await sitePricesRepo.store(conn, route, answer) };
+      } catch (err) {
+        // The answer is the site's either way; only the next reader will not find it.
+        platform.logger.warn({ err: errorForLog(err) }, "site price not stored");
+        const figures =
+          answer.kind === "priced" ? answer.figures : { business: null, first: null, premiumEconomy: null };
+        return { row: { status: answer.kind, ...figures, fetchedAt: new Date() } };
+      }
+    }
+
+    /**
+     * D6's order for one route and cabin once a published fare is ruled out (ADR-IMPL-063): the site's stored answer;
+     * then, for an undated search only (`live`), one live question; then the formula where the site could not be asked —
+     * or, for Home's pins and a quote, which never ask it, where nothing is stored. `stored` reads the route's row (the
+     * pins pass the one batch they read).
+     */
+    function siteResolution(
+      from: AirportRow,
+      to: AirportRow,
+      cabin: "business" | "first",
+      rules: StoredRules | null,
+      opts: { live: boolean; stored: () => Promise<StoredSitePrice | null> },
+    ) {
+      const a = pricedAirport(from);
+      const b = pricedAirport(to);
+      return resolveIndicative(
+        { from: a, to: b, cabin },
+        {
+          stored: opts.stored,
+          live: opts.live ? () => askSiteNow({ from: a.code, to: b.code }) : undefined,
+          formula: () => (rules ? (estimateFare(rules.rules, a, b, cabin)?.amount ?? null) : null),
+        },
+      );
+    }
+
+    /** A resolution as the estimate a member sees, with its source; null when there is no number. */
+    function resolvedVM(r: Resolution, cabin: "business" | "first") {
+      if (r.kind === "site") return sourcedEstimateVM(r.amount, cabin, { kind: "site", asOf: r.asOf });
+      if (r.kind === "club") return sourcedEstimateVM(r.amount, cabin, { kind: "club" });
+      return null;
+    }
 
     async function indicativeEstimate(
-      from: Parameters<typeof toEstimateVM>[1],
-      to: Parameters<typeof toEstimateVM>[2],
+      from: AirportRow,
+      to: AirportRow,
       cabin: "business" | "first",
     ): Promise<ReturnType<typeof toEstimateVM>> {
-      const stored = await estimateRules("search");
-      if (!stored) return null;
-      const estimate = toEstimateVM(stored.rules, from, to, cabin);
+      const sources = await estimateSources("search");
+      if (!sources) return null;
+      let estimate: ReturnType<typeof toEstimateVM>;
+      if (!sources.site) {
+        // The site off: the formula alone, exactly as before ADR-IMPL-063.
+        if (!sources.rules) return null;
+        estimate = toEstimateVM(sources.rules.rules, from, to, cabin);
+      } else {
+        const r = await siteResolution(from, to, cabin, sources.rules, {
+          live: true,
+          stored: () => sitePricesRepo.fresh(conn, from.code.trim(), to.code.trim(), "round_trip"),
+        });
+        platform.metrics.inc("search_site_prices", { source: r.kind, how: r.how });
+        estimate = resolvedVM(r, cabin);
+      }
       if (estimate) platform.metrics.inc("search_estimates_shown", { cabin });
       return estimate;
     }
 
     /**
      * ADR-IMPL-045: the site's cities listed from `home`, as pins priced the way their search will be — the formula, in
-     * the member's cabin (ADR-IMPL-037), so a pin, its estimate row and the quote it leads to show one number. Nothing
-     * unless `catalog.site_pins` is on and estimates are (no price, no pin). Cached like the fares' pins: 60 s, and
-     * dropped when the sync or an import bumps the generation.
+     * the member's cabin (ADR-IMPL-037), so a pin, its estimate row and the quote it leads to show one number. With
+     * `catalog.site_prices` on (ADR-IMPL-063): the site's stored answers, read in one batch, else the formula — never a
+     * call to the site; a city the company has no price for gets no pin. Nothing unless `catalog.site_pins` is on and
+     * estimates are (no price, no pin). Cached like the fares' pins: 60 s, and dropped when the sync or an import bumps
+     * the generation; the site's answers the job stores are seen within the minute.
      */
     async function sitePins(
       home: string,
       cabin: "business" | "first",
     ): Promise<(DestinationPin & { airports: string[] })[]> {
       if (!(await platform.flags.isEnabled("catalog.site_pins", false))) return [];
-      const stored = await estimateRules("home");
-      if (!stored) return [];
-      const key = `${home.toUpperCase()}:${cabin}:${stored.fingerprint}`;
+      const sources = await estimateSources("home");
+      if (!sources) return [];
+      const { site, rules } = sources;
+      const key = site
+        ? `${home.toUpperCase()}:${cabin}:${rules?.fingerprint ?? "-"}:site`
+        : `${home.toUpperCase()}:${cabin}:${rules?.fingerprint}`;
       const load = async () => {
         const [homeRow, rows] = await Promise.all([
           airportsRepo.get(conn, home),
           siteRepo.pinsFrom(conn, home, SITE_PINS * 3),
         ]);
         if (!homeRow) return [];
-        return rows.flatMap((r) => {
-          const estimate = toEstimateVM(stored.rules, homeRow, r.airport, cabin);
-          if (!estimate) return [];
+        // Kept for the pins' minute: an answer that would pass its 24 hours within it is not read.
+        const answers = site
+          ? await sitePricesRepo.freshFrom(
+              conn,
+              homeRow.code.trim(),
+              rows.map((r) => r.airport.code.trim()),
+              "round_trip",
+              SITE_PINS_CACHE_S,
+            )
+          : null;
+        const priced = await Promise.all(
+          rows.map(async (r): Promise<{ amount: number; source?: "site" | "club" } | null> => {
+            if (!answers) {
+              const estimate = rules ? toEstimateVM(rules.rules, homeRow, r.airport, cabin) : null;
+              return estimate ? { amount: estimate.amount } : null;
+            }
+            const resolved = await siteResolution(homeRow, r.airport, cabin, rules, {
+              live: false,
+              stored: async () => answers.get(r.airport.code.trim()) ?? null,
+            });
+            return resolved.kind === "none" ? null : { amount: resolved.amount, source: resolved.kind };
+          }),
+        );
+        return rows.flatMap((r, i) => {
+          const price = priced[i];
+          if (!price) return [];
           return [
             {
               code: r.airport.code.trim(),
@@ -118,7 +248,8 @@ export const catalogModule = (
               lat: Number(r.airport.lat),
               lng: Number(r.airport.lng),
               description: r.airport.description,
-              fromPrice: estimate.amount,
+              fromPrice: price.amount,
+              ...(price.source ? { priceSource: price.source } : {}),
               airports: r.airports,
             },
           ];
@@ -126,7 +257,7 @@ export const catalogModule = (
       };
       const gen = await platform.cache.generation("catalog:dest:gen");
       if (gen == null) return sitePinsCache.get(key, load);
-      return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, 60, load);
+      return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, SITE_PINS_CACHE_S, load);
     }
 
     /** ADR-IMPL-045: the site's photos, and the cities kept out of them (`skip`: the site's ids). Null: off. */
@@ -168,8 +299,8 @@ export const catalogModule = (
       indicativeFor: async (exec, q) => {
         // The cached flag rows first: with estimates off (production today) or no valid rules, the question costs no
         // query. The request module counts what it stores (`request_estimates_stored`), after its insert.
-        const stored = await estimateRules("request");
-        if (!stored) return null;
+        const sources = await estimateSources("request");
+        if (!sources) return null;
         const from = q.from.toUpperCase();
         const to = q.to.toUpperCase();
         const e = exec ?? conn;
@@ -181,8 +312,21 @@ export const catalogModule = (
         const toApt = airports.find((a) => a.code === to);
         // Published fares always win: the search showed them, not an estimate.
         if (!fromApt || !toApt || rows.length > 0) return null;
-        const estimate = toEstimateVM(stored.rules, fromApt, toApt, q.cabin);
-        return estimate ? { ...estimate, rules: stored.fingerprint } : null;
+        const { site, rules } = sources;
+        if (!site) {
+          // The site off: the formula alone, exactly as before ADR-IMPL-063.
+          const estimate = rules ? toEstimateVM(rules.rules, fromApt, toApt, q.cabin) : null;
+          return estimate && rules ? { ...estimate, rules: rules.fingerprint } : null;
+        }
+        // ADR-IMPL-063: the site's stored answer — the one the search stored — else the formula. Never a call to the
+        // site: a quote asks this inside its transaction, under its lock.
+        const r = await siteResolution(fromApt, toApt, q.cabin, rules, {
+          live: false,
+          stored: () => sitePricesRepo.fresh(e, from, to, "round_trip"),
+        });
+        const estimate = resolvedVM(r, q.cabin);
+        if (!estimate) return null;
+        return r.kind === "club" && rules ? { ...estimate, rules: rules.fingerprint } : estimate;
       },
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
@@ -611,6 +755,32 @@ export const catalogModule = (
               );
               if (report.read) await invalidateMaps();
               return report;
+            },
+          },
+        },
+        {
+          // ADR-IMPL-063: the company's site's answers for the routes Home's site pins show, so a pin shows the site's
+          // price without asking it. At most 150 questions a run, about two a second (75 s and more); it stops at the
+          // site's first 429 or when the breaker opens. Ten minutes apart, five to finish. With the site's prices or
+          // estimates off, nothing is asked.
+          name: "refresh-site-prices",
+          spec: {
+            cron: "*/10 * * * *",
+            singleton: true,
+            timeoutMs: 300_000,
+            handler: async (ctx) => {
+              const on =
+                (await platform.flags.isEnabled("catalog.estimates", false)) &&
+                (await platform.flags.isEnabled("catalog.site_prices", false));
+              if (!on) return { skipped: 1 };
+              return refreshSitePrices({
+                db: conn,
+                client: sitePrices,
+                clock: siteClock,
+                signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                metrics: platform.metrics,
+                logger: platform.logger,
+              });
             },
           },
         },
