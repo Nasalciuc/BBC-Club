@@ -15,7 +15,14 @@ import { GLOBE_SPEC, GlobeFallback, routeView, tokens } from "@bbc/ui";
 
 import { env } from "@/lib/env";
 
-import { type TileProbe, cameBack, satelliteTileProbe, shouldReprobe, shouldShowMapbox } from "./mapbox-ready-logic";
+import {
+  type TileProbe,
+  cameBack,
+  reprobeSatelliteTile,
+  satelliteTileProbe,
+  shouldReprobe,
+  shouldShowMapbox,
+} from "./mapbox-ready-logic";
 import type { MapboxGlobeProps } from "./MapboxGlobe";
 
 export const MAPBOX_READY =
@@ -106,9 +113,10 @@ export function Globe(props: Props) {
     };
   }, []);
 
-  // ADR-IMPL-068: the black globe's floor. While the satellite globe is shown, its imagery is asked for again when the app
-  // comes back to the foreground or the phone comes back online (at most once a minute); if it no longer comes, the
-  // drawn globe takes Explore back for the session — never a sphere of the style's background.
+  // ADR-IMPL-068: the black globe's floor. While the satellite globe is shown and the phone is online, its imagery is
+  // asked for again when the app comes back to the foreground or the phone comes back online (at most once a minute);
+  // if Mapbox refuses the token, the drawn globe takes Explore back for the session. No answer (offline, a timeout)
+  // changes nothing: Mapbox draws what it has cached, the ocean where a tile is missing.
   const [appActive, setAppActive] = useState(AppState.currentState === "active");
   useEffect(() => {
     const app = AppState.addEventListener("change", (s) => setAppActive(s === "active"));
@@ -122,14 +130,14 @@ export function Globe(props: Props) {
     const now = Date.now();
     if (
       !MAPBOX_READY ||
-      !shouldReprobe({ came, mapboxShown: show, failed: mapFailed, lastAskedAt: lastAskedAt.current, now })
+      !shouldReprobe({ came, offline, mapboxShown: show, failed: mapFailed, lastAskedAt: lastAskedAt.current, now })
     ) {
       return;
     }
     lastAskedAt.current = now;
-    void satelliteTileProbe(env.EXPO_PUBLIC_MAPBOX_TOKEN, undefined, { fresh: true }).then((probe) => {
-      if (probe !== "failed") return;
-      console.warn("Mapbox imagery no longer loads; drawing GlobeFallback instead.");
+    void reprobeSatelliteTile(env.EXPO_PUBLIC_MAPBOX_TOKEN).then((found) => {
+      if (found !== "refused") return;
+      console.warn("Mapbox refused the imagery; drawing GlobeFallback instead.");
       setMapFailed(true);
     });
   }, [appActive, offline, show, mapFailed]);

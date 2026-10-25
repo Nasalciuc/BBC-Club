@@ -93,7 +93,10 @@ all`. No image draws the answer or the distance line (`DESIGN.md` has no rule fo
 8. **The black globe's floor, over the air.** Mapbox's `background` layer (`existing`) is recoloured to the drawn
    globe's deep ocean (`globe-ocean-deep`): a missing tile shows the sea, never near-black. The satellite tile probe
    (F107) is asked again when the app comes back to the foreground or the phone comes back online, while Mapbox is the
-   globe shown, at most once a minute; a failure hands Explore back to the drawn globe for the session. Counting
+   globe shown and the phone is online (a return while offline waits for the reconnect), at most once a minute. Only
+   Mapbox refusing the token (401 or 403) hands Explore back to the drawn globe, for the session; no answer — offline,
+   a timeout, a 5xx, a captive portal's page — changes nothing, since Mapbox still draws what it has cached and the
+   ocean where a tile is missing: a moment underground never costs the imagery for the rest of the session. Counting
    Mapbox's tile errors after the style loaded (10.3.8's `subscribeMapLoadingError`, which carries the type) needs the
    native release (D4) and is left to it.
 
