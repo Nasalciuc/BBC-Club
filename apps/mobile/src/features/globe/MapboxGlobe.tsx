@@ -311,7 +311,9 @@ export default function MapboxGlobe({
   const ornament = { bottom: Math.max(8, size.height - sheetTop + 8) };
 
   return (
-    <View style={StyleSheet.absoluteFill} onLayout={onLayout}>
+    // `globe.map`: the satellite globe's surface, which takes the pan, the pinch and (ADR-IMPL-068) the tap — as
+    // `globe.drawn` is the drawn one's. No accessibilityLabel: Search is the screen reader's way to a city.
+    <View testID="globe.map" style={StyleSheet.absoluteFill} onLayout={onLayout}>
       <MapView
         style={StyleSheet.absoluteFill}
         styleURL={SATELLITE_STYLE}

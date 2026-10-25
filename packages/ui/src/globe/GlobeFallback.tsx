@@ -214,8 +214,11 @@ export function GlobeFallback({
   useEffect(() => engine.onTap(onTap), [engine, onTap]);
 
   return (
+    // `globe.drawn`: the surface the pan, the pinch and (ADR-IMPL-068) the tap answer on — an e2e flow finds the globe by
+    // it. No accessibilityLabel: it is no element for a screen reader, whose way to a city is Search (reported in the ADR
+    // as a conflict with DESIGN.md · Accessibility).
     <GestureDetector gesture={engine.gesture(tap)}>
-      <View style={[styles.wrap, { width: size, height: size }]} collapsable={false}>
+      <View testID="globe.drawn" style={[styles.wrap, { width: size, height: size }]} collapsable={false}>
         <Svg width={size} height={size} style={StyleSheet.absoluteFill} pointerEvents="none">
           <Defs>
             <RadialGradient
