@@ -53,13 +53,16 @@ pace of its reads, the job's timeout).
    recognised under either (`SITE_STORAGE_PREFIXES`, `place-photos.repo.ts`): the next night moves a photo stored under
    the old address to the new one, or hands it back — photos off, its city skipped or gone. No migration.
 5. **Paced to the rate limit.** Every API request waits its turn: one start every 600 ms across the pool, about 100 a
-   minute, room left for anyone else on the same address. A 429 holds every worker for its `Retry-After` (seconds or an
-   HTTP date; 60 s without one; at most 120 s), then that page is asked once more; a second 429 ends the read with a
-   `SiteError` naming the page, and the night changes nothing, as any failed night. A read that fails stops its other
-   workers, so none asks the site afterwards. Photo checks (HEAD on `/storage`, no stated limit) keep four at a time,
-   unpaced. The clock is injectable (`SiteDeps.clock`, `catalogModule({ siteClock })`), so tests take no real time.
-   `sync-site-destinations`' timeout goes from 100 s to 420 s: about two and a half minutes of pages, the photo checks,
-   and room for a hold.
+   minute. A 429 holds every worker for its `Retry-After` (seconds or an HTTP date; 60 s without one; at most 120 s),
+   then that page is asked once more; a second 429 ends the read with a `SiteError` naming the page, and the night
+   changes nothing, as any failed night. A read that fails stops its other workers, so none asks the site afterwards.
+   Photo checks (HEAD on `/storage`, no stated limit) keep four at a time, unpaced. The clock is injectable
+   (`SiteDeps.clock`, `catalogModule({ siteClock })`), so tests take no real time. The 120 a minute are the address's,
+   not one read's: staging runs on the production host (ADR-IMPL-010) with the same crontab, so on a night both
+   environments read the site, two reads at 07:40 spend one budget. Simulated against a fixed window of 120 per 60 s,
+   they meet 429s and wait them out — none fails — and each takes about four minutes of pages (about six and a half if
+   the site sent no `Retry-After`) against two and a half alone. `sync-site-destinations`' timeout goes from 100 s to
+   600 s, the platform's default: that worst case, the photo checks and a margin.
 6. **`scripts/load-pricing-rules.ts --check-site`.** For 24 routes — two per continent pair, both trips; Istanbul,
    Québec (YQB) and Seville (SVQ) among them; from North America, and LAX only as a destination, since the site prices
    LAX's one-way trips abroad its own way — asked one at a time, 500 ms apart, 5 s each, with the club's User-Agent, it
@@ -79,12 +82,15 @@ pace of its reads, the job's timeout).
 - The golden pins the club's engine with the reference rules, not the site: only business round trip was compared
   with the site, and its first-class lines carry the reference set's first-class values, which the site does not use.
   The Python engine's hash, checked with Turkey in Europe, keeps an independent engine behind every other line. A later
-  change of continents changes the golden again, by the same recomputation, and adds its country to `python`'s.
+  change of continents changes the golden again, by the same recomputation, and adds that country to `python`'s
+  `continents` with the continent the Python engine gave it.
 - With the reference set, `--check-site` is expected to exit 1: the routes with a Q differ in business, and first
   differs on almost every route. That is the set's values, not the engine.
-- A night's sync takes about three to five minutes, longer than the worker's 120-s HTTP idle timeout: the cron's
-  request, or an operator's, is closed while the run goes on, and `platform.job_runs` holds its outcome, as for
-  `retention` (RUNBOOK, "The site's destinations").
+- A night's sync takes about three to five minutes — up to about seven when staging reads the site at the same time —
+  longer than the worker's 120-s HTTP idle timeout: the cron's request, or an operator's, is closed while the run goes
+  on, and `platform.job_runs` holds its outcome, as for `retention` (RUNBOOK, "The site's destinations"). Giving staging
+  its own minute would need a crontab per environment (the crontab is generated from the job specs, ADR-IMPL-021); it is
+  not done here.
 - `--check-site` ran once against the live site with the repository's made-up test rules: all 24 routes answered the
   club's User-Agent (every route differed, as made-up rules must).
 
@@ -101,4 +107,5 @@ site's own price as the estimate's source, which removes all of them with the Q 
   almost every route. `--check-site` names the routes. CI keeps the reference set (the golden's fingerprint) until the
   owner decides otherwise.
 - Confirm with the company that `https://buybusinessclass.com/api` is the supported replacement for `weba.`, and that
-  about 250 paced reads a night, plus about 150 photo checks, are acceptable.
+  about 250 paced reads a night, plus about 150 photo checks, are acceptable — twice that from one address on a night
+  staging reads the site too.

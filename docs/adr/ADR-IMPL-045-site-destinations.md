@@ -18,7 +18,7 @@ is the Seychelles' capital; "Benglaru" is misspelled; Kyoto has no airport of it
 - **One job, once a night** — `sync-site-destinations` (worker, 07:40 UTC, singleton, 100 s): regions → countries →
   cities, then each city's page, at most four requests at a time, the club's User-Agent, 10 s a request; then a HEAD
   request for each city's own photo. (Amended by ADR-IMPL-062: the API's requests start 600 ms apart, under its rate
-  limit; a 429 waits and asks once more; the job's timeout is 420 s.) All or nothing: a region or a country that does
+  limit; a 429 waits and asks once more; the job's timeout is 600 s.) All or nothing: a region or a country that does
   not answer, fewer than 80 % of last night's cities listed or placed on their airports, or more than 10 % (at least
   three) city pages unanswered — the run fails and changes nothing. One city page that does not answer keeps last
   night's rows; a photo that cannot be asked about (no answer, a 5xx) keeps last night's verdict.

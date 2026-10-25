@@ -257,8 +257,9 @@ photo for gets its satellite view, looked at again each day.
 
 Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own API
 — `buybusinessclass.com/api` (ADR-IMPL-062; `weba.buybusinessclass.com` until it stopped resolving): regions, their
-countries, their cities, about 240 pages, one starting every 600 ms (the API allows 120 requests a minute), then a HEAD
-request for each city's photo, four at a time — and keeps a snapshot: `catalog.site_places` (each city, its main
+countries, their cities, about 240 pages, one starting every 600 ms (the API allows 120 requests a minute per address,
+and staging's night, on this host at the same minute, spends the same 120), then a HEAD request for each city's photo,
+four at a time — and keeps a snapshot: `catalog.site_places` (each city, its main
 airport, every airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price
 from, and that price — kept, never shown). The site has no airport codes: a city is matched by name inside the country
 the site puts it in; the few names that need help are listed in `SITE_CITY_AIRPORTS` (catalog
@@ -286,8 +287,10 @@ their airports, or more than 10 % (at least three) city pages unanswered, and th
 `bbc_job_failed{job="sync-site-destinations"}`, and `/status` turns red with the job in `failingJobs` until a run
 succeeds. A single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no
 answer, a 5xx) keeps last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
-asks (a minute without one, two at most), then the page is asked again; a second 429 fails the night like any page that
-does not answer (`site getOne?id=…: HTTP 429 again after waiting`). The run's counts are in `platform.job_runs`; the log
+asks (a minute without one, two at most), then the page is asked again; a second 429 on any page, a city's included,
+fails the night — unlike a city page that merely does not answer (`site getOne?id=…: HTTP 429 again after waiting`). A
+few 429s are expected on a night staging reads the site too: the two reads share the address's 120 a minute and wait
+their turns. The run's counts are in `platform.job_runs`; the log
 lines `site: no airport`, `site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`,
 `site: photo does not answer`, `site: photo not checked, kept`, `site: unknown US city` and
 `site: city page did not answer, kept` name the cities. Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is
@@ -318,7 +321,8 @@ docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
   bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET}}).then(async r=>console.log(r.status,await r.text()))"
 ```
 
-A night's run takes three to five minutes, longer than the worker's HTTP idle timeout (120 s): the command above then
+A night's run takes three to five minutes (up to about seven when staging's run reads the site at the same time; the
+job's timeout is ten), longer than the worker's HTTP idle timeout (120 s): the command above then
 ends with the connection closed while the run goes on (the cron's own call logs `FAIL` the same way). Its outcome is in
 `platform.job_runs`, a few minutes later:
 
