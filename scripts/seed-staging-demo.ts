@@ -368,7 +368,7 @@ export async function seedStagingDemo(
         memberId: member.id,
         category: "transactional",
         title: "Your quote is ready",
-        body: `${leg?.from} → ${leg?.to} — tap to call your specialist`,
+        body: `${leg?.from} → ${leg?.to} — a specialist will call you shortly`,
         deepLink: `bbcclub://requests/${quoted.row.id}`,
         requestId: quoted.row.id,
         sourceEventId: "staging-demo:quote",
