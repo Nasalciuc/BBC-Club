@@ -6,12 +6,13 @@
  */
 import { z } from "zod";
 import { errorForLog, type Executor } from "@bbc/db";
-import type { PlacePhotoVM } from "@bbc/shared/api/v1/places";
-import { PLACE_PHOTOS_MAX_CODES } from "@bbc/shared/api/v1/places";
+import { PLACE_PHOTOS_MAX_CODES, PlacePhotoVM } from "@bbc/shared/api/v1/places";
 
 import { airportsRepo } from "../infrastructure/airports.repo";
+import type { LandmarkStandIn } from "../infrastructure/place-landmarks.repo";
 import { placePhotosRepo, type PlacePhotoRow } from "../infrastructure/place-photos.repo";
 import { sourceHoldsRepo } from "../infrastructure/source-holds.repo";
+import { landmarkAuthor } from "./landmark-sources";
 import {
   CARD_WIDTH,
   HERO_WIDTH,
@@ -20,6 +21,8 @@ import {
   acceptCommons,
   askCommons,
   askPexels,
+  commonsPage,
+  commonsThumbAt,
   findCities,
   type CityFacts,
   type Centre,
@@ -82,6 +85,45 @@ export function toPlacePhotoVM(row: PlacePhotoRow): PlacePhotoVM {
     return { code, kind: "satellite", lat: Number(row.lat), lng: Number(row.lng) };
   }
   return { code, kind: "none" };
+}
+
+/**
+ * A landmark's photograph as the city's photo (ADR-IMPL-064, amendment 1): its 1280-px thumbnail full width, the same
+ * file at 500 px for a card (else the 1280 one), and its own credit — its author, its licence, its Commons page — as a
+ * Commons city photo is credited. Null when the result is something the app could not read (the route then leaves
+ * the city as it was).
+ */
+export function landmarkAsPhoto(code: string, landmark: LandmarkStandIn): PlacePhotoVM | null {
+  const vm: PlacePhotoVM = {
+    code,
+    kind: "photo",
+    card: commonsThumbAt(landmark.imageUrl, CARD_WIDTH) ?? landmark.imageUrl,
+    hero: landmark.imageUrl,
+    credit: {
+      source: "wikimedia",
+      author: landmarkAuthor(landmark.credit),
+      license: landmark.licence,
+      link: commonsPage(landmark.file),
+    },
+  };
+  return PlacePhotoVM.safeParse(vm).success ? vm : null;
+}
+
+/**
+ * The answer with a landmark standing in where a city has no photograph of its own — its satellite view, or nothing
+ * yet (ADR-IMPL-064, amendment 1). A photo of any source (Commons, Pexels, the club's own) stays first. `standIns` is
+ * the first landmark the route may show for each place (`placeLandmarksRepo.standIns`: rank order, the flag's `skip`
+ * left out); empty while `catalog.landmarks` is off — then nothing changes.
+ */
+export function withLandmarkPhotos(
+  items: readonly PlacePhotoVM[],
+  standIns: ReadonlyMap<string, LandmarkStandIn>,
+): PlacePhotoVM[] {
+  return items.map((item) => {
+    if (item.kind === "photo") return item;
+    const landmark = standIns.get(item.code);
+    return (landmark && landmarkAsPhoto(item.code, landmark)) ?? item;
+  });
 }
 
 const HttpsUrl = z.string().trim().max(2048).url().startsWith("https://");

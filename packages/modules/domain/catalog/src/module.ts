@@ -24,7 +24,13 @@ import { formatInZone } from "./application/flight-local";
 import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody, ImportError } from "./application/import";
 import { readLandmarksFlag, resolvePlaceLandmarks, toPlaceLandmarksVM } from "./application/place-landmarks";
-import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
+import {
+  PlacePhotoOverride,
+  parseCodes,
+  resolvePlacePhotos,
+  toPlacePhotoVM,
+  withLandmarkPhotos,
+} from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
 import { systemClock, type SiteClock } from "./application/site-cms";
 import { refreshSitePrices, type FailedRoutes } from "./application/refresh-site-prices";
@@ -576,7 +582,14 @@ export const catalogModule = (
           if (vm) return [vm];
           return added.has(code) ? [{ code, kind: "none" }] : [];
         });
-        return c.json({ items });
+        // ADR-IMPL-064, amendment 1: where a city has no photograph of its own (its satellite view, or nothing yet), its
+        // first landmark's stands in — composed here, at read time, so the flag and its `skip` act at once and an
+        // operator's photo stays first. With `catalog.landmarks` off nothing is read and nothing changes.
+        const without = items.filter((i) => i.kind !== "photo").map((i) => i.code);
+        const flag = without.length > 0 ? await landmarksFlag() : null;
+        if (!flag?.enabled) return c.json({ items });
+        const standIns = await placeLandmarksRepo.standIns(conn, without, flag.skip);
+        return c.json({ items: withLandmarkPhotos(items, standIns) });
       },
     );
 

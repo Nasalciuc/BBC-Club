@@ -638,6 +638,24 @@ export function commonsCredit(info: ImageInfo): { author: string | null; license
   return { author, license, link };
 }
 
+/** A Commons file's own page, from its name: "Eiffel Tower.jpg" → ".../wiki/File:Eiffel_Tower.jpg" on Commons. */
+export function commonsPage(file: string): string {
+  return `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file.trim().replace(/ /g, "_"))}`;
+}
+
+/**
+ * The same Commons thumbnail at another of Wikimedia's standard widths — ".../thumb/a/ab/X.jpg/1280px-X.jpg" at 500 is
+ * ".../thumb/a/ab/X.jpg/500px-X.jpg", its query kept. Null for an address on no Wikimedia host or not shaped so.
+ */
+export function commonsThumbAt(url: string, width: number): string | null {
+  if (!onWikimedia(url)) return null;
+  const u = new URL(url);
+  const m = u.pathname.match(/^(\/(?:[^/]+\/)*thumb\/[0-9a-f]\/[0-9a-f]{2}\/[^/]+\/)\d+px-([^/]+)$/);
+  if (!m) return null;
+  u.pathname = `${m[1]}${width}px-${m[2]}`;
+  return u.toString();
+}
+
 // ── Pexels ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const PEXELS_SEARCH = "https://api.pexels.com/v1/search";

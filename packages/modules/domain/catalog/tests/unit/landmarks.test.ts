@@ -13,6 +13,8 @@ import {
   LANDMARK_MIN_WIDTH,
   acceptLandmarkPhoto,
   askLandmarkFiles,
+  landmarkAuthor,
+  landmarkCredit,
   landmarkFiles,
   landmarkSparql,
   pickLandmarks,
@@ -277,6 +279,15 @@ describe("D7's filters through Commons", () => {
     });
     expect(acceptLandmarkPhoto(info({ license: "Free Art License 1.3" }))?.licence).toBe("Free Art License 1.3");
     expect(acceptLandmarkPhoto(info({ license: "FAL", artist: null }))).toBeNull(); // FAL asks for an author
+  });
+
+  it("a credit line reads back to its author: the city photo a landmark stands in for names the same person", () => {
+    expect(landmarkCredit("Ana Pop")).toBe("Ana Pop · Wikimedia Commons");
+    expect(landmarkCredit(null)).toBe("Wikimedia Commons");
+    expect(landmarkAuthor(landmarkCredit("Ana Pop"))).toBe("Ana Pop");
+    expect(landmarkAuthor(landmarkCredit("Ion · Ana Pop"))).toBe("Ion · Ana Pop");
+    expect(landmarkAuthor(landmarkCredit(null))).toBeNull();
+    expect(landmarkAuthor("Studio Pop")).toBe("Studio Pop"); // not the job's shape: the line as it is
   });
 });
 

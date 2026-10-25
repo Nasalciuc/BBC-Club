@@ -1,7 +1,7 @@
 /** Place photos (ADR-IMPL-043): reading the three sources, choosing a photo, and what the app receives. */
 import { describe, expect, it } from "bun:test";
 
-import { PlacePhotosVM } from "@bbc/shared/api/v1/places";
+import { PlacePhotosVM, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import {
   COMMONS_API,
   DEFAULT_RETRY_AFTER_S,
@@ -14,6 +14,8 @@ import {
   cityFactsByName,
   citySparql,
   commonsFileName,
+  commonsPage,
+  commonsThumbAt,
   metadataText,
   parsePoint,
   pickPexels,
@@ -29,12 +31,15 @@ import {
   PEXELS_PER_RUN,
   PLACE_PHOTOS_REQUESTS_MS,
   decidePlaces,
+  landmarkAsPhoto,
   parseCodes,
   toPlacePhotoVM,
+  withLandmarkPhotos,
   withoutOutcome,
   type Outcome,
   type Place,
 } from "../../src/application/place-photos";
+import type { LandmarkStandIn } from "../../src/infrastructure/place-landmarks.repo";
 import { binding, commonsThumb, fakeSources, pexelsPhoto } from "./place-photos.fixture";
 // WDQS's own answers, 25 Oct 2026 (no person in them): the airports' question for RMO and KIV, and the search by a
 // city's name for Chișinău, for Kishinev (with the search's order) and for Springfield.
@@ -399,6 +404,33 @@ describe("Commons", () => {
     expect(acceptCommons(png.hero, png.card)).toBeNull();
   });
 
+  it("names a file's page, and the same thumbnail at another standard width (its host and query kept)", () => {
+    expect(commonsPage("Notre-Dame de Paris (1).jpg")).toBe(
+      "https://commons.wikimedia.org/wiki/File:Notre-Dame_de_Paris_(1).jpg",
+    );
+    expect(commonsPage("Chișinău water tower.jpg")).toBe(
+      "https://commons.wikimedia.org/wiki/File:Chi%C8%99in%C4%83u_water_tower.jpg",
+    );
+    expect(commonsThumbAt(commonsThumb("London.jpg", 1280), 500)).toBe(commonsThumb("London.jpg", 500));
+    expect(
+      commonsThumbAt(
+        "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/A_b.jpg/1280px-A_b.jpg?utm_source=commons.wikimedia.org",
+        500,
+      ),
+    ).toBe(
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/A_b.jpg/500px-A_b.jpg?utm_source=commons.wikimedia.org",
+    );
+    for (const url of [
+      "https://upload.wikimedia.org/wikipedia/commons/6/69/A_b.jpg", // the original
+      "https://example.com/wikipedia/commons/thumb/6/69/A_b.jpg/1280px-A_b.jpg", // not Wikimedia
+      "http://upload.wikimedia.org/wikipedia/commons/thumb/6/69/A_b.jpg/1280px-A_b.jpg", // not https
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/69/A_b.tif/lossy-page1-1280px-A_b.tif.jpg", // a page
+      "not a url",
+    ]) {
+      expect(commonsThumbAt(url, 500)).toBeNull();
+    }
+  });
+
   it("reads metadata as text: tags out, entities once, spaces collapsed, long credits cut", () => {
     const text = (value: unknown) => metadataText({ extmetadata: { Artist: { value } } }, "Artist");
     expect(text("<span>Ana &amp; <b>Ion</b></span>")).toBe("Ana & Ion");
@@ -490,6 +522,82 @@ describe("what the app receives", () => {
     });
     expect(parsed.items.map((i) => i.code)).toEqual(["LHR", "NRT", "RMO"]);
     expect(() => PlacePhotosVM.parse({ items: "x" })).toThrow();
+  });
+});
+
+describe("a landmark stands in for a city without a photograph (ADR-IMPL-064, amendment 1)", () => {
+  // A landmark row as resolve-place-landmarks writes it (the file and the author made up).
+  const tower: LandmarkStandIn = {
+    file: "Water tower from the air.jpg",
+    imageUrl: commonsThumb("Water tower from the air.jpg", 1280),
+    licence: "CC BY-SA 4.0",
+    credit: "Ana Pop · Wikimedia Commons",
+  };
+  const asPhoto = {
+    code: "RMO",
+    kind: "photo",
+    card: commonsThumb("Water tower from the air.jpg", 500),
+    hero: commonsThumb("Water tower from the air.jpg", 1280),
+    credit: {
+      source: "wikimedia",
+      author: "Ana Pop",
+      license: "CC BY-SA 4.0",
+      link: "https://commons.wikimedia.org/wiki/File:Water_tower_from_the_air.jpg",
+    },
+  } as const;
+
+  it("its photograph as the city's photo: full width at 1280 px, the card at 500, its own credit and page", () => {
+    expect(landmarkAsPhoto("RMO", tower)).toEqual(asPhoto);
+    // Public domain or CC0 without an author: Commons alone.
+    const cc0 = landmarkAsPhoto("RMO", { ...tower, licence: "CC0", credit: "Wikimedia Commons" });
+    expect(cc0?.kind === "photo" ? cc0.credit : null).toEqual({
+      ...asPhoto.credit,
+      author: null,
+      license: "CC0",
+    });
+    // An address that is no standard thumbnail: the card shows the full-width one.
+    const odd = "https://upload.wikimedia.org/wikipedia/commons/a/ab/Water_tower.jpg";
+    expect(landmarkAsPhoto("RMO", { ...tower, imageUrl: odd })).toMatchObject({ card: odd, hero: odd });
+    // Something the app could not read: no stand-in.
+    expect(landmarkAsPhoto("RMO", { ...tower, imageUrl: "http://upload.wikimedia.org/x.jpg" })).toBeNull();
+  });
+
+  it("only where the city has its satellite view or nothing yet: any photo of its own stays first", () => {
+    const commons: PlacePhotoVM = {
+      code: "LHR",
+      kind: "photo",
+      card: "https://upload.wikimedia.org/c.jpg",
+      hero: "https://upload.wikimedia.org/h.jpg",
+      credit: {
+        source: "wikimedia",
+        author: "Jane Doe",
+        license: "CC BY-SA 4.0",
+        link: "https://commons.wikimedia.org/wiki/File:L.jpg",
+      },
+    };
+    const club: PlacePhotoVM = {
+      code: "ZRH",
+      kind: "photo",
+      card: "https://cdn.test/c.jpg",
+      hero: "https://cdn.test/h.jpg",
+      credit: null,
+    };
+    const items: PlacePhotoVM[] = [
+      commons,
+      club,
+      { code: "RMO", kind: "satellite", lat: 47.0105, lng: 28.8638 },
+      { code: "CDG", kind: "none" },
+      { code: "NRT", kind: "satellite", lat: 35.7, lng: 140.4 },
+    ];
+    const standIns = new Map(["LHR", "ZRH", "RMO", "CDG"].map((code) => [code, tower]));
+    const out = withLandmarkPhotos(items, standIns);
+    expect(out).toEqual([commons, club, asPhoto, { ...asPhoto, code: "CDG" }, items[4]!]);
+    expect(PlacePhotosVM.parse({ items: out }).items).toEqual(out);
+    // No landmark (the flag off, none found, all kept out): the answer as it was.
+    expect(withLandmarkPhotos(items, new Map())).toEqual(items);
+    // A landmark the app could not read leaves the satellite view.
+    const unreadable = new Map([["RMO", { ...tower, imageUrl: "http://x.test/a.jpg" }]]);
+    expect(withLandmarkPhotos(items, unreadable)[2]).toEqual(items[2]!);
   });
 });
 
