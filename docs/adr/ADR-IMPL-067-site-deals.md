@@ -127,10 +127,11 @@ a day; a snapshot row is served for a day) and ADR-IMPL-040 (a demo offer an ope
 9. **The app.** Explore's rest row (02) and the raised sheet's row (16) draw the deals after the offers, as `OfferCard`s
    (`explore.deal.<id>`); `No offers yet.` only when there is neither. A deal has no page of its own: a tap chooses its
    destination as a pin does (`selectDestination`: the route's sheet, its search from the member's airport). The
-   picture: the design's photo of the city on an offer, else the photo the deal carries, else the place photos'. The
-   app reads `validUntil` too: Home is read once, when Explore mounts, and a phone can keep the app a day in the
-   background — when it comes back to the foreground, the deals past their day leave the Home it holds at once (with
-   no network as well) and Home is read again (`withLiveDeals`, `useExploreHome`).
+   picture: the design's photo of the city on an offer, else the photo the deal carries, else the place photos' — the
+   last two credited nowhere the deal leads (Deviations, below). The app reads `validUntil` too: Home is read once, when
+   Explore mounts, and a phone can keep the app a day in the background — when it comes back to the foreground, the
+   deals past their day leave the Home it holds at once (with no network as well) and Home is read again
+   (`withLiveDeals`, `useExploreHome`).
 10. **Staging's demo** (brief 4.1 item 7). The demo seed keeps a demo offer an operator withdrew withdrawn — its upsert
     no longer sets a withdrawn row back to active — and writes no inbox item for it; a run twice is the same rows. Once
     the deals are on in staging, the RUNBOOK's step withdraws the demo's Paris and Tokyo through the internal route
@@ -186,6 +187,12 @@ published that fare and when; "the company's site" says neither.
   indicative mark like the estimates' `INDICATIVE FARE`; 02 and 16 draw room for neither, so either is a new line.
 - design/components.md's OfferCard (02, 16) draws no origin line. The deals need one (the brief: "an offer that leaves
   from another city than the member's home says so"); it is drawn with the card's own country role and colour.
+- ADR-IMPL-043's credits: "A card's photo is credited on the fare page it opens." A deal opens no fare page — a tap
+  chooses its destination on the globe (§9), and the route's sheet (13) has no credit line — so a deal card showing a
+  Commons or Pexels photo (a city the design has no photo of) credits it nowhere the deal leads. It is the case
+  ADR-IMPL-043 accepts for an offer card with no fare ("its photo is shown there without a credit"), now on more cards.
+  The deal carries the credit (`destination.photo.credit`) for the day it is shown: a credit line on the route's sheet,
+  or a tap that opens the destination's page (04), which credits its photo — for the owner and the designer.
 
 **Left to the owner.**
 
