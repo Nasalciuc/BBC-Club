@@ -13,6 +13,7 @@ import {
   LANDMARK_MIN_WIDTH,
   acceptLandmarkPhoto,
   askLandmarkFiles,
+  commonsPage,
   landmarkFiles,
   landmarkSparql,
   pickLandmarks,
@@ -271,6 +272,7 @@ describe("what the app receives", () => {
     rank,
     landmarkQid: `Q${rank}`,
     name: `Sight ${rank}`,
+    file: `S${rank}.jpg`,
     imageUrl: `https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/S${rank}.jpg/1280px-S${rank}.jpg`,
     width: 1280,
     height: 853,
@@ -293,6 +295,7 @@ describe("what the app receives", () => {
             text: "Ana Pop · Wikimedia Commons",
             licence: "CC BY-SA 4.0",
             licenceUrl: "https://creativecommons.org/licenses/by-sa/4.0",
+            pageUrl: "https://commons.wikimedia.org/wiki/File:S1.jpg",
           },
         },
         {
@@ -300,11 +303,35 @@ describe("what the app receives", () => {
           imageUrl: rows[2]!.imageUrl,
           width: 1280,
           height: 853,
-          credit: { text: "Ana Pop · Wikimedia Commons", licence: "CC BY-SA 4.0" },
+          credit: {
+            text: "Ana Pop · Wikimedia Commons",
+            licence: "CC BY-SA 4.0",
+            pageUrl: "https://commons.wikimedia.org/wiki/File:S3.jpg",
+          },
         },
       ],
     });
     expect(PlaceLandmarksVM.parse(vm)).toEqual(vm);
+  });
+
+  it("each credit links its photograph's own page on Commons, the page Commons gave for it (ADR-IMPL-043)", () => {
+    const title = (url: string) => decodeURIComponent(new URL(url).pathname);
+    for (const [saved, city] of [
+      [paris, "Q90"],
+      [chisinau, "Q21197"],
+    ] as const) {
+      const picked = pickLandmarks(readLandmarks(bindingsOf(saved), city), infosOf(saved));
+      expect(picked.length).toBeGreaterThan(0);
+      for (const p of picked) expect(title(commonsPage(p.file))).toBe(title(p.page));
+    }
+    // As MediaWiki writes a page's address (made-up names): an apostrophe encoded, brackets and commas kept.
+    expect(commonsPage("Gare d'Orsay (1).jpg")).toBe("https://commons.wikimedia.org/wiki/File:Gare_d%27Orsay_(1).jpg");
+    expect(commonsPage("old house, river_bank.jpg")).toBe(
+      "https://commons.wikimedia.org/wiki/File:Old_house,_river_bank.jpg",
+    );
+    expect(commonsPage("Vue aérienne? #2.jpg")).toBe(
+      "https://commons.wikimedia.org/wiki/File:Vue_a%C3%A9rienne%3F_%232.jpg",
+    );
   });
 
   it("a landmark an older app cannot read is dropped, never the whole answer; three at most", () => {

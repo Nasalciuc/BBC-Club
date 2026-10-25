@@ -85,7 +85,9 @@ Commons, 117 requests) found:
   - **at most three, fewer when fewer qualify; never invented.**
     The credit stored and served: `text` "<Artist, 80 characters at most> · Wikimedia Commons" (or "Wikimedia Commons"
     when the licence needs no author), `licence` (LicenseShortName), `licenceUrl` (Commons' LicenseUrl on https, when it
-    gives one).
+    gives one), and `pageUrl`, the file's own page on Commons (its author, source and licence), built from the stored
+    file's name as MediaWiki writes a page's address (`commonsPage`) — what the credit links to, as the city photo's
+    does (ADR-IMPL-043; CC BY and BY-SA ask for a link to the material where one is practicable).
 - **The table** `catalog.place_landmarks` (0039, a named step after 0006; the drizzle snapshot levelled by the no-op
   `20261025133511_snapshot_sync`): per place (the airport code the app asks with) and rank, the city item, the landmark
   item, its name, the Commons file, the thumbnail's address and size, the licence and its address, the credit line,
@@ -118,7 +120,7 @@ Commons, 117 requests) found:
   Museum): off, the route serves none and the job asks nothing. `skip` is the operator's override, by Wikidata item:
   the route leaves a skipped landmark out at once, and the next look picks another in its place.
 - **The route** `GET /v1/places/:code/landmarks` (`fares:read`, the place photo route's permission; rate rule `read`):
-  `PlaceLandmarksVM { code, landmarks: [{ name, imageUrl, width, height, credit: { text, licence, licenceUrl? } }] }`,
+  `PlaceLandmarksVM { code, landmarks: [{ name, imageUrl, width, height, credit: { text, licence, licenceUrl?, pageUrl? } }] }`,
   best first, from the table at once; a strong ETag over the body, 304 on `If-None-Match`, `Cache-Control: private,
 no-cache`; 404 for a code that is no airport (or not three letters). The contract (`packages/shared`, additive — the
   change to shared this ADR covers) drops a landmark an app cannot read, never the whole answer, and keeps three.
@@ -147,8 +149,9 @@ licences and restrictions as Commons gave them; authors are made up and files wh
   and Harpa are absent from Reykjavík's answer, which was not investigated; Table Mountain is a `mountain`, so Cape Town
   never gets it). Resort cities like Cancún may have fewer than three.
 - **The 80 % target** was measured on 12 cities, not the site's 154; the job's own counts (`fewer`) will tell.
-- **Credits.** The contract carries the credit line and the licence's address, not the file's Commons page; the
-  destination screen's step decides whether to link the page as the city photo's credit does.
+- **Credits.** Closed by the destination screen's step: the contract carries the file's Commons page too (`pageUrl`,
+  additive; a server before it sent none), and the app links it as the city photo's credit links its page — the
+  licence's page only from a server that sends no page.
 
 **Rejected.** P131 and its parents (loses the Colosseum and Buckingham Palace). QLever (faster, 1.6–7.3 s, the same top
 three as WDQS wherever both answered) — another provider's availability for a production job; WDQS stays the source, and

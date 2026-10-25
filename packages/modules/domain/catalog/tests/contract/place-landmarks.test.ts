@@ -138,6 +138,12 @@ describe("landmarks", () => {
     expect(cdgVm.code).toBe("CDG");
     expect(cdgVm.landmarks.map((l) => l.name)).toEqual(["Eiffel Tower", "Musée d'Orsay", "Palace of Versailles"]);
     expect(cdgVm.landmarks[0]).toMatchObject({ width: 1280, height: 853, credit: { licence: "CC BY-SA 4.0" } });
+    // Each credit links its photograph's own page: the one Commons gave for it, kept through the table (its file).
+    const pageOf = (url: string | undefined) => (url ? decodeURIComponent(new URL(url).pathname) : null);
+    const commonsPages = Object.values(paris.commons).map((info) =>
+      pageOf((info as { descriptionurl?: string }).descriptionurl),
+    );
+    for (const landmark of cdgVm.landmarks) expect(commonsPages).toContain(pageOf(landmark.credit.pageUrl));
     expect((await t.landmarks("RMO")).landmarks.map((l) => l.name)).toEqual([
       "National Museum of Fine Arts",
       "National Museum of History of Moldova",

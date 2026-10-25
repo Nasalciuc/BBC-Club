@@ -31,14 +31,15 @@ const AFTER_AUTHOR = ` · ${COMMONS}`;
  * The credit line under a landmark, as the city photo's reads (`creditFor`): `Photo: Jane Doe · CC BY-SA 4.0 ·
  * Wikimedia Commons`, or `Photo: CC0 · Wikimedia Commons` when the licence needs no author — the server's `text` is
  * "<author> · Wikimedia Commons" or "Wikimedia Commons" alone. Another `text` (a later server's) is printed as it came,
- * the licence after it. Linked to the licence's page when the server gives one (the contract carries no file page).
- * Null when the credit says nothing — no one to credit or no licence: such a photograph is not shown.
+ * the licence after it. Linked to the photograph's own page on Commons, as the city photo's credit is (ADR-IMPL-043);
+ * to the licence's page from a server that sends no page; else only read. Null when the credit says nothing — no one
+ * to credit or no licence: such a photograph is not shown.
  */
 export function landmarkCredit(credit: LandmarkCreditVM): Credit | null {
   const text = credit.text.trim();
   const licence = credit.licence.trim();
   if (text.length === 0 || licence.length === 0) return null;
-  const link = credit.licenceUrl ?? null;
+  const link = credit.pageUrl ?? credit.licenceUrl ?? null;
   if (text === COMMONS) return creditFor({ source: "wikimedia", author: null, license: licence, link });
   if (text.endsWith(AFTER_AUTHOR)) {
     const author = text.slice(0, -AFTER_AUTHOR.length).trim();

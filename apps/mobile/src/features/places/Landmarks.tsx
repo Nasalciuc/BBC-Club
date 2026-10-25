@@ -25,8 +25,9 @@ const LOOK = {
 
 /**
  * Up to three landmarks of the destination (ADR-IMPL-064), best first: each photograph with its name under it and the
- * credit its licence asks for, linked to the licence. Fewer when fewer exist; none — nothing at all, no title and no
- * empty frame (a photograph that will not load leaves with its name and credit). No skeleton: the images draw no slot.
+ * credit its licence asks for, linked to the photograph's page. Fewer when fewer exist; none — nothing at all, no
+ * title and no empty frame (a photograph that will not load leaves with its name and credit). No skeleton: the images
+ * draw no slot.
  */
 export function Landmarks({ landmarks, testIDPrefix }: { landmarks: readonly LandmarkVM[]; testIDPrefix: string }) {
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());

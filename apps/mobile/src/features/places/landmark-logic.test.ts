@@ -16,6 +16,7 @@ import { creditFor, wikimediaHeaders } from "./place-photo-logic";
 const HEADERS = wikimediaHeaders("1.4.0", "https://api.example.test");
 const thumb = (file: string) => `https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/${file}/1280px-${file}`;
 const LICENCE_URL = "https://creativecommons.org/licenses/by-sa/4.0";
+const page = (file: string) => `https://commons.wikimedia.org/wiki/File:${file}`;
 
 function landmark(name: string, file: string, over: Partial<LandmarkVM> = {}): LandmarkVM {
   return {
@@ -23,7 +24,12 @@ function landmark(name: string, file: string, over: Partial<LandmarkVM> = {}): L
     imageUrl: thumb(file),
     width: 1280,
     height: 853,
-    credit: { text: "Jane Doe · Wikimedia Commons", licence: "CC BY-SA 4.0", licenceUrl: LICENCE_URL },
+    credit: {
+      text: "Jane Doe · Wikimedia Commons",
+      licence: "CC BY-SA 4.0",
+      licenceUrl: LICENCE_URL,
+      pageUrl: page(file),
+    },
     ...over,
   };
 }
@@ -68,22 +74,31 @@ describe("readLandmarks — what an app reads of the answer", () => {
 });
 
 describe("landmarkCredit — the line under each photograph", () => {
-  it("reads as the city photo's credit, linked to the licence", () => {
+  it("reads as the city photo's credit, linked to the photograph's own page on Commons", () => {
     expect(landmarkCredit(tower.credit)).toEqual({
       label: "Photo: Jane Doe · CC BY-SA 4.0 · Wikimedia Commons",
       spoken: "Photo by Jane Doe, CC BY-SA 4.0, Wikimedia Commons",
-      link: LICENCE_URL,
+      link: page("Tower.jpg"),
     });
     expect(landmarkCredit(tower.credit)).toEqual(
-      creditFor({ source: "wikimedia", author: "Jane Doe", license: "CC BY-SA 4.0", link: LICENCE_URL }),
+      creditFor({ source: "wikimedia", author: "Jane Doe", license: "CC BY-SA 4.0", link: page("Tower.jpg") }),
     );
   });
 
-  it("a licence that needs no author: Commons and the licence; no licence page — a line only read", () => {
+  it("a server that sends no page: the licence's page; neither — a line only read", () => {
+    expect(landmarkCredit({ ...tower.credit, pageUrl: undefined })?.link).toBe(LICENCE_URL);
     expect(landmarkCredit(louvre.credit)).toEqual({
       label: "Photo: CC0 · Wikimedia Commons",
       spoken: "Photo, CC0, Wikimedia Commons",
       link: null,
+    });
+  });
+
+  it("a licence that needs no author: Commons and the licence, linked to the page", () => {
+    expect(landmarkCredit({ ...louvre.credit, pageUrl: page("Louvre.jpg") })).toEqual({
+      label: "Photo: CC0 · Wikimedia Commons",
+      spoken: "Photo, CC0, Wikimedia Commons",
+      link: page("Louvre.jpg"),
     });
   });
 
@@ -161,6 +176,12 @@ describe("landmarkTiles — what the destination draws", () => {
 
   it("the floor: every landmark drawn has its name and its credit, with its licence", () => {
     const credits = [
+      {
+        text: "Jane Doe · Wikimedia Commons",
+        licence: "CC BY-SA 4.0",
+        licenceUrl: LICENCE_URL,
+        pageUrl: page("A.jpg"),
+      },
       { text: "Jane Doe · Wikimedia Commons", licence: "CC BY-SA 4.0", licenceUrl: LICENCE_URL },
       { text: "Wikimedia Commons", licence: "Public domain" },
       { text: "A. Photographer · Example Archive", licence: "CC BY 4.0" },
@@ -195,7 +216,7 @@ describe("landmarkTiles — what the destination draws", () => {
           expect(tile.credit.label.startsWith("Photo: ")).toBe(true);
           expect(tile.credit.label).toContain(source.credit.licence.trim());
           expect(tile.credit.spoken.length).toBeGreaterThan(0);
-          expect(tile.credit.link).toBe(source.credit.licenceUrl ?? null);
+          expect(tile.credit.link).toBe(source.credit.pageUrl ?? source.credit.licenceUrl ?? null);
         });
         drawn += tiles.length;
       }

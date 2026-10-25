@@ -7,6 +7,8 @@ export type PlaceLandmarkRow = {
   rank: number;
   landmarkQid: string;
   name: string;
+  /** The Commons file: its page is what the credit links to. */
+  file: string;
   imageUrl: string;
   width: number;
   height: number;
@@ -67,6 +69,7 @@ export const placeLandmarksRepo = {
         rank: placeLandmarks.rank,
         landmarkQid: placeLandmarks.landmarkQid,
         name: placeLandmarks.name,
+        file: placeLandmarks.file,
         imageUrl: placeLandmarks.imageUrl,
         width: placeLandmarks.width,
         height: placeLandmarks.height,
@@ -79,12 +82,13 @@ export const placeLandmarksRepo = {
       .orderBy(asc(placeLandmarks.rank));
     // The CHECK place_landmarks_landmark keeps every one of these set on a landmark row.
     return rows.flatMap((r) =>
-      r.landmarkQid && r.name && r.imageUrl && r.width && r.height && r.licence && r.credit
+      r.landmarkQid && r.name && r.file && r.imageUrl && r.width && r.height && r.licence && r.credit
         ? [
             {
               ...r,
               landmarkQid: r.landmarkQid,
               name: r.name,
+              file: r.file,
               imageUrl: r.imageUrl,
               width: r.width,
               height: r.height,

@@ -59,13 +59,15 @@ export const PLACE_PHOTOS_MAX_CODES = 20;
 
 /**
  * Who took a landmark's photograph and under which licence (ADR-IMPL-064): `text` names who to credit as the app prints
- * it ("Jane Doe · Wikimedia Commons"), `licence` its short name ("CC BY-SA 4.0"), linked to `licenceUrl` when Commons
- * gives one.
+ * it ("Jane Doe · Wikimedia Commons"), `licence` its short name ("CC BY-SA 4.0") and `licenceUrl` its page when Commons
+ * gives one; `pageUrl` is the photograph's own page on Commons (its author, source and licence), which the credit links
+ * to as the city photo's does (ADR-IMPL-043) — a server before it sent none.
  */
 export const LandmarkCreditVM = z.object({
   text: z.string().min(1),
   licence: z.string().min(1),
   licenceUrl: HttpsUrl.optional(),
+  pageUrl: HttpsUrl.optional(),
 });
 export type LandmarkCreditVM = z.infer<typeof LandmarkCreditVM>;
 

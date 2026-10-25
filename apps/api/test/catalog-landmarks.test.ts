@@ -43,6 +43,7 @@ describe("GET /v1/places/:code/landmarks", () => {
           text: "Ana Pop · Wikimedia Commons",
           licence: "CC BY-SA 4.0",
           licenceUrl: "https://creativecommons.org/licenses/by-sa/4.0",
+          pageUrl: `https://commons.wikimedia.org/wiki/File:Sight_${rank}.jpg`,
         },
       })),
     });
