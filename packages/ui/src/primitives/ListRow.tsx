@@ -4,6 +4,7 @@ import { Icon, type IconName } from "../icons";
 import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
 import { hitSlopFor } from "./hit-slop";
+import { lookRowFlex } from "./look-row-flex";
 import { Toggle } from "./Toggle";
 
 /**
@@ -270,8 +271,9 @@ export function ListRow({
  * A row in a screen's look (12, 34, 36), as measured: the mark centred in its column, the label from where the words
  * start, the value ending where the screen ends it, the thin chevron at its inset; everything centred on the row. With
  * a subtitle (34's Notifications), the label's baseline 25.9 pt under the row's top, the subtitle 16.6 under it, the
- * row's foot 16.6 under that. A value too long for its line (a member's own name, any value at 1.3× text) wraps and the
- * row grows — nothing is cut (DESIGN.md, Layout).
+ * row's foot 16.6 under that. Beside a value the label keeps its own line, and a value too long for what is left (a
+ * member's own name, a long city at 1.3× text) wraps and the row grows — nothing is cut (DESIGN.md, Layout;
+ * look-row-flex.ts).
  */
 function LookRow({
   look,
@@ -311,6 +313,7 @@ function LookRow({
   // Rows in a card touch: their drawn pitch is the target. A row alone reaches 44 pt where its neighbours leave room.
   const slop = hitSlopFor(rowHeight, gapAbove, gapBelow);
   const chevronBoxRight = look.chevron.right - ((9 - look.chevron.stroke / 2) * look.chevron.size) / 24;
+  const flex = lookRowFlex({ value: Boolean(value), subtitle: Boolean(subtitle) });
   const body = (
     <>
       {icon ? (
@@ -318,14 +321,13 @@ function LookRow({
           <Icon name={icon} size={look.icon} color={tint} strokeWidth={1.75} />
         </View>
       ) : null}
-      <View style={[lookStyles.text, { marginLeft: look.labelLeft }]}>
+      <View style={[flex.text, { marginLeft: look.labelLeft }]}>
         <Text
           style={[
             danger ? look.danger : look.label,
             { color: danger ? tokens.colors.statusDangerText : look.labelColor },
             subtitle ? { marginTop: 25.9 - baselineOffset(look.label) } : null,
           ]}
-          numberOfLines={1}
         >
           {label}
         </Text>
@@ -344,7 +346,9 @@ function LookRow({
           </Text>
         ) : null}
       </View>
-      {value ? <Text style={[look.value, lookStyles.value, { color: look.valueColor }]}>{value}</Text> : null}
+      {value ? (
+        <Text style={[look.value, lookStyles.value, flex.value, { color: look.valueColor }]}>{value}</Text>
+      ) : null}
       {toggle ? (
         <Toggle
           value={toggle.value}
@@ -466,10 +470,9 @@ const lookStyles = StyleSheet.create({
   },
   row: { flexDirection: "row", alignItems: "center" },
   icon: { position: "absolute", alignItems: "center" },
-  text: { flex: 1 },
   // A wrapped value keeps clear of the rules; one line, up to 1.3× text, still fits every look's drawn height (12's
-  // 29.65: 17 × 1.3 + 2 × 2).
-  value: { flexShrink: 1, maxWidth: "55%", textAlign: "right", marginVertical: tokens.space.hair },
+  // 29.65: 17 × 1.3 + 2 × 2). Its width beside the label: look-row-flex.ts.
+  value: { textAlign: "right", marginVertical: tokens.space.hair },
   chevron: { position: "absolute" },
   rule: { position: "absolute", top: 0, height: StyleSheet.hairlineWidth, backgroundColor: tokens.colors.borderFaint },
 });
