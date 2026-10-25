@@ -398,6 +398,23 @@ describe("site destinations — the pins", () => {
     await t.iso.drop();
   });
 
+  it("a city whose route from home is past its day is no pin (ADR-IMPL-067): the others stay", async () => {
+    const t = await pinsSetup("site-pins-expired");
+    // Tokyo's route from JFK, read a day and an hour ago: past its day — the site has not listed it since.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes SET synced_at = now() - interval '25 hours', valid_until = now() - interval '1 hour'
+      WHERE route_from = 'JFK' AND cms_id IN (SELECT cms_id FROM catalog.site_places WHERE airport = 'HND')`);
+    const pins = await t.facade.destinations(undefined, "JFK");
+    expect(pins[0]?.code).toBe("LGW");
+    expect(
+      pins
+        .slice(1)
+        .map((p) => p.code)
+        .sort(),
+    ).toEqual(["HER", "JTR", "SEZ", "VLC"]);
+    await t.iso.drop();
+  });
+
   it("nothing from the site with its pins off, or with estimates off (no price, no pin)", async () => {
     const t = await pinsSetup("site-pins-off");
     await t.flags.set("catalog.estimates", { enabled: false });
