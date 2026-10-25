@@ -105,19 +105,14 @@ export function horizonDeg(zoom: number, viewHeight: number): number {
 }
 
 /**
- * Whether the place `mapPoint` puts at `at` stands past Mapbox's horizon at a zoom: hidden behind the globe, so no pin
- * there is a target (ADR-IMPL-068). `mapPoint` keeps places to NEAR_SIDE_DEG, which zoomed in is past the horizon (74°
- * at 2× on an 852-pt view); their 44-pt targets would reach out over the sky. Its point is R·sin α from the centre,
- * α ≤ NEAR_SIDE_DEG, so the angle is read back from it.
+ * Whether a place stands past Mapbox's horizon for a camera: hidden behind the globe, so no pin there is a target
+ * (ADR-IMPL-068). `mapPoint` keeps places to NEAR_SIDE_DEG, which is past the horizon zoomed in (74° at 2× on an 852-pt
+ * view) and on a short view at rest (79° on 667 pt); their 44-pt targets would reach out over the sky. Read from the
+ * place itself, not from where the labels' layout put it: that layout follows the camera a step behind (up to 0.03 zoom,
+ * 0.5°), and near the horizon a point read back at the wrong zoom is off by degrees.
  */
-export function pastHorizon(
-  at: { x: number; y: number },
-  zoom: number,
-  centre: { x: number; y: number },
-  viewHeight: number,
-): boolean {
-  const sin = Math.min(1, Math.hypot(at.x - centre.x, at.y - centre.y) / radiusAtZoom(zoom));
-  return Math.asin(sin) / RAD > horizonDeg(zoom, viewHeight);
+export function pastHorizon(place: GeoPoint, camera: GlobeCamera, viewHeight: number): boolean {
+  return geoDistance([place.lng, place.lat], camera.center) / RAD > horizonDeg(camera.zoom, viewHeight);
 }
 
 /**

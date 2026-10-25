@@ -6,7 +6,7 @@
  * the pin's — pins keep priority, whatever else the touch could be; a touch a pin's own press already answered (the
  * press guard) is nothing more; the sky is nothing; anywhere else on the disc is the place under the finger.
  */
-import { type GlobeCamera, cameraPoint, mapPoint, mapTap, pastHorizon } from "./globe-geo";
+import { type GeoPoint, type GlobeCamera, cameraPoint, mapPoint, mapTap, pastHorizon } from "./globe-geo";
 import { type GlobeTap, type View, projector } from "./globe-logic";
 import { type PlacedPin, pinAt } from "./pin-labels";
 
@@ -72,7 +72,8 @@ export function mapboxPress(
     camera: GlobeCamera;
     centre: { x: number; y: number };
     viewHeight: number;
-    placed: Placed;
+    /** Each with its place: whether it is past the horizon is read from the place, not from the layout's point. */
+    placed: readonly (Placed[number] & GeoPoint)[];
     route: boolean;
   },
   guard: Guard,
@@ -84,7 +85,7 @@ export function mapboxPress(
   const pin = pinAt(
     press.screen.x,
     press.screen.y,
-    seen.placed.filter((p) => !pastHorizon(p, camera.zoom, centre, viewHeight)).map((p) => moved(p, shown(p))),
+    seen.placed.filter((p) => !pastHorizon(p, camera, viewHeight)).map((p) => moved(p, shown(p))),
   );
   if (pin !== null) return { kind: "pin", code: pin };
   if (guard.pressedLately()) return null;

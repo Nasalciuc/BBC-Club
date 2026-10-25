@@ -443,6 +443,8 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
   });
 
   describe("Mapbox's press", () => {
+    /** A pin as MapboxGlobe hands it over: where the labels' layout put it, with its place. */
+    type OnMap = PlacedPin & { lng: number; lat: number };
     const centre = { x: 196.5, y: 266 };
     const cam: GlobeCamera = { center: [0, 0], zoom: REST_ZOOM };
     const r = radiusAtZoom(REST_ZOOM);
@@ -455,8 +457,8 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
     // where its camera shows Paris — 41 pt farther out, 49° from the view's centre at rest.
     const paris = mapPoint(PARIS, cam, centre)!;
     const shown = mapbox.project(PARIS)!;
-    const placed: PlacedPin[] = [{ code: "CDG", x: paris.x, y: paris.y, lines: [], label: null }];
-    const seen = (over: { placed?: PlacedPin[]; route?: boolean } = {}) => ({
+    const placed: OnMap[] = [{ code: "CDG", x: paris.x, y: paris.y, lines: [], label: null, ...PARIS }];
+    const seen = (over: { placed?: OnMap[]; route?: boolean } = {}) => ({
       camera: cam,
       centre,
       viewHeight: VIEW_H,
@@ -497,9 +499,9 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
         const pin = mb.project(FAR)!;
         expect(pin.x - at.x).toBeGreaterThan(40);
         if (zoom === REST_ZOOM) expect(pin.x - centre.x).toBeGreaterThan(radiusAtZoom(zoom));
-        const view = (p: PlacedPin[]) => ({ ...seen({ placed: p }), camera });
+        const view = (p: OnMap[]) => ({ ...seen({ placed: p }), camera });
         // A pin alone: a press 6 pt beside its MarkerView, on each side, is the pin's.
-        const bare = view([{ code: "XXX", x: at.x, y: at.y, lines: [], label: null }]);
+        const bare = view([{ code: "XXX", x: at.x, y: at.y, lines: [], label: null, ...FAR }]);
         const frame = pinUnion(pin.x, pin.y, null);
         const midY = (frame.top + frame.bottom) / 2;
         for (const finger of [
@@ -516,7 +518,7 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
         expect(mapboxPress(press(at.x, at.y), bare, never)?.kind).toBe("place");
         // With its label: the pin and the label are one MarkerView, shown together — the ring over the label is the pin's.
         const box = labelBox(at.x, at.y, lines, "right");
-        const labelled = view([{ code: "XXX", x: at.x, y: at.y, lines, label: { side: "right", box } }]);
+        const labelled = view([{ code: "XXX", x: at.x, y: at.y, lines, label: { side: "right", box }, ...FAR }]);
         const shownBox = {
           left: box.left + pin.x - at.x,
           right: box.right + pin.x - at.x,
@@ -533,26 +535,47 @@ describe("whose a touch on the globe is (globe-tap.ts)", () => {
 
     it("a pin past the horizon is no target: a press on the sky beside the limb opens nothing, at 2× and 3×", () => {
       // `mapPoint` keeps places to 80°; zoomed in, Mapbox's horizon is nearer (74° at 2×, 69° at 3× on an 852-pt view),
-      // so a pin between the two stands behind the globe — its 44-pt target would reach out over the sky.
+      // so a pin between the two stands behind the globe — its 44-pt target would reach out over the sky. The labels'
+      // layout follows the camera a step behind (MapboxGlobe: 0.03 zoom, 0.5°), so the pins are laid out at a camera
+      // that lags the press's too: whether a pin is past the horizon is read from its place, not from that layout.
+      const lags = [
+        { zoom: 0, lng: 0 },
+        { zoom: 0.03, lng: 0 },
+        { zoom: -0.03, lng: 0 },
+        { zoom: 0, lng: 0.5 },
+        { zoom: -0.03, lng: -0.5 },
+      ];
       for (const zoom of [REST_ZOOM + 1, ZOOM_RANGE.max]) {
         const camera: GlobeCamera = { ...cam, zoom };
         const mb = mapboxCamera(camera, centre, Math.SQRT1_2);
         const press = (x: number, y: number) => ({ ...mb.resolve(x, y), screen: { x, y } });
         const horizon = horizonDeg(zoom, VIEW_H);
         const behind = { lng: Math.min(79, horizon + 3), lat: 0 };
-        const front = { lng: horizon - 5, lat: 0 };
+        const front = { lng: horizon - 1.5, lat: 0 };
         const limb = limbRadius(zoom, VIEW_H);
         const sky = { x: centre.x + limb + 10, y: centre.y };
-        const pins = (p: { lng: number; lat: number }) => {
-          const at = mapPoint(p, camera, centre)!;
-          return { ...seen({ placed: [{ code: "XXX", x: at.x, y: at.y, lines: [], label: null }] }), camera };
-        };
-        expect({ zoom, choice: mapboxPress(press(sky.x, sky.y), pins(behind), never) }).toEqual({ zoom, choice: null });
-        // A pin on the near side of the horizon keeps its target, here as everywhere.
+        // A pin on the near side, where Mapbox shows it: a press 6 pt beside its MarkerView, toward the centre.
         const pin = mb.project(front)!;
         const frame = pinUnion(pin.x, pin.y, null);
         const beside = { x: frame.left - 6, y: (frame.top + frame.bottom) / 2 };
-        expect(mapboxPress(press(beside.x, beside.y), pins(front), never)).toEqual({ kind: "pin", code: "XXX" });
+        for (const lag of lags) {
+          const layout: GlobeCamera = { center: [lag.lng, 0], zoom: zoom + lag.zoom };
+          const pins = (p: { lng: number; lat: number }) => {
+            const at = mapPoint(p, layout, centre)!;
+            return { ...seen({ placed: [{ code: "XXX", x: at.x, y: at.y, lines: [], label: null, ...p }] }), camera };
+          };
+          expect({ zoom, lag, choice: mapboxPress(press(sky.x, sky.y), pins(behind), never) }).toEqual({
+            zoom,
+            lag,
+            choice: null,
+          });
+          // 1.5° inside the horizon, at the rim: it keeps its target, here as everywhere.
+          expect({ zoom, lag, choice: mapboxPress(press(beside.x, beside.y), pins(front), never) }).toEqual({
+            zoom,
+            lag,
+            choice: { kind: "pin", code: "XXX" },
+          });
+        }
       }
     });
 
