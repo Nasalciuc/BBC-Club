@@ -80,8 +80,10 @@ a day; a snapshot row is served for a day) and ADR-IMPL-040 (a demo offer an ope
      when `catalog.place_photos` is on and it has one (the photo and credit `/v1/places/photos` serves), the origin
      `{ code, city }`, the price, `validUntil`; for the BFF also every airport of the city and of the origin's metro.
      Reads: the home airport and the origins (one grouped query, about 27 rows), then one query for the nearest metros'
-     deals — one more only when their deals overlap past what they hold; measured on Home, 9 queries with the deals on
-     against 8 without, 4 once cached. Cached a minute like the site's pins (`catalog:deals:{gen}:{HOME}:{limit}:{photos}`
+     deals — one more only when their deals overlap past what they hold. Measured on Home (the API's test fixture, a
+     New York member): with every cache cold, 12 queries with the deals on against 8 without (the flag's read, then the
+     three); with the flags kept, a home whose deals' minute has turned costs those three reads; 4 against 4 while the
+     deals are kept. Cached a minute like the site's pins (`catalog:deals:{gen}:{HOME}:{limit}:{photos}`
      with the pins' generation, which the sync bumps; a process cache without Redis); with an executor, read now.
 5. **The flag** `catalog.site_offers`, `{ enabled: false }`, seeded off by `scripts/seed-flags.ts`; off, `siteDeals`
    answers none without a query and Home is exactly what it was, its ETag included. **It needs neither
@@ -168,7 +170,10 @@ published that fare and when; "the company's site" says neither.
   their day: a site that has not answered for a day leaves no site pin either (D6 for the city list as for the price).
   After this migration, an environment whose last good night is older than a day shows no site pin until the next
   successful run.
-- Home costs one more query with the flag on (measured above); `query-budget.test.ts` holds it.
+- Home costs three more reads with the flag on when a home's deals are not kept (the flag's own read too when the
+  flags' cache is cold, and a second read of the deals when the nearest metros overlap), none while they are kept
+  (measured in §4); `query-budget.test.ts` holds it: two reads of `site_routes` on a miss, none kept, and at most four
+  over Home without the deals.
 
 **Deviations, reported (owner's decision).**
 
