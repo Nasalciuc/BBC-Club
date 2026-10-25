@@ -2,7 +2,7 @@
  *  and the landmark that stands in for a city photo on GET /v1/places/photos (amendment 1). */
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
-import { PlaceLandmarksVM, PlacePhotosVM } from "@bbc/shared/api/v1/places";
+import { PlaceLandmarksVM, PlacePhotosVM, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { testApp } from "./helpers/test-app";
 
 describe("GET /v1/places/:code/landmarks", () => {
@@ -87,13 +87,13 @@ describe("GET /v1/places/photos — a landmark stands in (ADR-IMPL-064, amendmen
       expect(res.status).toBe(200);
       return PlacePhotosVM.parse(await res.json()).items;
     };
-    const satellite = { code: "CDG", kind: "satellite", lat: 48.856944, lng: 2.351389 };
+    const satellite = { code: "CDG", kind: "satellite", lat: 48.856944, lng: 2.351389 } as const;
 
     // Seeded off: the satellite view, as before.
     expect(await photo()).toEqual([satellite]);
 
     await t.flags.set("catalog.landmarks", { enabled: true, skip: [] });
-    const sight = (rank: number) => ({
+    const sight = (rank: number): PlacePhotoVM => ({
       code: "CDG",
       kind: "photo",
       card: `https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Sight_${rank}.jpg/500px-Sight_${rank}.jpg`,
