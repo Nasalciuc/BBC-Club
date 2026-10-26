@@ -2,7 +2,7 @@
  * The company's site (ADR-IMPL-045), read through its own API — buybusinessclass.com/api, the backend the site reads
  * (it answered at weba.buybusinessclass.com until that name stopped resolving; ADR-IMPL-062). Seven regions; each
  * region's countries; each country's cities; a city's page carries its photo, the US cities the site lists a price from,
- * and where it sits (region › country › city). Read-only, once a night, with the club's User-Agent: at most four
+ * and where it sits (region › country › city). Read-only, twice a day, with the club's User-Agent: at most four
  * requests at a time, the API's paced to its rate limit (`API_GAP_MS`). The site has no IATA codes: site-places.ts finds
  * the airports.
  */
@@ -21,9 +21,9 @@ export const SITE_STORAGE_PREFIXES: readonly string[] = [SITE_STORAGE, LEGACY_SI
 
 /**
  * The site's API answers at most 120 requests a minute per IP (`x-ratelimit-limit: 120`, a 60-s window). The read
- * starts one API request every 1.2 s across all its workers — about 50 a minute — so a night's ~240 pages take about
- * five minutes. The budget is the address's, not the read's: staging and production share one host and the same 07:40
- * cron, and two reads at about 50 a minute each stay under the 120 together, with no 429 to wait out. Photos
+ * starts one API request every 1.2 s across all its workers — about 50 a minute — so a run's ~240 pages take about
+ * five minutes. The budget is the address's, not the read's: staging and production share one host and the same cron
+ * (07:40 and 19:40 UTC), and two reads at about 50 a minute each stay under the 120 together, with no 429 to wait out. Photos
  * (`/storage`) have no stated limit and are not paced.
  */
 export const API_GAP_MS = 1200;

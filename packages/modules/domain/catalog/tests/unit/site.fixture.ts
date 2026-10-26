@@ -39,11 +39,11 @@ export function siteFixture(): FakeSite {
                 name: "London",
                 image: "bestDeals/23/image/london01.jpg",
                 deals: [
-                  { id: 54, name: "New York ", price: 788, old: 2288 },
-                  { id: 55, name: "Chicago", price: "1250", old: 2258 },
-                  { id: 1632, name: "Jacksonville", price: 1083, old: 1740 },
+                  { id: 54, name: "New York ", price: 801, old: 2101 },
+                  { id: 55, name: "Chicago", price: "1301", old: 2401 },
+                  { id: 1632, name: "Jacksonville", price: 1101, old: 1801 },
                   { id: 1699, name: "Atlantis", price: 999, old: null },
-                  { id: 1700, name: "Boston", price: null, old: 1497 },
+                  { id: 1700, name: "Boston", price: null, old: 1601 },
                 ],
               },
             ],
@@ -111,8 +111,8 @@ export function siteFixture(): FakeSite {
                 name: "Tokyo",
                 image: "bestDeals/283/image/tokyo.jpg",
                 deals: [
-                  { id: 1508, name: "New York", price: 1745, old: 1865 },
-                  { id: 289, name: "Los Angeles", price: 1410, old: 2661 },
+                  { id: 1508, name: "New York", price: 1901, old: 2901 },
+                  { id: 289, name: "Los Angeles", price: 1401, old: 2801 },
                 ],
               },
               {

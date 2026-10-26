@@ -895,8 +895,8 @@ describe("GET /v1/home — the site's pins", () => {
         (1201, 'Zurich', 'Switzerland', 'Europe', 'ZRH', ARRAY['ZRH'], false, NULL)`);
     await t.db.execute(sql`
       INSERT INTO catalog.site_routes (route_from, cms_id, deal, price, published_price) VALUES
-        ('JFK', 23, 54, 788, 2288), ('JFK', 8, 168, 872, 2319), ('JFK', 283, 1508, 1745, 1865),
-        ('JFK', 512, 1, 1365, NULL), ('JFK', 92, 2, 950, NULL), ('JFK', 1201, 3, 990, NULL)`);
+        ('JFK', 23, 54, 801, 2101), ('JFK', 8, 168, 1301, 2401), ('JFK', 283, 1508, 1901, 2901),
+        ('JFK', 512, 1, 1601, NULL), ('JFK', 92, 2, 950, NULL), ('JFK', 1201, 3, 990, NULL)`);
     await t.flags.set("catalog.site_pins", { enabled: true });
     await t.flags.set("catalog.estimates", { enabled: true });
     await t.flags.set("catalog.pricing_rules", storedPricingRules(FIXTURE_RULES));

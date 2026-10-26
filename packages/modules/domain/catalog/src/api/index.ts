@@ -1,6 +1,6 @@
 import type { Executor } from "@bbc/db";
 import type { fares } from "@bbc/db/schema/catalog";
-import type { EstimateVM } from "@bbc/shared/api/v1/fares";
+import type { EstimateVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import { toAirportVM, toFareVM } from "../application/to-fare-vm";
 
 export type FareRow = typeof fares.$inferSelect;
@@ -29,6 +29,13 @@ export type DestinationPin = {
    *  on every pin while `catalog.site_prices` is off. */
   priceSource?: "site" | "club";
 };
+
+/**
+ * One of the company site's deals for Home (ADR-IMPL-067): the view model, and what the BFF needs to keep a city off
+ * "Offers to inspire" twice — every airport of the destination city, and every airport of the metro the deal leaves
+ * from. The BFF sends only the view model.
+ */
+export type SiteDeal = SiteDealVM & { airports: string[]; originAirports: string[] };
 
 /** The only import surface of @bbc/catalog. module.ts implements it; consumers import it. */
 export type CatalogFacade = {
@@ -66,5 +73,15 @@ export type CatalogFacade = {
     exec: Executor | undefined,
     q: { from: string; to: string; cabin: "business" | "first" },
   ): Promise<IndicativeEstimate | null>;
+  /**
+   * ADR-IMPL-067: the company site's deals a member whose airport is `home` sees, at most `limit`, with `catalog.site_offers`
+   * on (seeded off; none otherwise): from `home` and its metro first, then from the nearest cities the site sells from
+   * by great-circle distance — a home the site sells nothing from (Seattle, Toronto, Chișinău) gets the nearest's — each
+   * deal naming the city it leaves from; one deal per destination city, never the member's own; in the pins' order (the
+   * site's home page first, then the busiest). Read from the snapshot (`site_routes`, twice a day), only deals still
+   * served (`valid_until`, D6); the price is the site's "Price Today", never its "Old Price". Cached a minute with the
+   * pins' generation; with an executor, read now.
+   */
+  siteDeals(exec: Executor | undefined, home: string, limit: number): Promise<SiteDeal[]>;
   importCsv(input: unknown): Promise<{ imported: number }>;
 };

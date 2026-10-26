@@ -101,6 +101,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog place landmarks applied/);
     expect(second.out).not.toMatch(/catalog site prices applied/);
     expect(second.out).not.toMatch(/requests shown estimate source applied/);
+    expect(second.out).not.toMatch(/catalog site route validity applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -145,6 +146,7 @@ describe("extras ledger", () => {
       "0038_catalog_site_prices.sql",
       "0039_catalog_place_landmarks.sql",
       "0040_requests_shown_estimate_source.sql",
+      "0042_catalog_site_route_validity.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -213,6 +215,80 @@ describe("extras ledger", () => {
       sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_shown_estimate_source'`,
     )) as unknown as { convalidated: boolean }[];
     expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-067, D6: a site deal is served for at most a day after the read that wrote it.
+  it("catalog.site_routes: valid until the read + 24 hours at most, after it, by default the day", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    await db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports)
+      VALUES (23, 'London', 'United Kingdom', 'Europe', 'LHR', ARRAY['LHR'])
+      ON CONFLICT (cms_id) DO NOTHING`);
+    const insert = async (from: string, validUntil: string | null) => {
+      try {
+        // Made-up prices.
+        if (validUntil === null) {
+          await db.execute(sql`
+            INSERT INTO catalog.site_routes (route_from, cms_id, deal, price) VALUES (${from}, 23, 9001, 1111)`);
+        } else {
+          await db.execute(sql`
+            INSERT INTO catalog.site_routes (route_from, cms_id, deal, price, synced_at, valid_until)
+            VALUES (${from}, 23, 9001, 1111, now(), now() + ${validUntil}::interval)`);
+        }
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert("JFK", "24 hours")).toBe("ok");
+    expect(await insert("EWR", null)).toBe("ok"); // a binary from before 0042: the default, the read + 24 hours
+    expect(await insert("LGA", "25 hours")).toBe("23514"); // D6: never longer than a day
+    expect(await insert("ORD", "0 seconds")).toBe("23514");
+    expect(await insert("MDW", "-1 hour")).toBe("23514");
+    const [ewr] = (await db.execute(sql`
+      SELECT valid_until = synced_at + interval '24 hours' AS day FROM catalog.site_routes WHERE route_from = 'EWR'`)) as unknown as {
+      day: boolean;
+    }[];
+    expect(ewr?.day).toBe(true);
+    await db.execute(sql`DELETE FROM catalog.site_routes WHERE cms_id = 23`);
+  });
+
+  // ADR-IMPL-067: the rows a database holds when 0042 runs get their own read + 24 hours — a row read two days ago is
+  // expired at once, one read two hours ago keeps its day — never the migration's own day.
+  it("0042 gives the rows already there their own read + 24 hours", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    // The table as it was before 0042, with two nights' rows (made-up prices).
+    await db.execute(sql`ALTER TABLE catalog.site_routes DROP CONSTRAINT site_routes_validity`);
+    await db.execute(sql`ALTER TABLE catalog.site_routes DROP COLUMN valid_until`);
+    await db.execute(sql`DELETE FROM platform.extras_applied WHERE name = '0042_catalog_site_route_validity.sql'`);
+    await db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports)
+      VALUES (23, 'London', 'United Kingdom', 'Europe', 'LHR', ARRAY['LHR'])
+      ON CONFLICT (cms_id) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price, synced_at) VALUES
+        ('JFK', 23, 9001, 1111, now() - interval '2 days'), ('ORD', 23, 9002, 1222, now() - interval '2 hours')`);
+
+    const run = await runMigrate();
+    expect(run.code).toBe(0);
+    expect(run.out).toMatch(/catalog site route validity applied/);
+    const rows = (await db.execute(sql`
+      SELECT route_from, valid_until = synced_at + interval '24 hours' AS own_day, valid_until > now() AS served
+      FROM catalog.site_routes WHERE cms_id = 23 ORDER BY route_from`)) as unknown as {
+      route_from: string;
+      own_day: boolean;
+      served: boolean;
+    }[];
+    expect(rows.map((r) => [r.route_from.trim(), r.own_day, r.served])).toEqual([
+      ["JFK", true, false],
+      ["ORD", true, true],
+    ]);
+    const [check] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'site_routes_validity'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(check?.convalidated).toBe(true);
+    await db.execute(sql`DELETE FROM catalog.site_routes WHERE cms_id = 23`);
   });
 
   // ADR-IMPL-063, D6: what the site answered, shown for at most 24 hours; a priced row has its business figure.

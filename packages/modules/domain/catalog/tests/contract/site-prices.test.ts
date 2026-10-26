@@ -365,6 +365,28 @@ describe("site prices — the refresh job", () => {
     await t.iso.drop();
   });
 
+  it("asks nothing for a route past its day (ADR-IMPL-067): a city the site has not listed for a day is no pin", async () => {
+    const t = await setup("site-prices-job-expired-route", {
+      [`JFK-ZRH ${RT}`]: { business: 2222, first: 3333, premium_economy: 1111 },
+      [`JFK-CDG ${RT}`]: { business: 2100, first: 3100, premium_economy: 1000 },
+      [`JFK-HND ${RT}`]: { business: 2500, first: 3700, premium_economy: 1300 },
+      [`MIA-HND ${RT}`]: { business: 2400, first: 3600, premium_economy: 1200 },
+    });
+    await t.seedSiteRoutes();
+    // JFK → Tokyo, read a day and an hour ago: past its day. Miami's Tokyo is still within its own.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes SET synced_at = now() - interval '25 hours', valid_until = now() - interval '1 hour'
+      WHERE route_from = 'JFK' AND cms_id = 103`);
+    const routes = (await sitePricesRepo.pinRoutes(t.iso.db)).map((r) => `${r.from.code}-${r.to.code}`);
+    expect(routes.sort()).toEqual(["JFK-CDG", "JFK-ZRH", "MIA-HND"]);
+
+    await t.estimatesOn(true);
+    await t.flags.set("catalog.site_pins", { enabled: true });
+    expect(await t.run()).toMatchObject({ due: 3, asked: 3, priced: 3 });
+    expect(t.site.calls.sort()).toEqual([`JFK-CDG ${RT}`, `JFK-ZRH ${RT}`, `MIA-HND ${RT}`]);
+    await t.iso.drop();
+  });
+
   it("asks nothing without Home's site pins: the routes it keeps are theirs, and no member sees them", async () => {
     const t = await setup("site-prices-job-no-pins", {
       [`JFK-ZRH ${RT}`]: { business: 2222, first: 3333, premium_economy: 1111 },
