@@ -9,6 +9,7 @@ import {
   PHOTO_QUALITIES,
   base64ToBytes,
   encodeWithin,
+  photoActions,
   photoFailureCopy,
   photoPickerAvailable,
   photoRowValue,
@@ -178,5 +179,17 @@ describe("the row and the words", () => {
       expect(copy).not.toContain("!");
     }
     expect(photoFailureCopy("upload", "The club's own words.")).toBe("The club's own words.");
+  });
+});
+
+describe("photoActions — removing needs no picker", () => {
+  it("a build with the picker: the row always, Choose always, Remove once there is a photo", () => {
+    expect(photoActions(true, false)).toEqual({ row: true, choose: true, remove: false });
+    expect(photoActions(true, true)).toEqual({ row: true, choose: true, remove: true });
+  });
+
+  it("a build without it: no row until there is a photo, then the row with Remove alone", () => {
+    expect(photoActions(false, false)).toEqual({ row: false, choose: false, remove: false });
+    expect(photoActions(false, true)).toEqual({ row: true, choose: false, remove: true });
   });
 });

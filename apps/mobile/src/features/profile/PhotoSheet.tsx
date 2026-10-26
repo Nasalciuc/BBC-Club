@@ -5,8 +5,8 @@ import { Avatar, Button, ModalSheet, type ModalSheetHandle, PROFILE_AVATAR, Text
 
 import { deleteProfilePhoto, putProfilePhoto, type Profile } from "@/lib/api";
 import { monogram } from "@/lib/monogram";
-import { photoFailureCopy } from "./photo-logic";
-import { pickPhoto } from "./photo-native";
+import { photoActions, photoFailureCopy } from "./photo-logic";
+import { photoPickerReady, pickPhoto } from "./photo-native";
 import { portraitOf } from "./portrait";
 import type { ProfileSheetHandle } from "./types";
 
@@ -18,8 +18,10 @@ type Props = {
 /**
  * The member's own photo (brief 3.4.2, ADR-IMPL-070). 36 draws no such sheet; it is the profile's question sheet: the
  * portrait as Profile shows it, what the photo is for and who sees it, `Choose a photo` (the system's photo library,
- * then its square crop) and, once there is one, `Remove photo`. Opened only on a build that has the picker
- * (photo-native.ts `photoPickerReady`, D4). A photo that cannot be used or saved says so in slate, and the sheet stays.
+ * then its square crop) and, once there is one, `Remove photo`. `Choose` only on a build that has the picker
+ * (photo-native.ts `photoPickerReady`, D4); `Remove` on any, as it needs no native module (`photoActions`). While a
+ * photo is being saved or removed the sheet has no way out (no drag, no ×, no Back) until the answer, so a second write
+ * cannot start under it. A photo that cannot be used or saved says so in slate, and the sheet stays.
  */
 export const PhotoSheet = forwardRef<ProfileSheetHandle, Props>(function PhotoSheet({ profile, onSaved }, ref) {
   const modalRef = useRef<ModalSheetHandle>(null);
@@ -33,7 +35,7 @@ export const PhotoSheet = forwardRef<ProfileSheetHandle, Props>(function PhotoSh
 
   useImperativeHandle(ref, () => ({
     present() {
-      setBusy(null);
+      // `busy` stays: a write still on its way keeps the sheet shut until it answers, and clears it then.
       setMessage(null);
       modalRef.current?.present();
     },
@@ -75,6 +77,7 @@ export const PhotoSheet = forwardRef<ProfileSheetHandle, Props>(function PhotoSh
   }
 
   const hasPhoto = Boolean(profile.photo);
+  const actions = photoActions(photoPickerReady, hasPhoto);
   return (
     <ModalSheet
       ref={modalRef}
@@ -83,18 +86,21 @@ export const PhotoSheet = forwardRef<ProfileSheetHandle, Props>(function PhotoSh
       closeTestID="profile.photo.close"
       testID="profile.photo.sheet"
       dismissible={busy === null}
+      closable={busy === null}
       insets={insets}
       footer={
         <View style={styles.answers}>
-          <Button
-            testID="profile.photo.choose"
-            label={busy === "choose" ? "Saving…" : hasPhoto ? "Choose a new photo" : "Choose a photo"}
-            variant="primary"
-            busy={busy === "choose"}
-            disabled={busy !== null}
-            onPress={() => void onChoose()}
-          />
-          {hasPhoto ? (
+          {actions.choose ? (
+            <Button
+              testID="profile.photo.choose"
+              label={busy === "choose" ? "Saving…" : hasPhoto ? "Choose a new photo" : "Choose a photo"}
+              variant="primary"
+              busy={busy === "choose"}
+              disabled={busy !== null}
+              onPress={() => void onChoose()}
+            />
+          ) : null}
+          {actions.remove ? (
             <TextButton
               testID="profile.photo.remove"
               label={busy === "remove" ? "Removing…" : "Remove photo"}

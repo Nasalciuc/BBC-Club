@@ -127,6 +127,18 @@ export function photoRowValue(profile: Pick<Profile, "photo"> | null | undefined
   return profile?.photo ? "Added" : "Not set";
 }
 
+/**
+ * What Edit profile offers for the photo. Choosing needs the picker's native modules; removing is one request and needs
+ * none, so a member whose photo was added on another phone can still remove it on a build without the picker: the
+ * row and its sheet are there whenever a photo is, the sheet's `Choose` only where the picker is.
+ */
+export function photoActions(
+  pickerReady: boolean,
+  hasPhoto: boolean,
+): { row: boolean; choose: boolean; remove: boolean } {
+  return { row: pickerReady || hasPhoto, choose: pickerReady, remove: hasPhoto };
+}
+
 /** Why a photo was not saved, in the sheet's calm words (slate, never red: no field is at fault). */
 export type PhotoFailure = "picker" | "prepare" | "upload";
 

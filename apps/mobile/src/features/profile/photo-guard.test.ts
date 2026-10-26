@@ -47,10 +47,14 @@ describe("the photo picker's one door", () => {
     expect(door).toContain("photoPickerAvailable((name) => requireOptionalNativeModule(name))");
   });
 
-  it("the Photo row and its sheet stand behind the same guard on Edit profile", () => {
+  it("the Photo row and its sheet stand behind the same guard on Edit profile; Choose behind the picker's", () => {
     const screen = readFileSync(join(SRC, "app/edit-profile.tsx"), "utf8");
-    expect(screen).toMatch(/\{photoPickerReady \? \(\s*<ListRow\s+testID="editProfile\.photo"/);
-    expect(screen).toContain("{photoPickerReady ? <PhotoSheet");
+    expect(screen).toContain("const photo = photoActions(photoPickerReady, Boolean(profile?.photo));");
+    expect(screen).toMatch(/\{photo\.row \? \(\s*<ListRow\s+testID="editProfile\.photo"/);
+    expect(screen).toContain("{photo.row ? <PhotoSheet");
+    const sheet = readFileSync(join(SRC, "features/profile/PhotoSheet.tsx"), "utf8");
+    expect(sheet).toContain("const actions = photoActions(photoPickerReady, hasPhoto);");
+    expect(sheet).toMatch(/\{actions\.choose \? \(\s*<Button\s+testID="profile\.photo\.choose"/);
   });
 
   it("the guard asks for the modules by the names the packages themselves load", () => {

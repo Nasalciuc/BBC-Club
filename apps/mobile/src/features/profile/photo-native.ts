@@ -54,7 +54,11 @@ export async function pickPhoto(): Promise<PickedPhoto> {
       try {
         const encoded = await encodeWithin(async (quality) => {
           const saved = await square.saveAsync({ format: SaveFormat.WEBP, compress: quality, base64: true });
-          return base64ToBytes(saved.base64 ?? "");
+          try {
+            return base64ToBytes(saved.base64 ?? "");
+          } finally {
+            await removeCopy(saved.uri);
+          }
         });
         if (!encoded.ok) return { kind: "failed", stage: "prepare" };
         const sent = photoToSend(encoded.bytes);
@@ -68,5 +72,20 @@ export async function pickPhoto(): Promise<PickedPhoto> {
     }
   } catch {
     return { kind: "failed", stage: "prepare" };
+  }
+}
+
+/**
+ * Each attempt's `saveAsync` also writes the WebP to the app's cache: a copy of the member's photo the server's delete
+ * could never reach. It goes as soon as its bytes are read. A copy that cannot be deleted is left to the cache, which
+ * the system clears; it never fails the photo.
+ */
+async function removeCopy(uri: string): Promise<void> {
+  try {
+    const { File } = await import("expo-file-system");
+    const copy = new File(uri);
+    if (copy.exists) copy.delete();
+  } catch {
+    // left to the system's cache
   }
 }
