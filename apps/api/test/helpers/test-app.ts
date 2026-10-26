@@ -7,6 +7,7 @@ import { mockCrm } from "./mock-crm";
 import { testAuth } from "./test-auth";
 import type { IdentityFacade } from "@bbc/identity";
 import type { IdentityModuleOptions } from "@bbc/identity/module";
+import type { catalogModule } from "@bbc/catalog/module";
 import type { EngagementFacade } from "@bbc/engagement";
 import { DEPART, RETURN } from "./days";
 
@@ -29,6 +30,13 @@ export async function testApp(
     queryLog?: string[];
     /** identityModule's test seams: the breached-password predicate (else: nothing is breached), the OTP answer floor. */
     identity?: IdentityModuleOptions;
+    /** `env`: the CRM the env names (CRM_ADAPTER: `email` writes to the capturing e-mail, `http` calls CRM_API_URL),
+     *  as a deployed host builds it. Default `mock`: the recording CRM below (`t.crm`). */
+    crm?: "mock" | "env";
+    /** catalogModule's test seams: a `fetch` that answers for the company's site (its price search, ADR-IMPL-063) and
+     *  the photo sources, and the clock their pacing and the price breaker read. Else the real network — never reached
+     *  while their flags are off. */
+    catalog?: Parameters<typeof catalogModule>[0];
   } = {},
 ) {
   const poolMax = opts.poolMax ?? 6;
@@ -65,7 +73,13 @@ export async function testApp(
     },
   };
 
-  const overrides = { email, crm, push, identity: opts.identity };
+  const overrides = {
+    email,
+    crm: opts.crm === "env" ? undefined : crm,
+    push,
+    identity: opts.identity,
+    catalog: opts.catalog,
+  };
   let built = await buildApp({ env, db, overrides, startPoller: false });
   let auth = testAuth(built.registry.facade<IdentityFacade>("identity").auth, db);
   const internalSecret = env.INTERNAL_API_SECRET;

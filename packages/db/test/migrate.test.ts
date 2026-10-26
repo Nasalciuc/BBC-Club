@@ -42,9 +42,11 @@ describe("extras ledger", () => {
         'deliveries_paused',
         'fares_home_destinations',
         'notif_sending_claimed',
+        'place_landmarks_one_marker',
         'place_photos_due',
         'requests_member_list',
         'site_places_airport',
+        'site_prices_due',
         'site_routes_cms_id'
       )
       ORDER BY indexname`);
@@ -54,9 +56,11 @@ describe("extras ledger", () => {
       "deliveries_pending_created",
       "fares_home_destinations",
       "notif_sending_claimed",
+      "place_landmarks_one_marker",
       "place_photos_due",
       "requests_member_list",
       "site_places_airport",
+      "site_prices_due",
       "site_routes_cms_id",
     ]);
 
@@ -94,6 +98,11 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog checks applied/);
     expect(second.out).not.toMatch(/notifications campaign not before applied/);
     expect(second.out).not.toMatch(/catalog fares keep live copy/);
+    expect(second.out).not.toMatch(/catalog place landmarks applied/);
+    expect(second.out).not.toMatch(/catalog site prices applied/);
+    expect(second.out).not.toMatch(/requests shown estimate source applied/);
+    expect(second.out).not.toMatch(/catalog site route validity applied/);
+    expect(second.out).not.toMatch(/members photo applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -135,6 +144,11 @@ describe("extras ledger", () => {
       "0035_catalog_checks.sql",
       "0036_notifications_campaign_not_before.sql",
       "0037_catalog_fares_keep_live_copy.sql",
+      "0038_catalog_site_prices.sql",
+      "0039_catalog_place_landmarks.sql",
+      "0040_requests_shown_estimate_source.sql",
+      "0042_catalog_site_route_validity.sql",
+      "0043_members_photo.sql",
       "0044_notifications_offer_send_day.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
@@ -168,6 +182,150 @@ describe("extras ledger", () => {
     expect(await insert(2055, null)).toBe("23514");
     expect(await insert(0, "USD")).toBe("23514");
     expect(await insert(2055, "EUR")).toBe("23514");
+  });
+
+  // ADR-IMPL-063: who priced a quote's estimate — only beside an estimate, only the site or the club's formula.
+  it("requests_shown_estimate_source takes site or club beside an estimate, or none", async () => {
+    // Made-up amounts.
+    expect((await runMigrate()).code).toBe(0);
+    let n = 0;
+    const insert = async (amount: number | null, source: string | null) => {
+      n += 1;
+      try {
+        await db.execute(sql`
+          INSERT INTO requests.requests (id, reference, idempotency_key, trip_type, cabin, legs, passengers,
+            contact_name, contact_phone, contact_email, source, shown_estimate_amount, shown_estimate_currency,
+            shown_estimate_source)
+          VALUES (gen_random_uuid(), ${`R-SRC${n}`}, ${`estimate-source-${n}`}, 'round', 'business',
+            '[{"from":"JFK","to":"ZRH","date":"2027-10-12"}]'::jsonb, '{"adult":1,"child":0,"infant":0}'::jsonb,
+            'Alex Morgan', '+12125550148', 'alex@test.dev', 'ios', ${amount}, ${amount === null ? null : "USD"},
+            ${source})`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert(null, null)).toBe("ok");
+    expect(await insert(2222, null)).toBe("ok"); // an estimate stored before the site priced any: the formula's
+    expect(await insert(2222, "site")).toBe("ok");
+    expect(await insert(2222, "club")).toBe("ok");
+    expect(await insert(null, "site")).toBe("23514"); // a source without an estimate
+    expect(await insert(2222, "formula")).toBe("23514");
+    expect(await insert(2222, "")).toBe("23514");
+    // Added NOT VALID, then validated in its own transaction: the rows there were are checked too.
+    const [validated] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'requests_shown_estimate_source'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(validated?.convalidated).toBe(true);
+  });
+
+  // ADR-IMPL-067, D6: a site deal is served for at most a day after the read that wrote it.
+  it("catalog.site_routes: valid until the read + 24 hours at most, after it, by default the day", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    await db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports)
+      VALUES (23, 'London', 'United Kingdom', 'Europe', 'LHR', ARRAY['LHR'])
+      ON CONFLICT (cms_id) DO NOTHING`);
+    const insert = async (from: string, validUntil: string | null) => {
+      try {
+        // Made-up prices.
+        if (validUntil === null) {
+          await db.execute(sql`
+            INSERT INTO catalog.site_routes (route_from, cms_id, deal, price) VALUES (${from}, 23, 9001, 1111)`);
+        } else {
+          await db.execute(sql`
+            INSERT INTO catalog.site_routes (route_from, cms_id, deal, price, synced_at, valid_until)
+            VALUES (${from}, 23, 9001, 1111, now(), now() + ${validUntil}::interval)`);
+        }
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert("JFK", "24 hours")).toBe("ok");
+    expect(await insert("EWR", null)).toBe("ok"); // a binary from before 0042: the default, the read + 24 hours
+    expect(await insert("LGA", "25 hours")).toBe("23514"); // D6: never longer than a day
+    expect(await insert("ORD", "0 seconds")).toBe("23514");
+    expect(await insert("MDW", "-1 hour")).toBe("23514");
+    const [ewr] = (await db.execute(sql`
+      SELECT valid_until = synced_at + interval '24 hours' AS day FROM catalog.site_routes WHERE route_from = 'EWR'`)) as unknown as {
+      day: boolean;
+    }[];
+    expect(ewr?.day).toBe(true);
+    await db.execute(sql`DELETE FROM catalog.site_routes WHERE cms_id = 23`);
+  });
+
+  // ADR-IMPL-067: the rows a database holds when 0042 runs get their own read + 24 hours — a row read two days ago is
+  // expired at once, one read two hours ago keeps its day — never the migration's own day.
+  it("0042 gives the rows already there their own read + 24 hours", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    // The table as it was before 0042, with two nights' rows (made-up prices).
+    await db.execute(sql`ALTER TABLE catalog.site_routes DROP CONSTRAINT site_routes_validity`);
+    await db.execute(sql`ALTER TABLE catalog.site_routes DROP COLUMN valid_until`);
+    await db.execute(sql`DELETE FROM platform.extras_applied WHERE name = '0042_catalog_site_route_validity.sql'`);
+    await db.execute(sql`
+      INSERT INTO catalog.site_places (cms_id, name, country, region, airport, airports)
+      VALUES (23, 'London', 'United Kingdom', 'Europe', 'LHR', ARRAY['LHR'])
+      ON CONFLICT (cms_id) DO NOTHING`);
+    await db.execute(sql`
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price, synced_at) VALUES
+        ('JFK', 23, 9001, 1111, now() - interval '2 days'), ('ORD', 23, 9002, 1222, now() - interval '2 hours')`);
+
+    const run = await runMigrate();
+    expect(run.code).toBe(0);
+    expect(run.out).toMatch(/catalog site route validity applied/);
+    const rows = (await db.execute(sql`
+      SELECT route_from, valid_until = synced_at + interval '24 hours' AS own_day, valid_until > now() AS served
+      FROM catalog.site_routes WHERE cms_id = 23 ORDER BY route_from`)) as unknown as {
+      route_from: string;
+      own_day: boolean;
+      served: boolean;
+    }[];
+    expect(rows.map((r) => [r.route_from.trim(), r.own_day, r.served])).toEqual([
+      ["JFK", true, false],
+      ["ORD", true, true],
+    ]);
+    const [check] = (await db.execute(
+      sql`SELECT convalidated FROM pg_constraint WHERE conname = 'site_routes_validity'`,
+    )) as unknown as { convalidated: boolean }[];
+    expect(check?.convalidated).toBe(true);
+    await db.execute(sql`DELETE FROM catalog.site_routes WHERE cms_id = 23`);
+  });
+
+  // ADR-IMPL-063, D6: what the site answered, shown for at most 24 hours; a priced row has its business figure.
+  it("catalog.site_prices: priced or none, figures above zero, never the same airport, 24 hours at most", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    const insert = async (
+      row: Partial<{ from: string; to: string; status: string; business: number | null; first: number | null }>,
+      expires = "24 hours",
+    ) => {
+      const r = { from: "JFK", to: "ZRH", status: "priced", business: 2222, first: null, ...row };
+      try {
+        // Made-up figures.
+        await db.execute(sql`
+          INSERT INTO catalog.site_prices (route_from, route_to, trip, status, business, first, fetched_at, expires_at)
+          VALUES (${r.from}, ${r.to}, 'round_trip', ${r.status}::catalog.site_price_status, ${r.business}, ${r.first},
+            now(), now() + ${expires}::interval)
+          ON CONFLICT (route_from, route_to, trip) DO NOTHING`);
+        return "ok";
+      } catch (err) {
+        const e = err as { code?: string; cause?: { code?: string } };
+        return e.code ?? e.cause?.code ?? "error";
+      }
+    };
+    expect(await insert({})).toBe("ok");
+    expect(await insert({ to: "CDG", status: "none", business: null })).toBe("ok");
+    expect(await insert({ to: "LHR" }, "25 hours")).toBe("23514"); // D6: older than 24 hours is never shown
+    expect(await insert({ to: "LHR" }, "0 seconds")).toBe("23514");
+    expect(await insert({ to: "LHR", business: null })).toBe("23514"); // priced without its business figure
+    expect(await insert({ to: "LHR", status: "none" })).toBe("23514"); // none with a figure
+    expect(await insert({ to: "LHR", business: 0 })).toBe("23514");
+    expect(await insert({ to: "LHR", first: -5 })).toBe("23514");
+    expect(await insert({ to: "JFK" })).toBe("23514"); // the site prices JFK → JFK; the club never stores it
+    expect(await insert({ to: "LHR", status: "unknown" })).toBe("22P02"); // an enum
+    await db.execute(sql`DELETE FROM catalog.site_prices WHERE route_from = 'JFK'`);
   });
 
   // ADR-IMPL-046: a struck price always carries its source — both or neither, each half tried alone.

@@ -6,7 +6,16 @@
  * then served from Mapbox's cache — on the pale sky (02). Our pins and their labels are React views on the map
  * (MarkerView); a chosen route is a white line with its plane, framed over the sheet (13).
  */
-import Mapbox, { Atmosphere, Camera, LineLayer, MapView, MarkerView, ShapeSource, type MapState } from "@rnmapbox/maps";
+import Mapbox, {
+  Atmosphere,
+  BackgroundLayer,
+  Camera,
+  LineLayer,
+  MapView,
+  MarkerView,
+  ShapeSource,
+  type MapState,
+} from "@rnmapbox/maps";
 import { type ComponentRef, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -25,9 +34,11 @@ import {
   OPENING_CENTER,
   REST_ZOOM,
   ZOOM_RANGE,
+  createPressGuard,
   globePadding,
   labelScale,
   mapPoint,
+  mapboxPress,
   pinFrame,
   pinPriority,
   placeLabels,
@@ -37,6 +48,7 @@ import {
   routeMiddle,
   tokens,
   type GlobeCamera,
+  type GlobeTap,
   type LngLat,
   type Pin,
   type PinToPlace,
@@ -53,6 +65,12 @@ Mapbox.setTelemetryEnabled(false);
 /** The Earth as photographed, without names (the owner's reference, 13 Oct 2026). A map that cannot load falls back to
  *  the drawn globe. */
 const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-v9";
+/**
+ * The black globe's floor (ADR-IMPL-068, over the air): satellite-v9 paints its background layer, rgb(4,7,14), wherever
+ * a tile is missing — a sphere of near-black where the imagery did not come. Recoloured to the drawn globe's deep ocean,
+ * a missing tile shows the sea instead.
+ */
+const BACKGROUND = { backgroundColor: tokens.colors.globeOceanDeep } as const;
 /** 02: the globe on the pale sky, a white haze at its rim, no stars. */
 const ATMOSPHERE = {
   color: tokens.colors.surfaceCard,
@@ -68,6 +86,11 @@ const TURN_DEG_PER_S = 360 / (GLOBE_SPEC.periodMs / 1000);
  *  home to destination. Back to rest is an ease. */
 const MOVE_MS = { frame: 900, flight: 950, arc: 600 } as const;
 const ARC_TICK_MS = 30;
+
+/** The globe was touched now: the slow turn waits 4 s from here. */
+function touched(view: { touchedAt: number }) {
+  view.touchedAt = Date.now();
+}
 
 export type MapboxGlobeProps = {
   pins: Pin[];
@@ -89,6 +112,8 @@ export type MapboxGlobeProps = {
   onFailed: () => void;
   /** The map has loaded and drawn: Globe fades it in over the drawn globe. */
   onReady: () => void;
+  /** A press on the globe that is no pin's, at rest (ADR-IMPL-068): the place under the finger. The sky is nothing. */
+  onTapPlace?: (tap: GlobeTap) => void;
 };
 
 export default function MapboxGlobe({
@@ -102,6 +127,7 @@ export default function MapboxGlobe({
   paused = false,
   onFailed,
   onReady,
+  onTapPlace,
 }: MapboxGlobeProps) {
   const camera = useRef<ComponentRef<typeof Camera>>(null);
   const view = useRef({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM, touchedAt: 0 });
@@ -118,6 +144,10 @@ export default function MapboxGlobe({
   const [arc, setArc] = useState(1);
   // Where the camera stands, for the labels: which pins are on the near side, and on which side each label fits.
   const [seen, setSeen] = useState<GlobeCamera>({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM });
+  // ADR-IMPL-068: one choice per touch. @rnmapbox/maps 10.3.7 keeps a press on a MarkerView from the map (iOS ignores the
+  // touch, Android absorbs the press), but a press in a pin's hit slop, outside its MarkerView, reaches the map — and on
+  // Android may reach the pin too: whichever answers first chooses.
+  const [pressGuard] = useState(() => createPressGuard());
 
   const moving = appActive && !paused && !reducedMotion;
 
@@ -253,11 +283,45 @@ export default function MapboxGlobe({
 
   const line = dest && home ? routeLine(home, dest) : null;
   const middle = dest && home ? routeMiddle(home, dest) : null;
+  // ADR-IMPL-068: with the globe's tap, a press at rest — whose it is, `mapboxPress` decides (globe-tap.ts). On a pin's
+  // 44-pt target it is the pin's: the map gets the press in the ring outside the MarkerView, where the pin's own press
+  // does not reach, and chooses the pin through the guard. On the sky — Mapbox answers it with a place on its horizon,
+  // which Android reports reprojected onto the limb, not where the finger was — it is nothing; elsewhere on the disc, the
+  // place under the finger. Without the tap (no list to snap to) a press only pauses the turn, as before.
+  function onMapPress(feature: {
+    geometry: { coordinates: number[] };
+    properties: { screenPointX: number; screenPointY: number };
+  }) {
+    touched(view.current); // a press is a touch: the slow turn pauses for it too
+    if (!onTapPlace) return;
+    const [lng, lat] = feature.geometry.coordinates;
+    if (lng === undefined || lat === undefined) return;
+    const cam: GlobeCamera = { center: [...view.current.center] as LngLat, zoom: view.current.zoom };
+    const screen = { x: feature.properties.screenPointX, y: feature.properties.screenPointY };
+    // The map view's height: how far Mapbox's camera stands, so where its horizon is at this zoom and where it shows the
+    // pins `placed` puts with `mapPoint` (their targets are measured there: `mapboxPress`). Each pin goes with its place,
+    // which says whether it is past the horizon: the layout follows the camera a step behind.
+    const places = new Map(shown.map((s) => [s.code, { lng: s.lng, lat: s.lat }]));
+    const targets = placed.flatMap((p) => {
+      const at = places.get(p.code);
+      return at ? [{ ...p, ...at }] : [];
+    });
+    const seenThen = { camera: cam, centre, viewHeight: size.height, placed: targets, route: selected !== null };
+    const choice = mapboxPress({ lng, lat, screen }, seenThen, pressGuard);
+    if (choice?.kind === "pin") {
+      if (pressGuard.choose(choice.code)) onSelect(choice.code);
+    } else if (choice?.kind === "place") {
+      onTapPlace(choice.tap);
+    }
+  }
+
   // Mapbox's terms: logo and attribution always visible — just above the sheet.
   const ornament = { bottom: Math.max(8, size.height - sheetTop + 8) };
 
   return (
-    <View style={StyleSheet.absoluteFill} onLayout={onLayout}>
+    // `globe.map`: the satellite globe's surface, which takes the pan, the pinch and (ADR-IMPL-068) the tap — as
+    // `globe.drawn` is the drawn one's. No accessibilityLabel: Search is the screen reader's way to a city.
+    <View testID="globe.map" style={StyleSheet.absoluteFill} onLayout={onLayout}>
       <MapView
         style={StyleSheet.absoluteFill}
         styleURL={SATELLITE_STYLE}
@@ -287,11 +351,9 @@ export default function MapboxGlobe({
           setMapReady(true);
           onReady();
         }}
-        // A tap on the ocean moves nothing, but it is a touch: the slow turn pauses for it too.
-        onPress={() => {
-          view.current.touchedAt = Date.now();
-        }}
+        onPress={onMapPress}
       >
+        <BackgroundLayer id="background" existing style={BACKGROUND} />
         <Atmosphere style={ATMOSPHERE} />
         <Camera
           ref={camera}
@@ -365,7 +427,8 @@ export default function MapboxGlobe({
                   pin && pin.code !== selected
                     ? () => {
                         view.current.touchedAt = Date.now();
-                        onSelect(pin.code);
+                        // With the globe's tap, the guard tells the map's press of the same touch that it was the pin's.
+                        if (!onTapPlace || pressGuard.choose(pin.code)) onSelect(pin.code);
                       }
                     : undefined
                 }

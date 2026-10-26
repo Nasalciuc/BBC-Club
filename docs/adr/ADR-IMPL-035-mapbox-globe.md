@@ -21,7 +21,9 @@ sat 13 points from it under London's 48-point tap area, Tokyo and Singapore were
 - **Sizes from Figma** (`globe-geo.ts`, tested): zoom 1.605 gives Figma's 248-point radius; pinch 1×–3×; pins 8 / 12
   points, offer halos 28 pulsing every 2 s; the route is a dashed great circle, unwrapped across the antimeridian.
 - **Taps** (`pickPin`): the nearest pin wins; only a tap that lands between two pins (within 8 points of both) zooms
-  toward them. Home is drawn, never picked.
+  toward them. Home is drawn, never picked. (Amended by ADR-IMPL-068: with `catalog.globe_tap` on, the map's press at
+  rest opens the nearest city the club sells within 600 km of the place pressed — the sky is nothing — and a press in a
+  pin's 44-pt target, which reaches the map outside the pin's MarkerView, opens the pin.)
 - **Framing** (`routeCamera`, `globePadding`): London, Paris or Rome from New York keep Figma's opening view; any
   other route centres its great-circle midpoint and zooms out until both ends fit the width, above the sheet.
 - **Motion**: Figma's 3° a second westward turn, paused by a touch and resumed after 4 s; none with reduced motion.

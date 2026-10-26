@@ -139,7 +139,7 @@ export type RequestCardModel = {
  * Everything a card shows for a request (09, 28): the city, its state, the route, the days, the trip and the travelers.
  * A request still on the phone passes `onPhone`, as its detail reads it: only one waiting to go (`queued`) says its
  * details are saved. One that will not go out by itself — refused for good (`rejected`), or held by a server that gave
- * up passing it on (`not_sent`) — says nothing more: its detail says "We couldn’t pass this on" and offers the call.
+ * up passing it on (`not_sent`) — says nothing more: its detail says "We couldn’t pass this on" and what to do.
  * `timeZone` is for tests.
  */
 export function requestCard(

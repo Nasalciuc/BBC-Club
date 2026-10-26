@@ -22,7 +22,10 @@ import {
 import { DEFAULT_ORIGIN, profileOrigin } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { clubPhoto } from "@/features/places/club-photos";
+import { destinationPhoto } from "@/features/places/landmark-logic";
+import { Landmarks } from "@/features/places/Landmarks";
 import { bandPicture } from "@/features/places/place-photo-logic";
+import { usePlaceLandmarks } from "@/features/places/usePlaceLandmarks";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
@@ -45,8 +48,8 @@ const PAGE = {
 
 /**
  * A destination chosen on Search (04): the city's photograph, then the same destination as Explore's sheet shows (13) —
- * its country, the trip's chips, the fare's summary and local time, the flight options — and `Request a quote` over
- * the tab bar.
+ * its country, the trip's chips, the fare's summary and local time, the flight options — then up to three of the city's
+ * landmarks with their credits (ADR-IMPL-064; the images draw none), and `Request a quote` over the tab bar.
  */
 export default function DestinationScreen() {
   const params = useLocalSearchParams();
@@ -80,6 +83,8 @@ export default function DestinationScreen() {
   }, [given?.code]);
   const { state, dispatch, retry } = useSearch({ defaultFrom: given ?? found });
   const photoFor = usePlacePhotos([chosen?.airport.code]);
+  // Up to three landmarks of the city, each with its name and credit (ADR-IMPL-064); none — nothing at all.
+  const landmarks = usePlaceLandmarks(chosen?.airport.code, offline);
 
   // The member's usual cabin and travelers first, then the destination with the dates it was last searched for.
   const usualCabin = profile?.preferences.cabin;
@@ -121,14 +126,17 @@ export default function DestinationScreen() {
   // Opened on the member's own airport (a link, a list from before): no search and no quote for a trip to itself.
   const ownAirport = isHomeAirport(chosen.airport.code, state.from);
   const heroHeight = insets.top + PAGE.sheetTop + PAGE.corner;
-  // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo.
-  const bundled = clubPhoto(chosen.airport.code, "any");
-  const band = bandPicture(undefined, photoFor(chosen.airport.code), {
-    headers: PICTURE_HEADERS,
-    mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
-    size: { width, height: heroHeight },
-  });
-  const credit = bundled ? null : band.credit;
+  // The design's own photograph of the city where it has one (ADR-IMPL-056), else the server's place photo — and the
+  // address its landmarks leave out (`destinationPhoto`: one choice for both).
+  const hero = destinationPhoto(
+    clubPhoto(chosen.airport.code, "any"),
+    bandPicture(undefined, photoFor(chosen.airport.code), {
+      headers: PICTURE_HEADERS,
+      mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
+      size: { width, height: heroHeight },
+    }),
+  );
+  const credit = hero.credit;
   const creditLink = credit?.link ?? null;
 
   function retrySearch() {
@@ -140,13 +148,13 @@ export default function DestinationScreen() {
 
   return (
     <View style={styles.root} testID="destination.root">
-      <ScreenStatusBar on={statusBarOn({ hasImage: Boolean(bundled ?? band.source), pastHero: false })} />
+      <ScreenStatusBar on={statusBarOn({ hasImage: Boolean(hero.source), pastHero: false })} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={{ height: heroHeight }}>
           <Photo
-            source={bundled ?? band.source}
+            source={hero.source}
             fallback={null}
-            cachePolicy={bundled ? "memory-disk" : band.cache}
+            cachePolicy={hero.cache}
             position="top"
             style={StyleSheet.absoluteFill}
             testID="destination.photo"
@@ -218,6 +226,19 @@ export default function DestinationScreen() {
               }
             />
           ) : null}
+          {ownAirport ? null : (
+            <Landmarks
+              landmarks={landmarks.landmarks}
+              failed={landmarks.failed}
+              // The photograph over the page, as drawn above: where it is a landmark standing in for the city's
+              // (ADR-IMPL-064, amendment 1), that landmark is left out before the three are counted — the server sends
+              // three, so such a city shows at most two here.
+              photo={hero}
+              onPhotoError={landmarks.onPhotoError}
+              look="page"
+              testIDPrefix="destination"
+            />
+          )}
         </View>
       </ScrollView>
       {ownAirport ? null : (

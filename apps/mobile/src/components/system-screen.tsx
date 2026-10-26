@@ -2,6 +2,8 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, StateMessage, tokens, rn } from "@bbc/ui";
 
+import type { ClubCall } from "@/lib/support-phone-logic";
+
 type Props = {
   testID: string;
   /** The message's own id: `<testID>.message` unless given. */
@@ -9,8 +11,9 @@ type Props = {
   title: string;
   body: string;
   primary: { label: string; testID: string; onPress: () => void };
-  /** `Call a specialist`, when the club's number is known (240:5129, 240:5163). */
-  call?: { testID: string; onPress: () => void } | null;
+  /** `Call a specialist`: the club's general line with its words (`clubCall`, support-phone.ts), null without one
+   *  (240:5129, 240:5163). */
+  call?: ClubCall | null;
 };
 
 /**
@@ -32,9 +35,7 @@ export function SystemScreen({ testID, messageTestID, title, body, primary, call
             body={body}
             primary={primary}
           />
-          {call ? (
-            <Button testID={call.testID} label="Call a specialist" variant="secondary" onPress={call.onPress} />
-          ) : null}
+          {call ? <Button testID={call.testID} label={call.label} variant="secondary" onPress={call.onPress} /> : null}
         </View>
       </ScrollView>
     </View>

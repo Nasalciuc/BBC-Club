@@ -1,11 +1,13 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
-import { rateLimit } from "@bbc/platform/ratelimit";
+import { rateLimit, subjectOf } from "@bbc/platform/ratelimit";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { createMembersFacade, toProfileVM } from "./application/facade";
+import { createPhotoStore } from "./application/photo";
 import type { MembersFacade, ProfileCreationDeps } from "./api";
 import type { CrmFacade } from "@bbc/crm";
 import type { IdentityFacade } from "@bbc/identity";
@@ -16,6 +18,7 @@ import { event } from "@bbc/shared/events";
 import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
 import type { Principal } from "@bbc/shared/authz/principal";
+import { PHOTO_CONTENT_TYPE, PHOTO_MAX_BYTES, checkPhotoWebp, type PhotoProblem } from "@bbc/shared/media/webp";
 
 type Ports = {
   crm: CrmFacade;
@@ -25,6 +28,30 @@ type Ports = {
 function memberEmail(p: Principal): string | null {
   return p.kind === "member" ? p.email : null;
 }
+
+/**
+ * GET /v1/profile/photo's headers (ADR-IMPL-070), as every per-member answer's (the host's http-cache.ts): `private,
+ * no-cache` — a phone keeps the bytes but asks again, and the strong ETag's 304 spares it them; no shared cache may serve
+ * one member's photo to another. `Vary` names what the answer depends on.
+ */
+const PHOTO_CACHE = { "Cache-Control": "private, no-cache", Vary: "Cookie, Authorization" } as const;
+
+/** If-None-Match as RFC 9110 §13.1.2 reads it: `*`, or a list of tags compared weakly. */
+function ifNoneMatchHits(header: string | undefined, etag: string): boolean {
+  if (!header) return false;
+  const opaque = (tag: string) => tag.trim().replace(/^W\//, "");
+  return header.split(",").some((tag) => tag.trim() === "*" || opaque(tag) === etag);
+}
+
+/** What the member is told when a photo is refused, by why (the app sends only what passes the same check). */
+const PHOTO_REFUSED: Record<PhotoProblem | "type", string> = {
+  type: "Send the photo as a WebP image.",
+  size: "This photo is too large. Choose it again so the app can make it smaller.",
+  format: "This photo could not be read. Choose another one.",
+  metadata: "This photo still carries details from the camera. Choose it again so the app can remove them.",
+  animation: "A moving picture cannot be your photo. Choose a still one.",
+  dimensions: "Your photo is 512 by 512 pixels. Choose it again so the app can size it.",
+};
 
 export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
   name: "members",
@@ -185,6 +212,116 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
         }
         await facade.setNotificationPreferences(undefined, actor, parsed.data.preferences);
         return c.json({ ok: true });
+      },
+    );
+
+    // ── The member's own photo (ADR-IMPL-070, D9): the bytes in Postgres, only ever the caller's. ────────────────────
+    const photos = createPhotoStore(conn);
+    const photoRefused = (problem: PhotoProblem | "type") =>
+      apiError("VALIDATION", { message: PHOTO_REFUSED[problem], context: { problem } });
+    const photoSaved = async (tx: Executor, actor: string) =>
+      publish(tx, {
+        type: "member.profile_updated",
+        version: 1,
+        aggregateType: "member",
+        aggregateId: actor,
+        memberId: actor,
+        payload: event("member.profile_updated", {
+          memberId: actor,
+          fields: ["photo"],
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+
+    // Only the caller's, with its strong ETag (the bytes' sha256): If-None-Match → 304 without reading the bytes. None
+    // — 404, the same answer as a member who never had one.
+    registerRoute("GET", "/v1/profile/photo", "profile:read-self", "read");
+    routes.get(
+      "/profile/photo",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("profile:read-self", { module: "members", flags: platform.flags }),
+      async (c) => {
+        const actor = actorMemberId(c.get("principal"));
+        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+        const current = await photos.etagOf(undefined, actor);
+        if (!current) return c.json(apiError("NOT_FOUND"), 404);
+        const etag = `"${current}"`;
+        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+          return c.body(null, 304, { ETag: etag, ...PHOTO_CACHE });
+        }
+        const photo = await photos.read(undefined, actor);
+        if (!photo) return c.json(apiError("NOT_FOUND"), 404);
+        return c.body(photo.image, 200, {
+          "Content-Type": PHOTO_CONTENT_TYPE,
+          ETag: `"${photo.etag}"`,
+          ...PHOTO_CACHE,
+        });
+      },
+    );
+
+    // The photo itself as the body (image/webp, at most 100 KB): checked whole before anything is written — a WebP,
+    // 512 × 512, still, without EXIF, XMP or an ICC profile. Anything else is the member's to fix: 400 (415 for another
+    // type, 413 over the size), never 500. Answers the whole profile, as every profile write does (ADR-IMPL-058).
+    // The member is known before anything counts, and photos have profile.write's numbers in a bucket of their own (as
+    // the password has): choosing a photo again does not use up the member's other profile saves.
+    const photoLimit = rateLimit(platform.rateLimit, "profile.write", (c) => `photo:${subjectOf(c)}`);
+    const photoBodyLimit = bodyLimit({ maxSize: PHOTO_MAX_BYTES, onError: (c) => c.json(photoRefused("size"), 413) });
+    registerRoute("PUT", "/v1/profile/photo", "profile:update-self", "profile.write");
+    routes.put(
+      "/profile/photo",
+      authorize("profile:update-self", {
+        module: "members",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      photoLimit,
+      async (c, next) => {
+        const type = (c.req.header("Content-Type") ?? "").split(";")[0]?.trim().toLowerCase();
+        if (type !== PHOTO_CONTENT_TYPE) return c.json(photoRefused("type"), 415);
+        return photoBodyLimit(c, next);
+      },
+      async (c) => {
+        const principal = c.get("principal");
+        const actor = actorMemberId(principal);
+        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+        const image = new Uint8Array(await c.req.arrayBuffer());
+        const checked = checkPhotoWebp(image);
+        if (!checked.ok) return c.json(photoRefused(checked.problem), checked.problem === "size" ? 413 : 400);
+        const updated = await withTx(conn, async (tx) => {
+          const p = await writeOrCreate(tx, actor, async () =>
+            (await photos.write(tx, actor, image)) ? facade.getProfile(tx, actor) : null,
+          );
+          if (!p) return null;
+          await photoSaved(tx, actor);
+          return p;
+        });
+        if (!updated) return c.json(apiError("NOT_FOUND"), 404);
+        const prefs = await facade.preferencesOf(undefined, actor);
+        return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
+      },
+    );
+
+    // Takes the photo away: the initials again. Asked twice, the second finds none and says the same. Answers the whole
+    // profile.
+    registerRoute("DELETE", "/v1/profile/photo", "profile:update-self", "profile.write");
+    routes.delete(
+      "/profile/photo",
+      authorize("profile:update-self", {
+        module: "members",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      photoLimit,
+      async (c) => {
+        const principal = c.get("principal");
+        const actor = actorMemberId(principal);
+        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+        const p = await withTx(conn, async (tx) => {
+          if (await photos.remove(tx, actor)) await photoSaved(tx, actor);
+          return facade.getProfile(tx, actor);
+        });
+        const prefs = await facade.preferencesOf(undefined, actor);
+        return c.json(toProfileVM(p, memberEmail(principal), actor, prefs));
       },
     );
 

@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "01925845-6d1e-458b-adb2-e1d75db156bf",
-  "prevIds": ["1923bcf6-58f5-4f34-8519-b45f82ee44e3", "a7f8f4a7-5dc0-48c8-bb2e-4edc7f53d437"],
+  "id": "bacfa0e5-c7b9-4f9f-b4c9-a0b5e8ba2b1a",
+  "prevIds": ["2b703aae-3961-4bdc-b479-fd08d64a60f3"],
   "ddl": [
     {
       "name": "platform",
@@ -183,6 +183,12 @@
       "schema": "catalog"
     },
     {
+      "values": ["priced", "none"],
+      "name": "site_price_status",
+      "entityType": "enums",
+      "schema": "catalog"
+    },
+    {
       "values": ["running", "succeeded", "failed"],
       "name": "sync_status",
       "entityType": "enums",
@@ -335,6 +341,12 @@
     {
       "isRlsEnabled": false,
       "name": "site_places",
+      "entityType": "tables",
+      "schema": "catalog"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "site_prices",
       "entityType": "tables",
       "schema": "catalog"
     },
@@ -2504,6 +2516,19 @@
       "table": "requests"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "shown_estimate_source",
+      "entityType": "columns",
+      "schema": "requests",
+      "table": "requests"
+    },
+    {
       "type": "trip_type",
       "typeSchema": "requests",
       "notNull": true,
@@ -3749,6 +3774,136 @@
       "name": "route_from",
       "entityType": "columns",
       "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "char(3)",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "route_to",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "fare_trip",
+      "typeSchema": "catalog",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "trip",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "site_price_status",
+      "typeSchema": "catalog",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "business",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "first",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "premium_economy",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "fetched_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "char(3)",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "route_from",
+      "entityType": "columns",
+      "schema": "catalog",
       "table": "site_routes"
     },
     {
@@ -3812,6 +3967,19 @@
       "generated": null,
       "identity": null,
       "name": "synced_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_routes"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "(now() + interval '24 hours')",
+      "generated": null,
+      "identity": null,
+      "name": "valid_until",
       "entityType": "columns",
       "schema": "catalog",
       "table": "site_routes"
@@ -5521,34 +5689,6 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
-        },
-        {
-          "value": "scheduled_for",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": "\"category\" IN ('offers_personal', 'offers_broadcast')",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "notif_offer_sends",
-      "entityType": "indexes",
-      "schema": "notifications",
-      "table": "notifications"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "member_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
         }
       ],
       "isUnique": false,
@@ -6293,6 +6433,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "expires_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "site_prices_due",
+      "entityType": "indexes",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "cms_id",
           "isExpression": false,
           "asc": true,
@@ -6581,6 +6742,14 @@
       "entityType": "pks",
       "schema": "catalog",
       "table": "demand_daily"
+    },
+    {
+      "columns": ["route_from", "route_to", "trip"],
+      "nameExplicit": false,
+      "name": "site_prices_pkey",
+      "entityType": "pks",
+      "schema": "catalog",
+      "table": "site_prices"
     },
     {
       "columns": ["route_from", "cms_id"],
@@ -7005,6 +7174,13 @@
       "table": "requests"
     },
     {
+      "value": "\"shown_estimate_source\" IS NULL OR (\"shown_estimate_amount\" IS NOT NULL AND \"shown_estimate_source\" IN ('site', 'club'))",
+      "name": "requests_shown_estimate_source",
+      "entityType": "checks",
+      "schema": "requests",
+      "table": "requests"
+    },
+    {
       "value": "(\"published_at_request\" IS NULL AND \"published_source_at_request\" IS NULL) OR (\"published_at_request\" IS NOT NULL AND \"published_source_at_request\" IS NOT NULL AND \"published_at_request\" > 0 AND length(btrim(\"published_source_at_request\")) > 0)",
       "name": "requests_published_at_request",
       "entityType": "checks",
@@ -7159,6 +7335,34 @@
       "table": "site_places"
     },
     {
+      "value": "\"route_from\" <> \"route_to\"",
+      "name": "site_prices_route",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "value": "(\"status\" = 'priced' AND \"business\" IS NOT NULL) OR (\"status\" = 'none' AND \"business\" IS NULL AND \"first\" IS NULL AND \"premium_economy\" IS NULL)",
+      "name": "site_prices_status",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "value": "(\"business\" IS NULL OR \"business\" > 0) AND (\"first\" IS NULL OR \"first\" > 0) AND (\"premium_economy\" IS NULL OR \"premium_economy\" > 0)",
+      "name": "site_prices_amounts",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "value": "\"expires_at\" > \"fetched_at\" AND \"expires_at\" <= \"fetched_at\" + interval '24 hours'",
+      "name": "site_prices_expiry",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
       "value": "\"deal\" > 0",
       "name": "site_routes_deal",
       "entityType": "checks",
@@ -7175,6 +7379,13 @@
     {
       "value": "\"published_price\" IS NULL OR \"published_price\" > 0",
       "name": "site_routes_published_price",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_routes"
+    },
+    {
+      "value": "\"valid_until\" > \"synced_at\" AND \"valid_until\" <= \"synced_at\" + interval '24 hours'",
+      "name": "site_routes_validity",
       "entityType": "checks",
       "schema": "catalog",
       "table": "site_routes"

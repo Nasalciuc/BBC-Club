@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { estimateRules } from "../../src/pricing/estimate-rules";
+import { estimateRules, estimateSources } from "../../src/pricing/estimate-rules";
 import { storedPricingRules } from "../../src/pricing/rules";
 import { FIXTURE_RULES } from "./pricing-rules.fixture";
 
@@ -51,6 +51,37 @@ describe("estimateRules — why there is no estimate is counted as what it is", 
     });
     platform.flags.isEnabled = async () => false;
     expect(await estimateRules(platform, "home")).toBeNull();
+    expect(counted).toEqual([]);
+  });
+});
+
+describe("estimateSources — what may price an estimate (ADR-IMPL-063)", () => {
+  const on = (keys: string[]) => async (key: string) => keys.includes(key);
+
+  it("the site off: the rules, or nothing — exactly as estimateRules", async () => {
+    const { platform } = platformWith(async () => storedPricingRules(FIXTURE_RULES));
+    expect(await estimateSources(platform, "search")).toEqual({
+      site: false,
+      rules: (await estimateRules(platform, "search"))!,
+    });
+    const without = platformWith(async () => null);
+    expect(await estimateSources(without.platform, "search")).toBeNull();
+    expect(without.counted).toEqual([{ name: "search_estimates_unavailable", labels: { reason: "missing" } }]);
+  });
+
+  it("the site on: it prices without rules; only the fallback is missing, and that is counted", async () => {
+    const { platform, counted } = platformWith(async () => null);
+    platform.flags.isEnabled = on(["catalog.estimates", "catalog.site_prices"]);
+    expect(await estimateSources(platform, "home")).toEqual({ site: true, rules: null });
+    expect(counted).toEqual([{ name: "home_estimates_unavailable", labels: { reason: "missing" } }]);
+  });
+
+  it("estimates off is the master switch: the site's flag on changes nothing, nothing is read", async () => {
+    const { platform, counted } = platformWith(async () => {
+      throw new Error("must not be read");
+    });
+    platform.flags.isEnabled = on(["catalog.site_prices"]);
+    expect(await estimateSources(platform, "request")).toBeNull();
     expect(counted).toEqual([]);
   });
 });

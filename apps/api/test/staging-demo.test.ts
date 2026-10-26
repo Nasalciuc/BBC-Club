@@ -187,6 +187,60 @@ describe("staging demo", () => {
     await t.close();
   }, 60_000);
 
+  // ADR-IMPL-067: once the site's deals are on, an operator withdraws the demo's broadcast offers (RUNBOOK, "Staging demo
+  // data"); the next deploy's run must not bring them back — Tokyo would stand twice on Explore, the demo's and the
+  // site's. The run stays idempotent: twice, the same rows, one active Tokyo at most.
+  it("keeps a demo offer an operator withdrew withdrawn, and writes no inbox item for it", async () => {
+    const t = await testApp({ suite: "staging-demo-withdrawn" });
+    await t.seedCatalogBasics();
+    const auth = t.registry.facade<IdentityFacade>("identity").auth;
+    const email = "review.staging-withdrawn@test.dev";
+    const password = "review-demo-password-1";
+    const account = await ensureReviewAccount({ auth, db: t.db, email, password, persona: DEMO_PERSONA });
+    await t.drainAll();
+    const cookie = { headers: { Cookie: await t.auth.cookieFor(email, password) } };
+    const member = { id: account.memberId, email };
+    const events = appEvents(t);
+    const tokyoRows = async () =>
+      (await t.db.execute(sql`
+        SELECT status FROM proposals.offers WHERE route_to = 'HND' ORDER BY status`)) as unknown as {
+        status: string;
+      }[];
+
+    expect(await seedStagingDemo(t.db, member, new Date(), events)).toMatchObject({ offers: 3, inbox: 4 });
+    expect(await seedStagingDemo(t.db, member, new Date(), events)).toMatchObject({ offers: 3, inbox: 4 });
+    expect(await tokyoRows()).toEqual([{ status: "active" }]);
+
+    // The operator's step: the demo's broadcast offers withdrawn through the internal route.
+    const ids = (await t.db.execute(sql`
+      SELECT id FROM proposals.offers WHERE idempotency_key IN ('staging-demo:paris', 'staging-demo:tokyo')`)) as unknown as {
+      id: string;
+    }[];
+    expect(ids.length).toBe(2);
+    for (const { id } of ids) {
+      const r = await t.app.request(`/v1/internal/offers/${id}/withdraw`, {
+        method: "POST",
+        headers: { "X-Internal-Secret": t.internalSecret, "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "the site's deals are on" }),
+      });
+      expect(r.status).toBe(200);
+    }
+
+    // The next deploys: still withdrawn, no inbox item for them, London (the member's own) as before.
+    for (let run = 0; run < 2; run++) {
+      expect(await seedStagingDemo(t.db, member, new Date(), events)).toMatchObject({ offers: 1, inbox: 2 });
+    }
+    expect(await tokyoRows()).toEqual([{ status: "withdrawn" }]);
+    const feed = FeedVM.parse(await (await t.app.request("/v1/proposals", cookie)).json());
+    expect(feed.items.map((i) => i.title)).toEqual([expect.stringMatching(/^Your \w+ in London$/)]);
+    const inbox = InboxVM.parse(await (await t.app.request("/v1/inbox", cookie)).json());
+    expect(inbox.items.map((i) => i.title)).toEqual([
+      expect.stringMatching(/^Your \w+ in London$/),
+      "Your quote is ready",
+    ]);
+    await t.close();
+  }, 60_000);
+
   // ADR-IMPL-040: the fixture seed is not meant for staging, yet staging held its offers beside the demo's — Paris and
   // Tokyo twice on Explore. The demo withdraws them, as the internal withdraw route does: status and offer.withdrawn.
   it("withdraws the fixture seed's offers, once, as the withdraw route does", async () => {

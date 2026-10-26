@@ -1,7 +1,7 @@
 import type { ProposalCardVM, ProposalDetailVM, ResponseState } from "@bbc/shared/api/v1/proposals";
-import type { DestinationPinVM } from "@bbc/shared/api/v1/fares";
+import type { DestinationPinVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import type { OfferRow } from "@bbc/proposals";
-import type { DestinationPin } from "@bbc/catalog";
+import type { BookablePlace, DestinationPin, SiteDeal } from "@bbc/catalog";
 export { toProfileVM } from "@bbc/members";
 
 function resolveState(raw: "interested" | "dismissed" | null | undefined): ResponseState {
@@ -65,7 +65,40 @@ export function toDestinationPin(row: DestinationPin, hasOffer: boolean): Destin
     // ADR-IMPL-056: the destination's one line (04), or none — a pin cached before 0031 has no such field.
     description: row.description ?? null,
     fromPrice: row.fromPrice,
+    // ADR-IMPL-063: who priced a site city's pin — the site or the club's formula; none on a fare's pin.
+    ...(row.priceSource ? { priceSource: row.priceSource } : {}),
     hasOffer,
     region: row.region,
+  };
+}
+
+/** ADR-IMPL-067: a site deal as Home sends it — without the airports the BFF dedupes by. */
+export function toSiteDealVM(deal: SiteDeal): SiteDealVM {
+  return {
+    id: deal.id,
+    destination: deal.destination,
+    origin: deal.origin,
+    price: deal.price,
+    validUntil: deal.validUntil,
+  };
+}
+
+/** ADR-IMPL-068: a pin, or an offer's arrival as the catalog has it, as a city a tap on the globe may open. The airport
+ *  row's coordinates are numeric(9,6) — strings from Postgres. */
+export function toBookablePlace(row: {
+  code: string;
+  name: string;
+  city: string;
+  countryCode: string;
+  lat: number | string;
+  lng: number | string;
+}): BookablePlace {
+  return {
+    code: row.code.trim(),
+    name: row.name,
+    city: row.city,
+    countryCode: row.countryCode,
+    lat: Number(row.lat),
+    lng: Number(row.lng),
   };
 }

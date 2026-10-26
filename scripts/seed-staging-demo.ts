@@ -5,7 +5,9 @@
  *   bun run scripts/seed-staging-demo.ts        (infra/deploy.sh runs it after every staging deploy)
  * Refuses any database that is not staging's or a local one. Idempotent: fixed ids and keys, rewritten in place, and
  * everything a demo did to the account is undone — a read or new inbox item, an offer tapped, a request made, a
- * preference or home airport changed, a password changed. The account's phones keep their sign-in.
+ * preference or home airport changed, a password changed. The account's phones keep their sign-in. A demo offer an
+ * operator withdrew stays withdrawn, run after run (ADR-IMPL-067: once the site's deals are on, the demo's Paris and
+ * Tokyo leave Explore for good — RUNBOOK, "Staging demo data").
  * The data is the fixture's (packages/shared/src/fixture.ts); only its dates move.
  */
 import { and, eq, inArray, like, notInArray, sql } from "drizzle-orm";
@@ -328,16 +330,23 @@ export async function seedStagingDemo(
       .values(fareRows)
       .onConflictDoUpdate({ target: fares.id, set: { ...excluded(fares, fareRows[0]!, "id"), updatedAt: now } });
 
+    // Rewritten in place — but a demo offer an operator withdrew (POST /v1/internal/offers/:id/withdraw: its
+    // offer.withdrawn already closed what its consumers held) stays withdrawn: the next deploy must not bring it back
+    // beside the site's deals (ADR-IMPL-067). Its dates still move, so it reads as the others do.
     const saved = await tx
       .insert(offers)
       .values(offerRows)
       .onConflictDoUpdate({
         target: offers.idempotencyKey,
-        set: { ...excluded(offers, offerRows[0]!, "idempotencyKey"), updatedAt: now },
+        set: {
+          ...excluded(offers, offerRows[0]!, "idempotencyKey"),
+          status: sql`CASE WHEN ${offers.status} = 'withdrawn' THEN ${offers.status} ELSE excluded.status END`,
+          updatedAt: now,
+        },
       })
-      .returning({ id: offers.id, idempotencyKey: offers.idempotencyKey });
-    const offerIdByKey = new Map(
-      plan.offers.map((o) => [o.key, saved.find((r) => r.idempotencyKey === o.row.idempotencyKey)?.id]),
+      .returning({ id: offers.id, idempotencyKey: offers.idempotencyKey, status: offers.status });
+    const savedByKey = new Map(
+      plan.offers.map((o) => [o.key, saved.find((r) => r.idempotencyKey === o.row.idempotencyKey)]),
     );
 
     await tx
@@ -368,7 +377,7 @@ export async function seedStagingDemo(
         memberId: member.id,
         category: "transactional",
         title: "Your quote is ready",
-        body: `${leg?.from} → ${leg?.to} — tap to call your specialist`,
+        body: `${leg?.from} → ${leg?.to} — a specialist will call you shortly`,
         deepLink: `bbcclub://requests/${quoted.row.id}`,
         requestId: quoted.row.id,
         sourceEventId: "staging-demo:quote",
@@ -380,8 +389,11 @@ export async function seedStagingDemo(
       });
     }
     for (const { key, row } of plan.offers) {
-      const id = offerIdByKey.get(key);
-      if (!id) throw new Error(`staging demo: offer ${key} not saved`);
+      const offer = savedByKey.get(key);
+      if (!offer) throw new Error(`staging demo: offer ${key} not saved`);
+      // A withdrawn demo offer has no inbox item: its link would open a page that says it has gone.
+      if (offer.status === "withdrawn") continue;
+      const id = offer.id;
       const at = row.publishAt;
       inbox.push({
         memberId: member.id,
@@ -403,7 +415,8 @@ export async function seedStagingDemo(
     return {
       fares: fareRows.length,
       pins: new Set(fareRows.map((f) => f.routeTo)).size,
-      offers: offerRows.length,
+      // The demo offers members can see: a withdrawn one is not counted.
+      offers: saved.filter((o) => o.status !== "withdrawn").length,
       requests: requestRows.length,
       inbox: inbox.length,
     };

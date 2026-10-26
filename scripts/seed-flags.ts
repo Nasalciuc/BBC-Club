@@ -38,12 +38,33 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
   [
     "catalog.site_photos",
     { enabled: false },
-    "ADR-IMPL-045: the site's city photos on their airports, synced nightly; on once the company confirms the rights; skip: [site ids]",
+    "ADR-IMPL-045: the site's city photos on their airports, synced twice a day; on once the company confirms the rights; skip: [site ids]",
+  ],
+  [
+    "catalog.landmarks",
+    // Q177174: the Icelandic Phallological Museum, Reykjavík's most written-about sight (ADR-IMPL-064).
+    { enabled: false, skip: ["Q177174"] },
+    "ADR-IMPL-064: three landmarks per city from Wikidata and Commons, looked up by resolve-place-landmarks; off = none served, nothing asked; skip: [Wikidata items kept out]",
   ],
   [
     "catalog.site_pins",
     { enabled: false },
     "ADR-IMPL-045: up to 12 of the site's cities as pins from the member's home, priced by the formula; needs catalog.estimates",
+  ],
+  [
+    "catalog.site_prices",
+    { enabled: false },
+    "ADR-IMPL-063: the company's site prices indicative fares (its stored answer, else the formula; none where the company has none); needs catalog.estimates",
+  ],
+  [
+    "catalog.site_offers",
+    { enabled: false },
+    "ADR-IMPL-067: the site's deals in Explore's Offers to inspire, after the member's own offers (from home, else the nearest city the site sells from); needs neither catalog.site_pins nor catalog.estimates",
+  ],
+  [
+    "catalog.globe_tap",
+    { enabled: false },
+    "ADR-IMPL-068: Home sends the cities a tap anywhere on the globe may open (the site's cities and origins, the fares' and offers' arrivals); off = taps open pins only",
   ],
 ];
 

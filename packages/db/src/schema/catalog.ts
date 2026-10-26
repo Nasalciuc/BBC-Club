@@ -1,4 +1,16 @@
-import { pgSchema, text, char, numeric, integer, boolean, index, unique, check, primaryKey } from "drizzle-orm/pg-core";
+import {
+  pgSchema,
+  text,
+  char,
+  numeric,
+  integer,
+  boolean,
+  index,
+  unique,
+  uniqueIndex,
+  check,
+  primaryKey,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { id, createdAt, updatedAt, tz } from "./_helpers";
 
@@ -219,8 +231,10 @@ export const sitePlaces = catalog.table(
 
 /**
  * The US airports the site lists a price from for each of its cities (ADR-IMPL-045): New York's deal for London is
- * three rows, JFK, EWR and LGA. The site's prices are kept, never shown — a pin is priced by the formula (ADR-IMPL-037).
- * Created by 0028_catalog_site_destinations.sql.
+ * three rows, JFK, EWR and LGA. A pin is priced by the formula (ADR-IMPL-037); with `catalog.site_offers` on, Home's
+ * "Offers to inspire" shows `price` as the site's deal, `from $X` — never `published_price`, which has no source
+ * (ADR-IMPL-067). A row is served until `valid_until`, at most 24 hours after the read that wrote it (D6, CHECK).
+ * Created by 0028_catalog_site_destinations.sql; `valid_until` by 0042_catalog_site_route_validity.sql.
  */
 export const siteRoutes = catalog.table(
   "site_routes",
@@ -237,6 +251,10 @@ export const siteRoutes = catalog.table(
     price: integer("price").notNull(),
     publishedPrice: integer("published_price"),
     syncedAt: tz("synced_at").notNull().defaultNow(),
+    /** Not served from this moment on: the read's time + 24 hours, as the sync writes it (ADR-IMPL-067, D6). */
+    validUntil: tz("valid_until")
+      .notNull()
+      .default(sql`(now() + interval '24 hours')`),
     createdAt: createdAt(),
   },
   (t) => [
@@ -245,5 +263,142 @@ export const siteRoutes = catalog.table(
     check("site_routes_deal", sql`${t.deal} > 0`),
     check("site_routes_price", sql`${t.price} > 0`),
     check("site_routes_published_price", sql`${t.publishedPrice} IS NULL OR ${t.publishedPrice} > 0`),
+    // D6: a deal is shown for at most 24 hours after the site was read.
+    check(
+      "site_routes_validity",
+      sql`${t.validUntil} > ${t.syncedAt} AND ${t.validUntil} <= ${t.syncedAt} + interval '24 hours'`,
+    ),
   ],
 );
+
+/** What the company's site said about a route (ADR-IMPL-063): its prices, or that it has none. */
+export const sitePriceStatus = catalog.enum("site_price_status", ["priced", "none"]);
+
+/**
+ * The company's site's own answer for a route and trip (ADR-IMPL-063): whole USD per person in each cabin, or `none` —
+ * the company has no price there (the site answered 404), so the member sees no number at all. Written by the search's
+ * one live call and by the refresh-site-prices job, never on an error; read by the search, Home's site pins and a quote
+ * request. A row is shown only until it expires, at most 24 hours after the site was asked (CHECK). Created by
+ * 0038_catalog_site_prices.sql (after 0006).
+ */
+export const sitePrices = catalog.table(
+  "site_prices",
+  {
+    routeFrom: char("route_from", { length: 3 }).notNull(),
+    routeTo: char("route_to", { length: 3 }).notNull(),
+    trip: fareTrip("trip").notNull(),
+    status: sitePriceStatus("status").notNull(),
+    /** The site's figures, whole USD per person; null on a `none` row. Premium economy is kept, never shown. */
+    business: integer("business"),
+    first: integer("first"),
+    premiumEconomy: integer("premium_economy"),
+    /** When the site answered. */
+    fetchedAt: tz("fetched_at").notNull().defaultNow(),
+    /** Not shown from this moment on: at most 24 hours after `fetched_at`. */
+    expiresAt: tz("expires_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.routeFrom, t.routeTo, t.trip] }),
+    // The job's questions: what is due for a refresh, and what has expired.
+    index("site_prices_due").on(t.expiresAt),
+    // The site prices JFK → JFK; the club never asks, and never stores it.
+    check("site_prices_route", sql`${t.routeFrom} <> ${t.routeTo}`),
+    // A priced row has its business figure; a `none` row has no figure at all.
+    check(
+      "site_prices_status",
+      sql`(${t.status} = 'priced' AND ${t.business} IS NOT NULL) OR (${t.status} = 'none' AND ${t.business} IS NULL AND ${t.first} IS NULL AND ${t.premiumEconomy} IS NULL)`,
+    ),
+    check(
+      "site_prices_amounts",
+      sql`(${t.business} IS NULL OR ${t.business} > 0) AND (${t.first} IS NULL OR ${t.first} > 0) AND (${t.premiumEconomy} IS NULL OR ${t.premiumEconomy} > 0)`,
+    ),
+    // D6: a price older than 24 hours is never shown.
+    check(
+      "site_prices_expiry",
+      sql`${t.expiresAt} > ${t.fetchedAt} AND ${t.expiresAt} <= ${t.fetchedAt} + interval '24 hours'`,
+    ),
+  ],
+);
+
+/** What a landmark row is (ADR-IMPL-064): a landmark at its rank; `fewer` — the job looked and found fewer than three
+ *  (the marker sits right after the last one found); `failed` — a place never looked at successfully. */
+export const placeLandmarkKind = catalog.enum("place_landmark_kind", ["landmark", "fewer", "failed"]);
+/** The outside sources a Wikimedia job asks and that may answer 429: the Wikidata Query Service and Commons' API. */
+export const outsideSource = catalog.enum("outside_source", ["wikidata", "commons"]);
+
+/**
+ * Up to three landmarks of the city each airport serves (ADR-IMPL-064) — the address of each one's photograph on
+ * Wikimedia Commons with its credit, never the image. Rows per place: ranks 1–3 best first, and a marker after the last
+ * one found when there are fewer than three (`fewer`), or alone at rank 1 when no look has worked yet (`failed`). The
+ * resolve-place-landmarks job writes them; a place is looked at again when its rows expire. Created by
+ * 0039_catalog_place_landmarks.sql (after 0006).
+ */
+export const placeLandmarks = catalog.table(
+  "place_landmarks",
+  {
+    /** The airport the app asks with. */
+    code: char("code", { length: 3 })
+      .notNull()
+      .references(() => airports.code, { onDelete: "cascade" }),
+    rank: integer("rank").notNull(),
+    kind: placeLandmarkKind("kind").notNull(),
+    /** The city's Wikidata item; null only on a marker for a place whose city was not found. */
+    cityQid: text("city_qid"),
+    landmarkQid: text("landmark_qid"),
+    name: text("name"),
+    /** The Commons file the photograph is. */
+    file: text("file"),
+    /** Its 1280-px thumbnail on Wikimedia, and that thumbnail's size. */
+    imageUrl: text("image_url"),
+    width: integer("width"),
+    height: integer("height"),
+    licence: text("licence"),
+    licenceUrl: text("licence_url"),
+    /** Who to credit, as the app prints it before the licence. */
+    credit: text("credit"),
+    fetchedAt: tz("fetched_at").notNull().defaultNow(),
+    /** When the job looks again: a month after a look, six hours after a failed first one. */
+    expiresAt: tz("expires_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.code, t.rank] }),
+    uniqueIndex("place_landmarks_one_marker")
+      .on(t.code)
+      .where(sql`${t.kind} <> 'landmark'`),
+    check("place_landmarks_rank", sql`${t.rank} BETWEEN 1 AND 3`),
+    check(
+      "place_landmarks_landmark",
+      sql`${t.kind} <> 'landmark' OR (${t.cityQid} IS NOT NULL AND ${t.landmarkQid} IS NOT NULL AND ${t.name} IS NOT NULL AND ${t.file} IS NOT NULL AND ${t.imageUrl} IS NOT NULL AND ${t.width} IS NOT NULL AND ${t.height} IS NOT NULL AND ${t.licence} IS NOT NULL AND ${t.credit} IS NOT NULL)`,
+    ),
+    check(
+      "place_landmarks_marker",
+      sql`${t.kind} = 'landmark' OR (${t.landmarkQid} IS NULL AND ${t.name} IS NULL AND ${t.file} IS NULL AND ${t.imageUrl} IS NULL AND ${t.width} IS NULL AND ${t.height} IS NULL AND ${t.licence} IS NULL AND ${t.licenceUrl} IS NULL AND ${t.credit} IS NULL)`,
+    ),
+    check("place_landmarks_failed", sql`${t.kind} <> 'failed' OR ${t.rank} = 1`),
+    check(
+      "place_landmarks_size",
+      sql`(${t.width} IS NULL OR ${t.width} > 0) AND (${t.height} IS NULL OR ${t.height} > 0)`,
+    ),
+    check(
+      "place_landmarks_https",
+      sql`(${t.imageUrl} IS NULL OR ${t.imageUrl} LIKE 'https://%') AND (${t.licenceUrl} IS NULL OR ${t.licenceUrl} LIKE 'https://%')`,
+    ),
+    check(
+      "place_landmarks_qids",
+      sql`(${t.cityQid} IS NULL OR ${t.cityQid} ~ '^Q[1-9][0-9]*$') AND (${t.landmarkQid} IS NULL OR ${t.landmarkQid} ~ '^Q[1-9][0-9]*$')`,
+    ),
+    check("place_landmarks_expiry", sql`${t.expiresAt} > ${t.fetchedAt}`),
+  ],
+);
+
+/**
+ * An outside source that answered 429 (ADR-IMPL-064): until `not_before` (its Retry-After) neither resolve-place-photos
+ * nor resolve-place-landmarks asks it anything. One row a source, moved forward by each 429. Created by 0039.
+ */
+export const sourceHolds = catalog.table("source_holds", {
+  source: outsideSource("source").primaryKey(),
+  notBefore: tz("not_before").notNull(),
+  createdAt: createdAt(),
+});
