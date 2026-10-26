@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { sql } from "drizzle-orm";
+import { photoWebp } from "@bbc/shared/media/webp-fixtures";
 import { testApp } from "./helpers/test-app";
 
 /** Host integration: account deletion cascades across schemas via member.deleted consumers. */
@@ -35,6 +36,14 @@ describe("account deletion — zero rows everywhere", () => {
       INSERT INTO personalization.proposal_candidates (member_id, offer_draft, score, reasons, ranker_version)
       VALUES (${memberId}, '{"title":"x"}'::jsonb, 0.5, '["route"]'::jsonb, 'rules-v1')`);
 
+    // The member's own photo (ADR-IMPL-070): the bytes in members.profile_photo, made-up here (D13).
+    const photo = await t.app.request("/v1/profile/photo", {
+      method: "PUT",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "image/webp" },
+      body: photoWebp(),
+    });
+    expect(photo.status).toBe(200);
+
     const created = await t.submitRequestAs(t.memberA, t.sampleRequestBody());
     expect(created.status).toBe(201);
     const createdBody = (await created.json()) as { id: string };
@@ -54,6 +63,7 @@ describe("account deletion — zero rows everywhere", () => {
     expect(await count("auth", "session", "user_id")).toBe(0);
     expect(await count("members", "profile", "member_id")).toBe(0);
     expect(await count("members", "notification_preferences", "member_id")).toBe(0);
+    expect(await count("members", "profile_photo", "member_id")).toBe(0);
     expect(await count("notifications", "device_tokens", "member_id")).toBe(0);
     expect(await count("notifications", "notifications", "member_id")).toBe(0);
     expect(await count("engagement", "offer_responses", "member_id")).toBe(0);

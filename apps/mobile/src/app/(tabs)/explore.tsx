@@ -48,6 +48,7 @@ import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
+import { portraitOf } from "@/features/profile/portrait";
 import { useProfile } from "@/features/profile/useProfile";
 import { env } from "@/lib/env";
 import { monogram } from "@/lib/monogram";
@@ -338,7 +339,7 @@ export default function ExploreScreen() {
         <GreetingHeader
           name={firstName(profile?.displayName)}
           initials={monogram(profile?.displayName)}
-          portrait={profile?.avatarUrl ? { uri: profile.avatarUrl } : null}
+          portrait={portraitOf(profile)}
           onProfile={() => router.push("/(tabs)/profile" as Href)}
           topInset={insets.top}
         />

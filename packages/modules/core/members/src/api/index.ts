@@ -16,8 +16,11 @@ export type ProfileRow = {
   status: "active" | "waitlist" | "deleted";
   displayName: string | null;
   homeAirport: string | null;
-  /** The member's photo, an https address, or null (ADR-IMPL-056). No route sets it yet. */
+  /** The member's photo, an https address, or null (ADR-IMPL-056). No route sets it. */
   avatarUrl: string | null;
+  /** The tag of the photo the member added themselves (ADR-IMPL-070) — the sha256 of its bytes — or null. The bytes
+   *  stay in members.profile_photo, served only to the member (GET /v1/profile/photo). */
+  photoEtag: string | null;
   timezone: string;
   phone: string | null;
   preferences: {

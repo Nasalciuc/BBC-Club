@@ -35,7 +35,9 @@ type Props = {
  * 16.6 under it, centred.
  */
 const BAND_BELOW_INSET = 95.3;
-const AVATAR = 113.6;
+/** The portrait's diameter on Profile (12), its ring included — Edit profile's Photo sheet shows it at the same size. */
+export const PROFILE_AVATAR = 113.6;
+const AVATAR = PROFILE_AVATAR;
 const AVATAR_OVER = 75.8;
 const NAME_BASELINE = 63.4;
 const HOME_PITCH = 16.6;

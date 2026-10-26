@@ -102,6 +102,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog site prices applied/);
     expect(second.out).not.toMatch(/requests shown estimate source applied/);
     expect(second.out).not.toMatch(/catalog site route validity applied/);
+    expect(second.out).not.toMatch(/members photo applied/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -147,6 +148,7 @@ describe("extras ledger", () => {
       "0039_catalog_place_landmarks.sql",
       "0040_requests_shown_estimate_source.sql",
       "0042_catalog_site_route_validity.sql",
+      "0043_members_photo.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

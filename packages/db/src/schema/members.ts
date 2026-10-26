@@ -1,4 +1,4 @@
-import { pgSchema, text, jsonb, boolean, primaryKey, index, check } from "drizzle-orm/pg-core";
+import { pgSchema, text, jsonb, boolean, primaryKey, index, check, bytea, integer } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createdAt, updatedAt, tz } from "./_helpers";
 
@@ -56,6 +56,39 @@ export const profile = members.table(
     check("profile_deleted_consistent", sql`(${t.status} = 'deleted') = (${t.deletedAt} IS NOT NULL)`),
     // a photo is only ever an https address (0033)
     check("profile_avatar_url", sql`${t.avatarUrl} IS NULL OR ${t.avatarUrl} ~ '^https://'`),
+  ],
+);
+
+/**
+ * The photo the member added themselves (ADR-IMPL-070): the image itself, kept here and nowhere else — no object store,
+ * no public address. A still WebP, 512 × 512, at most 100 KB, without metadata (`@bbc/shared/media/webp` checks it
+ * before it is written); read only by its member, through GET /v1/profile/photo, whose ETag is `sha256`. One per
+ * member, and it goes with the profile: deleting the profile (member.deleted) deletes it (FK, ON DELETE CASCADE).
+ * Added by the named step 0043.
+ */
+export const profilePhoto = members.table(
+  "profile_photo",
+  {
+    memberId: text("member_id")
+      .primaryKey()
+      .references(() => profile.memberId, { onDelete: "cascade" }),
+    image: bytea("image").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    /** The bytes' sha256 in hex: the ETag, and the app's cache key. Postgres computes it again on every write. */
+    sha256: text("sha256").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // 1 B to 100 KB, and the size stored is the bytes' own.
+    check("profile_photo_size", sql`${t.byteSize} BETWEEN 1 AND 102400 AND octet_length(${t.image}) = ${t.byteSize}`),
+    // A WebP's container: RIFF … WEBP.
+    check(
+      "profile_photo_webp",
+      sql`substring(${t.image} from 1 for 4) = 'RIFF'::bytea AND substring(${t.image} from 9 for 4) = 'WEBP'::bytea`,
+    ),
+    // The tag is the bytes' own: an ETag can never describe another photo.
+    check("profile_photo_sha256", sql`${t.sha256} = encode(sha256(${t.image}), 'hex')`),
   ],
 );
 

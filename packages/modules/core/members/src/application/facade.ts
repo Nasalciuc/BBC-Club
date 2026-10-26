@@ -1,7 +1,7 @@
 /** The only import surface of @bbc/members. Other modules and the host see nothing else. */
 import { and, eq, gt, ne, notExists, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
-import { profile, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
+import { profile, profilePhoto, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
 import type { AudienceMember, MembersFacade, ProfileRow, NotificationPrefView, ProfileCreationDeps } from "../api";
 import { insertProfile } from "./create-profile";
@@ -26,14 +26,22 @@ export function createMembersFacade(db: Executor): MembersFacade {
   }
 
   async function getProfile(exec: Executor | undefined, actorMemberId: string): Promise<ProfileRow | null> {
-    const row = await readProfile(exec, actorMemberId, "hide");
-    if (!row) return null;
+    // The photo's tag in the same query (ADR-IMPL-070): never its bytes, which only GET /v1/profile/photo reads.
+    const [found] = await (exec ?? db)
+      .select({ row: profile, photoEtag: profilePhoto.sha256 })
+      .from(profile)
+      .leftJoin(profilePhoto, eq(profilePhoto.memberId, profile.memberId))
+      .where(live(actorMemberId))
+      .limit(1);
+    if (!found) return null;
+    const row = found.row;
     return {
       memberId: row.memberId,
       status: row.status,
       displayName: row.displayName,
       homeAirport: row.homeAirport,
       avatarUrl: row.avatarUrl,
+      photoEtag: found.photoEtag ?? null,
       timezone: row.timezone,
       phone: row.phone,
       preferences: (row.preferences as ProfileRow["preferences"]) ?? {},
