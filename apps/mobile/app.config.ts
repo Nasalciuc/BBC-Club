@@ -23,7 +23,7 @@ export function dialable(phone: string): boolean {
     .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, " ")
     .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-")
     .trim();
-  if (!/^\+[\d ().-]+$/.test(raw) || /\(\s*0\s*\)/.test(raw)) return false;
+  if (!/^\+[\d ().-]+$/.test(raw) || /\(\s*0\s*\)/.test(raw) || /\)[\s.-]*$/.test(raw)) return false;
   const digits = raw.replace(/\D/g, "");
   if (digits.startsWith("1") && digits.length !== 11) return false;
   return digits.length >= 8 && digits.length <= 15;

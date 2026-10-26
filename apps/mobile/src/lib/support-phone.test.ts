@@ -270,11 +270,14 @@ describe("every call button", () => {
       "+1-800-FLY-0148",
       "+1 212 555 0148 0148 01",
       "+44 (0)20 7946 0018",
+      "+44 20 7946 0018 (22)",
     ]) {
       expect({ wrong, tel: telHref(wrong) }).toEqual({ wrong, tel: null });
     }
     expect(telHref(" +1.212.555.0148 ")).toBe("tel:+12125550148");
     expect(telHref("+44 20 7946 0018")).toBe("tel:+442079460018");
+    // Brackets round an area code are formatting; round the last group they are an extension.
+    expect(telHref("+44 (20) 7946 0018")).toBe("tel:+442079460018");
     // 8 digits is the shortest dialled; 7 is too short.
     expect([telHref("+44123456"), telHref("+4412345")]).toEqual(["tel:+44123456", null]);
   });

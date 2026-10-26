@@ -158,6 +158,9 @@ by itself" (the call, its words and the list's hint at it only with the club's g
   2xx — the CRM does **not** verify the HMAC yet. We still require `CRM_API_SECRET` at boot and send the ADR-065
   headers so verification can turn on without another adapter change. Is HMAC the scheme they will keep, or do they
   need their own (API key, OAuth)? A different scheme changes the adapter.
+  **Go-live gate: `CRM_ADAPTER` stays `email` in production until the CRM verifies `X-BBC-Signature`** (and refuses a
+  wrong one with a 401, tested with the CRM team on staging). Until then the signature authenticates nothing on the
+  CRM's side. `infra/env/production.env.example` says the same beside the setting.
 - **The payload mapping.** Live answers with `crmRequestId`; the adapter keeps that string (or `data.id`) in
   `crm_request_id`, else `http:<reference>`. Field names remain `CrmRequestPayload` as in
   `packages/modules/integration/crm/src/api/index.ts` until the CRM asks for a rename.
