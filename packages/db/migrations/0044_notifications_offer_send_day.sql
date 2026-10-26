@@ -2,7 +2,7 @@
 -- offer pushes by scheduled_for, a window of a few days around the send. notif_inbox (member_id, created_at) cannot
 -- bound that read — a personal offer published for later is created days before it is sent — so without this index the
 -- cap would read every row a member has. Partial on the two offer categories, which the query writes as literals.
--- CONCURRENTLY: applied outside a transaction by migrate.ts (applyConcurrentIndexes), so pushes keep being written.
+-- CONCURRENTLY: applied outside a transaction by migrate.ts (applyConcurrentIndexFile, scripts/concurrent-indexes.ts), so pushes keep being written.
 -- The drizzle snapshot is brought level by a no-op sync migration (*_snapshot_sync).
 CREATE INDEX CONCURRENTLY IF NOT EXISTS notif_offer_sends
   ON notifications.notifications (member_id, scheduled_for)

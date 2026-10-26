@@ -103,8 +103,6 @@ Amends ADR-IMPL-059 point 3 (the quota counted inside the caller's transaction, 
   a contract and copy decision.
 - Whether a request taken without its fare tells the member so.
 - Whether the offers stored before the ingest grew stricter are repaired, after which `IngestReplayInput` can go.
-- `0044_notifications_offer_send_day.sql` names the runner by its old name (`applyConcurrentIndexes`); an existing
-  migration is not edited without an ADR (AGENTS.md rule 9).
 
 **In the app, to follow.**
 
