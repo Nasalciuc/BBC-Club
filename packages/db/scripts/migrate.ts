@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createDb } from "../src/client";
 import { applyReferenceFixes, loadAirportsReference } from "./airports-reference";
+import { applyConcurrentIndexFile } from "./concurrent-indexes";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -346,40 +347,14 @@ try {
     }
   }
 
-  /** CREATE INDEX CONCURRENTLY cannot run inside a transaction or as a multi-statement string. */
-  const applyConcurrentIndexes = async (name: string, file: string, label: string) => {
-    if (!existsSync(file)) return;
-    const done = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${name}`)) as unknown[];
-    if (done.length) return;
-    const statements = readFileSync(file, "utf8")
-      .split(";")
-      .map((part) =>
-        part
-          .split("\n")
-          .filter((line) => !line.trimStart().startsWith("--"))
-          .join("\n")
-          .trim(),
-      )
-      .filter((stmt) => stmt.length > 0);
-    const raw = db.raw;
-    // Outside a transaction: a long build is fine (no statement timeout), waiting on a lock is not.
-    await raw.unsafe("SET statement_timeout = 0");
-    await raw.unsafe("SET lock_timeout = '5s'");
-    try {
-      for (const stmt of statements) await raw.unsafe(stmt);
-      await db.execute(sql`INSERT INTO platform.extras_applied (name) VALUES (${name})`);
-      console.log(label);
-    } finally {
-      await raw.unsafe("SET statement_timeout = '15s'");
-    }
-  };
-
-  await applyConcurrentIndexes(
+  await applyConcurrentIndexFile(
+    db,
     "0012_platform_delivery_stats.sql",
     join(migrationsDir, "0012_platform_delivery_stats.sql"),
     "platform delivery stats indexes applied",
   );
-  await applyConcurrentIndexes(
+  await applyConcurrentIndexFile(
+    db,
     "0013_catalog_fares_home_destinations.sql",
     join(migrationsDir, "0013_catalog_fares_home_destinations.sql"),
     "catalog fares_home_destinations applied",
@@ -432,7 +407,8 @@ try {
     }
   }
 
-  await applyConcurrentIndexes(
+  await applyConcurrentIndexFile(
+    db,
     "0017_notifications_sending_index.sql",
     join(migrationsDir, "0017_notifications_sending_index.sql"),
     "notifications sending index applied",
@@ -704,7 +680,8 @@ try {
   // After Drizzle's migrations (notifications.notifications): the daily offer cap reads a member's offer pushes by the
   // time they are sent, in a window around the new one (daily-cap.ts). CONCURRENTLY, outside a transaction: pushes keep
   // being written while it builds.
-  await applyConcurrentIndexes(
+  await applyConcurrentIndexFile(
+    db,
     "0044_notifications_offer_send_day.sql",
     join(migrationsDir, "0044_notifications_offer_send_day.sql"),
     "notifications offer send day index applied",
