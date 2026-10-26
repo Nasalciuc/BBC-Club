@@ -6,7 +6,13 @@ import { capturingEmail } from "./capturing-email";
 import { mockCrm } from "./mock-crm";
 import { testAuth } from "./test-auth";
 import type { IdentityFacade } from "@bbc/identity";
+import type { IdentityModuleOptions } from "@bbc/identity/module";
 import type { EngagementFacade } from "@bbc/engagement";
+import { DEPART, RETURN } from "./days";
+
+/** A travel day `n` days from today (YYYY-MM-DD): fixture legs dated from the clock, never a fixed calendar day
+ *  the server will one day call past (`earliestLegDay`). */
+export const dayFromNow = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 
 /** The whole host, in-memory (no port), against an isolated clone of the test template, with capturing adapters.
  *  Every suite that needs the system uses this — nobody builds their own wiring.
@@ -20,10 +26,16 @@ export async function testApp(
     suite?: string;
     poolMax?: number;
     env?: Record<string, string>;
+    queryLog?: string[];
+    /** identityModule's test seams: the breached-password predicate (else: nothing is breached), the OTP answer floor. */
+    identity?: IdentityModuleOptions;
   } = {},
 ) {
   const poolMax = opts.poolMax ?? 6;
-  const iso = await isolatedDb(opts.suite ?? "api", { max: poolMax });
+  const iso = await isolatedDb(opts.suite ?? "api", {
+    max: poolMax,
+    logger: opts.queryLog ? { logQuery: (q) => opts.queryLog!.push(q) } : undefined,
+  });
   const env = loadEnv({
     ...process.env,
     DATABASE_URL: iso.url,
@@ -53,7 +65,8 @@ export async function testApp(
     },
   };
 
-  let built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
+  const overrides = { email, crm, push, identity: opts.identity };
+  let built = await buildApp({ env, db, overrides, startPoller: false });
   let auth = testAuth(built.registry.facade<IdentityFacade>("identity").auth, db);
   const internalSecret = env.INTERNAL_API_SECRET;
 
@@ -89,12 +102,14 @@ export async function testApp(
     flags: {
       kill: (m: string) => built.platform.flags.set(`${m}.killed`, { enabled: true }),
       revive: (m: string) => built.platform.flags.set(`${m}.killed`, { enabled: false }),
+      set: (key: string, value: { enabled?: boolean; variant?: string; [k: string]: unknown }) =>
+        built.platform.flags.set(key, value),
     },
     /** Rebuild the host on the same isolated DB (killswitch / boot-time flags). */
     async restart() {
       // Do not call built.shutdown() — that closes the shared db pool.
       await built.platform.poller.stop();
-      built = await buildApp({ env, db, overrides: { email, crm, push }, startPoller: false });
+      built = await buildApp({ env, db, overrides, startPoller: false });
       auth = testAuth(built.registry.facade<IdentityFacade>("identity").auth, db);
       memberA.cookie = await auth.cookieFor(memberA.email);
       memberB.cookie = await auth.cookieFor(memberB.email);
@@ -188,6 +203,13 @@ export async function testApp(
     async withPathAPassword(memberId: string) {
       await db.execute(sql`DELETE FROM auth.account WHERE user_id = ${memberId} AND provider_id = 'credential'`);
     },
+    /** A credential row with no stored password: better-auth does not count it as a password. */
+    async withEmptyCredential(memberId: string) {
+      await db.execute(sql`DELETE FROM auth.account WHERE user_id = ${memberId} AND provider_id = 'credential'`);
+      await db.execute(
+        sql`INSERT INTO auth.account (id, user_id, account_id, provider_id) VALUES (${`empty-${memberId}`}, ${memberId}, ${memberId}, 'credential')`,
+      );
+    },
     async seedNotification(memberId: string) {
       const [{ id }]: any = await db.execute(
         sql`INSERT INTO notifications.notifications (member_id, category, title, status) VALUES (${memberId}, 'transactional', 'Welcome to the club', 'sent') RETURNING id`,
@@ -207,7 +229,7 @@ export async function testApp(
           ('CDG', 'Charles de Gaulle', 'Paris', 'France', 'FR', 'europe', 49.0097, 2.5479, 95),
           ('HND', 'Haneda', 'Tokyo', 'Japan', 'JP', 'asia', 35.5494, 139.7798, 94),
           ('DXB', 'Dubai International', 'Dubai', 'United Arab Emirates', 'AE', 'middle_east', 25.2532, 55.3657, 92)
-        ON CONFLICT (code) DO NOTHING`);
+        ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, city = EXCLUDED.city, country = EXCLUDED.country, country_code = EXCLUDED.country_code, region = EXCLUDED.region, lat = EXCLUDED.lat, lng = EXCLUDED.lng, popularity = EXCLUDED.popularity`);
       const until = new Date(Date.now() + 30 * 86_400_000).toISOString();
       const from = new Date(Date.now() - 86_400_000).toISOString();
       const carriers = [
@@ -235,6 +257,23 @@ export async function testApp(
           '3850.00', '6900.00', 'Sabre · test', 'USD', 'manual', ${from}::timestamptz, ${until}::timestamptz, true
         )
         ON CONFLICT DO NOTHING`);
+    },
+    /** Extra published JFK→LHR business fares. Query-budget uses these to catch a per-row query. */
+    async seedMoreJfkLhrFares() {
+      const until = new Date(Date.now() + 30 * 86_400_000).toISOString();
+      const from = new Date(Date.now() - 86_400_000).toISOString();
+      const carriers = ["UA", "DL", "LH", "KL", "QR", "EK", "SQ", "CX", "JL", "NH", "AY", "SK"];
+      for (const c of carriers) {
+        await db.execute(sql`
+          INSERT INTO catalog.fares (
+            route_from, route_to, cabin, carrier, carrier_name, product, nonstop, duration_minutes,
+            price, published_price, published_source, currency, source, valid_from, valid_until, published
+          ) VALUES (
+            'JFK', 'LHR', 'business', ${c}, ${c}, 'Lie-flat', true, 425,
+            '4100.00', '7600.00', 'Sabre · test', 'USD', 'manual', ${from}::timestamptz, ${until}::timestamptz, true
+          )
+          ON CONFLICT DO NOTHING`);
+      }
     },
     async seedExpiredFare() {
       await this.seedCatalogBasics();
@@ -273,8 +312,8 @@ export async function testApp(
         tripType: "round",
         cabin: "business",
         legs: [
-          { from: "JFK", to: "LHR", date: "2026-10-12" },
-          { from: "LHR", to: "JFK", date: "2026-10-19" },
+          { from: "JFK", to: "LHR", date: DEPART },
+          { from: "LHR", to: "JFK", date: RETURN },
         ],
         passengers: { adult: 1, child: 0, infant: 0 },
         contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },

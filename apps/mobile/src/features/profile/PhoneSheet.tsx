@@ -1,11 +1,10 @@
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Button, CloseButton, tokens, rn } from "@bbc/ui";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, ModalSheet, type ModalSheetHandle, TextField, tokens, rn } from "@bbc/ui";
 
-import { PhoneField } from "@/components/phone-field";
 import { patchProfile, type Profile } from "@/lib/api";
-import { defaultPhoneCountry, splitStoredPhone, validatePhone, type CountryCode } from "@/lib/phone";
+import { defaultPhoneCountry, displayPhone, validatePhone } from "@/lib/phone";
 import type { ProfileSheetHandle } from "./types";
 
 type Props = {
@@ -13,20 +12,26 @@ type Props = {
   onSaved: (next: Profile) => void;
 };
 
-const SNAP = ["50%"] as const;
-
+/**
+ * Figma 320:5969 / 325:8525: the short sheet under its 28-pt headline — what the number is for, then `Phone number`
+ * over one field holding the number as a person reads it (`+1 212 555 0142`). A number that does not parse turns the
+ * border red and says so under it.
+ */
 export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSheet({ profile, onSaved }, ref) {
-  const modalRef = useRef<BottomSheetModal>(null);
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
   const [phone, setPhone] = useState("");
-  const [country, setCountry] = useState<CountryCode>(() => defaultPhoneCountry());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // With the keyboard up a new error scrolls into view above the keys.
+  const errorRef = useRef<Text>(null);
+  useEffect(() => {
+    if (error) modalRef.current?.reveal(errorRef.current);
+  }, [error]);
 
   useImperativeHandle(ref, () => ({
     present() {
-      const split = splitStoredPhone(profile.phone, defaultPhoneCountry());
-      setPhone(split.national);
-      setCountry(split.country);
+      setPhone(displayPhone(profile.phone) ?? "");
       setBusy(false);
       setError(null);
       modalRef.current?.present();
@@ -37,7 +42,8 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
   }));
 
   async function onSave() {
-    const parsed = validatePhone(phone, country);
+    // One field: a number that starts with + carries its country; any other is read in the phone's own country.
+    const parsed = validatePhone(phone, defaultPhoneCountry(), "profile");
     if (!parsed.valid) {
       setError(parsed.error);
       return;
@@ -55,58 +61,52 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
   }
 
   return (
-    <BottomSheetModal
+    <ModalSheet
       ref={modalRef}
-      snapPoints={[...SNAP]}
-      enablePanDownToClose={!busy}
-      keyboardBehavior="interactive"
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
+      title="Phone"
+      size="short"
+      closeTestID="profile.phone.close"
+      testID="profile.phone.sheet"
+      dismissible={!busy}
+      insets={insets}
+      footer={
+        <Button
+          testID="profile.phone.save"
+          label={busy ? "Saving…" : "Save phone"}
+          variant="primary"
+          busy={busy}
+          onPress={() => void onSave()}
+        />
+      }
     >
-      <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.phone.sheet">
-        <View style={styles.header}>
-          <Text style={styles.title}>Phone</Text>
-          <CloseButton testID="profile.phone.close" onPress={() => modalRef.current?.dismiss()} />
-        </View>
-
-        <PhoneField
+      <Text style={styles.intro}>The number a specialist calls you on.</Text>
+      <View style={styles.group}>
+        <TextField
           testID="profile.phone.input"
-          countryTestID="phone.country"
+          label="Phone number"
+          labelTone="caption"
           value={phone}
-          country={country}
           onChangeText={(v) => {
             setPhone(v);
             setError(null);
           }}
-          onCountryChange={(c) => {
-            setCountry(c);
-            setError(null);
-          }}
+          error={Boolean(error)}
+          keyboardType="phone-pad"
+          autoComplete="tel"
         />
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <Button
-          testID="profile.phone.save"
-          label={busy ? "Saving…" : "Save"}
-          busy={busy}
-          shape="card"
-          onPress={() => void onSave()}
-        />
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+        {error ? (
+          <Text ref={errorRef} testID="profile.phone.error" style={styles.error}>
+            {error}
+          </Text>
+        ) : null}
+      </View>
+    </ModalSheet>
   );
 });
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.sm },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  intro: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
+  // 325:8525: the error 8 pt under the field, in the danger colour.
+  group: { gap: tokens.space.xs },
+  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
 });

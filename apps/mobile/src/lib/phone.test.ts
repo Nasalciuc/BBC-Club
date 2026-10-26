@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { callingCodeLabel, defaultPhoneCountry, splitStoredPhone, validatePhone } from "./phone";
+import { callingCodeLabel, defaultPhoneCountry, displayPhone, splitStoredPhone, validatePhone } from "./phone";
 
 describe("validatePhone", () => {
   it("accepts E.164 and US national for the fixture number", () => {
@@ -16,7 +16,7 @@ describe("validatePhone", () => {
   it("rejects the screenshot digit string under US (regression)", () => {
     const r = validatePhone("154668456877", "US");
     expect(r.valid).toBe(false);
-    if (!r.valid) expect(r.error).toBe("That phone number doesn't look right.");
+    if (!r.valid) expect(r.error).toBe("Enter a complete phone number, including country code.");
   });
 
   it("rejects too-short input", () => {
@@ -35,6 +35,36 @@ describe("defaultPhoneCountry", () => {
   });
 });
 
+describe("phone rules on 173:3619", () => {
+  it("empty or short national numbers ask for a number", () => {
+    const r = validatePhone("", "US");
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.error).toBe("Enter a phone number so we can call you.");
+  });
+
+  it("a short plus-prefixed string asks for a number", () => {
+    const r = validatePhone("+12", "US");
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.error).toBe("Enter a phone number so we can call you.");
+  });
+
+  it("an invalid national string is rejected after submit", () => {
+    const r = validatePhone("0000000", "US");
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.error).toBe("Enter a complete phone number, including country code.");
+  });
+
+  it("Edit · Phone words the same rejection as its Figma frame does", () => {
+    const r = validatePhone("0000000", "US", "profile");
+    expect(r.valid).toBe(false);
+    if (!r.valid) expect(r.error).toBe("Enter a valid phone number, including the country code.");
+  });
+
+  it("a leading plus ignores the default country", () => {
+    expect(validatePhone("+447911123456", "US").e164).toBe("+447911123456");
+  });
+});
+
 describe("splitStoredPhone / callingCodeLabel", () => {
   it("splits E.164 into country + national", () => {
     expect(splitStoredPhone("+12125550148")).toEqual({ country: "US", national: "2125550148" });
@@ -44,5 +74,19 @@ describe("splitStoredPhone / callingCodeLabel", () => {
   it("labels calling codes", () => {
     expect(callingCodeLabel("US")).toBe("+1");
     expect(callingCodeLabel("MD")).toBe("+373");
+  });
+});
+
+describe("displayPhone — the number we will call, as a person reads it", () => {
+  it("North America in international form with spaces, as 3.0 prints it (11, 34)", () => {
+    expect(displayPhone("+12125550142")).toBe("+1 212 555 0142");
+  });
+  it("elsewhere in international form", () => {
+    expect(displayPhone("+37369123456")).toBe("+373 691 23 456");
+  });
+  it("nothing stored, nothing shown; a number that does not parse is shown as stored", () => {
+    expect(displayPhone(null)).toBeNull();
+    expect(displayPhone("  ")).toBeNull();
+    expect(displayPhone("12345")).toBe("12345");
   });
 });

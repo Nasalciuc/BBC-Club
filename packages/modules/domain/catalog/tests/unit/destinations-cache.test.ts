@@ -10,6 +10,7 @@ const pin = (code: string, fromPrice: number): DestinationPin => ({
   region: "americas",
   lat: 0,
   lng: 0,
+  description: null,
   fromPrice,
 });
 

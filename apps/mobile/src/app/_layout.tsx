@@ -3,26 +3,40 @@ import { MaterialSymbols_400Regular } from "@expo-google-fonts/material-symbols"
 import { Fraunces_400Regular, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
 import { Geist_400Regular, Geist_500Medium } from "@expo-google-fonts/geist";
 import { GeistMono_400Regular, GeistMono_500Medium } from "@expo-google-fonts/geist-mono";
-import { Inter_400Regular, Inter_500Medium } from "@expo-google-fonts/inter";
-import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from "@expo-google-fonts/jetbrains-mono";
-import { SourceSerif4_400Regular } from "@expo-google-fonts/source-serif-4";
+import {
+  InterTight_400Regular,
+  InterTight_500Medium,
+  InterTight_600SemiBold,
+  InterTight_700Bold,
+} from "@expo-google-fonts/inter-tight";
+import NetInfo from "@react-native-community/netinfo";
 import { useFonts } from "expo-font";
 import * as Linking from "expo-linking";
+import * as Notifications from "expo-notifications";
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AppState, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { tokens } from "@bbc/ui";
 
 import { AppGate } from "@/components/app-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
-import { signOut } from "@/features/auth/flows";
+import { endRevokedSession } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
+import { adoptLocalData } from "@/features/auth/local-owner";
 import { clearPendingOtp } from "@/features/auth/otp-holder";
-import { resolvePostAuthRoute } from "@/features/auth/session-gate";
+import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
+import { isOffline } from "@/features/explore/offline-logic";
+import { resetProfile } from "@/features/profile/profile-store";
+import { submitRequest } from "@/lib/api";
+import { linkCanOpen, linkFromNotification } from "@/lib/deeplink-logic";
 import { routeFromDeepLink } from "@/lib/deeplinks";
+import { createFlushTimer } from "@/lib/flush-timer";
 import { registerPushDevice } from "@/lib/push";
+import { adoptQueue, flushQueue, listQueued, subscribeQueue } from "@/lib/queue";
 import { onSessionRevoked } from "@/lib/session-events";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -34,6 +48,8 @@ export const unstable_settings = {
 const AUTH_ENTRY = new Set(["sign-in", "join", "reset-password"]);
 /** Screens that own their own post-auth navigation (password, OTP, first-run prefs). */
 const GATE_HOLD = new Set(["set-password", "verify-code", "onboarding"]);
+/** Where a deep link waits: the entry screens and the gate's (lib/deeplink-logic.ts, `linkCanOpen`). */
+const LINK_HOLD: ReadonlySet<string> = new Set([...AUTH_ENTRY, ...GATE_HOLD]);
 
 /** Club dark chrome — avoids React Navigation's default light/white flash (Expo Router ThemeProvider). */
 const clubDark = {
@@ -58,12 +74,13 @@ export default function RootLayout() {
   // (apiFetch 401) and explicit signOut navigate to /sign-in.
 
   // Fonts swap in when ready (RN 0.72+); do not block Stack on useFonts (Expo Router migrate).
+  // Inside the club, Inter Tight (DESIGN.md 3.0, ADR-IMPL-056); the entry keeps the 1.0 Fraunces, Geist and Geist
+  // Mono (constants/club.ts).
   useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    SourceSerif4_400Regular,
-    JetBrainsMono_400Regular,
-    JetBrainsMono_500Medium,
+    InterTight_400Regular,
+    InterTight_500Medium,
+    InterTight_600SemiBold,
+    InterTight_700Bold,
     Fraunces_400Regular,
     Fraunces_600SemiBold,
     Geist_400Regular,
@@ -71,13 +88,21 @@ export default function RootLayout() {
     GeistMono_400Regular,
     GeistMono_500Medium,
     MaterialSymbols_400Regular,
-    Inter: Inter_400Regular,
-    Newsreader: SourceSerif4_400Regular,
-    "JetBrains Mono": JetBrainsMono_400Regular,
     Fraunces: Fraunces_400Regular,
     Geist: Geist_400Regular,
     "Geist Mono": GeistMono_400Regular,
   });
+
+  // Another member signed in (after a sign-out or a deleted account) empties the one profile every screen shares
+  // (F104): a member never sees the name or the phone of the member signed in before. A session that reads null for a
+  // moment (a 429 on get-session) is no change of member.
+  const sessionUserId = session?.user?.id ?? null;
+  const lastMember = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessionUserId) return;
+    if (lastMember.current !== null && lastMember.current !== sessionUserId) resetProfile();
+    lastMember.current = sessionUserId;
+  }, [sessionUserId]);
 
   // Hide splash on first paint — never wait for get-session (Better Auth has no client timeout).
   useEffect(() => {
@@ -86,7 +111,9 @@ export default function RootLayout() {
 
   useEffect(() => () => clearPendingOtp(), []);
 
-  // Revoked session (apiFetch 401 on non-auth routes) → same clear as profile sign-out.
+  // Revoked session (apiFetch 401 on non-auth routes) → the session ends on the phone, but not as a sign-out: requests
+  // saved offline stay for their member (features/auth/flows.ts endRevokedSession). Then Sign in alone on the stack:
+  // Back must not reopen the screens of the session that ended (features/auth/leave.ts).
   useEffect(() => {
     let active = true;
     let handling = false;
@@ -95,8 +122,8 @@ export default function RootLayout() {
       handling = true;
       void (async () => {
         try {
-          await signOut();
-          if (active) router.replace("/sign-in");
+          await endRevokedSession();
+          if (active) leaveTo(router, "/sign-in");
         } finally {
           handling = false;
         }
@@ -118,6 +145,12 @@ export default function RootLayout() {
       const leaf = typeof segments[0] === "string" ? segments[0] : "index";
 
       if (!session) return;
+      // Path A: an OTP session has no password yet. Checked before GATE_HOLD so a remount
+      // cannot send that session to onboarding or Explore.
+      if (leaf !== "set-password" && passwordStillPending()) {
+        router.replace("/set-password");
+        return;
+      }
       if (GATE_HOLD.has(leaf) || AUTH_ENTRY.has(leaf)) return;
 
       const dest = await resolvePostAuthRoute();
@@ -141,23 +174,106 @@ export default function RootLayout() {
     });
   }, [session, sessionPending]);
 
-  // Deep links: bbcclub://proposal/<id> | bbcclub://inbox — no secrets in the URL.
+  const signedIn = Boolean(session) && !sessionPending;
+  const memberId = session?.user.id ?? null;
+
+  // Requests saved on the phone go out from anywhere — once signed in, each time the app comes back to the foreground,
+  // when the phone comes back online, and when a request waiting with the app open is due (lib/flush-timer.ts) — not
+  // only while Requests is open: the saved confirmation promises "Nothing more to do" (Figma 135:855). One flush at a
+  // time (lib/queue.ts).
   useEffect(() => {
-    if (!session || sessionPending) return;
-
-    function handle(url: string) {
-      const dest = routeFromDeepLink(url);
-      if (dest) router.push(dest);
-    }
-
-    const initial = Linking.getInitialURL();
-    void initial.then((url) => {
-      if (url) handle(url);
+    if (!signedIn || !memberId) return;
+    // The requests on the phone are this member's: another member's, left by a session that expired, are set aside for
+    // them — never sent under this account (lib/queue.ts). So are the saved items, recent searches and onboarded flag:
+    // another member's go (features/auth/local-owner.ts; each sign-in does this first, this is the backstop).
+    adoptQueue(memberId);
+    adoptLocalData(memberId);
+    const submit = (body: Parameters<typeof submitRequest>[0], key: string) => submitRequest(body, key);
+    const timer = createFlushTimer({
+      pending: listQueued,
+      online: async () => !isOffline(await NetInfo.fetch()),
+      flush: () => flushQueue(submit),
     });
+    // A fresh start: the timer's waits start over too.
+    const flush = () => {
+      timer.reset();
+      void flushQueue(submit).catch(() => undefined);
+    };
+    flush();
+    const appState = AppState.addEventListener("change", (next) => {
+      if (next === "active") flush();
+    });
+    let wasOffline: boolean | null = null;
+    const unsubscribeNet = NetInfo.addEventListener((state) => {
+      const offline = isOffline(state);
+      if (wasOffline === true && !offline) flush();
+      wasOffline = offline;
+    });
+    timer.schedule();
+    const unsubscribeQueue = subscribeQueue(timer.schedule);
+    return () => {
+      timer.stop();
+      appState.remove();
+      unsubscribeNet();
+      unsubscribeQueue();
+    };
+  }, [signedIn, memberId]);
 
-    const sub = Linking.addEventListener("url", (event) => handle(event.url));
-    return () => sub.remove();
-  }, [session, sessionPending, router]);
+  // Deep links — bbcclub://requests/<id> | bbcclub://inbox | …, no secrets in the URL — from three places: the URL that
+  // launched the app (taken once per process: the session refetches on every return to the foreground, and the launch
+  // URL must not be pushed again each time), a URL while running, and a tapped push (its `deepLink`, wherever the
+  // platform hands it over — lib/deeplink-logic.ts; the quote-ready push names its request). Each waits as
+  // `pendingLink` until the member is signed in and past the entry and gate screens, so the gate's own `replace` never
+  // lands on top of it. Expo Router leaves these links to us (+native-intent.tsx).
+  const pendingLink = useRef<string | null>(null);
+  const [linkTick, setLinkTick] = useState(0);
+  useEffect(() => {
+    const take = (url: string | null | undefined) => {
+      if (!url) return;
+      pendingLink.current = url;
+      setLinkTick((n) => n + 1);
+    };
+    void Linking.getInitialURL()
+      .then(take)
+      .catch(() => undefined);
+    const urls = Linking.addEventListener("url", (event) => take(event.url));
+    // A tap can reach us twice at a cold start (the launch response, and the listener): once per notification.
+    const seen = new Set<string>();
+    const tapped = (response: Notifications.NotificationResponse | null) => {
+      const link = linkFromNotification(response, Notifications.DEFAULT_ACTION_IDENTIFIER);
+      if (!link || !response) return;
+      const tap = response.notification.request.identifier;
+      if (seen.has(tap)) return;
+      seen.add(tap);
+      try {
+        // Answered once: the same tap is not taken again at the next launch.
+        Notifications.clearLastNotificationResponse();
+      } catch {
+        // Not on this platform (web): nothing is kept between launches there.
+      }
+      take(link);
+    };
+    let taps: { remove: () => void } | null = null;
+    try {
+      tapped(Notifications.getLastNotificationResponse());
+      taps = Notifications.addNotificationResponseReceivedListener(tapped);
+    } catch {
+      // Push is native only; on web there is no tap to answer.
+    }
+    return () => {
+      urls.remove();
+      taps?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const url = pendingLink.current;
+    const leaf = typeof segments[0] === "string" ? segments[0] : "index";
+    if (!url || !linkCanOpen(leaf, signedIn, LINK_HOLD)) return;
+    pendingLink.current = null;
+    const dest = routeFromDeepLink(url);
+    if (dest) router.push(dest);
+  }, [linkTick, signedIn, segments, router]);
 
   return (
     <View style={styles.shell}>
@@ -165,6 +281,8 @@ export default function RootLayout() {
         <ThemeProvider value={clubDark}>
           <BottomSheetModalProvider>
             <AppGate>
+              {/* The entry's and Welcome's bar; a screen on another surface mounts its own while it is in view
+                  (components/screen-status-bar.tsx, ADR-IMPL-047). */}
               <StatusBar style="light" />
               <Stack
                 screenOptions={{
@@ -181,28 +299,70 @@ export default function RootLayout() {
                 <Stack.Screen name="reset-password" />
                 <Stack.Screen
                   name="onboarding"
-                  options={{ contentStyle: { backgroundColor: Club.colors.surfacePage } }}
+                  options={{ contentStyle: { backgroundColor: tokens.colors.surfacePage } }}
                 />
                 <Stack.Screen name="(tabs)" />
+                <Stack.Screen
+                  name="search"
+                  options={{
+                    animation: "fade",
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="destination/[code]"
+                  options={{
+                    animation: "slide_from_right",
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                  }}
+                />
                 <Stack.Screen
                   name="fare/[id]"
                   options={{
                     animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
                 <Stack.Screen
                   name="request/[id]"
                   options={{
                     animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="request/confirmed"
+                  options={{
+                    animation: "fade",
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="request/limited"
+                  options={{
+                    animation: "fade",
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="settings"
+                  options={{
+                    animation: "slide_from_right",
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                  }}
+                />
+                <Stack.Screen
+                  name="edit-profile"
+                  options={{
+                    animation: "slide_from_right",
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
                 <Stack.Screen
                   name="dev/gallery"
                   options={{
                     animation: "slide_from_right",
-                    contentStyle: { backgroundColor: Club.colors.surfacePage },
+                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
                 />
               </Stack>

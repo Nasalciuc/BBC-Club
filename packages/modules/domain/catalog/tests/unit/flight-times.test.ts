@@ -32,12 +32,25 @@ describe("flight local times", () => {
     }
   });
 
-  it("maps fa01 to 18:55, 07:00, +1", () => {
+  it("maps fa01 to 18:55, 07:00, +1, on 12 October at JFK", () => {
     const vm = mapFa01();
     expect(vm.departLocal).toBe("18:55");
     expect(vm.arriveLocal).toBe("07:00");
     expect(vm.arriveDayOffset).toBe(1);
+    // 22:55 UTC is still the 12th in New York: the day is the origin's, named here, never read back from the clock.
+    expect(vm.departDate).toBe("2026-10-12");
     expect(fareFactsLine(vm)).toBe("18:55 — 07:00 +1 · 7H 05");
+  });
+
+  it("a fare with a departure and no arrival keeps the departure's clock and day", () => {
+    const vm = mapFa01({ arriveAt: null });
+    expect([vm.departLocal, vm.departDate, vm.arriveLocal, vm.arriveDayOffset]).toEqual([
+      "18:55",
+      "2026-10-12",
+      null,
+      0,
+    ]);
+    expect(mapFa01({ departAt: null, arriveAt: null }).departDate).toBeNull();
   });
 
   it("same fa01 clocks in Chișinău and Los Angeles", async () => {
@@ -48,7 +61,7 @@ describe("flight local times", () => {
       departLocal: "18:55",
       arriveLocal: "07:00",
       arriveDayOffset: 1,
-      facts: "18:55 — 07:00 +1 · 7H 05",
+      departDate: "2026-10-12",
     });
   });
 

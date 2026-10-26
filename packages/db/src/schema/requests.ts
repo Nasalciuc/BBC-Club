@@ -1,4 +1,16 @@
-import { pgSchema, text, uuid, char, integer, jsonb, boolean, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import {
+  pgSchema,
+  text,
+  uuid,
+  char,
+  integer,
+  numeric,
+  jsonb,
+  boolean,
+  index,
+  uniqueIndex,
+  check,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { id, createdAt, updatedAt, tz } from "./_helpers";
 
@@ -27,11 +39,28 @@ export const requests = requestsSchema.table(
     idempotencyKey: text("idempotency_key").notNull(),
     fareId: uuid("fare_id"),
     offerId: uuid("offer_id"),
+    /** quote | alternative. Null on a fare or offer request; the CHECK is the enum. */
+    intent: text("intent"),
+    replacesFareId: uuid("replaces_fare_id"),
+    /** The indicative price the search showed for a quote's route, recomputed by the server (ADR-IMPL-042). Whole USD;
+     *  null on every other request. Added by the named steps 0024 and 0025, not by a drizzle migration. */
+    shownEstimateAmount: integer("shown_estimate_amount"),
+    shownEstimateCurrency: text("shown_estimate_currency"),
     tripType: tripType("trip_type").notNull(),
     cabin: requestCabin("cabin").notNull(),
     legs: jsonb("legs").$type<RequestLeg[]>().notNull(),
     passengers: jsonb("passengers").$type<Passengers>().notNull(),
     priceAtRequest: text("price_at_request"),
+    /** The fare's published price and its source when the member asked, recorded by the server from the fare — never
+     *  from the app (ADR-IMPL-046); both or neither. The detail strikes it beside the fare once the quote is ready
+     *  (Figma 233:4204). Added by the named step 0029, not by a drizzle migration. */
+    publishedAtRequest: numeric("published_at_request", { precision: 10, scale: 2 }),
+    publishedSourceAtRequest: text("published_source_at_request"),
+    /** The airline the request was made for: its fare's carrier code and the name the member read, recorded by the
+     *  server from the fare — never from the app (ADR-IMPL-056); a code always with its name. The request received and
+     *  its detail name it (images 08, 11). Added by the named step 0030, not by a drizzle migration. */
+    carrierAtRequest: char("carrier_at_request", { length: 2 }),
+    carrierNameAtRequest: text("carrier_name_at_request"),
     contactName: text("contact_name").notNull(),
     contactPhone: text("contact_phone").notNull(),
     contactEmail: text("contact_email").notNull(),
@@ -56,6 +85,12 @@ export const requests = requestsSchema.table(
     index("requests_member")
       .on(t.memberId, t.createdAt)
       .where(sql`${t.memberId} IS NOT NULL`),
+    /** The member's list: requests in progress first, newest first within each group (0025). The second key is the
+     *  list's ORDER BY expression, written the same way, so the list reads 51 entries however many requests a member
+     *  has. */
+    index("requests_member_list")
+      .on(t.memberId, sql`(${t.status} IN ('booked', 'closed'))`, t.createdAt.desc().nullsFirst())
+      .where(sql`${t.memberId} IS NOT NULL`),
     index("requests_unsent")
       .on(t.createdAt)
       .where(sql`${t.sentToCrm} = false`),
@@ -68,11 +103,31 @@ export const requests = requestsSchema.table(
     index("requests_offer")
       .on(t.offerId)
       .where(sql`${t.offerId} IS NOT NULL`),
+    index("requests_replaces_fare")
+      .on(t.replacesFareId)
+      .where(sql`${t.replacesFareId} IS NOT NULL`),
     index("requests_crm")
       .on(t.crmRequestId)
       .where(sql`${t.crmRequestId} IS NOT NULL`),
     check("requests_legs_nonempty", sql`jsonb_array_length(${t.legs}) >= 1`),
     check("requests_one_source", sql`NOT (${t.fareId} IS NOT NULL AND ${t.offerId} IS NOT NULL)`),
+    check("requests_intent", sql`${t.intent} IS NULL OR ${t.intent} IN ('quote', 'alternative')`),
+    check(
+      "requests_shown_estimate",
+      // Each side says IS NOT NULL: a CHECK passes on NULL, so the second side alone let half a pair in (0024 → 0025).
+      sql`(${t.shownEstimateAmount} IS NULL AND ${t.shownEstimateCurrency} IS NULL) OR (${t.shownEstimateAmount} IS NOT NULL AND ${t.shownEstimateCurrency} IS NOT NULL AND ${t.shownEstimateAmount} > 0 AND ${t.shownEstimateCurrency} = 'USD')`,
+    ),
+    check(
+      "requests_published_at_request",
+      // A struck price always carries its source (FTC): both or neither, each side IS NOT NULL (0029).
+      sql`(${t.publishedAtRequest} IS NULL AND ${t.publishedSourceAtRequest} IS NULL) OR (${t.publishedAtRequest} IS NOT NULL AND ${t.publishedSourceAtRequest} IS NOT NULL AND ${t.publishedAtRequest} > 0 AND length(btrim(${t.publishedSourceAtRequest})) > 0)`,
+    ),
+    check(
+      "requests_carrier_at_request",
+      // A code requires the name the member read; a name says something (0030). Each side is true or false, never
+      // NULL: a CHECK passes on NULL (0025).
+      sql`(${t.carrierAtRequest} IS NULL OR ${t.carrierNameAtRequest} IS NOT NULL) AND (${t.carrierNameAtRequest} IS NULL OR length(btrim(${t.carrierNameAtRequest})) > 0)`,
+    ),
     check(
       "requests_sync_consistent",
       sql`(${t.sentToCrm} = false) OR (${t.crmRequestId} IS NOT NULL AND ${t.sentAt} IS NOT NULL)`,

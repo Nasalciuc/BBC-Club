@@ -10,14 +10,16 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
-    "test:db": "bun test tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts"
+    "test": "bun test tests/unit tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
+    "test:db": "bun test tests/unit tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts"
   },
   "dependencies": {
     "@bbc/db": "workspace:*",
     "@bbc/platform": "workspace:*",
     "@bbc/shared": "workspace:*",
+    "@bbc/catalog": "workspace:*",
     "@bbc/crm": "workspace:*",
+    "@bbc/proposals": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4",
     "hono": "^4.7.0",
     "libphonenumber-js": "^1.13.13",

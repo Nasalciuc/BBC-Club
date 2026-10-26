@@ -1,16 +1,17 @@
 # BuyBusinessClass Club
 
-Private travel club app for BuyBusinessClass clients. Entry is a cinematic cabin (sign in, join, verify, password); inside, a daylight proposals feed.
+Private travel club app for BuyBusinessClass clients. Entry is a cinematic cabin (sign in, join, verify, password); inside, Explore — a globe and a search for destinations, fares and offers — a member's requests, and their profile. A specialist books by phone; the app takes no booking and no payment.
 
 ## Stack
 
-Expo SDK 57, Expo Router, React Native, Reanimated 4, expo-image, expo-symbols. Design tokens live in `src/constants/club.ts`. System: [DESIGN.md](./DESIGN.md).
+One Bun monorepo. `apps/mobile`: Expo SDK 57, Expo Router, React Native, Reanimated 4, expo-image. `apps/api` and `packages/modules`: Bun, Hono, Drizzle, Postgres, Better Auth. Design tokens are generated into `packages/ui/src/tokens.ts` from [DESIGN.md](./DESIGN.md); screens from onboarding on follow DESIGN.md 3.0 and the images in `isolated/bbc-club-3.0-design/final/` (ADR-IMPL-055); the entry keeps 1.0. Rules for agents: [AGENTS.md](./AGENTS.md).
 
 ## Develop
 
 ```bash
-npm ci
-npx expo start
+bun install --frozen-lockfile
+bun run validate:quick
+cd apps/mobile && bun run start
 ```
 
 Use a development build (Expo Go is not the target). iOS and Android phones only.
@@ -41,4 +42,4 @@ Web is a development preview only; the product ships to the App Store and Google
 
 ## Status
 
-Entry flow UI; backend not wired.
+The app and the API run on staging (`infra/RUNBOOK.md`); production is set up on the box but not yet deployed. The ADRs in `docs/adr/` hold the decisions.

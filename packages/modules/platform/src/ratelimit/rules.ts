@@ -1,5 +1,5 @@
 export type RateRule = {
-  store: "postgres" | "memory";
+  store: "postgres" | "memory" | "redis";
   limit: number;
   periodMs: number;
   burst: number;
@@ -8,8 +8,8 @@ export type RateRule = {
 const MIN = 60_000,
   HOUR = 3_600_000;
 export const RULES = {
-  read: { store: "memory", limit: 120, periodMs: MIN, burst: 60, fail: "open" },
-  search: { store: "memory", limit: 60, periodMs: MIN, burst: 20, fail: "open" },
+  read: { store: "redis", limit: 120, periodMs: MIN, burst: 60, fail: "open" },
+  search: { store: "redis", limit: 60, periodMs: MIN, burst: 20, fail: "open" },
   anon: { store: "memory", limit: 300, periodMs: MIN, burst: 100, fail: "open" },
   "requests.submit": { store: "postgres", limit: 10, periodMs: HOUR, burst: 5, fail: "closed" },
   "requests.submit.ip": { store: "postgres", limit: 60, periodMs: HOUR, burst: 20, fail: "closed" },

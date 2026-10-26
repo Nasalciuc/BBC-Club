@@ -2,15 +2,15 @@
 
 **Versions:** drizzle-orm / drizzle-kit **`1.0.0-rc.4`** (pinned), postgres.js 3.x, PostgreSQL 16 on the VPS (uuid v4 from `gen_random_uuid()`; `uuidv7()` when we move to PG 18).
 
-> **Debt — stable Drizzle 1.x:** `^1.0.0` is not a published stable range yet. We pin the RC that the assembled
-> lockfile resolves. Moving to stable 1.x with Relational Queries v2 (`defineRelations`) remains an explicit
-> follow-up; see [`DB_LAYER_DESIGN.md`](./DB_LAYER_DESIGN.md). Do not bump to `^1.0.0` until that note is closed.
+> **Pinned RC:** `^1.0.0` is not a published stable range yet, so we pin the RC the lockfile resolves. The client
+> is type-checked (type-checking is no longer switched off): it no longer passes `schema` / `relations` to `drizzle()`, because nothing
+> used Relational Queries (`db.query.*`) and those typings were why checking was off. Bring Relational
+> Queries back only with a caller and with the client still type-checking.
 
 ## What lives here
 
 - `src/client.ts` — one `createDb(url, opts)`; pool sizing (app 10, scripts 1), `statement_timeout` 15 s, `withTx` for composable use cases, `Executor` type so repositories accept a db **or** a transaction.
 - `src/schema/*` — one file per Postgres schema = one owning module (`platform`, `auth`, `members`, `notifications`, `proposals`, `engagement`, `crm`, `personalization`). Explicit column names everywhere; no casing magic. (After stage 0 day 4 the files move next to their modules; this package keeps the index that re-exports them.)
-- `src/relations/*` — Relational Queries v2 **parts per module**; a part may reference only its own schema's tables (`test/relations.test.ts` enforces it). Cross-module reads are facade calls or events, never relations.
 - `src/helpers.ts` — `bumpCounter` (atomic upsert with optional cap), `tryAdvisoryXactLock`, `forUpdateSkipLocked`, keyset `cursor`, `assertNotProduction`.
 - `migrations/` — drizzle-kit output, numbered `NNNN_<module>_<desc>`, plus `0001_extras.sql` (updated_at trigger, monthly partitioning of `platform.domain_events`, `platform.cross_schema_fks` view). `scripts/migrate.ts` applies both, under an advisory lock, `exit(1)` on failure.
 - `scripts/verify.ts` — **fitness functions on the live DB**, run in CI after migrate: schemas exist · no cross-schema FK · every `*_id` column indexed · no naive timestamps · `created_at` everywhere · trigger on every `updated_at` · status columns are enums · journal is partitioned.
@@ -38,9 +38,9 @@
 
 Pinned: **drizzle-orm 1.0.0-rc.4**, **drizzle-kit 1.0.0-rc.4**, **postgres.js 3.4.9**.
 
-| #   | Assumption                                                                                                        | Result                                                                                         |
-| --- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 7   | `drizzle(client, { schema, relations })`                                                                          | Accepted by this RC (`src/client.ts`); typings disagree → `@ts-nocheck` debt, not dead runtime |
-| 8   | `defineRelations` / `r.many.offerTargets({ from, to })` + `db.query.offers.findMany({ with: { targets: true } })` | Compiles; runtime nested rows in `test/relations-runtime.test.ts`                              |
-| 9   | `onConflictDoUpdate({ setWhere })`                                                                                | Accepted; `bumpCounter` + `responses.repo.upsert` tests                                        |
-| 12  | `postgres(url, { connection: { statement_timeout }, transform: { undefined: null } })`                            | `current_setting('statement_timeout')` → `15s` (`relations-runtime.test.ts`)                   |
+| #   | Assumption                                                                             | Result                                                                      |
+| --- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 7   | `drizzle({ client, logger })` — no `schema`, no `relations`                            | Type-checks with checking on (`src/client.ts`); no caller used `db.query.*` |
+| 8   | Relational Queries v2 (`defineRelations`)                                              | Removed with its only test; cross-module reads stay facade calls or events  |
+| 9   | `onConflictDoUpdate({ setWhere })`                                                     | Accepted; `bumpCounter` + `responses.repo.upsert` tests                     |
+| 12  | `postgres(url, { connection: { statement_timeout }, transform: { undefined: null } })` | `current_setting('statement_timeout')` → `15s` (`test/session.test.ts`)     |

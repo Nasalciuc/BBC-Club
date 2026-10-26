@@ -20,6 +20,7 @@ export const mirror = crm.table(
     lastFlightAt: tz("last_flight_at"),
     advisorName: text("advisor_name"), // "Julia Reed"
     syncedAt: tz("synced_at").notNull().defaultNow(),
+    createdAt: createdAt(), // added by 0001_extras.sql for db:verify §5; the database had it, the code did not
   },
   (t) => [
     uniqueIndex("mirror_email").on(t.emailNormalized),

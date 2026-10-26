@@ -1,3 +1,4 @@
+import NetInfo from "@react-native-community/netinfo";
 import { hc } from "hono/client";
 import type { Hono } from "hono";
 import { authMessage } from "@bbc/shared/auth-messages";
@@ -24,6 +25,13 @@ import {
   type HomeVM as HomeVMType,
   type SearchResultVM as SearchResultVMType,
 } from "@bbc/shared/api/v1/fares";
+import {
+  HomeSuggestionVM,
+  PopularVM,
+  type HomeSuggestionVM as HomeSuggestionVMType,
+  type PopularVM as PopularVMType,
+} from "@bbc/shared/api/v1/discovery";
+import { PlacePhotosVM, type PlacePhotoVM as PlacePhotoVMType } from "@bbc/shared/api/v1/places";
 import type { ProfileVM as Profile } from "@bbc/shared/api/v1/profile";
 import {
   RequestBody,
@@ -35,9 +43,12 @@ import {
 
 import { authHeaders } from "@/features/auth/client";
 import { env } from "@/lib/env";
+import { maintenanceValue, storeUrlValue, type StoreUrl } from "@/lib/app-gate-logic";
+import { UNREACHABLE_MESSAGE, classifyFetchFailure, passwordChangedNotice } from "@/lib/error-context";
 import { appPlatform, appVersion } from "@/lib/app-meta";
 import { emitSessionRevoked } from "@/lib/session-events";
 import { API_TIMEOUT_MS, NetworkError, networkFail, timeoutSignal } from "@/lib/timeout";
+import { parseFareGoneContext, type FareGoneContext } from "@/lib/fare-gone";
 
 /** Better Auth routes — wrong password/OTP must not trigger global sign-out bounce. */
 function isAuthApiPath(path: string): boolean {
@@ -59,52 +70,47 @@ export type { Profile };
 
 export type ApiResult<T> =
   | { ok: true; data: T }
-  | { ok: false; message: string; code?: string; status: number; gone?: FareGoneContext; retryAfterS?: number };
+  | {
+      ok: false;
+      message: string;
+      code?: string;
+      status: number;
+      gone?: FareGoneContext;
+      retryAfterS?: number;
+      /** The server's `error.context`, as it sent it (the facts a screen words its message from). */
+      context?: Record<string, unknown>;
+    };
 
-/** Closed-fare facts from a 410 body — only when the server sent `error.context`. */
-export type FareGoneContext = {
-  price: number;
-  currency: string;
-  validUntil: string;
-  from: string;
-  to: string;
-};
-
-function parseFareGoneContext(raw: unknown): FareGoneContext | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const o = raw as Record<string, unknown>;
-  if (
-    typeof o.price !== "number" ||
-    typeof o.currency !== "string" ||
-    typeof o.validUntil !== "string" ||
-    typeof o.from !== "string" ||
-    typeof o.to !== "string"
-  ) {
-    return undefined;
-  }
-  return {
-    price: o.price,
-    currency: o.currency,
-    validUntil: o.validUntil,
-    from: o.from,
-    to: o.to,
-  };
-}
+export type { FareGoneContext };
 
 async function parseJson(res: Response): Promise<unknown> {
   return res.json().catch(() => null);
 }
 
-function failFromBody(res: Response, body: { error?: { code?: string; message?: string } } | null): ApiResult<never> {
+/** The server's `error.context` when it is an object; anything else is none. */
+function errorContext(body: { error?: { context?: unknown } } | null): { context?: Record<string, unknown> } {
+  const context = body?.error?.context;
+  return context && typeof context === "object" && !Array.isArray(context)
+    ? { context: context as Record<string, unknown> }
+    : {};
+}
+
+function failFromBody(
+  res: Response,
+  body: { error?: { code?: string; message?: string; context?: unknown } } | null,
+): ApiResult<never> {
   if (res.status === 429) {
     const header = Number(res.headers.get("Retry-After"));
     const retryAfterS = Number.isFinite(header) && header >= 0 ? Math.ceil(header) : undefined;
+    // errorContext carries which limit refused (POST /v1/requests: `{ scope: "ip" | "member" }`): the rate-limit page
+    // words them apart.
     return {
       ok: false,
       message: authMessage("TOO_MANY_ATTEMPTS"),
       code: "RATE_LIMITED",
       status: 429,
       ...(retryAfterS !== undefined ? { retryAfterS } : {}),
+      ...errorContext(body),
     };
   }
   return {
@@ -112,13 +118,24 @@ function failFromBody(res: Response, body: { error?: { code?: string; message?: 
     message: body?.error?.message ?? authMessage(body?.error?.code),
     code: body?.error?.code,
     status: res.status,
+    ...errorContext(body),
   };
+}
+
+/** A call that reached no server while the phone is online: DNS, TLS, the club's server down (F110). */
+class ServerUnreachable extends Error {
+  constructor() {
+    super("UNREACHABLE");
+    this.name = "ServerUnreachable";
+  }
 }
 
 async function asResult<T>(run: () => Promise<ApiResult<T>>): Promise<ApiResult<T>> {
   try {
     return await run();
   } catch (e) {
+    if (e instanceof ServerUnreachable)
+      return { ok: false, status: 0, code: "UNREACHABLE", message: UNREACHABLE_MESSAGE };
     if (e instanceof NetworkError) return networkFail(e);
     throw e;
   }
@@ -151,7 +168,11 @@ async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
     return res;
   } catch (e) {
     const timeout = e instanceof Error && (e.name === "AbortError" || e.name === "TimeoutError");
-    throw new NetworkError(timeout ? "TIMEOUT" : "OFFLINE");
+    if (timeout) throw new NetworkError("TIMEOUT");
+    // `fetch` fails the same way offline and when the club's server does not answer: the platform tells them apart.
+    const network = await NetInfo.fetch().catch(() => null);
+    if (classifyFetchFailure(network) === "OFFLINE") throw new NetworkError("OFFLINE");
+    throw new ServerUnreachable();
   } finally {
     cancel();
   }
@@ -247,11 +268,24 @@ export async function putNotificationPreferences(
   });
 }
 
+/** GET /v1/account/password — whether a password is stored. The server decides, by better-auth's own rule. */
+export async function fetchPasswordStatus(): Promise<ApiResult<{ hasPassword: boolean }>> {
+  return asResult(async () => {
+    const res = await apiFetch("/v1/account/password");
+    if (!res.ok) {
+      const body = (await parseJson(res)) as { error?: { code?: string; message?: string } } | null;
+      return failFromBody(res, body);
+    }
+    const body = (await parseJson(res)) as { hasPassword?: unknown } | null;
+    return { ok: true, data: { hasPassword: body?.hasPassword === true } };
+  });
+}
+
 /** POST /v1/account/password — Path A set, or change when currentPassword is sent. */
 export async function postAccountPassword(
   newPassword: string,
   currentPassword?: string,
-): Promise<ApiResult<{ ok: true }>> {
+): Promise<ApiResult<{ ok: true; notice?: string }>> {
   const parsed = PasswordBody.safeParse({
     newPassword,
     ...(currentPassword ? { currentPassword } : {}),
@@ -264,7 +298,7 @@ export async function postAccountPassword(
       status: 400,
     };
   }
-  return asResult(async () => {
+  return asResult<{ ok: true; notice?: string }>(async () => {
     const res = await apiFetch("/v1/account/password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -272,6 +306,9 @@ export async function postAccountPassword(
     });
     if (!res.ok) {
       const body = (await parseJson(res)) as { error?: { code?: string; message?: string } } | null;
+      // The password changed, the other sessions did not end: a change made, with words for the member (ADR-IMPL-047).
+      const notice = passwordChangedNotice(body);
+      if (notice) return { ok: true, data: { ok: true, notice } };
       const code = body?.error?.code;
       return {
         ok: false,
@@ -338,7 +375,7 @@ export async function fetchLastOtpForTest(email: string): Promise<string | null>
 
 export type HomeResult = { home: HomeVMType; etag: string | null; notModified: boolean };
 
-/** GET /v1/home — ETag, 5-minute private cache. */
+/** GET /v1/home — ETag revalidation (`private, no-cache`): a 304 keeps the member's stored copy. */
 export async function fetchHome(etag?: string | null): Promise<ApiResult<HomeResult>> {
   return asResult<HomeResult>(async () => {
     const res = await apiFetch("/v1/home", {
@@ -371,9 +408,12 @@ export async function searchFares(q: {
   from: string;
   to: string;
   cabin: "business" | "first";
+  /** ISO datetime: only fares valid at that instant. Omitted for flexible dates (the search that can estimate). */
+  when?: string;
 }): Promise<ApiResult<SearchResultVMType>> {
   return asResult(async () => {
     const params = new URLSearchParams({ from: q.from, to: q.to, cabin: q.cabin });
+    if (q.when) params.set("when", q.when);
     const res = await apiFetch(`/v1/search?${params}`);
     if (!res.ok) {
       return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
@@ -404,6 +444,54 @@ export async function fetchAirports(query: string): Promise<ApiResult<AirportVMT
       if (parsed.success) items.push(parsed.data);
     }
     return { ok: true, data: items };
+  });
+}
+
+/** GET /v1/airports/popular?from= — "Popular from <city>" (ADR-IMPL-039): at most four destinations, names only. */
+export async function fetchPopular(from: string): Promise<ApiResult<PopularVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/airports/popular?from=${encodeURIComponent(from)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const parsed = PopularVM.safeParse(await parseJson(res));
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
+  });
+}
+
+/** GET /v1/airports/home-suggestion?tz= — the busiest airport in the phone's time zone, or null (ADR-IMPL-039). */
+export async function fetchHomeSuggestion(tz: string): Promise<ApiResult<HomeSuggestionVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/airports/home-suggestion?tz=${encodeURIComponent(tz)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const parsed = HomeSuggestionVM.safeParse(await parseJson(res));
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
+  });
+}
+
+/**
+ * GET /v1/places/photos?codes= — the photo of each city (ADR-IMPL-043): a code the server does not know is absent, and
+ * an item this app cannot read is dropped by the contract, never the whole answer.
+ */
+export async function fetchPlacePhotos(codes: readonly string[]): Promise<ApiResult<PlacePhotoVMType[]>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/places/photos?codes=${codes.map((c) => encodeURIComponent(c)).join(",")}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const parsed = PlacePhotosVM.safeParse(await parseJson(res));
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data.items };
   });
 }
 
@@ -498,10 +586,22 @@ export async function fetchRequests(): Promise<ApiResult<{ items: RequestVMType[
     if (!Array.isArray(items)) {
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }
+    // Row by row: one request this app cannot read must not take the others with it. The contract reads new states
+    // and new fields as known ones (ADR-IMPL-042), so a dropped row means a server this app does not understand —
+    // said in development, where it can be fixed; never a member's data in the message.
     const parsed: RequestVMType[] = [];
+    let dropped = 0;
+    let firstIssue = "";
     for (const row of items) {
       const v = RequestVM.safeParse(row);
       if (v.success) parsed.push(v.data);
+      else {
+        dropped += 1;
+        if (!firstIssue) firstIssue = v.error.issues[0]?.path.join(".") ?? "";
+      }
+    }
+    if (dropped > 0 && __DEV__) {
+      console.warn(`[fetchRequests] ${dropped} of ${items.length} requests did not read (first at "${firstIssue}")`);
     }
     const hasMore = RequestList.shape.hasMore.catch(false).parse((raw as { hasMore?: unknown })?.hasMore);
     return { ok: true, data: { items: parsed, hasMore } };
@@ -524,7 +624,12 @@ export async function fetchRequest(id: string): Promise<ApiResult<RequestVMType>
   });
 }
 
-export type AppConfig = { minSupportedVersion: string; maintenance: string | null };
+export type AppConfig = {
+  minSupportedVersion: string;
+  maintenance: string | null;
+  /** The store listings that hold the update, per platform, when the server names them (F039). */
+  storeUrl?: StoreUrl;
+};
 
 /** GET /v1/app-config — cold start, public. */
 export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
@@ -533,12 +638,19 @@ export async function fetchAppConfig(): Promise<ApiResult<AppConfig>> {
     if (!res.ok) {
       return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
     }
-    const raw = (await parseJson(res)) as AppConfig;
+    const raw = (await parseJson(res)) as {
+      minSupportedVersion?: unknown;
+      maintenance?: unknown;
+      storeUrl?: unknown;
+    } | null;
     return {
       ok: true,
       data: {
-        minSupportedVersion: raw.minSupportedVersion ?? "0.1.0",
-        maintenance: raw.maintenance ?? null,
+        minSupportedVersion: typeof raw?.minSupportedVersion === "string" ? raw.minSupportedVersion : "0.1.0",
+        // Only a non-blank string is maintenance: anything else never reaches the screen as `[object Object]`.
+        maintenance: maintenanceValue(raw?.maintenance),
+        // Only a store or https link per platform; none named, `Update app` opens the website.
+        storeUrl: storeUrlValue(raw?.storeUrl),
       },
     };
   });

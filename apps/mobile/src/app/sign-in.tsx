@@ -1,23 +1,30 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useKeyboardShown } from "@bbc/ui";
 
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { ClubField, ClubInput, ClubPasswordInput } from "@/components/club-field";
 import { Club } from "@/constants/club";
 import { signIn } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
+import { signInNotice } from "@/features/auth/reset-flow-logic";
 import { Email } from "@/features/auth/schemas";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { authMessage } from "@bbc/shared/auth-messages";
 
 export default function SignInScreen() {
   const router = useRouter();
+  const { notice: noticeParam } = useLocalSearchParams<{ notice?: string }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // After a reset whose sign-in did not go through: the new password is set (reset-flow-logic.ts). Until the next try.
+  const [notice, setNotice] = useState(() => signInNotice(noticeParam));
+  const keyboard = useKeyboardShown();
 
   const canSubmit = Email.safeParse(email).success && password.length > 0 && !busy;
 
@@ -35,15 +42,17 @@ export default function SignInScreen() {
 
     setBusy(true);
     setError(null);
+    setNotice(null);
     const result = await signIn(emailResult.data, password);
     if (!result.ok) {
       setBusy(false);
       setError(result.message);
       return;
     }
+    // Signed in: onboarding or Explore alone on the stack — Back must not return to Welcome or Sign in.
     const dest = await resolvePostAuthRoute();
     setBusy(false);
-    router.replace(dest);
+    leaveTo(router, dest);
   }
 
   return (
@@ -58,17 +67,23 @@ export default function SignInScreen() {
             disabled={!canSubmit}
             onPress={() => void onSubmit()}
           />
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerLabel}>New to the club</Text>
-            <View style={styles.dividerLine} />
-          </View>
-          <ClubButton
-            testID="signIn.createAccount"
-            label="Create account"
-            variant="secondary"
-            onPress={() => router.push("/join")}
-          />
+          {/* With the keys up only Sign in stands on them (ADR-IMPL-047): the divider and Create account took the
+              password field's room. They come back with the keys down; the screen without the keys is unchanged. */}
+          {keyboard ? null : (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerLabel}>New to the club</Text>
+                <View style={styles.dividerLine} />
+              </View>
+              <ClubButton
+                testID="signIn.createAccount"
+                label="Create account"
+                variant="secondary"
+                onPress={() => router.push("/join")}
+              />
+            </>
+          )}
         </>
       }
     >
@@ -121,6 +136,10 @@ export default function SignInScreen() {
           <Text testID="signIn.error" style={styles.error}>
             {error}
           </Text>
+        ) : notice ? (
+          <Text testID="signIn.notice" style={styles.error}>
+            {notice}
+          </Text>
         ) : null}
       </View>
     </AuthShell>
@@ -163,6 +182,7 @@ const styles = StyleSheet.create({
   },
   error: {
     ...Club.type.bodySm,
-    color: Club.colors.statusDanger,
+    // The words of an error stay quiet on the navy panel (DESIGN.md: never red for messages): 5.71:1 (ADR-IMPL-047).
+    color: Club.colors.textOnDarkMuted,
   },
 });

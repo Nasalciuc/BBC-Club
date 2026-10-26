@@ -1,6 +1,6 @@
 ---
 description: Rules for the Expo app
-globs: src/**/*.ts,src/**/*.tsx,app.json,babel.config.js
+globs: apps/mobile/src/**/*.ts,apps/mobile/src/**/*.tsx,apps/mobile/app.json,apps/mobile/babel.config.js,packages/ui/src/**/*.tsx
 alwaysApply: false
 ---
 
@@ -10,12 +10,24 @@ here, not an optimisation.
 **Animation:** `react-native-reanimated` only. Never import `Animated` or `Easing` from `react-native`.
 On Reanimated 4 use `sharedValue.get()` / `sharedValue.set(…)`, not `.value`.
 
-**Styling:** every colour, size, radius and spacing comes from `src/constants/club.ts` (the `Club` object).
-No inline hex, no `rgba(...)`, no magic numbers. If a token is missing, say so — do not invent one.
-The tokens mirror `DESIGN.md`; that file is the source of truth and is not edited casually.
+**Styling:** every colour, size, radius, spacing and type role comes from the generated tokens (`tokens` and
+`rn()` from `@bbc/ui`, made from `DESIGN.md` by `bun run tokens`). `src/constants/club.ts` (the `Club` object)
+holds the entry's own colours, spacing, radii, type and motion, written by hand so a token change does not reach
+them (ADR-IMPL-047, ADR-IMPL-055); `ClubButton`, `ClubIcon` and `AnimatedEntrance` read only it. The entry screens
+read it; outside them only the root's dark chrome and the phone column's width (`Club.layout.phoneMaxWidth`). No
+inline hex, no `rgba(...)`, no magic numbers. If a token is missing, say so — do not invent one. Where an image of
+`isolated/bbc-club-3.0-design/final/` and `DESIGN.md` disagree, `DESIGN.md` wins (ADR-IMPL-055); report the conflict.
 
-**Typography roles** (do not swap them): `display`/`headline`/`title` are serif; body text is Inter;
-flight facts and field labels are JetBrains Mono, uppercase for labels.
+**Typography roles** (do not swap them): inside the club, one sans-serif — Inter — for every role (`display`,
+`headline`, `title`, `subtitle`, `body`, `label` uppercase and letter-spaced, `price` with tabular figures); no serif.
+The entry keeps its 1.0 Fraunces, Geist and Geist Mono from `club.ts`.
+
+**Status bar:** the root shows light glyphs (the entry, Welcome). A screen on the porcelain page, a photograph
+or the night mounts `<ScreenStatusBar on="light" | "dark" />` (`src/components/screen-status-bar.tsx`) for the
+surface under the bar.
+
+**Android Back:** a `ModalSheet` closes itself on Back. A screen with states of its own (typing, an expanded
+sheet, a second step) handles `BackHandler` as its Cancel or Done does.
 
 **Every interactive element needs `testID="screen.element"`** (`signIn.submit`, `verify.code`,
 `setPassword.continue`). Maestro flows depend on these names.

@@ -1,7 +1,9 @@
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import type { FlagValue } from "../flags";
+import type { Redis } from "../redis/client";
 import { createMemoryLimiter } from "./memory-store";
 import { gcraCheck } from "./pg-store";
+import { loadGcraScript, redisGcraCheck } from "./redis-store";
 import { RULES, type RateRule, type RuleName } from "./rules";
 
 export type RateCheck = {
@@ -28,8 +30,33 @@ function num(value: unknown, fallback: number): number {
 }
 
 /** Defaults in code. A cached flag row `ratelimit.<rule>` may override limit, periodMs, burst. */
-export function createRateLimiter(deps: { db: Executor; flags: FlagReader; metrics?: Metrics; logger?: Logger }) {
+export function createRateLimiter(deps: {
+  db: Executor;
+  flags: FlagReader;
+  metrics?: Metrics;
+  logger?: Logger;
+  redis?: Redis | null;
+}) {
   const memory = createMemoryLimiter();
+  const sha = { current: "" };
+  let loading: Promise<string> | null = null;
+
+  async function redisCheck(key: string, spec: RateRule) {
+    const redis = deps.redis;
+    if (!redis) return memory.check(key, spec.limit, spec.periodMs, spec.burst);
+    try {
+      if (!sha.current) {
+        loading ??= loadGcraScript(redis).finally(() => {
+          loading = null;
+        });
+        sha.current = await loading;
+      }
+      return await redisGcraCheck(redis, sha, key, spec.limit, spec.periodMs, spec.burst);
+    } catch (err) {
+      deps.logger?.warn({ rule: key, err: errorForLog(err) }, "redis rate limit fell back to memory");
+      return memory.check(key, spec.limit, spec.periodMs, spec.burst);
+    }
+  }
 
   async function ruleOf(name: RuleName): Promise<RateRule> {
     const base = RULES[name];
@@ -44,19 +71,24 @@ export function createRateLimiter(deps: { db: Executor; flags: FlagReader; metri
   }
 
   return {
-    async check(rule: RuleName, subject: string): Promise<RateCheck> {
+    /** `exec`: a transaction the caller holds — a postgres rule is checked on its connection, so a caller that must
+     *  count inside its own transaction (requests.submit, under its idempotency lock) never waits for a second pooled
+     *  connection while holding one. Its unit is spent only if that transaction commits. Other stores ignore it. */
+    async check(rule: RuleName, subject: string, exec?: Executor): Promise<RateCheck> {
       const spec = await ruleOf(rule);
       const key = `${rule}:${subject}`;
       try {
         const result =
           spec.store === "memory"
             ? memory.check(key, spec.limit, spec.periodMs, spec.burst)
-            : await gcraCheck(deps.db, key, spec.limit, spec.periodMs, spec.burst);
+            : spec.store === "redis"
+              ? await redisCheck(key, spec)
+              : await gcraCheck(exec ?? deps.db, key, spec.limit, spec.periodMs, spec.burst);
         if (!result.allowed) deps.metrics?.inc("rate_limited_total", { rule });
         return { ...result, limit: spec.limit };
       } catch (err) {
         if (spec.fail === "closed") {
-          deps.logger?.warn({ rule, err: err instanceof Error ? err.message : String(err) }, "rate limit fail-closed");
+          deps.logger?.warn({ rule, err: errorForLog(err) }, "rate limit fail-closed");
           throw new RateLimitUnavailable(rule);
         }
         throw err;

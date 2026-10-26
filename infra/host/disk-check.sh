@@ -14,7 +14,10 @@ fi
 APP_DIR="$(cd "$INFRA_DIR/.." && pwd)"
 cd "$APP_DIR"
 ENV_FILE="$INFRA_DIR/env/production.env"
-source <(grep -E '^OPS_WEBHOOK=' "$ENV_FILE" || true)
+# Read the webhook the way Compose does — never source the env file, which would run whatever a value contains.
+# shellcheck disable=SC1091
+source "$INFRA_DIR/env-value.sh"
+OPS_WEBHOOK="$(env_optional "$ENV_FILE" OPS_WEBHOOK)"
 USE=$(df --output=pcent / | tail -1 | tr -dc '0-9')
 STAMP=/run/bbc-disk-alerted
 if (( USE >= 70 )); then

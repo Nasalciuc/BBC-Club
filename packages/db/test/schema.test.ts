@@ -83,11 +83,11 @@ describe("atomic counters", () => {
         ]),
       ),
     );
-    const [{ count }] = await db
+    const [row] = await db
       .select({ count: rateLimits.count })
       .from(rateLimits)
       .where(sql`${rateLimits.key} = ${key}`);
-    expect(count).toBe(25);
+    expect(row?.count).toBe(25);
   });
   it("bumpCounter with cap returns null once exhausted", async () => {
     const key = `cap:${Date.now()}`;

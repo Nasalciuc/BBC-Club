@@ -1,0 +1,502 @@
+import * as Notifications from "expo-notifications";
+import { useIsFocused, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
+import {
+  BackButton,
+  Button,
+  CHECK_CIRCLE_SIZE,
+  CheckCircle,
+  Icon,
+  Photo,
+  PhotoCredit,
+  TripCard,
+  Wordmark,
+  baselineOffset,
+  belowBaseline,
+  rn,
+  tokens,
+} from "@bbc/ui";
+
+import { RootTabBar } from "@/components/RootTabBar";
+import { ScreenStatusBar } from "@/components/screen-status-bar";
+import { createTapGuard, openOffer } from "@/features/explore/open-offer";
+import { OfferCards } from "@/features/explore/SheetRest";
+import { useExploreHome } from "@/features/explore/useExploreHome";
+import { airlineMark, airlineRibbon } from "@/features/fares/airline-marks";
+import {
+  NotificationsAskSheet,
+  type NotificationsAskSheetHandle,
+} from "@/features/notifications/NotificationsAskSheet";
+import { RECEIVED_TRIP_FRAME, clubPhoto, clubReceivedPhoto } from "@/features/places/club-photos";
+import { bandPicture, cardPicture } from "@/features/places/place-photo-logic";
+import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import {
+  type ConfirmationModel,
+  confirmationFromRequest,
+  confirmationRoute,
+  readConfirmation,
+  sentRequestId,
+} from "@/features/requests/confirmation-handoff";
+import {
+  confirmationKind,
+  otherFares,
+  savedCopy,
+  tripFacts,
+  type RequestSource,
+} from "@/features/requests/confirmation-logic";
+import { useProfile } from "@/features/profile/useProfile";
+import { fetchRequest } from "@/lib/api";
+import { env } from "@/lib/env";
+import { displayPhone } from "@/lib/phone";
+import { shouldAskForPush, type PermissionStatus } from "@/lib/push-ask-logic";
+import { appStorage, PUSH_ASKED_AT_KEY } from "@/lib/storage-keys";
+
+type Role = { fontSize: number; lineHeight: number };
+
+/** The margin that puts a line's baseline `pitch` under the one before it. */
+const after = (pitch: number, prev: Role, next: Role) => pitch - belowBaseline(prev) - baselineOffset(next);
+
+const title = tokens.type.receivedTitle;
+const body = tokens.type.receivedBody;
+const phoneRole = tokens.type.receivedPhone;
+const next = tokens.type.receivedNext;
+const section = tokens.type.receivedSection;
+const seeAll = tokens.type.receivedSeeAll;
+/** The wordmark's line: ` Club`, the larger of its two sizes, sets where the baseline falls in it. */
+const wordmarkLine = {
+  fontSize: tokens.type.wordmarkReceivedClub.fontSize,
+  lineHeight: tokens.type.wordmarkReceived.lineHeight,
+};
+
+/**
+ * 08, measured (pt, from the safe area's top — 47 on the image — and from the sheet's top edge): Tower Bridge to 290.2
+ * under the safe area, the wordmark's baseline 13.75 under it, 25 in; the white sheet from 258, its corners 16; the
+ * check's middle 4.13 under its edge; `Request received.` on 69.58, the call on 95.54 and the number on 115.04 (19.5
+ * apart), all centred; the rule's middle 17.51 under the last line, 24 in, 0.7 thick; `London is next.` on 164.49,
+ * 24.84 in; the trip card from 176.25 on 21.2 gutters; `View request ›` 9.27 under it, 34.36 tall, 21.1 and 21.5 in,
+ * its chevron (16.15 at 2.08) 8.57 from its right edge and 0.47 low; `Other great fares` on 348.14, 24 in, `See all`
+ * on 347.04, 330.4 in, its chevron (13.27 at 2.29) 1.6 after it and 0.49 under the words' middle; the cards from
+ * 357.97, the first 20.8 from the screen's edge, 8.55 apart.
+ */
+const PAGE = {
+  hero: 290.2,
+  wordmark: { left: 25.01, baseline: 13.75 },
+  sheet: { top: 258, radius: 16 },
+  check: 4.13,
+  title: 69.58,
+  body: 25.96,
+  phone: 19.5,
+  rule: { below: 17.51, inset: 24, thickness: 0.7 },
+  next: { baseline: 31.94, left: 24.84 },
+  trip: { below: 11.76, left: 21.2, right: 21.2 },
+  pill: { above: 9.27, height: 34.36, left: 21.11, right: 21.5, chevron: { size: 16.15, stroke: 2.082, inset: 8.57 } },
+  pillChevron: { x: 0, y: 0.47 },
+  others: { baseline: 31.46, left: 24.01 },
+  seeAll: { left: 330.37, rise: 1.1, gap: 1.6, chevron: { size: 13.27, stroke: 2.293, drop: 0.49 } },
+  cards: { below: 9.83, inset: 20.8, gap: 8.55 },
+} as const;
+
+/** 26, measured from the safe area's top: the back button's middle 6.3 under it, 37.6 in, 35.3 across; the message 23.6
+ *  in, in a 328-pt column (where 26 breaks its lines) — its title on 254.85 and 285.34, the words on 322.75 and 343.8;
+ *  `Done` 42.93 tall, 19.96 and 20.5 in, its foot 27.35 over the tab bar. */
+const SAVED = {
+  back: {
+    centre: { x: 37.6, y: 6.3 },
+    diameter: 35.3,
+    glyph: { size: 23.21, stroke: 2.179, offset: { x: -1.17, y: 0.22 } },
+  },
+  left: 23.6,
+  column: 328,
+  title: { baseline: 254.85, pitch: 30.49 },
+  body: { baseline: 322.75, pitch: 21.05, left: 23.85 },
+  pill: { height: 42.93, left: 19.96, right: 20.5, bottom: 27.35 },
+} as const;
+// 26's lines as it spaces them (the tokens round a line height to the point).
+const savedTitle = {
+  ...rn(tokens.type.savedTitle),
+  fontSize: tokens.type.savedTitle.fontSize,
+  lineHeight: SAVED.title.pitch,
+};
+const savedBody = {
+  ...rn(tokens.type.savedBody),
+  fontSize: tokens.type.savedBody.fontSize,
+  lineHeight: SAVED.body.pitch,
+};
+
+/**
+ * The request's confirmation (08, 25, 26): Tower Bridge under the navy wordmark; the check on the sheet's edge,
+ * `Request received.` and the number the specialist will call; `London is next.` with the trip; `View request ›`;
+ * `Other great fares` and `See all ›`, which opens every offer on Explore (16). Saved on an offline phone, a page of
+ * its own (26). The tab bar shows Requests: the request is there now. The notifications question rises over it once (25).
+ */
+export default function RequestConfirmedScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const askRef = useRef<NotificationsAskSheetHandle>(null);
+  // Only the request's id (or queued key) and whether it was saved offline come from the URL (F014): what the page
+  // shows was handed over by the sheet, in memory — or, after a relaunch or from a link, is read from the request
+  // itself. No phone, city or picture is ever taken from a param.
+  const route = confirmationRoute(useLocalSearchParams());
+  const handedOver = readConfirmation(route.id);
+  const [loaded, setLoaded] = useState<ConfirmationModel | null>(null);
+  const model = handedOver ?? loaded;
+  // The request that was sent, by its server id: read from the server when nothing was handed over, and opened by
+  // `View request`. None for a request saved offline, or for an id a link made up.
+  const sentId = sentRequestId(route);
+  const fromServer = !handedOver && sentId !== null;
+  useEffect(() => {
+    if (!fromServer || !sentId) return;
+    let cancelled = false;
+    void (async () => {
+      const result = await fetchRequest(sentId);
+      if (!cancelled && result.ok) {
+        setLoaded(confirmationFromRequest(result.data, displayPhone(result.data.phone ?? null)));
+      }
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [fromServer, sentId]);
+  const source: RequestSource = model?.source ?? "search";
+  const kind = confirmationKind(source, route.queued);
+  // The number this request will be called on, as the sheet sent it; the profile's only when the sheet passed none.
+  const requestPhone = model?.phone || null;
+  // The profile from the one store every screen shares (F104) — asked only when the sheet passed no number. Saved on
+  // the phone (offline): this screen names no number, and there is no network to ask.
+  const profile = useProfile({ load: !requestPhone && kind !== "saved" });
+  const phone = requestPhone ?? (kind === "saved" ? null : displayPhone(profile?.phone ?? null));
+  const from = model?.from ?? "";
+  const to = model?.to ?? "";
+  const city = model?.city ?? "";
+  // Home's offers for `Other great fares` — no origin to resolve here.
+  const { home } = useExploreHome({ origin: false });
+  const others = otherFares(home, to);
+  const photoFor = usePlacePhotos(kind === "saved" ? [] : [to]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const current = await Notifications.getPermissionsAsync();
+        if (cancelled) return;
+        const raw = appStorage.getString(PUSH_ASKED_AT_KEY);
+        const parsed = raw == null || raw === "" ? null : Number(raw);
+        const askedAt = parsed != null && Number.isFinite(parsed) ? parsed : null;
+        const status: PermissionStatus =
+          current.status === "granted" || current.status === "denied" ? current.status : "undetermined";
+        if (shouldAskForPush(status, askedAt)) askRef.current?.present();
+      } catch {
+        // Permission state is best-effort; the request itself already succeeded.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const viewRequest = () => {
+    if (sentId) router.push(`/request/${sentId}` as Href);
+  };
+
+  // `Other great fares` open the offer's own page at once (F067), one navigation at a time (F101).
+  const focused = useIsFocused();
+  const [tapGuard] = useState(() => createTapGuard());
+  useEffect(() => {
+    if (focused) tapGuard.release();
+  }, [focused]);
+
+  function openOther(card: ProposalCardVM) {
+    openOffer(router, card, tapGuard);
+  }
+
+  if (kind === "saved") {
+    const copy = savedCopy(route.unreachable);
+    const s = SAVED;
+    return (
+      <View style={styles.root} testID="confirmation.root">
+        <ScreenStatusBar on="light" />
+        <BackButton
+          testID="confirmation.back"
+          variant="round"
+          diameter={s.back.diameter}
+          glyph={s.back.glyph}
+          onPress={() => router.back()}
+          style={StyleSheet.flatten([
+            styles.absolute,
+            {
+              left: s.back.centre.x - s.back.diameter / 2,
+              top: insets.top + s.back.centre.y - s.back.diameter / 2,
+            },
+          ])}
+        />
+        <View style={styles.saved}>
+          <Text
+            style={[savedTitle, styles.navy, { marginTop: insets.top + s.title.baseline - baselineOffset(savedTitle) }]}
+            accessibilityRole="header"
+          >
+            {copy.title}
+          </Text>
+          <Text
+            style={[
+              savedBody,
+              styles.slate,
+              {
+                marginLeft: s.body.left - s.left,
+                // From the title's last line: the words' first baseline 322.75 under the safe area's top.
+                marginTop:
+                  s.body.baseline -
+                  s.title.baseline -
+                  s.title.pitch -
+                  belowBaseline(savedTitle) -
+                  baselineOffset(savedBody),
+              },
+            ]}
+          >
+            {copy.body}
+          </Text>
+        </View>
+        <View style={[styles.savedPill, { paddingBottom: s.pill.bottom }]}>
+          <Button
+            testID="confirmation.done"
+            label="Done"
+            variant="primary"
+            height={s.pill.height}
+            text="buttonSaved"
+            style={{ marginLeft: s.pill.left, marginRight: s.pill.right }}
+            onPress={() => router.back()}
+          />
+        </View>
+        <RootTabBar active="requests" />
+        <NotificationsAskSheet ref={askRef} />
+      </View>
+    );
+  }
+
+  const g = PAGE;
+  const heroHeight = insets.top + g.hero;
+  const own = clubReceivedPhoto(to);
+  const picture = bandPicture(model?.media ?? null, photoFor(to), {
+    headers: PICTURE_HEADERS,
+    mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
+    size: { width, height: heroHeight },
+  });
+  // The design's own photograph of the city where it has one (08: Tower Bridge); the request's or the place's else.
+  const heroSource = own?.source ?? picture.source;
+  const credit = own ? null : picture.credit;
+  const creditLink = credit?.link ?? null;
+  const carrierName = model?.carrier?.name ?? "";
+  const carrier = carrierName ? { name: carrierName, logoUrl: model?.carrier?.logoUrl ?? null } : null;
+  const airline = model?.carrier?.code ?? null;
+  const facts = tripFacts(model?.trip ?? "", model?.travelers ?? "");
+  const lastLine = phone ? phoneRole : body;
+
+  return (
+    <View style={styles.root} testID="confirmation.root">
+      <ScreenStatusBar on="light" />
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={[styles.hero, { height: heroHeight }]}>
+          <Photo
+            source={heroSource}
+            fallback={CLUB_PICTURE}
+            cachePolicy={own ? "disk" : picture.cache}
+            position={own ? { left: own.left, top: 0 } : undefined}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            style={[
+              styles.absolute,
+              {
+                left: g.wordmark.left,
+                top: insets.top + g.wordmark.baseline - baselineOffset(wordmarkLine),
+              },
+            ]}
+          >
+            <Wordmark look="received" testID="confirmation.wordmark" />
+          </View>
+        </View>
+        <View
+          style={[
+            styles.sheet,
+            {
+              marginTop: insets.top + g.sheet.top - heroHeight,
+              borderTopLeftRadius: g.sheet.radius,
+              borderTopRightRadius: g.sheet.radius,
+            },
+          ]}
+        >
+          <View style={[styles.check, { top: g.check - CHECK_CIRCLE_SIZE / 2 }]}>
+            <CheckCircle testID="confirmation.check" />
+          </View>
+          <Text
+            style={[rn(title), styles.navy, styles.centred, { marginTop: g.title - baselineOffset(title) }]}
+            accessibilityRole="header"
+          >
+            Request received.
+          </Text>
+          <Text style={[rn(body), styles.slate, styles.centred, { marginTop: after(g.body, title, body) }]}>
+            {phone ? "A specialist will call you shortly on" : "A specialist will call you shortly."}
+          </Text>
+          {phone ? (
+            <Text style={[rn(phoneRole), styles.navy, styles.centred, { marginTop: after(g.phone, body, phoneRole) }]}>
+              {phone}
+              <Text style={[rn(body), styles.slate]}>.</Text>
+            </Text>
+          ) : null}
+          <View
+            style={[
+              styles.rule,
+              {
+                height: g.rule.thickness,
+                marginHorizontal: g.rule.inset,
+                marginTop: g.rule.below - belowBaseline(lastLine) - g.rule.thickness / 2,
+              },
+            ]}
+          />
+          {city ? (
+            <Text
+              style={[
+                rn(next),
+                styles.navy,
+                { marginLeft: g.next.left, marginTop: g.next.baseline - g.rule.thickness / 2 - baselineOffset(next) },
+              ]}
+              accessibilityRole="header"
+            >
+              {`${city} is next.`}
+            </Text>
+          ) : null}
+          {from && to ? (
+            <View
+              style={{
+                marginLeft: g.trip.left,
+                marginRight: g.trip.right,
+                marginTop: city ? g.trip.below - belowBaseline(next) : tokens.space.md,
+              }}
+            >
+              <TripCard
+                testID="confirmation.trip"
+                photo={clubPhoto(to, "request") ?? cardPicture(model?.media ?? null, photoFor(to), PICTURE_HEADERS)}
+                position={clubPhoto(to, "request") ? RECEIVED_TRIP_FRAME : undefined}
+                fallback={CLUB_PICTURE}
+                cabin={model?.cabin === "first" ? "FIRST CLASS" : "BUSINESS CLASS"}
+                from={from}
+                to={to}
+                dates={model?.dates || null}
+                facts={facts}
+                carrier={carrier}
+                ribbon={carrier ? airlineRibbon(airline) : null}
+                mark={carrier && !airlineRibbon(airline) ? airlineMark(airline) : null}
+              />
+            </View>
+          ) : null}
+          <Button
+            testID="confirmation.viewRequest"
+            label="View request"
+            variant="primary"
+            height={g.pill.height}
+            text="buttonReceived"
+            trailing="chevron"
+            trailingAtEdge
+            trailingInset={g.pill.chevron.inset}
+            trailingSize={g.pill.chevron.size}
+            trailingStroke={g.pill.chevron.stroke}
+            trailingOffset={g.pillChevron}
+            style={{ marginLeft: g.pill.left, marginRight: g.pill.right, marginTop: g.pill.above }}
+            onPress={viewRequest}
+          />
+          {credit ? (
+            // The credit the photograph owes (ADR-IMPL-043).
+            <View style={styles.credit}>
+              <PhotoCredit
+                testID="confirmation.photoCredit"
+                label={credit.label}
+                accessibilityLabel={credit.spoken}
+                onPress={
+                  creditLink
+                    ? () => {
+                        Linking.openURL(creditLink).catch(() => undefined);
+                      }
+                    : undefined
+                }
+              />
+            </View>
+          ) : null}
+          {others.length > 0 ? (
+            <View>
+              <View style={{ marginTop: g.others.baseline - baselineOffset(section) }}>
+                <Text style={[rn(section), styles.navy, { marginLeft: g.others.left }]} accessibilityRole="header">
+                  Other great fares
+                </Text>
+                <Pressable
+                  testID="confirmation.seeAll"
+                  accessibilityRole="button"
+                  accessibilityLabel="See all fares"
+                  // A 44-pt target around the 13.3-pt row.
+                  hitSlop={{ top: 16, bottom: 16, left: 10, right: 10 }}
+                  onPress={() => router.dismissTo({ pathname: "/(tabs)/explore", params: { offers: "all" } })}
+                  style={({ pressed }) => [
+                    styles.seeAll,
+                    {
+                      left: g.seeAll.left,
+                      top: baselineOffset(section) - g.seeAll.rise - baselineOffset(seeAll),
+                      gap: g.seeAll.gap,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[rn(seeAll), styles.subtle]}>See all</Text>
+                  <View style={{ transform: [{ translateY: g.seeAll.chevron.drop }] }}>
+                    <Icon
+                      name="chevron"
+                      size={g.seeAll.chevron.size}
+                      color={tokens.colors.textSubtle}
+                      strokeWidth={g.seeAll.chevron.stroke}
+                    />
+                  </View>
+                </Pressable>
+              </View>
+              <View style={{ marginTop: g.cards.below - belowBaseline(section) - CAROUSEL_PAD }}>
+                <OfferCards
+                  items={others}
+                  home={home}
+                  onOpenOffer={openOther}
+                  testID="confirmation.others"
+                  cardTestID="confirmation.other"
+                  compact
+                  row={{ bleed: 0, inset: g.cards.inset, gap: g.cards.gap }}
+                />
+              </View>
+            </View>
+          ) : null}
+        </View>
+      </ScrollView>
+      <RootTabBar active="requests" />
+      <NotificationsAskSheet ref={askRef} />
+    </View>
+  );
+}
+
+/** The room the offers' row keeps over its cards for their shadow (`CarouselRow`). */
+const CAROUSEL_PAD = tokens.space.sm;
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
+  scroll: { paddingBottom: tokens.space.md },
+  absolute: { position: "absolute" },
+  hero: { backgroundColor: tokens.colors.surfaceTint, overflow: "hidden" },
+  sheet: { backgroundColor: tokens.colors.surfaceCard, paddingBottom: tokens.space.xs },
+  check: { position: "absolute", left: 0, right: 0, alignItems: "center", zIndex: 1 },
+  centred: { textAlign: "center" },
+  navy: { color: tokens.colors.textPrimary },
+  slate: { color: tokens.colors.textSecondary },
+  subtle: { color: tokens.colors.textSubtle },
+  rule: { backgroundColor: tokens.colors.borderDefault },
+  credit: { marginTop: tokens.space.xs, paddingHorizontal: tokens.space.gutter },
+  seeAll: { position: "absolute", flexDirection: "row", alignItems: "center" },
+  pressed: { opacity: 0.6 },
+  saved: { paddingLeft: SAVED.left, width: SAVED.left + SAVED.column },
+  savedPill: { flex: 1, justifyContent: "flex-end" },
+});

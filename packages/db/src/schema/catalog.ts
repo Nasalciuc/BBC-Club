@@ -1,10 +1,12 @@
-import { pgSchema, text, char, numeric, integer, boolean, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { pgSchema, text, char, numeric, integer, boolean, index, unique, check, primaryKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { id, createdAt, updatedAt, tz } from "./_helpers";
 
 export const catalog = pgSchema("catalog");
 export const fareCabin = catalog.enum("fare_cabin", ["business", "first"]);
 export const fareSource = catalog.enum("fare_source", ["manual", "import", "gds"]);
+/** The trip a fare's price is for (ADR-IMPL-056): one way unless the catalogue says the price is for the round trip. */
+export const fareTrip = catalog.enum("fare_trip", ["round_trip", "one_way"]);
 
 /** A published fare for a route. Distinct from proposals.offers (promotional). */
 export const fares = catalog.table(
@@ -25,6 +27,9 @@ export const fares = catalog.table(
     publishedPrice: numeric("published_price", { precision: 10, scale: 2 }),
     publishedSource: text("published_source"),
     currency: char("currency", { length: 3 }).notNull().default("USD"),
+    /** What the price is for: `round_trip` only when the catalogue says so (04 and 13 print `round trip` beside a
+     *  fare), else one way. Added by the named step 0031, not by a drizzle migration. */
+    trip: fareTrip("trip").notNull().default("one_way"),
     source: fareSource("source").notNull().default("import"),
     validFrom: tz("valid_from").notNull().defaultNow(),
     validUntil: tz("valid_until").notNull(),
@@ -33,7 +38,11 @@ export const fares = catalog.table(
     updatedAt: updatedAt(),
   },
   (t) => [
-    uniqueIndex("fares_route_cabin_carrier").on(t.routeFrom, t.routeTo, t.cabin, t.carrier, t.validFrom),
+    /** One fare per route, cabin, carrier, valid_from and trip; a fare without a carrier is one too (NULLS NOT
+     *  DISTINCT) — the import's ON CONFLICT target. A constraint since 0034 (0006 made it an index without the trip). */
+    unique("fares_route_cabin_carrier")
+      .on(t.routeFrom, t.routeTo, t.cabin, t.carrier, t.validFrom, t.trip)
+      .nullsNotDistinct(),
     index("fares_search")
       .on(t.routeFrom, t.routeTo, t.cabin)
       .where(sql`${t.published} = true`),
@@ -54,6 +63,27 @@ export const fares = catalog.table(
       sql`length(${t.routeFrom}) = 3 AND length(${t.routeTo}) = 3 AND ${t.routeFrom} <> ${t.routeTo}`,
     ),
     check("fares_published_has_source", sql`${t.publishedPrice} IS NULL OR ${t.publishedSource} IS NOT NULL`),
+    // Whole minutes above zero or none, as FareVM reads it (0035).
+    check("fares_duration_pos", sql`${t.durationMinutes} IS NULL OR ${t.durationMinutes} > 0`),
+  ],
+);
+
+/** Daily search demand. No member id. JSON routes use from/to; the columns are route_from/route_to. */
+export const demandDaily = catalog.table(
+  "demand_daily",
+  {
+    day: tz("day").notNull(),
+    routeFrom: char("route_from", { length: 3 }).notNull(),
+    routeTo: char("route_to", { length: 3 }).notNull(),
+    cabin: fareCabin("cabin").notNull(),
+    searches: integer("searches").notNull(),
+    searchesWithoutFare: integer("searches_without_fare").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.day, t.routeFrom, t.routeTo, t.cabin] }),
+    check("demand_daily_counts_nonneg", sql`${t.searches} >= 0 AND ${t.searchesWithoutFare} >= 0`),
+    check("demand_daily_nofare_lte", sql`${t.searchesWithoutFare} <= ${t.searches}`),
   ],
 );
 
@@ -71,7 +101,149 @@ export const airports = catalog.table(
     lng: numeric("lng", { precision: 9, scale: 6 }).notNull(),
     popularity: integer("popularity").notNull().default(0),
     tz: text("tz").notNull().default("UTC"),
+    /** Other names a member may type: metro and former codes (LON, KIV), the town it sits in. Search only. */
+    searchTerms: text("search_terms"),
+    /** Lower-case, accent-free copies for search, written only by the airports_normalize trigger (0023). Never set them. */
+    cityNorm: text("city_norm"),
+    nameNorm: text("name_norm"),
+    countryNorm: text("country_norm"),
+    termsNorm: text("terms_norm"),
+    /** The destination's one line under its city (04: `Iconic sights, world-class culture and unforgettable
+     *  experiences.`), from the airports import; null until it has one (ADR-IMPL-056). Added by the named step 0031. */
+    description: text("description"),
     createdAt: createdAt(),
   },
-  (t) => [index("airports_city").on(t.city), index("airports_region").on(t.region)],
+  (t) => [
+    index("airports_city").on(t.city),
+    index("airports_region").on(t.region),
+    check("airports_description", sql`${t.description} IS NULL OR length(btrim(${t.description})) BETWEEN 1 AND 160`),
+    // On the globe (0035).
+    check("airports_coordinates", sql`${t.lat} BETWEEN -90 AND 90 AND ${t.lng} BETWEEN -180 AND 180`),
+  ],
+);
+
+/** What a place photo is now (ADR-IMPL-043): not looked at yet, a photo, or only coordinates to draw from above. */
+export const placePhotoStatus = catalog.enum("place_photo_status", ["pending", "photo", "satellite"]);
+/** Where a photo comes from: Wikimedia Commons (through Wikidata), Pexels, or an operator's own choice. */
+export const placePhotoSource = catalog.enum("place_photo_source", ["wikimedia", "pexels", "override"]);
+
+/**
+ * The photo the app shows for the city an airport serves (ADR-IMPL-043) — the address of an image hosted elsewhere,
+ * never the image. One row per airport the app asked about. `pending` until the resolve-place-photos job looks; then a
+ * photo with its credit, or the coordinates the app draws from Mapbox's satellite imagery. A row is looked at again
+ * when it expires; an operator's own photo never expires. Created by 0026_catalog_place_photos.sql (after 0006).
+ */
+export const placePhotos = catalog.table(
+  "place_photos",
+  {
+    code: char("code", { length: 3 })
+      .primaryKey()
+      .references(() => airports.code, { onDelete: "cascade" }),
+    status: placePhotoStatus("status").notNull().default("pending"),
+    /** Set exactly when there is a photo. */
+    source: placePhotoSource("source"),
+    /** For a card: 500 px wide from Commons, 940 from Pexels. */
+    cardUrl: text("card_url"),
+    /** For a full-width photograph: 1280 px wide from Commons, 1880 from Pexels. */
+    heroUrl: text("hero_url"),
+    author: text("author"),
+    license: text("license"),
+    /** The photo's own page: its author, its licence, the original. An operator's photo may have none. */
+    link: text("link"),
+    /** Where the satellite view is centred: the city, else the airport. */
+    lat: numeric("lat", { precision: 9, scale: 6 }),
+    lng: numeric("lng", { precision: 9, scale: 6 }),
+    /** Looks since the last one that answered; spaces out the next look after a failure. */
+    attempts: integer("attempts").notNull().default(0),
+    resolvedAt: tz("resolved_at"),
+    /** When the job looks again: a new row is due at once; an operator's photo, never ('infinity'). */
+    expiresAt: tz("expires_at").notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("place_photos_due").on(t.expiresAt),
+    check("place_photos_source", sql`(${t.status} = 'photo') = (${t.source} IS NOT NULL)`),
+    check(
+      "place_photos_photo",
+      sql`${t.status} <> 'photo' OR (${t.cardUrl} IS NOT NULL AND ${t.heroUrl} IS NOT NULL AND (${t.link} IS NOT NULL OR ${t.source} = 'override'))`,
+    ),
+    check(
+      "place_photos_satellite",
+      sql`${t.status} <> 'satellite' OR (${t.lat} IS NOT NULL AND ${t.lng} IS NOT NULL AND ${t.lat} BETWEEN -90 AND 90 AND ${t.lng} BETWEEN -180 AND 180)`,
+    ),
+    check(
+      "place_photos_https",
+      sql`(${t.cardUrl} IS NULL OR ${t.cardUrl} LIKE 'https://%') AND (${t.heroUrl} IS NULL OR ${t.heroUrl} LIKE 'https://%') AND (${t.link} IS NULL OR ${t.link} LIKE 'https://%')`,
+    ),
+    check("place_photos_attempts", sql`${t.attempts} >= 0`),
+  ],
+);
+
+/**
+ * The cities the company's site sells (ADR-IMPL-045), as the sync-site-destinations job read them last: each city's
+ * airports, its photo's address on the site, whether the site's home page shows it. A snapshot the job replaces whole,
+ * in one transaction. Created by 0028_catalog_site_destinations.sql (after 0006).
+ */
+export const sitePlaces = catalog.table(
+  "site_places",
+  {
+    /** The site's own id for the city: its page is /flight/city/<name>/<id>. */
+    cmsId: integer("cms_id").primaryKey(),
+    name: text("name").notNull(),
+    /** The site's country and region, as the site names them. */
+    country: text("country").notNull(),
+    region: text("region").notNull(),
+    /** The city's main airport: the one its pin stands on. */
+    airport: char("airport", { length: 3 })
+      .notNull()
+      .references(() => airports.code, { onDelete: "cascade" }),
+    /** Every airport the city's photo goes on, the main one included. */
+    airports: char("airports", { length: 3 }).array().notNull(),
+    /** On the site's home page. */
+    promoted: boolean("promoted").notNull().default(false),
+    /** `bestDeals/<id>/image/<file>` when the city's photo is its own and answers; null otherwise. */
+    image: text("image"),
+    syncedAt: tz("synced_at").notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("site_places_airport").on(t.airport),
+    check("site_places_cms_id", sql`${t.cmsId} > 0`),
+    check("site_places_main_airport", sql`${t.airport} = ANY (${t.airports})`),
+    check(
+      "site_places_image",
+      sql`${t.image} IS NULL OR ${t.image} ~* '^bestDeals/[0-9]+/image/[a-z0-9._-]+\\.(jpe?g|png|webp)$'`,
+    ),
+  ],
+);
+
+/**
+ * The US airports the site lists a price from for each of its cities (ADR-IMPL-045): New York's deal for London is
+ * three rows, JFK, EWR and LGA. The site's prices are kept, never shown — a pin is priced by the formula (ADR-IMPL-037).
+ * Created by 0028_catalog_site_destinations.sql.
+ */
+export const siteRoutes = catalog.table(
+  "site_routes",
+  {
+    routeFrom: char("route_from", { length: 3 })
+      .notNull()
+      .references(() => airports.code, { onDelete: "cascade" }),
+    cmsId: integer("cms_id")
+      .notNull()
+      .references(() => sitePlaces.cmsId, { onDelete: "cascade" }),
+    /** The site's own id for this price: one bestDeals entry of the city's page. */
+    deal: integer("deal").notNull(),
+    /** The site's "Price Today" and "Old Price", whole USD. */
+    price: integer("price").notNull(),
+    publishedPrice: integer("published_price"),
+    syncedAt: tz("synced_at").notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.routeFrom, t.cmsId] }),
+    index("site_routes_cms_id").on(t.cmsId),
+    check("site_routes_deal", sql`${t.deal} > 0`),
+    check("site_routes_price", sql`${t.price} > 0`),
+    check("site_routes_published_price", sql`${t.publishedPrice} IS NULL OR ${t.publishedPrice} > 0`),
+  ],
 );

@@ -154,7 +154,8 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/ui/src/tokens.ts", "apps/mobile/src/constants/club.ts"],
+    // The generated tokens; the entry's own values and the test that pins them (ADR-IMPL-047, ADR-IMPL-055).
+    files: ["packages/ui/src/tokens.ts", "apps/mobile/src/constants/club.ts", "apps/mobile/src/constants/club.test.ts"],
     rules: { "bbc/no-inline-color": "off" },
   },
   {

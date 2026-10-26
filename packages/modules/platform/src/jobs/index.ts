@@ -1,9 +1,10 @@
-import { sql } from "drizzle-orm";
+import { desc, inArray, sql } from "drizzle-orm";
 import { CRON_FIELDS_RE, type JobSpec } from "@bbc/shared/platform-specs";
 import { jobRuns } from "../infrastructure/schema";
+import { errorForLog, errorLine, type Db } from "@bbc/db";
 
 export type JobContext = {
-  db: any;
+  db: Db;
   logger: {
     info: (o: object, m?: string) => void;
     warn: (o: object, m?: string) => void;
@@ -18,12 +19,14 @@ export type { JobSpec };
  *  (`POST /v1/internal/run/:name`, authorized `jobs:run`). Every run is recorded in platform.job_runs —
  *  that table is the only honest answer to "did the backup run last night?". */
 export function createJobs(
-  db: any,
+  db: Db,
   deps: {
     logger: JobContext["logger"];
     metrics?: {
       inc(n: string, l?: Record<string, string>): void;
       observe(n: string, v: number, l?: Record<string, string>): void;
+      setGauge?(n: string, v: number, l?: Record<string, string>): void;
+      clearPrefix?(prefix: string): void;
     };
   },
 ) {
@@ -54,12 +57,18 @@ export function createJobs(
       }
     }
 
-    const [runRow] = await db.insert(jobRuns).values({ job: name, status: "running" }).returning({ id: jobRuns.id });
+    // From here on the lock is held: everything, the job_runs insert included, runs inside try so that finally
+    // always unlocks and releases the reserved connection. A throw outside it would keep the lock on a leaked
+    // connection, and every later run would be "skipped" until the process restarts.
+    let runId: bigint | null = null;
     const ac = new AbortController();
     const DEFAULT_JOB_TIMEOUT_MS = 10 * 60_000;
     const timeout = setTimeout(() => ac.abort(), spec.timeoutMs ?? DEFAULT_JOB_TIMEOUT_MS);
 
     try {
+      const [runRow] = await db.insert(jobRuns).values({ job: name, status: "running" }).returning({ id: jobRuns.id });
+      if (!runRow) throw new Error(`job ${name}: the job_runs insert returned no row`);
+      runId = runRow.id;
       const raw = await spec.handler({ db, logger: deps.logger, signal: ac.signal });
       const metrics =
         raw !== null &&
@@ -72,20 +81,23 @@ export function createJobs(
       await db
         .update(jobRuns)
         .set({ status: "succeeded", finishedAt: sql`now()`, durationMs, metrics })
-        .where(sql`${jobRuns.id} = ${runRow.id}`);
+        .where(sql`${jobRuns.id} = ${runId}`);
       deps.metrics?.observe("job_duration_ms", durationMs, { job: name });
       deps.metrics?.inc("job_succeeded", { job: name });
       deps.logger.info({ job: name, durationMs, ...(metrics ?? {}) }, "job succeeded");
       return { status: "succeeded", durationMs, metrics };
-    } catch (e: any) {
+    } catch (e: unknown) {
       const durationMs = Date.now() - started;
-      const error = String(e?.message ?? e).slice(0, 2000);
-      await db
-        .update(jobRuns)
-        .set({ status: "failed", finishedAt: sql`now()`, durationMs, error })
-        .where(sql`${jobRuns.id} = ${runRow.id}`);
+      // Never the error's own text: a failed query's message holds its parameters (AGENTS.md rule 6).
+      const error = errorLine(e).slice(0, 2000);
+      // No row when the insert itself failed; the result and the log still say so.
+      if (runId !== null)
+        await db
+          .update(jobRuns)
+          .set({ status: "failed", finishedAt: sql`now()`, durationMs, error })
+          .where(sql`${jobRuns.id} = ${runId}`);
       deps.metrics?.inc("job_failed", { job: name });
-      deps.logger.error({ job: name, durationMs, err: error }, "job failed");
+      deps.logger.error({ job: name, durationMs, err: errorForLog(e) }, "job failed");
       return { status: "failed", durationMs, error };
     } finally {
       clearTimeout(timeout);
@@ -125,6 +137,16 @@ export function createJobs(
       return Object.fromEntries(
         rows.map((r) => [r.job, { status: r.status, at: r.started_at, durationMs: r.duration_ms }]),
       );
+    },
+    /** Last finished run per job, succeeded or failed — a run still going or skipped behind the lock says nothing about
+     *  whether the job works. For /status: a scheduled job whose last finished run failed is failing. */
+    async lastFinishedRuns(): Promise<Record<string, { status: string; at: Date }>> {
+      const rows = await db
+        .selectDistinctOn([jobRuns.job], { job: jobRuns.job, status: jobRuns.status, at: jobRuns.startedAt })
+        .from(jobRuns)
+        .where(inArray(jobRuns.status, ["succeeded", "failed"]))
+        .orderBy(jobRuns.job, desc(jobRuns.startedAt), desc(jobRuns.id));
+      return Object.fromEntries(rows.map((r) => [r.job, { status: r.status, at: r.at }]));
     },
   };
 }

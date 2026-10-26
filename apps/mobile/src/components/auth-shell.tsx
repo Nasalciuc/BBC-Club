@@ -1,8 +1,9 @@
 import { Image } from "expo-image";
 import { Href, useRouter } from "expo-router";
 import { PropsWithChildren, ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useKeyboardShown } from "@bbc/ui";
 
 import cabinImage from "@/assets/images/cabin.webp";
 import logoWelcome from "@/assets/images/logo-welcome.png";
@@ -13,12 +14,16 @@ type Logo = "none" | "left" | "center";
 
 type Props = PropsWithChildren<{
   footer?: ReactNode;
-  onBack?: Href;
+  /** Where back goes when there is no history — or what it does, when leaving needs more than a navigation. */
+  onBack?: Href | (() => void);
   logo?: Logo;
   heroPercent?: number;
   panelRadius?: number;
   testID?: string;
 }>;
+
+/** The back button's side, in the hero. */
+const BACK_SIZE = 40;
 
 export function AuthShell({
   children,
@@ -31,9 +36,19 @@ export function AuthShell({
 }: Props) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardShown();
   const top = Math.max(insets.top, Club.space.md) + Club.space.xs;
+  // With the keys up the photograph gives way to the fields (ADR-IMPL-047): it keeps only the back button and the logo,
+  // above the panel's rounded edge, so the button stands on the keys and the field being typed in stays in view.
+  const hero = keyboard
+    ? { height: top + BACK_SIZE + Club.space.xl + Club.space.xs, minHeight: 0 }
+    : { height: `${Math.round(heroPercent * 100)}%` as const };
 
   const goBack = () => {
+    if (typeof onBack === "function") {
+      onBack();
+      return;
+    }
     if (router.canGoBack()) {
       router.back();
       return;
@@ -45,8 +60,11 @@ export function AuthShell({
 
   return (
     <View style={styles.root}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={[styles.hero, { height: `${Math.round(heroPercent * 100)}%` }]}>
+      {/* `padding` on both platforms (ADR-IMPL-047): Android draws edge to edge, so the window no longer shrinks for the
+          keyboard (`softwareKeyboardLayoutMode: resize` has nothing to resize) and, without it, the button stayed under
+          the keys — the Maestro flows closed the keyboard first. A window that does shrink leaves no overlap to pad. */}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+        <View style={[styles.hero, hero]}>
           <Image
             source={cabinImage}
             style={[StyleSheet.absoluteFill, styles.heroImage]}
@@ -90,8 +108,16 @@ export function AuthShell({
           >
             {children}
           </ScrollView>
+          {/* On the keys, the navigation bar is under them: the padding above already counts it. */}
           {footer ? (
-            <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, Club.space.md) }]}>{footer}</View>
+            <View
+              style={[
+                styles.footer,
+                { paddingBottom: keyboard ? Club.space.md : Math.max(insets.bottom, Club.space.md) },
+              ]}
+            >
+              {footer}
+            </View>
           ) : null}
         </View>
       </KeyboardAvoidingView>
@@ -121,9 +147,9 @@ const styles = StyleSheet.create({
   back: {
     position: "absolute",
     left: Club.space.gutter,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: BACK_SIZE,
+    height: BACK_SIZE,
+    borderRadius: BACK_SIZE / 2,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,

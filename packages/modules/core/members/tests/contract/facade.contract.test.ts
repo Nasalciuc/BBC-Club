@@ -98,6 +98,69 @@ describe("@bbc/members facade", () => {
     }
   });
 
+  it("ensureProfile makes the row the delivery would; the delivery then adds nothing and links once, from the row", async () => {
+    const linkedEarly = randomId();
+    const waitlisted = randomId();
+    const known = { crmClientId: "crm_early", fullName: "Carol King", homeAirport: "BOS" };
+    const off = { get: async () => false };
+    try {
+      const facade = createMembersFacade(db);
+      await facade.ensureProfile(undefined, linkedEarly, "carol@test.dev", {
+        crm: { findByEmail: async () => known },
+        flags: off,
+      });
+      await facade.ensureProfile(undefined, waitlisted, "dave@test.dev", {
+        crm: { findByEmail: async () => null },
+        flags: off,
+      });
+      // Already there: left as it is.
+      await facade.ensureProfile(undefined, linkedEarly, "carol@test.dev", {
+        crm: { findByEmail: async () => null },
+        flags: off,
+      });
+      expect((await facade.getProfile(undefined, linkedEarly))?.status).toBe("active");
+      expect((await facade.getProfile(undefined, linkedEarly))?.crmLinked).toBe(true);
+      expect((await facade.getProfile(undefined, waitlisted))?.status).toBe("waitlist");
+
+      const deliver = async (memberId: string, email: string) => {
+        const published: { type: string; payload: unknown }[] = [];
+        await db.transaction((tx: any) =>
+          onMemberRegistered(
+            {
+              tx,
+              // The CRM knows both by now: the link still follows the row, never this late match.
+              crm: { findByEmail: async () => known },
+              flags: off,
+              publish: async (e) => {
+                published.push(e);
+              },
+            },
+            {
+              type: "member.registered",
+              version: 1,
+              memberId,
+              emailNormalized: email,
+              registeredAt: new Date().toISOString(),
+            },
+          ),
+        );
+        return published;
+      };
+      const links = await deliver(linkedEarly, "carol@test.dev");
+      expect(links.map((e) => e.type)).toEqual(["member.linked_to_crm"]);
+      expect((links[0]?.payload as { crmClientId: string }).crmClientId).toBe("crm_early");
+      expect(await deliver(waitlisted, "dave@test.dev")).toEqual([]);
+      expect((await facade.getProfile(undefined, waitlisted))?.status).toBe("waitlist");
+
+      const [{ n }]: any = await db.execute(
+        sql`SELECT count(*)::int n FROM members.profile WHERE member_id IN (${linkedEarly}, ${waitlisted})`,
+      );
+      expect(n).toBe(2);
+    } finally {
+      await cleanup([linkedEarly, waitlisted]);
+    }
+  });
+
   it("updateProfile updates only provided fields", async () => {
     const memberId = randomId();
     try {
@@ -112,9 +175,90 @@ describe("@bbc/members facade", () => {
     }
   });
 
+  // ADR-IMPL-056: the member's photo — stored and read; a profile patch does not write it.
+  it("getProfile reads the member's photo, none until one is stored; a profile update leaves it", async () => {
+    const memberId = randomId();
+    try {
+      await db.execute(sql`INSERT INTO members.profile (member_id, status) VALUES (${memberId}, 'active')`);
+      const facade = createMembersFacade(db);
+      expect((await facade.getProfile(undefined, memberId))?.avatarUrl).toBeNull();
+      const url = "https://cdn.example.com/members/daniel.webp";
+      await db.execute(sql`UPDATE members.profile SET avatar_url = ${url} WHERE member_id = ${memberId}`);
+      expect((await facade.getProfile(undefined, memberId))?.avatarUrl).toBe(url);
+      const updated = await facade.updateProfile(undefined, memberId, { displayName: "Daniel" });
+      expect([updated?.displayName, updated?.avatarUrl]).toEqual(["Daniel", url]);
+    } finally {
+      await cleanup([memberId]);
+    }
+  });
+
+  it("two travel saves at the same moment both land: the merge is one statement, never read-merge-write", async () => {
+    const memberId = randomId();
+    try {
+      await db.execute(sql`INSERT INTO members.profile (member_id, status) VALUES (${memberId}, 'active')`);
+      const facade = createMembersFacade(db);
+      const lost: number[] = [];
+      for (let round = 0; round < 20; round++) {
+        await db.execute(sql`UPDATE members.profile SET preferences = '{}'::jsonb WHERE member_id = ${memberId}`);
+        await Promise.all([
+          facade.setTravelPreferences(undefined, memberId, { cabin: "first" }),
+          facade.setTravelPreferences(undefined, memberId, { passengers: { adult: 2, child: 0, infant: 0 } }),
+        ]);
+        const p = await facade.getProfile(undefined, memberId);
+        if (p?.preferences.cabin !== "first" || p.preferences.passengers?.adult !== 2) lost.push(round);
+      }
+      expect(lost).toEqual([]);
+
+      // Top-level keys replace, as the spread did; keys not sent stay.
+      const after = await facade.setTravelPreferences(undefined, memberId, {
+        passengers: { adult: 1, child: 1, infant: 0 },
+        destinations: ["LHR"],
+      });
+      expect(after?.preferences).toEqual({
+        cabin: "first",
+        passengers: { adult: 1, child: 1, infant: 0 },
+        destinations: ["LHR"],
+      });
+      // An unknown member has no row to merge into.
+      expect(await facade.setTravelPreferences(undefined, randomId(), { cabin: "first" })).toBeNull();
+    } finally {
+      await cleanup([memberId]);
+    }
+  });
+
   it("getProfile returns null for unknown member", async () => {
     const facade = createMembersFacade(db);
     const p = await facade.getProfile(undefined, randomId());
     expect(p).toBeNull();
+  });
+
+  it("a deleted member is invisible to profile reads and writes; only getStatus still says so", async () => {
+    const memberId = randomId();
+    try {
+      await db.execute(sql`INSERT INTO members.profile (member_id, status, display_name, home_airport, preferences)
+        VALUES (${memberId}, 'active', 'Alex', 'JFK', '{"cabin":"business"}'::jsonb)`);
+      await db.execute(
+        sql`UPDATE members.profile SET status = 'deleted', deleted_at = now() WHERE member_id = ${memberId}`,
+      );
+      const facade = createMembersFacade(db);
+
+      expect(await facade.getProfile(undefined, memberId)).toBeNull();
+      expect(
+        await facade.updateProfile(undefined, memberId, { displayName: "Changed", homeAirport: "LHR" }),
+      ).toBeNull();
+      expect(await facade.setTravelPreferences(undefined, memberId, { cabin: "first" })).toBeNull();
+      expect(await facade.getStatus(undefined, memberId)).toBe("deleted"); // dispatch suppresses with member_deleted
+
+      // Nothing was written: the row is exactly as the deletion left it.
+      const [row] = (await db.execute(sql`SELECT display_name, home_airport, preferences FROM members.profile
+        WHERE member_id = ${memberId}`)) as unknown as {
+        display_name: string;
+        home_airport: string;
+        preferences: unknown;
+      }[];
+      expect(row).toEqual({ display_name: "Alex", home_airport: "JFK", preferences: { cabin: "business" } });
+    } finally {
+      await cleanup([memberId]);
+    }
   });
 });

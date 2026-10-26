@@ -1,15 +1,21 @@
 # Multi-stage: the whole workspace is needed at build (paths, contracts, migrations), a pruned copy at runtime.
 FROM oven/bun:1.3-alpine AS deps
 WORKDIR /repo
-COPY package.json bun.lock turbo.json tsconfig.base.json ./
+COPY package.json bun.lock turbo.json tsconfig.base.json bunfig.toml ./
 COPY apps/api/package.json apps/api/
+COPY apps/mobile/package.json apps/mobile/
 COPY packages ./packages
-RUN bun install --frozen-lockfile --production=false
+RUN bun install --frozen-lockfile
 
 FROM oven/bun:1.3-alpine AS build
 WORKDIR /repo
 COPY --from=deps /repo /repo
 COPY apps/api ./apps/api
+COPY scripts ./scripts
+# The scripts run from this image (the staging demo at deploy step 7; by hand, the review account and the load test's
+# accounts) resolve their imports through the root tsconfig.json's paths, as in the repository. Without it Bun falls
+# back to @bbc/shared's exports (`./src/*.ts`), which name no folder — and `@bbc/shared/events` is one (ADR-IMPL-040).
+COPY tsconfig.json ./
 RUN bun run --filter @bbc/api typecheck
 
 FROM oven/bun:1.3-alpine AS runtime

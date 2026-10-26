@@ -1,38 +1,187 @@
 import { Hono } from "hono";
-import type { Db, Executor } from "@bbc/db";
+import { z } from "zod";
+import { desc, gte, sql } from "drizzle-orm";
+import { errorForLog, type Db, type Executor } from "@bbc/db";
+import { demandDaily } from "@bbc/db/schema/catalog";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
+import { SearchEvent } from "@bbc/platform";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
+import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
+import { placePhotosRepo } from "./infrastructure/place-photos.repo";
+import { siteRepo } from "./infrastructure/site.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
+import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
-import { importCatalog, ImportBody } from "./application/import";
-import { toAirportVM, toFareVM } from "./application/to-fare-vm";
-import type { CatalogFacade } from "./api";
+import { formatInZone } from "./application/flight-local";
+import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
+import { importCatalog, ImportBody, ImportError } from "./application/import";
+import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
+import type { Fetch } from "./application/place-photo-sources";
+import { syncSite } from "./application/site-sync";
+import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
+import { estimateRules as readEstimateRules } from "./pricing/estimate-rules";
+import type { CatalogFacade, DestinationPin } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
   return row.published && row.validFrom <= now && row.validUntil > now;
 }
 
-export const catalogModule = (): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
+/** A route's IATA code as a member's request may carry it (upper-cased first). */
+const IATA = /^[A-Z]{3}$/;
+/** A fare's id is a UUID: anything else is no fare (404), never a cast Postgres refuses (500). */
+const isUuid = (v: string) => z.string().uuid().safeParse(v).success;
+
+/** The travel days fares are sold for: from yesterday (a member a day behind UTC still means today) to two years ahead.
+ *  A day outside them has no fare — the search answers an empty list without asking Postgres (a year it cannot store
+ *  was a 500). Never an error: the app's recent searches keep their dates, and a day gone by is still sent. */
+function searchWhenInRange(when: Date, now = new Date()): boolean {
+  // Travel days, not a rolling 24 hours: yesterday begins at its UTC midnight, so a member west of UTC whose
+  // yesterday is still their today is in range at any hour of the server's day.
+  const earliest = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  const latest = new Date(now);
+  latest.setUTCFullYear(latest.getUTCFullYear() + 2);
+  return when >= earliest && when <= latest;
+}
+
+/** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
+export const SITE_PINS = 12;
+
+/** `fetch` is for tests: the place-photo sources (Wikidata, Commons, Pexels) and the site answered by fixtures. */
+export const catalogModule = (
+  opts: { fetch?: Fetch } = {},
+): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
   name: "catalog",
   layer: "domain",
-  init: ({ db, platform }) => {
+  init: ({ db, platform, env }) => {
     const conn = db as unknown as Executor;
+    /** ADR-IMPL-043: place photos. On unless an operator turns the flag row off; then no photo is served or looked up. */
+    const placePhotosOn = () => platform.flags.isEnabled("catalog.place_photos", true);
     const destinationsCache = createDestinationsCache();
+    const sitePinsCache = createDestinationsCache<DestinationPin & { airports: string[] }>();
+    const invalidateMaps = async () => {
+      destinationsCache.clear();
+      sitePinsCache.clear();
+      await platform.cache.bump("catalog:dest:gen");
+      await platform.cache.bump("catalog:airports:gen");
+    };
+    const estimateRules = (metric: "search" | "request" | "home") => readEstimateRules(platform, metric);
+
+    async function indicativeEstimate(
+      from: Parameters<typeof toEstimateVM>[1],
+      to: Parameters<typeof toEstimateVM>[2],
+      cabin: "business" | "first",
+    ): Promise<ReturnType<typeof toEstimateVM>> {
+      const stored = await estimateRules("search");
+      if (!stored) return null;
+      const estimate = toEstimateVM(stored.rules, from, to, cabin);
+      if (estimate) platform.metrics.inc("search_estimates_shown", { cabin });
+      return estimate;
+    }
+
+    /**
+     * ADR-IMPL-045: the site's cities listed from `home`, as pins priced the way their search will be — the formula, in
+     * the member's cabin (ADR-IMPL-037), so a pin, its estimate row and the quote it leads to show one number. Nothing
+     * unless `catalog.site_pins` is on and estimates are (no price, no pin). Cached like the fares' pins: 60 s, and
+     * dropped when the sync or an import bumps the generation.
+     */
+    async function sitePins(
+      home: string,
+      cabin: "business" | "first",
+    ): Promise<(DestinationPin & { airports: string[] })[]> {
+      if (!(await platform.flags.isEnabled("catalog.site_pins", false))) return [];
+      const stored = await estimateRules("home");
+      if (!stored) return [];
+      const key = `${home.toUpperCase()}:${cabin}:${stored.fingerprint}`;
+      const load = async () => {
+        const [homeRow, rows] = await Promise.all([
+          airportsRepo.get(conn, home),
+          siteRepo.pinsFrom(conn, home, SITE_PINS * 3),
+        ]);
+        if (!homeRow) return [];
+        return rows.flatMap((r) => {
+          const estimate = toEstimateVM(stored.rules, homeRow, r.airport, cabin);
+          if (!estimate) return [];
+          return [
+            {
+              code: r.airport.code.trim(),
+              name: r.airport.name,
+              city: r.airport.city,
+              countryCode: r.airport.countryCode,
+              region: r.airport.region,
+              lat: Number(r.airport.lat),
+              lng: Number(r.airport.lng),
+              description: r.airport.description,
+              fromPrice: estimate.amount,
+              airports: r.airports,
+            },
+          ];
+        });
+      };
+      const gen = await platform.cache.generation("catalog:dest:gen");
+      if (gen == null) return sitePinsCache.get(key, load);
+      return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, 60, load);
+    }
+
+    /** ADR-IMPL-045: the site's photos, and the cities kept out of them (`skip`: the site's ids). Null: off. */
+    async function sitePhotos(): Promise<{ skip: ReadonlySet<number> } | null> {
+      const v = await platform.flags.read("catalog.site_photos");
+      if (v?.enabled !== true) return null;
+      const skip = Array.isArray(v.skip) ? v.skip.filter((x): x is number => Number.isInteger(x)) : [];
+      return { skip: new Set(skip) };
+    }
+
     const expose: CatalogFacade = {
       searchFares: (exec, q) => faresRepo.search(exec ?? conn, q),
       getFare: (exec, id) => faresRepo.getAny(exec ?? conn, id),
-      destinations: (exec, home) =>
-        exec
-          ? faresRepo.destinations(exec, home)
-          : destinationsCache.get(home, () => faresRepo.destinations(conn, home)),
+      destinations: async (exec, home, opts) => {
+        const fares = await (async () => {
+          if (exec) return faresRepo.destinations(exec, home);
+          const gen = await platform.cache.generation("catalog:dest:gen");
+          if (gen == null) return destinationsCache.get(home, () => faresRepo.destinations(conn, home));
+          const code = home.toUpperCase();
+          return platform.cache.getOrLoad(`catalog:dest:${gen}:${code}`, 60, () => faresRepo.destinations(conn, home));
+        })();
+        // ADR-IMPL-045: after the fares' pins, the site's cities none of whose airports is pinned already — by a fare,
+        // or by a site city before it (two cities naming one airport give one pin).
+        const site = await sitePins(home, opts?.cabin ?? "business");
+        if (site.length === 0) return fares;
+        const pinned = new Set(fares.map((f) => f.code.trim()));
+        const added: DestinationPin[] = [];
+        for (const { airports, ...pin } of site) {
+          if (added.length === SITE_PINS) break;
+          if (pinned.has(pin.code) || airports.some((c) => pinned.has(c))) continue;
+          for (const c of airports) pinned.add(c);
+          added.push(pin);
+        }
+        return [...fares, ...added];
+      },
       searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
       getAirports: (exec, codes) => airportsRepo.getMany(exec ?? conn, [...codes]),
+      indicativeFor: async (exec, q) => {
+        // The cached flag rows first: with estimates off (production today) or no valid rules, the question costs no
+        // query. The request module counts what it stores (`request_estimates_stored`), after its insert.
+        const stored = await estimateRules("request");
+        if (!stored) return null;
+        const from = q.from.toUpperCase();
+        const to = q.to.toUpperCase();
+        const e = exec ?? conn;
+        const [airports, rows] = await Promise.all([
+          airportsRepo.getMany(e, [from, to]),
+          faresRepo.search(e, { from, to, cabin: q.cabin }),
+        ]);
+        const fromApt = airports.find((a) => a.code === from);
+        const toApt = airports.find((a) => a.code === to);
+        // Published fares always win: the search showed them, not an estimate.
+        if (!fromApt || !toApt || rows.length > 0) return null;
+        const estimate = toEstimateVM(stored.rules, fromApt, toApt, q.cabin);
+        return estimate ? { ...estimate, rules: stored.fingerprint } : null;
+      },
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
@@ -52,27 +201,47 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         const to = (c.req.query("to") ?? "").toUpperCase();
         const cabin = c.req.query("cabin") as "business" | "first" | undefined;
         const whenRaw = c.req.query("when");
-        if (!from || from.length !== 3 || !to || to.length !== 3 || (cabin !== "business" && cabin !== "first")) {
+        if (!IATA.test(from) || !IATA.test(to) || (cabin !== "business" && cabin !== "first")) {
           return c.json(apiError("VALIDATION", { message: "from, to (IATA), cabin required" }), 400);
         }
         const when = whenRaw ? new Date(whenRaw) : undefined;
         if (when && Number.isNaN(when.getTime())) {
           return c.json(apiError("VALIDATION", { message: "when must be ISO datetime" }), 400);
         }
+        // A day gone by (a recent search's remembered date) or further out than anything is sold: no fare flies then.
+        // An empty list, as for any day without one — an error would come back on every Try again.
+        const sold = !when || searchWhenInRange(when);
 
         const [fromApt, toApt, rows] = await Promise.all([
           airportsRepo.get(conn, from),
           airportsRepo.get(conn, to),
-          faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }),
+          sold ? faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }) : Promise.resolve([]),
         ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
 
         const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
+        // Demand counts the days fares are sold for; a day outside them is no route's demand.
+        if (sold) {
+          platform.search.note({
+            from,
+            to,
+            cabin,
+            month: (when ?? new Date()).toISOString().slice(0, 7),
+            hadFares: items.length > 0,
+            results: items.length,
+          });
+        }
+        // No fare in this cabin: the company's formula, as an indicative price (ADR-IMPL-037). Undated searches only —
+        // with a date, the route may have fares on other days, and published fares always win. The flag rows are read
+        // only then, so searches with fares cost nothing extra. The rules are not in the repository: each environment
+        // holds them in `catalog.pricing_rules` (scripts/load-pricing-rules.ts).
+        const estimate = items.length === 0 && !when ? await indicativeEstimate(fromApt, toApt, cabin) : null;
         return c.json({
           from: toAirportVM(fromApt),
           to: toAirportVM(toApt),
           items,
           offer: null,
+          estimate,
         });
       },
     );
@@ -88,8 +257,14 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
       }),
       async (c) => {
         const id = c.req.param("id");
+        if (!isUuid(id)) return c.json(apiError("NOT_FOUND"), 404);
         const row = await faresRepo.getAny(conn, id);
         if (!row) return c.json(apiError("NOT_FOUND"), 404);
+
+        const [fromApt, toApt] = await Promise.all([
+          airportsRepo.get(conn, row.routeFrom),
+          airportsRepo.get(conn, row.routeTo),
+        ]);
         if (!isVisible(row)) {
           return c.json(
             apiError("GONE", {
@@ -100,16 +275,18 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
                 validUntil: row.validUntil.toISOString(),
                 from: row.routeFrom,
                 to: row.routeTo,
+                // Figma 135:848 names what closed: the route by its cities, the airline and cabin, the day it left
+                // the origin — that airport's day, never the server's (ADR-IMPL-019).
+                fromCity: fromApt?.city ?? null,
+                toCity: toApt?.city ?? null,
+                carrier: row.carrierName,
+                cabin: row.cabin,
+                departDate: row.departAt && fromApt ? formatInZone(row.departAt.toISOString(), fromApt.tz).ymd : null,
               },
             }),
             410,
           );
         }
-
-        const [fromApt, toApt] = await Promise.all([
-          airportsRepo.get(conn, row.routeFrom),
-          airportsRepo.get(conn, row.routeTo),
-        ]);
         if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND"), 404);
         return c.json(toFareVM(row, { from: fromApt, to: toApt }, false));
       },
@@ -125,9 +302,160 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const q = c.req.query("q") ?? "";
-        const rows = await airportsRepo.search(conn, q);
+        const raw = c.req.query("q") ?? "";
+        // Postgres text cannot hold a NUL: no airport has one, and the query would fail.
+        if (raw.includes("\u0000")) return c.json(apiError("VALIDATION", { message: "q has a NUL character" }), 400);
+        const q = raw.slice(0, 64);
+        const gen = await platform.cache.generation("catalog:airports:gen");
+        const rows =
+          gen == null
+            ? await airportsRepo.search(conn, q)
+            : await platform.cache.getOrLoad(`catalog:airports:${gen}:${q.toLowerCase()}`, 60, () =>
+                airportsRepo.search(conn, q),
+              );
         return c.json(rows.map((r) => toAirportVM(r)));
+      },
+    );
+
+    // ADR-IMPL-039: "Popular from <city>" — searched routes first, then the hubs; names only. Cached 5 minutes with the
+    // airports' generation (an import refreshes it); without Redis, three small queries.
+    registerRoute("GET", "/v1/airports/popular", "fares:read", "read");
+    routes.get(
+      "/airports/popular",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const from = (c.req.query("from") ?? "").toUpperCase();
+        if (!/^[A-Z]{3}$/.test(from)) return c.json(apiError("VALIDATION", { message: "from (IATA) required" }), 400);
+        const origin = await airportsRepo.get(conn, from);
+        if (!origin) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+        const gen = await platform.cache.generation("catalog:airports:gen");
+        const picked =
+          gen == null
+            ? await popularFrom(conn, origin)
+            : await platform.cache.getOrLoad(`catalog:popular:${gen}:${from}`, 300, () => popularFrom(conn, origin));
+        platform.metrics.inc("popular_destinations_shown", { source: "searches" }, picked.fromSearches);
+        platform.metrics.inc(
+          "popular_destinations_shown",
+          { source: "hubs" },
+          picked.destinations.length - picked.fromSearches,
+        );
+        return c.json({ from: toAirportVM(origin), destinations: picked.destinations.map((a) => toAirportVM(a)) });
+      },
+    );
+
+    // ADR-IMPL-039: the home airport suggested at onboarding, from the phone's time zone.
+    registerRoute("GET", "/v1/airports/home-suggestion", "fares:read", "read");
+    routes.get(
+      "/airports/home-suggestion",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const zones = homeZones(c.req.query("tz") ?? "");
+        if (!zones) return c.json(apiError("VALIDATION", { message: "tz must be an IANA time zone" }), 400);
+        const airport = await homeSuggestion(conn, zones);
+        return c.json({ airport: airport ? toAirportVM(airport) : null });
+      },
+    );
+
+    // ADR-IMPL-043: the photo for each city asked about — a photograph's addresses and credit, a satellite view's
+    // centre, or nothing yet. Airports never asked about before get a row the resolve-place-photos job fills.
+    registerRoute("GET", "/v1/places/photos", "fares:read", "read");
+    routes.get(
+      "/places/photos",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const codes = parseCodes(c.req.query("codes"));
+        if (!codes) {
+          return c.json(
+            apiError("VALIDATION", { message: `codes: 1 to ${PLACE_PHOTOS_MAX_CODES} IATA codes, comma-separated` }),
+            400,
+          );
+        }
+        if (!(await placePhotosOn())) return c.json({ items: [] satisfies PlacePhotoVM[] });
+        const rows = await placePhotosRepo.getMany(conn, codes);
+        const known = new Map(rows.map((r) => [r.code.trim(), toPlacePhotoVM(r)]));
+        const added = new Set(
+          await placePhotosRepo.addPending(
+            conn,
+            codes.filter((code) => !known.has(code)),
+          ),
+        );
+        if (added.size > 0) platform.metrics.inc("place_photos_requested", {}, added.size);
+        const items = codes.flatMap((code): PlacePhotoVM[] => {
+          const vm = known.get(code);
+          if (vm) return [vm];
+          return added.has(code) ? [{ code, kind: "none" }] : [];
+        });
+        return c.json({ items });
+      },
+    );
+
+    // ADR-IMPL-043: an operator's own photo for a city (a wrong or poor one found automatically): it replaces what the
+    // job found, never expires, and DELETE hands the city back to the job.
+    registerRoute("PUT", "/v1/internal/places/:code/photo", "catalog:import");
+    routes.put(
+      "/internal/places/:code/photo",
+      authorize("catalog:import", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const code = c.req.param("code").toUpperCase();
+        if (!/^[A-Z]{3}$/.test(code)) return c.json(apiError("VALIDATION", { message: "code (IATA) required" }), 400);
+        const parsed = PlacePhotoOverride.safeParse(await c.req.json().catch(() => ({})));
+        if (!parsed.success) {
+          return c.json(
+            apiError("VALIDATION", {
+              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+            }),
+            400,
+          );
+        }
+        if (!(await airportsRepo.get(conn, code))) {
+          return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+        }
+        const { card, hero, credit } = parsed.data;
+        const row = await placePhotosRepo.setOverride(conn, code, {
+          cardUrl: card,
+          heroUrl: hero,
+          author: credit?.author ?? null,
+          license: credit?.license ?? null,
+          link: credit?.link ?? null,
+        });
+        return c.json(toPlacePhotoVM(row));
+      },
+    );
+
+    registerRoute("DELETE", "/v1/internal/places/:code/photo", "catalog:import");
+    routes.delete(
+      "/internal/places/:code/photo",
+      authorize("catalog:import", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const code = c.req.param("code").toUpperCase();
+        if (!/^[A-Z]{3}$/.test(code)) return c.json(apiError("VALIDATION", { message: "code (IATA) required" }), 400);
+        if (!(await placePhotosRepo.clearOverride(conn, code))) {
+          return c.json(apiError("NOT_FOUND", { message: "no operator photo for this airport" }), 404);
+        }
+        return c.body(null, 204);
       },
     );
 
@@ -151,13 +479,73 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
         }
         try {
           const r = await expose.importCsv(parsed.data);
-          destinationsCache.clear();
+          await invalidateMaps();
           return c.json(r);
         } catch (e: unknown) {
-          return c.json(apiError("VALIDATION", { message: e instanceof Error ? e.message : "import failed" }), 400);
+          // The file's fault, row by row; anything else is ours (the error contract logs it without the query's values).
+          if (e instanceof ImportError) {
+            return c.json(apiError("VALIDATION", { message: "The file was not imported.", details: e.details }), 400);
+          }
+          throw e;
         }
       },
     );
+
+    registerRoute("GET", "/v1/internal/demand", "ops:read");
+    routes.get(
+      "/internal/demand",
+      authorize("ops:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const days = Number(c.req.query("days") ?? "7");
+        if (!Number.isInteger(days) || days < 1 || days > 90) {
+          return c.json(apiError("VALIDATION", { message: "days must be an integer from 1 to 90" }), 400);
+        }
+        const since = new Date(Date.now() - days * 86_400_000);
+        const rows = await conn
+          .select({
+            from: demandDaily.routeFrom,
+            to: demandDaily.routeTo,
+            cabin: demandDaily.cabin,
+            searches: sql<number>`sum(${demandDaily.searches})::int`.mapWith(Number),
+            searchesWithoutFare: sql<number>`sum(${demandDaily.searchesWithoutFare})::int`.mapWith(Number),
+          })
+          .from(demandDaily)
+          .where(gte(demandDaily.day, since))
+          .groupBy(demandDaily.routeFrom, demandDaily.routeTo, demandDaily.cabin)
+          .orderBy(desc(sql`sum(${demandDaily.searchesWithoutFare})`), desc(sql`sum(${demandDaily.searches})`));
+        return c.json({ days, routes: rows });
+      },
+    );
+
+    if (platform.kafka && platform.redis && env.APP_ROLE !== "api" && env.KAFKA_BROKERS) {
+      const redis = platform.redis;
+      const loop = platform.kafka
+        .consume({
+          clientId: "bbc-demand",
+          groupId: "catalog.demand",
+          topic: "bbc.search.v1",
+          consumerName: "catalog.demand",
+          signal: platform.signal,
+          handle: async (_eventId, value) => {
+            const parsed = SearchEvent.safeParse(value);
+            if (!parsed.success) {
+              platform.metrics.inc("search_events_rejected");
+              return;
+            }
+            await recordSearch(redis, parsed.data);
+          },
+        })
+        .catch((err: unknown) => {
+          platform.logger.error({ err: errorForLog(err) }, "demand consumer stopped");
+        });
+      platform.lifecycle.onClose(async () => {
+        await loop;
+      });
+    }
 
     return {
       exposes: expose,
@@ -172,8 +560,72 @@ export const catalogModule = (): ModuleDescriptor<Record<string, never>, Catalog
             timeoutMs: 30_000,
             handler: async () => {
               const out = await expireFares({ db: conn });
-              destinationsCache.clear();
+              await invalidateMaps();
               return out;
+            },
+          },
+        },
+        {
+          name: "demand-rollup",
+          spec: {
+            cron: "15 3 * * *",
+            singleton: true,
+            timeoutMs: 60_000,
+            handler: async () => {
+              if (!platform.redis) return { skipped: 1, rows: 0 };
+              return { skipped: 0, ...(await rollupDemand(platform.redis, conn)) };
+            },
+          },
+        },
+        {
+          // ADR-IMPL-045: the site's destinations, once a night. With its photos and its pins off, nothing is asked
+          // and the site's photos go back to Wikimedia. Four requests at a time end well inside the worker's 120 s.
+          name: "sync-site-destinations",
+          spec: {
+            cron: "40 7 * * *",
+            singleton: true,
+            timeoutMs: 100_000,
+            handler: async (ctx) => {
+              const photos = await sitePhotos();
+              const pins = await platform.flags.isEnabled("catalog.site_pins", false);
+              const report = await syncSite(
+                {
+                  db: conn,
+                  site: {
+                    fetch: opts.fetch ?? fetch,
+                    userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; site destinations)`,
+                    signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                  },
+                  logger: platform.logger,
+                },
+                { read: photos !== null || pins, photos },
+              );
+              if (report.read) await invalidateMaps();
+              return report;
+            },
+          },
+        },
+        {
+          // ADR-IMPL-043: ten due airports a minute — new ones first. Nothing due: one query, no request outside.
+          name: "resolve-place-photos",
+          spec: {
+            cron: "* * * * *",
+            singleton: true,
+            timeoutMs: 50_000,
+            handler: async (ctx) => {
+              if (!(await placePhotosOn())) return { skipped: 1 };
+              return resolvePlacePhotos({
+                db: conn,
+                sources: {
+                  fetch: opts.fetch ?? fetch,
+                  // Wikimedia's User-Agent policy: who is asking, and where to reach them.
+                  userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; place photos)`,
+                  signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                },
+                pexelsKey: env.PEXELS_API_KEY,
+                metrics: platform.metrics,
+                logger: platform.logger,
+              });
             },
           },
         },

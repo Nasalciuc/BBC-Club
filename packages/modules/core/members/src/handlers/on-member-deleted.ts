@@ -1,11 +1,12 @@
 import { eq } from "drizzle-orm";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
 import { profile, notificationPreferences } from "@bbc/db/schema/members";
+import type { Executor } from "@bbc/db";
 
 /** Hard-delete the member's profile + prefs. Tombstone runs in a later consumer so siblings still see the payload. */
 export async function onMemberDeleted(
   deps: {
-    tx: any;
+    tx: Executor;
   },
   raw: unknown,
 ) {

@@ -42,7 +42,8 @@ export default function JoinScreen() {
   return (
     <AuthShell
       logo="center"
-      onBack="/sign-in"
+      // Back to where Join was opened from; alone on the stack (after a deletion) it goes to Welcome.
+      onBack="/"
       footer={
         <>
           <ClubButton
@@ -127,7 +128,8 @@ const styles = StyleSheet.create({
   },
   error: {
     ...Club.type.bodySm,
-    color: Club.colors.statusDanger,
+    // The words of an error stay quiet on the navy panel (DESIGN.md: never red for messages): 5.71:1 (ADR-IMPL-047).
+    color: Club.colors.textOnDarkMuted,
     marginTop: Club.space.sm,
   },
 });

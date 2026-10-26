@@ -1,40 +1,186 @@
-import type { ReactNode } from "react";
-import { StyleSheet } from "react-native";
-import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { createContext, type ReactNode, useContext, useEffect, useRef } from "react";
+import { StyleSheet, View } from "react-native";
+import BottomSheet, {
+  type BottomSheetBackgroundProps,
+  BottomSheetFooter,
+  type BottomSheetFooterProps,
+  type BottomSheetHandleProps,
+  BottomSheetScrollView,
+} from "@gorhom/bottom-sheet";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, { Extrapolation, interpolate, useAnimatedStyle } from "react-native-reanimated";
+
 import { tokens } from "../tokens";
 
-/** Derived from content: field + chips + three FareRows ≈ 60% of 852. Module const — no useMemo. */
-const SNAP_POINTS = ["35%", "60%", "100%"] as const;
+/** 13: `Request a quote`, 40.6 tall, 16.4 and 16.8 from the edges, its foot 13.9 over the sheet's bottom edge (the tab
+ *  bar's top, its hairline included). */
+const FOOTER = { pill: 40.6, left: 16.4, right: 16.8, bottom: 13.9 } as const;
+const FOOTER_HEIGHT = FOOTER.pill + FOOTER.bottom;
+/** The docked pill's height (13), for the screen's `Button`. */
+export const HOME_SHEET_PILL = FOOTER.pill;
+
+/** The grabber's band (13, 16): the content starts 16 pt under the sheet's top. */
+export const HOME_SHEET_HANDLE = 16;
+
+/**
+ * The raised sheet as each stop draws it: a chosen route (13) with 26-pt corners and its grabber 41.5 × 4.4, 9.1 under
+ * the top; every offer (16) with 22-pt corners and the grabber 48.4 × 4.2, 11.3 under it.
+ */
+const RAISED = {
+  route: { radius: 26, grabber: { width: 41.5, height: 4.4, top: 9.1 } },
+  all: { radius: 22, grabber: { width: 48.4, height: 4.2, top: 11.3 } },
+} as const;
+const LookContext = createContext<(typeof RAISED)[keyof typeof RAISED]>(RAISED.route);
 
 type Props = {
   index: number;
   onChange: (index: number) => void;
+  /** The sheet's three heights, in points, lowest first: at rest (02), a chosen route (13), every offer (16). */
+  snapPoints: readonly [number, number, number];
   children: ReactNode;
+  /** Docked at the sheet's bottom edge, above the scrolling content (13: `Request a quote`). */
+  footer?: ReactNode;
+  /**
+   * In the grabber's band, beside the grabber and over the content's top (16: `Done`, whose words stand partly above
+   * where the scrolling content starts). The screen places it; it does not scroll.
+   */
+  accessory?: ReactNode;
+  /**
+   * When the hosting screen is on screen. After a tab switch Android can leave the sheet closed while React's index
+   * stays at rest (parity: `explore.search` gone); becoming active snaps it back to `index`.
+   */
+  active?: boolean;
+  testID?: string;
 };
+const AccessoryContext = createContext<ReactNode>(null);
 
-/** BottomSheetScrollView, never ScrollView — content gesture must not fight the sheet. */
-export function HomeSheet({ index, onChange, children }: Props) {
+// gorhom mounts `footerComponent` as a component type: a function created per render would remount the footer on every
+// render. One module-level component reads the node from context instead.
+const FooterContext = createContext<ReactNode>(null);
+
+function DockedFooter(props: BottomSheetFooterProps) {
+  const footer = useContext(FooterContext);
   return (
-    <BottomSheet
-      index={index}
-      snapPoints={[...SNAP_POINTS]}
-      onChange={onChange}
-      enablePanDownToClose={false}
-      animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
-      handleIndicatorStyle={styles.handle}
-      backgroundStyle={styles.background}
-    >
-      <BottomSheetScrollView contentContainerStyle={styles.content}>{children}</BottomSheetScrollView>
-    </BottomSheet>
+    <BottomSheetFooter {...props}>
+      <View style={styles.footer}>{footer}</View>
+    </BottomSheetFooter>
+  );
+}
+
+/** How far the sheet is from rest toward its next stop: 0 at rest (02, no card), 1 from halfway up (13, 16). */
+function cardness(index: number) {
+  "worklet";
+  return interpolate(index, [0, 0.5], [0, 1], Extrapolation.CLAMP);
+}
+
+/**
+ * At rest (02) the sheet is no card: the search bar floats over the globe's foot and the offers sit on the page, the
+ * sky fading into it behind the bar. Raised it is the white sheet with its shadow: 26-pt corners on a route (13), 22
+ * over every offer (16).
+ */
+function SheetBackground({ animatedIndex, style, pointerEvents }: BottomSheetBackgroundProps) {
+  const card = useAnimatedStyle(() => ({ opacity: cardness(animatedIndex.value) }));
+  const look = useContext(LookContext);
+  return (
+    <View style={style} pointerEvents={pointerEvents}>
+      <View style={StyleSheet.absoluteFill}>
+        <LinearGradient colors={[`${tokens.colors.surfacePage}00`, tokens.colors.surfacePage]} style={styles.haze} />
+        <View style={styles.page} />
+      </View>
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          styles.card,
+          { borderTopLeftRadius: look.radius, borderTopRightRadius: look.radius },
+          card,
+        ]}
+      />
+    </View>
+  );
+}
+
+function SheetHandle({ animatedIndex }: BottomSheetHandleProps) {
+  const shown = useAnimatedStyle(() => ({ opacity: cardness(animatedIndex.value) }));
+  const { grabber } = useContext(LookContext);
+  const accessory = useContext(AccessoryContext);
+  return (
+    <View style={styles.handleArea}>
+      <Animated.View
+        style={[
+          styles.handle,
+          { width: grabber.width, height: grabber.height, marginTop: grabber.top, borderRadius: grabber.height / 2 },
+          shown,
+        ]}
+      />
+      {accessory}
+    </View>
+  );
+}
+
+/** Explore's sheet over the globe, at three stops (02, 13, 16). BottomSheetScrollView, never ScrollView — the content's
+ *  gesture must not fight the sheet's. */
+export function HomeSheet({ index, onChange, snapPoints, children, footer, accessory, active = true, testID }: Props) {
+  const sheet = useRef<BottomSheet>(null);
+  // The sheet is never closed: three stops and no pan down to close. The library says -1 when a snap lands on none
+  // of them — its target moved while it ran, as the screen's height settles after its first layout — and passing
+  // that on closed the sheet for good: the screen's index became -1 and nothing raised it again (Android parity on
+  // #80: Explore without its search bar). The sheet goes back to the stop the screen asked for instead.
+  function settle(next: number) {
+    if (next >= 0) onChange(next);
+    else sheet.current?.snapToIndex(index);
+  }
+  // A tab that was off-screen can leave the sheet closed while `index` stays at rest — controlled `index={0}` then
+  // changes nothing. Snap again when the host comes back.
+  useEffect(() => {
+    if (active) sheet.current?.snapToIndex(index);
+  }, [active, index]);
+  return (
+    <LookContext.Provider value={index >= 2 ? RAISED.all : RAISED.route}>
+      <AccessoryContext.Provider value={accessory ?? null}>
+        <FooterContext.Provider value={footer ?? null}>
+          <BottomSheet
+            ref={sheet}
+            index={index}
+            snapPoints={[...snapPoints]}
+            // v5 sizes to content by default and inserts that height as an extra snap, shifting every index: keep exactly
+            // these three.
+            enableDynamicSizing={false}
+            onChange={settle}
+            // The index follows a snap as it starts, not only when it lands: a city chosen while a dragged sheet is still
+            // settling must find the index already down, or raising it again would change nothing.
+            onAnimate={(_from, to) => settle(to)}
+            enablePanDownToClose={false}
+            animationConfigs={{ damping: 30, stiffness: 260, mass: 1, overshootClamping: false }}
+            handleComponent={SheetHandle}
+            backgroundComponent={SheetBackground}
+            footerComponent={footer ? DockedFooter : undefined}
+          >
+            <BottomSheetScrollView
+              testID={testID}
+              contentContainerStyle={[styles.content, footer ? styles.contentAboveFooter : null]}
+            >
+              {children}
+            </BottomSheetScrollView>
+          </BottomSheet>
+        </FooterContext.Provider>
+      </AccessoryContext.Provider>
+    </LookContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  background: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
+  handleArea: { height: HOME_SHEET_HANDLE, alignItems: "center", zIndex: 1 },
+  handle: { backgroundColor: tokens.colors.grabber },
+  // 02: the sky fades into the page behind the search bar, then the page.
+  haze: { height: 72 },
+  page: { flex: 1, backgroundColor: tokens.colors.surfacePage },
+  card: { backgroundColor: tokens.colors.surfaceCard, ...tokens.elevation.sheet },
+  content: { paddingHorizontal: tokens.space.gutter, paddingBottom: tokens.space.xxxl },
+  contentAboveFooter: { paddingBottom: FOOTER_HEIGHT + tokens.space.lg },
+  footer: {
+    paddingLeft: FOOTER.left,
+    paddingRight: FOOTER.right,
+    paddingBottom: FOOTER.bottom,
+    backgroundColor: tokens.colors.surfaceCard,
   },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl },
 });

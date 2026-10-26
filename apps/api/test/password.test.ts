@@ -1,7 +1,39 @@
 /** POST /v1/account/password: set (Path A) or change (credential) a password. */
 import { describe, it, expect } from "bun:test";
 import { sql } from "drizzle-orm";
+import type { IdentityFacade } from "@bbc/identity";
 import { testApp } from "./helpers/test-app";
+
+/** The stand-in breach list's one entry, and what the member reads when they choose it. */
+const BREACHED = "password123456";
+const BREACH_MESSAGE = "This password has appeared in a data breach. Please choose a different one.";
+
+type App = Awaited<ReturnType<typeof testApp>>;
+
+/** Join as the app does (ADR-PROD-001 path A): email → code → a session with no password yet. */
+async function joinByCode(t: App, email: string): Promise<string> {
+  const post = (path: string, body: Record<string, string>) =>
+    t.app.request(`/api/auth${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "bbcclub://" },
+      body: JSON.stringify(body),
+    });
+  expect((await post("/email-otp/send-verification-otp", { email, type: "sign-in" })).status).toBe(200);
+  const verify = await post("/sign-in/email-otp", { email, otp: t.email.lastOtp(email) });
+  expect(verify.status).toBe(200);
+  return verify.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0] ?? "")
+    .filter((c) => c.length > 0)
+    .join("; ");
+}
+
+const setFirst = (t: App, cookie: string, newPassword: string) =>
+  t.app.request("/v1/account/password", {
+    method: "POST",
+    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ newPassword }),
+  });
 
 describe("POST /v1/account/password", () => {
   it("Path A: first-time set without currentPassword is 200 and publishes member.password_changed", async () => {
@@ -22,16 +54,42 @@ describe("POST /v1/account/password", () => {
     await t.close();
   });
 
-  it("C6 probe (before fix this was 400): credential + only newPassword is 400", async () => {
+  it("credential + only newPassword is 409: the password is already set", async () => {
     const t = await testApp({ suite: "pw-has-cred" });
     const r = await t.app.request("/v1/account/password", {
       method: "POST",
       headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
       body: JSON.stringify({ newPassword: "newClubPass2026!" }),
     });
-    expect(r.status).toBe(400);
-    const body = (await r.json()) as { error?: { message?: string } };
-    expect(body.error?.message).toBe("Current password is required.");
+    expect(r.status).toBe(409);
+    const body = (await r.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("CONFLICT");
+    expect(body.error?.message).toBe("This account already has a password.");
+    await t.close();
+  });
+
+  it("a credential row with no stored password is not a password: setting one is 200", async () => {
+    const t = await testApp({ suite: "pw-empty-cred" });
+    await t.withEmptyCredential(t.memberA.id);
+    const status = async () =>
+      (await t.app.request("/v1/account/password", { headers: { Cookie: t.memberA.cookie } })).json();
+    expect(await status()).toEqual({ hasPassword: false });
+    const r = await t.app.request("/v1/account/password", {
+      method: "POST",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ newPassword: "newClubPass2026!" }),
+    });
+    expect(r.status).toBe(200);
+    expect(await status()).toEqual({ hasPassword: true });
+    await t.close();
+  });
+
+  it("GET reports a stored password, and needs a session", async () => {
+    const t = await testApp({ suite: "pw-status" });
+    const r = await t.app.request("/v1/account/password", { headers: { Cookie: t.memberA.cookie } });
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ hasPassword: true });
+    expect((await t.app.request("/v1/account/password")).status).toBe(401);
     await t.close();
   });
 
@@ -43,8 +101,38 @@ describe("POST /v1/account/password", () => {
       body: JSON.stringify({ newPassword: "newClubPass2026!", currentPassword: "not-the-password" }),
     });
     expect(r.status).toBe(400);
-    const body = (await r.json()) as { error?: { message?: string } };
+    const body = (await r.json()) as { error?: { message?: string; details?: { path: string }[] } };
     expect(body.error?.message).toBe("That password isn't right.");
+    expect(body.error?.details?.[0]?.path).toBe("currentPassword");
+    await t.close();
+  });
+
+  it("the right current password with a breached new one is told the new one is the problem, not the current", async () => {
+    const t = await testApp({ suite: "pw-change-breached", identity: { breachedPassword: (p) => p === BREACHED } });
+    const change = (currentPassword: string, newPassword: string) =>
+      t.app.request("/v1/account/password", {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword, currentPassword }),
+      });
+
+    const breached = await change(t.memberA.password, BREACHED);
+    expect(breached.status).toBe(400);
+    const body = (await breached.json()) as {
+      error?: { code?: string; message?: string; details?: { path: string }[] };
+    };
+    expect(body.error?.code).toBe("VALIDATION");
+    expect(body.error?.message).toBe(BREACH_MESSAGE);
+    expect(body.error?.details?.[0]?.path).toBe("newPassword");
+
+    const wrong = await change("not-the-password", "newClubPass2026!");
+    expect(wrong.status).toBe(400);
+    expect(((await wrong.json()) as { error?: { message?: string } }).error?.message).toBe(
+      "That password isn't right.",
+    );
+
+    // Nothing changed: the password the member had still signs in.
+    expect(await t.auth.cookieFor(t.memberA.email, t.memberA.password)).toBeTruthy();
     await t.close();
   });
 
@@ -70,6 +158,44 @@ describe("POST /v1/account/password", () => {
     await t.close();
   });
 
+  it("a change whose other sessions do not end is published and answered as such, never as ok (ADR-IMPL-047)", async () => {
+    const t = await testApp({ suite: "pw-revoke-fails" });
+    // The route calls the facade's own Better Auth object: its revokeOtherSessions fails once the password changed.
+    const api = t.registry.facade<IdentityFacade>("identity").auth.api as unknown as { revokeOtherSessions: unknown };
+    const revoke = api.revokeOtherSessions;
+    api.revokeOtherSessions = async () => {
+      throw new Error("injected: sessions store unavailable");
+    };
+    try {
+      const elsewhere = await t.auth.cookieFor(t.memberA.email, t.memberA.password);
+      const r = await t.app.request("/v1/account/password", {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: "newClubPass2026!", currentPassword: t.memberA.password }),
+      });
+      expect(r.status).toBe(500);
+      const body = (await r.json()) as {
+        ok?: boolean;
+        error?: { message?: string; context?: { passwordChanged?: boolean } };
+      };
+      expect(body.ok).toBeUndefined();
+      expect(body.error?.message).toContain("other devices are still signed in");
+      // The app reads this flag: the change was made, so the sheet does not offer the form (and the old password) again.
+      expect(body.error?.context?.passwordChanged).toBe(true);
+      // The change stands: the new password signs in, the other session is still there, the event went out.
+      expect(await t.auth.cookieFor(t.memberA.email, "newClubPass2026!")).toBeTruthy();
+      expect((await t.app.request("/v1/profile", { headers: { Cookie: elsewhere } })).status).toBe(200);
+      await t.drainAll();
+      const evts = await t.journal.forMember(t.memberA.id);
+      expect(
+        evts.filter((e: { payload?: { type?: string } }) => e.payload?.type === "member.password_changed").length,
+      ).toBeGreaterThanOrEqual(1);
+    } finally {
+      api.revokeOtherSessions = revoke;
+      await t.close();
+    }
+  });
+
   it("rejects a password that is too short", async () => {
     const t = await testApp({ suite: "pw-short" });
     const r = await t.app.request("/v1/account/password", {
@@ -81,6 +207,30 @@ describe("POST /v1/account/password", () => {
     await t.close();
   });
 
+  it("needs a number or a symbol, on a change and on a first set (the app's rule, now the API's)", async () => {
+    const t = await testApp({ suite: "pw-rule" });
+    const post = (cookie: string, body: Record<string, string>) =>
+      t.app.request("/v1/account/password", {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const lettersOnly = { path: "newPassword", message: "Use at least one number or symbol." };
+
+    const change = await post(t.memberA.cookie, { newPassword: "aaaaaaaa", currentPassword: t.memberA.password });
+    expect(change.status).toBe(400);
+    const changeBody = (await change.json()) as { error: { code: string; details?: unknown[] } };
+    expect(changeBody.error.code).toBe("VALIDATION");
+    expect(changeBody.error.details).toContainEqual(lettersOnly);
+
+    await t.withPathAPassword(t.memberB.id);
+    const first = await post(t.memberB.cookie, { newPassword: "cccccccc" });
+    expect(first.status).toBe(400);
+    expect(((await first.json()) as { error: { details?: unknown[] } }).error.details).toContainEqual(lettersOnly);
+    expect((await post(t.memberB.cookie, { newPassword: "cccccccc1" })).status).toBe(200);
+    await t.close();
+  });
+
   it("401 without session", async () => {
     const t = await testApp({ suite: "pw-unauth" });
     const r = await t.app.request("/v1/account/password", {
@@ -89,6 +239,115 @@ describe("POST /v1/account/password", () => {
       body: JSON.stringify({ newPassword: "somepassword123!" }),
     });
     expect(r.status).toBe(401);
+    await t.close();
+  });
+
+  it("the current password cannot be guessed without end: past the burst, 429 (ADR-IMPL-047)", async () => {
+    const t = await testApp({ suite: "pw-guess" });
+    const guess = () =>
+      t.app.request("/v1/account/password", {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: "newClubPass2026!", currentPassword: "notTheOne2026!" }),
+      });
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) statuses.push((await guess()).status);
+    // profile.write: a burst of 10, then one every two minutes — the wrong guesses are 400 until the limit says 429.
+    expect(statuses.slice(0, 10).every((s) => s === 400)).toBe(true);
+    expect(statuses.slice(10)).toEqual([429, 429]);
+    // A bucket of its own: the guesses leave the member's profile edits as they were.
+    const edit = await t.app.request("/v1/profile", {
+      method: "PATCH",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: "Alex Still Here" }),
+    });
+    expect(edit.status).toBe(200);
+    await t.close();
+  });
+
+  it("Path A: a breached first password is refused and nothing is set (ADR-PROD-001: HIBP applies to set-password)", async () => {
+    const t = await testApp({ suite: "pw-first-breached", identity: { breachedPassword: (p) => p === BREACHED } });
+    const cookie = await joinByCode(t, `pw-first-breached.${crypto.randomUUID().slice(0, 8)}@test.dev`);
+    const status = async () => (await t.app.request("/v1/account/password", { headers: { Cookie: cookie } })).json();
+    expect(await status()).toEqual({ hasPassword: false });
+
+    const breached = await setFirst(t, cookie, BREACHED);
+    expect(breached.status).toBe(400);
+    const body = (await breached.json()) as {
+      error?: { code?: string; message?: string; details?: { path: string }[] };
+    };
+    expect(body.error?.code).toBe("VALIDATION");
+    expect(body.error?.message).toBe(BREACH_MESSAGE);
+    expect(body.error?.details?.[0]?.path).toBe("newPassword");
+    expect(await status()).toEqual({ hasPassword: false });
+
+    expect((await setFirst(t, cookie, "fine-pass-2026x")).status).toBe(200);
+    expect(await status()).toEqual({ hasPassword: true });
+    await t.close();
+  });
+
+  it("Path A: when the breach list cannot be reached, nothing is set and the member is asked to try again", async () => {
+    const t = await testApp({
+      suite: "pw-first-hibp-down",
+      identity: {
+        // Only this one is asked while the list is down; the fixture members' sign-ups are checked as usual.
+        breachedPassword: (p) => {
+          if (p === "unchecked-pass-2026x") throw new Error("api.pwnedpasswords.com unreachable");
+          return false;
+        },
+      },
+    });
+    const cookie = await joinByCode(t, `pw-first-down.${crypto.randomUUID().slice(0, 8)}@test.dev`);
+    const r = await setFirst(t, cookie, "unchecked-pass-2026x");
+    expect(r.status).toBe(503);
+    const body = (await r.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("SERVICE_DISABLED");
+    expect(body.error?.message).toBe("We couldn't check this password just now. Try again in a moment.");
+    const status = await t.app.request("/v1/account/password", { headers: { Cookie: cookie } });
+    expect(await status.json()).toEqual({ hasPassword: false });
+    await t.close();
+  });
+
+  it("a change while the breach list cannot be reached: 503, as for a first password, and nothing changes", async () => {
+    const t = await testApp({
+      suite: "pw-change-hibp-down",
+      identity: {
+        breachedPassword: (p) => {
+          if (p === "unchecked-pass-2026x") throw new Error("api.pwnedpasswords.com unreachable");
+          return false;
+        },
+      },
+    });
+    const r = await t.app.request("/v1/account/password", {
+      method: "POST",
+      headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({ newPassword: "unchecked-pass-2026x", currentPassword: t.memberA.password }),
+    });
+    expect(r.status).toBe(503);
+    const body = (await r.json()) as { error?: { code?: string; message?: string } };
+    expect(body.error?.code).toBe("SERVICE_DISABLED");
+    expect(body.error?.message).toBe("We couldn't check this password just now. Try again in a moment.");
+    expect(await t.auth.cookieFor(t.memberA.email, t.memberA.password)).toBeTruthy();
+    await t.close();
+  });
+
+  it("nor around it: Better Auth's own change-password and verify-password are not served (ADR-IMPL-047)", async () => {
+    const t = await testApp({ suite: "pw-auth-route" });
+    const post = (path: string, body: Record<string, string>) =>
+      t.app.request(`/api/auth${path}`, {
+        method: "POST",
+        headers: { Cookie: t.memberA.cookie, "Content-Type": "application/json", Origin: t.appOrigin },
+        body: JSON.stringify(body),
+      });
+    // The right password on both: served, either would answer 200.
+    const change = await post("/change-password", {
+      newPassword: "newClubPass2026!",
+      currentPassword: t.memberA.password,
+    });
+    expect(change.status).toBe(404);
+    expect((await post("/verify-password", { password: t.memberA.password })).status).toBe(404);
+    // Nothing changed: the password the member had still signs in.
+    expect(await t.auth.cookieFor(t.memberA.email, t.memberA.password)).toBeTruthy();
     await t.close();
   });
 });

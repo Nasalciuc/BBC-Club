@@ -1,8 +1,9 @@
-import { BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Button, CloseButton, Stepper, tokens, rn } from "@bbc/ui";
+import { StyleSheet, Text } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, ModalSheet, type ModalSheetHandle, Stepper, tokens, rn } from "@bbc/ui";
 
+import { withAdults } from "@/features/explore/travel-preferences";
 import { putTravelPreferences, type Profile } from "@/lib/api";
 import type { ProfileSheetHandle } from "./types";
 
@@ -11,10 +12,9 @@ type Props = {
   onSaved: (next: Profile) => void;
 };
 
-const SNAP = ["55%"] as const;
-
 export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function TravelersSheet({ profile, onSaved }, ref) {
-  const modalRef = useRef<BottomSheetModal>(null);
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
   const [adult, setAdult] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +35,9 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
   async function onSave() {
     setBusy(true);
     setError(null);
+    // Adults only here: children and infants already in the profile stay.
     const result = await putTravelPreferences({
-      passengers: { adult, child: 0, infant: 0 },
+      passengers: withAdults(profile.preferences?.passengers, adult),
     });
     setBusy(false);
     if (!result.ok) {
@@ -48,46 +49,35 @@ export const TravelersSheet = forwardRef<ProfileSheetHandle, Props>(function Tra
   }
 
   return (
-    <BottomSheetModal
+    <ModalSheet
       ref={modalRef}
-      snapPoints={[...SNAP]}
-      enablePanDownToClose={!busy}
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
-    >
-      <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.travelers.sheet">
-        <View style={styles.header}>
-          <Text style={styles.title}>Travelers</Text>
-          <CloseButton testID="profile.travelers.close" onPress={() => modalRef.current?.dismiss()} />
-        </View>
-
-        <Stepper testID="profile.travelers.adult" label="Adults" value={adult} min={1} max={9} onChange={setAdult} />
-        <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
+      title="Travelers"
+      closeTestID="profile.travelers.close"
+      testID="profile.travelers.sheet"
+      dismissible={!busy}
+      insets={insets}
+      footer={
         <Button
           testID="profile.travelers.save"
-          label={busy ? "Saving…" : "Save"}
+          label={busy ? "Saving…" : "Save travelers"}
+          variant="primary"
           busy={busy}
-          shape="card"
           onPress={() => void onSave()}
         />
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+      }
+    >
+      {/* Figma 238:4842: what the number is for, the stepper, the note for children or larger parties — 24 apart. */}
+      <Text style={styles.help}>Set the usual number of adults. You can change it for each request.</Text>
+      <Stepper testID="profile.travelers.adult" label="Adults" value={adult} min={1} max={9} onChange={setAdult} />
+      <Text style={styles.caption}>For children or larger parties, add a note to your request.</Text>
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </ModalSheet>
   );
 });
 
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.sm },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
+  help: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
   caption: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
 });

@@ -1,4 +1,10 @@
 # Generated crontab must stay LF so cron:gen parity matches on Windows checkouts.
 infra/cron/crontab text eol=lf
+infra/env-value.sh text eol=lf
+infra/bootstrap.sh text eol=lf
+infra/deploy.sh text eol=lf
+# scripts/env-profile.test.ts runs rotate-secret.sh with bash, which reads a CR as part of the command.
+infra/rotate-secret.sh text eol=lf
 infra/caddy/cloudflare_ranges.caddy text eol=lf
 packages/shared/src/net/cloudflare-ranges.ts text eol=lf
+packages/db/seeds/*.tsv text eol=lf -whitespace

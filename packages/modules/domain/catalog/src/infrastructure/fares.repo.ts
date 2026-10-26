@@ -1,20 +1,41 @@
 import type { Executor } from "@bbc/db";
-import { and, asc, eq, gt, lt, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { airports, fares } from "@bbc/db/schema/catalog";
 
 export type SearchQuery = {
   from: string;
   to: string;
   cabin: "business" | "first";
+  /** The travel day (its UTC date part: the app sends noon UTC of the chosen day). Absent: any day. */
   when?: Date;
+  /** For tests: the instant the sale window is read at. */
+  now?: Date;
 };
+
+/** The fare's origin airport, for the zone its departure day is read in. */
+const origin = alias(airports, "origin");
 
 export const SEARCH_LIMIT = 30; // the same page the future FT.SEARCH … LIMIT 0 30 returns — one contract for both paths
 
 export const faresRepo = {
-  /** Visible published fares in the validity window. Filters in SQL. At most SEARCH_LIMIT rows, cheapest first. */
-  async search(exec: Executor, q: SearchQuery) {
-    const now = q.when ?? new Date();
+  /**
+   * ADR-IMPL-041 (amended): a fare is listed only while it is on sale — published, valid_from ≤ now < valid_until, the
+   * rule GET /v1/fares/:id reads, so no item opens on a 410. A travel date then picks a timed fare (depart_at set) by
+   * its departure day in the origin airport's zone, and an undated one while it is still sold on that day.
+   */
+  searchSelect(exec: Executor, q: SearchQuery) {
+    const now = q.now ?? new Date();
+    const originTz = exec.select({ tz: origin.tz }).from(origin).where(eq(origin.code, fares.routeFrom));
+    const onDay = q.when
+      ? or(
+          and(
+            isNotNull(fares.departAt),
+            sql`(${fares.departAt} AT TIME ZONE coalesce((${originTz}), 'UTC'))::date = ${q.when.toISOString().slice(0, 10)}::date`,
+          ),
+          and(isNull(fares.departAt), gt(fares.validUntil, q.when)),
+        )
+      : undefined;
     return exec
       .select()
       .from(fares)
@@ -26,10 +47,16 @@ export const faresRepo = {
           eq(fares.cabin, q.cabin),
           lte(fares.validFrom, now),
           gt(fares.validUntil, now),
+          onDay,
         ),
       )
       .orderBy(asc(fares.price))
       .limit(SEARCH_LIMIT);
+  },
+
+  /** Visible published fares in the validity window. Filters in SQL. At most SEARCH_LIMIT rows, cheapest first. */
+  async search(exec: Executor, q: SearchQuery) {
+    return this.searchSelect(exec, q);
   },
 
   /** Any row by id (ignore published/window) — caller maps expired → 410. */
@@ -38,12 +65,10 @@ export const faresRepo = {
     return row ?? null;
   },
 
-  /** Cheapest published fare per destination from `home`, with airport enrichment. hasOffer left to BFF.
-   *  DISTINCT ON (route_to) keeps the first row of ORDER BY route_to, price — the cheapest. */
-  async destinations(exec: Executor, home: string) {
+  /** Same SELECT DISTINCT ON the destinations() path uses — hot-query tests EXPLAIN this builder. */
+  destinationsSelect(exec: Executor, home: string, now = new Date()) {
     const homeCode = home.toUpperCase();
-    const now = new Date();
-    const rows = await exec
+    return exec
       .selectDistinctOn([fares.routeTo], {
         code: fares.routeTo,
         name: airports.name,
@@ -52,6 +77,7 @@ export const faresRepo = {
         region: airports.region,
         lat: airports.lat,
         lng: airports.lng,
+        description: airports.description,
         fromPrice: fares.price,
       })
       .from(fares)
@@ -65,6 +91,12 @@ export const faresRepo = {
         ),
       )
       .orderBy(asc(fares.routeTo), asc(fares.price)); // DISTINCT ON keeps the first row per routeTo = the cheapest
+  },
+
+  /** Cheapest published fare per destination from `home`, with airport enrichment. hasOffer left to BFF.
+   *  DISTINCT ON (route_to) keeps the first row of ORDER BY route_to, price — the cheapest. */
+  async destinations(exec: Executor, home: string) {
+    const rows = await this.destinationsSelect(exec, home);
     return rows.map((r) => ({
       ...r,
       lat: parseFloat(String(r.lat)),
@@ -97,6 +129,9 @@ export const faresRepo = {
       publishedPrice: string | null;
       publishedSource: string | null;
       currency: string;
+      /** What the price is for (ADR-IMPL-056): the row says it, or one way. Part of the fare's identity (0034): the same
+       *  route sold one way and round trip is two fares. */
+      trip: "round_trip" | "one_way";
       validFrom: Date;
       validUntil: Date;
     },
@@ -109,7 +144,9 @@ export const faresRepo = {
         published: true,
       })
       .onConflictDoUpdate({
-        target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom],
+        // fares_route_cabin_carrier (0034): the trip in it, a NULL carrier not distinct — a carrier-less fare re-imported
+        // is the same fare, and one route sold one way and round trip is two.
+        target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom, fares.trip],
         set: {
           carrierName: row.carrierName,
           product: row.product,

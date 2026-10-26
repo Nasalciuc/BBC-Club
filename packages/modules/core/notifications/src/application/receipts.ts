@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
+import type { Executor } from "@bbc/db";
 
 /** `sent` without `delivered` for > 24h → stamp last_error='receipt_unknown' (provider never confirmed). */
-export async function reconcileReceipts(db: any): Promise<Record<string, number>> {
+export async function reconcileReceipts(db: Executor): Promise<Record<string, number>> {
   const rows: any[] = await db.execute(sql`
     UPDATE notifications.notifications
     SET last_error = 'receipt_unknown'

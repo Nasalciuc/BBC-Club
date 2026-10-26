@@ -1,11 +1,16 @@
 import type { Executor } from "@bbc/db";
-import type { fares, airports } from "@bbc/db/schema/catalog";
+import type { fares } from "@bbc/db/schema/catalog";
+import type { EstimateVM } from "@bbc/shared/api/v1/fares";
 import { toAirportVM, toFareVM } from "../application/to-fare-vm";
 
 export type FareRow = typeof fares.$inferSelect;
-export type AirportRow = typeof airports.$inferSelect;
+export type { AirportRow } from "../application/to-fare-vm";
+import type { AirportRow } from "../application/to-fare-vm";
 
 export { toAirportVM, toFareVM };
+
+/** An estimate as the facade answers it: what the search shows, and the fingerprint of the rules behind it. */
+export type IndicativeEstimate = EstimateVM & { rules: string };
 
 /** Cheapest published fare per destination from home — shape of destinations(). */
 export type DestinationPin = {
@@ -16,6 +21,8 @@ export type DestinationPin = {
   region: string;
   lat: number;
   lng: number;
+  /** The destination's one line under its city (04), or null (ADR-IMPL-056). */
+  description: string | null;
   fromPrice: number;
 };
 
@@ -27,10 +34,30 @@ export type CatalogFacade = {
     q: { from: string; to: string; cabin: "business" | "first"; when?: Date },
   ): Promise<FareRow[]>;
   getFare(exec: Executor | undefined, id: string): Promise<FareRow | null>;
-  destinations(exec: Executor | undefined, home: string): Promise<DestinationPin[]>;
+  /**
+   * The home screen's pins: the cheapest published fare to each destination from `home`, then (ADR-IMPL-045, with
+   * `catalog.site_pins` and estimates on) up to twelve of the site's cities listed from there, priced by the formula in
+   * `cabin` — business unless the member's profile says first.
+   */
+  destinations(
+    exec: Executor | undefined,
+    home: string,
+    opts?: { cabin?: "business" | "first" },
+  ): Promise<DestinationPin[]>;
   searchAirports(exec: Executor | undefined, q: string): Promise<AirportRow[]>;
   getAirport(exec: Executor | undefined, code: string): Promise<AirportRow | null>;
   /** Batch lookup; order is not guaranteed. Replaces getAirport in loops. */
   getAirports(exec: Executor | undefined, codes: readonly string[]): Promise<AirportRow[]>;
+  /**
+   * The indicative price an undated search shows for this route right now (ADR-IMPL-037), with the fingerprint of the
+   * rules that computed it, or null: estimates off, no valid rules, an unknown airport, a published fare in this cabin,
+   * or a route the formula does not price. A quote request whose app showed the estimate asks the same question
+   * (ADR-IMPL-042), so the specialist sees the member's number. A killed catalog still answers (its facade stays so
+   * dependents boot): `catalog.estimates` off is the switch for estimates.
+   */
+  indicativeFor(
+    exec: Executor | undefined,
+    q: { from: string; to: string; cabin: "business" | "first" },
+  ): Promise<IndicativeEstimate | null>;
   importCsv(input: unknown): Promise<{ imported: number }>;
 };

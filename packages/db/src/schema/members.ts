@@ -30,6 +30,9 @@ export const profile = members.table(
     displayName: text("display_name"),
     phone: text("phone"),
     homeAirport: text("home_airport"), // IATA
+    /** The member's photo (02, 12): the https address of an image hosted elsewhere, never the image; null — their
+     *  initials shown — until they add one (ADR-IMPL-056). No route sets it yet. Added by the named step 0033. */
+    avatarUrl: text("avatar_url"),
     preferences: jsonb("preferences").$type<TravelPreferences>().notNull().default({}),
     timezone: text("timezone").notNull().default("America/New_York"),
     status: memberStatus("status").notNull().default("waitlist"),
@@ -51,6 +54,8 @@ export const profile = members.table(
     check("profile_linked_consistent", sql`(${t.crmClientId} IS NULL) = (${t.linkedAt} IS NULL)`),
     // deleted rows must carry a deleted_at (and vice versa)
     check("profile_deleted_consistent", sql`(${t.status} = 'deleted') = (${t.deletedAt} IS NOT NULL)`),
+    // a photo is only ever an https address (0033)
+    check("profile_avatar_url", sql`${t.avatarUrl} IS NULL OR ${t.avatarUrl} ~ '^https://'`),
   ],
 );
 

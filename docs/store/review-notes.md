@@ -1,0 +1,32 @@
+# App review notes
+
+The app is a private members’ concierge. It does **not** book or take payment. A reviewer needs a real account.
+
+## Demo account
+
+Create it against the environment under review:
+
+```bash
+cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml --env-file env/production.env run --rm --no-deps api bun run scripts/seed-review-account.ts
+```
+
+Requires `REVIEW_ACCOUNT_EMAIL` and `REVIEW_ACCOUNT_PASSWORD` from the environment (`packages/shared/src/env.ts`). The script is idempotent: run again, it keeps the account verified and active and puts the password back to the environment's. Put the credentials in App Store Connect and Play Console **only**. Never commit them.
+
+On staging the same account also carries the demo situations — pins, offers, requests, inbox — refreshed at every deploy (`scripts/seed-staging-demo.ts`, ADR-IMPL-040). Production gets the account alone.
+
+## Path for the reviewer
+
+1. Sign in (`/sign-in`) with the demo email and password.
+2. If onboarding appears, set a home airport or skip.
+3. Home / Explore (`explore.root`): open a fare card, or search (`explore.search` / `explore.airportQuery`) and open a result.
+4. Fare (`fare.root`) → **Request** (`fare.request`) opens the request sheet (`request.sheet`).
+5. Fill contact if needed and submit (`request.submit`). That is how a member asks for a quote — there is no separate “I’m interested” API.
+6. Open the Requests tab (`requests.root`) to see the new row; tap it for `request.root`.
+
+## Account deletion (as shipped today)
+
+Profile tab → **Delete account** (`profile.delete`), or Profile → Settings → **Delete account** (`settings.delete`) → the confirmation sheet (`profile.deleteConfirm`) asks for the account's password (`profile.deleteConfirm.password`). Use the demo account's password. The red **Delete account** (`profile.deleteConfirm.confirm`) stays disabled until a password is typed. `deleteAccount(password)` in `apps/mobile/src/features/auth/flows.ts` refuses an empty password without a request (`refuseEmptyPassword`, `features/auth/flows-logic.ts`), calls `authClient.deleteUser({ password })`, then clears the member's data on the phone (push device, request queue, saved items, recent searches, onboarded flag). The API deletes nothing without the right password: an empty or wrong one is `400 INVALID_PASSWORD`, the sheet marks the field (`profile.deleteConfirm.wrongPassword`) and stays open. A member who joined by code and never set a password sets one first with Forgot password?.
+
+## What the reviewer will not find
+
+Booking, checkout, Apple Pay / Play Billing, in-app search of the public web, Face ID, or a crash-reporter settings screen.

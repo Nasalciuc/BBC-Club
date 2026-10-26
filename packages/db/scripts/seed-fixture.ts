@@ -11,6 +11,7 @@ import { profile } from "../src/schema/members";
 import { offers } from "../src/schema/proposals";
 import { mirror } from "../src/schema/crm";
 import { airports, fares } from "../src/schema/catalog";
+import { liveValidUntil } from "./fixture-dates";
 
 assertNotProduction("seed-fixture");
 const db = createDb(process.env.DATABASE_URL!, { max: 1, applicationName: "bbc-seed" });
@@ -84,6 +85,9 @@ try {
       })
       .onConflictDoNothing({ target: profile.memberId });
 
+    // A new database's offers stay live whatever the day the seed runs: a validity that has passed moves on by whole
+    // years. A database seeded before keeps the offers it has, dates included (onConflictDoNothing).
+    const today = new Date();
     for (const o of fixture.offers) {
       await tx
         .insert(offers)
@@ -99,9 +103,9 @@ try {
           publishedPrice: String(o.published),
           currency: "USD",
           title: o.title,
-          contextLine: o.contextLine ?? null,
+          contextLine: "contextLine" in o ? o.contextLine : null, // only some fixture offers carry one
           flightFacts: o.facts,
-          validUntil: new Date(o.validUntil),
+          validUntil: liveValidUntil(o.validUntil, today),
           status: "active",
         })
         .onConflictDoNothing({ target: offers.idempotencyKey });
@@ -141,8 +145,9 @@ try {
         departAt: f.departAt ? new Date(f.departAt) : null,
         arriveAt: f.arriveAt ? new Date(f.arriveAt) : null,
         price: String(f.price.offer),
-        publishedPrice: f.price.published != null ? String(f.price.published) : null,
-        publishedSource: f.price.publishedSource ?? null,
+        // Some fixture fares have no published price (the union's members differ): narrow, don't assert.
+        publishedPrice: "published" in f.price ? String(f.price.published) : null,
+        publishedSource: "publishedSource" in f.price ? f.price.publishedSource : null,
         currency: f.price.currency,
         source: "manual" as const,
         validFrom: new Date("2026-09-01T00:00:00.000Z"),
@@ -177,7 +182,7 @@ try {
         .insert(fares)
         .values(f)
         .onConflictDoNothing({
-          target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom],
+          target: [fares.routeFrom, fares.routeTo, fares.cabin, fares.carrier, fares.validFrom, fares.trip],
         });
     }
 
@@ -192,7 +197,7 @@ try {
                timestamptz '2026-01-01 00:00:00+00' + (g || ' seconds')::interval,
                timestamptz '2028-01-01 00:00:00+00', true
         FROM generate_series(1, 10000) g
-        ON CONFLICT (route_from, route_to, cabin, carrier, valid_from) DO NOTHING
+        ON CONFLICT (route_from, route_to, cabin, carrier, valid_from, trip) DO NOTHING
       `);
       console.log("bench fares seeded (10000 JFK→LHR)");
     }

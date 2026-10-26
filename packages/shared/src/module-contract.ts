@@ -58,8 +58,15 @@ export type ModulePlatform = {
   logger: HandlerLogger;
   flags: {
     isEnabled: (key: string, fallback?: boolean) => Promise<boolean>;
+    variant: (key: string, fallback: string) => Promise<string>;
     isKilled: (module: string) => Promise<boolean>;
     isConsumerPaused: (consumer: string) => Promise<boolean>;
+    /** The whole cached row value, or null (no row, or unreadable — it never throws). For settings an operator keeps
+     *  beside the module's flags (ADR-IMPL-037: `catalog.pricing_rules`); the caller validates the shape. */
+    read: (key: string) => Promise<Record<string, unknown> | null>;
+    /** `read` without the fallback: the error that kept the row from being read, never a null in its place. For a
+     *  caller that must tell an unreadable row from a missing one (`catalog.pricing_rules`, ADR-IMPL-059). */
+    readStrict: (key: string) => Promise<Record<string, unknown> | null>;
   };
   events: {
     publish: (exec: unknown, input: PublishInput) => Promise<unknown>;
@@ -68,10 +75,61 @@ export type ModulePlatform = {
   };
   jobs: { register: (name: string, spec: JobSpec) => void };
   rateLimit: {
+    /** `exec`: the caller's transaction, for a rule counted inside it (postgres store only). */
     check(
       rule: string,
       subject: string,
+      exec?: unknown,
     ): Promise<{ allowed: boolean; remaining: number; resetMs: number; retryAfterMs?: number; limit: number }>;
+  };
+  cache: {
+    getOrLoad<T>(key: string, ttlS: number, load: () => Promise<T>): Promise<T>;
+    invalidate(...keys: string[]): Promise<void>;
+    bump(key: string): Promise<void>;
+    /** Null when Redis is not connected, so callers keep their process cache. */
+    generation(key: string): Promise<string | null>;
+  };
+  search: {
+    note(event: {
+      from: string;
+      to: string;
+      cabin: "business" | "first";
+      month: string;
+      hadFares: boolean;
+      results: number;
+    }): void;
+  };
+  /** Null when REDIS_URL is unset. */
+  streams: {
+    enqueue(ids: string[]): Promise<void>;
+    run(consumer: string, handle: (ids: string[]) => Promise<void>): Promise<void>;
+  } | null;
+  lifecycle: { onClose(fn: () => Promise<void>): void };
+  signal: AbortSignal;
+  metrics: { inc(name: string, labels?: Record<string, string>, by?: number): void };
+  /** Null when REDIS_URL is unset. Sketches only — the record stays in Postgres. */
+  redis: null | {
+    topK: {
+      reserve(key: string, k: number): Promise<unknown>;
+      incrBy(key: string, item: { item: string; incrementBy: number }): Promise<unknown>;
+      listWithCount(key: string): Promise<{ item: string; count: number }[]>;
+    };
+    cms: {
+      initByProb(key: string, error: number, probability: number): Promise<unknown>;
+      incrBy(key: string, item: { item: string; incrementBy: number }): Promise<unknown>;
+      query(key: string, items: string[]): Promise<number[]>;
+    };
+  };
+  /** Null when KAFKA_BROKERS is unset. */
+  kafka: null | {
+    consume(opts: {
+      clientId: string;
+      groupId: string;
+      topic: string;
+      consumerName: string;
+      signal: AbortSignal;
+      handle: (eventId: string, value: unknown, tx: unknown) => Promise<void>;
+    }): Promise<void>;
   };
 };
 

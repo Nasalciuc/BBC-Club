@@ -2,3 +2,16 @@ reviews:
   pre_merge_checks:
     docstrings:
       mode: off
+  # Generated and binary files are not reviewed: their sources are (DESIGN.md for tokens.ts, .cursor/rules for
+  # .claude/rules, the drizzle schema for a snapshot). Keeps each review under its 100-file limit.
+  path_filters:
+    - "!**/snapshot.json"
+    - "!bun.lock"
+    - "!packages/ui/src/tokens.ts"
+    - "!.claude/rules/**"
+    - "!isolated/**"
+    - "!graphify-out/**"
+    - "!**/*.png"
+    - "!**/*.webp"
+    - "!**/*.jpg"
+    - "!**/*.jpeg"

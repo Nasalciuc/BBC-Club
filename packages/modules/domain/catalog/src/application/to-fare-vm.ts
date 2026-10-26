@@ -1,9 +1,12 @@
-import type { AirportVM, DestinationPinVM, FareVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, DestinationPinVM, EstimateVM, FareVM } from "@bbc/shared/api/v1/fares";
 import type { airports, fares } from "@bbc/db/schema/catalog";
+import { estimateFare } from "../pricing/estimate";
+import type { PricingRules } from "../pricing/rules";
 import { calendarDayOffset, formatInZone } from "./flight-local";
 
 type FareRow = typeof fares.$inferSelect;
-type AirportRow = typeof airports.$inferSelect;
+/** An airport as the catalog serves it — the one definition. The *Norm search columns are the trigger's (0023). */
+export type AirportRow = Omit<typeof airports.$inferSelect, "cityNorm" | "nameNorm" | "countryNorm" | "termsNorm">;
 
 export function toAirportVM(row: AirportRow): AirportVM {
   return {
@@ -13,6 +16,9 @@ export function toAirportVM(row: AirportRow): AirportVM {
     countryCode: row.countryCode,
     lat: typeof row.lat === "number" ? row.lat : parseFloat(String(row.lat)),
     lng: typeof row.lng === "number" ? row.lng : parseFloat(String(row.lng)),
+    tz: row.tz,
+    // ADR-IMPL-056: the destination's one line (04), or none — a row cached before 0031 has no such field.
+    description: row.description ?? null,
   };
 }
 
@@ -53,6 +59,8 @@ export function toFareVM(
         : {}),
       currency: row.currency,
     },
+    // What the price is for, as the catalogue says (ADR-IMPL-056); one way unless it says round trip.
+    trip: row.trip,
     validUntil: row.validUntil.toISOString(),
     hasOffer,
     offerId,
@@ -69,6 +77,7 @@ export function toDestinationPin(
     lat: number;
     lng: number;
     fromPrice: number;
+    description?: string | null;
   },
   hasOffer: boolean,
 ): DestinationPinVM {
@@ -79,6 +88,7 @@ export function toDestinationPin(
     countryCode: row.countryCode,
     lat: row.lat,
     lng: row.lng,
+    description: row.description ?? null,
     fromPrice: row.fromPrice,
     hasOffer,
     region: row.region,
@@ -90,15 +100,36 @@ function localClocks(
   arriveAt: string | null,
   originTz: string,
   destTz: string,
-): { departLocal: string | null; arriveLocal: string | null; arriveDayOffset: number } {
-  if (!departAt || !arriveAt) {
-    return { departLocal: null, arriveLocal: null, arriveDayOffset: 0 };
+): { departLocal: string | null; arriveLocal: string | null; arriveDayOffset: number; departDate: string | null } {
+  if (!departAt) {
+    return { departLocal: null, arriveLocal: null, arriveDayOffset: 0, departDate: null };
   }
+  // The departure's clock and its day at the origin, named here from its zone: the app prints them as they are
+  // (ADR-IMPL-019) — a fare with a departure and no arrival keeps both.
   const dep = formatInZone(departAt, originTz);
+  if (!arriveAt) {
+    return { departLocal: dep.hhmm, arriveLocal: null, arriveDayOffset: 0, departDate: dep.ymd };
+  }
   const arr = formatInZone(arriveAt, destTz);
   return {
     departLocal: dep.hhmm,
     arriveLocal: arr.hhmm,
     arriveDayOffset: calendarDayOffset(dep.ymd, arr.ymd),
+    departDate: dep.ymd,
   };
+}
+
+/**
+ * The company's formula as a member may see it (ADR-IMPL-037): an indicative round-trip price in the chosen cabin, or
+ * null where the formula has none. Callers show it only when the route has no fare.
+ */
+export function toEstimateVM(
+  rules: PricingRules,
+  from: AirportRow,
+  to: AirportRow,
+  cabin: "business" | "first",
+): EstimateVM | null {
+  const at = (a: AirportRow) => ({ code: a.code, countryCode: a.countryCode, lat: Number(a.lat), lng: Number(a.lng) });
+  const estimate = estimateFare(rules, at(from), at(to), cabin);
+  return estimate ? { ...estimate, trip: "round_trip", cabin, basis: "formula" } : null;
 }

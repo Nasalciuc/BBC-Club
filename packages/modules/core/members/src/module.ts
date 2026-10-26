@@ -6,7 +6,7 @@ import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { createMembersFacade, toProfileVM } from "./application/facade";
-import type { MembersFacade } from "./api";
+import type { MembersFacade, ProfileCreationDeps } from "./api";
 import type { CrmFacade } from "@bbc/crm";
 import type { IdentityFacade } from "@bbc/identity";
 import { onMemberRegistered, reconcileMissingProfiles } from "./handlers/on-member-registered";
@@ -47,6 +47,27 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
       await platform.events.publish(tx, { ...e, publishedBy: "members" });
     };
 
+    // ADR-PROD-001: seeded false by scripts/seed-flags.ts — an unknown CRM email is waitlist.
+    const profileCreation: ProfileCreationDeps = {
+      crm: ports.crm,
+      flags: { get: (k: string) => platform.flags.isEnabled(k, false) },
+    };
+
+    /** Right after the join code the profile row is not there until member.registered is delivered, and onboarding's
+     *  first save answered 404 'Not found.'. When the write finds no row and the account still exists, make the row the
+     *  delivery would make (`ensureProfile`) and write once more; still none (a deleted profile) → null → 404.
+     *  The account is asked of identity, not read from the principal: a member deleted on another device keeps a
+     *  session in the cookie cache for up to a minute, and a save from it must not bring back, active and linked to
+     *  the CRM, the profile member.deleted erased (nothing would erase it again). */
+    async function writeOrCreate<T>(tx: Executor, actor: string, write: () => Promise<T | null>): Promise<T | null> {
+      const first = await write();
+      if (first) return first;
+      const email = await ports.identity.registeredEmail(actor);
+      if (!email) return null;
+      await facade.ensureProfile(tx, actor, email, profileCreation);
+      return write();
+    }
+
     const routes = new Hono<AppEnv>();
 
     registerRoute("PATCH", "/v1/profile", "profile:update-self", "profile.write");
@@ -59,7 +80,8 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const actor = actorMemberId(c.get("principal"));
+        const principal = c.get("principal");
+        const actor = actorMemberId(principal);
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
         const parsed = ProfilePatchBody.safeParse(await c.req.json().catch(() => ({})));
         if (!parsed.success) {
@@ -71,7 +93,7 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           );
         }
         const updated = await withTx(conn, async (tx) => {
-          const p = await facade.updateProfile(tx, actor, parsed.data);
+          const p = await writeOrCreate(tx, actor, () => facade.updateProfile(tx, actor, parsed.data));
           if (!p) return null;
           const fields = Object.keys(parsed.data);
           await publish(tx, {
@@ -89,7 +111,9 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           return p;
         });
         if (!updated) return c.json(apiError("NOT_FOUND"), 404);
-        return c.json(updated);
+        // The ProfileVM GET answers, as the travel save does: email and notifications included (ADR-IMPL-025).
+        const prefs = await facade.preferencesOf(undefined, actor);
+        return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
       },
     );
 
@@ -116,7 +140,7 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           );
         }
         const updated = await withTx(conn, async (tx) => {
-          const p = await facade.setTravelPreferences(tx, actor, parsed.data);
+          const p = await writeOrCreate(tx, actor, () => facade.setTravelPreferences(tx, actor, parsed.data));
           if (!p) return null;
           await publish(tx, {
             type: "member.profile_updated",
@@ -133,7 +157,8 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           return p;
         });
         if (!updated) return c.json(apiError("NOT_FOUND"), 404);
-        return c.json(toProfileVM(updated, memberEmail(principal), actor));
+        const prefs = await facade.preferencesOf(undefined, actor);
+        return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
       },
     );
 
@@ -173,10 +198,8 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           handler: (ctx: HandlerContext, payload: unknown) =>
             onMemberRegistered(
               {
-                tx: ctx.tx,
-                crm: ports.crm,
-                // ADR-PROD-001: seeded false by scripts/seed-flags.ts — an unknown CRM email is waitlist.
-                flags: { get: (k: string) => platform.flags.isEnabled(k, false) },
+                ...profileCreation,
+                tx: ctx.tx as unknown as Executor,
                 publish: async (e) => {
                   await platform.events.publish(ctx.tx, { ...e, publishedBy: "members" });
                 },
@@ -187,7 +210,8 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
         {
           type: "member.deleted",
           name: "members.onMemberDeleted",
-          handler: (ctx: HandlerContext, payload: unknown) => onMemberDeleted({ tx: ctx.tx }, payload),
+          handler: (ctx: HandlerContext, payload: unknown) =>
+            onMemberDeleted({ tx: ctx.tx as unknown as Executor }, payload),
         },
         // stage 1: crm.mirror.synced → link waitlist members
       ],

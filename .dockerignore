@@ -2,6 +2,7 @@
 **/graphify-out
 **/.git
 apps/mobile
+!apps/mobile/package.json
 isolated
 docs
 design

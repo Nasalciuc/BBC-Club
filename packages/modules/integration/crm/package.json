@@ -10,6 +10,7 @@
   },
   "scripts": {
     "test": "bun test tests/unit tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
+    "test:unit": "bun test tests/unit",
     "test:db": "bun test tests/contract tests/handlers --preload ../../../db/src/testing/preload.ts",
     "typecheck": "tsc --noEmit"
   },

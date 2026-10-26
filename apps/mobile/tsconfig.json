@@ -10,11 +10,14 @@
       "@bbc/shared/*": ["../../packages/shared/src/*"],
       "@bbc/ui": ["../../packages/ui/src/index.ts"],
       "@bbc/ui/tokens": ["../../packages/ui/src/tokens.ts"],
-      "@bbc/ui/icons": ["../../packages/ui/src/icons.tsx"]
+      "@bbc/ui/icons": ["../../packages/ui/src/icons.tsx"],
+      "@bbc/ui/calendar-logic": ["../../packages/ui/src/calendar/calendar-logic.ts"],
+      "@bbc/ui/flight-facts": ["../../packages/ui/src/cards/flight-facts.ts"],
+      "@bbc/ui/status-copy": ["../../packages/ui/src/primitives/status-copy.ts"]
     },
     "noUncheckedIndexedAccess": false,
     "verbatimModuleSyntax": false
   },
-  "include": ["src", "app.json", "expo-env.d.ts", ".expo/types/**/*.ts"],
+  "include": ["src", "app.json", "app.config.ts", "plugins", "expo-env.d.ts", ".expo/types/**/*.ts"],
   "exclude": ["node_modules", "src/**/*.test.ts"]
 }

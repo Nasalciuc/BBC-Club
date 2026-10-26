@@ -4,7 +4,7 @@
 // apps/api/src/index.ts (boot)
 const platform = createPlatform(db, { level: env.LOG_LEVEL });
 for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
-registerPlatformJobs(platform.jobs);
+registerPlatformJobs(platform.jobs, platform.metrics);
 registerModules(platform); // each module: registerConsumer(...) and jobs.register(...)
 platform.poller.start(); // one line; SKIP LOCKED makes several instances safe
 ```

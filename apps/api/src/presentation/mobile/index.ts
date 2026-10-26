@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createHash } from "node:crypto";
+import { z } from "zod";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { authorize, registerRoute, type PrincipalVars } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
@@ -12,6 +12,7 @@ import type { EngagementFacade } from "@bbc/engagement";
 import type { CatalogFacade } from "@bbc/catalog";
 import { toAirportVM } from "@bbc/catalog";
 import { toCard, toDetail, toDestinationPin, toProfileVM } from "./view-models";
+import { PER_MEMBER_CACHE, etagOf, ifNoneMatchHits } from "./http-cache";
 
 type Ports = {
   members: MembersFacade;
@@ -20,11 +21,26 @@ type Ports = {
   catalog: CatalogFacade;
 };
 
-const SECTION_ORDER: Array<{ key: string; title: string; region: string | null }> = [
-  { key: "inspire", title: "Inspiration", region: null },
-  { key: "europe", title: "Europe", region: "europe" },
-  { key: "asia", title: "Asia", region: "asia" },
-  { key: "middle_east", title: "Middle East", region: "middle_east" },
+/** Where an offer flies to, as the catalog places the airport. */
+type Place = { region: string; countryCode: string };
+
+/** The americas region's countries that Figma's TO NORTH AMERICA holds (Vancouver, Honolulu); Brazil has no section. */
+const NORTH_AMERICA = new Set(["US", "CA", "MX"]);
+
+/**
+ * Home's sections in Figma 89:389's order and words: the offers to inspire, then one carousel per region, titled
+ * `To …`. `holds` is null for the inspiring offers, which are the first six of every region.
+ */
+const SECTION_ORDER: Array<{ key: string; title: string; holds: ((place: Place) => boolean) | null }> = [
+  { key: "inspire", title: "Inspiration", holds: null },
+  { key: "europe", title: "To Europe", holds: (p) => p.region === "europe" },
+  { key: "asia", title: "To Asia", holds: (p) => p.region === "asia" },
+  { key: "middle_east", title: "To the Middle East", holds: (p) => p.region === "middle_east" },
+  {
+    key: "north_america",
+    title: "To North America",
+    holds: (p) => p.region === "americas" && NORTH_AMERICA.has(p.countryCode.toUpperCase()),
+  },
 ];
 
 /** The mobile BFF. Composes proposals + engagement + catalog → view-models. /v1/app-config stays in the host. */
@@ -45,9 +61,12 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
       async (c) => {
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const p = await ports.members.getProfile(undefined, actor);
+        const [p, prefs] = await Promise.all([
+          ports.members.getProfile(undefined, actor),
+          ports.members.preferencesOf(undefined, actor),
+        ]);
         const principal = c.get("principal");
-        return c.json(toProfileVM(p, principal.kind === "member" ? principal.email : null, actor));
+        return c.json(toProfileVM(p, principal.kind === "member" ? principal.email : null, actor, prefs));
       },
     );
 
@@ -70,34 +89,45 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const homeCode = (profile?.homeAirport ?? DEFAULT_HOME_AIRPORT).toUpperCase();
 
         const [destRows, offerRows] = await Promise.all([
-          ports.catalog.destinations(undefined, homeCode),
+          // ADR-IMPL-045: the site's pins are priced in the cabin the member's search starts in.
+          ports.catalog.destinations(undefined, homeCode, { cabin: profile?.preferences.cabin ?? "business" }),
           ports.proposals.feed(undefined, actor, null, 50),
         ]);
 
         const offerRouteTos = new Set(offerRows.map((o) => String(o.routeTo).toUpperCase()));
         const destinations = destRows.map((d) => toDestinationPin(d, offerRouteTos.has(d.code.toUpperCase())));
 
-        const regionByCode = new Map(destRows.map((d) => [d.code.toUpperCase(), d.region]));
+        const placeByCode = new Map<string, Place>(
+          destRows.map((d) => [d.code.toUpperCase(), { region: d.region, countryCode: d.countryCode }]),
+        );
         const missing = [...new Set(offerRows.map((o) => String(o.routeTo).toUpperCase()))].filter(
-          (c) => !regionByCode.has(c),
+          (c) => !placeByCode.has(c),
         );
         const airportRows = await ports.catalog.getAirports(undefined, [homeCode, ...missing]);
         const byCode = new Map(airportRows.map((a) => [a.code.toUpperCase(), a]));
         for (const code of missing) {
-          const r = byCode.get(code)?.region;
-          if (r) regionByCode.set(code, r);
+          const a = byCode.get(code);
+          if (a?.region) placeByCode.set(code, { region: a.region, countryCode: a.countryCode });
         }
         const homeRow = byCode.get(homeCode) ?? null;
+        // ADR-IMPL-057: an offer to a city no pin lists still names its city and country on its card.
+        const places = missing.flatMap((code) => {
+          const a = byCode.get(code);
+          return a ? [{ code, city: a.city, countryCode: a.countryCode }] : [];
+        });
 
         const offerIds = offerRows.map((r) => r.id);
         const states = offerIds.length > 0 ? await ports.engagement.responsesFor(undefined, actor, offerIds) : {};
         const cards = offerRows.map((r) => toCard(r, states[r.id]));
 
-        const sections = SECTION_ORDER.map(({ key, title, region }) => {
+        const sections = SECTION_ORDER.map(({ key, title, holds }) => {
           const items =
-            region == null
+            holds == null
               ? cards.slice(0, 6)
-              : cards.filter((card) => regionByCode.get(card.route.to.toUpperCase()) === region);
+              : cards.filter((card) => {
+                  const place = placeByCode.get(card.route.to.toUpperCase());
+                  return place != null && holds(place);
+                });
           return { key, title, items };
         }).filter((s) => s.items.length > 0 || s.key === "inspire");
 
@@ -105,19 +135,18 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
           home: homeRow ? toAirportVM(homeRow) : null,
           destinations,
           sections,
+          places,
         };
 
-        const etag = `"${createHash("sha1")
-          .update(JSON.stringify({ homeCode, destinations: destinations.map((d) => d.code), offerIds, states }))
-          .digest("hex")
-          .slice(0, 16)}"`;
-        const ifNoneMatch = c.req.header("If-None-Match");
-        if (ifNoneMatch === etag) return c.body(null, 304);
+        // The tag is the body's, whole: a pin's price, city, name or place (ADR-IMPL-045), a destination's line
+        // (ADR-IMPL-056), a carousel's offers and their states, a place's name (ADR-IMPL-057) — whatever Home shows. The
+        // home code too, for a home airport the catalog does not know (no `home` in the body).
+        const etag = etagOf({ homeCode, states, body });
+        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+          return c.body(null, 304, { ETag: etag, ...PER_MEMBER_CACHE });
+        }
 
-        return c.json(body, 200, {
-          ETag: etag,
-          "Cache-Control": "private, max-age=300",
-        });
+        return c.json(body, 200, { ETag: etag, ...PER_MEMBER_CACHE });
       },
     );
 
@@ -143,10 +172,10 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const items = rows.map((r) => toCard(r, states[r.id]));
         const personal = items.filter((i) => i.targeting === "personal").length;
 
-        const etag = `"${createHash("sha1").update(JSON.stringify({ offerIds, states })).digest("hex").slice(0, 16)}"`;
-
-        const ifNoneMatch = c.req.header("If-None-Match");
-        if (ifNoneMatch === etag) return c.body(null, 304);
+        const etag = etagOf({ offerIds, states });
+        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+          return c.body(null, 304, { ETag: etag, ...PER_MEMBER_CACHE });
+        }
 
         const lastRow = rows[rows.length - 1];
         const cursor =
@@ -154,6 +183,7 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
 
         return c.json({ items, summary: { total: items.length, personal }, ...(cursor ? { cursor } : {}) }, 200, {
           ETag: etag,
+          ...PER_MEMBER_CACHE,
         });
       },
     );
@@ -173,6 +203,9 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
         const id = c.req.param("id");
+        // An offer's id is a UUID (a bbcclub:// link can carry anything): anything else is no offer, never a cast
+        // Postgres refuses.
+        if (!z.string().uuid().safeParse(id).success) return c.json(apiError("NOT_FOUND"), 404);
 
         const row = await ports.proposals.getVisible(undefined, actor, id);
         if (!row) {

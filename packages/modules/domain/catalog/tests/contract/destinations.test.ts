@@ -17,7 +17,7 @@ describe("destinations", () => {
         ('JFK', 'John F Kennedy International', 'New York', 'United States', 'US', 'americas', 40.641300, -73.778100, 100),
         ('LHR', 'Heathrow', 'London', 'United Kingdom', 'GB', 'europe', 51.470000, -0.454300, 98),
         ('CDG', 'Charles de Gaulle', 'Paris', 'France', 'FR', 'europe', 49.009700, 2.547900, 90)
-      ON CONFLICT DO NOTHING`);
+      ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, city = EXCLUDED.city, country = EXCLUDED.country, country_code = EXCLUDED.country_code, region = EXCLUDED.region, lat = EXCLUDED.lat, lng = EXCLUDED.lng, popularity = EXCLUDED.popularity`);
     await iso.db.execute(sql`
       INSERT INTO catalog.fares (
         route_from, route_to, cabin, carrier, carrier_name, nonstop, price, currency, source,
@@ -54,7 +54,7 @@ describe("destinations", () => {
       INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng, popularity) VALUES
         ('JFK', 'John F Kennedy International', 'New York', 'United States', 'US', 'americas', 40.641300, -73.778100, 100),
         ('LHR', 'Heathrow', 'London', 'United Kingdom', 'GB', 'europe', 51.470000, -0.454300, 98)
-      ON CONFLICT DO NOTHING`);
+      ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, city = EXCLUDED.city, country = EXCLUDED.country, country_code = EXCLUDED.country_code, region = EXCLUDED.region, lat = EXCLUDED.lat, lng = EXCLUDED.lng, popularity = EXCLUDED.popularity`);
     await iso.db.execute(sql`
       INSERT INTO catalog.fares (
         route_from, route_to, cabin, carrier, nonstop, price, currency, source, valid_from, valid_until, published

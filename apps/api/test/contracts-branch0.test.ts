@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { RequestBody } from "@bbc/shared/api/v1/requests";
-import { FareVM } from "@bbc/shared/api/v1/fares";
+import { FareVM, isCalendarDay } from "@bbc/shared/api/v1/fares";
 import { fixture } from "@bbc/shared/fixture";
 
 describe("Branch 0 contracts", () => {
@@ -28,5 +28,16 @@ describe("Branch 0 contracts", () => {
     expect(noTimes.departAt).toBeNull();
     const withCents = FareVM.parse(fixture.fares[4]);
     expect(withCents.price.offer).toBe(3900.5);
+  });
+
+  it("takes a departure's day only when the calendar has it", () => {
+    const day = (departDate: string | null) => FareVM.safeParse({ ...fixture.fares[0], departDate }).success;
+    expect(["2026-10-12", "2026-12-31", "2028-02-29", "2000-02-29"].map(day)).toEqual([true, true, true, true]);
+    expect(
+      ["2026-02-30", "2026-04-31", "2027-02-29", "1900-02-29", "2026-13-01", "2026-10-00", "12 Oct"].map(day),
+    ).toEqual([false, false, false, false, false, false, false]);
+    expect(day(null)).toBe(true);
+    expect(isCalendarDay("2026-02-28")).toBe(true);
+    expect(isCalendarDay("2026-2-28")).toBe(false);
   });
 });

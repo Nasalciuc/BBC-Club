@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Empty Ubuntu 24.04 → running production stack (+ optional staging). Idempotent.
-#   curl -fsSL https://raw.githubusercontent.com/Nasalciuc/BBC-Club/main/isolated/infra-production-v2/infra-v2/infra/bootstrap.sh | sudo bash -s -- production
-#   ... | sudo bash -s -- production --with-staging
-# After the monorepo assembly this file lives at infra/bootstrap.sh — the URL changes, the script does not.
+# Pin a reviewed commit — never pipe mutable main into sudo bash (see infra/RUNBOOK.md):
+#   SHA=<reviewed commit sha>
+#   curl -fsSL "https://raw.githubusercontent.com/Nasalciuc/BBC-Club/$SHA/infra/bootstrap.sh" -o /tmp/bootstrap.sh
+#   sha256sum /tmp/bootstrap.sh   # compare with the checksum in the PR / release notes
+#   sudo bash /tmp/bootstrap.sh production
+#   sudo bash /tmp/bootstrap.sh production --with-staging
+# This file lives at infra/bootstrap.sh.
 set -Eeuo pipefail
 trap 'echo "❌ bootstrap failed at line $LINENO" >&2' ERR
 MODE="${1:-production}"; WITH_STAGING="${2:-}"
@@ -126,24 +130,43 @@ iptables-save | grep -q 'BBC-CF-WEB' || { echo "❌ BBC-CF-WEB missing from save
 ip6tables-save | grep -q 'BBC-CF-WEB6' || { echo "❌ BBC-CF-WEB6 missing from saved ip6tables — refusing to continue"; exit 1; }
 
 say "6/9 secrets"
+# Read env files with the parser Compose agrees with (quotes, CRLF, comments): the same password must reach both.
+# shellcheck disable=SC1091
+source "$INFRA_DIR/env-value.sh"
+# A password inside a connection URL must need no escaping, or the URL breaks.
+url_safe() { [[ "$2" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo "❌ $1 in $3 may use only A-Z a-z 0-9 . _ ~ - (it goes into connection URLs). Regenerate: openssl rand -hex 32"; exit 2; }; }
+# The image deploy.sh rolls back to obeys deploy.sh's contract: tagged with a commit SHA.
+sha_tagged() { [[ "$2" =~ ^[^:]+:[0-9a-f]{7,40}$ ]] || { echo "❌ $1 in $3 must name an image tagged with a commit SHA (got: $2)"; exit 2; }; }
 ENV_FILE="$INFRA_DIR/env/${MODE}.env"
 if [[ ! -f "$ENV_FILE" ]]; then
   install -m 600 -o root -g root "$INFRA_DIR/env/${MODE}.env.example" "$ENV_FILE"
   echo "⚠ created $ENV_FILE from the example — fill it in, then re-run: sudo bash $INFRA_DIR/bootstrap.sh $MODE $WITH_STAGING"; exit 2
 fi
 chmod 600 "$ENV_FILE"; chown root:root "$ENV_FILE"
-missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done
-if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do grep -qE "^${k}=.+" "$ENV_FILE" || missing+=("$k"); done; fi
-[[ ${#missing[@]} -eq 0 ]] || { echo "❌ missing in $ENV_FILE: ${missing[*]}"; exit 2; }
+POSTGRES_PASSWORD="$(env_value "$ENV_FILE" POSTGRES_PASSWORD)"
+missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done
+if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
+if glitchtip_wanted "$ENV_FILE"; then for k in GLITCHTIP_DB_PASSWORD GLITCHTIP_SECRET ERRORS_DOMAIN; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
+[[ ${#missing[@]} -eq 0 ]] || { echo "❌ not filled in, or unreadable, in $ENV_FILE: ${missing[*]}"; exit 2; }
+url_safe POSTGRES_PASSWORD "$POSTGRES_PASSWORD" "$ENV_FILE"
+if glitchtip_wanted "$ENV_FILE"; then url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"; fi
+sha_tagged API_IMAGE "$(env_value "$ENV_FILE" API_IMAGE)" "$ENV_FILE"
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   STG="$INFRA_DIR/env/staging.env"
   [[ -f "$STG" ]] || { install -m 600 "$INFRA_DIR/env/staging.env.example" "$STG"; echo "⚠ fill $STG and re-run"; exit 2; }
   chmod 600 "$STG"
   chown root:root "$STG"
   stg_missing=(); for k in POSTGRES_PASSWORD_STAGING BETTER_AUTH_SECRET INTERNAL_API_SECRET_STAGING API_IMAGE_STAGING APP_ORIGIN; do
-    grep -qE "^${k}=.+" "$STG" || stg_missing+=("$k"); done
-  [[ ${#stg_missing[@]} -eq 0 ]] || { echo "❌ missing in $STG: ${stg_missing[*]}"; exit 2; }
+    env_known "$STG" "$k" || stg_missing+=("$k"); done
+  [[ ${#stg_missing[@]} -eq 0 ]] || { echo "❌ not filled in, or unreadable, in $STG: ${stg_missing[*]}"; exit 2; }
+  POSTGRES_PASSWORD_STAGING="$(env_value "$STG" POSTGRES_PASSWORD_STAGING)"
+  url_safe POSTGRES_PASSWORD_STAGING "$POSTGRES_PASSWORD_STAGING" "$STG"
+  sha_tagged API_IMAGE_STAGING "$(env_value "$STG" API_IMAGE_STAGING)" "$STG"
 fi
+# staging.env holds staging's own names only (env-value.sh): checked with the other settings, before anything starts.
+guard_staging "${STG:-}" "$INFRA_DIR/docker-compose.yml" "$INFRA_DIR/compose.prod.yml"
+# Caddy will not start with ORIGIN_TLS=on and no certificate: check it before anything starts.
+origin_tls_check "$ENV_FILE" "${STG:-}" || exit 2
 
 say "7/9 host cron (backups, restore drill, disk check)"
 APP_DIR_ESC=$(printf '%s' "$APP_DIR" | sed -e 's/[&|\\]/\\&/g')
@@ -153,21 +176,48 @@ chmod 644 /etc/cron.d/bbc && chown root:root /etc/cron.d/bbc
 say "8/9 start (database → migrations → API and ingress)"
 DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.yml --env-file $ENV_FILE"
 [[ "$WITH_STAGING" == "--with-staging" ]] && DC="$DC -f $INFRA_DIR/compose.staging.yml --env-file $INFRA_DIR/env/staging.env"
+stg_file=""
+if [[ "$WITH_STAGING" == "--with-staging" ]]; then
+  stg_file="$INFRA_DIR/env/staging.env"
+fi
+if redis_kafka_wanted "$ENV_FILE" "$stg_file"; then
+  DC="$DC --profile redis-kafka"
+fi
+if glitchtip_wanted "$ENV_FILE"; then
+  DC="$DC --profile glitchtip"
+fi
 export ENV_FILE
 $DC build -q postgres
 $DC pull -q --ignore-buildable
+# The image checks each env file with the server's own rules (scripts/check-env.ts), as the API and as the worker,
+# before anything starts: a missing key is named here, not five minutes later in a container that will not start.
+check_env_as=(api worker)
+[[ "$WITH_STAGING" == "--with-staging" ]] && check_env_as+=(api-staging worker-staging)
+for svc in "${check_env_as[@]}"; do
+  if ! $DC run --rm --no-deps --entrypoint test "$svc" -f scripts/check-env.ts; then
+    echo "⚠ the image of $svc has no scripts/check-env.ts (built before it existed): its env is checked at start instead"
+    continue
+  fi
+  $DC run --rm --no-deps "$svc" bun scripts/check-env.ts ||
+    { echo "❌ the env of $svc does not pass the API's checks (above)"; exit 2; }
+done
+# The same for the Caddyfile, certificates included: Caddy is the last thing to start and the only door.
+$DC run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile >/dev/null ||
+  { echo "❌ Caddy refuses its config (above)"; exit 2; }
 $DC up -d postgres
 for i in {1..30}; do $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
 $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres never became ready"; exit 1; }
-$DC run --rm --no-deps api bun run --filter @bbc/db db:migrate      # schema exists before anything serves traffic
-$DC run --rm --no-deps api bun run scripts/seed-flags.ts || { echo "❌ flag seeding failed"; exit 1; }
+$DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc" api bun run --filter @bbc/db db:migrate
+# Seeding runs before PgBouncer exists (--no-deps): connect straight to postgres, as the migration above does.
+$DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc" api bun run scripts/seed-flags.ts \
+  || { echo "❌ flag seeding failed"; exit 1; }
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   $DC up -d postgres-staging
   for i in {1..30}; do $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
   $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 || { echo "❌ postgres-staging never became ready"; exit 1; }
-  $DC run --rm --no-deps api-staging bun run --filter @bbc/db db:migrate \
+  $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run --filter @bbc/db db:migrate \
     || { echo "❌ staging migration failed — is API_IMAGE_STAGING a real published SHA tag?"; exit 1; }
-  $DC run --rm --no-deps api-staging bun run scripts/seed-flags.ts \
+  $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run scripts/seed-flags.ts \
     || { echo "❌ staging flag seeding failed — is API_IMAGE_STAGING a real published SHA tag?"; exit 1; }
 fi
 $DC up -d
@@ -178,9 +228,9 @@ for i in {1..60}; do
   if ready api && { [[ "$WITH_STAGING" != "--with-staging" ]] || ready api-staging; }; then
     echo "✅ stack up ($MODE${WITH_STAGING:+ + staging})"; echo
     echo "next:"
-    echo "  1. DNS: $(grep '^API_DOMAIN=' "$ENV_FILE" | cut -d= -f2-) → $(curl -s ifconfig.me) (Cloudflare proxied, Full strict)"
+    echo "  1. DNS: $(env_value "$ENV_FILE" API_DOMAIN) → $(curl -s ifconfig.me) (Cloudflare proxied, Full strict)"
     [[ "$MODE" == "production" ]] && echo "  2. backups: bash $INFRA_DIR/pgbackrest-init.sh   then   bash $INFRA_DIR/restore-test.sh"
-    echo "  3. Uptime Kuma via tunnel: ssh -L 3001:uptime-kuma:3001 root@$(hostname) — add /health (1m) + /ready (5m)"
+    echo "  3. Uptime Kuma via tunnel: ssh -L 3001:uptime-kuma:3001 root@$(hostname) — add http://api:8000/health (1m) + /status (5m)"
     echo "  4. put every secret in the company password manager"
     exit 0
   fi

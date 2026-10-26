@@ -80,34 +80,50 @@ async function drainBacklog(db: Awaited<ReturnType<typeof buildApp>>["db"]) {
   if (sec >= 10) console.error(`poller drain took ${sec.toFixed(2)}s (warning only; 10s is not a gate)`);
 }
 
+/** One member asks 2,200 times a case, and the member read limits (120 a minute) answer 429 from the 61st. The bench
+ *  measures the handlers, not the limiter: these rules are lifted for its run, and put back as they were after. */
+const LIFTED = ["ratelimit.read", "ratelimit.search", "ratelimit.anon"];
+
 const built = await buildApp({ startPoller: false });
+const before = (await built.db.execute(
+  sql`SELECT key, value FROM platform.flags WHERE key IN ${LIFTED}`,
+)) as unknown as { key: string; value: Record<string, unknown> }[];
+for (const key of LIFTED) await built.platform.flags.set(key, { limit: 1e8, burst: 1e8 }, "bench run: no limit");
 const cookie = await signInBenchMember(built);
 const { app, shutdown } = built;
 
 const report: Record<string, { cpuMsPerReq: number; p50: number; p99: number }> = {};
-for (const c of CASES) {
-  for (let i = 0; i < 200; i++) await app.request(c.path, { headers: { cookie } });
-  const lat: number[] = [];
-  const cpu0 = process.cpuUsage();
-  for (let i = 0; i < N; i++) {
-    const t = performance.now();
-    const res = await app.request(c.path, { method: c.method, headers: { cookie } });
-    if (res.status >= 400) throw new Error(`${c.name}: ${res.status} ${await res.text()}`);
-    await res.arrayBuffer();
-    lat.push(performance.now() - t);
+try {
+  for (const c of CASES) {
+    for (let i = 0; i < 200; i++) await app.request(c.path, { headers: { cookie } });
+    const lat: number[] = [];
+    const cpu0 = process.cpuUsage();
+    for (let i = 0; i < N; i++) {
+      const t = performance.now();
+      const res = await app.request(c.path, { method: c.method, headers: { cookie } });
+      if (res.status >= 400) throw new Error(`${c.name}: ${res.status} ${await res.text()}`);
+      await res.arrayBuffer();
+      lat.push(performance.now() - t);
+    }
+    const cpu = process.cpuUsage(cpu0);
+    lat.sort((a, b) => a - b);
+    const p50 = lat[N >> 1];
+    const p99 = lat[Math.floor(N * 0.99)];
+    if (p50 === undefined || p99 === undefined) throw new Error(`${c.name}: empty sample`);
+    report[c.name] = {
+      cpuMsPerReq: (cpu.user + cpu.system) / 1_000 / N,
+      p50,
+      p99,
+    };
   }
-  const cpu = process.cpuUsage(cpu0);
-  lat.sort((a, b) => a - b);
-  const p50 = lat[N >> 1];
-  const p99 = lat[Math.floor(N * 0.99)];
-  if (p50 === undefined || p99 === undefined) throw new Error(`${c.name}: empty sample`);
-  report[c.name] = {
-    cpuMsPerReq: (cpu.user + cpu.system) / 1_000 / N,
-    p50,
-    p99,
-  };
+  await drainBacklog(built.db);
+} finally {
+  for (const key of LIFTED) {
+    const row = before.find((r) => r.key === key);
+    if (row) await built.platform.flags.set(key, row.value);
+    else await built.db.execute(sql`DELETE FROM platform.flags WHERE key = ${key}`);
+  }
 }
-await drainBacklog(built.db);
 await shutdown();
 await Bun.write("load/bench/report.json", JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));

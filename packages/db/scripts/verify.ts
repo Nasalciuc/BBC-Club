@@ -116,7 +116,8 @@ try {
       `non-PK *_id has nextval default (reference, not generated): ${r.table_schema}.${r.table_name}.${r.column_name}`,
     );
 
-  // 12. Every table with member_id is named in delete.test.ts (G11 — no allow-list).
+  // 12. Every table with member_id, or a column ending in _member_id (a cursor, a target), is named in delete.test.ts
+  //     (G11 — no allow-list).
   // Skip partition children (domain_events_YYYY_MM); the parent name is what the test mentions.
   const deleteTest = readFileSync(join(import.meta.dir, "../../../apps/api/test/delete.test.ts"), "utf8");
   const memberIdTables = await q(sql`
@@ -124,7 +125,7 @@ try {
     FROM pg_attribute a
     JOIN pg_class c ON c.oid = a.attrelid
     JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE a.attname = 'member_id' AND a.attnum > 0 AND NOT a.attisdropped
+    WHERE (a.attname = 'member_id' OR a.attname LIKE '%\\_member\\_id' ESCAPE '\\') AND a.attnum > 0 AND NOT a.attisdropped
       AND n.nspname IN (${schemasIn()})
       AND c.relkind IN ('r', 'p')
       AND NOT c.relispartition`);

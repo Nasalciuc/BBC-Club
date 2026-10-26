@@ -21,5 +21,6 @@ export default defineConfig({
     "crm",
     "personalization",
     "campaigns",
+    "catalog",
   ],
 });

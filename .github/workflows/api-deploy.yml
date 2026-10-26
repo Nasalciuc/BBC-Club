@@ -1,10 +1,6 @@
-# Live workflow — GitHub only loads .github/workflows/ at the repository root.
-# Snapshot copy: isolated/infra-production-v2/infra-v2/.github/workflows/api-deploy.yml
+# Manual deploy of the API image: build → push to GHCR (7-char SHA tag only) → SSH → infra/deploy.sh.
+# workflow_dispatch only. The push trigger below stays commented out: enabling it is a separate, owner-approved decision.
 name: api-deploy
-# DISABLED until the monorepo assembly lands (PLAN.md → D2).
-# The Docker build needs bun.lock, turbo.json, tsconfig.base.json, apps/api/ and packages/ at the context
-# root; today none of them exist. Re-enable by restoring the push trigger below and setting
-# `context: .` with `file: apps/api/Dockerfile`.
 on:
   workflow_dispatch:
     inputs:
@@ -12,10 +8,6 @@ on:
         description: "staging | production"
         required: true
         default: staging
-      confirm_assembled:
-        description: "type ASSEMBLED to confirm the monorepo layout exists"
-        required: true
-        default: ""
 # on:
 #   push:
 #     branches: [main]
@@ -30,21 +22,16 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
     outputs:
       image: ${{ steps.meta.outputs.image }}
     steps:
-      - name: refuse to run before the monorepo assembly
-        if: inputs.confirm_assembled != 'ASSEMBLED'
-        run: |
-          echo "::error::This workflow needs the assembled monorepo (bun.lock, turbo.json, apps/api, packages at the context root)."
-          exit 1
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -53,15 +40,13 @@ jobs:
         run: |
           SHA=${GITHUB_SHA::7}
           echo "image=ghcr.io/nasalciuc/bbc-api:${SHA}" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          # Post-assembly path: apps/api/Dockerfile
-          file: isolated/infra-production-v2/infra-v2/apps/api/Dockerfile
+          file: apps/api/Dockerfile
           push: true
           tags: |
             ${{ steps.meta.outputs.image }}
-            ghcr.io/nasalciuc/bbc-api:staging
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -70,7 +55,7 @@ jobs:
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: staging
     steps:
       - uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
@@ -78,11 +63,20 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
+          # The action's default is 10 minutes, then it ends the session and deploy.sh with it: a production deploy
+          # waits 10 minutes on its canary alone. An hour: up to 25 minutes for the lock, then the deploy.
+          command_timeout: 60m
           script: |
             set -euo pipefail
             APP_DIR="${APP_DIR:-/opt/bbc}"
             cd "$APP_DIR"
+            # One deploy at a time on the box, whichever ref or environment: the checkout below is shared.
+            exec 9>/var/lock/bbc-deploy.lock
+            flock -w 1500 9 || { echo "❌ another deploy has held the box for 25 minutes"; exit 1; }
             git fetch -q --all
+            # Production's Caddy reads infra/caddy from this checkout (its well-known files at once): staging takes main's.
+            git diff --quiet origin/main ${{ github.sha }} -- infra/caddy ||
+              { echo "❌ this commit's infra/caddy is not main's, and production's Caddy reads it from this checkout: deploy it to staging after the merge"; exit 1; }
             git checkout -q ${{ github.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" staging ${{ needs.build.outputs.image }}
 
@@ -91,7 +85,7 @@ jobs:
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production # protected: requires manual approval in GitHub → Environments
     steps:
       - uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
@@ -99,10 +93,16 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
+          # The action's default is 10 minutes, then it ends the session and deploy.sh with it: a production deploy
+          # waits 10 minutes on its canary alone. An hour: up to 25 minutes for the lock, then the deploy.
+          command_timeout: 60m
           script: |
             set -euo pipefail
             APP_DIR="${APP_DIR:-/opt/bbc}"
             cd "$APP_DIR"
+            # One deploy at a time on the box, whichever ref or environment: the checkout below is shared.
+            exec 9>/var/lock/bbc-deploy.lock
+            flock -w 1500 9 || { echo "❌ another deploy has held the box for 25 minutes"; exit 1; }
             git fetch -q --all
             git checkout -q ${{ github.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" production ${{ needs.build.outputs.image }}

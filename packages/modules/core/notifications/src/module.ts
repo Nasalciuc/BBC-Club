@@ -1,28 +1,32 @@
 import { Hono } from "hono";
-import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
+import { and, eq, sql } from "drizzle-orm";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
 import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { rateLimit } from "@bbc/platform/ratelimit";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
-import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
-import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
+import { campaigns, notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import { notificationsRepo } from "./infrastructure/notifications.repo";
 import { devicesRepo } from "./infrastructure/devices.repo";
 import { markRead } from "./application/mark-read";
-import { dispatch } from "./application/dispatch";
+import { dispatch, deliverSending } from "./application/dispatch";
+import { campaignFanout } from "./application/campaign-fanout";
 import { reconcileReceipts } from "./application/receipts";
 import { cleanupDevices } from "./application/cleanup-devices";
 import { onOfferPublished } from "./handlers/on-offer-published";
 import { onOfferExpired, onOfferWithdrawn } from "./handlers/on-offer-lifecycle";
+import { onRequestStatusChanged } from "./handlers/on-request-status-changed";
 import { DeviceBody } from "@bbc/shared/api/v1/proposals";
 import type { NotificationsFacade } from "./api";
 import type { MembersFacade } from "@bbc/members";
 import type { PushFacade } from "@bbc/push";
+
+const NotificationId = z.string().uuid();
 
 type Ports = {
   members: MembersFacade;
@@ -33,7 +37,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
   name: "notifications",
   layer: "core",
   needs: ["members", "push"],
-  init: ({ db, platform, ports }) => {
+  init: ({ db, platform, ports, env }) => {
     const conn = db as unknown as Executor;
     const routes = new Hono<AppEnv>();
     const publish = (
@@ -47,6 +51,29 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
         payload: unknown;
       },
     ) => platform.events.publish(tx, { ...e, publishedBy: "notifications" });
+
+    const streams = platform.streams;
+    if (streams && env.APP_ROLE !== "api") {
+      const loop = streams
+        .run(`push-${process.pid}`, (ids) =>
+          deliverSending(
+            {
+              db: conn,
+              push: ports.push,
+              members: ports.members,
+              publish,
+              logger: platform.logger,
+            },
+            ids,
+          ).then(() => undefined),
+        )
+        .catch((err: unknown) => {
+          platform.logger.error({ err: errorForLog(err) }, "push stream worker stopped");
+        });
+      platform.lifecycle.onClose(async () => {
+        await loop;
+      });
+    }
 
     registerRoute("GET", "/v1/inbox", "inbox:read", "read");
     routes.get(
@@ -98,7 +125,10 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
         log: platform.logger.warn.bind(platform.logger),
       }),
       async (c) => {
-        const r = await markRead(conn, c.get("principal"), c.req.param("id"));
+        // An id that is not a UUID names no notification: 404, never a cast error from Postgres.
+        const id = NotificationId.safeParse(c.req.param("id"));
+        if (!id.success) return c.json(apiError("NOT_FOUND"), 404);
+        const r = await markRead(conn, c.get("principal"), id.data);
         if (r === "ok") return c.json({ ok: true });
         return c.json(apiError(r === "not_found" ? "NOT_FOUND" : "FORBIDDEN"), r === "not_found" ? 404 : 403);
       },
@@ -141,7 +171,10 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
       async (c) => {
         const actor = actorMemberId(c.get("principal"));
         if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const ok = await devicesRepo.deactivate(conn, actor, c.req.param("deviceId"));
+        const deviceId = c.req.param("deviceId");
+        // An id POST /v1/devices refuses was never stored (U+0000 as %00 in the path answered 500): not found.
+        if (!DeviceBody.shape.deviceId.safeParse(deviceId).success) return c.json(apiError("NOT_FOUND"), 404);
+        const ok = await devicesRepo.deactivate(conn, actor, deviceId);
         if (!ok) return c.json(apiError("NOT_FOUND"), 404);
         return c.json({ ok: true });
       },
@@ -159,35 +192,31 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
           type: "offer.published",
           name: "notifications.onOfferPublished",
           handler: (ctx: HandlerContext, raw: unknown) =>
-            onOfferPublished({ tx: ctx.tx, members: ports.members, sourceEventId: String(ctx.event.id) }, raw),
+            onOfferPublished(
+              {
+                tx: ctx.tx as unknown as Executor,
+                members: ports.members,
+                sourceEventId: String(ctx.event.id),
+                logger: ctx.logger,
+              },
+              raw,
+            ),
         },
         {
           type: "offer.withdrawn",
           name: "notifications.onOfferWithdrawn",
-          handler: (ctx: HandlerContext, raw: unknown) => onOfferWithdrawn({ tx: ctx.tx }, raw),
+          handler: (ctx: HandlerContext, raw: unknown) => onOfferWithdrawn({ tx: ctx.tx as unknown as Executor }, raw),
         },
         {
           type: "offer.expired",
           name: "notifications.onOfferExpired",
-          handler: (ctx: HandlerContext, raw: unknown) => onOfferExpired({ tx: ctx.tx }, raw),
+          handler: (ctx: HandlerContext, raw: unknown) => onOfferExpired({ tx: ctx.tx as unknown as Executor }, raw),
         },
         {
           type: "request.status_changed",
           name: "notifications.onRequestStatusChanged",
-          handler: async (ctx: HandlerContext, raw: unknown) => {
-            const evt = RequestStatusChangedV1.parse(raw);
-            if (evt.to !== "quoted" || !evt.memberId) return;
-            const body = `${evt.route ?? "Your trip"} — tap to call your specialist`;
-            const deepLink = `bbcclub://requests/${evt.requestId}`;
-            await ctx.tx.execute(sql`
-              INSERT INTO notifications.notifications
-                (member_id, category, title, body, deep_link, request_id, source_event_id, status, scheduled_for)
-              VALUES
-                (${evt.memberId}, 'transactional', 'Your quote is ready', ${body}, ${deepLink},
-                 ${evt.requestId}::uuid, ${String(ctx.event.id)}, 'pending', now())
-              ON CONFLICT (member_id, request_id, category) WHERE request_id IS NOT NULL
-              DO NOTHING`);
-          },
+          handler: (ctx: HandlerContext, raw: unknown) =>
+            onRequestStatusChanged({ tx: ctx.tx as unknown as Executor, sourceEventId: String(ctx.event.id) }, raw),
         },
         {
           type: "member.deleted",
@@ -196,6 +225,12 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
             const evt = MemberDeletedV1.parse(raw);
             await ctx.tx.delete(deviceTokens).where(eq(deviceTokens.memberId, evt.memberId));
             await ctx.tx.delete(notificationsTable).where(eq(notificationsTable.memberId, evt.memberId));
+            // A finished campaign keeps no cursor (campaign-fanout); one finished before that rule may still hold
+            // this member's id. A running campaign needs its cursor and drops it when it finishes.
+            await (ctx.tx as unknown as Executor)
+              .update(campaigns)
+              .set({ lastMemberId: null })
+              .where(and(eq(campaigns.lastMemberId, evt.memberId), eq(campaigns.status, "done")));
           },
         },
       ],
@@ -213,7 +248,24 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
                 members: ports.members,
                 publish,
                 signal: ctx.signal,
+                transport: async () => {
+                  if (!platform.streams) return "pg";
+                  const variant = await platform.flags.variant("jobs.push.transport", "pg");
+                  return variant === "streams" ? "streams" : "pg";
+                },
+                enqueue: streams ? (ids) => streams.enqueue(ids) : undefined,
               }),
+          },
+        },
+        {
+          // A broadcast offer is recorded as a campaign; this pages through its audience (RUNBOOK: Campaigns).
+          name: "campaign-fanout",
+          spec: {
+            cron: "* * * * *",
+            singleton: true,
+            timeoutMs: 55_000,
+            handler: async (ctx: JobContext) =>
+              campaignFanout({ db: conn, members: ports.members, signal: ctx.signal, logger: platform.logger }),
           },
         },
         {

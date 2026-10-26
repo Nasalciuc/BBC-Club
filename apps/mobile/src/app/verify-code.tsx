@@ -4,44 +4,95 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
 import { setPendingOtp } from "@/features/auth/otp-holder";
-import { resendCode, verifyJoin } from "@/features/auth/flows";
+import { checkResetCode, resendCode, verifyJoin } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
+import { passwordStillPending, resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { Otp } from "@/features/auth/schemas";
+import {
+  afterResetNotice,
+  afterVerifyError,
+  formatResendCountdown,
+  resendDeadline,
+  secondsLeft,
+  type VerifyErrorPlan,
+} from "@/features/auth/verify-code-logic";
 import { AuthShell } from "@/components/auth-shell";
 import { ClubButton } from "@/components/club-button";
 import { Club } from "@/constants/club";
 
 const CODE_LENGTH = 6;
-/** Matches identity OTP expiresIn / send window (one live code). */
-const RESEND_SECONDS = 15 * 60;
-
-function formatResendCountdown(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
 
 export default function VerifyCodeScreen() {
   const router = useRouter();
-  const { email, purpose: purposeParam } = useLocalSearchParams<{
+  const {
+    email,
+    purpose: purposeParam,
+    notice,
+  } = useLocalSearchParams<{
     email?: string;
     purpose?: string;
+    notice?: string;
   }>();
   const purpose = parseAuthPurpose(purposeParam);
   const inputRef = useRef<TextInput>(null);
+  // Back from set-password, whose reset refused the code: `notice` names why, never the code — words and when Resend
+  // opens, never a send of its own (verify-code-logic.ts afterResetNotice).
+  const [noticePlan] = useState(() => afterResetNotice(notice));
   const [code, setCode] = useState("");
-  const [seconds, setSeconds] = useState(RESEND_SECONDS);
+  // Resend opens at a wall-clock deadline (verify-code-logic.ts): a timer chain stops while the app is in the background.
+  // A dead code from set-password opens it at once.
+  const [deadline, setDeadline] = useState(() => (noticePlan?.resendNow ? Date.now() : resendDeadline(Date.now())));
+  const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => noticePlan?.message ?? null);
+  const seconds = secondsLeft(deadline, now);
 
   useEffect(() => {
     if (seconds <= 0) return;
-    const id = setTimeout(() => setSeconds((value) => value - 1), 1000);
+    const id = setTimeout(() => setNow(Date.now()), 1000);
     return () => clearTimeout(id);
-  }, [seconds]);
+  }, [seconds, now]);
 
   const digits = Array.from({ length: CODE_LENGTH }, (_, index) => code[index] ?? "");
   const canVerify = code.length === CODE_LENGTH && !busy;
   const destination = email?.trim() || "your email";
+
+  /**
+   * Ask the server to mail a code again. Resend is closed while the request is out, and its 30 s count from the answer:
+   * the server's cooldown starts when it takes the request (identity otp-cooldown.ts), so a Resend that opened 30 s
+   * after the tap could still be inside it — and a send there mails nothing while answering 200.
+   */
+  async function sendNewCode(normalizedEmail: string) {
+    const askedAt = Date.now();
+    setDeadline(resendDeadline(askedAt));
+    setNow(askedAt);
+    const sent = await resendCode(normalizedEmail, purpose);
+    const answeredAt = Date.now();
+    setDeadline(resendDeadline(answeredAt));
+    setNow(answeredAt);
+    return sent;
+  }
+
+  /**
+   * A code the server refused (verify-code-logic.ts): a dead one empties the boxes and opens Resend at once; an expired
+   * one is replaced at once — the words promise it — and if that send fails, its own error is shown instead.
+   */
+  async function applyPlan(plan: VerifyErrorPlan, fallback: string, normalizedEmail: string) {
+    if (plan.clear) setCode("");
+    if (plan.resendNow) {
+      const at = Date.now();
+      setDeadline(at);
+      setNow(at);
+    }
+    if (plan.resend) {
+      const sent = await sendNewCode(normalizedEmail);
+      if (!sent.ok) {
+        setError(sent.message);
+        return;
+      }
+    }
+    setError(plan.message ?? fallback);
+  }
 
   async function onVerify() {
     const otpResult = Otp.safeParse(code);
@@ -55,8 +106,20 @@ export default function VerifyCodeScreen() {
       return;
     }
 
+    setBusy(true);
+    setError(null);
+
     if (purpose === "reset") {
+      // Checked here, where the boxes are: a wrong, expired or dead code stays on Verify. A right one is not used up —
+      // set-password's reset consumes it.
+      const checked = await checkResetCode(normalizedEmail, otpResult.data);
+      if (!checked.ok) {
+        await applyPlan(afterVerifyError(checked.code), checked.message, normalizedEmail);
+        setBusy(false);
+        return;
+      }
       setPendingOtp(otpResult.data);
+      setBusy(false);
       router.replace({
         pathname: "/set-password",
         params: { purpose: "reset", email: normalizedEmail },
@@ -64,15 +127,22 @@ export default function VerifyCodeScreen() {
       return;
     }
 
-    setBusy(true);
-    setError(null);
     const result = await verifyJoin(normalizedEmail, otpResult.data);
-    setBusy(false);
     if (!result.ok) {
-      setError(result.message);
+      await applyPlan(afterVerifyError(result.code), result.message, normalizedEmail);
+      setBusy(false);
       return;
     }
-    router.replace({
+    // A member who already has a password goes straight in; only a new member chooses one. Either way the entry screens
+    // go: Back must not show Join to a signed-in member (features/auth/leave.ts).
+    if (!passwordStillPending()) {
+      const dest = await resolvePostAuthRoute();
+      setBusy(false);
+      leaveTo(router, dest);
+      return;
+    }
+    setBusy(false);
+    leaveTo(router, {
       pathname: "/set-password",
       params: { purpose: "join" },
     });
@@ -81,10 +151,9 @@ export default function VerifyCodeScreen() {
   async function onResend() {
     const normalizedEmail = email?.trim().toLowerCase() ?? "";
     if (!normalizedEmail || seconds > 0) return;
-    setSeconds(RESEND_SECONDS);
     setCode("");
     setError(null);
-    const result = await resendCode(normalizedEmail, purpose);
+    const result = await sendNewCode(normalizedEmail);
     if (!result.ok) setError(result.message);
   }
 
@@ -205,7 +274,8 @@ const styles = StyleSheet.create({
   },
   error: {
     ...Club.type.bodySm,
-    color: Club.colors.statusDanger,
+    // The words of an error stay quiet on the navy panel (DESIGN.md: never red for messages): 5.71:1 (ADR-IMPL-047).
+    color: Club.colors.textOnDarkMuted,
     marginTop: Club.space.sm,
   },
 });

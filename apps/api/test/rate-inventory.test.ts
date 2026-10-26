@@ -21,9 +21,12 @@ describe("rate limit inventory", () => {
     expect(rateRuleRegistry.get("PATCH /v1/profile")).toBe("profile.write");
     expect(rateRuleRegistry.get("PUT /v1/profile/travel")).toBe("profile.write");
     expect(rateRuleRegistry.get("PUT /v1/profile/preferences")).toBe("profile.write");
+    // The first password and a change of it: the current one cannot be guessed here without end (ADR-IMPL-047).
+    expect(rateRuleRegistry.get("POST /v1/account/password")).toBe("profile.write");
     expect(rateRuleRegistry.get("POST /v1/devices")).toBe("devices.register");
     expect(rateRuleRegistry.get("GET /health")).toBeUndefined();
     expect(rateRuleRegistry.get("GET /ready")).toBeUndefined();
+    expect(rateRuleRegistry.get("GET /status")).toBeUndefined();
     expect(rateRuleRegistry.get("GET /metrics")).toBeUndefined();
     await t.close();
   });

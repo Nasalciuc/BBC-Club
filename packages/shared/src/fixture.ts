@@ -21,7 +21,7 @@ export const fixture = {
       published: 7850,
       publishedSource: "Sabre · 16 Sep",
       contextLine: "You flew this route in March.",
-      validUntil: "2026-10-04T23:59:59Z",
+      validUntil: "2027-12-31T23:59:59Z",
       facts: {
         nonstop: true,
         durationMinutes: 425,
@@ -261,7 +261,7 @@ export const fixture = {
       arriveLocal: "07:00",
       arriveDayOffset: 1,
       price: { offer: 4200, published: 7850, publishedSource: "Sabre · 16 Sep", currency: "USD" },
-      validUntil: "2026-10-04T23:59:59.000Z",
+      validUntil: "2027-12-31T23:59:59.000Z",
       offerId: null,
       hasOffer: true,
     },

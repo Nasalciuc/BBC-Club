@@ -1,6 +1,9 @@
 appId: com.buybusinessclass.club
 ---
+# The keyboard stays open: AuthShell's footer docks above it on Android too (ADR-IMPL-047, PR 43 follow-up #1).
+# This flow is the check — the others still close the keyboard first.
 - launchApp: { clearState: true }
+- runFlow: _dismiss-system-dialogs.yaml
 - assertVisible: { id: "welcome.signIn" }
 - tapOn: { id: "welcome.signIn" }
 - assertVisible: { id: "signIn.email" }
@@ -8,6 +11,7 @@ appId: com.buybusinessclass.club
 - inputText: "alex.morgan@company.com"
 - tapOn: { id: "signIn.password" }
 - inputText: "atlantic2026!"
+- assertVisible: { id: "signIn.submit" }
 - tapOn: { id: "signIn.submit" }
 # Active member lands on Explore.
 - assertVisible: { id: "explore.root" }

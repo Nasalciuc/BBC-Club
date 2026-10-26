@@ -1,9 +1,10 @@
-import { BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Button, CloseButton, tokens, rn } from "@bbc/ui";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { StyleSheet, Text } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button, ModalSheet, type ModalSheetHandle, tokens, rn } from "@bbc/ui";
 
 import { postAccountPassword, type Profile } from "@/lib/api";
+import { PasswordField } from "./PasswordField";
 import type { ProfileSheetHandle } from "./types";
 
 type Props = {
@@ -11,15 +12,23 @@ type Props = {
   onSaved: (next: Profile) => void;
 };
 
-const SNAP = ["70%"] as const;
-
 export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function PasswordSheet({ profile, onSaved }, ref) {
-  const modalRef = useRef<BottomSheetModal>(null);
+  const modalRef = useRef<ModalSheetHandle>(null);
+  const insets = useSafeAreaInsets();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Figma 238:5260 · Password saved: the sheet stays, says so, and closes on Done.
+  const [saved, setSaved] = useState(false);
+  // The change made, the other devices still signed in: the saved frame says so and how to end them (ADR-IMPL-047).
+  const [notice, setNotice] = useState<string | null>(null);
+  // With the keyboard up the error would sit under the keys or the pinned button: each new one scrolls into view.
+  const errorRef = useRef<Text>(null);
+  useEffect(() => {
+    if (error) modalRef.current?.reveal(errorRef.current);
+  }, [error]);
 
   useImperativeHandle(ref, () => ({
     present() {
@@ -28,6 +37,8 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       setConfirmPassword("");
       setBusy(false);
       setError(null);
+      setSaved(false);
+      setNotice(null);
       modalRef.current?.present();
     },
     dismiss() {
@@ -40,8 +51,9 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       setError("Enter your current password.");
       return;
     }
-    if (newPassword.length < 8) {
-      setError("New password must be at least 8 characters.");
+    if (newPassword.length < 8 || !/[\d\W]/.test(newPassword)) {
+      // The rule the sheet states (Figma 238:4974) — the same check Set password makes.
+      setError("At least 8 characters, with one number or symbol.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -56,107 +68,88 @@ export const PasswordSheet = forwardRef<ProfileSheetHandle, Props>(function Pass
       setError(result.message);
       return;
     }
+    setNotice(result.data.notice ?? null);
     onSaved(profile);
-    modalRef.current?.dismiss();
+    setSaved(true);
   }
 
   return (
-    <BottomSheetModal
+    <ModalSheet
       ref={modalRef}
-      snapPoints={[...SNAP]}
-      enablePanDownToClose={!busy}
-      keyboardBehavior="interactive"
-      backgroundStyle={styles.bg}
-      handleIndicatorStyle={styles.handle}
+      title={saved ? "Password updated" : "Change password"}
+      closeTestID="profile.password.close"
+      testID="profile.password.sheet"
+      dismissible={!busy}
+      insets={insets}
+      footer={
+        saved ? (
+          <Button
+            testID="profile.password.done"
+            label="Done"
+            variant="primary"
+            onPress={() => modalRef.current?.dismiss()}
+          />
+        ) : (
+          <Button
+            testID="profile.password.save"
+            label={busy ? "Saving…" : "Save password"}
+            variant="primary"
+            busy={busy}
+            onPress={() => void onSave()}
+          />
+        )
+      }
     >
-      <BottomSheetScrollView contentContainerStyle={styles.content} testID="profile.password.sheet">
-        <View style={styles.header}>
-          <Text style={styles.title}>Password</Text>
-          <CloseButton testID="profile.password.close" onPress={() => modalRef.current?.dismiss()} />
-        </View>
+      {saved ? (
+        <>
+          <Text style={styles.headline} testID="profile.password.saved">
+            Your new password is ready for your next sign-in.
+          </Text>
+          <Text style={styles.body} testID={notice ? "profile.password.notice" : undefined}>
+            {notice ?? "Keep it private. We will never ask for your password by phone."}
+          </Text>
+        </>
+      ) : (
+        // Figma 238:4974: three fields, their labels in sentence case, `Enter password` and the eye in each; the rule
+        // under them, 24 pt apart.
+        <>
+          <PasswordField
+            testID="profile.password.current"
+            label="Current password"
+            labelTone="bodySm"
+            value={currentPassword}
+            onChangeText={setCurrentPassword}
+          />
+          <PasswordField
+            testID="profile.password.new"
+            label="New password"
+            labelTone="bodySm"
+            value={newPassword}
+            onChangeText={setNewPassword}
+          />
+          <PasswordField
+            testID="profile.password.confirm"
+            label="Confirm new password"
+            labelTone="bodySm"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
+          <Text style={styles.rule}>At least 8 characters, with one number or symbol.</Text>
 
-        <Field
-          testID="profile.password.current"
-          label="CURRENT"
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-          secure
-        />
-        <Field testID="profile.password.new" label="NEW" value={newPassword} onChangeText={setNewPassword} secure />
-        <Field
-          testID="profile.password.confirm"
-          label="CONFIRM"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secure
-        />
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <Button
-          testID="profile.password.save"
-          label={busy ? "Saving…" : "Save"}
-          busy={busy}
-          shape="card"
-          onPress={() => void onSave()}
-        />
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+          {error ? (
+            <Text ref={errorRef} style={styles.error}>
+              {error}
+            </Text>
+          ) : null}
+        </>
+      )}
+    </ModalSheet>
   );
 });
 
-function Field({
-  testID,
-  label,
-  value,
-  onChangeText,
-  secure,
-}: {
-  testID: string;
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  secure?: boolean;
-}) {
-  return (
-    <View style={styles.fieldWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <BottomSheetTextInput
-        testID={testID}
-        value={value}
-        onChangeText={onChangeText}
-        secureTextEntry={secure}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.field}
-        placeholderTextColor={tokens.colors.textTertiary}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  bg: {
-    backgroundColor: tokens.colors.surfacePage,
-    borderTopLeftRadius: tokens.radius.panel,
-    borderTopRightRadius: tokens.radius.panel,
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: tokens.colors.borderDefault },
-  content: { paddingHorizontal: tokens.space.lg, paddingBottom: tokens.space.xxl, gap: tokens.space.sm },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
-  fieldWrap: { gap: tokens.space.xxs },
-  fieldLabel: { ...rn(tokens.type.labelMono), color: tokens.colors.textSecondary },
-  field: {
-    minHeight: 56,
-    borderRadius: tokens.radius.field,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    paddingHorizontal: tokens.space.md,
-    paddingVertical: tokens.space.sm,
-    ...rn(tokens.type.body),
-    color: tokens.colors.textPrimary,
-    backgroundColor: tokens.colors.surfaceCard,
-  },
-  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDanger },
+  error: { ...rn(tokens.type.caption), color: tokens.colors.statusDangerText },
+  rule: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary },
+  headline: { ...rn(tokens.type.headline), color: tokens.colors.textPrimary },
+  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary },
 });

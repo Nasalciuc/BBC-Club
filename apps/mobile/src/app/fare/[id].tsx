@@ -1,320 +1,737 @@
-import type { FareVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
-import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
+import { type ForwardedRef, forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Linking, ScrollView, Share, StyleSheet, Text, type TextStyle, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BackButton, Button, ErrorState, Icon, ListRow, PricePair, SectionLabel, tokens, rn } from "@bbc/ui";
+import {
+  ABOUT_BODY,
+  Button,
+  Chip,
+  FareOverviewCard,
+  FareRouteCard,
+  FareSummaryCard,
+  ListRow,
+  ModalSheet,
+  type ModalSheetHandle,
+  PhotoCredit,
+  PricePair,
+  RoundButton,
+  RowGroup,
+  Skeleton,
+  StateMessage,
+  baselineOffset,
+  belowBaseline,
+  cabinText,
+  rn,
+  tokens,
+} from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
-import { fetchFare, fetchProfile, fetchProposal, type FareGoneContext, type Profile } from "@/lib/api";
+import { RootTabBar } from "@/components/RootTabBar";
+import { ScreenStatusBar } from "@/components/screen-status-bar";
+import { offerFromParams } from "@/features/explore/open-offer";
+import { datesShortLabel, travelersLabel } from "@/features/explore/travel-preferences";
+import { airlineRibbon } from "@/features/fares/airline-marks";
+import { FARE_HERO, FareHero, fareHeroBottom, type HeroPage } from "@/features/fares/FareHero";
+import {
+  aboutFareLines,
+  aboutFareNote,
+  comparisonLine,
+  errorFrameActions,
+  fareDates,
+  fareSearchFromParams,
+  savings as savingsOf,
+  shareFareText,
+} from "@/features/fares/fare-page-logic";
+import { withKnownCarrier } from "@/features/fares/known-carrier";
+import { offerFare } from "@/features/fares/offer-page-logic";
+import { routeFareFor } from "@/features/fares/route-fare";
+import { useFareWeather } from "@/features/fares/weather";
+import { useProfile } from "@/features/profile/useProfile";
+import { CABIN_PHOTOS, clubPhoto } from "@/features/places/club-photos";
+import { bandPicture } from "@/features/places/place-photo-logic";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { toggleSaved, useIsSaved } from "@/features/saved/saved";
+import { airportByCode } from "@/lib/airport-by-code";
+import { fetchFare, fetchProposal, type FareGoneContext } from "@/lib/api";
 import { env } from "@/lib/env";
-import { formatPrice, formatValidUntil } from "@/lib/format";
+import { readFailureCopy, stateCopy } from "@/lib/error-context";
+import { savingPercent } from "@/lib/saving";
+import { statusBarOn } from "@/lib/status-bar-logic";
 
-const CTA_RESERVE = 56 + 24 + 18;
+/** 21's message. */
+const GONE_TITLE = "This fare is unavailable.";
+const OFFER_GONE_TITLE = "This offer is unavailable.";
+const STATUS = 47;
 
-function TimeBlock({ fare }: { fare: FareVM }) {
-  if (!fare.departLocal || !fare.arriveLocal) {
-    return <Text style={styles.factsMono}>{fare.nonstop ? "NONSTOP" : "1 STOP"} · TIMES ON REQUEST</Text>;
-  }
-  const dur =
-    fare.durationMinutes != null
-      ? `${Math.floor(fare.durationMinutes / 60)}H ${String(fare.durationMinutes % 60).padStart(2, "0")}`
-      : null;
-  const arriveClock = fare.arriveDayOffset > 0 ? `${fare.arriveLocal} +${fare.arriveDayOffset}` : fare.arriveLocal;
-  return (
-    <View style={styles.timeBlock}>
-      <View style={styles.timeCol}>
-        <Text style={styles.timeDisplay}>{fare.departLocal}</Text>
-        <Text style={styles.factsMono}>{fare.from.code}</Text>
-        {fare.departAt ? (
-          <Text style={styles.caption}>
-            {new Date(fare.departAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </Text>
-        ) : null}
-      </View>
-      <View style={styles.timeMid}>
-        <View style={styles.hairline} />
-        {dur ? <Text style={styles.dur}>{dur}</Text> : null}
-      </View>
-      <View style={[styles.timeCol, styles.timeRight]}>
-        <Text style={styles.timeDisplay}>{arriveClock}</Text>
-        <Text style={styles.factsMono}>{fare.to.code}</Text>
-        {fare.arriveAt ? (
-          <Text style={styles.caption}>
-            {new Date(fare.arriveAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </Text>
-        ) : null}
-      </View>
-    </View>
-  );
-}
+/**
+ * 05 from the screen's top on a 47-pt status bar (pt), under the photographs (`FareHero`): the route's title on 288.5,
+ * 15.5 in; the chips from 299.8, 15.2 in, 7.1 apart; the weather and the fare from 337.2, 14.8 and 13.8 from the edges;
+ * `Flight overview` from 420.4, the rows from 517.2 (37.5 each), `The route` from 601.3 — 15 and 14.1 from the edges;
+ * over the tab bar, the pill 39.3 tall 7.1 under what scrolls, 15.2 and 14.1 in, its words 0.47 over its middle, and
+ * `No payment is taken in the app.` 13.2 under it and 8.7 over the tab bar (as the web harness renders the margins
+ * below: 14.16 and 7.74).
+ */
+const PAGE = {
+  title: { baseline: 288.5, left: 15.5 },
+  chips: { top: 299.8, left: 15.2, gap: 7.1, height: 26.8 },
+  summary: { top: 337.2, left: 14.8, right: 13.8, height: 73.3 },
+  overview: { top: 420.4, left: 15, right: 14.1, height: 89.8 },
+  rows: { top: 517.22, left: 15, right: 14.1, row: 37.5 },
+  route: { top: 601.27, left: 15, right: 14.1 },
+  pill: { height: 39.3, left: 15.2, right: 14.1, above: 7.1, lift: 0.47, fineBelow: 14.16, fineAboveTabs: 7.74 },
+} as const;
 
-function dialSupport() {
-  const phone = env.EXPO_PUBLIC_SUPPORT_PHONE;
-  if (!phone) return;
-  void Linking.openURL(`tel:${phone}`);
-}
+/** 21: the message centred on 305.1, the pill 41.5 tall from 328.9, 15.3 and 14.6 in, its words 0.44 over its middle. */
+const GONE = { title: 305.1, pill: { top: 328.9, height: 41.5, left: 15.3, right: 14.6, lift: 0.44 } } as const;
 
+type Role = TextStyle & { fontSize: number; lineHeight: number };
+const TITLE = rn(tokens.type.fareTitle) as Role;
+const FINE = rn(tokens.type.fareFine) as Role;
+const GONE_ROLE = rn(tokens.type.goneTitle) as Role;
+
+/**
+ * A fare (05, 20, 21): the city's photograph, the seat and the lounge, with back, share and the heart; the route as its
+ * title and the trip as chips; the weather beside `Your fare` and what it saves; the flight; `About this fare` and
+ * `The comparison`; the route on the map; `Request this fare` and `No payment is taken in the app.` over the tab bar.
+ * A fare that has closed says so and offers an alternative (21).
+ */
 export default function FareDetailScreen() {
-  const { id, offerId: offerIdParam } = useLocalSearchParams<{ id: string; offerId?: string }>();
+  const params = useLocalSearchParams();
+  const id = typeof params.id === "string" ? params.id : undefined;
+  const offerIdParam = typeof params.offerId === "string" ? params.offerId : undefined;
+  // An offer's own page (offerHref, F067): `id` is the offer's, the page shows and requests the offer itself — its
+  // price, never a catalogue fare's. Its route and cabin ride along for a closed offer's alternative.
+  const offerRoute = offerFromParams(params);
+  const offerMode = offerRoute !== null;
+  const search = fareSearchFromParams(params);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const sheetRef = useRef<RequestSheetHandle>(null);
-  const [fare, setFare] = useState<FareVM | null>(null);
+  const aboutRef = useRef<ModalSheetHandle>(null);
+  const comparisonRef = useRef<ModalSheetHandle>(null);
+  const [catalogFare, setCatalogFare] = useState<FareVM | null>(null);
   const [offer, setOffer] = useState<ProposalDetailVM | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // An offer's page: a catalogue fare on its route, for the flight facts the offer does not state — never its price.
+  const [routeFare, setRouteFare] = useState<FareVM | null>(null);
+  // The one profile every screen shares (F104): read, or asked once.
+  const profile = useProfile();
   const [loading, setLoading] = useState(true);
   const [gone, setGone] = useState<FareGoneContext | true | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [whyOpen, setWhyOpen] = useState(false);
+  // `status: 404` — a fare that does not exist: asking again cannot bring it, so the page offers the way back instead.
+  const [error, setError] = useState<{ title: string; body: string; status?: number } | null>(null);
+  // `Try again` loads the fare again, here — it never leaves the page (ADR-IMPL-047).
+  const [reloadToken, setReloadToken] = useState(0);
+  // The photograph carries the status bar until the page scrolls it away; the page under it then needs dark glyphs.
+  const [pastHero, setPastHero] = useState(false);
+  // The route's map needs both airports where they are: asked once the fare is known.
+  const [airports, setAirports] = useState<{ from: AirportVM; to: AirportVM } | null>(null);
+  const saved = useIsSaved("fare", id);
+  // What the page shows: the fare, or the offer as a fare is shown — at the offer's own price (offerFare).
+  const fare: FareVM | null = offerMode
+    ? offer
+      ? offerFare(offer, routeFare, { from: airports?.from.city, to: airports?.to.city })
+      : null
+    : catalogFare;
+  const closed = gone && gone !== true ? gone : null;
+  const city = fare?.to.code ?? closed?.to ?? offerRoute?.to ?? undefined;
+  const photoFor = usePlacePhotos([city]);
+  // The fare's own day when it has one; a searched range never stands over the flight shown (fareDates).
+  const dates = fare ? fareDates(fare, search) : { depart: search.depart, return: null };
+  const weather = useFareWeather();
 
   useEffect(() => {
-    if (!id || typeof id !== "string") {
-      setError("This fare is unavailable.");
+    if (!id) {
+      setError({ title: stateCopy("route").title, body: GONE_TITLE, status: 404 });
       setLoading(false);
       return;
     }
+    setLoading(true);
+    setError(null);
+    if (offerMode) {
+      void (async () => {
+        const offerResult = await fetchProposal(id);
+        if (!offerResult.ok) {
+          // An offer that has closed (410) or is not there for this member (404): the closed frame, with an
+          // alternative on the same route.
+          if (offerResult.status === 404 || offerResult.status === 410) setGone(true);
+          else setError(readFailureCopy(offerResult.code, "fare"));
+          setLoading(false);
+          return;
+        }
+        setGone(null);
+        setOffer(offerResult.data);
+        setLoading(false);
+      })();
+      return;
+    }
     void (async () => {
-      const [fareResult, profileResult] = await Promise.all([fetchFare(id), fetchProfile()]);
-      if (profileResult.ok) setProfile(profileResult.data);
+      const fareResult = await fetchFare(id);
       if (!fareResult.ok) {
         if (fareResult.status === 410) {
           setGone(fareResult.gone ?? true);
+        } else if (fareResult.status === 404) {
+          // An unknown id (a link): the same words as no id at all, and the way back, not `Try again` (ADR-IMPL-047).
+          setError({ title: stateCopy("route").title, body: GONE_TITLE, status: 404 });
         } else {
-          setError(fareResult.message);
+          setError(readFailureCopy(fareResult.code, "fare"));
         }
         setLoading(false);
         return;
       }
-      setFare(fareResult.data);
+      setCatalogFare(fareResult.data);
       const resolvedOfferId =
-        (typeof offerIdParam === "string" && offerIdParam.length > 0 ? offerIdParam : null) ?? fareResult.data.offerId;
+        (offerIdParam && offerIdParam.length > 0 ? offerIdParam : null) ?? fareResult.data.offerId;
       if (resolvedOfferId) {
         const offerResult = await fetchProposal(resolvedOfferId);
         if (offerResult.ok) setOffer(offerResult.data);
       }
       setLoading(false);
     })();
-  }, [id, offerIdParam]);
+  }, [id, offerIdParam, offerMode, reloadToken]);
 
+  // An offer's page: the catalogue's fare on the offer's route and cabin, for the facts the offer does not state.
+  const offerFrom = offerMode ? offer?.route.from : undefined;
+  const offerTo = offerMode ? offer?.route.to : undefined;
+  const offerCabin = offerMode ? offer?.cabin : undefined;
+  useEffect(() => {
+    if (!offerFrom || !offerTo || !offerCabin) return;
+    let cancelled = false;
+    void (async () => {
+      const found = await routeFareFor({ route: { from: offerFrom, to: offerTo }, cabin: offerCabin });
+      if (!cancelled) setRouteFare(found);
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [offerFrom, offerTo, offerCabin]);
+
+  const fromCode = fare?.from.code;
+  const toCode = fare?.to.code;
+  useEffect(() => {
+    if (!fromCode || !toCode) return;
+    let cancelled = false;
+    void (async () => {
+      const [a, b] = await Promise.all([airportByCode(fromCode), airportByCode(toCode)]);
+      if (!cancelled && a && b) setAirports({ from: a, to: b });
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [fromCode, toCode]);
+
+  // The design's photograph of the city where it has one (ADR-IMPL-056); else the offer's own picture or the city's
+  // photograph with its credit (ADR-IMPL-043). Then the seat — a business-class one, so only for Business — and the
+  // lounge.
+  const bundled = clubPhoto(city, "any");
+  const band = bandPicture(offer?.mediaUrl, photoFor(city), {
+    headers: PICTURE_HEADERS,
+    mapboxToken: env.EXPO_PUBLIC_MAPBOX_TOKEN,
+    size: { width, height: fareHeroBottom(false) + insets.top - STATUS },
+  });
+  const credit = bundled ? null : band.credit;
+  const creditLink = credit?.link ?? null;
+  const cityName = fare?.to.city ?? closed?.toCity ?? null;
+  const pages: HeroPage[] = loading
+    ? []
+    : [
+        {
+          source: bundled ?? band.source,
+          label: cityName ?? "The destination",
+          position: bundled ? { top: 0, right: 0 } : undefined,
+          cache: bundled ? "memory-disk" : band.cache,
+        },
+        ...(fare && fare.cabin === "business"
+          ? [{ source: CABIN_PHOTOS.seat.full, thumb: CABIN_PHOTOS.seat.thumb, label: "The business-class seat" }]
+          : []),
+        ...(fare ? [{ source: CABIN_PHOTOS.lounge.full, thumb: CABIN_PHOTOS.lounge.thumb, label: "The lounge" }] : []),
+      ];
+
+  const dy = insets.top - STATUS;
+  const heroBottom = fareHeroBottom(Boolean(gone)) + dy;
+  // White glyphs only over a picture: the empty slot while loading, after an error or for a city without one is the
+  // light tint, and so is the page once the photograph has scrolled away (ADR-IMPL-047).
+  const barOn = statusBarOn({ hasImage: Boolean(pages[0]?.source), pastHero });
+
+  const creditRow = credit ? (
+    // The credit the photograph owes (ADR-IMPL-043).
+    <View style={styles.credit}>
+      <PhotoCredit
+        testID="fare.photoCredit"
+        label={credit.label}
+        accessibilityLabel={credit.spoken}
+        onPress={
+          creditLink
+            ? () => {
+                Linking.openURL(creditLink).catch(() => undefined);
+              }
+            : undefined
+        }
+      />
+    </View>
+  ) : null;
+
+  const hero = (
+    <FareHero
+      testID="fare.hero"
+      pages={pages}
+      insetTop={insets.top}
+      gone={Boolean(gone)}
+      onBack={() => router.back()}
+      actions={
+        // Share and the heart are a fare's: its link and the saved fares name fares, never offers.
+        fare && id && !offerMode
+          ? ({ top, size }) => (
+              <>
+                <RoundButton
+                  testID="fare.share"
+                  icon="share"
+                  accessibilityLabel="Share this fare"
+                  diameter={size}
+                  iconSize={15.5}
+                  strokeWidth={1.7}
+                  onPress={() => {
+                    Share.share({ message: shareFareText(fare) }).catch(() => undefined);
+                  }}
+                  style={StyleSheet.flatten([styles.round, { top, left: FARE_HERO.round.share }])}
+                />
+                <RoundButton
+                  testID="fare.save"
+                  icon="heart"
+                  selectedIcon="heart-fill"
+                  selected={saved}
+                  accessibilityLabel={saved ? "Saved: this fare" : "Save this fare"}
+                  diameter={size}
+                  iconSize={16.6}
+                  strokeWidth={1.49}
+                  onPress={() => toggleSaved("fare", id)}
+                  style={StyleSheet.flatten([styles.round, { top, left: FARE_HERO.round.heart }])}
+                />
+              </>
+            )
+          : undefined
+      }
+    />
+  );
+
+  // While it loads, and when it did not, the page keeps its photograph's place, its way back and the tab bar.
   if (loading) {
     return (
-      <View style={[styles.root, styles.centered]}>
-        <ActivityIndicator color={tokens.colors.primary} />
+      <View style={styles.root}>
+        <ScreenStatusBar on={barOn} />
+        {hero}
+        <View style={styles.skeletons}>
+          <Skeleton width="80%" height={33} radius="pill" />
+          <Skeleton width={260} height={PAGE.chips.height} radius="pill" />
+          <Skeleton height={PAGE.summary.height} radius="md" />
+          <Skeleton height={PAGE.overview.height} radius="md" />
+        </View>
+        <View style={styles.grow} />
+        <RootTabBar active="explore" />
       </View>
     );
   }
 
   if (gone) {
-    const closed = gone === true ? null : gone;
     return (
-      <View testID="fare.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <ErrorState
-          testID="fare.gone"
-          variant="gone"
-          title="This fare has closed."
-          body={
-            closed
-              ? `Was ${formatPrice(closed.price, closed.currency)} · valid until ${new Date(closed.validUntil).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-              : "The price you saw is no longer available."
-          }
-          primary={{
-            label: closed ? `Request ${closed.from} → ${closed.to}` : "Request this route",
-            onPress: () =>
-              sheetRef.current?.present({
-                profile,
-                fromCode: closed?.from,
-                toCode: closed?.to,
-              }),
-          }}
-          secondary={{
-            label: "See other fares",
-            onPress: () => router.replace("/(tabs)/explore" as Href),
-          }}
-        />
-        <RequestSheet ref={sheetRef} onSeeRequests={() => router.push("/(tabs)/requests" as Href)} />
+      <View testID="fare.root" style={styles.root}>
+        <ScreenStatusBar on={barOn} />
+        {hero}
+        <View style={styles.grow} testID="fare.gone">
+          <Text
+            style={[
+              GONE_ROLE,
+              styles.navy,
+              styles.centred,
+              { marginTop: GONE.title + dy - baselineOffset(GONE_ROLE) - heroBottom },
+            ]}
+            accessibilityRole="header"
+          >
+            {offerMode ? OFFER_GONE_TITLE : GONE_TITLE}
+          </Text>
+          {offerMode && !(offerRoute.from && offerRoute.to) ? null : (
+            <View
+              style={{
+                marginTop: GONE.pill.top - (GONE.title - baselineOffset(GONE_ROLE) + GONE_ROLE.lineHeight),
+                paddingLeft: GONE.pill.left,
+                paddingRight: GONE.pill.right,
+              }}
+            >
+              <Button
+                testID="fare.alternative"
+                label="Request an alternative"
+                variant="primary"
+                height={GONE.pill.height}
+                text="buttonGone"
+                style={{ paddingBottom: 2 * GONE.pill.lift }}
+                onPress={() =>
+                  sheetRef.current?.present(
+                    offerMode
+                      ? // A closed offer names no fare to replace: the specialist quotes its route and cabin.
+                        {
+                          profile,
+                          mode: "quote",
+                          fromCode: offerRoute.from ?? undefined,
+                          toCode: offerRoute.to ?? undefined,
+                          search: {
+                            dates: { depart: null, return: null, flexible: true },
+                            cabin: offerRoute.cabin ?? profile?.preferences.cabin ?? "business",
+                            passengers: profile?.preferences.passengers ?? { adult: 1, child: 0, infant: 0 },
+                          },
+                        }
+                      : {
+                          profile,
+                          mode: "alternative",
+                          replacesFareId: id,
+                          fromCode: closed?.from,
+                          toCode: closed?.to,
+                          fromCity: closed?.fromCity ?? undefined,
+                          city: closed?.toCity ?? closed?.to,
+                        },
+                  )
+                }
+              />
+            </View>
+          )}
+          {creditRow}
+        </View>
+        <RootTabBar active="explore" />
+        <RequestSheet ref={sheetRef} />
       </View>
     );
   }
 
   if (error || !fare) {
+    const copy = error ?? stateCopy("route");
     return (
-      <View testID="fare.root" style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
-        <ErrorState
-          testID="fare.error"
-          variant="error"
-          title="Something went wrong."
-          body={error ?? "This fare could not be found."}
-          primary={{ label: "Try again", onPress: () => router.back() }}
-        />
+      <View testID="fare.root" style={styles.root}>
+        <ScreenStatusBar on={barOn} />
+        {hero}
+        <View style={[styles.message, styles.grow]}>
+          <StateMessage
+            testID="fare.error"
+            align="center"
+            title={copy.title}
+            body={copy.body}
+            primary={
+              errorFrameActions({ status: error?.status }).includes("back")
+                ? {
+                    label: "Back to Explore",
+                    testID: "fare.notFound.back",
+                    onPress: () => {
+                      if (router.canGoBack()) router.back();
+                      else router.replace("/(tabs)/explore" as Href);
+                    },
+                  }
+                : { label: "Try again", testID: "fare.error.retry", onPress: () => setReloadToken((n) => n + 1) }
+            }
+          />
+        </View>
+        <RootTabBar active="explore" />
       </View>
     );
   }
 
-  const savings = fare.price.published != null ? Math.round(fare.price.published - fare.price.offer) : null;
-  const flightNumber = offer?.flightFacts?.flightNumber ?? null;
-  const included = [
-    fare.nonstop ? "Nonstop" : "One stop",
-    fare.product ?? (fare.cabin === "business" ? "Business class" : "First class"),
-    "Lounge access",
-  ];
-  const factsLine = [fare.nonstop ? "NONSTOP" : "1 STOP", fare.product?.toUpperCase(), offer?.flightFacts?.carrier]
-    .filter(Boolean)
-    .join(" · ");
-  const supportPhone = env.EXPO_PUBLIC_SUPPORT_PHONE;
+  const percent = savingPercent(fare.price);
+  const difference = savingsOf(fare.price);
+  const comparable = difference != null && difference > 0;
+  const passengers = search.passengers ?? profile?.preferences.passengers ?? null;
+  const days = datesShortLabel(dates);
+  const rows = comparable ? 2 : 1;
+  const titleTop = PAGE.title.baseline - baselineOffset(TITLE);
+  const fadeFrom = FARE_HERO.fade.from + dy;
 
   return (
     <View testID="fare.root" style={styles.root}>
+      <ScreenStatusBar on={barOn} />
       <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + tokens.space.md,
-          paddingHorizontal: tokens.space.lg,
-          paddingBottom: insets.bottom + CTA_RESERVE + tokens.space.xl,
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          const past = e.nativeEvent.contentOffset.y > fadeFrom - insets.top;
+          if (past !== pastHero) setPastHero(past);
         }}
       >
-        <BackButton testID="fare.back" onPress={() => router.back()} style={styles.back} />
-
-        {offer?.mediaUrl ? (
-          <Image
-            source={{ uri: offer.mediaUrl }}
-            style={styles.hero}
-            accessibilityIgnoresInvertColors
-            testID="fare.media"
-          />
-        ) : null}
-
-        <Text style={styles.display}>
-          {fare.from.city} → {fare.to.city}
+        {hero}
+        <Text
+          style={[
+            TITLE,
+            styles.navy,
+            { marginTop: titleTop + dy - heroBottom, marginLeft: PAGE.title.left, marginRight: PAGE.title.left },
+          ]}
+          accessibilityRole="header"
+          numberOfLines={2}
+        >
+          {`${fare.from.city} to ${fare.to.city}`}
         </Text>
-
-        <View style={styles.carrierRow}>
-          <View style={styles.logo}>
-            <Text style={styles.logoCode}>{fare.carrier.code ?? "··"}</Text>
-          </View>
-          <Text style={styles.carrierName}>{fare.carrier.name}</Text>
-          {flightNumber ? <Text style={styles.factsMono}>{flightNumber}</Text> : null}
-        </View>
-
-        <TimeBlock fare={fare} />
-        {factsLine ? <Text style={styles.factsMono}>{factsLine}</Text> : null}
-
-        <SectionLabel label="What's included" />
-        {included.map((line) => (
-          <View key={line} style={styles.checkRow}>
-            <Icon name="check" size={16} color={tokens.colors.textPrimary} />
-            <Text style={styles.body}>{line}</Text>
-          </View>
-        ))}
-
-        <View style={styles.priceBlock}>
-          <PricePair price={fare.price} size="lg" align="left" />
-        </View>
-
-        {savings != null && savings > 0 ? (
-          <ListRow
-            testID="fare.whyLower"
-            label={`Why it's $${savings.toLocaleString("en-US")} lower`}
-            onPress={() => setWhyOpen(true)}
+        {/* The trip, as facts: the cabin, what the price is for, who travels and when — one row that scrolls once full. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.chipsScroll, { marginTop: PAGE.chips.top - (titleTop + TITLE.lineHeight) }]}
+          contentContainerStyle={[styles.chips, { paddingLeft: PAGE.chips.left, paddingRight: PAGE.chips.left }]}
+          testID="fare.chips"
+        >
+          <Chip
+            testID="fare.chip.cabin"
+            look="fare"
+            icon={fare.cabin === "first" ? "seat-first" : "seat"}
+            label={cabinText(fare.cabin)}
           />
-        ) : null}
-
-        <Text style={styles.caption}>{formatValidUntil(fare.validUntil)} · A specialist books it for you</Text>
-        {supportPhone ? (
-          <Pressable
-            testID="fare.callSpecialist"
-            accessibilityRole="button"
-            accessibilityLabel="Call a specialist"
-            onPress={dialSupport}
-            style={({ pressed }) => pressed && styles.pressed}
+          {fare.trip ? (
+            <Chip
+              testID="fare.chip.trip"
+              look="fare"
+              icon={fare.trip === "round_trip" ? "round-trip" : "arrow-right"}
+              label={fare.trip === "round_trip" ? "Round trip" : "One way"}
+            />
+          ) : null}
+          {passengers ? (
+            <Chip testID="fare.chip.travelers" look="fare" icon="user" label={travelersLabel(passengers)} />
+          ) : null}
+          {days ? <Chip testID="fare.chip.dates" look="fare" icon="calendar" label={days} /> : null}
+        </ScrollView>
+        <View
+          style={{
+            marginTop: PAGE.summary.top - (PAGE.chips.top + PAGE.chips.height),
+            marginLeft: PAGE.summary.left,
+            marginRight: PAGE.summary.right,
+          }}
+        >
+          <FareSummaryCard testID="fare.price" price={fare.price} percent={percent} weather={weather} />
+        </View>
+        <View
+          style={{
+            marginTop: PAGE.overview.top - (PAGE.summary.top + PAGE.summary.height),
+            marginLeft: PAGE.overview.left,
+            marginRight: PAGE.overview.right,
+          }}
+        >
+          <FareOverviewCard
+            testID="fare.flight"
+            // A fare that names no airline prints none (never `Unknown`), as the request records none.
+            fare={withKnownCarrier(fare)}
+            ribbon={airlineRibbon(fare.carrier.code)}
+          />
+        </View>
+        <View
+          style={{
+            marginTop: PAGE.rows.top - (PAGE.overview.top + PAGE.overview.height),
+            marginLeft: PAGE.rows.left,
+            marginRight: PAGE.rows.right,
+          }}
+        >
+          <RowGroup testID="fare.rows" look="fare" rowHeight={PAGE.rows.row}>
+            <ListRow
+              testID="fare.about"
+              icon="document"
+              label="About this fare"
+              onPress={() => aboutRef.current?.present()}
+            />
+            {comparable ? (
+              <ListRow
+                testID="fare.comparison"
+                icon="bar-chart"
+                label="The comparison"
+                onPress={() => comparisonRef.current?.present()}
+              />
+            ) : null}
+          </RowGroup>
+        </View>
+        {airports ? (
+          <View
+            style={{
+              marginTop: PAGE.route.top - (PAGE.rows.top + rows * PAGE.rows.row),
+              marginLeft: PAGE.route.left,
+              marginRight: PAGE.route.right,
+            }}
           >
-            <Text style={styles.caption}>Call a specialist</Text>
-          </Pressable>
+            <FareRouteCard
+              testID="fare.route"
+              from={{ code: airports.from.code, city: fare.from.city, lat: airports.from.lat, lng: airports.from.lng }}
+              to={{ code: airports.to.code, city: fare.to.city, lat: airports.to.lat, lng: airports.to.lng }}
+            />
+          </View>
         ) : null}
+        {creditRow}
       </ScrollView>
 
-      <View style={[styles.sticky, { paddingBottom: insets.bottom + tokens.space.sm }]}>
+      <View style={styles.footer}>
         <Button
           testID="fare.request"
           label="Request this fare"
-          shape="card"
-          onPress={() => sheetRef.current?.present({ fare, profile })}
+          variant="primary"
+          height={PAGE.pill.height}
+          text="buttonFare"
+          style={{ paddingBottom: 2 * PAGE.pill.lift }}
+          onPress={() =>
+            sheetRef.current?.present({
+              // An offer's page asks for the offer itself — its id and its price (F067); a fare's, for the fare.
+              ...(offerMode && offer
+                ? {
+                    fare: null,
+                    offer,
+                    facts: fare,
+                    fromCode: fare.from.code,
+                    toCode: fare.to.code,
+                    fromCity: fare.from.city !== fare.from.code ? fare.from.city : undefined,
+                    city: fare.to.city !== fare.to.code ? fare.to.city : undefined,
+                  }
+                : { fare }),
+              profile,
+              confirmation: offer ? "offer" : "search",
+              photo: offer?.mediaUrl ?? null,
+              search:
+                search.depart || search.passengers
+                  ? {
+                      dates: { depart: search.depart, return: search.return, flexible: search.depart === null },
+                      cabin: fare.cabin,
+                      passengers: search.passengers ??
+                        profile?.preferences.passengers ?? { adult: 1, child: 0, infant: 0 },
+                    }
+                  : null,
+            })
+          }
         />
+        <Text style={[FINE, styles.fine]}>No payment is taken in the app.</Text>
       </View>
+      <RootTabBar active="explore" />
 
-      <Modal visible={whyOpen} transparent animationType="fade" onRequestClose={() => setWhyOpen(false)}>
-        <Pressable testID="fare.whyScrim" style={styles.modalScrim} onPress={() => setWhyOpen(false)}>
-          <View style={styles.modalCard} testID="fare.whySheet">
-            <Text style={styles.title}>{`Why it's ${formatPrice(savings ?? 0, fare.price.currency)} lower`}</Text>
-            <Text style={styles.body}>
-              {`${formatPrice(fare.price.published!, fare.price.currency)} published − ${formatPrice(fare.price.offer, fare.price.currency)} club fare = ${formatPrice(savings ?? 0, fare.price.currency)}.`}
-            </Text>
-            <Button testID="fare.whyClose" label="Got it" shape="card" onPress={() => setWhyOpen(false)} />
-          </View>
-        </Pressable>
-      </Modal>
-
-      <RequestSheet ref={sheetRef} onSeeRequests={() => router.push("/(tabs)/requests" as Href)} />
+      <AboutFareSheet
+        ref={aboutRef}
+        fare={fare}
+        depart={dates.depart}
+        ret={dates.return}
+        passengers={search.passengers}
+      />
+      {comparable ? <ComparisonSheet ref={comparisonRef} fare={fare} /> : null}
+      <RequestSheet ref={sheetRef} />
     </View>
   );
 }
 
+/** A sheet of the page's own, opened by its row and closed by `Got it` (20). */
+function useSheetHandle(ref: ForwardedRef<ModalSheetHandle>) {
+  const modalRef = useRef<ModalSheetHandle>(null);
+  useImperativeHandle(ref, () => ({
+    present: () => modalRef.current?.present(),
+    dismiss: () => modalRef.current?.dismiss(),
+    reveal: (target) => modalRef.current?.reveal(target),
+  }));
+  return modalRef;
+}
+
+/** A range of days stays on one line (`12–19,` as 20 sets it): no break at its dash — word joiners either side. */
+function keepRangesTogether(text: string): string {
+  return text.replace(/(\d)–(\d)/g, "$1\u2060–\u2060$2");
+}
+
+/** 20's `Got it`: 39.2 tall, its words 0.47 over its middle. */
+const GOT_IT = { height: 39.2, lift: 0.51 } as const;
+
+/**
+ * `About this fare` (20): what the fare is — round trip or one way, for whom, the route by its cities and codes, the
+ * days — and what the specialist does, in the club's own facts.
+ */
+const AboutFareSheet = forwardRef<
+  ModalSheetHandle,
+  {
+    fare: FareVM;
+    depart: string | null;
+    ret: string | null;
+    passengers: { adult: number; child: number; infant: number } | null;
+  }
+>(function AboutFareSheet({ fare, depart, ret, passengers }, ref) {
+  const modalRef = useSheetHandle(ref);
+  const insets = useSafeAreaInsets();
+  const [first, second] = aboutFareLines({ ...fare, depart, return: ret, passengers }).map(keepRangesTogether);
+  return (
+    <ModalSheet
+      ref={modalRef}
+      title="About this fare"
+      size="explain"
+      look="about"
+      closeTestID="fare.aboutClose"
+      testID="fare.aboutSheet"
+      insets={insets}
+      footer={
+        <Button
+          testID="fare.aboutGotIt"
+          label="Got it"
+          variant="primary"
+          height={GOT_IT.height}
+          text="buttonAbout"
+          style={{ paddingBottom: 2 * GOT_IT.lift }}
+          onPress={() => modalRef.current?.dismiss()}
+        />
+      }
+    >
+      <Text style={[ABOUT_BODY, styles.navy]}>{first}</Text>
+      <Text style={[ABOUT_BODY, styles.navy]}>{second}</Text>
+    </ModalSheet>
+  );
+});
+
+/**
+ * `The comparison`: the club's fare beside the published one with its source, the sum written out, and when the
+ * published fare was recorded — only where it is on record. No image draws it: it takes 20's sheet.
+ */
+const ComparisonSheet = forwardRef<ModalSheetHandle, { fare: FareVM }>(function ComparisonSheet({ fare }, ref) {
+  const modalRef = useSheetHandle(ref);
+  const insets = useSafeAreaInsets();
+  const comparison = comparisonLine(fare.price);
+  return (
+    <ModalSheet
+      ref={modalRef}
+      title="The comparison"
+      size="explain"
+      look="about"
+      closeTestID="fare.comparisonClose"
+      testID="fare.comparisonSheet"
+      insets={insets}
+      footer={
+        <Button
+          testID="fare.comparisonGotIt"
+          label="Got it"
+          variant="primary"
+          height={GOT_IT.height}
+          text="buttonAbout"
+          style={{ paddingBottom: 2 * GOT_IT.lift }}
+          onPress={() => modalRef.current?.dismiss()}
+        />
+      }
+    >
+      <PricePair price={fare.price} layout="detail" />
+      {comparison ? <Text style={[ABOUT_BODY, styles.navy]}>{comparison}</Text> : null}
+      <Text style={[ABOUT_BODY, styles.slate]}>{aboutFareNote(fare)}</Text>
+    </ModalSheet>
+  );
+});
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },
-  centered: { alignItems: "center", justifyContent: "center", padding: tokens.space.lg },
-  back: { marginBottom: tokens.space.md },
-  hero: {
-    width: "100%",
-    height: 180,
-    borderRadius: tokens.radius.panel,
-    marginBottom: tokens.space.md,
-    backgroundColor: tokens.colors.surfaceMuted,
-  },
-  display: { ...rn(tokens.type.display), color: tokens.colors.textPrimary, marginBottom: tokens.space.md },
-  carrierRow: { flexDirection: "row", alignItems: "center", gap: tokens.space.sm, marginBottom: tokens.space.md },
-  logo: {
-    width: 20,
-    height: 20,
-    borderRadius: tokens.radius.badge,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderDefault,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoCode: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary },
-  carrierName: { ...rn(tokens.type.titleSm), color: tokens.colors.textPrimary, flex: 1 },
-  timeBlock: { flexDirection: "row", alignItems: "center", marginBottom: tokens.space.md },
-  timeCol: { gap: tokens.space.xxs },
-  timeRight: { alignItems: "flex-end" },
-  timeDisplay: { ...rn(tokens.type.display), color: tokens.colors.textPrimary },
-  timeMid: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: tokens.space.sm },
-  hairline: { height: 1, alignSelf: "stretch", backgroundColor: tokens.colors.borderDefault },
-  dur: { ...rn(tokens.type.caption), color: tokens.colors.textSecondary, marginTop: -tokens.space.sm },
-  factsMono: { ...rn(tokens.type.factsMono), color: tokens.colors.textSecondary, marginBottom: tokens.space.sm },
-  caption: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, marginTop: tokens.space.sm },
-  checkRow: { flexDirection: "row", alignItems: "center", gap: tokens.space.sm, marginBottom: tokens.space.xs },
-  body: { ...rn(tokens.type.body), color: tokens.colors.textPrimary },
-  priceBlock: { marginVertical: tokens.space.lg },
-  sticky: {
-    position: "absolute",
-    left: tokens.space.lg,
-    right: tokens.space.lg,
-    bottom: 0,
+  grow: { flex: 1 },
+  navy: { color: tokens.colors.textPrimary },
+  slate: { color: tokens.colors.textSecondary },
+  centred: { textAlign: "center", paddingHorizontal: tokens.space.gutter },
+  round: { position: "absolute" },
+  skeletons: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.lg, gap: tokens.space.sm },
+  chipsScroll: { flexGrow: 0 },
+  chips: { flexDirection: "row", gap: PAGE.chips.gap },
+  credit: { paddingHorizontal: PAGE.overview.left },
+  // 05: the pill and its line pinned over the tab bar, the page's white around them.
+  footer: {
+    paddingTop: PAGE.pill.above,
+    paddingLeft: PAGE.pill.left,
+    paddingRight: PAGE.pill.right,
     backgroundColor: tokens.colors.surfacePage,
-    paddingTop: tokens.space.sm,
   },
-  pressed: { opacity: 0.7 },
-  modalScrim: {
-    flex: 1,
-    backgroundColor: tokens.colors.scrim,
-    justifyContent: "flex-end",
-    padding: tokens.space.lg,
+  fine: {
+    color: tokens.colors.textSecondary,
+    textAlign: "center",
+    marginTop: PAGE.pill.fineBelow - baselineOffset(FINE),
+    marginBottom: PAGE.pill.fineAboveTabs - belowBaseline(FINE),
   },
-  modalCard: {
-    backgroundColor: tokens.colors.surfaceCard,
-    borderRadius: tokens.radius.panel,
-    padding: tokens.space.lg,
-    gap: tokens.space.md,
-  },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary },
+  message: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.xxl },
 });

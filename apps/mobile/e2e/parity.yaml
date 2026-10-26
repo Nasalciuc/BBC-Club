@@ -1,0 +1,55 @@
+appId: com.buybusinessclass.club
+---
+# Screenshots at 392.7 dp (run-parity-ci.sh sets wm density 440). Names are Figma frame ids.
+# Later stages of this PR append a takeScreenshot for each new frame. This file does not replace the four flows.
+- launchApp: { clearState: true }
+- runFlow: _dismiss-system-dialogs.yaml
+- tapOn: { id: "welcome.signIn" }
+- tapOn: { id: "signIn.email" }
+- inputText: "alex.morgan@company.com"
+- tapOn: { id: "signIn.password" }
+- inputText: "atlantic2026!"
+- hideKeyboard
+- tapOn: { id: "signIn.submit" }
+- assertVisible: { id: "explore.root" }
+# 02: Explore at rest shows its sheet, the search bar on the globe's foot — before the picture is taken.
+- assertVisible: { id: "explore.search" }
+- takeScreenshot: 89-386
+- tapOn: { id: "tab.profile" }
+- assertVisible: { id: "profile.root" }
+- takeScreenshot: 233-4453
+- tapOn: { id: "profile.settings" }
+- assertVisible: { id: "settings.root" }
+- takeScreenshot: 479-8226
+- tapOn: { id: "settings.back" }
+- tapOn: { id: "profile.edit" }
+- assertVisible: { id: "editProfile.root" }
+- takeScreenshot: 479-8296
+- tapOn: { id: "editProfile.back" }
+- tapOn: { id: "tab.requests" }
+- assertVisible: { id: "requests.root" }
+- takeScreenshot: 233-4069
+- tapOn: { id: "tab.explore" }
+- assertVisible: { id: "explore.root" }
+# After other tabs, wait for the sheet to snap back open (HomeSheet `active`) before tapping search.
+- assertVisible: { id: "explore.search" }
+- tapOn: { id: "explore.search" }
+- assertVisible: { id: "explore.airportQuery" }
+- takeScreenshot: 104-838
+# ADR-IMPL-041, ADR-IMPL-055 — Search's Cancel goes back to Explore, a pin opens the route with its trip chips (13).
+# No hideKeyboard after Cancel: Cancel closes the keyboard itself, and on Android Maestro's hideKeyboard is the Back
+# key — with no keyboard open, Back can leave Explore, and the next step then fails.
+- tapOn: { id: "explore.airportQuery.cancel" }
+- assertVisible: { id: "explore.search" }
+- tapOn: { id: "globe.pin.LHR" }
+- assertVisible: { id: "explore.chips" }
+- assertVisible: { id: "explore.quote" }
+- takeScreenshot: 89-387
+- tapOn: { id: "explore.chip.dates" }
+- assertVisible: { id: "dates.root" }
+- takeScreenshot: 325-5878
+- tapOn: { id: "dates.close" }
+# 3.0 (13): a chosen route hides the greeting; its back button returns to rest, where the portrait opens Profile.
+- tapOn: { id: "explore.back" }
+- tapOn: { id: "explore.profile" }
+- assertVisible: { id: "profile.root" }

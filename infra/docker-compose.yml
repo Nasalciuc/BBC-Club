@@ -1,5 +1,11 @@
 # ONE project, ONE compose file, overlays for prod/staging/test. Staging is extra services in this same
 # project (api-staging, postgres-staging) so a single Caddy can hold certificates for both domains.
+#
+# Memory on the 8 GB box (limits, MB): production 4 096 (Caddy 128, 2 × API 512, worker 512, PgBouncer 64, Postgres
+# 2 048, cron 64, MinIO 256) + staging 2 688 + Uptime Kuma 128 = 6 912, so the limits never add up past the RAM; a
+# deploy runs twice the API replicas for a few minutes (+1 024). Off unless asked for: GlitchTip 1 664 (GLITCHTIP=on)
+# and Redis + Kafka 1 344 (REDIS_URL or KAFKA_BROKERS). API_MEMORY, WORKER_MEMORY and POSTGRES_MEMORY move a limit
+# without editing this file. Under pressure the kernel kills staging first (oom_score_adj 500) and Postgres last (-500).
 name: bbc
 
 x-logging: &logging
@@ -19,16 +25,21 @@ services:
     ports: ["80:80", "443:443"]
     networks: [edge, data]
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./caddy/cloudflare_ranges.caddy:/etc/caddy/cloudflare_ranges.caddy:ro
-      - ./caddy/origin-pulls.caddy:/etc/caddy/origin-pulls.caddy:ro
-      - ./caddy/cloudflare-origin-pull-ca.pem:/etc/caddy/cloudflare-origin-pull-ca.pem:ro
+      # The directory, not single files: a file git replaces gets a new inode, which a single-file mount never sees,
+      # so `caddy reload` (deploy.sh step 8) would keep reading the old Caddyfile.
+      - ./caddy:/etc/caddy:ro
       - ./caddy/well-known:/srv/well-known:ro
+      # The Cloudflare Origin CA certificate, outside git (RUNBOOK § Certificates). Read only with ORIGIN_TLS=on.
+      - ${ORIGIN_CERT_DIR:-/etc/bbc/origin}:/srv/origin:ro
       - caddy_data:/data
       - caddy_config:/config
-    env_file:
-      - path: "${ENV_FILE:-./env/production.env}"
-        required: false
+    # Only what the Caddyfile reads ({$…}), not all of production.env: Caddy holds no secret, and its container changes
+    # only when one of these does (deploy.sh step 8 then recreates it; otherwise it reloads the Caddyfile).
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      API_DOMAIN: ${API_DOMAIN}
+      API_DOMAIN_STAGING: ${API_DOMAIN_STAGING:-}
+      ORIGIN_TLS: ${ORIGIN_TLS:-off}
     # deliberately NOT depends_on api: a dead upstream is a 502, not a dead Caddy (certs must keep renewing)
     deploy: { resources: { limits: { memory: 128m } } }
 
@@ -42,8 +53,12 @@ services:
         required: false
     environment:
       PORT: "8000"
-      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
-    depends_on: { postgres: { condition: service_healthy } }
+      APP_ROLE: api
+      DB_POOLER: transaction
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@pgbouncer:5432/bbc
+    depends_on:
+      postgres: { condition: service_healthy }
+      pgbouncer: { condition: service_healthy }
     healthcheck:
       test:
         [
@@ -56,8 +71,64 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s
-    stop_grace_period: 15s
-    deploy: { resources: { limits: { cpus: "2.0", memory: 1g } } }
+    stop_grace_period: 20s
+    deploy:
+      # Two on two cores, staging alongside (docs/perf/CAPACITY.md). deploy.sh reads the same setting.
+      replicas: ${API_REPLICAS:-2}
+      resources: { limits: { cpus: "1.0", memory: "${API_MEMORY:-512m}" } }
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p0
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
+      DB_USER: bbc
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_NAME: bbc
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      ADMIN_USERS: bbc
+      MAX_CLIENT_CONN: "2000"
+      DEFAULT_POOL_SIZE: "20"
+      RESERVE_POOL_SIZE: "5"
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits
+    depends_on: { postgres: { condition: service_healthy } }
+    healthcheck: { test: ["CMD", "pg_isready", "-h", "127.0.0.1"], interval: 5s, timeout: 3s, retries: 10 }
+    deploy: { resources: { limits: { memory: 64m } } }
+
+  worker:
+    image: ${API_IMAGE:?API_IMAGE must be a SHA-tagged image}
+    <<: [*restart, *logging]
+    command: ["bun", "apps/api/src/worker.ts"]
+    networks: [edge, data]
+    env_file:
+      - path: "${ENV_FILE:-./env/production.env}"
+        required: false
+    environment:
+      APP_ROLE: worker
+      WORKER_PORT: "8001"
+      DB_POOLER: none
+      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc
+      PGBOUNCER_ADMIN_URL: postgres://bbc:${POSTGRES_PASSWORD}@pgbouncer:5432/pgbouncer
+    depends_on:
+      postgres: { condition: service_healthy }
+      pgbouncer: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://localhost:8001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    stop_grace_period: 60s
+    deploy: { resources: { limits: { cpus: "1.0", memory: "${WORKER_MEMORY:-512m}" } } }
 
   postgres:
     build: { context: ./postgres } # postgres:16 + pgbackrest in the SAME container (archive_command needs it)
@@ -70,27 +141,50 @@ services:
     environment:
       POSTGRES_USER: bbc
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # pg_dump, psql and pgBackRest run inside this container over the local socket, which asks for a password
+      # (--auth-local=scram-sha-256). The same secret as POSTGRES_PASSWORD — nothing new is exposed.
+      PGPASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: bbc
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
       PGBACKREST_STANZA: bbc
     command:
       - postgres
-      - -c=shared_buffers=512MB
-      - -c=effective_cache_size=1536MB
-      - -c=work_mem=8MB
-      - -c=maintenance_work_mem=128MB
-      - -c=max_connections=100
-      - -c=wal_level=replica
-      - -c=archive_mode=on
-      - -c=archive_command=pgbackrest --stanza=bbc archive-push %p
-      - -c=archive_timeout=300
-      - -c=log_min_duration_statement=1000
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=100
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=10000
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=pgbackrest --stanza=bbc archive-push %p
+      - -c
+      - archive_timeout=300
+      - -c
+      - log_min_duration_statement=1000
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - pgbackrest_spool:/var/spool/pgbackrest
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
-    deploy: { resources: { limits: { cpus: "2.0", memory: 2g } } }
+    # Time for the shutdown checkpoint and the last WAL push, rather than a SIGKILL and crash recovery after 10 s.
+    stop_grace_period: 60s
+    # The OOM killer takes everything else first: losing Postgres mid-write is the one failure that costs data.
+    oom_score_adj: -500
+    deploy: { resources: { limits: { cpus: "2.0", memory: "${POSTGRES_MEMORY:-2g}" } } }
 
   cron:
     image: alpine:3.20 # busybox crond + wget, verified present
@@ -99,13 +193,15 @@ services:
     entrypoint: ["/bin/sh", "/etc/cron/run.sh"]
     volumes: ["./cron:/etc/cron:ro"]
     environment:
-      API_URL: "http://api:8000"
+      API_URL: "http://worker:8001"
       INTERNAL_API_SECRET: "${INTERNAL_API_SECRET}"
-    depends_on: { api: { condition: service_healthy } }
+    depends_on: { worker: { condition: service_healthy } }
     deploy: { resources: { limits: { memory: 64m } } }
 
   minio:
-    image: minio/minio:latest
+    # MinIO stopped publishing its community image on 23 Oct 2025 (minio/minio is gone from Docker Hub).
+    # Chainguard's build of the same server, pinned by digest — bump it with infra/RUNBOOK.md, "Images pinned by digest".
+    image: cgr.dev/chainguard/minio:latest@sha256:9dcc028b309030afa86fc1fc8d93907ae373ea3fb75277cca3fc77e4645932b7
     <<: [*restart, *logging]
     networks: [data]
     command: server /data --console-address ":9001"
@@ -113,39 +209,118 @@ services:
       MINIO_ROOT_USER: "${MINIO_USER}"
       MINIO_ROOT_PASSWORD: "${MINIO_PASSWORD}"
     volumes: ["minio_data:/data"]
-    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 15s, timeout: 5s, retries: 5 }
     deploy: { resources: { limits: { memory: 256m } } }
 
+  # App Redis. Private, unpublished. The API uses it only when REDIS_URL is set (ADR-IMPL-029).
+  # GlitchTip's `redis` below is a different service — do not point the API there.
+  redis-app:
+    image: redis:8.10.1-alpine
+    profiles: ["redis-kafka"]
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      REDIS_APP_PASSWORD: "${REDIS_APP_PASSWORD:-}"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - 'if [ -z "$$REDIS_APP_PASSWORD" ]; then echo "REDIS_APP_PASSWORD is required" >&2; exit 1; fi; exec redis-server --requirepass "$$REDIS_APP_PASSWORD" --maxmemory 256mb --maxmemory-policy allkeys-lru --save "" --appendonly no'
+    healthcheck:
+      test: ["CMD-SHELL", 'REDISCLI_AUTH="$$REDIS_APP_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy: { resources: { limits: { memory: 320m } } }
+
+  kafka:
+    image: apache/kafka:4.3.1
+    profiles: ["redis-kafka"]
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qg"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_HEAP_OPTS: "-Xms512m -Xmx512m"
+    volumes: [kafka_data:/var/lib/kafka/data]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || kafka-topics.sh --bootstrap-server localhost:9092 --list",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
+    deploy: { resources: { limits: { memory: 1g } } }
+
+  kafka-init:
+    image: apache/kafka:4.3.1
+    profiles: ["redis-kafka"]
+    networks: [data]
+    depends_on: { kafka: { condition: service_healthy } }
+    restart: "no"
+    entrypoint: ["/bin/sh", "/init/topics.sh"]
+    volumes: ["./kafka:/init:ro"]
+    deploy: { resources: { limits: { memory: 512m } } }
+
+  # ── GlitchTip: only with GLITCHTIP=on in production.env (bootstrap.sh and deploy.sh add the profile) ─────
   redis:
     image: redis:7-alpine
+    profiles: ["glitchtip"]
     <<: [*restart, *logging]
     networks: [data]
     # ONLY for GlitchTip. Our rate limiting stays in Postgres (fail-closed). Do not point the API here.
     command: ["redis-server", "--maxmemory", "192mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
     deploy: { resources: { limits: { memory: 256m } } }
 
-  glitchtip:
-    image: glitchtip/glitchtip:latest
+  glitchtip-postgres:
+    image: postgres:16-alpine
+    profiles: ["glitchtip"]
     <<: [*restart, *logging]
     networks: [data]
     environment:
-      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
-      SECRET_KEY: ${GLITCHTIP_SECRET}
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD:-}
+      POSTGRES_DB: glitchtip
+    volumes: [glitchtip_pg:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"], interval: 5s, timeout: 3s, retries: 10 }
+    deploy: { resources: { limits: { memory: 512m } } }
+
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    profiles: ["glitchtip"]
+    <<: [*restart, *logging]
+    networks: [data]
+    environment:
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:-}@glitchtip-postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET:-}
       REDIS_URL: redis://redis:6379/0
-      GLITCHTIP_DOMAIN: https://${ERRORS_DOMAIN}
+      GLITCHTIP_DOMAIN: https://${ERRORS_DOMAIN:-}
       GLITCHTIP_MAX_EVENT_LIFE_DAYS: "30"
       ENABLE_USER_REGISTRATION: "false"
-    depends_on: { postgres: { condition: service_healthy } }
+    depends_on: { glitchtip-postgres: { condition: service_healthy } }
     deploy: { resources: { limits: { memory: 512m } } }
 
   glitchtip-worker:
     image: glitchtip/glitchtip:latest
+    profiles: ["glitchtip"]
     <<: [*restart, *logging]
     networks: [data]
     command: ["./bin/run-celery-with-beat.sh"]
     environment:
-      DATABASE_URL: postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
-      SECRET_KEY: ${GLITCHTIP_SECRET}
+      DATABASE_URL: postgres://glitchtip:${GLITCHTIP_DB_PASSWORD:-}@glitchtip-postgres:5432/glitchtip
+      SECRET_KEY: ${GLITCHTIP_SECRET:-}
       REDIS_URL: redis://redis:6379/0
     depends_on: [glitchtip]
     deploy: { resources: { limits: { memory: 384m } } }
@@ -160,7 +335,9 @@ services:
 volumes:
   postgres_data: {}
   pgbackrest_spool: {}
+  glitchtip_pg: {}
   minio_data: {}
   kuma_data: {}
   caddy_data: {}
   caddy_config: {}
+  kafka_data: {}

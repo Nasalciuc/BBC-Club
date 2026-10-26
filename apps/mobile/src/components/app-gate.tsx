@@ -1,118 +1,133 @@
 import Constants from "expo-constants";
-import { Linking } from "react-native";
-import { useEffect, useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Button, tokens, rn } from "@bbc/ui";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AppState, Linking, Platform } from "react-native";
 
+import { SystemScreen } from "@/components/system-screen";
+import { telHref } from "@/features/requests/confirmation-logic";
 import { fetchAppConfig } from "@/lib/api";
+import { gateFor, gateRetryDelayMs, maintenanceBody, openFirst, shouldRecheck, type Gate } from "@/lib/app-gate-logic";
 import { env } from "@/lib/env";
-
-function compareSemver(a: string, b: string): number {
-  const pa = a.split(".").map((n) => Number(n) || 0);
-  const pb = b.split(".").map((n) => Number(n) || 0);
-  for (let i = 0; i < 3; i++) {
-    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
-    if (d !== 0) return d;
-  }
-  return 0;
-}
-
-function formatMaintenance(raw: string): string {
-  const iso = Date.parse(raw);
-  if (Number.isNaN(iso)) return raw;
-  return new Date(iso).toLocaleString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-  });
-}
+import { stateCopy } from "@/lib/error-context";
 
 /**
- * Forced update / maintenance overlay. Children (Stack) stay mounted while config loads —
- * never return null / empty boot over the navigator (Expo Router: root must keep Stack).
+ * Forced update / maintenance (Figma 240:5129 / 240:5163). Children (Stack) stay mounted while config loads — never
+ * return null / empty boot over the navigator (Expo Router: root must keep Stack).
+ *
+ * It asks /v1/app-config at launch and again (F033): after a failure at 5 s, 30 s and 2 min, then each time the app
+ * comes back to the front; after an answer, when the app comes back to the front five minutes or more later. A failed
+ * answer changes nothing on screen (fail open: an open app stays open, a page that is up stays up).
  */
 export function AppGate({ children }: { children: ReactNode }) {
-  const [blocked, setBlocked] = useState<"update" | "maintenance" | null>(null);
-  const [maintenanceCopy, setMaintenanceCopy] = useState<string | null>(null);
+  const [gate, setGate] = useState<Gate>(null);
+  // The maintenance page's `Try again`: asks at once, whatever the last answer was.
+  const askNow = useRef<() => void>(() => undefined);
   const current = Constants.expoConfig?.version ?? "0.1.0";
-  const build = Constants.expoConfig?.ios?.buildNumber ?? "18";
 
   useEffect(() => {
-    void (async () => {
-      const result = await fetchAppConfig();
-      if (!result.ok) return;
-      if (compareSemver(result.data.minSupportedVersion, current) > 0) {
-        setBlocked("update");
-      } else if (result.data.maintenance) {
-        setBlocked("maintenance");
-        setMaintenanceCopy(formatMaintenance(result.data.maintenance));
+    let alive = true;
+    let asking = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const seen: { lastOkAt: number | null; lastFailedAt: number | null; attempts: number } = {
+      lastOkAt: null,
+      lastFailedAt: null,
+      attempts: 0,
+    };
+    const stopTimer = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    };
+    // The next try after a failure, when it is due; a timer that fires early waits out the rest.
+    const retryWhenDue = () => {
+      const wait = gateRetryDelayMs(seen.attempts);
+      if (wait === null || seen.lastFailedAt === null) return;
+      timer = setTimeout(
+        () => {
+          timer = null;
+          if (shouldRecheck({ ...seen, now: Date.now(), trigger: "retry" })) void ask();
+          else retryWhenDue();
+        },
+        Math.max(1, seen.lastFailedAt + wait - Date.now()),
+      );
+    };
+    const ask = async (): Promise<void> => {
+      if (asking || !alive) return;
+      asking = true;
+      stopTimer();
+      try {
+        const result = await fetchAppConfig().catch(() => null);
+        if (!alive) return;
+        if (!result?.ok) {
+          seen.lastFailedAt = Date.now();
+          seen.attempts += 1;
+          retryWhenDue();
+          return;
+        }
+        seen.lastOkAt = Date.now();
+        seen.attempts = 0;
+        // `Try again` after the maintenance, or a minimum lowered again: the app opens where it was.
+        setGate(gateFor(result.data, current, Platform.OS));
+      } finally {
+        asking = false;
       }
-    })();
+    };
+
+    askNow.current = () => void ask();
+    void ask();
+    const foreground = AppState.addEventListener("change", (next) => {
+      if (next === "active" && shouldRecheck({ ...seen, now: Date.now(), trigger: "foreground" })) void ask();
+    });
+    return () => {
+      alive = false;
+      stopTimer();
+      foreground.remove();
+      askNow.current = () => undefined;
+    };
   }, [current]);
 
-  if (blocked === "update") {
+  // A call needs the club's verified number (EXPO_PUBLIC_SUPPORT_PHONE, in digits); without one, no button.
+  const tel = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
+  const call = (testID: string) =>
+    tel ? { testID, onPress: () => void Linking.openURL(tel).catch(() => undefined) } : null;
+
+  if (gate?.kind === "update") {
+    // Figma 240:5129: no way past it but the update — from this platform's store listing when the server names one,
+    // else its web page, else the website (F039).
+    const copy = stateCopy("update");
+    const targets = gate.targets;
+    // The page replaces the navigator, the root's light bar with it: its porcelain takes the dark glyphs.
     return (
-      <View testID="appGate.update" style={styles.root}>
-        <Text style={styles.wordmark}>BUYBUSINESSCLASS</Text>
-        <Text style={styles.title}>{"We've improved the app."}</Text>
-        <Text style={styles.body}>Please update to keep requesting fares.</Text>
-        <Button
-          testID="appGate.update.cta"
-          label="Update"
-          shape="card"
-          onPress={() => void Linking.openURL("https://buybusinessclass.com")}
+      <>
+        <StatusBar style="dark" />
+        <SystemScreen
+          testID="appGate.update"
+          title={copy.title}
+          body={copy.body}
+          primary={{
+            label: "Update app",
+            testID: "appGate.update.cta",
+            onPress: () => void openFirst(targets, (url) => Linking.openURL(url)),
+          }}
+          call={call("appGate.update.call")}
         />
-        {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
-          <Pressable
-            testID="appGate.update.call"
-            accessibilityRole="button"
-            onPress={() => void Linking.openURL(`tel:${env.EXPO_PUBLIC_SUPPORT_PHONE}`)}
-          >
-            <Text style={styles.link}>{`Need a fare now? Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}</Text>
-          </Pressable>
-        ) : null}
-        <Text style={styles.version}>{`VERSION ${current} (${build})`}</Text>
-      </View>
+      </>
     );
   }
 
-  if (blocked === "maintenance") {
+  if (gate?.kind === "maintenance") {
     return (
-      <View testID="appGate.maintenance" style={styles.root}>
-        <Text style={styles.wordmark}>BUYBUSINESSCLASS</Text>
-        <Text style={styles.title}>Back in a moment.</Text>
-        <Text style={styles.body}>
-          {maintenanceCopy ? `Expected back at ${maintenanceCopy}` : "We're making a quick improvement."}
-        </Text>
-        {env.EXPO_PUBLIC_SUPPORT_PHONE ? (
-          <Button
-            testID="appGate.maintenance.call"
-            label={`Call ${env.EXPO_PUBLIC_SUPPORT_PHONE}`}
-            variant="ghost"
-            shape="card"
-            onPress={() => void Linking.openURL(`tel:${env.EXPO_PUBLIC_SUPPORT_PHONE}`)}
-          />
-        ) : null}
-      </View>
+      <>
+        <StatusBar style="dark" />
+        <SystemScreen
+          testID="appGate.maintenance"
+          title={stateCopy("maintenance").title}
+          body={maintenanceBody(gate.value)}
+          primary={{ label: "Try again", testID: "appGate.maintenance.retry", onPress: () => askNow.current() }}
+          call={call("appGate.maintenance.call")}
+        />
+      </>
     );
   }
 
   return <>{children}</>;
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: tokens.colors.surfacePage,
-    padding: tokens.space.lg,
-    justifyContent: "center",
-    gap: tokens.space.md,
-  },
-  wordmark: { ...rn(tokens.type.labelMono), color: tokens.colors.textPrimary, textAlign: "center" },
-  title: { ...rn(tokens.type.title), color: tokens.colors.textPrimary, textAlign: "center" },
-  body: { ...rn(tokens.type.body), color: tokens.colors.textSecondary, textAlign: "center" },
-  link: { ...rn(tokens.type.bodySm), color: tokens.colors.primary, textAlign: "center" },
-  caption: { ...rn(tokens.type.caption), color: tokens.colors.textTertiary, textAlign: "center" },
-  version: { ...rn(tokens.type.labelMono), color: tokens.colors.textTertiary, textAlign: "center" },
-});

@@ -1,10 +1,12 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { BackHandler, StyleSheet, Text, View } from "react-native";
 
 import { parseAuthPurpose } from "@/lib/auth-purpose";
-import { clearPendingOtp, takePendingOtp } from "@/features/auth/otp-holder";
-import { resetPassword, setPassword } from "@/features/auth/flows";
+import { clearPendingOtp, peekPendingOtp } from "@/features/auth/otp-holder";
+import { resendCode, resetPassword, setPassword, signOut } from "@/features/auth/flows";
+import { leaveTo } from "@/features/auth/leave";
+import { nextAfterResetFailure, noticeForVerify } from "@/features/auth/reset-flow-logic";
 import { Password } from "@/features/auth/schemas";
 import { resolvePostAuthRoute } from "@/features/auth/session-gate";
 import { AuthShell } from "@/components/auth-shell";
@@ -15,6 +17,13 @@ import { Club } from "@/constants/club";
 
 function hasNumberOrSymbol(value: string) {
   return /[\d\W]/.test(value);
+}
+
+/** Back on the join path leaves the join: drop the session the email code opened, return to the welcome screen. */
+async function leaveJoin(router: ReturnType<typeof useRouter>): Promise<void> {
+  clearPendingOtp();
+  await signOut();
+  leaveTo(router, "/");
 }
 
 export default function SetPasswordScreen() {
@@ -31,6 +40,16 @@ export default function SetPasswordScreen() {
 
   useEffect(() => () => clearPendingOtp(), []);
 
+  // Android's back gesture leaves the join too. On the reset path back keeps working as before.
+  useEffect(() => {
+    if (purpose === "reset") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      void leaveJoin(router);
+      return true;
+    });
+    return () => sub.remove();
+  }, [purpose, router]);
+
   const longEnough = password.length >= 8;
   const complexEnough = hasNumberOrSymbol(password);
   const canContinue = longEnough && complexEnough && !busy;
@@ -46,20 +65,50 @@ export default function SetPasswordScreen() {
     setError(null);
 
     if (purpose === "reset") {
-      const otp = takePendingOtp();
       const normalizedEmail = email?.trim().toLowerCase() ?? "";
-      if (!otp || !normalizedEmail) {
+      if (!normalizedEmail) {
         clearPendingOtp();
         setBusy(false);
         router.replace("/sign-in");
         return;
       }
+      // Read, not taken: a Continue that fails keeps the code for the next one (cleared once the reset is done, or when
+      // this screen goes).
+      const otp = peekPendingOtp();
+      if (!otp) {
+        // The code is held in memory only: gone (the app was restarted), it is typed again on Verify — still valid there.
+        setBusy(false);
+        router.replace({ pathname: "/verify-code", params: { purpose: "reset", email: normalizedEmail } });
+        return;
+      }
       const result = await resetPassword(normalizedEmail, otp, parsed.data);
       if (!result.ok) {
+        const next = nextAfterResetFailure(result.code);
+        if (next === "signIn") {
+          // The password is set and the code spent; only the sign-in after it did not go through.
+          setBusy(false);
+          clearPendingOtp();
+          leaveTo(router, { pathname: "/sign-in", params: { notice: "reset" } });
+          return;
+        }
+        if (next === "verify" && result.code) {
+          // The code itself no longer works: Verify, with Resend open and why — the code never goes in the params. An
+          // expired one is replaced here, on this Continue ("We'll send you a new one"): Verify never mails because of
+          // its params, which a link can set (reset-flow-logic.ts noticeForVerify).
+          clearPendingOtp();
+          const sent = result.code === "OTP_EXPIRED" ? (await resendCode(normalizedEmail, "reset")).ok : false;
+          setBusy(false);
+          router.replace({
+            pathname: "/verify-code",
+            params: { purpose: "reset", email: normalizedEmail, notice: noticeForVerify(result.code, sent) },
+          });
+          return;
+        }
         setBusy(false);
         setError(result.message);
         return;
       }
+      clearPendingOtp();
     } else {
       const result = await setPassword(parsed.data);
       if (!result.ok) {
@@ -69,15 +118,16 @@ export default function SetPasswordScreen() {
       }
     }
 
+    // Signed in: onboarding or Explore alone on the stack — Back must not reach Join or Forgot password.
     const dest = await resolvePostAuthRoute();
     setBusy(false);
-    router.replace(dest);
+    leaveTo(router, dest);
   }
 
   return (
     <AuthShell
       heroPercent={0.25}
-      onBack="/sign-in"
+      onBack={purpose === "reset" ? "/sign-in" : () => void leaveJoin(router)}
       footer={
         <ClubButton
           testID="setPassword.continue"
@@ -88,6 +138,7 @@ export default function SetPasswordScreen() {
         />
       }
     >
+      <Stack.Screen options={{ gestureEnabled: purpose === "reset" }} />
       <View style={styles.copy}>
         <Text style={styles.kicker}>Your key</Text>
         <Text style={styles.headline}>Choose your password</Text>
@@ -149,7 +200,8 @@ const styles = StyleSheet.create({
   },
   error: {
     ...Club.type.bodySm,
-    color: Club.colors.statusDanger,
+    // The words of an error stay quiet on the navy panel (DESIGN.md: never red for messages): 5.71:1 (ADR-IMPL-047).
+    color: Club.colors.textOnDarkMuted,
     marginTop: Club.space.md,
   },
 });

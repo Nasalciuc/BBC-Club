@@ -140,19 +140,20 @@ def g9_g10() -> list[str]:
 
 
 def g11() -> list[str]:
-    tables: set[str] = set()
-    schema_dir = ROOT / "packages/db/src/schema"
-    for p in schema_dir.glob("*.ts"):
-        current = None
-        for line in p.read_text(encoding="utf-8").splitlines():
-            tm = re.search(r'\.table\(\s*"([^"]+)"', line)
-            if tm:
-                current = tm.group(1)
-            if current and re.search(r'text\(\s*"member_id"\s*\)', line):
-                tables.add(current)
+    """Every member id column (member_id, *_member_id) is counted after a deletion in delete.test.ts, as
+    count("<schema>", "<table>", "<column>"). Read over the whole file: a table's name often sits on the line after
+    `.table(`, and a column belongs to the last table declared above it."""
+    columns: set[tuple[str, str]] = set()
+    for p in sorted((ROOT / "packages/db/src/schema").glob("*.ts")):
+        src = p.read_text(encoding="utf-8")
+        tables = [(m.start(), m.group(1)) for m in re.finditer(r'\.table\(\s*"([^"]+)"', src)]
+        for m in re.finditer(r'\btext\(\s*"((?:[a-z_]+_)?member_id)"\s*\)', src):
+            owner = [name for pos, name in tables if pos < m.start()]
+            if owner:
+                columns.add((owner[-1], m.group(1)))
     delete_src = (ROOT / "apps/api/test/delete.test.ts").read_text(encoding="utf-8")
-    missing = sorted(t for t in tables if t not in delete_src)
-    print("G11 member_id tables missing from delete.test.ts:", missing)
+    missing = sorted(f"{t}.{c}" for t, c in columns if not re.search(rf'"{t}",\s*"{c}"', delete_src))
+    print(f"G11 member id columns: {len(columns)}; not counted in delete.test.ts:", missing)
     return ["G11"] if missing else []
 
 

@@ -20,6 +20,10 @@ export const ProfileVM = z.object({
   email: z.string().email().nullable(),
   displayName: z.string().nullable(),
   homeAirport: z.string().length(3).nullable(),
+  /** The member's photo (02: the avatar beside the greeting; 12: the portrait on Profile) — an https address. Null
+   *  until they add one: the app shows their initials (ADR-IMPL-056). Optional both ways; a value this app cannot read
+   *  reads as none, and the profile still parses. */
+  avatarUrl: z.string().url().startsWith("https://").nullable().optional().catch(null),
   timezone: z.string(),
   phone: z.string().nullable(),
   /** Null only on the no-row pending stub. */
@@ -27,5 +31,12 @@ export const ProfileVM = z.object({
   crmLinkedAt: z.string().datetime().nullable(),
   crmLinked: z.boolean(),
   preferences: TravelPreferencesVM,
+  /** What the member saved (ADR-IMPL-025) — the notifications sheet shows this, never a default. */
+  notifications: z.object({
+    /** Always on: the backend cannot turn quote-ready notifications off. */
+    requestUpdates: z.literal(true),
+    /** On when either offers_personal or offers_broadcast is on (a missing preference row means on). */
+    offers: z.boolean(),
+  }),
 });
 export type ProfileVM = z.infer<typeof ProfileVM>;

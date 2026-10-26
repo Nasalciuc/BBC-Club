@@ -9,11 +9,18 @@ export type AuthVars = { Variables: { member: Member; sessionId: string } };
 export type IdentityFacade = {
   auth: Auth;
   handler: Auth["handler"];
-  getSession(headers: Headers): Promise<SessionInfo | null>;
+  /** `fresh: true` skips the session cookie cache (one database read): callers pass it on writes, so a deleted member
+   *  or an ended session cannot write during the cache window. */
+  getSession(headers: Headers, opts?: { fresh?: boolean }): Promise<SessionInfo | null>;
   requireMember: MiddlewareHandler<AuthVars>;
   requireRole(...allowed: string[]): MiddlewareHandler<AuthVars>;
-  deleteAccount(headers: Headers): Promise<void>;
+  /** Deletes the signed-in member's account; refused without the right password (INVALID_PASSWORD). */
+  deleteAccount(headers: Headers, password: string): Promise<void>;
   listUsersCreatedBefore(before: Date, limit?: number): Promise<{ id: string; email: string; createdAt: Date }[]>;
+  /** The email member.registered carries for this account (trimmed, lower-cased), or null when there is no account —
+   *  deleted, while a session of it may still be in the cookie cache. Members makes a profile row on demand only for an
+   *  account this answers. */
+  registeredEmail(memberId: string): Promise<string | null>;
 };
 
 export type { Auth } from "../infrastructure/auth";

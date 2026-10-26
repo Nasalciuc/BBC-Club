@@ -4,8 +4,13 @@ import { toFareVM } from "../../src/application/to-fare-vm";
 
 const now = new Date("2026-09-01T00:00:00.000Z");
 
-export function mapFa01(): FareVM {
-  const f = fixture.fares[0]!;
+/** fa01 through the mapper — `times` sets its instants aside, for a fare with a departure and no arrival, or none;
+ *  `trip`, what its price is for (one way, as the catalogue's default). */
+export function mapFa01(
+  times: { departAt?: string | null; arriveAt?: string | null } = {},
+  trip: "round_trip" | "one_way" = "one_way",
+): FareVM {
+  const f = { ...fixture.fares[0]!, ...times };
   return toFareVM(
     {
       id: f.id,
@@ -23,6 +28,7 @@ export function mapFa01(): FareVM {
       publishedPrice: f.price.published != null ? String(f.price.published) : null,
       publishedSource: f.price.publishedSource ?? null,
       currency: f.price.currency,
+      trip,
       source: "manual",
       validFrom: now,
       validUntil: new Date(f.validUntil),
@@ -42,6 +48,8 @@ export function mapFa01(): FareVM {
         lng: "-73.778100",
         popularity: 100,
         tz: "America/New_York",
+        searchTerms: null,
+        description: null,
         createdAt: now,
       },
       to: {
@@ -55,6 +63,8 @@ export function mapFa01(): FareVM {
         lng: "-0.454300",
         popularity: 98,
         tz: "Europe/London",
+        searchTerms: null,
+        description: null,
         createdAt: now,
       },
     },

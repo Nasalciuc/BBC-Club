@@ -1,18 +1,31 @@
-import { Icon, type IconName, type IconSize } from "@bbc/ui/icons";
+import { ArrowRight, Check, ChevronLeft, Circle, Eye, EyeOff } from "lucide-react-native";
 
 import { Club } from "@/constants/club";
 
-/** Kept so the entry screens keep their imports. New code imports `Icon` from @bbc/ui/icons. */
+/**
+ * The entry's icons, exactly as 1.0 draws them: Lucide's line glyphs at a 1.5 stroke. Taken here, not from `@bbc/ui`'s
+ * `Icon`, so the club's icon set can move to 3.0 (ADR-IMPL-055) without touching the entry (ADR-IMPL-047).
+ */
+const GLYPHS = {
+  arrow: ArrowRight,
+  back: ChevronLeft,
+  check: Check,
+  circle: Circle,
+  eye: Eye,
+  eyeOff: EyeOff,
+} as const;
+
+export type ClubIconName = keyof typeof GLYPHS;
+
 export function ClubIcon({
   name,
   size = 24,
   color = Club.colors.textOnDark,
 }: {
-  name: IconName;
-  size?: IconSize | number;
+  name: ClubIconName;
+  size?: number;
   color?: string;
 }) {
-  return <Icon name={name} size={size as IconSize} color={color} />;
+  const Glyph = GLYPHS[name];
+  return <Glyph size={size} color={color} strokeWidth={1.5} />;
 }
-
-export type { IconName };

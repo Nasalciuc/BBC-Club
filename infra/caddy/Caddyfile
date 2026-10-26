@@ -6,20 +6,58 @@
 		# every per-IP rule (Better Auth rate limits, logs) would see Cloudflare instead of the client.
 		import /etc/caddy/cloudflare_ranges.caddy
 		# Without this, Caddy parses X-Forwarded-For left-to-right, so a spoofed leading 127.0.0.1
-		# reaches the client_ip matcher and opens /metrics and /ready through Cloudflare.
+		# reaches the client_ip matcher and opens /metrics, /ready and /status through Cloudflare.
 		trusted_proxies_strict
+	}
+}
+
+# The origin certificate (RUNBOOK § Certificates). ORIGIN_TLS=on in production.env: the Cloudflare Origin CA certificate
+# from ORIGIN_CERT_DIR (mounted at /srv/origin) and no ACME — behind Cloudflare on "Full (strict)", with 80/443 open to
+# Cloudflare only, ACME validation cannot reach this box. Unset or off: Caddy gets its own certificates, as before.
+# Either way a site has ONE tls block and origin-pulls.caddy goes inside it: a second tls block for the same names makes
+# Caddy refuse the whole config ("conflicting client auth configuration").
+(origin_tls_on) {
+	tls /srv/origin/cert.pem /srv/origin/key.pem {
+		import /etc/caddy/origin-pulls.caddy
+	}
+}
+
+# The ACME e-mail again, only so the block has an argument (an empty tls { } does not parse). With origin-pulls.caddy
+# empty, this adapts to the same config as no tls block at all.
+(origin_tls_off) {
+	tls {$ACME_EMAIL} {
+		import /etc/caddy/origin-pulls.caddy
 	}
 }
 
 (api_site) {
 	encode zstd gzip
 
-	# operator-only endpoints: reachable through an SSH tunnel to the box, never from the internet
-	@ops path /metrics /ready
+	# operator-only endpoints: 404 to every address but Caddy's own; on the box, ask the containers (RUNBOOK § Daily shape)
+	@ops path /metrics /ready /status
 	handle @ops {
 		@remote not client_ip 127.0.0.1/32 ::1/128
 		respond @remote 404
-		reverse_proxy {args[0]}
+		reverse_proxy {
+			dynamic a {
+				name {args[0]}
+				port 8000
+				refresh 5s
+			}
+			lb_policy least_conn
+			lb_try_duration 5s
+			fail_duration 10s
+			max_fails 2
+			unhealthy_status 5xx
+		}
+	}
+
+	# db-observe gauges live in the worker process, not on an API replica
+	@worker_metrics path /worker-metrics
+	handle @worker_metrics {
+		@worker_remote not client_ip 127.0.0.1/32 ::1/128
+		respond @worker_remote 404
+		reverse_proxy {args[1]}:8001
 	}
 
 	# associated-domain files (AASA / assetlinks) — the real ones live on buybusinessclass.com;
@@ -29,16 +67,25 @@
 		file_server
 	}
 
-	# offer photography: public read-only bucket, cached by Cloudflare
-	handle_path /media/* {
-		reverse_proxy minio:9000 {
-			header_up Host {upstream_hostport}
-		}
-		header Cache-Control "public, max-age=86400, immutable"
+	# offer photography is not served from this box yet (R1b): until then nothing under /media reaches MinIO. This path
+	# sent the whole of MinIO — its S3 API and its admin API — to the internet (ADR-IMPL-047). MinIO stays on the
+	# internal network, reached through an SSH tunnel (RUNBOOK); R1b brings a read-only route for its public bucket.
+	handle /media/* {
+		respond 404
 	}
 
 	handle {
-		reverse_proxy {args[0]} {
+		reverse_proxy {
+			dynamic a {
+				name {args[0]}
+				port 8000
+				refresh 5s
+			}
+			lb_policy least_conn
+			lb_try_duration 5s
+			fail_duration 10s
+			max_fails 2
+			unhealthy_status 5xx
 			header_up X-Forwarded-Proto {scheme}
 			transport http {
 				dial_timeout 5s
@@ -61,11 +108,11 @@
 }
 
 {$API_DOMAIN} {
-	import /etc/caddy/origin-pulls.caddy
-	import api_site api:8000
+	import origin_tls_{$ORIGIN_TLS:off}
+	import api_site api worker
 }
 
 {$API_DOMAIN_STAGING} {
-	import /etc/caddy/origin-pulls.caddy
-	import api_site api-staging:8000
+	import origin_tls_{$ORIGIN_TLS:off}
+	import api_site api-staging worker-staging
 }

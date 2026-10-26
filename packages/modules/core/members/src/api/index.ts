@@ -1,11 +1,23 @@
 import type { Executor } from "@bbc/db";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
 
+/** What making a profile row needs: the CRM mirror lookup and the open-signups flag (ADR-PROD-001). */
+export type ProfileCreationDeps = {
+  crm: {
+    findByEmail(
+      emailNormalized: string,
+    ): Promise<{ crmClientId: string; fullName?: string; homeAirport?: string } | null>;
+  };
+  flags: { get(key: string): Promise<boolean> };
+};
+
 export type ProfileRow = {
   memberId: string;
   status: "active" | "waitlist" | "deleted";
   displayName: string | null;
   homeAirport: string | null;
+  /** The member's photo, an https address, or null (ADR-IMPL-056). No route sets it yet. */
+  avatarUrl: string | null;
   timezone: string;
   phone: string | null;
   preferences: {
@@ -30,6 +42,9 @@ export type NotificationPrefView = {
   offers_broadcast: boolean;
 };
 
+/** One page of a campaign audience: active members who accept `category`, in member-id order. */
+export type AudienceMember = { memberId: string; timezone: string };
+
 export { toProfileVM } from "../application/to-profile-vm";
 
 /** The only import surface of @bbc/members. module.ts implements it; consumers import it. */
@@ -38,6 +53,12 @@ export type MembersFacade = {
   getStatus(exec: Executor | undefined, memberId: string): Promise<MemberStatus>;
   timezoneOf(exec: Executor | undefined, memberId: string): Promise<string>;
   activeMemberIds(exec: Executor | undefined): Promise<string[]>;
+  /** Active members who accept `category`, with their time zone — one page, keyset on member id.
+   *  A missing preference row means enabled. Campaign fan-out pages through this instead of loading every id. */
+  audiencePage(
+    exec: Executor | undefined,
+    q: { category: "offers_broadcast" | "offers_personal"; after: string | null; limit: number },
+  ): Promise<AudienceMember[]>;
   preferencesOf(exec: Executor | undefined, memberId: string): Promise<NotificationPrefView>;
   updateProfile(
     exec: Executor | undefined,
@@ -60,5 +81,13 @@ export type MembersFacade = {
     exec: Executor | undefined,
     actorMemberId: string,
     prefs: Array<{ category: "offers_personal" | "offers_broadcast"; enabled: boolean }>,
+  ): Promise<void>;
+  /** The member's profile row, made now if member.registered has not been delivered yet (the same insert the delivery
+   *  makes; ON CONFLICT DO NOTHING). Publishes nothing: the delivery still links to the CRM, once. */
+  ensureProfile(
+    exec: Executor | undefined,
+    memberId: string,
+    emailNormalized: string,
+    deps: ProfileCreationDeps,
   ): Promise<void>;
 };

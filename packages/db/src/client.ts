@@ -1,9 +1,8 @@
-// @ts-nocheck — drizzle-orm@1.0.0-rc.4 Relational Queries typings disagree with postgres-js + multi-schema
-// exports (see README debt). Runtime shape is correct; re-enable when on stable 1.x.
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import * as schema from "./schema";
-import { relations } from "./relations";
+
+export { query, queryEach, RowShapeError } from "./query";
+export { errorForLog, errorLine, type LoggedError } from "./errors";
 
 export type Db = ReturnType<typeof createDb>;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -15,25 +14,30 @@ export type DbOptions = {
   max?: number;
   /** Prepared statements are fine on a direct Postgres connection; disable behind pgbouncer (transaction mode). */
   prepare?: boolean;
+  /** "transaction" when connecting through PgBouncer in transaction mode: no prepared statements, no startup params. */
+  pooler?: "none" | "transaction";
   logger?: boolean | { logQuery: (q: string, params: unknown[]) => void };
   applicationName?: string;
 };
 
 export function createDb(url: string, opts: DbOptions = {}) {
+  const pooled = opts.pooler === "transaction";
   const client = postgres(url, {
     max: opts.max ?? 10,
-    prepare: opts.prepare ?? true,
+    prepare: pooled ? false : (opts.prepare ?? true),
     idle_timeout: 30,
     max_lifetime: 60 * 30,
     connect_timeout: 10,
-    connection: { application_name: opts.applicationName ?? "bbc-api", statement_timeout: 15_000 },
+    connection: pooled
+      ? { application_name: opts.applicationName ?? "bbc-api" }
+      : { application_name: opts.applicationName ?? "bbc-api", statement_timeout: 15_000 },
     transform: { undefined: null },
     onnotice: () => {},
   });
+  // No `schema` / `relations`: nothing uses Relational Queries (`db.query.*`), and passing them is what made this
+  // file type-check only with checking switched off. Every query goes through the builder or `sql`.
   const db = drizzle({
     client,
-    schema,
-    relations,
     logger: opts.logger ?? false,
   });
   return Object.assign(db, {

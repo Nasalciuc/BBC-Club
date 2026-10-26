@@ -1,21 +1,97 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import type { Executor } from "@bbc/db";
+import { z } from "zod";
+import { query, queryEach, type Executor } from "@bbc/db";
+import { col } from "@bbc/db/helpers";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 
 type EventRow = typeof requestEvents.$inferSelect;
 
+/** send-requests tries a request this many times, `SEND_RETRY_MINUTES` apart; then it stops, and the member reads
+ *  `not_sent` (toRequestVM). One number for both (ADR-IMPL-042). */
+export const MAX_SEND_ATTEMPTS = 6;
+export const SEND_RETRY_MINUTES = 5;
+
+/** One request claimed for the CRM send (claimUnsent). Validated where it is read. */
+export const ClaimedRow = z.object({
+  id: z.string().uuid(),
+  reference: z.string(),
+  contact_name: z.string(),
+  contact_phone: z.string().min(7),
+  contact_email: z.string(),
+  legs: z.array(z.object({ from: z.string(), to: z.string(), date: z.string() })),
+  trip_type: z.string(),
+  cabin: z.string(),
+  passengers: z.object({
+    adult: z.coerce.number(),
+    child: z.coerce.number(),
+    infant: z.coerce.number(),
+  }),
+  source: z.string(),
+  app_version: z.string().nullable(),
+  send_attempts: z.coerce.number().int(),
+  phone_valid: z.coerce.boolean(),
+  phone_e164: z.string().nullable(),
+  intent: z.enum(["quote", "alternative"]).nullable(),
+  replaces_fare_id: z.string().uuid().nullable(),
+  fare_id: z.string().uuid().nullable(),
+  offer_id: z.string().uuid().nullable(),
+  /** The member's note — children's ages, a preferred time to call. The specialist's e-mail carries it. */
+  note: z.string().nullable(),
+  shown_estimate_amount: z.number().int().positive().nullable(),
+  shown_estimate_currency: z.literal("USD").nullable(),
+  /** What a fare request recorded of its fare (0029, 0030): the price the member saw, the published price and its
+   *  source, the airline. The specialist's e-mail names them. */
+  price_at_request: z.string().nullable(),
+  published_at_request: z.coerce.number().positive().nullable(),
+  published_source_at_request: z.string().nullable(),
+  carrier_at_request: z.string().nullable(),
+  carrier_name_at_request: z.string().nullable(),
+});
+export type ClaimedRow = z.infer<typeof ClaimedRow>;
+
 type Status = "received" | "assigned" | "quoted" | "booked" | "closed";
+
+/** The statement `claimUnsent` runs, on its own so its plan is checked (hot-queries.test.ts: index requests_unsent).
+ *  Columns come from the schema (col()): a rename cannot leave this statement behind. */
+export function claimUnsentSql(limit: number) {
+  const r = requests;
+  return sql`
+        SELECT
+          ${col(r.id)}, ${col(r.reference)}, ${col(r.contactName)}, ${col(r.contactPhone)}, ${col(r.contactEmail)},
+          ${col(r.legs)}, ${col(r.tripType)}, ${col(r.cabin)}, ${col(r.passengers)}, ${col(r.source)},
+          ${col(r.appVersion)}, ${col(r.sendAttempts)}, ${col(r.phoneValid)}, ${col(r.phoneE164)},
+          ${col(r.intent)}, ${col(r.replacesFareId)}, ${col(r.fareId)}, ${col(r.offerId)}, ${col(r.note)},
+          ${col(r.shownEstimateAmount)}, ${col(r.shownEstimateCurrency)}, ${col(r.priceAtRequest)},
+          ${col(r.publishedAtRequest)}, ${col(r.publishedSourceAtRequest)}, ${col(r.carrierAtRequest)},
+          ${col(r.carrierNameAtRequest)}
+        FROM ${r}
+        WHERE ${col(r.sentToCrm)} = false
+          AND ${col(r.sendAttempts)} < ${MAX_SEND_ATTEMPTS}
+          AND ${col(r.status)} <> 'closed'
+          AND (${col(r.sentAt)} IS NULL OR ${col(r.sentAt)} < now() - interval '${sql.raw(String(SEND_RETRY_MINUTES))} minutes')
+        ORDER BY ${col(r.createdAt)}
+        FOR UPDATE SKIP LOCKED
+        LIMIT ${limit}`;
+}
 
 /** Ownership is in the WHERE. Someone else's request returns undefined → route 404. */
 export function createRequestsRepo(db: Executor) {
   return {
-    async listForMember(exec: Executor | undefined, memberId: string) {
+    /** Requests in progress first, newest first within each group: past the 50 the list shows, an older request still
+     *  in progress must not drop off while finished ones fill the page. The first key is written exactly as the second
+     *  key of `requests_member_list` (0025) — false sorts first — so the read stops at 51 index entries; changing one
+     *  without the other turns it into a read of every request the member has (hot-queries.test.ts). */
+    listForMemberSelect(exec: Executor | undefined, memberId: string) {
       return (exec ?? db)
         .select()
         .from(requests)
         .where(eq(requests.memberId, memberId))
-        .orderBy(desc(requests.createdAt))
+        .orderBy(sql`(${requests.status} IN ('booked', 'closed'))`, desc(requests.createdAt))
         .limit(51);
+    },
+
+    async listForMember(exec: Executor | undefined, memberId: string) {
+      return this.listForMemberSelect(exec, memberId);
     },
 
     async getForMember(exec: Executor | undefined, memberId: string, id: string) {
@@ -29,6 +105,13 @@ export function createRequestsRepo(db: Executor) {
 
     async getById(exec: Executor | undefined, id: string) {
       const [row] = await (exec ?? db).select().from(requests).where(eq(requests.id, id)).limit(1);
+      return row;
+    },
+
+    /** The request, its row locked until the transaction ends: a status change reads the status it moves from under
+     *  this lock, so a second webhook or click waits and then reads the first one's result (set-status.ts). */
+    async lockById(tx: Executor, id: string) {
+      const [row] = await tx.select().from(requests).where(eq(requests.id, id)).limit(1).for("update");
       return row;
     },
 
@@ -57,31 +140,27 @@ export function createRequestsRepo(db: Executor) {
       return byId;
     },
 
-    /** Claims unsent requests. FOR UPDATE SKIP LOCKED so two workers never take the same row. */
-    async claimUnsent(tx: Executor, limit = 20) {
-      return tx.execute(sql`
-        SELECT
-          id,
-          reference,
-          contact_name,
-          contact_phone,
-          contact_email,
-          legs,
-          trip_type,
-          cabin,
-          passengers,
-          source,
-          app_version,
-          send_attempts,
-          phone_valid,
-          phone_e164
-        FROM requests.requests
-        WHERE sent_to_crm = false
-          AND send_attempts < 6
-          AND (sent_at IS NULL OR sent_at < now() - interval '5 minutes')
-        ORDER BY created_at
-        FOR UPDATE SKIP LOCKED
-        LIMIT ${limit}`);
+    /** Claims unsent requests. FOR UPDATE SKIP LOCKED so two workers never take the same row. A closed request is not
+     *  sent: a deleted member's rows are closed and redacted, and an operator has nothing to call. A row that does not
+     *  read is not sent either: it is counted as a failed attempt (so the member reads `not_sent` after six) and
+     *  returned in `rejected` — one bad row never stops the batch. */
+    async claimUnsent(
+      tx: Executor,
+      limit = 20,
+    ): Promise<{ rows: ClaimedRow[]; rejected: { id: string | null; reason: string; attempts: number }[] }> {
+      const { rows, rejected } = await queryEach(tx, claimUnsentSql(limit), ClaimedRow);
+      const bad: { id: string | null; reason: string; attempts: number }[] = [];
+      for (const reject of rejected) {
+        const raw = (reject.raw as { id?: unknown } | null)?.id;
+        const id = typeof raw === "string" ? raw : null;
+        const reason = `row shape: ${reject.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ")}`.slice(
+          0,
+          500,
+        );
+        const attempts = id ? await this.markFailed(tx, id, reason) : 0;
+        bad.push({ id, reason, attempts });
+      }
+      return { rows, rejected: bad };
     },
 
     async markSent(tx: Executor, id: string, crmRequestId: string) {
@@ -97,8 +176,9 @@ export function createRequestsRepo(db: Executor) {
         .where(eq(requests.id, id));
     },
 
-    async markFailed(tx: Executor, id: string, error: string) {
-      await tx
+    /** One failed attempt. Returns the attempts made so far, so the job knows when it has just given up. */
+    async markFailed(tx: Executor, id: string, error: string): Promise<number> {
+      const [row] = await tx
         .update(requests)
         .set({
           lastError: error,
@@ -106,14 +186,17 @@ export function createRequestsRepo(db: Executor) {
           sendAttempts: sql`${requests.sendAttempts} + 1`,
           updatedAt: sql`now()`,
         })
-        .where(eq(requests.id, id));
+        .where(eq(requests.id, id))
+        .returning({ attempts: requests.sendAttempts });
+      return row?.attempts ?? 0;
     },
 
-    async setStatus(tx: Executor, id: string, status: Status, note: string | null, actor: string | null) {
+    /** Moves the request from `from` to `status` and writes the step; null when it is no longer at `from`. */
+    async setStatus(tx: Executor, id: string, from: Status, status: Status, note: string | null, actor: string | null) {
       const [row] = await tx
         .update(requests)
         .set({ status, updatedAt: sql`now()` })
-        .where(eq(requests.id, id))
+        .where(and(eq(requests.id, id), eq(requests.status, from)))
         .returning();
       if (!row) return null;
       await tx.insert(requestEvents).values({ requestId: id, status, note, actor });

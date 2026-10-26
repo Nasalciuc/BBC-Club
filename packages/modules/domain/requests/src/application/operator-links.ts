@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { requestRoute } from "./route";
 
 export type OperatorAction = "quoted" | "booked" | "closed";
 const TTL_S = 7 * 24 * 3600;
@@ -10,6 +11,10 @@ export function signAction(secret: string, requestId: string, action: OperatorAc
   return `${b64u(body)}.${b64u(createHmac("sha256", secret).update(body).digest())}`;
 }
 
+/**
+ * An empty secret signs nothing anyone can trust: anybody can compute that HMAC, and every adapter but `email` boots
+ * without OPS_LINK_SECRET (staging's mock among them). Such a link is refused as a bad signature (ADR-IMPL-047).
+ */
 export function verifyAction(
   secret: string,
   token: string,
@@ -17,6 +22,7 @@ export function verifyAction(
 ):
   | { ok: true; requestId: string; action: OperatorAction }
   | { ok: false; reason: "malformed" | "signature" | "expired" } {
+  if (secret.length === 0) return { ok: false, reason: "signature" };
   const [b, s] = token.split(".");
   if (!b || !s) return { ok: false, reason: "malformed" };
   const body = Buffer.from(b, "base64url").toString("utf8");
@@ -41,12 +47,9 @@ export function escapeHtml(value: string): string {
   });
 }
 
-export function routeLabel(legs: unknown): string {
-  if (!Array.isArray(legs) || legs.length === 0) return "";
-  const first = legs[0] as { from?: string; to?: string };
-  const last = legs[legs.length - 1] as { from?: string; to?: string };
-  if (!first?.from || !last?.to) return "";
-  return `${first.from} → ${last.to}`;
+/** The operator page's route line — the same route the member sees (ADR-IMPL-042). */
+export function routeLabel(legs: unknown, tripType: string | null | undefined): string {
+  return requestRoute(legs, tripType);
 }
 
 export function actionLabel(action: OperatorAction): string {

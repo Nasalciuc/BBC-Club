@@ -1,3 +1,4 @@
 # No-op until Authenticated Origin Pulls is enabled in Cloudflare AND a follow-up PR fills this file.
-# Do not put live tls { client_auth … } here by editing the server — the next deploy would wipe it.
+# Do not put a live client_auth { … } here by editing the server — the next deploy would wipe it.
+# The Caddyfile reads this file INSIDE each site's tls block: client_auth alone, never tls { } around it.
 # See origin-pulls.caddy.example and RUNBOOK § "The origin is reachable only through Cloudflare".

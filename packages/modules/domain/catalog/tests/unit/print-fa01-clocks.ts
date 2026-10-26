@@ -1,5 +1,4 @@
 import { fixture } from "@bbc/shared/fixture";
-import { fareFacts } from "../../../../../ui/src/cards/fare-facts";
 import { toFareVM } from "../../src/application/to-fare-vm";
 
 const vm = toFareVM(
@@ -19,9 +18,10 @@ const vm = toFareVM(
     publishedPrice: "7850.00",
     publishedSource: "Sabre · 16 Sep",
     currency: "USD",
+    trip: "one_way",
     source: "manual",
     validFrom: new Date("2026-09-01T00:00:00.000Z"),
-    validUntil: new Date("2026-10-04T23:59:59.000Z"),
+    validUntil: new Date("2027-12-31T23:59:59.000Z"),
     published: true,
     createdAt: new Date("2026-09-01T00:00:00.000Z"),
     updatedAt: new Date("2026-09-01T00:00:00.000Z"),
@@ -38,6 +38,8 @@ const vm = toFareVM(
       lng: "-73.778100",
       popularity: 100,
       tz: "America/New_York",
+      searchTerms: null,
+      description: null,
       createdAt: new Date("2026-09-01T00:00:00.000Z"),
     },
     to: {
@@ -51,6 +53,8 @@ const vm = toFareVM(
       lng: "-0.454300",
       popularity: 98,
       tz: "Europe/London",
+      searchTerms: null,
+      description: null,
       createdAt: new Date("2026-09-01T00:00:00.000Z"),
     },
   },
@@ -62,6 +66,6 @@ process.stdout.write(
     departLocal: vm.departLocal,
     arriveLocal: vm.arriveLocal,
     arriveDayOffset: vm.arriveDayOffset,
-    facts: fareFacts(vm),
+    departDate: vm.departDate,
   }),
 );

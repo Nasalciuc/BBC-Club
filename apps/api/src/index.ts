@@ -1,9 +1,16 @@
 import { Hono } from "hono";
+import { sql } from "drizzle-orm";
 import { authOrigins, loadEnv } from "@bbc/shared/env";
 import { EVENT_CATALOGUE } from "@bbc/shared/events";
 import { apiError } from "@bbc/shared/errors";
-import { createDb } from "@bbc/db";
-import { createPlatform, registerPlatformJobs } from "@bbc/platform";
+import { createDb, errorForLog } from "@bbc/db";
+import {
+  createPlatform,
+  registerPlatformJobs,
+  collectDbReport,
+  kafkaRelayHandler,
+  RELAY_CONSUMER,
+} from "@bbc/platform";
 import { lastDevOtp } from "@bbc/email";
 import type { IdentityFacade } from "@bbc/identity";
 import { installBaseMiddleware } from "./middleware/base";
@@ -12,8 +19,9 @@ import { resolvePrincipal, type PrincipalVars } from "./middleware/principal";
 import { clientIp } from "./middleware/client-ip";
 import { authorize, registerRoute } from "./middleware/authorize";
 import { rateLimit } from "./middleware/rate-limit";
-import { ModuleRegistry } from "./registry";
+import { DatabaseUnreachable, ModuleRegistry } from "./registry";
 import { appConfig } from "./presentation/mobile/app-config";
+import { failingJobs, staleJobs } from "./cron/stale";
 import { modules } from "./modules"; // the ordered list of ModuleDescriptors (identity, members, proposals, …)
 
 export type BuildOptions = {
@@ -22,16 +30,29 @@ export type BuildOptions = {
   /** Tests inject a capturing email sender and extra flags here. */
   overrides?: Record<string, unknown>;
   startPoller?: boolean;
+  role?: "all" | "api" | "worker";
 };
 
 /** Builds the whole process. Tests call this with startPoller:false and drive the poller by hand. */
 export async function buildApp(opts: BuildOptions = {}) {
   const env = opts.env ?? loadEnv();
-  const db = opts.db ?? createDb(env.DATABASE_URL, { applicationName: "bbc-api" });
+  const role = opts.role ?? env.APP_ROLE;
+  const serveMembers = role !== "worker";
+  const runsBackground = role !== "api";
+  const db =
+    opts.db ??
+    createDb(env.DATABASE_URL, {
+      applicationName: role === "worker" ? "bbc-worker" : "bbc-api",
+      pooler: env.DB_POOLER,
+    });
   const platform = createPlatform(db, {
     level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug",
     pretty: env.NODE_ENV === "development",
+    redisUrl: env.REDIS_URL,
+    kafkaBrokers: env.KAFKA_BROKERS,
   });
+  // A reconnecting client must not hold route registration. connect() already catches a rejection.
+  void platform.connect();
   platform.metrics.gauge("push_live", () => (env.PUSH_ADAPTER === "live" ? 1 : 0));
   if (env.NODE_ENV === "production" && env.PUSH_ADAPTER !== "live") {
     platform.logger.warn(
@@ -39,10 +60,21 @@ export async function buildApp(opts: BuildOptions = {}) {
       "production is running with recording push; nothing is delivered until PUSH_ADAPTER=live",
     );
   }
+  // loadEnv lets APNs be all or nothing, so one key tells which: without it, push is live on Android only.
+  if (env.PUSH_ADAPTER === "live" && !env.APNS_P8_BASE64) {
+    platform.logger.warn(
+      { pushAdapter: env.PUSH_ADAPTER, apns: false },
+      "push is live on Android only; an iPhone notification is marked failed until the APNs keys are in env",
+    );
+  }
 
   // 1. events: the catalogue is the only source of types
   for (const [type, def] of Object.entries(EVENT_CATALOGUE)) platform.events.defineEvent(type, def);
-  registerPlatformJobs(platform.jobs);
+  if (platform.producer) {
+    const relay = kafkaRelayHandler(platform.producer);
+    for (const type of Object.keys(EVENT_CATALOGUE)) platform.events.registerConsumer(type, RELAY_CONSUMER, relay);
+  }
+  registerPlatformJobs(platform.jobs, platform.metrics);
 
   const app = new Hono<PrincipalVars>();
   installBaseMiddleware(app, { origins: authOrigins(env), metrics: platform.metrics });
@@ -52,11 +84,30 @@ export async function buildApp(opts: BuildOptions = {}) {
   const registry = new ModuleRegistry();
   for (const m of modules(opts.overrides ?? {})) registry.add(m);
   const mounted: { basePath: string; app: Hono<any> }[] = [];
-  await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
+  try {
+    await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
+  } catch (e) {
+    // The process entry exits non-zero on it; the container's restart policy starts the api again.
+    if (e instanceof DatabaseUnreachable)
+      platform.logger.fatal({ err: errorForLog(e) }, "boot: database unreachable, exiting");
+    throw e;
+  }
   const identity = registry.facade<IdentityFacade>("identity");
 
+  let draining = false;
+  const setDraining = (v: boolean) => {
+    draining = v;
+  };
+
+  const loadtestTrusted =
+    env.LOADTEST === "1"
+      ? env.LOADTEST_TRUSTED_PROXIES.split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
   // 3. client IP (behind Cloudflare → Caddy) then principal — IP before any authz log
-  app.use("*", clientIp());
+  app.use("*", clientIp(loadtestTrusted));
   app.use(
     "*",
     resolvePrincipal({
@@ -69,38 +120,72 @@ export async function buildApp(opts: BuildOptions = {}) {
     }),
   );
 
-  // 4. public
+  async function readyProbe(): Promise<boolean> {
+    try {
+      await Promise.race([
+        db.execute(sql`SELECT ${1}::int AS n`),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("ready probe timeout")), 2_000)),
+      ]);
+      await Promise.race([
+        db.execute(sql`SELECT ${1}::int AS n`),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("ready probe timeout")), 2_000)),
+      ]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // 4. public — every role answers these (Caddy drain, cron, metrics, monitoring)
   registerRoute("GET", "/health", "public");
   app.get("/health", (c) => c.json({ ok: true }));
+  // Can THIS process take traffic: not draining, and its database answers. deploy.sh and bootstrap.sh wait on it replica
+  // by replica, so the system's state (a dead letter, a stale job) must not be in it: it would hold back every deploy,
+  // the one that fixes it included.
   registerRoute("GET", "/ready", "public");
   app.get("/ready", async (c) => {
+    if (draining) return c.json({ ok: false, draining: true }, 503);
+    const dbOk = await readyProbe();
+    return c.json({ ok: dbOk, db: dbOk }, dbOk ? 200 : 503);
+  });
+  // Is the system well: the database, the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job
+  // on time and not failing (its last finished run succeeded). 503 when not — for Uptime Kuma and for people, never as
+  // a deploy gate.
+  registerRoute("GET", "/status", "public");
+  app.get("/status", async (c) => {
     const checks: Record<string, unknown> = {};
-    try {
-      await db.execute("SELECT 1");
-      checks.db = true;
-    } catch {
-      checks.db = false;
-    }
+    checks.db = await readyProbe();
     const h = await platform.health().catch(() => ({ ok: false, queue: null }));
     checks.queue = h.queue;
-    const runs = await platform.jobs.lastRuns().catch(() => ({}));
-    const stale = Object.entries(runs)
-      .filter(([, r]) => r.at && Date.now() - new Date(r.at).getTime() > 36 * 3600_000)
-      .map(([j]) => j);
-    checks.staleJobs = stale;
-    const ok = checks.db === true && h.ok && stale.length === 0;
+    const runs = await platform.jobs.lastRuns().catch(() => null);
+    // Each scheduled job against its own schedule; manual and removed jobs never count (src/cron/stale.ts).
+    // A read that failed is not an empty answer: without its runs, nothing here can say the jobs are well.
+    const schedule = platform.jobs.schedule();
+    const stale = runs === null ? [] : staleJobs(runs, schedule);
+    checks.staleJobs = runs === null ? "unavailable" : stale;
+    const finished = await platform.jobs.lastFinishedRuns().catch(() => null);
+    const failing = finished === null ? [] : failingJobs(finished, schedule);
+    checks.failingJobs = finished === null ? "unavailable" : failing;
+    const ok =
+      checks.db === true && h.ok && runs !== null && stale.length === 0 && finished !== null && failing.length === 0;
     return c.json({ ok, ...checks }, ok ? 200 : 503);
   });
   registerRoute("GET", "/metrics", "public");
   app.get("/metrics", async (c) =>
     c.text(await platform.metrics.render(), 200, { "Content-Type": "text/plain; version=0.0.4" }),
   );
-  // Inventory tests read routeRegistry — do not maintain a parallel allow-list in authz/guard.
-  registerRoute("GET", "/v1/app-config", "public", "anon");
-  app.get("/v1/app-config", rateLimit(platform.rateLimit, "anon"), async (c) => c.json(await appConfig(platform)));
+
+  registerRoute("GET", "/v1/internal/db-report", "ops:read");
+  app.get("/v1/internal/db-report", authorize("ops:read"), async (c) => c.json(await collectDbReport(db)));
+
+  if (serveMembers) {
+    // Inventory tests read routeRegistry — do not maintain a parallel allow-list in authz/guard.
+    registerRoute("GET", "/v1/app-config", "public", "anon");
+    app.get("/v1/app-config", rateLimit(platform.rateLimit, "anon"), async (c) => c.json(await appConfig(platform)));
+  }
 
   // Test/dev only: Maestro reads the last OTP without logging it. Never mounted in production.
-  if (env.NODE_ENV !== "production") {
+  if (serveMembers && env.NODE_ENV !== "production") {
     registerRoute("GET", "/v1/test/last-otp", "public");
     app.get("/v1/test/last-otp", (c) => {
       const email = c.req.query("email")?.trim();
@@ -111,39 +196,48 @@ export async function buildApp(opts: BuildOptions = {}) {
     });
   }
 
-  // 5. Better Auth owns /api/auth/*
-  app.on(["POST", "GET"], "/api/auth/*", (c) => identity.handler(c.req.raw));
+  if (serveMembers) {
+    app.on(["POST", "GET"], "/api/auth/*", (c) => identity.handler(c.req.raw));
+    for (const m of mounted) app.route(m.basePath, m.app);
+  }
 
-  // 6. module routes (each already carries authorize())
-  for (const m of mounted) app.route(m.basePath, m.app);
+  if (runsBackground) {
+    registerRoute("POST", "/v1/internal/run/:job", "jobs:run");
+    app.post("/v1/internal/run/:job", authorize("jobs:run"), async (c) => {
+      const name = c.req.param("job");
+      if (!platform.jobs.has(name))
+        return c.json({ error: { code: "NOT_FOUND", message: `unknown job ${name}` } }, 404);
+      return c.json(await platform.jobs.run(name));
+    });
+  }
 
-  // 7. jobs over HTTP for the cron container
-  registerRoute("POST", "/v1/internal/run/:job", "jobs:run");
-  app.post("/v1/internal/run/:job", authorize("jobs:run"), async (c) => {
-    const name = c.req.param("job");
-    if (!platform.jobs.has(name)) return c.json({ error: { code: "NOT_FOUND", message: `unknown job ${name}` } }, 404);
-    return c.json(await platform.jobs.run(name));
-  });
-
-  if (opts.startPoller ?? true) platform.poller.start();
+  if (runsBackground && (opts.startPoller ?? true)) platform.poller.start();
 
   const shutdown = async () => {
     platform.logger.info({}, "shutting down");
+    await platform.close();
     await platform.poller.stop(); // finishes the in-flight delivery, then stops
     await db.close();
   };
 
-  return { app, db, platform, registry, shutdown, env };
+  return { app, db, platform, registry, shutdown, env, role, setDraining };
 }
 
-/** Process entry: builds, serves, dies cleanly on SIGTERM (compose gives 10 s). */
+/** Process entry: builds, serves, dies cleanly on SIGTERM (compose drain then stop). */
 if (import.meta.main) {
-  const { app, shutdown, env, platform } = await buildApp();
+  // A database still unreachable after boot's retries: buildApp logged it; exit non-zero so the restart policy starts
+  // the process again, rather than serve with every module unmounted. Anything else surfaces as before.
+  const { app, shutdown, env, platform, setDraining } = await buildApp().catch((e: unknown) => {
+    if (e instanceof DatabaseUnreachable) process.exit(1);
+    throw e;
+  });
   const server = Bun.serve({ port: env.PORT, fetch: app.fetch, idleTimeout: 30 });
-  platform.logger.info({ port: server.port, env: env.NODE_ENV }, "api up");
+  platform.logger.info({ port: server.port, env: env.NODE_ENV, role: env.APP_ROLE }, "api up");
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, async () => {
-      server.stop(true);
+      setDraining(true);
+      await Bun.sleep(5_000);
+      server.stop(false);
       await shutdown();
       process.exit(0);
     });

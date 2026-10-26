@@ -6,6 +6,7 @@ type ProfileSource = {
   status: "active" | "waitlist" | "deleted";
   displayName: string | null;
   homeAirport: string | null;
+  avatarUrl: string | null;
   timezone: string;
   phone: string | null;
   preferences: ProfileVM["preferences"];
@@ -14,8 +15,21 @@ type ProfileSource = {
   crmLinked: boolean;
 };
 
-/** Always returns a parseable ProfileVM. Null row → complete pending stub with defaults. */
-export function toProfileVM(row: ProfileSource | null, email: string | null, memberId: string): ProfileVM {
+/** The member's saved notification preferences (`preferencesOf`: a missing row already reads as on). */
+type NotificationPrefsSource = { offers_personal: boolean; offers_broadcast: boolean };
+
+/** Always returns a parseable ProfileVM. Null row → complete pending stub with defaults.
+ *  `prefs` is required: the notifications field reflects what was saved, never a default. */
+export function toProfileVM(
+  row: ProfileSource | null,
+  email: string | null,
+  memberId: string,
+  prefs: NotificationPrefsSource,
+): ProfileVM {
+  const notifications = {
+    requestUpdates: true as const,
+    offers: prefs.offers_personal || prefs.offers_broadcast,
+  };
   if (!row) {
     return {
       memberId,
@@ -23,12 +37,14 @@ export function toProfileVM(row: ProfileSource | null, email: string | null, mem
       email,
       displayName: null,
       homeAirport: null,
+      avatarUrl: null,
       timezone: "America/New_York",
       phone: null,
       memberSince: null,
       crmLinkedAt: null,
       crmLinked: false,
       preferences: {},
+      notifications,
     };
   }
   return {
@@ -37,11 +53,14 @@ export function toProfileVM(row: ProfileSource | null, email: string | null, mem
     email,
     displayName: row.displayName,
     homeAirport: row.homeAirport,
+    // The photo's address, or none — the app shows the member's initials (ADR-IMPL-056).
+    avatarUrl: row.avatarUrl ?? null,
     timezone: row.timezone,
     phone: row.phone,
     memberSince: row.memberSince.toISOString(),
     crmLinkedAt: row.crmLinkedAt ? row.crmLinkedAt.toISOString() : null,
     crmLinked: row.crmLinked,
     preferences: row.preferences ?? {},
+    notifications,
   };
 }

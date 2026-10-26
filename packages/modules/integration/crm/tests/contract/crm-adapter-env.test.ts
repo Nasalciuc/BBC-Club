@@ -20,6 +20,18 @@ describe("CRM_ADAPTER via loadEnv", () => {
     expect(env.CRM_ADAPTER).toBe("mock");
   });
 
+  it("loadEnv refuses the http adapter, so scripts/check-env.ts names it before a deploy starts anything", () => {
+    expect(() =>
+      loadEnv({
+        APP_ORIGIN: "http://localhost:8000",
+        DATABASE_URL: "postgres://bbc:bbc@localhost:55432/bbc_test",
+        BETTER_AUTH_SECRET: "test-secret-test-secret-test-secret-0000",
+        INTERNAL_API_SECRET: "internal-secret-internal-secret-0000",
+        CRM_ADAPTER: "http",
+      }),
+    ).toThrow(/CRM_ADAPTER=http is not built yet/);
+  });
+
   it("crm module refuses http adapter without override", () => {
     expect(() =>
       crmModule().init({
