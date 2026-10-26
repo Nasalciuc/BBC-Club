@@ -83,8 +83,8 @@ export async function submit(
   try {
     return await withTx(exec, (tx) => write(tx));
   } catch (err) {
-    // Refused after the quota was counted: the transaction rolled back, so the refusal spent nothing — neither the
-    // address's unit when the member's own limit refused, nor either when the request did not pass.
+    // Refused by a limit: the transaction rolled back, so the 429 spent nothing — not the address's unit when the
+    // member's own limit refused (the member's limit must not drain an address others share).
     if (err instanceof RolledBack) return err.result;
     throw err;
   }
@@ -133,19 +133,26 @@ export async function submit(
     const fare = body.fareId && deps.fare ? await deps.fare(body.fareId, body.priceAtRequest) : null;
     const published = fare?.published ?? null;
     const carrier = fare?.carrier ?? null;
-    // The fare a request names must exist and be this trip's — its outbound leg and cabin; one that has closed since is
-    // still taken (an offline-queued request must not be lost). A read that failed checks nothing.
-    if (fare?.trip === "missing") refuse("fareId", "This fare is no longer available.");
-    if (fare?.trip && outbound) {
+    // A fare that no longer exists at all — a duplicate copy migration 0034 removed, under a request queued offline
+    // before it — is left out: the request is taken for its trip, without the fare and without the price that was the
+    // fare's, and the specialist quotes it. Refused, it was lost for good: the app never sends a refused request again.
+    const fareGone = fare?.trip === "missing";
+    const fareId = fareGone ? null : (body.fareId ?? null);
+    const priceAtRequest = fareGone ? undefined : body.priceAtRequest;
+    // The fare a request names must be this trip's — its outbound leg and cabin; one that has closed since is still
+    // taken (an offline-queued request must not be lost). A read that failed checks nothing. A refusal from here on
+    // keeps the quota it was counted (the transaction commits with nothing else written): a refused request costs what a
+    // sent one does, so refusals cannot be looped for free.
+    if (fare?.trip && fare.trip !== "missing" && outbound) {
       if (outbound.from !== fare.trip.from || outbound.to !== fare.trip.to) {
-        refuse("legs.0", `This fare is for ${fare.trip.from} → ${fare.trip.to}.`);
+        return refused("legs.0", `This fare is for ${fare.trip.from} → ${fare.trip.to}.`);
       }
-      if (body.cabin !== fare.trip.cabin) refuse("cabin", `This fare is for ${fare.trip.cabin} class.`);
+      if (body.cabin !== fare.trip.cabin) return refused("cabin", `This fare is for ${fare.trip.cabin} class.`);
     }
     // The offer a request names must be one the member could see; a withdrawn or expired one is still taken.
     if (body.offerId && deps.offer) {
       const offer = await deps.offer(body.offerId, actor.memberId);
-      if (offer === "missing" || offer === "not_yours") refuse("offerId", "This offer is no longer available.");
+      if (offer === "missing" || offer === "not_yours") return refused("offerId", "This offer is no longer available.");
     }
 
     const id = randomUUID();
@@ -158,7 +165,7 @@ export async function submit(
         reference,
         memberId: actor.memberId,
         idempotencyKey,
-        fareId: body.fareId ?? null,
+        fareId,
         offerId: body.offerId ?? null,
         intent: body.intent ?? null,
         replacesFareId: body.replacesFareId ?? null,
@@ -168,7 +175,7 @@ export async function submit(
         cabin: body.cabin,
         legs: body.legs,
         passengers: body.passengers,
-        priceAtRequest: body.priceAtRequest != null ? String(body.priceAtRequest) : null,
+        priceAtRequest: priceAtRequest != null ? String(priceAtRequest) : null,
         publishedAtRequest: published ? published.amount.toFixed(2) : null,
         publishedSourceAtRequest: published ? published.source : null,
         carrierAtRequest: carrier ? carrier.code : null,
@@ -206,7 +213,7 @@ export async function submit(
         reference,
         route,
         cabin: body.cabin,
-        fareId: body.fareId ?? null,
+        fareId,
         offerId: body.offerId ?? null,
         intent: body.intent ?? null,
         replacesFareId: body.replacesFareId ?? null,
@@ -222,24 +229,29 @@ export async function submit(
       }),
     });
 
-    return { ok: true as const, request: row, created: true as const };
+    // `fareLeftOut`: the fare it named, which no longer exists (counted and logged by the route).
+    return {
+      ok: true as const,
+      request: row,
+      created: true as const,
+      fareLeftOut: fareGone ? (body.fareId ?? null) : null,
+    };
   }
 }
 
-type Refusal =
-  | { ok: false; code: "VALIDATION"; message: string; details: { path: string; message: string }[] }
-  | { ok: false; code: "RATE_LIMITED"; scope: "ip" | "member"; retryAfterMs?: number };
+/** A limit's refusal, thrown inside the transaction so it rolls back — the quota counted in it with it. */
+type RateRefusal = { ok: false; code: "RATE_LIMITED"; scope: "ip" | "member"; retryAfterMs?: number };
 
-/** Thrown inside the transaction so it rolls back — the quota counted in it with it — and answered with `result`. */
 class RolledBack extends Error {
-  constructor(public readonly result: Refusal) {
+  constructor(public readonly result: RateRefusal) {
     super(result.code);
     this.name = "RolledBack";
   }
 }
 
-function refuse(path: string, message: string): never {
-  throw new RolledBack({ ok: false, code: "VALIDATION", message, details: [{ path, message }] });
+/** The fare or the offer a request names does not match it: answered with the field, the transaction committed. */
+function refused(path: string, message: string) {
+  return { ok: false as const, code: "VALIDATION" as const, message, details: [{ path, message }] };
 }
 
 type RequestRow = typeof requests.$inferSelect;

@@ -87,6 +87,31 @@ describe("POST /v1/requests rate limits", () => {
     await t.close();
   });
 
+  it("a refused request counts toward the quota: after five refusals the member's next request is 429", async () => {
+    // A request refused once its quota was counted (an offer or a fare that does not match it) keeps the units it spent,
+    // so refusals cannot be looped for free; a 429 still spends nothing (4.1.6).
+    const t = await testApp({ suite: "requests-rate-refused" });
+    const ip = "198.51.100.24";
+    for (let i = 0; i < 5; i++) {
+      const refused = await t.submitRequestAs(
+        t.memberA,
+        t.sampleRequestBody({ priceAtRequest: undefined, offerId: crypto.randomUUID() }),
+        { ip },
+      );
+      expect(refused.status).toBe(400);
+    }
+    const next = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { ip });
+    expect(next.status).toBe(429);
+    expect(((await next.json()) as { error: { context?: unknown } }).error.context).toEqual({ scope: "member" });
+    // The address spent a unit for each refusal (60 s of its bucket each: sixty an hour) and none for the 429.
+    const [{ s: spent }]: any = await t.db.execute(sql`
+      SELECT extract(epoch FROM tat - now())::float8 AS s FROM platform.rate_limit_state
+      WHERE key = ${`requests.submit.ip:ip:${ip}`}`);
+    expect(spent).toBeGreaterThan(5 * 60 - 30);
+    expect(spent).toBeLessThanOrEqual(5 * 60);
+    await t.close();
+  }, 30_000);
+
   it("the address's limit says so: a member with no requests behind a busy address reads scope 'ip'", async () => {
     const t = await testApp({ suite: "requests-rate-ip-scope" });
     const ip = "198.51.100.23";

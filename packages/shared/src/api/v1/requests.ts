@@ -27,6 +27,29 @@ export const Passengers = z.object({
 export type Passengers = z.infer<typeof Passengers>;
 
 /**
+ * Why a request cannot be taken, for the refusals an app on phones can meet — an older app checks less before it sends,
+ * and a request kept on the phone ages. Each such issue carries its reason (`params.reason`), and the server answers it
+ * in `error.context.reason` and in its line of `error.details`, beside a message already in the club's voice
+ * (ADR-IMPL-071). Stable: an app maps a reason to its own words and to the field to open; one it does not know reads as
+ * none, and it shows the message.
+ */
+export const REQUEST_REFUSAL_REASONS = [
+  /** A leg on a day already over everywhere (`SubmittedRequestBody`): a recent search's remembered day, a queued request. */
+  "day_passed",
+  /** A leg that ends where it starts. */
+  "same_airport",
+  /** More infants than adults: each travels on an adult's lap. */
+  "infants_over_adults",
+  /** A leg before the one before it. */
+  "dates_out_of_order",
+  /** A round trip that is not there and back. */
+  "round_trip",
+  /** One way that is not one leg, a multi-city trip that is not two to six. */
+  "legs_count",
+] as const;
+export type RequestRefusalReason = (typeof REQUEST_REFUSAL_REASONS)[number];
+
+/**
  * A trip that can be flown: a round trip is two legs, the second the first reversed; one way is one leg; multi-city two
  * to six; no leg ends where it starts; each leg on or after the one before; an infant travels on an adult's lap, so no
  * more infants than adults (here, not on `Passengers`, which views parse too). What the member typed is checked where
@@ -45,27 +68,35 @@ function tripIssues(
   },
   ctx: z.RefinementCtx,
 ): void {
-  const issue = (path: (string | number)[], message: string) =>
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+  const issue = (path: (string | number)[], message: string, reason: RequestRefusalReason) =>
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path, message, params: { reason } });
   const legs = b.legs;
   if (b.tripType === "round") {
     const [out, back] = legs;
-    if (legs.length !== 2 || !out || !back) issue(["legs"], "A round trip has two flights: there and back.");
+    if (legs.length !== 2 || !out || !back) issue(["legs"], "A round trip has two flights: there and back.", "round_trip");
     else if (back.from !== out.to || back.to !== out.from) {
-      issue(["legs", 1], "A round trip comes back the way it went.");
+      issue(["legs", 1], "A round trip comes back the way it went.", "round_trip");
     }
   }
-  if (b.tripType === "oneway" && legs.length !== 1) issue(["legs"], "A one-way trip has one flight.");
+  if (b.tripType === "oneway" && legs.length !== 1) issue(["legs"], "A one-way trip has one flight.", "legs_count");
   if (b.tripType === "multi" && (legs.length < 2 || legs.length > 6)) {
-    issue(["legs"], "A multi-city trip has two to six flights.");
+    issue(["legs"], "A multi-city trip has two to six flights.", "legs_count");
   }
   legs.forEach((leg, i) => {
-    if (leg.from === leg.to) issue(["legs", i, "to"], "Choose a destination other than where the flight leaves from.");
+    if (leg.from === leg.to) {
+      issue(["legs", i, "to"], "Choose a destination other than where the flight leaves from.", "same_airport");
+    }
     const before = legs[i - 1];
-    if (before && leg.date < before.date) issue(["legs", i, "date"], "Choose a date on or after the flight before.");
+    if (before && leg.date < before.date) {
+      issue(["legs", i, "date"], "Choose a date on or after the flight before.", "dates_out_of_order");
+    }
   });
   if (b.passengers.infant > b.passengers.adult) {
-    issue(["passengers", "infant"], "Each infant travels on an adult's lap. Add an adult or remove an infant.");
+    issue(
+      ["passengers", "infant"],
+      "Each infant travels on an adult's lap. Add an adult or remove an infant.",
+      "infants_over_adults",
+    );
   }
 }
 
@@ -145,6 +176,7 @@ export const SubmittedRequestBody = RequestBody.superRefine((b, ctx) => {
         code: z.ZodIssueCode.custom,
         path: ["legs", i, "date"],
         message: "That day has passed. Choose a date from today on.",
+        params: { reason: "day_passed" satisfies RequestRefusalReason },
       });
     }
   });
