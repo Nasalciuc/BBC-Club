@@ -242,6 +242,35 @@ export async function putTravelPreferences(body: TravelPreferencesBodyType): Pro
   });
 }
 
+/**
+ * PUT /v1/profile/photo — the member's own photo, as photo-native.ts made it: a 512-px WebP without metadata, at most
+ * 100 KB, sent as it is (ADR-IMPL-070). Answers the whole profile with the photo's new tag.
+ */
+export async function putProfilePhoto(bytes: Uint8Array): Promise<ApiResult<Profile>> {
+  return asResult(async () => {
+    const res = await apiFetch("/v1/profile/photo", {
+      method: "PUT",
+      headers: { "Content-Type": "image/webp" },
+      body: bytes as Uint8Array<ArrayBuffer>,
+    });
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    return { ok: true, data: (await parseJson(res)) as Profile };
+  });
+}
+
+/** DELETE /v1/profile/photo — the initials again. Answers the whole profile. */
+export async function deleteProfilePhoto(): Promise<ApiResult<Profile>> {
+  return asResult(async () => {
+    const res = await apiFetch("/v1/profile/photo", { method: "DELETE" });
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    return { ok: true, data: (await parseJson(res)) as Profile };
+  });
+}
+
 /** PUT /v1/profile/preferences — notification opt-outs. */
 export async function putNotificationPreferences(
   body: NotificationPreferencesBodyType,

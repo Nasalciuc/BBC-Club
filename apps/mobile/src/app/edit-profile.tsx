@@ -10,6 +10,9 @@ import { CabinSheet } from "@/features/profile/CabinSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
 import { nameRowValue } from "@/features/profile/name-logic";
 import { NameSheet } from "@/features/profile/NameSheet";
+import { photoRowValue } from "@/features/profile/photo-logic";
+import { photoPickerReady } from "@/features/profile/photo-native";
+import { PhotoSheet } from "@/features/profile/PhotoSheet";
 import { cabinLabel, travelersLabel } from "@/features/profile/profile-logic";
 import { profileCopy } from "@/features/profile/profile-save-logic";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
@@ -20,8 +23,10 @@ import { fetchProfile, type Profile } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 
 /**
- * Edit profile (36): the member's own name (brief 3.4.1 — 36 draws no `Name` row; it comes first, in 36's look), then
- * the home airport, the cabin and the travelers a search and a request start from.
+ * Edit profile (36): the member's own name (brief 3.4.1 — 36 draws no `Name` row; it comes first, in 36's look) and
+ * their photo (brief 3.4.2 — no `Photo` row either; under the name, on a build that has the photo picker only: an update
+ * over the air on an older binary shows no row, ADR-IMPL-070), then the home airport, the cabin and the travelers a
+ * search and a request start from.
  */
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -37,6 +42,7 @@ export default function EditProfileScreen() {
   // 36 names the home airport's city: `New York (JFK)`.
   const [homeCity, setHomeCity] = useState<{ code: string; city: string } | null>(null);
   const nameRef = useRef<ProfileSheetHandle>(null);
+  const photoRef = useRef<ProfileSheetHandle>(null);
   const homeAirportRef = useRef<ProfileSheetHandle>(null);
   const cabinRef = useRef<ProfileSheetHandle>(null);
   const travelersRef = useRef<ProfileSheetHandle>(null);
@@ -100,6 +106,16 @@ export default function EditProfileScreen() {
               disabled={!profile}
               onPress={() => nameRef.current?.present()}
             />
+            {photoPickerReady ? (
+              <ListRow
+                testID="editProfile.photo"
+                icon="camera-fill"
+                label="Photo"
+                value={profile ? photoRowValue(profile) : undefined}
+                disabled={!profile}
+                onPress={() => photoRef.current?.present()}
+              />
+            ) : null}
             <ListRow
               testID="editProfile.homeAirport"
               icon="plane-right-fill"
@@ -131,6 +147,7 @@ export default function EditProfileScreen() {
       {profile ? (
         <>
           <NameSheet ref={nameRef} profile={profile} onSaved={copy.saved} />
+          {photoPickerReady ? <PhotoSheet ref={photoRef} profile={profile} onSaved={copy.saved} /> : null}
           <HomeAirportSheet ref={homeAirportRef} profile={profile} homeCity={city} onSaved={copy.saved} />
           <CabinSheet ref={cabinRef} profile={profile} onSaved={copy.saved} />
           <TravelersSheet ref={travelersRef} profile={profile} onSaved={copy.saved} />

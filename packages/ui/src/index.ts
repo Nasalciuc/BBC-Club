@@ -67,7 +67,7 @@ export {
 } from "./cards/flight-facts";
 export { PopularCard } from "./cards/PopularCard";
 export { RecentRow } from "./cards/RecentRow";
-export { ProfileHero, profileBandHeight } from "./cards/ProfileHero";
+export { PROFILE_AVATAR, ProfileHero, profileBandHeight } from "./cards/ProfileHero";
 export { RequestCard } from "./cards/RequestCard";
 
 export { HOME_SHEET_HANDLE, HOME_SHEET_PILL, HomeSheet } from "./layout/HomeSheet";

@@ -21,6 +21,10 @@ describe("rate limit inventory", () => {
     expect(rateRuleRegistry.get("PATCH /v1/profile")).toBe("profile.write");
     expect(rateRuleRegistry.get("PUT /v1/profile/travel")).toBe("profile.write");
     expect(rateRuleRegistry.get("PUT /v1/profile/preferences")).toBe("profile.write");
+    // The member's own photo (ADR-IMPL-070): a write as any profile write; reading it, a read.
+    expect(rateRuleRegistry.get("PUT /v1/profile/photo")).toBe("profile.write");
+    expect(rateRuleRegistry.get("DELETE /v1/profile/photo")).toBe("profile.write");
+    expect(rateRuleRegistry.get("GET /v1/profile/photo")).toBe("read");
     // The first password and a change of it: the current one cannot be guessed here without end (ADR-IMPL-047).
     expect(rateRuleRegistry.get("POST /v1/account/password")).toBe("profile.write");
     expect(rateRuleRegistry.get("POST /v1/devices")).toBe("devices.register");

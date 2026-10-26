@@ -35,6 +35,7 @@ import { offersSwitchValue, withOffers } from "@/features/profile/notifications-
 import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
+import { portraitOf } from "@/features/profile/portrait";
 import { cabinLabel, openRequestsFor, profileStats, travelersLabel } from "@/features/profile/profile-logic";
 import { profileCopy } from "@/features/profile/profile-save-logic";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
@@ -264,7 +265,7 @@ export default function ProfileScreen() {
           testID="profile.hero"
           name={displayName}
           initials={monogram(profile?.displayName)}
-          portrait={profile?.avatarUrl ? { uri: profile.avatarUrl } : null}
+          portrait={portraitOf(profile)}
           home={home ? `Flies from ${home}` : null}
           image={heroImage}
           fallback={null}

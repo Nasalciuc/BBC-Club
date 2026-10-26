@@ -239,7 +239,9 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   white line arcing between them and the plane at its middle.
 - **Wordmark** — `BuyBusinessClass` Semibold and ` Club` Regular, one line, navy — over 08's daylight photograph too
   (white only over a dark one); 07 sets `BuyBusinessClass` Bold (`wordmarkDates`).
-- **Avatar** — the member's portrait in a white ring; their initials on navy until the club keeps a photo.
+- **Avatar** — the member's portrait in a white ring: the photo they added themselves (Edit profile's `Photo` row, on a
+  build that has the photo picker; ADR-IMPL-070), else their initials on navy. The photo is asked of the club with the
+  member's session, its tag in the address; while it loads, and if it cannot, the initials stay under it.
 - **Also in the library** — `SectionHeader` (a section's title with its action: 02, 03, 18), `CloseButton`,
   `ProgressLine` (01, 4.4 tall), `PhotoThumbs` and `PageDots` (05's photographs), `PhotoCredit`, `GlobePin` and
   `RouteEnd`, `PricePair` (20's comparison); the app's own `HomeAirportCard` (01), `GreetingHeader` (02), `FareHero`

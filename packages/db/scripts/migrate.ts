@@ -701,6 +701,23 @@ try {
     }
   }
 
+  // After drizzle's own migrations (members.profile): the photo the member adds themselves (ADR-IMPL-070). A new table,
+  // one transaction.
+  const membersPhoto = join(migrationsDir, "0043_members_photo.sql");
+  if (existsSync(membersPhoto)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0043_members_photo.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(membersPhoto, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0043_members_photo.sql')`);
+      });
+      console.log("members photo applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);
