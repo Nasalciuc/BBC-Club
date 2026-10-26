@@ -12,7 +12,7 @@ import { airportsRepo } from "../infrastructure/airports.repo";
 import type { LandmarkStandIn } from "../infrastructure/place-landmarks.repo";
 import { placePhotosRepo, type PlacePhotoRow } from "../infrastructure/place-photos.repo";
 import { sourceHoldsRepo } from "../infrastructure/source-holds.repo";
-import { landmarkAuthor } from "./landmark-sources";
+import { commonsPage, landmarkAuthor } from "./landmark-sources";
 import {
   CARD_WIDTH,
   HERO_WIDTH,
@@ -21,7 +21,6 @@ import {
   acceptCommons,
   askCommons,
   askPexels,
-  commonsPage,
   commonsThumbAt,
   findCities,
   type CityFacts,

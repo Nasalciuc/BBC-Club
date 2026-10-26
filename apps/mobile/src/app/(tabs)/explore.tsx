@@ -37,6 +37,8 @@ import { useExploreHome } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
 import { useDestinations } from "@/features/globe/useDestinations";
+import { Landmarks } from "@/features/places/Landmarks";
+import { usePlaceLandmarks } from "@/features/places/usePlaceLandmarks";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { toggleSaved, useIsSaved } from "@/features/saved/saved";
 import type { SearchContext } from "@/features/requests/useRequestDraft";
@@ -87,6 +89,8 @@ export default function ExploreScreen() {
   const { home, homeLoading, homeError, defaultFrom, retryHome } = useExploreHome();
   const { state, dispatch, retry } = useSearch({ defaultFrom });
   const { pins, homeCoord, pinToAirport } = useDestinations(home, state.to);
+  // A chosen route's city shows its landmarks under its flight options, as the destination's page does (ADR-IMPL-064).
+  const landmarks = usePlaceLandmarks(state.to?.code, offline);
 
   // The member's usual cabin and travelers (Profile → Edit profile) are where a search starts, until a chip is touched.
   const usualCabin = profile?.preferences.cabin;
@@ -305,40 +309,50 @@ export default function ExploreScreen() {
         testID="explore.sheet"
       >
         {routeShown ? (
-          <DestinationDetails
-            look="route"
-            testIDPrefix="explore"
-            state={state}
-            offline={offline}
-            onRetry={retrySearch}
-            onOpenFare={(fare: FareVM) =>
-              router.push(
-                fareHref(fare.id, fare.offerId, {
-                  depart: state.dates.depart,
-                  return: state.dates.return,
-                  passengers: state.passengers,
-                }),
-              )
-            }
-            onEditDates={() =>
-              datesRef.current?.present(
-                {
-                  tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
-                  depart: state.dates.depart,
-                  ret: state.dates.return,
-                  editing: "depart",
-                },
-                {
-                  fromCity: state.from?.city,
-                  toCity: state.to?.city,
-                  toCode: state.to?.code,
-                  flexible: state.dates.flexible,
-                },
-              )
-            }
-            onEditCabin={() => cabinRef.current?.present(state.cabin)}
-            onEditTravelers={() => travelersRef.current?.present(state.passengers)}
-          />
+          <View style={styles.route}>
+            <DestinationDetails
+              look="route"
+              testIDPrefix="explore"
+              state={state}
+              offline={offline}
+              onRetry={retrySearch}
+              onOpenFare={(fare: FareVM) =>
+                router.push(
+                  fareHref(fare.id, fare.offerId, {
+                    depart: state.dates.depart,
+                    return: state.dates.return,
+                    passengers: state.passengers,
+                  }),
+                )
+              }
+              onEditDates={() =>
+                datesRef.current?.present(
+                  {
+                    tripType: state.dates.depart && !state.dates.return ? "oneway" : "round",
+                    depart: state.dates.depart,
+                    ret: state.dates.return,
+                    editing: "depart",
+                  },
+                  {
+                    fromCity: state.from?.city,
+                    toCity: state.to?.city,
+                    toCode: state.to?.code,
+                    flexible: state.dates.flexible,
+                  },
+                )
+              }
+              onEditCabin={() => cabinRef.current?.present(state.cabin)}
+              onEditTravelers={() => travelersRef.current?.present(state.passengers)}
+            />
+            <Landmarks
+              landmarks={landmarks.landmarks}
+              failed={landmarks.failed}
+              onPhotoError={landmarks.onPhotoError}
+              // 13 draws the globe, not the city's photograph: the route look takes none, so no landmark is left out.
+              look="route"
+              testIDPrefix="explore"
+            />
+          </View>
         ) : homeError && !home ? (
           // A Home that did not load takes the place of what it would have shown; the search stays, and a route can still
           // be searched and asked for (ADR-IMPL-047).
@@ -419,4 +433,6 @@ const styles = StyleSheet.create({
   // 02: the bar 18.6 from the left and 18.7 from the right, a little inside the sheet's gutter.
   bar: { marginLeft: 18.6 - tokens.space.gutter, marginRight: 18.7 - tokens.space.gutter },
   rest: { gap: tokens.space.lg },
+  // 13: the landmarks under the flight options, as far as the destination's page puts them (04's sheet gap).
+  route: { gap: tokens.space.md },
 });

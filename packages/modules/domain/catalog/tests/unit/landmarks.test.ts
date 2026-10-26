@@ -13,6 +13,7 @@ import {
   LANDMARK_MIN_WIDTH,
   acceptLandmarkPhoto,
   askLandmarkFiles,
+  commonsPage,
   landmarkAuthor,
   landmarkCredit,
   landmarkFiles,
@@ -296,6 +297,7 @@ describe("what the app receives", () => {
     rank,
     landmarkQid: `Q${rank}`,
     name: `Sight ${rank}`,
+    file: `S${rank}.jpg`,
     imageUrl: `https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/S${rank}.jpg/1280px-S${rank}.jpg`,
     width: 1280,
     height: 853,
@@ -318,6 +320,7 @@ describe("what the app receives", () => {
             text: "Ana Pop · Wikimedia Commons",
             licence: "CC BY-SA 4.0",
             licenceUrl: "https://creativecommons.org/licenses/by-sa/4.0",
+            pageUrl: "https://commons.wikimedia.org/wiki/File:S1.jpg",
           },
         },
         {
@@ -325,11 +328,35 @@ describe("what the app receives", () => {
           imageUrl: rows[2]!.imageUrl,
           width: 1280,
           height: 853,
-          credit: { text: "Ana Pop · Wikimedia Commons", licence: "CC BY-SA 4.0" },
+          credit: {
+            text: "Ana Pop · Wikimedia Commons",
+            licence: "CC BY-SA 4.0",
+            pageUrl: "https://commons.wikimedia.org/wiki/File:S3.jpg",
+          },
         },
       ],
     });
     expect(PlaceLandmarksVM.parse(vm)).toEqual(vm);
+  });
+
+  it("each credit links its photograph's own page on Commons, the page Commons gave for it (ADR-IMPL-043)", () => {
+    const title = (url: string) => decodeURIComponent(new URL(url).pathname);
+    for (const [saved, city] of [
+      [paris, "Q90"],
+      [chisinau, "Q21197"],
+    ] as const) {
+      const picked = pickLandmarks(readLandmarks(bindingsOf(saved), city), infosOf(saved));
+      expect(picked.length).toBeGreaterThan(0);
+      for (const p of picked) expect(title(commonsPage(p.file))).toBe(title(p.page));
+    }
+    // As MediaWiki writes a page's address (made-up names): an apostrophe encoded, brackets and commas kept.
+    expect(commonsPage("Gare d'Orsay (1).jpg")).toBe("https://commons.wikimedia.org/wiki/File:Gare_d%27Orsay_(1).jpg");
+    expect(commonsPage("old house, river_bank.jpg")).toBe(
+      "https://commons.wikimedia.org/wiki/File:Old_house,_river_bank.jpg",
+    );
+    expect(commonsPage("Vue aérienne? #2.jpg")).toBe(
+      "https://commons.wikimedia.org/wiki/File:Vue_a%C3%A9rienne%3F_%232.jpg",
+    );
   });
 
   it("a landmark an older app cannot read is dropped, never the whole answer; three at most", () => {
@@ -340,6 +367,26 @@ describe("what the app receives", () => {
     });
     expect(parsed.landmarks).toHaveLength(3);
     expect(PlaceLandmarksVM.safeParse({ code: "cdg", landmarks: [] }).success).toBe(false);
+  });
+
+  it("a credit whose page or licence is not an https address takes its landmark out, never the list", () => {
+    // The app opens the credit's link (Linking.openURL): only an https address may reach it.
+    const good = toPlaceLandmarksVM("CDG", rows, new Set()).landmarks[0]!;
+    const linked = (over: { pageUrl?: string; licenceUrl?: string }) => ({
+      ...good,
+      credit: { ...good.credit, ...over },
+    });
+    const parsed = PlaceLandmarksVM.parse({
+      code: "CDG",
+      landmarks: [
+        linked({ pageUrl: "http://commons.wikimedia.org/wiki/File:S1.jpg" }),
+        linked({ pageUrl: "javascript:alert(1)" }),
+        linked({ pageUrl: "commons.wikimedia.org/wiki/File:S1.jpg" }),
+        linked({ licenceUrl: "http://creativecommons.org/licenses/by-sa/4.0" }),
+        good,
+      ],
+    });
+    expect(parsed.landmarks).toEqual([good]);
   });
 
   it("the flag: off unless on; skip holds Wikidata items only", () => {

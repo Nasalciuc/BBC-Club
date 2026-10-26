@@ -350,9 +350,14 @@ again for a month (rank 1 and `city_qid` null: no city found for the airport); a
 worked yet (the job tries again in six hours).
 
 A wrong or unwanted landmark: add its Wikidata item (`landmark_qid`) to the flag's `skip` list — the route leaves it out
-within ~35 s; the server's city photo it may stand in for changes as fast, but phones that already show that photo keep
-it for up to twelve hours (Place photos, above) — then let the city be looked at again so that another takes its place. The seeded list holds Q177174,
-Reykjavík's most written-about sight (the Icelandic Phallological Museum):
+within ~35 s; an app that already showed the city drops it at its next question for it, never sooner than 12 hours after
+the app's last answer for that city: within a minute of them while a screen showing the city is on screen, else when one
+next is, or at the app's next cold start. The server's city photo it may stand in for changes as fast, but phones that
+already show that photo keep it for up to twelve hours (Place photos, above); a destination never shows the stand-in's
+photograph twice, whichever of the two a phone has refreshed first (it compares photographs, not landmarks: a look that
+gives the same landmark another file can show it in both for up to twelve hours). Then let the city be looked at again
+so that another takes its place. The seeded list holds Q177174, Reykjavík's most written-about sight (the Icelandic
+Phallological Museum):
 
 ```sql
 UPDATE platform.flags SET value = jsonb_set(value, '{skip}', coalesce(value->'skip', '[]') || '["Q243"]'), updated_at = now()

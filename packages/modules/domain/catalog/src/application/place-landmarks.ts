@@ -13,6 +13,7 @@ import {
   LANDMARK_QUESTION_TIMEOUT_MS,
   askLandmarkFiles,
   askLandmarks,
+  commonsPage,
   landmarkFiles,
   pickLandmarks,
   readLandmarks,
@@ -52,7 +53,7 @@ export function readLandmarksFlag(value: Record<string, unknown> | null): {
 }
 
 /** What the app reads: the landmarks best first, without those an operator keeps out — at once, before the job has
- *  looked again. */
+ *  looked again — each credit linked to its photograph's own page on Commons (ADR-IMPL-043's credit rule). */
 export function toPlaceLandmarksVM(
   code: string,
   rows: readonly PlaceLandmarkRow[],
@@ -68,7 +69,12 @@ export function toPlaceLandmarksVM(
         imageUrl: r.imageUrl,
         width: r.width,
         height: r.height,
-        credit: { text: r.credit, licence: r.licence, ...(r.licenceUrl ? { licenceUrl: r.licenceUrl } : {}) },
+        credit: {
+          text: r.credit,
+          licence: r.licence,
+          ...(r.licenceUrl ? { licenceUrl: r.licenceUrl } : {}),
+          pageUrl: commonsPage(r.file),
+        },
       })),
   };
 }
