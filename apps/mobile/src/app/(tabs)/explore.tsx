@@ -2,7 +2,7 @@ import { type Href, useIsFocused, useLocalSearchParams, useRouter } from "expo-r
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, type LayoutChangeEvent, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AirportVM, BookablePlaceVM, FareVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, BookablePlaceVM, FareVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import {
   BackButton,
@@ -24,6 +24,7 @@ import { HOME_AIRPORT_MESSAGE } from "@/features/explore/discovery-logic";
 import { globeCentreY, sheetSnaps, sheetTop } from "@/features/explore/explore-layout";
 import { firstName } from "@/features/explore/greeting";
 import { GreetingHeader } from "@/features/explore/GreetingHeader";
+import { dealDestination } from "@/features/explore/offer-card-logic";
 import { createTapGuard, fareHref, openOffer } from "@/features/explore/open-offer";
 import { rememberDates, rememberSearch } from "@/features/explore/recent-searches";
 import {
@@ -219,6 +220,12 @@ export default function ExploreScreen() {
     openOffer(router, card, tapGuard);
   }
 
+  // A site deal (ADR-IMPL-067) has no page of its own: it chooses its destination as a pin does — the route's sheet
+  // (13), its search from the member's airport.
+  function onOpenDeal(deal: SiteDealVM) {
+    selectDestination(dealDestination(deal));
+  }
+
   function retrySearch() {
     void (async () => {
       const stillOffline = await refresh();
@@ -403,6 +410,7 @@ export default function ExploreScreen() {
             home={home}
             homeLoading={homeLoading}
             onOpenOffer={onOpenOffer}
+            onOpenDeal={onOpenDeal}
             onSearch={() => router.push("/search" as Href)}
           />
         ) : (
@@ -432,6 +440,7 @@ export default function ExploreScreen() {
               home={home}
               homeLoading={homeLoading}
               onOpenOffer={onOpenOffer}
+              onOpenDeal={onOpenDeal}
               onSeeAll={() => {
                 setTapAnswer(null);
                 setSheetIndex(STOP.all);

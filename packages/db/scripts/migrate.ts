@@ -742,6 +742,25 @@ try {
     }
   }
 
+  // After 0028 (catalog.site_routes): the day a site deal is shown for. ADR-IMPL-067. One transaction: the table holds
+  // about 1,500 rows, so the backfill, NOT NULL and the CHECK's scan take milliseconds under the lock.
+  const siteRouteValidity = join(migrationsDir, "0042_catalog_site_route_validity.sql");
+  if (existsSync(siteRouteValidity)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0042_catalog_site_route_validity.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(siteRouteValidity, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0042_catalog_site_route_validity.sql')`,
+        );
+      });
+      console.log("catalog site route validity applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);

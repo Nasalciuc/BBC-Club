@@ -1,7 +1,7 @@
 import type { ProposalCardVM, ProposalDetailVM, ResponseState } from "@bbc/shared/api/v1/proposals";
-import type { DestinationPinVM } from "@bbc/shared/api/v1/fares";
+import type { DestinationPinVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import type { OfferRow } from "@bbc/proposals";
-import type { BookablePlace, DestinationPin } from "@bbc/catalog";
+import type { BookablePlace, DestinationPin, SiteDeal } from "@bbc/catalog";
 export { toProfileVM } from "@bbc/members";
 
 function resolveState(raw: "interested" | "dismissed" | null | undefined): ResponseState {
@@ -69,6 +69,17 @@ export function toDestinationPin(row: DestinationPin, hasOffer: boolean): Destin
     ...(row.priceSource ? { priceSource: row.priceSource } : {}),
     hasOffer,
     region: row.region,
+  };
+}
+
+/** ADR-IMPL-067: a site deal as Home sends it — without the airports the BFF dedupes by. */
+export function toSiteDealVM(deal: SiteDeal): SiteDealVM {
+  return {
+    id: deal.id,
+    destination: deal.destination,
+    origin: deal.origin,
+    price: deal.price,
+    validUntil: deal.validUntil,
   };
 }
 

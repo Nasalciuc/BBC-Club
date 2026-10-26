@@ -2,13 +2,13 @@
  * The refresh-site-prices job (ADR-IMPL-063): keeps the company's site's answers stored for the routes Home's site pins
  * show, so a pin — which never calls the site — shows the site's price, and a quote from it records the same number.
  *
- * Which routes, simply and bounded: for every airport the site lists a price from (`catalog.site_routes`, a nightly
- * snapshot, ADR-IMPL-045), the first `PIN_CANDIDATES` of its cities in the order the pins read them — exactly the
- * candidates a member whose home it is can be shown — round trip, the only trip an estimate shows. Of those, the routes
- * with no stored answer first (in that order), then the ones answered 18 or more hours ago, oldest first; at most
- * `REFRESH_BUDGET` a run, one starting every `REFRESH_GAP_MS` (about two a second). Routes the club never prices (one
- * airport, one metro, no end in North America) are never asked. Routes searched outside the pins are not refreshed:
- * their answer expires and the next search asks again.
+ * Which routes, simply and bounded: for every airport the site lists a price from (`catalog.site_routes`, a snapshot
+ * written twice a day, ADR-IMPL-045, ADR-IMPL-067), the first `PIN_CANDIDATES` of its cities in the order the pins read
+ * them — exactly the candidates a member whose home it is can be shown — round trip, the only trip an estimate shows.
+ * Of those, the routes with no stored answer first (in that order), then the ones answered 18 or more hours ago, oldest
+ * first; at most `REFRESH_BUDGET` a run, one starting every `REFRESH_GAP_MS` (about two a second). Routes the club
+ * never prices (one airport, one metro, no end in North America) are never asked. Routes searched outside the pins are
+ * not refreshed: their answer expires and the next search asks again.
  *
  * It respects the breaker (nothing asked while it is open; it stops when it opens) and stops at the site's first 429.
  * Its flags (`stillOn`: estimates, the site's prices, the site's pins) are read before each question: one turned off
