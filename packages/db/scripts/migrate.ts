@@ -701,6 +701,47 @@ try {
     }
   }
 
+  // After 0006 and 0031 (the catalog schema and catalog.fare_trip): what the company's site answered for a route.
+  // ADR-IMPL-063.
+  const sitePrices = join(migrationsDir, "0038_catalog_site_prices.sql");
+  if (existsSync(sitePrices)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0038_catalog_site_prices.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(sitePrices, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0038_catalog_site_prices.sql')`);
+      });
+      console.log("catalog site prices applied");
+    }
+  }
+
+  // After 0005 and 0025 (the requests schema and its estimate pair): who priced the estimate a quote carries.
+  // ADR-IMPL-063.
+  const shownEstimateSource = join(migrationsDir, "0040_requests_shown_estimate_source.sql");
+  if (existsSync(shownEstimateSource)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0040_requests_shown_estimate_source.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the column and the CHECK as NOT VALID, then the scan that validates it.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(shownEstimateSource, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE requests.requests VALIDATE CONSTRAINT requests_shown_estimate_source`);
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0040_requests_shown_estimate_source.sql')`,
+        );
+      });
+      console.log("requests shown estimate source applied");
+    }
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);

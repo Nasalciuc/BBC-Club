@@ -46,6 +46,10 @@ export const requests = requestsSchema.table(
      *  null on every other request. Added by the named steps 0024 and 0025, not by a drizzle migration. */
     shownEstimateAmount: integer("shown_estimate_amount"),
     shownEstimateCurrency: text("shown_estimate_currency"),
+    /** Who priced that estimate (ADR-IMPL-063): `site`, the company's site; `club`, the club's copy of the formula.
+     *  Null on a request without an estimate, and on one stored before the site priced any or while
+     *  `catalog.site_prices` is off — the formula. Added by the named step 0040, not by a drizzle migration. */
+    shownEstimateSource: text("shown_estimate_source"),
     tripType: tripType("trip_type").notNull(),
     cabin: requestCabin("cabin").notNull(),
     legs: jsonb("legs").$type<RequestLeg[]>().notNull(),
@@ -116,6 +120,11 @@ export const requests = requestsSchema.table(
       "requests_shown_estimate",
       // Each side says IS NOT NULL: a CHECK passes on NULL, so the second side alone let half a pair in (0024 → 0025).
       sql`(${t.shownEstimateAmount} IS NULL AND ${t.shownEstimateCurrency} IS NULL) OR (${t.shownEstimateAmount} IS NOT NULL AND ${t.shownEstimateCurrency} IS NOT NULL AND ${t.shownEstimateAmount} > 0 AND ${t.shownEstimateCurrency} = 'USD')`,
+    ),
+    check(
+      "requests_shown_estimate_source",
+      // A source only beside an estimate, and only one of the two kinds (0040). True or false, never NULL (0025).
+      sql`${t.shownEstimateSource} IS NULL OR (${t.shownEstimateAmount} IS NOT NULL AND ${t.shownEstimateSource} IN ('site', 'club'))`,
     ),
     check(
       "requests_published_at_request",

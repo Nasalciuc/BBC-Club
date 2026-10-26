@@ -4,13 +4,13 @@ import { sql } from "drizzle-orm";
 import { isolatedDb } from "@bbc/db/testing/isolated-db";
 import { createPlatform } from "@bbc/platform";
 import type { Fetch } from "../../src/application/place-photo-sources";
-import { SITE_STORAGE, SiteError } from "../../src/application/site-cms";
+import { LEGACY_SITE_STORAGE, SITE_STORAGE, SiteError } from "../../src/application/site-cms";
 import { toEstimateVM } from "../../src/application/to-fare-vm";
 import { airportsRepo } from "../../src/infrastructure/airports.repo";
 import { SITE_PINS, catalogModule } from "../../src/module";
 import { storedPricingRules } from "../../src/pricing/rules";
 import { FIXTURE_RULES } from "../unit/pricing-rules.fixture";
-import { fakeSiteFetch, siteFixture, type FakeSite } from "../unit/site.fixture";
+import { fakeClock, fakeSiteFetch, siteFixture, type FakeSite } from "../unit/site.fixture";
 
 /** The module on a fresh database, the site answering from `site` (read again on every request: change it and run). */
 async function setup(name: string, site: FakeSite = siteFixture()) {
@@ -21,6 +21,7 @@ async function setup(name: string, site: FakeSite = siteFixture()) {
   const platform = createPlatform(iso.db, { level: "silent" });
   const out = await catalogModule({
     fetch: (url, init) => (tonight ?? fakeSiteFetch(site, calls))(url, init),
+    siteClock: fakeClock(),
   }).init({
     db: iso.db,
     platform,
@@ -93,6 +94,8 @@ async function setup(name: string, site: FakeSite = siteFixture()) {
 }
 
 const siteUrl = (path: string) => SITE_STORAGE + path;
+/** Where the site served its photos before (ADR-IMPL-062): rows a night wrote then. */
+const legacyUrl = (path: string) => LEGACY_SITE_STORAGE + path;
 
 describe("site destinations — the nightly job", () => {
   it("with its photos and its pins off, it asks the site nothing and hands the site's photos back", async () => {
@@ -163,6 +166,49 @@ describe("site destinations — the nightly job", () => {
     expect(off.photosCleared).toBeGreaterThan(5);
     expect(await t.photo("LHR")).toMatchObject({ status: "pending", source: null });
     expect(await t.photo("LGW")).toMatchObject({ cardUrl: "https://photos.example.test/gatwick.jpg" });
+    await t.iso.drop();
+  });
+
+  it("a photo stored under the site's former address is the site's: the next night moves it or hands it back", async () => {
+    const t = await setup("site-legacy");
+    await t.operatorPhoto("LHR", legacyUrl("bestDeals/23/image/london01.jpg"));
+    await t.operatorPhoto("SEZ", legacyUrl("bestDeals/858/image/victoria-old.jpg"));
+    await t.operatorPhoto("CDG", legacyUrl("bestDeals/9999/image/paris.jpg")); // a city the site no longer lists
+    await t.operatorPhoto("LGW", "https://photos.example.test/gatwick.jpg");
+    await t.flags.set("catalog.site_photos", { enabled: true });
+
+    await t.run();
+    expect(await t.photo("LHR")).toEqual({
+      status: "photo",
+      source: "override",
+      cardUrl: siteUrl("bestDeals/23/image/london01.jpg"),
+      forever: true,
+    });
+    expect(await t.photo("SEZ")).toMatchObject({ cardUrl: siteUrl("bestDeals/858/image/victoria.jpg") });
+    expect(await t.photo("CDG")).toMatchObject({ status: "pending", source: null, cardUrl: null });
+    // An operator's own photo, at an address that is not the site's, stays as ever.
+    expect(await t.photo("LGW")).toMatchObject({ cardUrl: "https://photos.example.test/gatwick.jpg" });
+    await t.iso.drop();
+  });
+
+  it("a city skipped, or the photos off, hands back its photo under the former address too", async () => {
+    const t = await setup("site-legacy-off");
+    await t.operatorPhoto("LHR", legacyUrl("bestDeals/23/image/london01.jpg"));
+    await t.operatorPhoto("SEZ", legacyUrl("bestDeals/858/image/victoria.jpg"));
+
+    // A night the site does not answer: the skip acts first, by address — London's goes, Victoria's stays.
+    t.site.broken = [603];
+    await t.flags.set("catalog.site_photos", { enabled: true, skip: [23] });
+    await expect(t.run()).rejects.toThrow("HTTP 500");
+    expect(await t.photo("LHR")).toMatchObject({ status: "pending", source: null });
+    expect(await t.photo("SEZ")).toMatchObject({
+      status: "photo",
+      cardUrl: legacyUrl("bestDeals/858/image/victoria.jpg"),
+    });
+
+    await t.flags.set("catalog.site_photos", { enabled: false });
+    expect(await t.run()).toMatchObject({ read: 0, photosCleared: 1 });
+    expect(await t.photo("SEZ")).toMatchObject({ status: "pending", source: null });
     await t.iso.drop();
   });
 

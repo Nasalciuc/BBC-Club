@@ -10,7 +10,15 @@ import { withTx } from "@bbc/db";
 
 import { placePhotosRepo } from "../infrastructure/place-photos.repo";
 import { siteRepo } from "../infrastructure/site.repo";
-import { SITE_STORAGE, SiteError, imageCheck, inPool, readSite, type SiteDeps } from "./site-cms";
+import {
+  SITE_STORAGE,
+  SITE_STORAGE_PREFIXES,
+  SiteError,
+  imageCheck,
+  inPool,
+  readSite,
+  type SiteDeps,
+} from "./site-cms";
 import { planSite } from "./site-places";
 
 /** A night that finds, or places, fewer than this share of last night's cities changes nothing. */
@@ -65,10 +73,11 @@ export async function syncSite(
   // The photos' switch first, from what is stored: it must work on a night the site does not answer.
   let cleared = 0;
   if (!opts.photos) {
-    cleared = (await placePhotosRepo.clearSitePhotos(deps.db, SITE_STORAGE)).length;
+    cleared = (await placePhotosRepo.clearSitePhotos(deps.db, SITE_STORAGE_PREFIXES)).length;
   } else if (opts.photos.skip.size > 0) {
     // A skipped city's own photos, by their address: an airport it shares keeps another city's.
-    cleared = (await placePhotosRepo.clearSitePhotos(deps.db, SITE_STORAGE, { of: [...opts.photos.skip] })).length;
+    cleared = (await placePhotosRepo.clearSitePhotos(deps.db, SITE_STORAGE_PREFIXES, { of: [...opts.photos.skip] }))
+      .length;
   }
   if (!opts.read) return { ...EMPTY, photosCleared: cleared };
 
@@ -134,17 +143,20 @@ export async function syncSite(
   const written = await withTx(deps.db, async (tx) => {
     await siteRepo.replace(tx, { places, routes: plan.routes }, read.failed);
     if (!opts.photos) {
-      return { set: 0, cleared: (await placePhotosRepo.clearSitePhotos(tx, SITE_STORAGE)).length };
+      return { set: 0, cleared: (await placePhotosRepo.clearSitePhotos(tx, SITE_STORAGE_PREFIXES)).length };
     }
-    // One photo per airport: the first city, by the site's id, that names it.
+    // One photo per airport: the first city, by the site's id, that names it — at the site's address today; a row
+    // stored under its former address is the site's too, and moves to today's (ADR-IMPL-062).
     const wanted = new Map<string, string>();
     for (const city of await siteRepo.withImage(tx)) {
       if (opts.photos.skip.has(city.cmsId)) continue;
       for (const code of city.airports) if (!wanted.has(code)) wanted.set(code, SITE_STORAGE + city.image);
     }
     let set = 0;
-    for (const [code, url] of wanted) if (await placePhotosRepo.setSitePhoto(tx, code, url, SITE_STORAGE)) set += 1;
-    const gone = await placePhotosRepo.clearSitePhotos(tx, SITE_STORAGE, { keep: [...wanted.keys()] });
+    for (const [code, url] of wanted) {
+      if (await placePhotosRepo.setSitePhoto(tx, code, url, SITE_STORAGE_PREFIXES)) set += 1;
+    }
+    const gone = await placePhotosRepo.clearSitePhotos(tx, SITE_STORAGE_PREFIXES, { keep: [...wanted.keys()] });
     return { set, cleared: gone.length };
   });
 

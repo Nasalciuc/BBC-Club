@@ -1,10 +1,11 @@
 /**
  * The company's price formula (ADR-IMPL-037): the base for the continent pair (trip, cabin), plus the value of every
  * letter of both IATA codes, plus the Hawaii supplement between HNL and the United States. Only routes that touch North
- * America have a price. A port of Nasalciuc/BBC-Marketing-Agent services/pricing_engine.py. The rules are a parameter —
- * their values are not in this repository; the parity test (tests/parity) pins this engine to the Python results.
+ * America have a price. A port of Nasalciuc/BBC-Marketing-Agent services/pricing_engine.py, with the continents the
+ * company's site prices by (continents.ts, ADR-IMPL-062). The rules are a parameter — their values are not in this
+ * repository; the parity test (tests/parity) pins this engine's results with the reference rules.
  */
-import { CONTINENT_OF, UNCONFIRMED_COUNTRIES } from "./continents";
+import { CONTINENT_OF, UNCONFIRMED_COUNTRIES, type Continent } from "./continents";
 import type { PricingRules, RuleCabin, RuleTrip } from "./rules";
 
 /** Coordinates are optional: without them the same-metro guard cannot apply, everything else does. */
@@ -21,16 +22,18 @@ function lettersValue(rules: PricingRules, code: string, cabin: RuleCabin): numb
   return sum;
 }
 
-/** The raw formula, any cabin, before the display rules. null wherever the formula has no price — never a guess. */
+/** The raw formula, any cabin, before the display rules. null wherever the formula has no price — never a guess.
+ *  `continents` is the site's table (continents.ts); the parity test passes the Python engine's, to check its results. */
 export function formulaPrice(
   rules: PricingRules,
   from: PricedAirport,
   to: PricedAirport,
   trip: RuleTrip,
   cabin: RuleCabin,
+  continents: Readonly<Record<string, Continent>> = CONTINENT_OF,
 ): number | null {
-  const a = CONTINENT_OF[from.countryCode.toUpperCase()];
-  const b = CONTINENT_OF[to.countryCode.toUpperCase()];
+  const a = continents[from.countryCode.toUpperCase()];
+  const b = continents[to.countryCode.toUpperCase()];
   if (!a || !b || from.code === to.code) return null;
   if (a !== "NA" && b !== "NA") return null;
   const pair = a === "NA" && b === "NA" ? "LOCAL" : `NA-${a === "NA" ? b : a}`;
@@ -64,7 +67,8 @@ export function distanceKm(a: { lat: number; lng: number }, b: { lat: number; ln
  * positive; first only when positive and above business — otherwise no estimate, and the member asks for a quote.
  * Premium economy never: the formula's values there can be negative, and the BBC site hides them too.
  * Never where it would mislead (7 Oct review): two airports of the same metro (the formula would price the "flight"
- * between them), or a country whose continent the site has not confirmed (UNCONFIRMED_COUNTRIES).
+ * between them), or a country whose continent the site has not confirmed (`unconfirmed`: UNCONFIRMED_COUNTRIES, empty
+ * since 2026-10-25; a test passes its own).
  */
 export function estimateFare(
   rules: PricingRules,
@@ -72,11 +76,9 @@ export function estimateFare(
   to: PricedAirport,
   cabin: "business" | "first",
   trip: RuleTrip = "round_trip",
+  unconfirmed: ReadonlySet<string> = UNCONFIRMED_COUNTRIES,
 ): Estimate | null {
-  if (
-    UNCONFIRMED_COUNTRIES.has(from.countryCode.toUpperCase()) ||
-    UNCONFIRMED_COUNTRIES.has(to.countryCode.toUpperCase())
-  ) {
+  if (unconfirmed.has(from.countryCode.toUpperCase()) || unconfirmed.has(to.countryCode.toUpperCase())) {
     return null;
   }
   if (

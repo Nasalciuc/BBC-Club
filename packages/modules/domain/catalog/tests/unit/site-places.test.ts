@@ -5,12 +5,19 @@ import { readFileSync } from "node:fs";
 
 import { REFERENCE_TSV, parseReference } from "../../../../../db/scripts/airports-reference";
 import {
+  API_GAP_MS,
+  LEGACY_SITE_STORAGE,
+  SITE_API,
   SITE_STORAGE,
+  SITE_STORAGE_PREFIXES,
   SiteError,
   dollars,
   imageCheck,
   inPool,
   readSite,
+  retryAfterMs,
+  sitePacer,
+  systemClock,
   toSiteCity,
   type SiteDeps,
 } from "../../src/application/site-cms";
@@ -23,7 +30,7 @@ import {
   type MappingAirport,
 } from "../../src/application/site-places";
 import { SITE_CITIES } from "./site-cities.fixture";
-import { fakeSiteFetch, siteFixture } from "./site.fixture";
+import { fakeClock, fakeSiteFetch, siteFixture } from "./site.fixture";
 
 const refAirport = (code: string, city: string, country: string, countryCode: string, popularity: number, terms = "") =>
   ({ code, city, country, countryCode, popularity, searchTerms: terms || null }) satisfies MappingAirport;
@@ -61,6 +68,7 @@ const deps = (calls: string[] = [], site = siteFixture()): SiteDeps => ({
   fetch: fakeSiteFetch(site, calls),
   userAgent: "BBCClub/test",
   signal: new AbortController().signal,
+  clock: fakeClock(),
 });
 
 describe("reading the site", () => {
@@ -158,6 +166,13 @@ describe("reading the site", () => {
     await expect(imageCheck({ ...down, signal: stopped.signal }, url)).rejects.toThrow("job timeout");
   });
 
+  it("the site's address: buybusinessclass.com; its photos' former address is still the site's", () => {
+    expect(SITE_API).toBe("https://buybusinessclass.com");
+    expect(SITE_STORAGE).toBe("https://buybusinessclass.com/storage/");
+    expect(LEGACY_SITE_STORAGE).toBe("https://weba.buybusinessclass.com/storage/");
+    expect(SITE_STORAGE_PREFIXES).toEqual([SITE_STORAGE, LEGACY_SITE_STORAGE]);
+  });
+
   it("a city's page: the first of its bloodline is the region, the last the city, the one before it the country", () => {
     const page = (bloodline: string[]) => ({
       type: "city" as const,
@@ -169,6 +184,134 @@ describe("reading the site", () => {
     expect(toSiteCity(23, page(["Europe", "United Kingdom", "London"]))).toMatchObject(london);
     expect(toSiteCity(23, page(["Europe", "British Isles", "United Kingdom", "London"]))).toMatchObject(london);
     expect(toSiteCity(23, page(["Europe", "London"]))).toBeNull();
+  });
+});
+
+describe("reading the site at its rate limit (ADR-IMPL-062)", () => {
+  type Start = { t: number; url: string };
+  /** The site as `fetch`, noting when each request starts by `clock`; `answer` may answer first. */
+  const timedSite = (
+    clock: ReturnType<typeof fakeClock>,
+    starts: Start[],
+    answer: (url: string) => Response | null = () => null,
+  ): SiteDeps => {
+    const site = fakeSiteFetch(siteFixture());
+    return {
+      fetch: async (url, init) => {
+        starts.push({ t: clock.now(), url });
+        return answer(url) ?? site(url, init);
+      },
+      userAgent: "BBCClub/test",
+      signal: new AbortController().signal,
+      clock,
+    };
+  };
+
+  it("the pacer: starts never closer than the gap, whichever worker asks; a hold keeps every worker back", async () => {
+    const clock = fakeClock();
+    const pacer = sitePacer(clock, 600);
+    const signal = new AbortController().signal;
+    const starts: number[] = [];
+    await Promise.all(
+      [1, 2, 3, 4, 5].map(async () => {
+        await pacer.wait(signal);
+        starts.push(clock.now());
+      }),
+    );
+    expect(starts).toEqual([0, 600, 1200, 1800, 2400]);
+    pacer.hold(30_000);
+    await Promise.all([pacer.wait(signal), pacer.wait(signal)]);
+    expect(clock.now()).toBe(2400 + 30_000 + 600);
+
+    const stopped = new AbortController();
+    stopped.abort(new Error("job timeout"));
+    await expect(pacer.wait(stopped.signal)).rejects.toThrow("job timeout");
+  });
+
+  it("the system clock's sleep ends early, with the signal's reason, when the job is stopped", async () => {
+    const stop = new AbortController();
+    const started = Date.now();
+    const sleeping = systemClock.sleep(10_000, stop.signal);
+    stop.abort(new Error("job timeout"));
+    await expect(sleeping).rejects.toThrow("job timeout");
+    await expect(systemClock.sleep(10_000, stop.signal)).rejects.toThrow("job timeout");
+    expect(Date.now() - started).toBeLessThan(1_000);
+    await systemClock.sleep(5, new AbortController().signal);
+  });
+
+  it("starts one API request every API_GAP_MS (1.2 s) across the pool of four, in order, at the site's address", async () => {
+    const clock = fakeClock();
+    const starts: Start[] = [];
+    const read = await readSite(timedSite(clock, starts));
+    expect(read.cities).toHaveLength(7);
+    // 1 list + 1 home page + 3 regions + 5 countries + 7 cities, each API_GAP_MS after the one before.
+    expect(starts.map((s) => s.t)).toEqual(Array.from({ length: 17 }, (_, i) => i * API_GAP_MS));
+    expect(starts.every((s) => s.url.startsWith(`${SITE_API}/api/bestDeals/`))).toBe(true);
+  });
+
+  it("photo checks are not paced: they keep their own four at a time", async () => {
+    const clock = fakeClock();
+    const starts: Start[] = [];
+    const d = timedSite(clock, starts);
+    await Promise.all([1, 2, 3].map(() => imageCheck(d, `${SITE_STORAGE}bestDeals/23/image/london01.jpg`)));
+    expect(starts.map((s) => s.t)).toEqual([0, 0, 0]);
+  });
+
+  it("a 429 holds every worker for what Retry-After asks, then that page is asked once more", async () => {
+    const clock = fakeClock();
+    const starts: Start[] = [];
+    let refused = 0;
+    const read = await readSite(
+      timedSite(clock, starts, (url) =>
+        url.endsWith("getOne?id=858") && refused++ === 0
+          ? new Response("slow down", { status: 429, headers: { "retry-after": "30" } })
+          : null,
+      ),
+    );
+    expect(read.failed).toEqual([]);
+    expect(read.cities).toHaveLength(7);
+    expect(starts).toHaveLength(18);
+    const first = starts.findIndex((s) => s.url.endsWith("getOne?id=858"));
+    const again = starts.findLastIndex((s) => s.url.endsWith("getOne?id=858"));
+    expect(again).toBeGreaterThan(first);
+    // Nothing starts while the site asks to wait: the next request, whichever, comes 30 s later or more.
+    expect(starts[first + 1]!.t - starts[first]!.t).toBeGreaterThanOrEqual(30_000);
+    expect(starts[again]!.t - starts[first]!.t).toBeGreaterThanOrEqual(30_000);
+    for (let i = 1; i < starts.length; i++) expect(starts[i]!.t - starts[i - 1]!.t).toBeGreaterThanOrEqual(API_GAP_MS);
+  });
+
+  it("a second 429 on one page ends the read with a SiteError naming the page — a region's or a city's", async () => {
+    for (const page of ["getOne?id=858", "getOne?id=603", "getAllDeals"]) {
+      const clock = fakeClock();
+      const starts: Start[] = [];
+      const err = await readSite(
+        timedSite(clock, starts, (url) => (url.endsWith(page) ? new Response("no", { status: 429 }) : null)),
+      ).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(SiteError);
+      expect(err).toMatchObject({ page, status: 429 });
+      const asked = starts.filter((s) => s.url.endsWith(page));
+      expect(asked).toHaveLength(2);
+      // No Retry-After: a minute.
+      expect(asked[1]!.t - asked[0]!.t).toBeGreaterThanOrEqual(60_000);
+      // The workers still waiting their turn stop with the read: nothing more is asked once it has failed.
+      const after = starts.length;
+      for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+      expect(starts.length).toBe(after);
+    }
+  });
+
+  it("Retry-After: seconds or an HTTP date; a minute without a readable one; never more than two", () => {
+    const now = Date.parse("2026-10-25T12:00:00Z");
+    expect(retryAfterMs("30", now)).toBe(30_000);
+    expect(retryAfterMs(" 0 ", now)).toBe(0);
+    expect(retryAfterMs(null, now)).toBe(60_000);
+    expect(retryAfterMs("", now)).toBe(60_000);
+    expect(retryAfterMs("soon", now)).toBe(60_000);
+    expect(retryAfterMs("1.5", now)).toBe(60_000);
+    expect(retryAfterMs("600", now)).toBe(120_000);
+    expect(retryAfterMs("Sun, 25 Oct 2026 12:00:45 GMT", now)).toBe(45_000);
+    expect(retryAfterMs("Sun, 25 Oct 2026 11:00:00 GMT", now)).toBe(0);
+    expect(retryAfterMs("Mon, 26 Oct 2026 12:00:00 GMT", now)).toBe(120_000);
   });
 });
 

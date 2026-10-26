@@ -5,7 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import { z } from "zod";
 
-import { AirportVM, EstimateVM, SearchResultVM } from "@bbc/shared/api/v1/fares";
+import { AirportVM, DestinationPinVM, EstimateVM, SearchResultVM } from "@bbc/shared/api/v1/fares";
 
 // Today's shapes, frozen as the 0.1.0 and 0.2.0 apps carry them.
 const AirportVM0 = z.object({
@@ -62,6 +62,35 @@ describe("search contract — both upgrade orders", () => {
       expect(parsed.estimate).toBeNull();
       expect(parsed.items).toEqual([]);
     }
+  });
+
+  // ADR-IMPL-063, Option A: who priced it rides beside the formula's literals, so an app built before it shows the same
+  // number under the same words; a value the app does not know reads as none.
+  it("an app built before the site's prices parses an estimate that says its source, and keeps the number", () => {
+    const EstimateVM0 = z.object({
+      amount: z.number().positive(),
+      currency: z.literal("USD"),
+      trip: z.literal("round_trip"),
+      cabin: z.enum(["business", "first"]),
+      basis: z.literal("formula"),
+    });
+    const SearchResultVM1 = SearchResultVM0.extend({ estimate: EstimateVM0.nullable().optional().catch(null) });
+    const site = { ...estimate, amount: 2222, source: "site", asOf: "2026-10-25T08:00:00.000Z" } as const;
+    const parsed = SearchResultVM1.parse({ from: jfk, to: zrh, items: [], offer: null, estimate: site });
+    expect(parsed.estimate).toEqual({ ...estimate, amount: 2222 });
+
+    expect(EstimateVM.parse(site)).toEqual(site);
+    expect(EstimateVM.parse({ ...estimate, source: "club" })).toEqual({ ...estimate, source: "club" });
+    expect(EstimateVM.parse({ ...estimate, source: "weba", asOf: "yesterday" })).toEqual(estimate);
+    expect(() => EstimateVM.parse({ ...site, basis: "site" })).toThrow(); // Option B is not this contract
+  });
+
+  it("a pin says who priced it when it can; a value an app does not know reads as none, the pin still lists", () => {
+    const pin = { ...jfk, code: "ZRH", fromPrice: 2222, hasOffer: false, region: "europe" };
+    expect(DestinationPinVM.parse({ ...pin, priceSource: "site" }).priceSource).toBe("site");
+    expect(DestinationPinVM.parse(pin).priceSource).toBeUndefined(); // a fare's pin, or the site's prices off
+    expect(DestinationPinVM.parse({ ...pin, priceSource: "weba" })).toMatchObject({ fromPrice: 2222 });
+    expect(DestinationPinVM.parse({ ...pin, priceSource: "weba" }).priceSource).toBeUndefined();
   });
 
   it("a time zone the app cannot format in never breaks an airport — it becomes undefined", () => {

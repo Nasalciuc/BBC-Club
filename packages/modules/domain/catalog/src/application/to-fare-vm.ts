@@ -78,6 +78,7 @@ export function toDestinationPin(
     lng: number;
     fromPrice: number;
     description?: string | null;
+    priceSource?: "site" | "club";
   },
   hasOffer: boolean,
 ): DestinationPinVM {
@@ -90,6 +91,7 @@ export function toDestinationPin(
     lng: row.lng,
     description: row.description ?? null,
     fromPrice: row.fromPrice,
+    ...(row.priceSource ? { priceSource: row.priceSource } : {}),
     hasOffer,
     region: row.region,
   };
@@ -129,7 +131,35 @@ export function toEstimateVM(
   to: AirportRow,
   cabin: "business" | "first",
 ): EstimateVM | null {
-  const at = (a: AirportRow) => ({ code: a.code, countryCode: a.countryCode, lat: Number(a.lat), lng: Number(a.lng) });
-  const estimate = estimateFare(rules, at(from), at(to), cabin);
+  const estimate = estimateFare(rules, pricedAirport(from), pricedAirport(to), cabin);
   return estimate ? { ...estimate, trip: "round_trip", cabin, basis: "formula" } : null;
+}
+
+/** An airport as the formula and the site's guards read it. */
+export const pricedAirport = (a: AirportRow) => ({
+  code: a.code.trim(),
+  countryCode: a.countryCode,
+  lat: Number(a.lat),
+  lng: Number(a.lng),
+});
+
+/**
+ * An indicative round-trip price whose source is said (ADR-IMPL-063): the company's site, with the moment it answered,
+ * or the club's copy of the formula. `basis` stays `formula` — both are the company's formula, and shipped apps accept
+ * no other value.
+ */
+export function sourcedEstimateVM(
+  amount: number,
+  cabin: "business" | "first",
+  source: { kind: "site"; asOf: Date } | { kind: "club" },
+): EstimateVM {
+  return {
+    amount,
+    currency: "USD",
+    trip: "round_trip",
+    cabin,
+    basis: "formula",
+    source: source.kind,
+    ...(source.kind === "site" ? { asOf: source.asOf.toISOString() } : {}),
+  };
 }

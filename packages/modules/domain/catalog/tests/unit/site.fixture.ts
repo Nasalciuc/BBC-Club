@@ -1,6 +1,7 @@
 /** A small copy of the company's site (ADR-IMPL-045), answered the way its API answers: regions → countries → cities,
  *  a city's page with its photo, its prices from US cities, region › country › city. Made-up prices. */
 import type { Fetch } from "../../src/application/place-photo-sources";
+import { SITE_API, type SiteClock } from "../../src/application/site-cms";
 
 type Deal = { id: number; name: string; price: number | string | null; old?: number | null };
 export type FakeCity = { id: number; name: string; image: string | null; deals: Deal[] };
@@ -128,7 +129,29 @@ export function siteFixture(): FakeSite {
   };
 }
 
-/** The site as a `fetch`: the API's pages, HEAD for photos. Counts every request in `calls`. */
+/**
+ * Time for the site's pacing that never really waits: `sleep` moves the clock on to the moment it was asked to wait for
+ * (never back), so a night of 600-ms gaps takes no time and each request's start can be read off `now()`. A sleeper
+ * wakes only after every answer already on its way is read (the site answers well inside the gap).
+ */
+export function fakeClock(start = 0): SiteClock & { slept: number[] } {
+  let t = start;
+  const slept: number[] = [];
+  return {
+    slept,
+    now: () => t,
+    sleep: async (ms, signal) => {
+      if (signal.aborted) throw signal.reason ?? new Error("aborted");
+      slept.push(ms);
+      const until = t + ms;
+      await new Promise((resolve) => setImmediate(resolve));
+      if (signal.aborted) throw signal.reason ?? new Error("aborted");
+      t = Math.max(t, until);
+    },
+  };
+}
+
+/** The site as a `fetch` at its address (SITE_API): the API's pages, HEAD for photos. Counts every request in `calls`. */
 export function fakeSiteFetch(site: FakeSite, calls: string[] = []): Fetch {
   const regions = new Map(site.regions.map((r) => [r.id, r]));
   const countries = new Map(site.regions.flatMap((r) => r.countries.map((c) => [c.id, { region: r, country: c }])));
@@ -140,7 +163,7 @@ export function fakeSiteFetch(site: FakeSite, calls: string[] = []): Fetch {
   return async (url: string, init?: RequestInit) => {
     calls.push(`${init?.method ?? "GET"} ${url}`);
     const u = new URL(url);
-    if (u.host !== "weba.buybusinessclass.com") return new Response("not here", { status: 404 });
+    if (u.origin !== SITE_API) return new Response("not here", { status: 404 });
     if ((init?.method ?? "GET") === "HEAD") {
       const path = u.pathname.replace(/^\/storage\//, "");
       const missing = site.missingImages?.includes(path);

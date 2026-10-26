@@ -12,7 +12,8 @@ import { catalogModule } from "@bbc/catalog/module";
 import { personalizationModule } from "@bbc/personalization/module";
 import { mobileBff } from "./presentation/mobile";
 
-/** The ordered inventory. Overrides let tests replace adapters (email → capturing, crm → mock, push → recording). */
+/** The ordered inventory. Overrides let tests replace adapters (email → capturing, crm → mock, push → recording) and
+ *  answer for the catalog's outside calls (catalog → `{ fetch, siteClock }`: the company's site, Wikimedia). */
 export function modules(overrides: Record<string, any> = {}): ModuleDescriptor<any, any>[] {
   return [
     emailModule(overrides.email),
@@ -24,7 +25,7 @@ export function modules(overrides: Record<string, any> = {}): ModuleDescriptor<a
     proposalsModule(),
     engagementModule(), // domain — implicit signals only after Branch 3
     requestsModule(), // domain — member requests → CRM
-    catalogModule(),
+    catalogModule(overrides.catalog),
     personalizationModule(),
     mobileBff(), // presentation
   ];

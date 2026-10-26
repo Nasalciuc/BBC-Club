@@ -10,16 +10,18 @@ production yet), and a city's photo comes from Wikimedia Commons (ADR-IMPL-043).
 already has (12 Oct 2026). What was read on 12 Oct: the site shows several prices for one route (London from New York
 $788 on London's page, $2,025 for the United Kingdom on the Europe page, and its search, the formula of ADR-IMPL-037,
 a third); some pages show another city's photo (Crete shows Santorini's, and seven countries share Spain's); "Victoria"
-is the Seychelles' capital; "Benglaru" is misspelled; Kyoto has no airport of its own.
+is the Seychelles' capital; "Benglaru" is misspelled; Kyoto has no airport of its own. (Amended by ADR-IMPL-062: since
+`weba.` stopped resolving, the same API answers at `buybusinessclass.com/api`, and the photos at its `/storage/`.)
 
 **Decision.**
 
 - **One job, once a night** — `sync-site-destinations` (worker, 07:40 UTC, singleton, 100 s): regions → countries →
   cities, then each city's page, at most four requests at a time, the club's User-Agent, 10 s a request; then a HEAD
-  request for each city's own photo. All or nothing: a region or a country that does not answer, fewer than 80 % of last
-  night's cities listed or placed on their airports, or more than 10 % (at least three) city pages unanswered — the run
-  fails and changes nothing. One city page that does not answer keeps last night's rows; a photo that cannot be asked
-  about (no answer, a 5xx) keeps last night's verdict.
+  request for each city's own photo. (Amended by ADR-IMPL-062: the API's requests start 1.2 s apart, under its rate
+  limit; a 429 waits and asks once more; the job's timeout is 600 s.) All or nothing: a region or a country that does
+  not answer, fewer than 80 % of last night's cities listed or placed on their airports, or more than 10 % (at least
+  three) city pages unanswered — the run fails and changes nothing. One city page that does not answer keeps last
+  night's rows; a photo that cannot be asked about (no answer, a 5xx) keeps last night's verdict.
 - **From names to airports** — a city is matched to the airports whose city, or one of whose search terms, is its name,
   inside the country the site puts it in (London, not London, Ontario; Victoria, the Seychelles' through SEZ's search
   term); our country names and the site's meet through the airports' `COUNTRY_ALIASES` (Turkiye). When the names cannot
@@ -59,7 +61,7 @@ on (`query-budget.test.ts`). The run's counts are in `platform.job_runs`; log li
 `scripts/site-destinations-report.ts` shows, with no database, what the site holds today and what the job would place —
 before a flag goes on. Tests: `tests/unit/site-places.test.ts` (reading the site, the names, the photos, the snapshot),
 `tests/contract/site-sync.test.ts` (the job, its photos, its failures, the pins), `apps/api/test/catalog.test.ts` (the
-home screen), the query budget.
+home screen), the query budget. (Amended by ADR-IMPL-062: the worker and the phones reach `buybusinessclass.com`.)
 
 **Deviations, reported (owner's decision).**
 

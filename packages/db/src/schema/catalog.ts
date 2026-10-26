@@ -247,3 +247,53 @@ export const siteRoutes = catalog.table(
     check("site_routes_published_price", sql`${t.publishedPrice} IS NULL OR ${t.publishedPrice} > 0`),
   ],
 );
+
+/** What the company's site said about a route (ADR-IMPL-063): its prices, or that it has none. */
+export const sitePriceStatus = catalog.enum("site_price_status", ["priced", "none"]);
+
+/**
+ * The company's site's own answer for a route and trip (ADR-IMPL-063): whole USD per person in each cabin, or `none` —
+ * the company has no price there (the site answered 404), so the member sees no number at all. Written by the search's
+ * one live call and by the refresh-site-prices job, never on an error; read by the search, Home's site pins and a quote
+ * request. A row is shown only until it expires, at most 24 hours after the site was asked (CHECK). Created by
+ * 0038_catalog_site_prices.sql (after 0006).
+ */
+export const sitePrices = catalog.table(
+  "site_prices",
+  {
+    routeFrom: char("route_from", { length: 3 }).notNull(),
+    routeTo: char("route_to", { length: 3 }).notNull(),
+    trip: fareTrip("trip").notNull(),
+    status: sitePriceStatus("status").notNull(),
+    /** The site's figures, whole USD per person; null on a `none` row. Premium economy is kept, never shown. */
+    business: integer("business"),
+    first: integer("first"),
+    premiumEconomy: integer("premium_economy"),
+    /** When the site answered. */
+    fetchedAt: tz("fetched_at").notNull().defaultNow(),
+    /** Not shown from this moment on: at most 24 hours after `fetched_at`. */
+    expiresAt: tz("expires_at").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.routeFrom, t.routeTo, t.trip] }),
+    // The job's questions: what is due for a refresh, and what has expired.
+    index("site_prices_due").on(t.expiresAt),
+    // The site prices JFK → JFK; the club never asks, and never stores it.
+    check("site_prices_route", sql`${t.routeFrom} <> ${t.routeTo}`),
+    // A priced row has its business figure; a `none` row has no figure at all.
+    check(
+      "site_prices_status",
+      sql`(${t.status} = 'priced' AND ${t.business} IS NOT NULL) OR (${t.status} = 'none' AND ${t.business} IS NULL AND ${t.first} IS NULL AND ${t.premiumEconomy} IS NULL)`,
+    ),
+    check(
+      "site_prices_amounts",
+      sql`(${t.business} IS NULL OR ${t.business} > 0) AND (${t.first} IS NULL OR ${t.first} > 0) AND (${t.premiumEconomy} IS NULL OR ${t.premiumEconomy} > 0)`,
+    ),
+    // D6: a price older than 24 hours is never shown.
+    check(
+      "site_prices_expiry",
+      sql`${t.expiresAt} > ${t.fetchedAt} AND ${t.expiresAt} <= ${t.fetchedAt} + interval '24 hours'`,
+    ),
+  ],
+);
