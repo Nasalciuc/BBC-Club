@@ -5,6 +5,8 @@ COPY package.json bun.lock turbo.json tsconfig.base.json bunfig.toml ./
 COPY apps/api/package.json apps/api/
 COPY apps/mobile/package.json apps/mobile/
 COPY packages ./packages
+# patchedDependencies (package.json): bun install applies them, and fails without the files.
+COPY patches ./patches
 RUN bun install --frozen-lockfile
 
 FROM oven/bun:1.3-alpine AS build

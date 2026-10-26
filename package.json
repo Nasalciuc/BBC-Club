@@ -59,5 +59,8 @@
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}": "prettier --write",
     "*.{ts,tsx}": "eslint --max-warnings 0 --no-warn-ignored"
+  },
+  "patchedDependencies": {
+    "@better-auth/core@1.6.31": "patches/@better-auth%2Fcore@1.6.31.patch"
   }
 }

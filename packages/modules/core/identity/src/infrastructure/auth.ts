@@ -7,7 +7,7 @@ import { authOrigins, type ServerEnv } from "@bbc/shared/env";
 import { event } from "@bbc/shared/events";
 import type { EmailSender } from "../ports/email";
 import type { EventPublisher } from "../ports/events";
-import type { Executor } from "@bbc/db";
+import { errorForLog, type Executor } from "@bbc/db";
 import { ac, roles } from "./access";
 import { claimOtpSend, releaseOtpClaim } from "./otp-cooldown";
 import { classifyOtpSendError, recordOtpSendFailure, type OtpSendFailure } from "./otp-send-outcome";
@@ -65,6 +65,15 @@ export function createAuth({ env, db, email, events, logger, metrics, notifyOps,
 
     // Mobile scheme + APP_ORIGIN + CORS_ORIGINS extras — same list as host CORS.
     trustedOrigins: authOrigins(env),
+
+    // Better Auth's own lines (a query that failed while it read a session or a member, a send that threw) go through
+    // the club's logger and errorForLog (AGENTS.md rule 6): its default logger prints the error itself, and a failed
+    // query's message holds its parameters. No `level`: one also prints the message of every refused request.
+    logger: { log: (level, message, ...args) => betterAuthLine(logger, level, message, args) },
+    // An error that is not Better Auth's own answer (a failed query) leaves the handler to the host's error contract,
+    // which logs it through errorForLog and answers the API's 500, instead of better-call printing it to the console.
+    // Better Auth's answers (400, 401, 429…) are unchanged: better-call still turns them into responses.
+    onAPIError: { throw: true },
 
     // A signed-in member changes the password through POST /v1/account/password only, limited per member (ADR-IMPL-047).
     // Better Auth's own routes that check it, which the app never calls, would let a session guess it: /change-password
@@ -242,4 +251,17 @@ export type Auth = ReturnType<typeof createAuth>;
 function mask(email: string) {
   const [u, d] = email.split("@");
   return `${(u ?? "").slice(0, 1)}***@${d ?? ""}`;
+}
+
+/** One of Better Auth's log calls as a club log line: the error through errorForLog, and the message only when it is
+ *  not a query's text (its router passes a failed query's message itself, parameters included). Some calls pass the
+ *  error as the message (`logger.error(e)`): it is found there too. */
+export function betterAuthLine(logger: Logger, level: string, message: unknown, args: unknown[]): void {
+  const err = [message, ...args].find((a) => a instanceof Error);
+  const first = String(message).split("\n")[0] ?? "";
+  const text = /Failed query|params:|@/.test(String(message)) ? "better-auth: failed query" : `better-auth: ${first}`;
+  const fields = err ? { err: errorForLog(err) } : {};
+  if (level === "error") logger.error(fields, text);
+  else if (level === "warn") logger.warn(fields, text);
+  else logger.info(fields, text);
 }
