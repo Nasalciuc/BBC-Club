@@ -26,7 +26,8 @@ describe("the photo picker's one door", () => {
   it("no file but photo-native.ts names the packages; it loads them only with import()", () => {
     const naming = sources(SRC)
       .filter((f) => PACKAGES.some((p) => readFileSync(f, "utf8").includes(`"${p}"`)))
-      .map((f) => relative(SRC, f));
+      // Paths compared with `/` so the guard holds on Windows too (relative() keeps the OS separator).
+      .map((f) => relative(SRC, f).replaceAll("\\", "/"));
     expect(naming).toEqual(["features/profile/photo-native.ts"]);
 
     const door = readFileSync(join(SRC, "features/profile/photo-native.ts"), "utf8");
