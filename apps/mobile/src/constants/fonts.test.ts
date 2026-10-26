@@ -18,7 +18,9 @@ const FontPlugin = z.tuple([
   z.object({ android: z.object({ fonts: z.array(z.string()) }).strict() }).strict(),
 ]);
 const AppJson = z.object({ expo: z.object({ plugins: z.array(z.unknown()) }) });
-const plugins = AppJson.parse(JSON.parse(readFileSync(join(APP, "app.json"), "utf8"))).expo.plugins;
+const appJson = AppJson.safeParse(JSON.parse(readFileSync(join(APP, "app.json"), "utf8")));
+if (!appJson.success) throw new Error(`app.json: ${appJson.error.message}`);
+const plugins = appJson.data.expo.plugins;
 const fontPlugins = plugins.filter((p) => p === "expo-font" || (Array.isArray(p) && p[0] === "expo-font"));
 
 /** `rn()`'s weights (packages/ui/src/rn-type.ts): the file of `Inter Tight` at each weight the tokens use. */
