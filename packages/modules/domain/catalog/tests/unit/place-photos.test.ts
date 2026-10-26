@@ -14,7 +14,6 @@ import {
   cityFactsByName,
   citySparql,
   commonsFileName,
-  commonsPage,
   commonsThumbAt,
   metadataText,
   parsePoint,
@@ -39,6 +38,7 @@ import {
   type Outcome,
   type Place,
 } from "../../src/application/place-photos";
+import { commonsPage } from "../../src/application/landmark-sources";
 import type { LandmarkStandIn } from "../../src/infrastructure/place-landmarks.repo";
 import { binding, commonsThumb, fakeSources, pexelsPhoto } from "./place-photos.fixture";
 // WDQS's own answers, 25 Oct 2026 (no person in them): the airports' question for RMO and KIV, and the search by a
@@ -540,6 +540,11 @@ describe("a landmark stands in for a city without a photograph (ADR-IMPL-064, am
     expect(landmarkAsPhoto("RMO", { ...tower, imageUrl: odd })).toMatchObject({ card: odd, hero: odd });
     // Something the app could not read: no stand-in.
     expect(landmarkAsPhoto("RMO", { ...tower, imageUrl: "http://upload.wikimedia.org/x.jpg" })).toBeNull();
+    // Its page is the one the landmarks route links the same photograph to (`pageUrl`): one helper, as MediaWiki
+    // writes the address — a capital first letter, an apostrophe encoded, brackets kept (a made-up name).
+    const orsay = landmarkAsPhoto("RMO", { ...tower, file: "gare d'Orsay (1).jpg" });
+    expect(orsay?.kind === "photo" ? orsay.credit?.link : null).toBe(commonsPage("gare d'Orsay (1).jpg"));
+    expect(commonsPage("gare d'Orsay (1).jpg")).toBe("https://commons.wikimedia.org/wiki/File:Gare_d%27Orsay_(1).jpg");
   });
 
   it("only where the city has its satellite view: any photo of its own stays first, nothing yet stays nothing", () => {

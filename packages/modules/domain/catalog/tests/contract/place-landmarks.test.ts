@@ -12,6 +12,7 @@ import type { Principal } from "@bbc/shared/authz/principal";
 import { PlaceLandmarksVM, PlacePhotosVM, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { DEFAULT_RETRY_AFTER_S, type Binding, type Fetch } from "../../src/application/place-photo-sources";
+import { commonsPage } from "../../src/application/landmark-sources";
 import {
   LANDMARK_PLACE_MAX_MS,
   LANDMARK_RUN_REQUESTS_MS,
@@ -149,6 +150,12 @@ describe("landmarks", () => {
     expect(cdgVm.code).toBe("CDG");
     expect(cdgVm.landmarks.map((l) => l.name)).toEqual(["Eiffel Tower", "Musée d'Orsay", "Palace of Versailles"]);
     expect(cdgVm.landmarks[0]).toMatchObject({ width: 1280, height: 853, credit: { licence: "CC BY-SA 4.0" } });
+    // Each credit links its photograph's own page: the one Commons gave for it, kept through the table (its file).
+    const pageOf = (url: string | undefined) => (url ? decodeURIComponent(new URL(url).pathname) : null);
+    const commonsPages = Object.values(paris.commons).map((info) =>
+      pageOf((info as { descriptionurl?: string }).descriptionurl),
+    );
+    for (const landmark of cdgVm.landmarks) expect(commonsPages).toContain(pageOf(landmark.credit.pageUrl));
     expect((await t.landmarks("RMO")).landmarks.map((l) => l.name)).toEqual([
       "National Museum of Fine Arts",
       "National Museum of History of Moldova",
@@ -530,7 +537,7 @@ describe("landmarks", () => {
         source: "wikimedia",
         author: String(r.credit).replace(/ · Wikimedia Commons$/, ""),
         license: r.licence,
-        link: `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(String(r.file).replace(/ /g, "_"))}`,
+        link: commonsPage(String(r.file)),
       },
     });
     expect(cdg[0]?.landmark_qid).toBe("Q243"); // the Eiffel Tower
@@ -540,6 +547,12 @@ describe("landmarks", () => {
     // RMO is not looked up yet: `none` though it has landmarks — phones ask again within a minute, and would keep a
     // stand-in for twelve hours past the city's own photo. LHR has no landmark: nothing yet, as before.
     expect(photos).toEqual([asPhoto("CDG", cdg[0]!), { code: "RMO", kind: "none" }, { code: "LHR", kind: "none" }]);
+    // The stand-in's page is the one Commons gave for its photograph, and the one the landmarks route links it to.
+    const page = (url: string | null | undefined) => (url ? decodeURIComponent(new URL(url).pathname) : null);
+    const standIn = photos[0]?.kind === "photo" ? photos[0].credit?.link : null;
+    const commonsInfo = paris.commons[String(cdg[0]?.file)] as { descriptionurl?: string } | undefined;
+    expect(page(standIn)).toBe(page(commonsInfo?.descriptionurl));
+    expect(standIn).toBe((await t.landmarks("CDG")).landmarks[0]?.credit.pageUrl);
     expect(photos[0]).toMatchObject({ credit: { license: "CC BY-SA 4.0" } });
     // Composed by the route, never written: the city photo rows are as they were, for the photo job to look again.
     expect(
