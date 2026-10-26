@@ -198,8 +198,10 @@ export const siteRepo = {
   },
 
   /** ADR-IMPL-068: the airports a tap on the globe may open — every city's main airport and every US airport the site
-   *  lists a price from — with their names and places, in one round trip (UNION drops an airport listed twice). */
-  async bookable(exec: Executor): Promise<BookablePlace[]> {
+   *  lists a price from — with their names and places, in one round trip (UNION drops an airport listed twice). A US
+   *  airport counts only while one of its routes is served `marginS` seconds from now (a read the site failed keeps a
+   *  route past its day). */
+  async bookable(exec: Executor, marginS = 0): Promise<BookablePlace[]> {
     const columns = {
       code: airports.code,
       name: airports.name,
@@ -212,7 +214,13 @@ export const siteRepo = {
       .select(columns)
       .from(sitePlaces)
       .innerJoin(airports, eq(airports.code, sitePlaces.airport))
-      .union(exec.select(columns).from(siteRoutes).innerJoin(airports, eq(airports.code, siteRoutes.routeFrom)));
+      .union(
+        exec
+          .select(columns)
+          .from(siteRoutes)
+          .innerJoin(airports, eq(airports.code, siteRoutes.routeFrom))
+          .where(served(marginS)),
+      );
     return rows.map((r) => ({
       code: r.code.trim(),
       name: r.name,

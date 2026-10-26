@@ -149,6 +149,30 @@ describe("bookable — what a tap on the globe may open", () => {
     await t.iso.drop();
   });
 
+  it("a US airport goes once its routes are past their day, and a minute early for the cached read", async () => {
+    const t = await setup("bookable-expired");
+    await t.flags.set("catalog.globe_tap", { enabled: true });
+    await t.run();
+    // A read the site failed keeps the routes it had: Los Angeles's is a minute past its day, Jacksonville's has
+    // thirty seconds left — less than the cached read is kept.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes SET synced_at = now() - interval '1441 minutes', valid_until = now() - interval '1 minute'
+      WHERE route_from = 'LAX'`);
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes
+      SET synced_at = now() - interval '1439 minutes 30 seconds', valid_until = now() + interval '30 seconds'
+      WHERE route_from = 'JAX'`);
+    const cached = codes(await t.facade.bookable(undefined, { home: t.fromJfk }));
+    expect(cached).not.toContain("LAX");
+    expect(cached).not.toContain("JAX");
+    expect(cached).toContain("ORD");
+    // A caller's transaction reads it uncached: Jacksonville still has its thirty seconds.
+    const direct = codes(await t.iso.db.transaction((tx) => t.facade.bookable(tx, { home: t.fromJfk })));
+    expect(direct).not.toContain("LAX");
+    expect(direct).toContain("JAX");
+    await t.iso.drop();
+  });
+
   it("the night's sync is seen at once: a city that leaves the site leaves the set", async () => {
     const t = await setup("bookable-sync");
     await t.flags.set("catalog.globe_tap", { enabled: true });

@@ -352,11 +352,12 @@ export const catalogModule = (
     /**
      * ADR-IMPL-068: the site's part of what a tap on the globe may open — the same for every member (home is taken out
      * per call), so one entry, cached like the site's pins: a minute, dropped when the sync or an import bumps the
-     * generation. `exec` (a caller's transaction) reads it uncached.
+     * generation, so its routes are asked to be served the time it is kept. `exec` (a caller's transaction) reads it
+     * uncached.
      */
     async function siteBookable(exec: Executor | undefined): Promise<BookablePlace[]> {
       if (exec) return siteRepo.bookable(exec);
-      const load = () => siteRepo.bookable(conn);
+      const load = () => siteRepo.bookable(conn, keptMargin(SITE_PINS_CACHE_S));
       const gen = await platform.cache.generation("catalog:dest:gen");
       if (gen == null) return bookableCache.get("ALL", load);
       return platform.cache.getOrLoad(`catalog:bookable:${gen}`, SITE_PINS_CACHE_S, load);
