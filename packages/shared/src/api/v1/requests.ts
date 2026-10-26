@@ -73,7 +73,8 @@ function tripIssues(
   const legs = b.legs;
   if (b.tripType === "round") {
     const [out, back] = legs;
-    if (legs.length !== 2 || !out || !back) issue(["legs"], "A round trip has two flights: there and back.", "round_trip");
+    if (legs.length !== 2 || !out || !back)
+      issue(["legs"], "A round trip has two flights: there and back.", "round_trip");
     else if (back.from !== out.to || back.to !== out.from) {
       issue(["legs", 1], "A round trip comes back the way it went.", "round_trip");
     }
