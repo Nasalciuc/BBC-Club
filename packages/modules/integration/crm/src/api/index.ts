@@ -42,6 +42,11 @@ export type CrmRequestPayload = {
   _actions?: { quoted: string; booked: string; closed: string };
 };
 
+/** What a failed CRM call throws (ADR-IMPL-065). `retryable` false: the CRM refused this request as it is (a 4xx other
+ *  than 408 and 429, a redirect, a request without its reference) — the same request sent again would be refused again.
+ *  Anything else, an error without the field included, is worth trying again. */
+export type CrmFailure = Error & { code: string; retryable: boolean };
+
 /** The only import surface of @bbc/crm. module.ts implements it; consumers import it. */
 export type CrmFacade = {
   findByEmail(emailNormalized: string, opts?: CrmCallOpts): Promise<CrmMatch | null>;

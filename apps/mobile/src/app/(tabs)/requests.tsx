@@ -36,6 +36,7 @@ import { askUnreadQuotes, noteUnreadQuotes } from "@/features/requests/unread-qu
 import { fetchRequests, submitRequest } from "@/lib/api";
 import { readFailureCopy, refreshFailedLine } from "@/lib/error-context";
 import { flushQueue, listQueued, subscribeQueue, type QueuedRequest } from "@/lib/queue";
+import { CAN_CALL } from "@/lib/support-phone";
 
 type Row = { id: string; status: string; card: RequestCardModel };
 
@@ -132,7 +133,7 @@ export default function RequestsScreen() {
   const empty = items !== null && rows.length === 0;
   const firstLoad = loading && items === null && queued.length === 0;
   const failedFirst = items === null && queued.length === 0 && failure !== null;
-  const attention = listAttention(rows);
+  const attention = listAttention(rows, CAN_CALL);
   const openRequest = (id: string) => router.push({ pathname: "/request/[id]", params: { id } } as Href);
 
   const title = (

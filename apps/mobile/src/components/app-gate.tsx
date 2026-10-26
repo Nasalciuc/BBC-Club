@@ -4,11 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AppState, Linking, Platform } from "react-native";
 
 import { SystemScreen } from "@/components/system-screen";
-import { telHref } from "@/features/requests/confirmation-logic";
 import { fetchAppConfig } from "@/lib/api";
 import { gateFor, gateRetryDelayMs, maintenanceBody, openFirst, shouldRecheck, type Gate } from "@/lib/app-gate-logic";
-import { env } from "@/lib/env";
 import { stateCopy } from "@/lib/error-context";
+import { clubCall } from "@/lib/support-phone";
 
 /**
  * Forced update / maintenance (Figma 240:5129 / 240:5163). Children (Stack) stay mounted while config loads — never
@@ -85,11 +84,6 @@ export function AppGate({ children }: { children: ReactNode }) {
     };
   }, [current]);
 
-  // A call needs the club's verified number (EXPO_PUBLIC_SUPPORT_PHONE, in digits); without one, no button.
-  const tel = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
-  const call = (testID: string) =>
-    tel ? { testID, onPress: () => void Linking.openURL(tel).catch(() => undefined) } : null;
-
   if (gate?.kind === "update") {
     // Figma 240:5129: no way past it but the update — from this platform's store listing when the server names one,
     // else its web page, else the website (F039).
@@ -108,7 +102,7 @@ export function AppGate({ children }: { children: ReactNode }) {
             testID: "appGate.update.cta",
             onPress: () => void openFirst(targets, (url) => Linking.openURL(url)),
           }}
-          call={call("appGate.update.call")}
+          call={clubCall("appGate.update.call", "Call a specialist")}
         />
       </>
     );
@@ -123,7 +117,7 @@ export function AppGate({ children }: { children: ReactNode }) {
           title={stateCopy("maintenance").title}
           body={maintenanceBody(gate.value)}
           primary={{ label: "Try again", testID: "appGate.maintenance.retry", onPress: () => askNow.current() }}
-          call={call("appGate.maintenance.call")}
+          call={clubCall("appGate.maintenance.call", "Call a specialist")}
         />
       </>
     );
