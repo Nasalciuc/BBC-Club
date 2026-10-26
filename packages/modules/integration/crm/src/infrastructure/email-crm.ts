@@ -21,9 +21,10 @@ function money(m: CrmMoney): string {
   }
 }
 
-/** `Indicative estimate shown: $2,055 round trip, business (formula)` — the wording approved with ADR-IMPL-037. */
+/** `Indicative estimate shown: $2,055 round trip, business (formula)` — the wording approved with ADR-IMPL-037 — or
+ *  `(company site)` when the company's site priced it (ADR-IMPL-063): the specialist knows which kind the member saw. */
 function estimateLine(e: NonNullable<Payload["shown_estimate"]>): string {
-  return `Indicative estimate shown: ${money(e)} round trip, ${e.cabin} (formula)`;
+  return `Indicative estimate shown: ${money(e)} round trip, ${e.cabin} (${e.source === "site" ? "company site" : "formula"})`;
 }
 
 /** `Fare <id> — British Airways — $4,200 (published $7,850, Sabre · 16 Sep)`: which fare, on which airline, at the price

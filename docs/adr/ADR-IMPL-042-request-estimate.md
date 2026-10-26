@@ -47,7 +47,10 @@ their children's ages), and every round-trip request read `JFK → JFK` (the sec
   them, it never reveals them, ADR-IMPL-037). Version stays 1: the fields are additive and optional.
 - **Sent** — `send-requests` passes `shown_estimate` (with the request's cabin) and, at last, `note` to the CRM; the
   e-mail adds one line under the travelers, only when there is an estimate:
-  `Indicative estimate shown: $2,055 round trip, business (formula)` (the approved wording). The note is the member's
+  `Indicative estimate shown: $2,055 round trip, business (formula)` (the approved wording). (Amended by ADR-IMPL-063:
+  the estimate may be the company's site's — read from what the search stored, never asked from the submit's
+  transaction; the request records who priced it, `shown_estimate_source` (`site` | `club`, 0040), the event carries
+  `shownEstimate.source`, and the line ends `(company site)` for the site's number, `(formula)` otherwise.) The note is the member's
   own text, now in the e-mail for the first time: it is quoted line by line (`> `) under `Note from the member:`,
   splitting at every break a mail client may honour (CR, LF, VT, FF, NEL, U+2028, U+2029), without the control and
   bidirectional characters that could hide text or move a `> `, and folded at 76 characters between whole characters

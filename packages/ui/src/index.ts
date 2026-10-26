@@ -67,7 +67,7 @@ export {
 } from "./cards/flight-facts";
 export { PopularCard } from "./cards/PopularCard";
 export { RecentRow } from "./cards/RecentRow";
-export { ProfileHero, profileBandHeight } from "./cards/ProfileHero";
+export { PROFILE_AVATAR, ProfileHero, profileBandHeight } from "./cards/ProfileHero";
 export { RequestCard } from "./cards/RequestCard";
 
 export { HOME_SHEET_HANDLE, HOME_SHEET_PILL, HomeSheet } from "./layout/HomeSheet";
@@ -88,7 +88,14 @@ export { TopBar } from "./layout/TopBar";
 export { GlobeFallback, type Pin } from "./globe/GlobeFallback";
 export { GlobePin, RouteEnd, pinFrame } from "./globe/GlobePin";
 export { RouteMap } from "./globe/RouteMap";
-export { GLOBE_SPEC, OPENING_VIEW, routeView, type RouteFrame } from "./globe/globe-logic";
+export {
+  GLOBE_SPEC,
+  OPENING_VIEW,
+  createPressGuard,
+  routeView,
+  type GlobeTap,
+  type RouteFrame,
+} from "./globe/globe-logic";
 export {
   MAX_LABEL_SCALE,
   labelScale,
@@ -113,6 +120,7 @@ export {
   type GlobeCamera,
   type LngLat,
 } from "./globe/globe-geo";
+export { drawnGlobeTap, mapboxPress, type TapChoice } from "./globe/globe-tap";
 
 export { EmptyState } from "./states/EmptyState";
 export { ErrorState, NoticeCard, StateMessage } from "./states/ErrorState";

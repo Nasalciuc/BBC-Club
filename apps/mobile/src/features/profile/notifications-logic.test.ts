@@ -19,7 +19,7 @@ function profile(offers: boolean): Profile {
   };
 }
 
-/** What PATCH /v1/profile answers with: the row, without `notifications`. */
+/** What an older server's PATCH /v1/profile answered with: the row, without `notifications`. */
 function rawRow(p: Profile): SavedProfile {
   const row: SavedProfile = { ...p };
   delete row.notifications;

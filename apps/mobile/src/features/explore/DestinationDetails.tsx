@@ -9,6 +9,7 @@ import type { SearchState } from "@/features/search/useSearch";
 import { countryName } from "@/lib/countries";
 import { formatPrice } from "@/lib/format";
 
+import { FLIGHT_OPTIONS } from "./destination-geometry";
 import { summaryIsMessage, summaryKind } from "./destination-summary-logic";
 import { localTime, msToNextMinute } from "./local-time";
 import { cabinLabel, datesChipLabel, flightOptionsTitle, noFareCopy, travelersLabel } from "./travel-preferences";
@@ -27,6 +28,12 @@ type Props = {
   look: "route" | "page";
   /** `explore` in Explore's sheet (13), `destination` on the destination's page (04). */
   testIDPrefix: "explore" | "destination";
+  /**
+   * ADR-IMPL-068: how far the city a tap on the globe snapped to is from where the finger fell (`Nearest: Rome · 180
+   * km`), under its country in the route's sheet (13) — no image draws it, so it takes the country's line and role.
+   * None: no line.
+   */
+  nearest?: string;
 };
 
 type Role = TextStyle & { fontSize: number; lineHeight: number };
@@ -38,6 +45,14 @@ const SUMMARY_GAP = 10;
 /** The margin that puts a line's baseline `pitch` under the one before it (or under the top of what holds it). */
 const after = (pitch: number, prev: Role | null, next: Role) =>
   pitch - (prev ? belowBaseline(prev) : 0) - baselineOffset(next);
+
+/** A look's flight options as the component draws them (`destination-geometry.ts` holds their measures). */
+const optionsOf = ({ title }: (typeof FLIGHT_OPTIONS)["route" | "page"]) => ({
+  role: r(title.type),
+  baseline: title.baseline,
+  left: title.left,
+  minGap: title.minGap,
+});
 
 type Geometry = {
   /** Where the component's own left edge stands on screen (Explore's sheet pads its content by the gutter). */
@@ -83,11 +98,10 @@ type Geometry = {
  * on 66.4; the chips from 79.3, 20.3 in, 7.15 apart; the rules 20.5 from either edge, at 122.8 and under the summary;
  * in the summary (from the first rule's top) the label on 23.3, the price on 49.6 with what it buys 1.65 higher, the
  * note on 67.7 — 20.8 in — and the clock's column 275.1 in on 23.3, 48.4 and 68.4 beside the rule at 259.35 (15.7 to
- * 70.1); the summary 86.5 tall; `Flight option` 20.4 in on 241, at least 26.5 under the second rule; the card from
- * 254.5, 16.2 from either edge.
+ * 70.1); the summary 86.5 tall; then `Flight option` and its card (`FLIGHT_OPTIONS.route`).
  */
 const ROUTE: Geometry = {
-  inset: tokens.space.gutter,
+  inset: FLIGHT_OPTIONS.route.inset,
   city: { role: r(tokens.type.routeCity), baseline: 45.2, left: 19.95 },
   sub: { role: r(tokens.type.routeCountry), baseline: 66.4, left: 20.8 },
   chips: { top: 79.3, afterLine: 12.9, left: 20.3, gap: 7.15, look: "route" },
@@ -112,8 +126,8 @@ const ROUTE: Geometry = {
     },
     rule: { left: 259.35, top: 15.7, bottom: 70.1 },
   },
-  options: { role: r(tokens.type.routeOptions), baseline: 241, left: 20.4, minGap: 26.5 },
-  cards: { top: 254.5, left: 16.2, right: 16.2, gap: 4.9 },
+  options: optionsOf(FLIGHT_OPTIONS.route),
+  cards: { ...FLIGHT_OPTIONS.route.cards },
 };
 
 /**
@@ -121,10 +135,10 @@ const ROUTE: Geometry = {
  * 85.5, 222 wide; the chips from 98.5, 22.1 in, 6.65 apart; the summary's card from 139.5, 11.2 and 11.8 from the edges,
  * 77.6 tall, radius 13 — in it (from its top) the label on 19.9, the price on 44.4 with what it buys on the same line,
  * the note on 63.7, 14.4 in, and the clock's column 303.1 in on 19.9, 38.4 and 50.4 beside the rule at 289.1 (14.1 to
- * 64); `Flight options` 17.9 in on 245.7; the cards from 255.2, as wide as the summary's, 4.9 apart.
+ * 64); then `Flight options` and their cards (`FLIGHT_OPTIONS.page`).
  */
 const PAGE: Geometry = {
-  inset: 0,
+  inset: FLIGHT_OPTIONS.page.inset,
   city: { role: r(tokens.type.placeCity), baseline: 49.2, left: 21.35 },
   sub: { role: r(tokens.type.placeAbout), baseline: 70.7, left: 22.8, width: 222 },
   chips: { top: 98.5, afterLine: 12.96, left: 22.1, gap: 6.65, look: "place" },
@@ -150,8 +164,8 @@ const PAGE: Geometry = {
     },
     rule: { left: 11.2 + 252, top: 14.1, bottom: 64 },
   },
-  options: { role: r(tokens.type.placeOptions), baseline: 245.7, left: 17.93, minGap: 26.5 },
-  cards: { top: 255.2, left: 11.2, right: 11.8, gap: 4.9 },
+  options: optionsOf(FLIGHT_OPTIONS.page),
+  cards: { ...FLIGHT_OPTIONS.page.cards },
 };
 
 /**
@@ -191,13 +205,18 @@ export function DestinationDetails({
   onOpenFare,
   look,
   testIDPrefix,
+  nearest,
 }: Props) {
   const g = look === "route" ? ROUTE : PAGE;
   const to = state.route?.to ?? state.to;
   const city = to?.city ?? "";
   const country = countryName(to?.countryCode);
   // 04 writes the destination's line from the catalogue under its name; 13 its country — and 04 too, without a line.
-  const line = look === "page" ? (to?.description ?? country) : country;
+  // 13 after a tap on the globe: the distance under the country, a second line of the same role.
+  const line =
+    look === "page"
+      ? (to?.description ?? country)
+      : [country, nearest].filter((l): l is string => Boolean(l)).join("\n");
   const fares = (state.status === "done" || state.status === "paused") && state.results ? state.results : [];
   const clock = useLocalTime(city, state.route?.to.tz);
   const x = (screen: number) => screen - g.inset;

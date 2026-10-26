@@ -81,10 +81,16 @@ export function createSendRequestsJob(deps: {
           cabin_class: row.cabin === "business" ? "Business Class" : "First Class",
           passengers: row.passengers,
           note: row.note,
-          // What the member saw before asking for a quote (ADR-IMPL-042). Round trip: the formula's only trip.
+          // What the member saw before asking for a quote (ADR-IMPL-042). Round trip: the formula's only trip. Who
+          // priced it when the request recorded it (ADR-IMPL-063): the company's site or the club's formula.
           shown_estimate:
             row.shown_estimate_amount !== null && row.shown_estimate_currency !== null
-              ? { amount: row.shown_estimate_amount, currency: row.shown_estimate_currency, cabin: row.cabin }
+              ? {
+                  amount: row.shown_estimate_amount,
+                  currency: row.shown_estimate_currency,
+                  cabin: row.cabin,
+                  ...(row.shown_estimate_source ? { source: row.shown_estimate_source } : {}),
+                }
               : null,
           phone_valid: row.phone_valid,
           intent: effectiveIntent({

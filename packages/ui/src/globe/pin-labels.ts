@@ -83,6 +83,41 @@ export function pinBox(x: number, y: number): Rect {
   return { left: x - PIN.w / 2, top: y - PIN.h, right: x + PIN.w / 2, bottom: y };
 }
 
+/** The pin and its label as one box: one target, as GlobePin draws them. */
+export function pinUnion(x: number, y: number, label: Rect | null): Rect {
+  const pin = pinBox(x, y);
+  return label
+    ? {
+        left: Math.min(pin.left, label.left),
+        top: Math.min(pin.top, label.top),
+        right: Math.max(pin.right, label.right),
+        bottom: Math.max(pin.bottom, label.bottom),
+      }
+    : pin;
+}
+
+/** Where a finger chooses the pin: its box and label grown evenly to at least 44 pt each way, as GlobePin's hit slop
+ *  grows them (DESIGN.md · Accessibility). */
+export function pinTarget(x: number, y: number, label: Rect | null): Rect {
+  const box = pinUnion(x, y, label);
+  const slopX = Math.max(0, (GLOBE_SPEC.pin.hit - (box.right - box.left)) / 2);
+  const slopY = Math.max(0, (GLOBE_SPEC.pin.hit - (box.bottom - box.top)) / 2);
+  return { left: box.left - slopX, top: box.top - slopY, right: box.right + slopX, bottom: box.bottom + slopY };
+}
+
+/**
+ * The pin a point falls on, or null (ADR-IMPL-068): a tap there is the pin's, never the globe's. Where targets overlap,
+ * the one drawn last — on top, the one the finger reaches.
+ */
+export function pinAt(x: number, y: number, placed: readonly Pick<PlacedPin, "code" | "x" | "y" | "label">[]) {
+  for (let i = placed.length - 1; i >= 0; i--) {
+    const p = placed[i]!;
+    const t = pinTarget(p.x, p.y, p.label?.box ?? null);
+    if (x >= t.left && x <= t.right && y >= t.top && y <= t.bottom) return p.code;
+  }
+  return null;
+}
+
 /** The label's box on one side, centred a little under the pin's head (02). */
 export function labelBox(x: number, y: number, lines: readonly string[], side: LabelSide, scale = 1): Rect {
   const { width, height } = labelSize(lines, scale);

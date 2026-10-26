@@ -7,6 +7,8 @@ import { createPlatform } from "@bbc/platform";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { PlacePhotosVM } from "@bbc/shared/api/v1/places";
 import type { AppEnv } from "@bbc/shared/http/app-env";
+import type { Fetch } from "../../src/application/place-photo-sources";
+import { PLACE_PHOTOS_REQUESTS_MS, resolvePlacePhotos } from "../../src/application/place-photos";
 import { placePhotosRepo } from "../../src/infrastructure/place-photos.repo";
 import { catalogModule } from "../../src/module";
 import { binding, commonsThumb, fakeSources } from "../unit/place-photos.fixture";
@@ -226,6 +228,69 @@ describe("place photos", () => {
     expect(await again.row("LHR")).toMatchObject({ status: "photo", source: "wikimedia", attempts: 1, hours: 1 });
     expect((await again.photos("LHR")).body?.items[0]).toMatchObject({ kind: "photo" });
     await down.iso.drop();
+  });
+
+  it("a 429 is not the city's fault: the cities wait out its Retry-After, uncounted, and no run asks before then", async () => {
+    const t = await setup("place-photos-429", { wikidata: 429, retryAfter: "1000" });
+    const waits = async () =>
+      (await t.iso.db.execute(sql`
+        SELECT code, round(extract(epoch FROM expires_at - now()))::int AS seconds
+        FROM catalog.place_photos ORDER BY code`)) as unknown as { code: string; seconds: number }[];
+    const holds = async () =>
+      (await t.iso.db.execute(sql`
+        SELECT source, round(extract(epoch FROM not_before - now()))::int AS seconds
+        FROM catalog.source_holds`)) as unknown as { source: string; seconds: number }[];
+
+    await t.photos("LHR,CDG");
+    expect(await t.run()).toEqual({ claimed: 2, photos: 0, satellites: 0, retries: 0, deferred: 2, held: 1 });
+    expect(await t.row("LHR")).toMatchObject({ status: "pending", attempts: 0 });
+    for (const w of await waits()) expect(Math.abs(w.seconds - 1000)).toBeLessThanOrEqual(5);
+    const [hold] = await holds();
+    expect(hold?.source).toBe("wikidata");
+    expect(Math.abs((hold?.seconds ?? 0) - 1000)).toBeLessThanOrEqual(5);
+
+    // Due again before the hold ends (an operator's UPDATE, say): claimed, nothing asked, back to waiting.
+    await t.due();
+    const asked = t.sources.calls.length;
+    expect(await t.run()).toEqual({ claimed: 2, photos: 0, satellites: 0, retries: 0, deferred: 2, held: 1 });
+    expect(t.sources.calls).toHaveLength(asked);
+    expect(await t.row("CDG")).toMatchObject({ status: "pending", attempts: 0 });
+    for (const w of await waits()) expect(w.seconds).toBeGreaterThan(900);
+
+    // The hold over, the next run asks.
+    await t.iso.db.execute(sql`UPDATE catalog.source_holds SET not_before = now() - interval '1 second'`);
+    const up = await setup("", { wikidata: [london, paris], commons: { "London at night.jpg": {} } }, t.iso);
+    await up.due();
+    expect(await up.run()).toEqual({ claimed: 2, photos: 1, satellites: 1, retries: 0, deferred: 0 });
+    await t.iso.drop();
+  });
+
+  it("a slow run stops asking at its budget: the cities left wait uncounted, never cut off by the job's timeout", async () => {
+    const t = await setup("place-photos-budget", { wikidata: [], cities: [] });
+    await t.photos("LHR,CDG,ZRH,NRT");
+    // Every answer takes twelve seconds (made up): the airports' question and two searches end at 36 s; a Pexels
+    // question would end past the run's 40 s.
+    const clock = { now: 0 };
+    const fetch: Fetch = async (url, init) => {
+      clock.now += 12_000;
+      return t.sources.fetch(url, init);
+    };
+    const platform = createPlatform(t.iso.db, { level: "silent" });
+    const counts = await resolvePlacePhotos({
+      db: t.iso.db,
+      sources: { fetch, userAgent: "BBCClub/1.0 (test)", signal: new AbortController().signal },
+      pexelsKey: "test".repeat(10), // a stand-in, not a key
+      metrics: platform.metrics,
+      logger: platform.logger,
+      now: () => clock.now,
+    });
+    expect(counts).toEqual({ claimed: 4, photos: 0, satellites: 0, retries: 0, deferred: 4 });
+    expect(t.sources.calls).toHaveLength(3); // no Pexels question
+    expect(clock.now).toBeLessThanOrEqual(PLACE_PHOTOS_REQUESTS_MS);
+    for (const code of ["LHR", "CDG", "ZRH", "NRT"]) {
+      expect(await t.row(code)).toMatchObject({ status: "pending", attempts: 0 });
+    }
+    await t.iso.drop();
   });
 
   it("a claimed city whose airport does not come back waits like a failed source", async () => {

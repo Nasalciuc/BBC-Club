@@ -24,6 +24,15 @@ export const ProfileVM = z.object({
    *  until they add one: the app shows their initials (ADR-IMPL-056). Optional both ways; a value this app cannot read
    *  reads as none, and the profile still parses. */
   avatarUrl: z.string().url().startsWith("https://").nullable().optional().catch(null),
+  /** The photo the member added themselves (ADR-IMPL-070): kept by the club, read only by them at GET
+   *  /v1/profile/photo, its tag the sha256 of its bytes (the route's ETag, and the app's cache key). Null — none; the
+   *  app shows avatarUrl's photo, else the initials. Optional both ways, like avatarUrl: an older app drops it, a value
+   *  this app cannot read reads as none. Never a URL: the bytes are only ever behind the member's own session. */
+  photo: z
+    .object({ etag: z.string().regex(/^[0-9a-f]{64}$/) })
+    .nullable()
+    .optional()
+    .catch(null),
   timezone: z.string(),
   phone: z.string().nullable(),
   /** Null only on the no-row pending stub. */
