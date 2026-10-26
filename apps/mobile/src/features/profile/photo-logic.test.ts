@@ -9,6 +9,7 @@ import {
   PHOTO_QUALITIES,
   base64ToBytes,
   encodeWithin,
+  insideDirectory,
   photoActions,
   photoFailureCopy,
   photoPickerAvailable,
@@ -191,5 +192,19 @@ describe("photoActions — removing needs no picker", () => {
   it("a build without it: no row until there is a photo, then the row with Remove alone", () => {
     expect(photoActions(false, false)).toEqual({ row: false, choose: false, remove: false });
     expect(photoActions(false, true)).toEqual({ row: true, choose: false, remove: true });
+  });
+});
+
+describe("insideDirectory — the picker's copy is deleted only from the app's cache", () => {
+  const cache = "file:///data/user/0/club.bbc.app/cache/";
+  it("a file in the cache, or under it, with or without the directory's last slash", () => {
+    expect(insideDirectory(`${cache}ImagePicker/1f2e.jpeg`, cache)).toBe(true);
+    expect(insideDirectory(`${cache}crop.jpeg`, cache.slice(0, -1))).toBe(true);
+  });
+  it("never the member's own photo, a sibling directory, the cache itself or a way out of it", () => {
+    expect(insideDirectory("content://media/external/images/media/42", cache)).toBe(false);
+    expect(insideDirectory("file:///data/user/0/club.bbc.app/cache2/crop.jpeg", cache)).toBe(false);
+    expect(insideDirectory(cache, cache)).toBe(false);
+    expect(insideDirectory(`${cache}../files/profile.webp`, cache)).toBe(false);
   });
 });

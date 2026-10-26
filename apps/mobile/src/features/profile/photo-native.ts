@@ -1,7 +1,14 @@
 import { requireOptionalNativeModule } from "expo";
 import { PHOTO_SIDE } from "@bbc/shared/media/webp";
 
-import { base64ToBytes, encodeWithin, photoPickerAvailable, photoToSend, squareCrop } from "./photo-logic";
+import {
+  base64ToBytes,
+  encodeWithin,
+  insideDirectory,
+  photoPickerAvailable,
+  photoToSend,
+  squareCrop,
+} from "./photo-logic";
 
 /**
  * The one door to the photo picker and the image manipulator (brief 3.4.2, ADR-IMPL-070, D4). Their JavaScript asks
@@ -44,6 +51,15 @@ export async function pickPhoto(): Promise<PickedPhoto> {
   }
 
   try {
+    return await prepare(uri);
+  } finally {
+    await removePicked(uri);
+  }
+}
+
+/** The picked photo, squared, resized and encoded as `pickPhoto` sends it. */
+async function prepare(uri: string): Promise<PickedPhoto> {
+  try {
     const { ImageManipulator, SaveFormat } = await import("expo-image-manipulator");
     // The picture as the manipulator reads it (turned upright): its own size, not the picker's, decides the square.
     const original = await ImageManipulator.manipulate(uri).renderAsync();
@@ -83,6 +99,21 @@ export async function pickPhoto(): Promise<PickedPhoto> {
 async function removeCopy(uri: string): Promise<void> {
   try {
     const { File } = await import("expo-file-system");
+    const copy = new File(uri);
+    if (copy.exists) copy.delete();
+  } catch {
+    // left to the system's cache
+  }
+}
+
+/**
+ * The picker's own copy of the photo (its crop, written to the app's cache) goes too, once the photo is prepared or
+ * has failed. Only a file inside the app's cache: a photo the picker hands back from anywhere else is the member's.
+ */
+async function removePicked(uri: string): Promise<void> {
+  try {
+    const { File, Paths } = await import("expo-file-system");
+    if (!insideDirectory(uri, Paths.cache.uri)) return;
     const copy = new File(uri);
     if (copy.exists) copy.delete();
   } catch {

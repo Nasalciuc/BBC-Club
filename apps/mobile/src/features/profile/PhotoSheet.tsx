@@ -44,17 +44,25 @@ export const PhotoSheet = forwardRef<ProfileSheetHandle, Props>(function PhotoSh
     },
   }));
 
+  // A write that throws (an answer `asResult` does not turn into a result) says the upload failed: `busy` is cleared in
+  // `finally`, so the sheet never stays shut with no way to close it.
   async function onChoose() {
     setBusy("choose");
     setMessage(null);
-    const picked = await pickPhoto();
-    if (picked.kind !== "photo") {
-      setBusy(null);
-      if (picked.kind === "failed") setMessage(photoFailureCopy(picked.stage));
+    let result: Awaited<ReturnType<typeof putProfilePhoto>>;
+    try {
+      const picked = await pickPhoto();
+      if (picked.kind !== "photo") {
+        if (picked.kind === "failed") setMessage(photoFailureCopy(picked.stage));
+        return;
+      }
+      result = await putProfilePhoto(picked.bytes);
+    } catch {
+      setMessage(photoFailureCopy("upload"));
       return;
+    } finally {
+      setBusy(null);
     }
-    const result = await putProfilePhoto(picked.bytes);
-    setBusy(null);
     if (!result.ok) {
       setMessage(photoFailureCopy("upload", result.message));
       return;
@@ -66,8 +74,15 @@ export const PhotoSheet = forwardRef<ProfileSheetHandle, Props>(function PhotoSh
   async function onRemove() {
     setBusy("remove");
     setMessage(null);
-    const result = await deleteProfilePhoto();
-    setBusy(null);
+    let result: Awaited<ReturnType<typeof deleteProfilePhoto>>;
+    try {
+      result = await deleteProfilePhoto();
+    } catch {
+      setMessage(photoFailureCopy("upload"));
+      return;
+    } finally {
+      setBusy(null);
+    }
     if (!result.ok) {
       setMessage(photoFailureCopy("upload", result.message));
       return;

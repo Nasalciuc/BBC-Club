@@ -103,6 +103,16 @@ export function base64ToBytes(text: string): Uint8Array<ArrayBuffer> {
   return out.subarray(0, at).slice();
 }
 
+/** Whether `uri` names a file inside the directory `dir` (both `file://` addresses), never one a `..` leads out of: the
+ *  picker's copy is deleted only when it is the app's own, in its cache — a photo the picker hands back from anywhere
+ *  else is the member's, and stays. */
+export function insideDirectory(uri: string, dir: string): boolean {
+  const base = dir.endsWith("/") ? dir : `${dir}/`;
+  if (!uri.startsWith(base)) return false;
+  const rest = uri.slice(base.length);
+  return rest.length > 0 && !rest.split("/").includes("..");
+}
+
 /** The portrait's source, as `Photo` takes it. */
 export type PortraitSource = { uri: string; headers?: Record<string, string> };
 

@@ -377,7 +377,8 @@ got), `bbc_place_landmarks_failed{stage}` (`wikidata`, `commons`: the source fai
 A member's own photo is in Postgres, `members.profile_photo`: one row per member, a 512 × 512 WebP of at most 100 KB
 without metadata, served only to that member by `GET /v1/profile/photo` (no public address, nothing in MinIO). It goes
 with the account (`member.deleted`, and the FK from the profile), so backups and the restore drill carry it like any
-other row. Only a build from 0.3.0 shows the `Photo` row; an older build that took an update over the air shows none.
+other row. Only a build from 0.3.0 can choose a photo. An older build that took an update over the air shows the `Photo`
+row only when the member already has a photo, and offers `Remove photo` alone.
 
 How many, and how much room they take:
 
