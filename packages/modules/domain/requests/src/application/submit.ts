@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { withTx, type Executor } from "@bbc/db";
+import type { ResolvedRateRule } from "@bbc/shared/module-contract";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 import { event } from "@bbc/shared/events";
 import { RequestBody, SubmittedRequestBody } from "@bbc/shared/api/v1/requests";
@@ -39,11 +40,13 @@ export async function submit(
   deps: {
     publish: Publish;
     rateLimit: {
+      /** The rule as it applies now — asked before the transaction opens (ADR-IMPL-071). */
+      rule: (name: "requests.submit" | "requests.submit.ip") => Promise<ResolvedRateRule>;
       /** `exec`: the submit's transaction — the quota is counted on its connection, under its idempotency lock. */
       check: (
-        rule: "requests.submit" | "requests.submit.ip",
+        rule: ResolvedRateRule,
         subject: string,
-        exec?: Executor,
+        exec: Executor,
       ) => Promise<{ allowed: boolean; retryAfterMs?: number }>;
     };
     /** The indicative price the search shows for a route (catalog, ADR-IMPL-042). Never throws: null when unknown. */
@@ -71,6 +74,12 @@ export async function submit(
   // A new request: on a day not yet over everywhere (SubmittedRequestBody).
   SubmittedRequestBody.parse(raw);
 
+  // The rules this request is counted by, as they stand now, read before the transaction opens: a rule's flag is read on
+  // a pooled connection, and read inside the transaction, on a cold cache, each submit held one connection while it
+  // waited for a second — with as many submits as connections, every one of them waited for ever (ADR-IMPL-071).
+  const ipRule = actor.ip ? await deps.rateLimit.rule("requests.submit.ip") : null;
+  const memberRule = actor.memberId ? await deps.rateLimit.rule("requests.submit") : null;
+
   try {
     return await withTx(exec, (tx) => write(tx));
   } catch (err) {
@@ -91,13 +100,13 @@ export async function submit(
     // Counted on this transaction's connection, so nothing here waits for a second one while holding the lock; a unit
     // is spent only if the request is written. `scope` says which limit refused: the address's (an office, a hotel,
     // a carrier's NAT — shared with others) or the member's own; the app words them differently.
-    if (actor.ip) {
-      const ip = await deps.rateLimit.check("requests.submit.ip", `ip:${actor.ip}`, tx);
+    if (actor.ip && ipRule) {
+      const ip = await deps.rateLimit.check(ipRule, `ip:${actor.ip}`, tx);
       if (!ip.allowed)
         throw new RolledBack({ ok: false, code: "RATE_LIMITED", scope: "ip", retryAfterMs: ip.retryAfterMs });
     }
-    if (actor.memberId) {
-      const member = await deps.rateLimit.check("requests.submit", `m:${actor.memberId}`, tx);
+    if (actor.memberId && memberRule) {
+      const member = await deps.rateLimit.check(memberRule, `m:${actor.memberId}`, tx);
       if (!member.allowed) {
         throw new RolledBack({ ok: false, code: "RATE_LIMITED", scope: "member", retryAfterMs: member.retryAfterMs });
       }

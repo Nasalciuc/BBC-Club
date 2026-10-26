@@ -54,6 +54,21 @@ export type ModuleDb = {
   transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 };
 
+/** A rate rule as it applies now, from `rateLimit.rule`: what `check` counts by without reading anything first. */
+export type ResolvedRateRule = {
+  readonly name: string;
+  readonly limit: number;
+  readonly periodMs: number;
+  readonly burst: number;
+};
+export type RateCheckResult = {
+  allowed: boolean;
+  remaining: number;
+  resetMs: number;
+  retryAfterMs?: number;
+  limit: number;
+};
+
 export type ModulePlatform = {
   logger: HandlerLogger;
   flags: {
@@ -75,12 +90,16 @@ export type ModulePlatform = {
   };
   jobs: { register: (name: string, spec: JobSpec) => void };
   rateLimit: {
-    /** `exec`: the caller's transaction, for a rule counted inside it (postgres store only). */
-    check(
-      rule: string,
-      subject: string,
-      exec?: unknown,
-    ): Promise<{ allowed: boolean; remaining: number; resetMs: number; retryAfterMs?: number; limit: number }>;
+    /** The rule as it applies now (its defaults, or the cached flag row `ratelimit.<rule>`), read on a pooled
+     *  connection. A caller that counts inside its own transaction resolves its rules with this before it opens the
+     *  transaction (ADR-IMPL-071). */
+    rule(name: string): Promise<ResolvedRateRule>;
+    /** By name: the rule is resolved first. */
+    check(rule: string, subject: string): Promise<RateCheckResult>;
+    /** `exec`: the caller's transaction, for a rule counted inside it (postgres store only) — with the rule `rule()`
+     *  resolved before that transaction opened: resolved inside it, the flag read would wait for a second pooled
+     *  connection while the transaction holds one. */
+    check(rule: ResolvedRateRule, subject: string, exec?: unknown): Promise<RateCheckResult>;
   };
   cache: {
     getOrLoad<T>(key: string, ttlS: number, load: () => Promise<T>): Promise<T>;
