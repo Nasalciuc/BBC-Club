@@ -103,7 +103,8 @@ export const sitePricesRepo = {
   /**
    * The routes Home's site pins are drawn from (ADR-IMPL-045): every airport the site lists a price from, to each of its
    * cities' main airports, in the order `siteRepo.pinsSelect` reads them (the site's home page first, then the busiest,
-   * then by code), with what the guards need of both airports. The caller keeps each home's first candidates.
+   * then by code), with what the guards need of both airports. The caller keeps each home's first candidates. Only the
+   * routes still served (ADR-IMPL-067), as the pins read them.
    */
   async pinRoutes(exec: Executor) {
     const home = alias(airports, "home");
@@ -117,6 +118,7 @@ export const sitePricesRepo = {
       .innerJoin(sitePlaces, eq(sitePlaces.cmsId, siteRoutes.cmsId))
       .innerJoin(dest, eq(dest.code, sitePlaces.airport))
       .innerJoin(home, eq(home.code, siteRoutes.routeFrom))
+      .where(gt(siteRoutes.validUntil, sql`now()`))
       .orderBy(asc(siteRoutes.routeFrom), desc(sitePlaces.promoted), desc(dest.popularity), asc(dest.code));
     const at = (a: { code: string; countryCode: string; lat: string; lng: string }) => ({
       code: a.code.trim(),

@@ -374,15 +374,17 @@ got), `bbc_place_landmarks_failed{stage}` (`wikidata`, `commons`: the source fai
 
 ## The site's destinations (ADR-IMPL-045)
 
-Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own API
+Twice a day (07:40 and 19:40 UTC; twice since ADR-IMPL-067) `sync-site-destinations` (worker) reads the company's site through its own API
 — `buybusinessclass.com/api` (ADR-IMPL-062; `weba.buybusinessclass.com` until it stopped resolving): regions, their
 countries, their cities, about 240 pages, one starting every 1.2 s (the API allows 120 requests a minute per address,
 and staging's night, on this host at the same minute, reads beside it: about 50 a minute each), then a HEAD request for each city's photo,
 four at a time — and keeps a snapshot: `catalog.site_places` (each city, its main
 airport, every airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price
-from, and that price — kept, never shown). The site has no airport codes: a city is matched by name inside the country
-the site puts it in; the few names that need help are listed in `SITE_CITY_AIRPORTS` (catalog
-`application/site-places.ts`). Two flags, both seeded off; with both off the job asks the site nothing.
+from, that price — shown only as a site deal — and the "Old Price", never shown), each route served until
+`valid_until`, a day after the run that wrote it (CHECK `site_routes_validity`, D6). The site has no airport codes: a
+city is matched by name inside the country the site puts it in; the few names that need help are listed in
+`SITE_CITY_AIRPORTS` (catalog `application/site-places.ts`). Three flags, all seeded off; with all three off the job asks
+the site nothing.
 
 - `catalog.site_photos`: each city's own photo on all its airports, stored as an operator's photo (it never expires, has
   no credit line, and `resolve-place-photos` never touches it). An operator's own photo from anywhere else stays; one
@@ -400,13 +402,19 @@ the site puts it in; the few names that need help are listed in `SITE_CITY_AIRPO
   pin, its search's estimate row and the quote show one number. Nothing while `catalog.estimates` is off: no price, no
   pin. With `catalog.site_prices` on, the pins show the site's stored answers, and `refresh-site-prices` keeps them
   only while this flag is on too ("The site's prices" below).
+- `catalog.site_offers`: the site's deals in Explore's "Offers to inspire", after the member's own offers ("The site's
+  deals" below). Needs neither of the other two, nor `catalog.estimates`.
 
 All or nothing: a region or a country that does not answer, fewer than 80 % of last night's cities listed or placed on
 their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
 `platform.job_runs` says `failed` and why, and the worker's `/metrics` counts it in
 `bbc_job_failed{job="sync-site-destinations"}`, and `/status` turns red with the job in `failingJobs` until a run
-succeeds. A single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no
-answer, a 5xx) keeps last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
+succeeds. "Last night" is the snapshot while its day has more than an hour to run (ADR-IMPL-067): a run twelve hours
+after a good one is weighed against it, the run a day after is not — that snapshot serves no deal and no pin from then
+on — so a site that really lists a fifth fewer cities is taken a day after its last good read, with no step of yours;
+until then the failures above say so, and the deals and site pins stay on the last good read for its day. A single
+city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no answer, a 5xx) keeps
+last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
 asks (a minute without one, two at most), then the page is asked again; a second 429 on any page, a city's included,
 fails the night — unlike a city page that merely does not answer (`site getOne?id=…: HTTP 429 again after waiting`). The
 pace leaves room for staging's read at the same minute (about 50 a minute each against the address's 120), so a 429
@@ -455,12 +463,40 @@ WHERE job = 'sync-site-destinations' ORDER BY started_at DESC LIMIT 1;
 its `error` says why; `skipped` — a run was already going: try again in five minutes. A run that ends within 120 s (the
 flags off) still answers `200` with the same fields.
 
-What the snapshot holds:
+What the snapshot holds, and how much of it is still within its day:
 
 ```sql
 SELECT cms_id, name, country, airport, airports, promoted, image IS NOT NULL AS photo FROM catalog.site_places ORDER BY name;
-SELECT route_from, count(*) FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
+SELECT route_from, count(*), count(*) FILTER (WHERE valid_until > now()) AS served, max(synced_at) AS read_at
+FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
 ```
+
+### The site's deals (ADR-IMPL-067)
+
+With `catalog.site_offers` on (seeded off), Explore's "Offers to inspire" shows, after the member's own offers, up to 24
+of the site's deals: from the member's airport and its metro first (New York is JFK, EWR and LGA), then from the nearest
+city the site sells from — Seattle sees San Francisco's, Toronto Washington's, Boston its five and then New York's — one
+deal per city, each card saying `from $X` (the site's "Price Today": per person, indicative; no trip, no cabin) and,
+when it leaves from another city than the member's, `from New York`. Never `Save X%`: the site's "Old Price" has no
+source and is never served. A tap opens the destination as a pin does. The deals are read from the snapshot, never from
+the site; a deal is shown for a day after the run that read it and is gone with the next run if the site dropped it.
+A run that fails changes nothing: the deals it leaves end within the day (two runs a day: one failure leaves twelve
+more hours). Home keeps them a minute; the run's end shows at once.
+
+Turn it on as the others (above): the flag row, a minute for the flag's cache, then run `sync-site-destinations` through
+the worker if the snapshot is older than a day (the query above: `served` 0). What a member at an airport sees:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.site_offers','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+-- Deals from JFK still served, the site's home page first, as Home orders them:
+SELECT p.name, r.price, r.valid_until FROM catalog.site_routes r JOIN catalog.site_places p USING (cms_id)
+JOIN catalog.airports a ON a.code = p.airport
+WHERE r.route_from = 'JFK' AND r.valid_until > now() ORDER BY p.promoted DESC, a.popularity DESC LIMIT 24;
+```
+
+Off: the next Home has none (the flag's cache aside), with no question to the database. On staging, once it is on,
+withdraw the demo's broadcast offers ("Staging demo data", below), or Tokyo stands twice on Explore.
 
 ## The site's prices (ADR-IMPL-063)
 
@@ -916,6 +952,24 @@ cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f
 ```
 
 It prints `staging demo ready — … dates from <today>`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing. The poster route JFK → ZRH is left without a fare on purpose, so the estimate (ADR-IMPL-037) can be shown there once `catalog.estimates` is on and the rules are loaded.
+
+**Once the site's deals are on in staging (`catalog.site_offers`, ADR-IMPL-067)** the demo's two broadcast offers — Paris
+and Tokyo, seen by every staging member — should not be what members see: withdraw them once, as the internal route
+does it (status `withdrawn` and `offer.withdrawn`, so pending pushes are suppressed). The demo seed keeps a withdrawn
+demo offer withdrawn at every later deploy and writes no inbox item for it; London, the review account's own, stays.
+
+```bash
+# staging: the two ids, then the withdraw route through the staging worker (the secret is read from its environment)
+docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc -Atc \
+  "SELECT id FROM proposals.offers WHERE idempotency_key IN ('staging-demo:paris','staging-demo:tokyo') AND status = 'active'"
+for id in <id-1> <id-2>; do
+  docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
+    bun -e "fetch('http://localhost:8001/v1/internal/offers/$id/withdraw',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET,'Content-Type':'application/json'},body:JSON.stringify({reason:'site deals on'})}).then(async r=>console.log(r.status,await r.text()))"
+done
+```
+
+Each answers `200 {"ok":true}`. To bring them back (the deals off again), set their `status` to `active` in
+`proposals.offers` and run the demo seed: it dates them from today.
 
 ## Redis, Kafka, Streams, and demand
 

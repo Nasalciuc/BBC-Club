@@ -11,7 +11,7 @@ import type { ProposalsFacade } from "@bbc/proposals";
 import type { EngagementFacade } from "@bbc/engagement";
 import type { CatalogFacade } from "@bbc/catalog";
 import { toAirportVM } from "@bbc/catalog";
-import { toCard, toDetail, toDestinationPin, toProfileVM } from "./view-models";
+import { toCard, toDetail, toDestinationPin, toProfileVM, toSiteDealVM } from "./view-models";
 import { PER_MEMBER_CACHE, etagOf, ifNoneMatchHits } from "./http-cache";
 
 type Ports = {
@@ -42,6 +42,22 @@ const SECTION_ORDER: Array<{ key: string; title: string; holds: ((place: Place) 
     holds: (p) => p.region === "americas" && NORTH_AMERICA.has(p.countryCode.toUpperCase()),
   },
 ];
+
+/**
+ * ADR-IMPL-067: how many of the company site's deals Home carries for "Offers to inspire", after the member's own offers
+ * — twice the pre-registered floor of twelve, a row of cards a thumb still scrolls, about 12 KB of Home.
+ */
+export const SITE_DEALS_SHOWN = 24;
+
+/** How many of the member's offers Home reads: the inspiring six, the rest in their region's rows. */
+const HOME_OFFERS_READ = 50;
+
+/**
+ * How many site deals Home asks the catalog for: SITE_DEALS_SHOWN, and one more for each offer Home reads. The catalog
+ * gives one deal per city, so an offer takes at most one deal off (its city's, from its own metro), and Home still has
+ * SITE_DEALS_SHOWN after them wherever the site has that many — asked beside the feed, and one cached read per home.
+ */
+const SITE_DEALS_ASKED = SITE_DEALS_SHOWN + HOME_OFFERS_READ;
 
 /** The mobile BFF. Composes proposals + engagement + catalog → view-models. /v1/app-config stays in the host. */
 export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => ({
@@ -88,10 +104,12 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         const profile = await ports.members.getProfile(undefined, actor);
         const homeCode = (profile?.homeAirport ?? DEFAULT_HOME_AIRPORT).toUpperCase();
 
-        const [destRows, offerRows] = await Promise.all([
+        const [destRows, offerRows, siteDeals] = await Promise.all([
           // ADR-IMPL-045: the site's pins are priced in the cabin the member's search starts in.
           ports.catalog.destinations(undefined, homeCode, { cabin: profile?.preferences.cabin ?? "business" }),
-          ports.proposals.feed(undefined, actor, null, 50),
+          ports.proposals.feed(undefined, actor, null, HOME_OFFERS_READ),
+          // ADR-IMPL-067: none while catalog.site_offers is off.
+          ports.catalog.siteDeals(undefined, homeCode, SITE_DEALS_ASKED),
         ]);
 
         const offerRouteTos = new Set(offerRows.map((o) => String(o.routeTo).toUpperCase()));
@@ -131,16 +149,36 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
           return { key, title, items };
         }).filter((s) => s.items.length > 0 || s.key === "inspire");
 
+        // ADR-IMPL-067: "Offers to inspire" is the member's own offers, then the site's deals — a deal to a city one of
+        // the member's offers already goes to from the same city leaves it, so no city shows twice for one origin.
+        // Every offer, not only the inspiring six: the others stand in their region's row (16, `To Asia`) under the
+        // deals, and at rest (02) the member would see the site's price for a city their own offer goes to. Capped after
+        // the filter, so the offers do not cost the member deals the site has.
+        const deals = siteDeals
+          .filter(
+            (deal) =>
+              !cards.some(
+                (card) =>
+                  deal.originAirports.includes(card.route.from.toUpperCase()) &&
+                  deal.airports.includes(card.route.to.toUpperCase()),
+              ),
+          )
+          .slice(0, SITE_DEALS_SHOWN)
+          .map(toSiteDealVM);
+
         const body = {
           home: homeRow ? toAirportVM(homeRow) : null,
           destinations,
           sections,
           places,
+          // Absent with none: with catalog.site_offers off, Home is exactly what it was, ETag included.
+          ...(deals.length > 0 ? { deals } : {}),
         };
 
         // The tag is the body's, whole: a pin's price, city, name or place (ADR-IMPL-045), a destination's line
-        // (ADR-IMPL-056), a carousel's offers and their states, a place's name (ADR-IMPL-057) — whatever Home shows. The
-        // home code too, for a home airport the catalog does not know (no `home` in the body).
+        // (ADR-IMPL-056), a carousel's offers and their states, a place's name (ADR-IMPL-057), the site's deals with
+        // their prices and days (ADR-IMPL-067) — whatever Home shows. The home code too, for a home airport the catalog
+        // does not know (no `home` in the body).
         const etag = etagOf({ homeCode, states, body });
         if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
           return c.body(null, 304, { ETag: etag, ...PER_MEMBER_CACHE });

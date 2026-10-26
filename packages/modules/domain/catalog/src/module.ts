@@ -42,6 +42,7 @@ import {
   type SiteUnavailable,
   type StoredSitePrice,
 } from "./application/site-prices";
+import { metrosFor, originMetros, pickDeals, type DealCandidate } from "./application/site-deals";
 import { syncSite } from "./application/site-sync";
 import {
   pricedAirport,
@@ -53,7 +54,7 @@ import {
 } from "./application/to-fare-vm";
 import { estimateFare } from "./pricing/estimate";
 import { estimateSources as readEstimateSources, type StoredRules } from "./pricing/estimate-rules";
-import type { CatalogFacade, DestinationPin } from "./api";
+import type { CatalogFacade, DestinationPin, SiteDeal } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
   return row.published && row.validFrom <= now && row.validUntil > now;
@@ -80,6 +81,14 @@ function searchWhenInRange(when: Date, now = new Date()): boolean {
 export const SITE_PINS = 12;
 /** How long Home's site pins are kept, in seconds (createDestinationsCache's minute, or Redis's). */
 const SITE_PINS_CACHE_S = 60;
+/** ADR-IMPL-067: how long one home's site deals are kept, in seconds. */
+const SITE_DEALS_CACHE_S = 60;
+/**
+ * ADR-IMPL-067: what a read kept `ttlS` seconds asks of a route's day (and of a stored answer's), so nothing kept is
+ * served past it: the cache's time, 10 % more since Redis keeps a key up to 1.1 × its TTL (the platform's cache spreads
+ * its expiries), and a few seconds for the read itself — 75 s for a minute.
+ */
+const keptMargin = (ttlS: number) => Math.ceil(ttlS * 1.1) + 9;
 
 /** A strong ETag over the body as JSON: whatever the answer shows changes it. */
 const etagOf = (value: unknown) => `"${createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 16)}"`;
@@ -108,9 +117,11 @@ export const catalogModule = (
     const placePhotosOn = () => platform.flags.isEnabled("catalog.place_photos", true);
     const destinationsCache = createDestinationsCache();
     const sitePinsCache = createDestinationsCache<DestinationPin & { airports: string[] }>();
+    const siteDealsCache = createDestinationsCache<SiteDeal>();
     const invalidateMaps = async () => {
       destinationsCache.clear();
       sitePinsCache.clear();
+      siteDealsCache.clear();
       await platform.cache.bump("catalog:dest:gen");
       await platform.cache.bump("catalog:airports:gen");
     };
@@ -242,7 +253,7 @@ export const catalogModule = (
       const load = async () => {
         const [homeRow, rows] = await Promise.all([
           airportsRepo.get(conn, home),
-          siteRepo.pinsFrom(conn, home, SITE_PINS * 3),
+          siteRepo.pinsFrom(conn, home, SITE_PINS * 3, keptMargin(SITE_PINS_CACHE_S)),
         ]);
         if (!homeRow) return [];
         // Kept for the pins' minute: an answer that would pass its 24 hours within it is not read.
@@ -252,7 +263,7 @@ export const catalogModule = (
               homeRow.code.trim(),
               rows.map((r) => r.airport.code.trim()),
               "round_trip",
-              SITE_PINS_CACHE_S,
+              keptMargin(SITE_PINS_CACHE_S),
             )
           : null;
         const priced = await Promise.all(
@@ -295,6 +306,70 @@ export const catalogModule = (
 
     /** ADR-IMPL-064: landmarks, off until an operator turns the flag row on; `skip`: landmarks kept out (QIDs). */
     const landmarksFlag = async () => readLandmarksFlag(await platform.flags.read("catalog.landmarks"));
+
+    /**
+     * ADR-IMPL-067: the site's deals for `home`, at most `limit` — from home and its metro first, then from the nearest
+     * cities the site sells from, one deal per destination city (`application/site-deals.ts`). Read from the snapshot
+     * the sync writes twice a day, never from the site; only deals served `marginS` seconds from now. Two reads (home,
+     * the origins), then one per round of metros — one round unless the nearest metros' deals overlap past what they
+     * hold.
+     */
+    async function loadSiteDeals(
+      e: Executor,
+      home: string,
+      limit: number,
+      photos: boolean,
+      marginS: number,
+    ): Promise<SiteDeal[]> {
+      const [homeRow, origins] = await Promise.all([airportsRepo.get(e, home), siteRepo.dealOrigins(e, marginS)]);
+      if (!homeRow || origins.length === 0 || limit <= 0) return [];
+      const at = { code: homeRow.code.trim(), lat: Number(homeRow.lat), lng: Number(homeRow.lng) };
+      const metros = originMetros(at, origins);
+      const counts = new Map(origins.map((o) => [o.code, o.deals]));
+      type Row = Awaited<ReturnType<typeof siteRepo.dealsFrom>>[number] & DealCandidate;
+      const rows: Row[] = [];
+      let asked = 0;
+      let picked: ReturnType<typeof pickDeals<Row>> = [];
+      while (asked < metros.length) {
+        const next = metros.slice(asked);
+        const n = metrosFor(next, counts, limit - picked.length);
+        const from = next.slice(0, n).flatMap((m) => m.airports);
+        for (const r of await siteRepo.dealsFrom(e, from, marginS, photos)) {
+          rows.push({ ...r, to: { lat: Number(r.airport.lat), lng: Number(r.airport.lng) } });
+        }
+        asked += n;
+        picked = pickDeals(at, metros.slice(0, asked), rows, limit);
+        if (picked.length >= limit) break;
+      }
+      return picked.map(({ deal, metro }) => {
+        const photo = deal.photo ? toPlacePhotoVM(deal.photo) : null;
+        return {
+          id: `site-${deal.deal}-${deal.routeFrom}`,
+          destination: {
+            ...toAirportVM(deal.airport),
+            photo: photo?.kind === "photo" ? { card: photo.card, hero: photo.hero, credit: photo.credit } : null,
+          },
+          origin: { code: deal.routeFrom, city: metro.city },
+          price: { amount: deal.price, currency: "USD" as const, basis: "site" as const, from: true as const },
+          validUntil: deal.validUntil.toISOString(),
+          airports: [...deal.airports],
+          originAirports: [...metro.airports],
+        };
+      });
+    }
+
+    /** ADR-IMPL-067: Home's site deals, behind `catalog.site_offers` (seeded off); cached like the site's pins — a minute,
+     *  dropped when the sync or an import bumps the generation. With an executor, read now, uncached. */
+    async function siteDeals(exec: Executor | undefined, home: string, limit: number): Promise<SiteDeal[]> {
+      if (!(await platform.flags.isEnabled("catalog.site_offers", false))) return [];
+      const photos = await placePhotosOn();
+      if (exec) return loadSiteDeals(exec, home, limit, photos, 0);
+      const key = `${home.toUpperCase()}:${limit}:${photos ? "photos" : "-"}`;
+      const load = () => loadSiteDeals(conn, home, limit, photos, keptMargin(SITE_DEALS_CACHE_S));
+      const gen = await platform.cache.generation("catalog:dest:gen");
+      if (gen == null) return siteDealsCache.get(key, load);
+      return platform.cache.getOrLoad(`catalog:deals:${gen}:${key}`, SITE_DEALS_CACHE_S, load);
+    }
 
     /** ADR-IMPL-045: the site's photos, and the cities kept out of them (`skip`: the site's ids). Null: off. */
     async function sitePhotos(): Promise<{ skip: ReadonlySet<number> } | null> {
@@ -364,6 +439,7 @@ export const catalogModule = (
         if (!estimate) return null;
         return r.kind === "club" && rules ? { ...estimate, rules: rules.fingerprint } : estimate;
       },
+      siteDeals,
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
@@ -796,22 +872,27 @@ export const catalogModule = (
           },
         },
         {
-          // ADR-IMPL-045: the site's destinations, once a night. With its photos and its pins off, nothing is asked
-          // and the site's photos go back to Wikimedia. ADR-IMPL-062: the site's API allows 120 requests a minute per
-          // IP, so its ~241 pages start 1.2 s apart (about five minutes), then ~150 photo checks four at a time. That
-          // minute is the host's: staging's cron reads the site at the same 07:40 from the same address, and at about
-          // 50 a minute each the two reads stay under the 120 together. Ten minutes leave room for the pages, the
-          // photos and a 429 waited out.
+          // ADR-IMPL-045: the site's destinations. With its photos, its pins and its deals off, nothing is asked and
+          // the site's photos go back to Wikimedia. ADR-IMPL-062: the site's API allows 120 requests a minute per IP, so
+          // its ~241 pages start 1.2 s apart (about five minutes), then ~150 photo checks four at a time. That minute is
+          // the host's: staging's cron reads the site at the same minutes from the same address, and at about 50 a
+          // minute each the two reads stay under the 120 together. Ten minutes leave room for the pages, the photos and
+          // a 429 waited out. ADR-IMPL-067: twice a day, 07:40 and 19:40 UTC — a deal is served for a day after its
+          // read, so one run that fails leaves the deals another twelve hours, and one run never ends a day's deals
+          // before the next has written its own.
           // Longer than the worker's 120-s HTTP idle timeout: the cron's request is closed while the run goes on, and
           // platform.job_runs holds its outcome (as for `retention`).
           name: "sync-site-destinations",
           spec: {
-            cron: "40 7 * * *",
+            cron: "40 7,19 * * *",
             singleton: true,
             timeoutMs: 600_000,
             handler: async (ctx) => {
               const photos = await sitePhotos();
-              const pins = await platform.flags.isEnabled("catalog.site_pins", false);
+              // ADR-IMPL-067: the deals need the snapshot as the pins do, and neither needs the other.
+              const snapshot =
+                (await platform.flags.isEnabled("catalog.site_pins", false)) ||
+                (await platform.flags.isEnabled("catalog.site_offers", false));
               const report = await syncSite(
                 {
                   db: conn,
@@ -823,7 +904,7 @@ export const catalogModule = (
                   },
                   logger: platform.logger,
                 },
-                { read: photos !== null || pins, photos },
+                { read: photos !== null || snapshot, photos },
               );
               if (report.read) await invalidateMaps();
               return report;

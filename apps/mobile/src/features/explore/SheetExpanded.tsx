@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import type { HomeVM } from "@bbc/shared/api/v1/fares";
+import type { HomeVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import {
   CAROUSEL_PAD,
@@ -15,7 +15,7 @@ import {
 
 import { CLUB_PICTURE, usePlacePhotos } from "@/features/places/usePlacePhotos";
 
-import { offerCardModel, sheetExpandedState } from "./offer-card-logic";
+import { homeDeals, offerCardModel, sheetExpandedState } from "./offer-card-logic";
 import { NoOffers, OfferCards, offerPicture } from "./SheetRest";
 
 type Section = HomeVM["sections"][number];
@@ -25,6 +25,8 @@ type Props = {
   /** Home is on its way: the cards' places, never `No offers yet.` before it answered (ADR-IMPL-047). */
   homeLoading: boolean;
   onOpenOffer: (card: ProposalCardVM) => void;
+  /** A site deal opens its destination as a pin does (ADR-IMPL-067). */
+  onOpenDeal: (deal: SiteDealVM) => void;
   onSearch: () => void;
 };
 
@@ -91,18 +93,22 @@ function placeRegions(regions: readonly Section[], afterInspire: boolean): Place
 }
 
 /**
- * Every offer (16): `Done` at the sheet's top, `Offers to inspire` and its row of shorter cards, then each region in
+ * Every offer (16): `Done` at the sheet's top, `Offers to inspire` and its row of shorter cards (the member's own
+ * offers, then the site's deals — ADR-IMPL-067), then each region in
  * the server's order and words (`To Europe`, `To Asia`, `To the Middle East`) with its cards laid sideways — two to a
  * row, one across the row when it stands alone. Everything is on the page already, so no `See all` here.
  */
-export function SheetExpanded({ home, homeLoading, onOpenOffer, onSearch }: Props) {
+export function SheetExpanded({ home, homeLoading, onOpenOffer, onOpenDeal, onSearch }: Props) {
   const shown = sheetExpandedState(home, homeLoading);
   const sections = home?.sections ?? [];
   const inspire = sections.find((s) => s.key === "inspire")?.items ?? [];
+  // ADR-IMPL-067: the site's deals close the inspiring row, after the member's own offers; the regions stay offers.
+  const deals = homeDeals(home);
+  const inspireShown = inspire.length > 0 || deals.length > 0;
   const regions = sections.filter((s) => s.key !== "inspire" && s.items.length > 0);
   const photoFor = usePlacePhotos(regions.flatMap((s) => s.items.map((item) => item.route.to)));
 
-  const placed = placeRegions(regions, inspire.length > 0);
+  const placed = placeRegions(regions, inspireShown);
 
   const region = ({ section, rows, marginTop, cardsMargin }: PlacedRegion) => {
     return (
@@ -168,7 +174,7 @@ export function SheetExpanded({ home, homeLoading, onOpenOffer, onSearch }: Prop
         <NoOffers onSearch={onSearch} marginTop={NO_OFFERS_TOP} />
       ) : (
         <View>
-          {inspire.length > 0 ? (
+          {inspireShown ? (
             <View>
               <Text
                 style={[styles.title, { marginTop: inspireTitleTop, marginLeft: ALL.inspireLeft - gutter }]}
@@ -179,8 +185,10 @@ export function SheetExpanded({ home, homeLoading, onOpenOffer, onSearch }: Prop
               <View style={{ marginTop: ALL.inspireTop - CAROUSEL_PAD - (inspireTitleTop + titleType.lineHeight) }}>
                 <OfferCards
                   items={inspire}
+                  deals={deals}
                   home={home}
                   onOpenOffer={onOpenOffer}
+                  onOpenDeal={onOpenDeal}
                   testID="explore.inspire"
                   cardTestID="explore.offer"
                   look="sheet"
