@@ -1,7 +1,9 @@
 /**
- * Country → continent for the price formula, from OurAirports' countries.csv (public domain; seeds/NOTICE.md).
- * One override, so that the app matches the BBC site: Turkey → EU (Istanbul is priced as Europe). Hawaii needs none:
- * by country it is the United States, North America — as on the site. Verified on the site's 62 airports.
+ * Country → continent for the price formula, from OurAirports' countries.csv (public domain; seeds/NOTICE.md), except
+ * where the company's site prices a country on another continent (ADR-IMPL-062, compared with the site on 2026-10-25):
+ * Cyprus, St Barthélemy and Saint Helena (Ascension) as Europe, Timor-Leste as Oceania — each marked below. Turkey
+ * keeps OurAirports' Asia: the site prices Istanbul as Asia. Hawaii needs none: by country it is the United States,
+ * North America — as on the site.
  * Left out: ZZ, OurAirports' "Unknown or unassigned country" (listed under AF) — an unknown country never gets a price.
  */
 export type Continent = "AF" | "AN" | "AS" | "EU" | "NA" | "OC" | "SA";
@@ -31,7 +33,7 @@ export const CONTINENT_OF: Readonly<Record<string, Continent>> = {
   BH: "AS",
   BI: "AF",
   BJ: "AF",
-  BL: "NA",
+  BL: "EU", // the site; OurAirports: NA
   BM: "NA",
   BN: "AS",
   BO: "SA",
@@ -59,7 +61,7 @@ export const CONTINENT_OF: Readonly<Record<string, Continent>> = {
   CV: "AF",
   CW: "NA",
   CX: "AS",
-  CY: "AS",
+  CY: "EU", // the site; OurAirports: AS
   CZ: "EU",
   DE: "EU",
   DJ: "AF",
@@ -203,7 +205,7 @@ export const CONTINENT_OF: Readonly<Record<string, Continent>> = {
   SD: "AF",
   SE: "EU",
   SG: "AS",
-  SH: "AF",
+  SH: "EU", // the site (Ascension); OurAirports: AF
   SI: "EU",
   SK: "EU",
   SL: "AF",
@@ -224,11 +226,11 @@ export const CONTINENT_OF: Readonly<Record<string, Continent>> = {
   TH: "AS",
   TJ: "AS",
   TK: "OC",
-  TL: "AS",
+  TL: "OC", // the site; OurAirports: AS
   TM: "AS",
   TN: "AF",
   TO: "OC",
-  TR: "EU",
+  TR: "AS",
   TT: "NA",
   TV: "OC",
   TW: "AS",
@@ -258,9 +260,10 @@ export const CONTINENT_OF: Readonly<Record<string, Continent>> = {
 };
 
 /**
- * Countries between continents that the BBC site's own airport list does not cover, so its classification is unknown:
- * the formula would guess, and a wrong guess shows a price the site does not (Cyprus priced as Asia instead of Europe).
- * No estimate there until one route per country is compared with the site (the approval pack); a confirmed country
- * then moves out of this set, with its continent fixed above if needed.
+ * Countries between continents whose continent on the company's site is not known: the formula would guess, and a wrong
+ * guess shows a price the site does not (Cyprus priced as Asia where the site prices it as Europe). A country here gets
+ * no estimate until one route is compared with the site; then it leaves the set, with its continent fixed above if
+ * needed. Empty since the comparison of 2026-10-25 (ADR-IMPL-062): the site prices Armenia, Azerbaijan, Georgia and
+ * Kazakhstan as Asia, Greenland as North America, all of Russia as Europe, and Cyprus as Europe (fixed above).
  */
-export const UNCONFIRMED_COUNTRIES: ReadonlySet<string> = new Set(["AM", "AZ", "CY", "GE", "GL", "KZ", "RU"]);
+export const UNCONFIRMED_COUNTRIES: ReadonlySet<string> = new Set<string>();

@@ -15,6 +15,8 @@ hold them (owner, 7 Oct 2026).
   have a price; anything else is `null`, never a guess. A port of `Nasalciuc/BBC-Marketing-Agent@747b5c7`, whose engine
   states it is identical to the site's. Continents come from OurAirports (public domain) by country, with one override:
   Turkey → Europe, as the site prices Istanbul. `ZZ` (OurAirports' "unknown country", listed under Africa) is left out.
+  (Amended by ADR-IMPL-062: the site prices Turkey as Asia, so the override is gone; Cyprus, St Barthélemy and Saint
+  Helena follow the site to Europe, Timor-Leste to Oceania.)
 - **The rules stay out of the repository** — `pricing/rules.ts` holds their shape only: a strict schema (26 letters ×
   3 cabins, 6 continent pairs × 2 trips × 3 cabins, the Hawaii supplement; whole dollars), with the field names of the
   agent's `data/price_generator_rules.json`. Their values live per environment in the flag row `catalog.pricing_rules`,
@@ -31,7 +33,9 @@ hold them (owner, 7 Oct 2026).
   them in TypeScript from the secret and compares the hash; without the secret (a laptop, a fork) the suite is skipped.
   CI keeps the reference set; an environment may run a newer set without a CI change, as the engine is the same
   function. That engine _states_ it matches the site; the approval pack's routes are what confirm it before production.
-  No Python enters this repository.
+  No Python enters this repository. (Amended by ADR-IMPL-062: the golden is now the club's engine's, recomputed the
+  same way with Turkey in Asia; the Python results differ on the 32 Istanbul routes. Their hash stays beside it, and the
+  engine must still reproduce it with Turkey back in Europe.)
 - **Logic tests** run on made-up rules of the same shape (`tests/unit/pricing-rules.fixture.ts`), chosen so that every
   display rule has a case.
 - **What a member sees** (owner, 7 Oct 2026) — the estimate follows the chosen cabin: business whenever positive; first
@@ -41,7 +45,10 @@ hold them (owner, 7 Oct 2026).
 - **Contract** — `SearchResultVM.estimate: EstimateVM | null`, optional; `AirportVM.tz`, optional (local time).
   `EstimateVM` has fixed literals (`USD`, `round_trip`, `formula`), so any other value fails parsing. It never uses
   `PricePair`: `published` is reserved for FTC-evidenced reference prices. Both upgrade orders work: an older app drops
-  the new fields; a newer app accepts their absence from an older server.
+  the new fields; a newer app accepts their absence from an older server. (Amended by ADR-IMPL-063: with
+  `catalog.site_prices` on, the company's site prices the estimate first — its stored answer, or one live call from an
+  undated search — and the formula stands in only where the site cannot be asked; where the company has no price there
+  is no number. `EstimateVM` keeps its literals and gains optional `source` (`site` | `club`) and `asOf`.)
 - **When** — only when an undated search has no fare in the chosen cabin; published fares always win. The app sends a
   date (`when`) only when the member picks a day in the calendar (ADR-IMPL-041); then the route may have fares on other
   days, so there is no estimate, and a quote asked from that search carries none (ADR-IMPL-042, `estimateShown`).
@@ -49,6 +56,7 @@ hold them (owner, 7 Oct 2026).
   metro: the formula would price JFK–EWR as a flight), and none for a country between continents that the site's airport
   list does not cover (`UNCONFIRMED_COUNTRIES`: AM, AZ, CY, GE, GL, KZ, RU — the formula would guess, and Cyprus priced
   as Asia is not Cyprus priced as Europe). A country leaves that set once one route is compared with the site.
+  (Amended by ADR-IMPL-062: the comparison of 25 Oct 2026 settled all seven, and the set is empty.)
 - **Resilient contract** — the app parses the whole search with `SearchResultVM`; `estimate` is `.catch(null)` and
   `AirportVM.tz` is `.catch(undefined)` — with a zone this runtime cannot format in counted as not understood (the
   check the catalogue import makes) — so a value this app does not understand hides the estimate or the zone instead of
