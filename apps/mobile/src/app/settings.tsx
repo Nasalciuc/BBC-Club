@@ -7,16 +7,12 @@ import { Button, ListRow, RowGroup, StateMessage, TopBar, tokens, rn } from "@bb
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { DeleteAccountSheet } from "@/features/profile/DeleteAccountSheet";
-import {
-  mergeSavedProfile,
-  offersSwitchValue,
-  withOffers,
-  type SavedProfile,
-} from "@/features/profile/notifications-logic";
+import { offersSwitchValue, withOffers } from "@/features/profile/notifications-logic";
 import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
 import { openRequestsFor } from "@/features/profile/profile-logic";
+import { profileCopy } from "@/features/profile/profile-save-logic";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { useSignOut } from "@/features/profile/useSignOut";
 import { fetchProfile, fetchRequests, type Profile } from "@/lib/api";
@@ -32,6 +28,9 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
+  // A phone saved here is every screen's at once: Profile under this page, the request sheet's contact
+  // (profile-save-logic).
+  const [copy] = useState(() => profileCopy(setProfile));
   // The profile's rows wait for the profile (ADR-IMPL-047): no number made up while it loads, no row that does nothing.
   // A profile that did not load takes their place, with `Try again`.
   const [loadFailure, setLoadFailure] = useState<{ title: string; body: string } | null>(null);
@@ -58,10 +57,6 @@ export default function SettingsScreen() {
       }
     })().catch(() => setLoadFailure(stateCopy("route")));
   }, [reloadToken]);
-
-  function onSheetSaved(next: SavedProfile) {
-    setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
-  }
 
   // 34 draws each card's second row taller than its first; Help, which 34 does not draw, takes the look's own height.
   const rows: { key: string; label: string; url: string | undefined; height?: number }[] = [
@@ -171,12 +166,14 @@ export default function SettingsScreen() {
       <RootTabBar active="profile" />
       {profile ? (
         <>
-          <PasswordSheet ref={passwordRef} profile={profile} onSaved={onSheetSaved} />
-          <PhoneSheet ref={phoneRef} profile={profile} onSaved={onSheetSaved} />
+          {/* A new password changes nothing on the profile (the sheet hands back the one it was given): nothing to
+              merge, nothing to share. */}
+          <PasswordSheet ref={passwordRef} profile={profile} onSaved={() => undefined} />
+          <PhoneSheet ref={phoneRef} profile={profile} onSaved={copy.saved} />
           <NotificationsSheet
             ref={notificationsRef}
             savedOffers={offersSwitchValue(profile)}
-            onSaved={(offers) => setProfile((prev) => (prev ? withOffers(prev, offers) : prev))}
+            onSaved={(offers) => copy.change((prev) => (prev ? withOffers(prev, offers) : prev))}
           />
         </>
       ) : null}

@@ -134,6 +134,21 @@ export function CheckMark({ height, color }: { height: number; color: string }) 
 /** The active tabs' filled glyphs (05, 11, 12), traced: a filled navy compass, clipboard and person. */
 export const TAB_ACTIVE = { explore: TAB_EXPLORE, requests: TAB_REQUESTS, profile: TAB_PROFILE } as const;
 
+/**
+ * The member's own `Name` row on Edit profile (brief 3.4.1; 36 draws no such row): the active Profile tab's person,
+ * traced — filled like 36's other marks, never redrawn. It stands 18 of the box's 24, as Lucide's `user` does, so it is
+ * as tall as `users-fill` under it.
+ */
+function UserFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  const [x, y, w, h] = box(TAB_PROFILE);
+  const side = (h * 24) / 18;
+  return (
+    <Svg width={size} height={size} viewBox={`${x - (side - w) / 2} ${y - (side - h) / 2} ${side} ${side}`}>
+      <Path d={TAB_PROFILE.d} fill={color} fillRule="evenodd" />
+    </Svg>
+  );
+}
+
 /** Lucide's handset (the pinned `phone`, sheet 43), filled: 11 and 30–33 draw it solid in its circle and on the pill. */
 const PHONE_D =
   "M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384";
@@ -387,6 +402,7 @@ export const icons = {
   "phone-fill": PhoneFill,
   "plane-right-fill": PlaneRightFill,
   "users-fill": UsersFill,
+  "user-fill": UserFill,
   "lock-fill": LockFill,
   "user-pen-fill": UserPenFill,
   "info-fill": InfoFill,

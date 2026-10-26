@@ -8,8 +8,10 @@ import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { CabinSheet } from "@/features/profile/CabinSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
-import { mergeSavedProfile, type SavedProfile } from "@/features/profile/notifications-logic";
+import { nameRowValue } from "@/features/profile/name-logic";
+import { NameSheet } from "@/features/profile/NameSheet";
 import { cabinLabel, travelersLabel } from "@/features/profile/profile-logic";
+import { profileCopy } from "@/features/profile/profile-save-logic";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { airportByCode } from "@/lib/airport-by-code";
@@ -17,17 +19,24 @@ import { homeAirportLabel } from "@/lib/airport-search-state";
 import { fetchProfile, type Profile } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 
-/** Edit profile (36): the home airport, the cabin and the travelers a search and a request start from. */
+/**
+ * Edit profile (36): the member's own name (brief 3.4.1 — 36 draws no `Name` row; it comes first, in 36's look), then
+ * the home airport, the cabin and the travelers a search and a request start from.
+ */
 export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<Profile | null>(null);
+  // Each sheet's save is this page's and every screen's at once — Explore's greeting, Profile's name
+  // (profile-save-logic).
+  const [copy] = useState(() => profileCopy(setProfile));
   // The rows wait for the profile (ADR-IMPL-047): dimmed and without a value while it loads, never a value made up
   // ("Not set", "Business", "1 adult") — and a profile that did not load takes their place, with `Try again`.
   const [loadFailure, setLoadFailure] = useState<{ title: string; body: string } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   // 36 names the home airport's city: `New York (JFK)`.
   const [homeCity, setHomeCity] = useState<{ code: string; city: string } | null>(null);
+  const nameRef = useRef<ProfileSheetHandle>(null);
   const homeAirportRef = useRef<ProfileSheetHandle>(null);
   const cabinRef = useRef<ProfileSheetHandle>(null);
   const travelersRef = useRef<ProfileSheetHandle>(null);
@@ -57,10 +66,6 @@ export default function EditProfileScreen() {
     };
   }, [homeAirport]);
 
-  function onSheetSaved(next: SavedProfile) {
-    setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
-  }
-
   // The city shown is always the one of the airport shown — never the previous airport's while the new one resolves.
   const city = homeAirport && homeCity?.code === homeAirport ? homeCity.city : null;
 
@@ -87,6 +92,14 @@ export default function EditProfileScreen() {
           />
         ) : (
           <RowGroup testID="editProfile.rows" look="edit">
+            <ListRow
+              testID="editProfile.name"
+              icon="user-fill"
+              label="Name"
+              value={profile ? nameRowValue(profile.displayName) : undefined}
+              disabled={!profile}
+              onPress={() => nameRef.current?.present()}
+            />
             <ListRow
               testID="editProfile.homeAirport"
               icon="plane-right-fill"
@@ -117,9 +130,10 @@ export default function EditProfileScreen() {
       <RootTabBar active="profile" />
       {profile ? (
         <>
-          <HomeAirportSheet ref={homeAirportRef} profile={profile} homeCity={city} onSaved={onSheetSaved} />
-          <CabinSheet ref={cabinRef} profile={profile} onSaved={onSheetSaved} />
-          <TravelersSheet ref={travelersRef} profile={profile} onSaved={onSheetSaved} />
+          <NameSheet ref={nameRef} profile={profile} onSaved={copy.saved} />
+          <HomeAirportSheet ref={homeAirportRef} profile={profile} homeCity={city} onSaved={copy.saved} />
+          <CabinSheet ref={cabinRef} profile={profile} onSaved={copy.saved} />
+          <TravelersSheet ref={travelersRef} profile={profile} onSaved={copy.saved} />
         </>
       ) : null}
     </View>
