@@ -5,7 +5,7 @@ import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { offersRepo } from "./infrastructure/offers.repo";
-import { ingest, IngestInput } from "./application/ingest";
+import { ingest } from "./application/ingest";
 import { expireOffers } from "./application/expire-offers";
 import { withdraw } from "./application/withdraw";
 import { onMemberDeleted } from "./handlers/on-member-deleted";
@@ -45,7 +45,8 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Propo
       getVisible: (exec, actor, id) => offersRepo.getVisible(exec ?? conn, actor, id),
       feed: (exec, actor, cursor, limit) => offersRepo.feed(exec ?? conn, actor, cursor, limit),
       getAny: (exec, id) => offersRepo.getAny(exec ?? conn, id),
-      ingest: (input, key) => ingest({ db: conn, events }, IngestInput.parse(input), key),
+      // Raw body: ingest looks the key up first, so a CRM retry of a pre-strictness offer still replays (4.1.6).
+      ingest: (input, key) => ingest({ db: conn, events }, input, key),
       withdraw: (offerId, reason) => withdraw({ db: conn, events }, offerId, reason),
     };
 
@@ -61,18 +62,10 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Propo
       }),
       async (c) => {
         const key = c.req.header("Idempotency-Key") ?? "";
-        const parsed = IngestInput.safeParse(await c.req.json().catch(() => ({})));
-        if (!parsed.success) {
-          return c.json(
-            apiError("VALIDATION", {
-              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-            }),
-            400,
-          );
-        }
+        const body = await c.req.json().catch(() => ({}));
         let r: Awaited<ReturnType<typeof expose.ingest>>;
         try {
-          r = await expose.ingest(parsed.data, key);
+          r = await expose.ingest(body, key);
         } catch (err) {
           // A rule of the offers table the schema above does not mirror yet: the payload is at fault, and a 500 would
           // have the at-least-once CRM retry it for ever. The constraint's name, never the query's values.
@@ -89,7 +82,9 @@ export const proposalsModule = (): ModuleDescriptor<Record<string, never>, Propo
         }
         if (!r.ok) {
           if (r.code === "BAD_KEY") return c.json(apiError("VALIDATION", { message: "Idempotency-Key required" }), 400);
-          if (r.code === "VALIDATION") return c.json(apiError("VALIDATION", { message: r.message }), 400);
+          if (r.code === "VALIDATION") {
+            return c.json(apiError("VALIDATION", { message: r.message, details: r.details }), 400);
+          }
           return c.json(apiError("CONFLICT"), 409);
         }
         return c.json({ offerId: r.offerId });

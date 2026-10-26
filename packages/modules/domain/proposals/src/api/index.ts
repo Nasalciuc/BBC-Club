@@ -7,8 +7,9 @@ export type FeedCursor = { ts: Date; id: string };
 export type IngestResult =
   | { ok: true; offerId: string }
   | { ok: false; code: "CONFLICT" | "BAD_KEY" }
-  /** A new offer that would already be past its validity (validUntil not after now and its publishAt). */
-  | { ok: false; code: "VALIDATION"; message: string };
+  /** A new offer that would already be past its validity (validUntil not after now and its publishAt), or a payload
+   *  the schema refuses. `details` names Zod paths when the body failed IngestInput / IngestReplayInput. */
+  | { ok: false; code: "VALIDATION"; message: string; details?: { path: string; message: string }[] };
 export type WithdrawResult = { ok: true } | { ok: false; code: "NOT_FOUND" | "NOT_ACTIVE" };
 
 /** The only import surface of @bbc/proposals. module.ts implements it; consumers import it. */
