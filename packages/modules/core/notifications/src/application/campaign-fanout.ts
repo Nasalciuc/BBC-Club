@@ -1,11 +1,11 @@
-import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { withTx, type Executor, type Tx } from "@bbc/db";
 import { campaigns, notificationsTable } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
 import { safeTimeZone, scheduleAfterQuietHours } from "./quiet-hours";
+import { cappedOnSendDay } from "./daily-cap";
 
 const PAGE = 1_000;
-const OFFER_CATEGORIES = ["offers_personal", "offers_broadcast"] as const;
 
 type Campaign = typeof campaigns.$inferSelect;
 
@@ -60,22 +60,6 @@ async function fanOutPage(
     .where(eq(campaigns.id, c.id))
     .for("update");
   if (open?.status !== "running") return null;
-  // Cap: at most one offer push per member per server day — date_trunc('day', now()) in the database
-  // session's time zone (UTC on the host), not the member's local day. Same rule the personal path applies.
-  const cappedRows = await tx
-    .select({ memberId: notificationsTable.memberId })
-    .from(notificationsTable)
-    .where(
-      and(
-        inArray(
-          notificationsTable.memberId,
-          page.map((p) => p.memberId),
-        ),
-        inArray(notificationsTable.category, [...OFFER_CATEGORIES]),
-        gte(notificationsTable.createdAt, sql`date_trunc('day', now())`),
-      ),
-    );
-  const capped = new Set(cappedRows.map((r) => r.memberId));
   // Once per time zone, not per member: the walk through quiet hours costs ~2 ms at night, and a page shares `now`.
   // A stored zone that is not one never fails the page (and so every later campaign): that member's row follows the
   // club's default zone, and the member is named in the log.
@@ -94,10 +78,17 @@ async function fanOutPage(
     if (!at) sendAt.set(timeZone, (at = scheduleAfterQuietHours(now, timeZone)));
     return at;
   };
-  const rows = page
-    .filter((p) => !capped.has(p.memberId))
-    .map((p) => ({
-      memberId: p.memberId,
+  const sends = page.map((p) => {
+    const timeZone = zoneOf(p);
+    return { memberId: p.memberId, timeZone, sendAt: scheduledFor(timeZone) };
+  });
+  // Cap: at most one offer push per member per day — the day this one is sent, in the member's zone (quiet hours can
+  // move it to tomorrow). One query for the whole page; the same rule the personal path applies (daily-cap.ts).
+  const capped = await cappedOnSendDay(tx, sends);
+  const rows = sends
+    .filter((s) => !capped.has(s.memberId))
+    .map((s) => ({
+      memberId: s.memberId,
       category: c.category,
       title: c.title,
       body: c.body,
@@ -105,7 +96,7 @@ async function fanOutPage(
       offerId: c.offerId,
       sourceEventId: c.sourceEventId,
       status: "pending" as const,
-      scheduledFor: scheduledFor(zoneOf(p)),
+      scheduledFor: s.sendAt,
     }));
   let inserted = 0;
   if (rows.length) {

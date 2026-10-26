@@ -3,6 +3,7 @@ import { OfferPublishedV1 } from "@bbc/shared/events/offer";
 import { campaigns } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
 import { safeTimeZone, scheduleAfterQuietHours } from "../application/quiet-hours";
+import { cappedOnSendDay } from "../application/daily-cap";
 import type { Executor } from "@bbc/db";
 
 /** `offer.published` → a personal offer becomes one pending inbox/push row; a broadcast becomes one campaign row,
@@ -15,6 +16,8 @@ export async function onOfferPublished(
     sourceEventId: string;
     /** Says which member's stored time zone was not one (their row follows the club's default). */
     logger?: { warn(obj: object, msg: string): void };
+    /** The clock (tests pin it). */
+    now?: () => Date;
   },
   raw: unknown,
 ): Promise<void> {
@@ -48,23 +51,20 @@ export async function onOfferPublished(
   const prefs = await deps.members.preferencesOf(deps.tx, memberId);
   if (!prefs.offers_personal) return;
 
-  // Cap: at most one offer push per member per server day — date_trunc('day', now()) in the database session's
-  // time zone (UTC on the host), not the member's local day. Enqueue-time check; the campaign job applies the same.
-  const alreadyToday: any[] = await deps.tx.execute(sql`
-    SELECT 1 FROM notifications.notifications
-    WHERE member_id = ${memberId}
-      AND category IN ('offers_personal', 'offers_broadcast')
-      AND created_at >= date_trunc('day', now())
-    LIMIT 1`);
-  if (alreadyToday.length > 0) return;
-
   // A stored zone that is not one never fails the delivery: the club's default, and the member named in the log.
   const tz = safeTimeZone(await deps.members.timezoneOf(deps.tx, memberId), () =>
     deps.logger?.warn({ memberId, reason: "invalid_time_zone" }, "member time zone not valid; default used"),
   );
   // Not before the offer is published: a push for one published later would open a 404 until then.
-  const from = new Date(Math.max(Date.now(), new Date(evt.publishedAt).getTime()));
-  const scheduledFor = scheduleAfterQuietHours(from, tz).toISOString();
+  const now = deps.now?.() ?? new Date();
+  const from = new Date(Math.max(now.getTime(), new Date(evt.publishedAt).getTime()));
+  const sendAt = scheduleAfterQuietHours(from, tz);
+
+  // Cap: at most one offer push per member per day — the day this one is sent, in the member's zone, whenever the
+  // other was created (daily-cap.ts). Enqueue-time check; the campaign job applies the same.
+  const capped = await cappedOnSendDay(deps.tx, [{ memberId, timeZone: tz, sendAt }]);
+  if (capped.has(memberId)) return;
+  const scheduledFor = sendAt.toISOString();
 
   // Partial unique index: ON CONFLICT must name the same columns + WHERE offer_id IS NOT NULL.
   await deps.tx.execute(sql`

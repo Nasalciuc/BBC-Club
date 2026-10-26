@@ -240,7 +240,7 @@ describe("POST /v1/requests — only a trip that can be flown, and the fare or o
     await t.close();
   });
 
-  it("a fare request is for the fare's own trip; an unknown fare is refused, a closed one is not", async () => {
+  it("a fare request is for the fare's own trip; a closed fare is taken, and a fare that no longer exists is left out", async () => {
     const t = await testApp({ suite: "requests-fare-match" });
     await t.seedCatalogBasics();
     const [ba]: any = await t.db.execute(
@@ -255,9 +255,6 @@ describe("POST /v1/requests — only a trip that can be flown, and the fare or o
       priceAtRequest: 4200,
     });
 
-    const unknown = await problem(t, oneway(crypto.randomUUID(), "JFK", "LHR"));
-    expect(unknown).toMatchObject({ status: 400, message: "This fare is no longer available." });
-    expect(unknown.paths).toContain("fareId");
     const elsewhere = await problem(t, oneway(ba.id, "KEF", "MAD", "first"));
     expect(elsewhere.status).toBe(400);
     expect(elsewhere.paths).toContain("legs.0");
@@ -270,6 +267,74 @@ describe("POST /v1/requests — only a trip that can be flown, and the fare or o
     expect((await problem(t, oneway(ba.id, "JFK", "LHR"))).status).toBe(201);
     // A fare that closed since the member asked (an offline-queued request) is still taken.
     expect((await problem(t, { ...oneway(closed, "JFK", "LHR"), priceAtRequest: 5000 })).status).toBe(201);
+
+    // A fare that no longer exists at all (a copy 0034 removed, under a request queued offline): the request is taken
+    // for its trip, without the fare and the price that was the fare's — the specialist quotes it (4.1.6).
+    const gone = crypto.randomUUID();
+    const taken = await t.submitRequestAs(t.memberA, t.sampleRequestBody(oneway(gone, "JFK", "LHR")));
+    expect(taken.status).toBe(201);
+    const vm = (await taken.json()) as { id: string; route: string; priceAtRequest: number | null; cabin: string };
+    expect(vm).toMatchObject({ route: "JFK → LHR", priceAtRequest: null, cabin: "business" });
+    const [row]: any = await t.db.execute(sql`
+      SELECT fare_id, price_at_request, intent, trip_type, legs FROM requests.requests WHERE id = ${vm.id}`);
+    expect(row).toMatchObject({ fare_id: null, price_at_request: null, intent: null, trip_type: "oneway" });
+    expect(row.legs).toEqual([{ from: "JFK", to: "LHR", date: day(30) }]);
+    const [submitted] = (await t.journal.byType("request.submitted")).filter(
+      (e: { payload: { requestId?: string } }) => e.payload.requestId === vm.id,
+    );
+    expect(submitted?.payload).toMatchObject({ fareId: null, route: "JFK → LHR" });
+    expect(await (await t.app.request("/metrics")).text()).toContain("bbc_request_fare_gone");
+    await t.close();
+  });
+
+  it("a refusal the app on phones can meet says why, in its message and in a reason that does not change", async () => {
+    const t = await testApp({ suite: "requests-refusal-reasons" });
+    const answer = async (over: Record<string, unknown>) => {
+      const r = await t.submitRequestAs(t.memberA, t.sampleRequestBody({ priceAtRequest: undefined, ...over }));
+      return {
+        status: r.status,
+        ...((await r.json()) as {
+          error: {
+            code: string;
+            message: string;
+            context?: { reason?: string };
+            details?: { path: string; reason?: string }[];
+          };
+        }),
+      };
+    };
+    // A recent search's remembered day, over everywhere now.
+    const past = await answer({ tripType: "oneway", legs: [{ from: "JFK", to: "LHR", date: day(-3) }] });
+    expect(past).toMatchObject({
+      status: 400,
+      error: {
+        code: "VALIDATION",
+        message: "That day has passed. Choose a date from today on.",
+        context: { reason: "day_passed" },
+      },
+    });
+    expect(past.error.details).toContainEqual(expect.objectContaining({ path: "legs.0.date", reason: "day_passed" }));
+    const same = await answer({ tripType: "oneway", legs: [{ from: "JFK", to: "JFK", date: day(30) }] });
+    expect(same).toMatchObject({
+      status: 400,
+      error: {
+        message: "Choose a destination other than where the flight leaves from.",
+        context: { reason: "same_airport" },
+      },
+    });
+    const lap = await answer({ passengers: { adult: 1, child: 0, infant: 2 } });
+    expect(lap).toMatchObject({
+      status: 400,
+      error: {
+        message: "Each infant travels on an adult's lap. Add an adult or remove an infant.",
+        context: { reason: "infants_over_adults" },
+      },
+    });
+    expect(lap.error.details).toContainEqual(expect.objectContaining({ path: "passengers.infant" }));
+    // A field the app checks itself keeps the general message and no reason.
+    const phone = await answer({ contact: { name: "Alex Morgan", phone: "1234567", email: "alex@test.dev" } });
+    expect(phone).toMatchObject({ status: 400, error: { message: "Please check the highlighted fields." } });
+    expect(phone.error.context).toBeUndefined();
     await t.close();
   });
 

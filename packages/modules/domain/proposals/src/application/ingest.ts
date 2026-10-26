@@ -86,6 +86,51 @@ export const IngestInput = z
  *  (or is a 409) whatever the time, and only a new offer must still be valid when it goes out. */
 export const VALID_UNTIL_PAST = "validUntil must be in the future";
 
+/**
+ * A CRM retry of an offer already stored (at-least-once, brief 4.1.6): the payload is compared to the row, not
+ * re-validated as a new offer. Values the stricter IngestInput now refuses — a non-UUID member id, an http media
+ * address, a route or currency that is not three letters — still replay (or 409). What was never an offer (cabin
+ * `economy`) stays a 400. Used only when the idempotency key already names a row.
+ */
+export const IngestReplayInput = z
+  .object({
+    source: z.enum(["crm_agent", "marketing_campaign"]),
+    targeting: z.enum(["user", "segment", "broadcast"]),
+    targetMemberId: z.string().optional(),
+    routeFrom: z
+      .string()
+      .min(1)
+      .transform((v) => v.toUpperCase()),
+    routeTo: z
+      .string()
+      .min(1)
+      .transform((v) => v.toUpperCase()),
+    cabin: z.enum(["business", "first"]),
+    price: Amount,
+    publishedPrice: Amount.optional(),
+    currency: z.string().optional(),
+    title: z.string().min(1),
+    body: z.string().optional(),
+    validUntil: z.string().datetime(),
+    publishAt: z.string().datetime().optional(),
+    flightFacts: FlightFactsInput.optional(),
+    mediaUrl: z.string().url().optional(),
+    rating: z.number().min(1).max(5).multipleOf(0.1).optional(),
+    createdBy: z.string().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.targeting === "user" && !v.targetMemberId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "targetMemberId required when targeting=user",
+        path: ["targetMemberId"],
+      });
+    }
+    if (v.targeting !== "user" && v.targetMemberId) {
+      ctx.addIssue({ code: "custom", message: "targetMemberId only when targeting=user", path: ["targetMemberId"] });
+    }
+  });
+
 export type IngestDeps = {
   db: Executor;
   events: {
@@ -103,15 +148,31 @@ export type IngestDeps = {
   };
 };
 
-/** Idempotent S2S ingest: same key → same offer id; same key + different payload → 409. */
-export async function ingest(
-  deps: IngestDeps,
-  input: z.infer<typeof IngestInput>,
-  idempotencyKey: string,
-): Promise<IngestResult> {
+type ReplayFields = z.infer<typeof IngestReplayInput>;
+
+function zodDetails(err: z.ZodError): { path: string; message: string }[] {
+  return err.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+}
+
+/** Idempotent S2S ingest: same key → same offer id; same key + different payload → 409. `raw` is the JSON body: a
+ *  known key is compared under IngestReplayInput (so a retry of a pre-strictness offer still replays); a new key must
+ *  pass IngestInput. */
+export async function ingest(deps: IngestDeps, raw: unknown, idempotencyKey: string): Promise<IngestResult> {
   if (!idempotencyKey) return { ok: false, code: "BAD_KEY" };
   const existing = await deps.db.select().from(offers).where(eq(offers.idempotencyKey, idempotencyKey)).limit(1);
-  if (existing[0]) return replay(existing[0], input);
+  if (existing[0]) {
+    const loose = IngestReplayInput.safeParse(raw);
+    if (!loose.success) {
+      return { ok: false, code: "VALIDATION", message: "invalid payload", details: zodDetails(loose.error) };
+    }
+    return replay(existing[0], loose.data);
+  }
+
+  const parsed = IngestInput.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, code: "VALIDATION", message: "invalid payload", details: zodDetails(parsed.error) };
+  }
+  const input = parsed.data;
 
   const publishAt = input.publishAt ? new Date(input.publishAt) : new Date();
   const validUntil = new Date(input.validUntil);
@@ -182,7 +243,7 @@ export async function ingest(
  *  publish_at is the insert's now() (within 2s of created_at). A scheduled time the retry drops is a conflict. */
 function replay(
   row: typeof offers.$inferSelect,
-  input: z.infer<typeof IngestInput>,
+  input: ReplayFields,
 ): { ok: true; offerId: string } | { ok: false; code: "CONFLICT" } {
   const num = (v: string | null | undefined) => (v == null ? null : Number(v));
   const instant = (v: Date | string | null | undefined) => (v == null ? null : new Date(v).getTime());
@@ -202,7 +263,7 @@ function replay(
     num(row.price) === num(input.price) &&
     num(row.publishedPrice) === num(input.publishedPrice) &&
     // An offer stored before the ingest upper-cased the currency ('usd') is the same offer when its retry says 'usd'.
-    row.currency.toUpperCase() === (input.currency ?? "USD") &&
+    row.currency.toUpperCase() === (input.currency ?? "USD").toUpperCase() &&
     row.title === input.title &&
     (row.body ?? null) === (input.body ?? null) &&
     instant(row.validUntil) === instant(input.validUntil) &&

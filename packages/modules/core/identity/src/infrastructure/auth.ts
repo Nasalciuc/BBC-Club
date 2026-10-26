@@ -43,7 +43,8 @@ const TEN_MINUTES = 60 * 10;
 const FIFTEEN_MINUTES = 60 * 15;
 
 /** What the send callback rethrows: the failure's facts only. Postmark's own message can name the recipient, and Better
- *  Auth prints whatever reaches runInBackgroundOrAwait to the console. */
+ *  Auth logs whatever reaches runInBackgroundOrAwait (`Failed to run background task:`) through `logger.log` below,
+ *  where betterAuthLine passes the error to errorForLog, which keeps an error's message. */
 class OtpSendFailed extends Error {
   constructor(failure: OtpSendFailure) {
     super(`otp send failed: ${failure.reason}${failure.status !== undefined ? ` (status ${failure.status})` : ""}`);

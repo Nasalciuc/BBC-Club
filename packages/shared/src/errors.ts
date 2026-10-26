@@ -20,7 +20,8 @@ export const ApiError = z.object({
     code: z.enum(ERROR_CODES),
     message: z.string(),
     requestId: z.string().optional(),
-    details: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+    /** `reason`: a stable machine word for a refusal an app maps to its own words (requests: REQUEST_REFUSAL_REASONS). */
+    details: z.array(z.object({ path: z.string(), message: z.string(), reason: z.string().optional() })).optional(),
     /** Optional machine facts (e.g. GONE closed-fare). Never set on 401/403. */
     context: z.record(z.unknown()).optional(),
     retryAfterSeconds: z.number().int().positive().optional(),
@@ -57,7 +58,7 @@ export function apiError(
   opts: {
     message?: string;
     requestId?: string;
-    details?: { path: string; message: string }[];
+    details?: FieldError[];
     context?: Record<string, unknown>;
     retryAfterSeconds?: number;
   } = {},
@@ -74,9 +75,16 @@ export function apiError(
   };
 }
 
-export function zodFieldErrors(err: unknown): { path: string; message: string }[] | null {
-  if (err instanceof ZodError) return err.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
-  return null;
+/** One field's refusal: where, in the club's words, and — when the schema tagged the issue (`params.reason`) — why, as a
+ *  stable word an app can map. */
+export type FieldError = { path: string; message: string; reason?: string };
+
+export function zodFieldErrors(err: unknown): FieldError[] | null {
+  if (!(err instanceof ZodError)) return null;
+  return err.issues.map((i) => {
+    const reason = i.code === "custom" ? (i.params as { reason?: unknown } | undefined)?.reason : undefined;
+    return { path: i.path.join("."), message: i.message, ...(typeof reason === "string" ? { reason } : {}) };
+  });
 }
 
 /** Thrown inside modules; the host's error middleware turns it into the shape above with the right status. */

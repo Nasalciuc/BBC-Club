@@ -28,7 +28,9 @@ const body = {
   passengers: { adult: 1, child: 0, infant: 0 },
   contact: { name: "Alex Morgan", phone: "+12125550148", email: "alex@test.dev" },
 };
-const allowAll = { check: async () => ({ allowed: true }) };
+/** The rule as the platform resolves it before the transaction (ADR-IMPL-071); these fakes count nothing by it. */
+const rule = async (name: string) => ({ name, limit: 10, periodMs: 3_600_000, burst: 5 });
+const allowAll = { rule, check: async () => ({ allowed: true }) };
 const noEstimate = async () => null;
 type PublishInput = Parameters<Parameters<typeof submit>[4]["publish"]>[1];
 const publish = async (tx: Executor, e: PublishInput): Promise<void> => {
@@ -171,7 +173,11 @@ describe("submit — transaction boundaries", () => {
       { ...body, intent: "quote", estimateShown: true },
       actor,
       `idem-${crypto.randomUUID()}`,
-      { publish, rateLimit: { check: async () => ({ allowed: false, retryAfterMs: 1000 }) }, indicative: estimate },
+      {
+        publish,
+        rateLimit: { rule, check: async () => ({ allowed: false, retryAfterMs: 1000 }) },
+        indicative: estimate,
+      },
     );
     expect(limited).toMatchObject({ ok: false, code: "RATE_LIMITED" });
     expect(asked).toEqual([]);
