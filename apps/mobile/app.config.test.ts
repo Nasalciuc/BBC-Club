@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { ExpoConfig } from "expo/config";
-import { assertProductionEnv, assertStagingEnv, withFirebase } from "./app.config";
+import { assertProductionEnv, assertStagingEnv, dialable, withFirebase } from "./app.config";
+import { telHref } from "./src/lib/support-phone-logic";
 
 const complete = {
   EXPO_PUBLIC_APP_ENV: "production",
@@ -92,6 +93,31 @@ describe("assertProductionEnv", () => {
 
   it("leaves EXPO_PUBLIC_SUPPORT_PHONE optional", () => {
     expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_SUPPORT_PHONE: undefined })).not.toThrow();
+    expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_SUPPORT_PHONE: "" })).not.toThrow();
+  });
+
+  it("refuses a general line the app cannot dial, and takes one it can", () => {
+    // Made-up numbers in the fictional 555 range.
+    for (const wrong of ["+1 212 555 0148 ext 2", "1 212 555 0148", "+44 (0)20 7946 0018"]) {
+      expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_SUPPORT_PHONE: wrong })).toThrow(
+        /EXPO_PUBLIC_SUPPORT_PHONE/,
+      );
+      expect(() =>
+        assertStagingEnv({
+          EXPO_PUBLIC_APP_ENV: "staging",
+          EXPO_PUBLIC_API_URL: "https://api.buybusinessclass.com",
+          EXPO_PUBLIC_SUPPORT_PHONE: wrong,
+        }),
+      ).toThrow(/EXPO_PUBLIC_SUPPORT_PHONE/);
+    }
+    expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_SUPPORT_PHONE: "+12125550148" })).not.toThrow();
+    expect(() =>
+      assertStagingEnv({
+        EXPO_PUBLIC_APP_ENV: "staging",
+        EXPO_PUBLIC_API_URL: "https://api.buybusinessclass.com",
+        EXPO_PUBLIC_SUPPORT_PHONE: "+1 (212) 555-0148",
+      }),
+    ).not.toThrow();
   });
 
   it("refuses an http privacy URL", () => {
@@ -116,6 +142,38 @@ describe("assertProductionEnv", () => {
     expect(() => assertProductionEnv({ ...complete, EXPO_PUBLIC_TERMS_URL: "file:///terms" })).toThrow(
       /EXPO_PUBLIC_TERMS_URL/,
     );
+  });
+});
+
+describe("dialable", () => {
+  it("answers as the app's telHref does, for every number either test names", () => {
+    // Made-up numbers (the fictional 555 range; Ofcom's drama range for London).
+    const numbers = [
+      "",
+      " ",
+      "+4412345",
+      "+44123456",
+      "+12125550148",
+      "+1 (212) 555-0148",
+      " +1.212.555.0148 ",
+      "+44 20 7946 0018",
+      "+1 212 555 0148 ext 2",
+      "+1 212 555 0148 x2",
+      "+1 212 555 0148 22",
+      "+1 212 555 0148 (22)",
+      "+1 212+555 0148",
+      "1 212 555 0148",
+      "+1-800-FLY-0148",
+      "+1 212 555 0148 0148 01",
+      "+44 (0)20 7946 0018",
+      "+1\u00A0212\u00A0555\u00A00148",
+      "\u202D+1 (212) 555\u20110148\u202C",
+      "\u202A+1 212-555-0148\u202C",
+      "+1 212\u2013555\u20130148",
+    ];
+    for (const phone of numbers) {
+      expect({ phone, dialable: dialable(phone) }).toEqual({ phone, dialable: telHref(phone) !== null });
+    }
   });
 });
 

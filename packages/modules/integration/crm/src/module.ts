@@ -1,22 +1,14 @@
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import type { EmailFacade } from "@bbc/email";
 import type { CrmFacade, CrmCallOpts } from "./api";
+import { CRM_TIMEOUT_MS, CrmTimeoutError } from "./domain/errors";
 import { emailCrm } from "./infrastructure/email-crm";
+import { httpCrm } from "./infrastructure/http-crm";
 
 export type { CrmFacade, CrmCallOpts };
+export { CrmHttpError, CrmRequestInvalidError, CrmTimeoutError, CrmUnreachableError } from "./domain/errors";
 /** @deprecated Prefer CrmFacade — same shape. */
 export type CrmConnector = CrmFacade;
-
-const CRM_TIMEOUT_MS = 5000;
-
-/** Partner slower than this is an outage. Fail fast and retry; do not hold a pooled connection. */
-export class CrmTimeoutError extends Error {
-  readonly code = "CRM_TIMEOUT" as const;
-  constructor(method: string, ms = CRM_TIMEOUT_MS) {
-    super(`CRM ${method} timed out after ${ms}ms`);
-    this.name = "CrmTimeoutError";
-  }
-}
 
 async function raceAbort<T>(method: string, signal: AbortSignal, work: Promise<T>, ms: number): Promise<T> {
   if (signal.aborted) throw new CrmTimeoutError(method, ms);
@@ -46,7 +38,7 @@ export function withCrmTimeout(adapter: CrmFacade, ms = CRM_TIMEOUT_MS): CrmFaca
   };
 }
 
-/** Mock until Dan grants access. The http adapter and the mirror sync are stage 5. */
+/** Dev, tests and staging: records submits, knows nobody. The mirror sync is stage 5. */
 export function mockCrm(
   known: { email: string; crmClientId: string; fullName?: string; homeAirport?: string }[] = [],
 ): CrmFacade {
@@ -77,7 +69,18 @@ export const crmModule = (override?: CrmFacade): ModuleDescriptor<{ email: Email
   needs: ["email"],
   init: ({ env, ports }) => {
     if (override) return { exposes: withCrmTimeout(override), routes: [], consumers: [], jobs: [] };
-    if (env.CRM_ADAPTER === "http") throw new Error("CRM http adapter is stage 5; set CRM_ADAPTER=mock");
+    if (env.CRM_ADAPTER === "http") {
+      // loadEnv refuses http without both (and an address that is not https); a host built without it is refused here.
+      if (!env.CRM_API_URL || !env.CRM_API_SECRET) {
+        throw new Error("CRM_API_URL and CRM_API_SECRET are required when CRM_ADAPTER=http");
+      }
+      return {
+        exposes: withCrmTimeout(httpCrm({ url: env.CRM_API_URL, secret: env.CRM_API_SECRET })),
+        routes: [],
+        consumers: [],
+        jobs: [],
+      };
+    }
     if (env.CRM_ADAPTER === "email") {
       if (!env.OPERATORS_EMAIL) throw new Error("OPERATORS_EMAIL is required when CRM_ADAPTER=email");
       return {

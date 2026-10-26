@@ -54,12 +54,6 @@ export function limitedCopy(s: { scope?: "ip" | "member" | null; minutes: number
   };
 }
 
-/** Call buttons exist only when a verified support number is configured (EXPO_PUBLIC_SUPPORT_PHONE) — the rule since #39. */
-export function telHref(phone: string | undefined): string | null {
-  const digits = phone?.replace(/[^\d+]/g, "") ?? "";
-  return digits.length >= 8 ? `tel:${digits}` : null;
-}
-
 /** `RequestBody.contact.name` takes 2–80 characters (the profile allows 120): the field stops at 80. */
 export const REQUEST_NAME_MAX = 80;
 

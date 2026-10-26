@@ -17,6 +17,7 @@ import {
 
 import { deleteAccount } from "@/features/auth/flows";
 import { clearStack } from "@/features/auth/leave";
+import { CAN_CALL } from "@/lib/support-phone";
 import { canConfirmDelete, deleteFailureCopy } from "./delete-logic";
 import { PasswordField } from "./PasswordField";
 import { openRequestsLine } from "./profile-logic";
@@ -79,7 +80,7 @@ export const DeleteAccountSheet = forwardRef<ProfileSheetHandle, Props>(function
     const result = await deleteAccount(password);
     setBusy(false);
     if (!result.ok) {
-      const copy = deleteFailureCopy(result.code, password.trim().length === 0);
+      const copy = deleteFailureCopy(result.code, password.trim().length === 0, CAN_CALL);
       if (copy.at === "field") setFieldMessage(copy.text);
       else setSheetMessage(copy.text);
       return;

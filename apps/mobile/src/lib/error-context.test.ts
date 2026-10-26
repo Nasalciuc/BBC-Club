@@ -119,13 +119,20 @@ describe("a call that reached no server while the phone is online is not 'offlin
   });
 });
 
-test("Profile's failure frame offers Call us beside Try again when the club's number is known (F114)", () => {
-  expect(errorFrameActions("profile", "+1 212 555 0142")).toEqual(["retry", "call"]);
-  expect(errorFrameActions("profile", undefined)).toEqual(["retry"]);
-  // A number too short to dial is no number (telHref).
-  expect(errorFrameActions("profile", "123")).toEqual(["retry"]);
+test("Profile's failure frame offers Call us beside Try again when the club's line is configured (F114)", () => {
+  expect(errorFrameActions("profile", true)).toEqual(["retry", "call"]);
+  expect(errorFrameActions("profile", false)).toEqual(["retry"]);
   // The other pages keep their own frames.
-  expect(errorFrameActions("fare", "+1 212 555 0142")).toEqual(["retry"]);
+  expect(errorFrameActions("fare", true)).toEqual(["retry"]);
+});
+
+test("a failed deletion points at the call only when the club's line is configured", () => {
+  expect(stateCopy("deleteFailed", true).body).toBe(
+    "Your account could not be deleted. Try again or call your specialist.",
+  );
+  expect(stateCopy("deleteFailed", false).body).toBe("Your account could not be deleted. Try again in a moment.");
+  // Unsaid is no number: the default never asks for a call.
+  expect(stateCopy("deleteFailed").body.toLowerCase()).not.toContain("call");
 });
 
 test("a password change made with the other sessions still alive is a notice; any other failure is not (ADR-IMPL-047)", () => {

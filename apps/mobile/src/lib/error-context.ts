@@ -1,9 +1,11 @@
-import { telHref } from "../features/requests/confirmation-logic";
-
 export type MessageKind =
   "gone" | "notSent" | "route" | "update" | "maintenance" | "generic" | "wrongPassword" | "deleteFailed";
 
-export function stateCopy(kind: MessageKind): { title: string; body: string } {
+/**
+ * A message's words. `canCall`: the club's general line is configured (support-phone.ts `CAN_CALL`) — only then may a
+ * message point at a call; without it, the calm way on (DESIGN.md, Product Content).
+ */
+export function stateCopy(kind: MessageKind, canCall = false): { title: string; body: string } {
   switch (kind) {
     case "gone":
       return {
@@ -39,7 +41,9 @@ export function stateCopy(kind: MessageKind): { title: string; body: string } {
     case "deleteFailed":
       return {
         title: "Something went wrong.",
-        body: "Your account could not be deleted. Try again or call your specialist.",
+        body: canCall
+          ? "Your account could not be deleted. Try again or call your specialist."
+          : "Your account could not be deleted. Try again in a moment.",
       };
     case "generic":
       return {
@@ -100,11 +104,11 @@ export function readFailureCopy(code: string | undefined, what: ReadSubject): { 
 const CALL_ON_FAILURE: ReadonlySet<ReadSubject> = new Set(["profile"]);
 
 /**
- * What a page's failure frame offers (F114): `Try again`, and on Profile `Call us` too when the club's verified number
- * is known (EXPO_PUBLIC_SUPPORT_PHONE, `telHref`) — as the app gate's pages offer it.
+ * What a page's failure frame offers (F114): `Try again`, and on Profile `Call us` too when the club's general line is
+ * configured (`canCall`, support-phone.ts) — as the app gate's pages offer it.
  */
-export function errorFrameActions(what: ReadSubject, supportPhone: string | undefined): ("retry" | "call")[] {
-  return CALL_ON_FAILURE.has(what) && telHref(supportPhone) ? ["retry", "call"] : ["retry"];
+export function errorFrameActions(what: ReadSubject, canCall: boolean): ("retry" | "call")[] {
+  return CALL_ON_FAILURE.has(what) && canCall ? ["retry", "call"] : ["retry"];
 }
 
 /** Over a list already on screen, when a reload did not answer: what is shown may be out of date — never "This screen

@@ -129,7 +129,11 @@ says the member saw one (ADR-IMPL-042). A review of about 560 hypotheses on this
 - **A request that will not go out by itself** — the server gave up passing it on (`not_sent`, ADR-IMPL-042) or refused
   the copy on the phone for good — no longer reads "Saved on your phone…", which was untrue: `We couldn’t pass this
 on. Call us and we’ll take it from here.` with `Call us`, the screen's one filled button; the list's hint points at
-  the call, not at a retry that does not exist (no frame draws this state — the owner's to confirm).
+  the call, not at a retry that does not exist (no frame draws this state — the owner's to confirm). (Amended by
+  ADR-IMPL-065: the call, its words and the list's hint at it only when the build has the club's general line,
+  `EXPO_PUBLIC_SUPPORT_PHONE`. Without it, a request the server holds (`not_sent`) says the club will try again, with
+  no need to send it again, and one the server never had (`rejected`) asks the member to send it again from Explore —
+  beside an info glyph, not the phone.)
 - **The offline queue never discards a request** (Figma's note on 325:8384, `Send now`): being offline costs no
   attempt; a server failure waits 1, 2, 4, 8, 16, then 30 minutes and is retried for as long as it takes; a refusal for
   good (400, 409) stays on the phone, saying so, for a week. The details are checked before a request is sent or saved
