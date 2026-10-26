@@ -12,9 +12,13 @@ describe("campaign fan-out at 20 000 members", () => {
     await t.db.execute(sql`
       INSERT INTO members.notification_preferences (member_id, category, enabled)
       SELECT 'vol-' || lpad(g::text, 6, '0'), 'offers_broadcast', false FROM generate_series(1, 20000, 10) g`);
+    // Already an offer push on the London day this one is sent (the cap's day, notifications MODULE.md): today's, or —
+    // from 22:00, when quiet hours send this one tomorrow at 08:00 — tomorrow's.
     await t.db.execute(sql`
-      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id)
-      SELECT 'vol-' || lpad(g::text, 6, '0'), 'offers_personal', 'earlier today', 'pending', gen_random_uuid()
+      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id, scheduled_for)
+      SELECT 'vol-' || lpad(g::text, 6, '0'), 'offers_personal', 'earlier today', 'pending', gen_random_uuid(),
+             CASE WHEN extract(hour FROM now() AT TIME ZONE 'Europe/London') >= 22 THEN now() + interval '12 hours'
+                  ELSE now() END
       FROM generate_series(2, 20000, 50) g`);
 
     const offerId = await t.seedBroadcastOffer({ title: "Your October in London" });

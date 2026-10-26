@@ -55,6 +55,10 @@ export const notificationsTable = notifications.table(
       .where(sql`${t.status} = 'sending'`),
     // inbox: newest first per member; badge = unread count
     index("notif_inbox").on(t.memberId, t.createdAt),
+    // the daily offer cap: a member's offer pushes by the time they are sent (0044; daily-cap.ts)
+    index("notif_offer_sends")
+      .on(t.memberId, t.scheduledFor)
+      .where(sql`${t.category} IN ('offers_personal', 'offers_broadcast')`),
     index("notif_unread")
       .on(t.memberId)
       .where(sql`${t.readAt} IS NULL`),

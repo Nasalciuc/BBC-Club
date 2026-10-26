@@ -2,6 +2,19 @@ import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { testApp } from "./helpers/test-app";
 
+/** What `work` answered, or "stalled" once `ms` passed first: a stall fails the test instead of hanging it. */
+async function within<T>(ms: number, work: Promise<T>): Promise<T | "stalled"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stalled = new Promise<"stalled">((resolve) => {
+    timer = setTimeout(() => resolve("stalled"), ms);
+  });
+  try {
+    return await Promise.race([work, stalled]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 describe("POST /v1/requests rate limits", () => {
   it("ten colleagues on one IP each get 201", async () => {
     const t = await testApp({ suite: "requests-rate-colleagues" });
@@ -74,6 +87,31 @@ describe("POST /v1/requests rate limits", () => {
     await t.close();
   });
 
+  it("a refused request counts toward the quota: after five refusals the member's next request is 429", async () => {
+    // A request refused once its quota was counted (an offer or a fare that does not match it) keeps the units it spent,
+    // so refusals cannot be looped for free; a 429 still spends nothing (4.1.6).
+    const t = await testApp({ suite: "requests-rate-refused" });
+    const ip = "198.51.100.24";
+    for (let i = 0; i < 5; i++) {
+      const refused = await t.submitRequestAs(
+        t.memberA,
+        t.sampleRequestBody({ priceAtRequest: undefined, offerId: crypto.randomUUID() }),
+        { ip },
+      );
+      expect(refused.status).toBe(400);
+    }
+    const next = await t.submitRequestAs(t.memberA, t.sampleRequestBody(), { ip });
+    expect(next.status).toBe(429);
+    expect(((await next.json()) as { error: { context?: unknown } }).error.context).toEqual({ scope: "member" });
+    // The address spent a unit for each refusal (60 s of its bucket each: sixty an hour) and none for the 429.
+    const [{ s: spent }]: any = await t.db.execute(sql`
+      SELECT extract(epoch FROM tat - now())::float8 AS s FROM platform.rate_limit_state
+      WHERE key = ${`requests.submit.ip:ip:${ip}`}`);
+    expect(spent).toBeGreaterThan(5 * 60 - 30);
+    expect(spent).toBeLessThanOrEqual(5 * 60);
+    await t.close();
+  }, 30_000);
+
   it("the address's limit says so: a member with no requests behind a busy address reads scope 'ip'", async () => {
     const t = await testApp({ suite: "requests-rate-ip-scope" });
     const ip = "198.51.100.23";
@@ -99,4 +137,50 @@ describe("POST /v1/requests rate limits", () => {
     expect(body.error.context).toEqual({ scope: "ip" });
     await t.close();
   }, 30_000);
+});
+
+/** ADR-IMPL-071: a submit counts its quota inside its transaction, on that transaction's connection. The rules it counts
+ *  by (code defaults or the flag row `ratelimit.<rule>`) are read before the transaction opens: read inside it, on a
+ *  cold flag cache each submit held one pooled connection while it waited for a second, and with as many submits as
+ *  connections every one of them waited for ever. */
+describe("POST /v1/requests on a full pool", () => {
+  it("a pool of two and a cold rule cache: two submits at once both answer", async () => {
+    const t = await testApp({ suite: "requests-rate-pool-two", poolMax: 2 });
+    try {
+      const answers = await within(
+        10_000,
+        Promise.all([
+          t.submitRequestAs(t.memberA, t.sampleRequestBody(), { ip: "198.51.100.30" }),
+          t.submitRequestAs(t.memberB, t.sampleRequestBody(), { ip: "198.51.100.31" }),
+        ]),
+      );
+      expect(answers === "stalled" ? answers : answers.map((r) => r.status)).toEqual([201, 201]);
+    } finally {
+      await t.close();
+    }
+  }, 30_000);
+
+  it("one member on one address, six at once on a pool of two: the rate rows queue them, five are taken, the sixth is 429", async () => {
+    // The suspected deadlock on the rate-limit rows themselves: every submit locks the address's row, then the member's,
+    // in that order, so they queue and never cross. With the rules read inside the transaction they stalled on the pool
+    // (the cause above); with a warm cache the same six already answered — the rows alone do not deadlock.
+    const t = await testApp({ suite: "requests-rate-pool-rows", poolMax: 2 });
+    try {
+      const ip = "198.51.100.32";
+      const answers = await within(
+        15_000,
+        Promise.all(Array.from({ length: 6 }, () => t.submitRequestAs(t.memberA, t.sampleRequestBody(), { ip }))),
+      );
+      expect(answers === "stalled" ? answers : answers.map((r) => r.status).sort()).toEqual([
+        201, 201, 201, 201, 201, 429,
+      ]);
+      if (answers === "stalled") return;
+      const refused = answers.find((r) => r.status === 429);
+      expect(((await refused?.json()) as { error: { context?: unknown } }).error.context).toEqual({ scope: "member" });
+      const [{ n }]: any = await t.db.execute(sql`SELECT count(*)::int n FROM requests.requests`);
+      expect(n).toBe(5);
+    } finally {
+      await t.close();
+    }
+  }, 40_000);
 });

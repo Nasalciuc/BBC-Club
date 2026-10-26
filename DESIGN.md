@@ -2221,8 +2221,9 @@ Documented in `design/components.md`. The rules an agent most often gets wrong:
 - Sentence case; buttons start with a verb (`Request a quote`, `Use these dates`, `Call your specialist`).
 - Facts are facts: a fare says what its price covers (`one way` until the catalogue says `round trip`); a starting
   fare says `from`; `Save 48%` only where the published fare is on record, its source beside it; a rating, a saved
-  count, the weather, a city's line and the member's photo only where the club has them (ADR-IMPL-056 §5). The
-  specialist confirms availability and books by phone; no payment in the app.
+  count, the weather and a city's line only where the club has them (ADR-IMPL-056 §5); the member's own photo when
+  they add one, seen only by them (ADR-IMPL-070). The specialist confirms availability and books by phone; no payment
+  in the app.
 - Errors say what happened and what to do next, calmly. No urgency, no scarcity, no exclamation marks.
 
 ## Do's and Don'ts

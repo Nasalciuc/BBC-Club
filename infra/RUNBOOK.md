@@ -383,6 +383,24 @@ got), `bbc_place_landmarks_failed{stage}` (`wikidata`, `commons`: the source fai
 `landmarks: a source asked the club to wait`, `landmarks: write refused`. The worker reaches `query.wikidata.org` and
 `commons.wikimedia.org` over 443; phones load the photographs from `upload.wikimedia.org`.
 
+## Member photos (ADR-IMPL-070)
+
+A member's own photo is in Postgres, `members.profile_photo`: one row per member, a 512 × 512 WebP of at most 100 KB
+without metadata, served only to that member by `GET /v1/profile/photo` (no public address, nothing in MinIO). It goes
+with the account (`member.deleted`, and the FK from the profile), so backups and the restore drill carry it like any
+other row. Only a build from 0.3.0 shows the `Photo` row; an older build that took an update over the air shows none.
+
+How many, and how much room they take:
+
+```sql
+SELECT count(*), pg_size_pretty(sum(byte_size)::bigint) AS bytes, max(byte_size) FROM members.profile_photo;
+SELECT pg_size_pretty(pg_total_relation_size('members.profile_photo'));
+```
+
+A member asks for their photo to be removed and cannot do it in the app (Edit profile → Photo → Remove photo):
+`DELETE FROM members.profile_photo WHERE member_id = '<member id>';` — their portrait shows their initials from the
+next load. Never copy a photo out of the database to look at it.
+
 ## The site's destinations (ADR-IMPL-045)
 
 Twice a day (07:40 and 19:40 UTC; twice since ADR-IMPL-067) `sync-site-destinations` (worker) reads the company's site through its own API

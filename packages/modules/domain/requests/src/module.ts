@@ -198,7 +198,19 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           });
         } catch (err: unknown) {
           const details = zodFieldErrors(err);
-          if (details) return c.json(apiError("VALIDATION", { details }), 400);
+          if (details) {
+            // A refusal an app on phones can meet (a remembered day now past, a leg that goes nowhere, more infants than
+            // adults) says why: its own message, which an older app shows as it is, and its reason, which a newer one
+            // maps (REQUEST_REFUSAL_REASONS, ADR-IMPL-071). Validation is unchanged.
+            const why = details.find((d) => d.reason);
+            return c.json(
+              apiError("VALIDATION", {
+                details,
+                ...(why ? { message: why.message, context: { reason: why.reason } } : {}),
+              }),
+              400,
+            );
+          }
           throw err;
         }
         if (!result.ok) {
@@ -218,6 +230,14 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
         // Counted once the row exists (a replay or a lost race stores nothing new): estimates that reached a request.
         if (result.created && created.shownEstimateAmount !== null) {
           platform.metrics.inc("request_estimates_stored", { cabin: created.cabin });
+        }
+        // Taken for its trip without the fare it named, which no longer exists (a request queued before 0034 removed it).
+        if (result.created && "fareLeftOut" in result && result.fareLeftOut) {
+          platform.metrics.inc("request_fare_gone");
+          platform.logger.info(
+            { requestId: created.id, fareId: result.fareLeftOut },
+            "request taken without its fare: the fare no longer exists",
+          );
         }
         return c.json(
           toRequestVM(created, [], cityOf(await citiesFor([created]), created)),

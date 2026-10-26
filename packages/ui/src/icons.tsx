@@ -212,6 +212,23 @@ function LockFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) 
   );
 }
 
+/**
+ * Edit profile's `Photo` row (brief 3.4.2; 36 draws no such row): Lucide's `camera`, solid like 36's other marks, its
+ * lens cut out in the card's white.
+ */
+function CameraFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M14 4a2 2 0 0 1 1.76 1.05l.49.9A2 2 0 0 0 18 7h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2a2 2 0 0 0 1.76-1.05l.49-.9A2 2 0 0 1 10 4Z"
+        fill={color}
+      />
+      <SvgCircle cx={12} cy={13} r={3.6} fill={tokens.colors.surfaceCard} />
+      <SvgCircle cx={12} cy={13} r={2} fill={color} />
+    </Svg>
+  );
+}
+
 /** 12: `Edit profile`'s mark, a person solid with a pen (Lucide `user-pen`, filled). */
 function UserPenFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
   return (
@@ -405,6 +422,7 @@ export const icons = {
   "user-fill": UserFill,
   "lock-fill": LockFill,
   "user-pen-fill": UserPenFill,
+  "camera-fill": CameraFill,
   "info-fill": InfoFill,
   "star-fill": StarFill,
   bell: Bell,

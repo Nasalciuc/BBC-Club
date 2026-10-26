@@ -7,6 +7,7 @@ type ProfileSource = {
   displayName: string | null;
   homeAirport: string | null;
   avatarUrl: string | null;
+  photoEtag: string | null;
   timezone: string;
   phone: string | null;
   preferences: ProfileVM["preferences"];
@@ -38,6 +39,7 @@ export function toProfileVM(
       displayName: null,
       homeAirport: null,
       avatarUrl: null,
+      photo: null,
       timezone: "America/New_York",
       phone: null,
       memberSince: null,
@@ -55,6 +57,8 @@ export function toProfileVM(
     homeAirport: row.homeAirport,
     // The photo's address, or none — the app shows the member's initials (ADR-IMPL-056).
     avatarUrl: row.avatarUrl ?? null,
+    // The photo the member added (ADR-IMPL-070): its tag, never an address — the app asks GET /v1/profile/photo.
+    photo: row.photoEtag ? { etag: row.photoEtag } : null,
     timezone: row.timezone,
     phone: row.phone,
     memberSince: row.memberSince.toISOString(),
