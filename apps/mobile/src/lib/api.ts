@@ -31,7 +31,11 @@ import {
   type HomeSuggestionVM as HomeSuggestionVMType,
   type PopularVM as PopularVMType,
 } from "@bbc/shared/api/v1/discovery";
-import { PlacePhotosVM, type PlacePhotoVM as PlacePhotoVMType } from "@bbc/shared/api/v1/places";
+import {
+  PlacePhotosVM,
+  type LandmarkVM as LandmarkVMType,
+  type PlacePhotoVM as PlacePhotoVMType,
+} from "@bbc/shared/api/v1/places";
 import type { ProfileVM as Profile } from "@bbc/shared/api/v1/profile";
 import {
   RequestBody,
@@ -42,6 +46,7 @@ import {
 } from "@bbc/shared/api/v1/requests";
 
 import { authHeaders } from "@/features/auth/client";
+import { readLandmarks } from "@/features/places/landmark-logic";
 import { env } from "@/lib/env";
 import { maintenanceValue, storeUrlValue, type StoreUrl } from "@/lib/app-gate-logic";
 import { UNREACHABLE_MESSAGE, classifyFetchFailure, passwordChangedNotice } from "@/lib/error-context";
@@ -521,6 +526,36 @@ export async function fetchPlacePhotos(codes: readonly string[]): Promise<ApiRes
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }
     return { ok: true, data: parsed.data.items };
+  });
+}
+
+export type PlaceLandmarksResult =
+  { notModified: true; etag: string | null } | { notModified: false; landmarks: LandmarkVMType[]; etag: string | null };
+
+/**
+ * GET /v1/places/:code/landmarks — up to three landmarks of the city (ADR-IMPL-064), revalidated by its ETag
+ * (`private, no-cache`): a 304 keeps what the app holds. A landmark this app cannot read is dropped, never the list
+ * (`readLandmarks`); a body it cannot read at all is a VALIDATION failure, and 404 a code that is no airport.
+ */
+export async function fetchPlaceLandmarks(
+  code: string,
+  etag?: string | null,
+): Promise<ApiResult<PlaceLandmarksResult>> {
+  return asResult<PlaceLandmarksResult>(async () => {
+    const res = await apiFetch(`/v1/places/${encodeURIComponent(code)}/landmarks`, {
+      headers: etag ? { "If-None-Match": etag } : {},
+    });
+    if (res.status === 304) {
+      return { ok: true, data: { notModified: true, etag: res.headers.get("ETag") ?? etag ?? null } };
+    }
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const landmarks = readLandmarks(await parseJson(res), code);
+    if (!landmarks) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: { notModified: false, landmarks, etag: res.headers.get("ETag") } };
   });
 }
 

@@ -26,6 +26,10 @@ export const RequestSubmittedV1 = z.object({
         .string()
         .regex(/^[0-9a-f]{16}$/)
         .optional(),
+      /** Who priced it (ADR-IMPL-063): `site`, the company's site; `club`, the club's copy of the formula. Absent on
+       *  rows published before the site's prices, and while `catalog.site_prices` is off: the formula. Optional,
+       *  additive. */
+      source: z.enum(["site", "club"]).optional(),
     })
     .nullable()
     .optional(),

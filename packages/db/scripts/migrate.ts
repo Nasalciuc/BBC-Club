@@ -701,6 +701,83 @@ try {
     }
   }
 
+  // After 0006 and 0031 (the catalog schema and catalog.fare_trip): what the company's site answered for a route.
+  // ADR-IMPL-063.
+  const sitePrices = join(migrationsDir, "0038_catalog_site_prices.sql");
+  if (existsSync(sitePrices)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0038_catalog_site_prices.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(sitePrices, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0038_catalog_site_prices.sql')`);
+      });
+      console.log("catalog site prices applied");
+    }
+  }
+
+  // After 0006 (catalog schema): landmarks, a table with a foreign key to catalog.airports, and the outside sources'
+  // holds. ADR-IMPL-064.
+  const placeLandmarks = join(migrationsDir, "0039_catalog_place_landmarks.sql");
+  if (existsSync(placeLandmarks)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0039_catalog_place_landmarks.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(placeLandmarks, "utf8")));
+        await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES ('0039_catalog_place_landmarks.sql')`);
+      });
+      console.log("catalog place landmarks applied");
+    }
+  }
+
+  // After 0005 and 0025 (the requests schema and its estimate pair): who priced the estimate a quote carries.
+  // ADR-IMPL-063.
+  const shownEstimateSource = join(migrationsDir, "0040_requests_shown_estimate_source.sql");
+  if (existsSync(shownEstimateSource)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0040_requests_shown_estimate_source.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      // Two transactions, as 0029: the column and the CHECK as NOT VALID, then the scan that validates it.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(shownEstimateSource, "utf8")));
+      });
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql`ALTER TABLE requests.requests VALIDATE CONSTRAINT requests_shown_estimate_source`);
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0040_requests_shown_estimate_source.sql')`,
+        );
+      });
+      console.log("requests shown estimate source applied");
+    }
+  }
+
+  // After 0028 (catalog.site_routes): the day a site deal is shown for. ADR-IMPL-067. One transaction: the table holds
+  // about 1,500 rows, so the backfill, NOT NULL and the CHECK's scan take milliseconds under the lock.
+  const siteRouteValidity = join(migrationsDir, "0042_catalog_site_route_validity.sql");
+  if (existsSync(siteRouteValidity)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0042_catalog_site_route_validity.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        await tx.execute(sql.raw(readFileSync(siteRouteValidity, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0042_catalog_site_route_validity.sql')`,
+        );
+      });
+      console.log("catalog site route validity applied");
+    }
+  }
+
   // After drizzle's own migrations (members.profile): the photo the member adds themselves (ADR-IMPL-070). A new table,
   // one transaction.
   const membersPhoto = join(migrationsDir, "0043_members_photo.sql");

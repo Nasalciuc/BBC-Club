@@ -37,7 +37,9 @@ appId: com.buybusinessclass.club
 - takeScreenshot: 233-4069
 - tapOn: { id: "tab.explore" }
 - assertVisible: { id: "explore.root" }
-# After other tabs, wait for the sheet to snap back open (HomeSheet `active`) before tapping search.
+# Back from other tabs, the sheet must still be drawn at rest: nothing moved it, so this checks that its resting style
+# outlived the other tabs' renders (design/motion.md, resting styles). It passes in under a second or not at all: a
+# longer wait would prove nothing. On a failure run-parity-ci.sh prints the sheet's trace (HomeSheet, e2e builds).
 - assertVisible: { id: "explore.search" }
 - tapOn: { id: "explore.search" }
 - assertVisible: { id: "explore.airportQuery" }

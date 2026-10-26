@@ -1,0 +1,149 @@
+{
+  "head": {
+    "vars": ["code", "city", "cityLabel", "cityCoord", "night", "image"]
+  },
+  "results": {
+    "bindings": [
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q135615"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Springfield"
+        },
+        "code": {
+          "type": "literal",
+          "value": "SGF"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(-93.286111111 37.195)"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/ParkCentralSquarefountainbyCVBCS.jpg"
+        }
+      },
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q28515"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Springfield"
+        },
+        "code": {
+          "type": "literal",
+          "value": "SGF"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(-89.645 39.7975)"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Illinois%20State%20Capitol%2C%20Springfield%2C%20IL.jpg"
+        }
+      },
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q49158"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Springfield"
+        },
+        "code": {
+          "type": "literal",
+          "value": "SGF"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(-72.547455 42.112411)"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Springfield%2C%20MA.jpg"
+        }
+      },
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q40325"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Springfield"
+        },
+        "code": {
+          "type": "literal",
+          "value": "SGF"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(-83.804166666 39.926944444)"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Downtown%20Springfield%2C%20Ohio%202021.jpg"
+        }
+      },
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q2369961"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Springfield"
+        },
+        "code": {
+          "type": "literal",
+          "value": "SGF"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(0.509 51.747)"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Springfield%20Place%2C%20Springfield%2C%20Essex%20-%20geograph.org.uk%20-%20132627.jpg"
+        }
+      },
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q7580888"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Springfield"
+        },
+        "code": {
+          "type": "literal",
+          "value": "SGF"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(-92.5578 35.2675)"
+        }
+      }
+    ]
+  }
+}

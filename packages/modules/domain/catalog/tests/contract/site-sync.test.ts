@@ -1,16 +1,16 @@
-/** The site's destinations against the database (ADR-IMPL-045): the nightly job, its photos, its pins, its failures. */
+/** The site's destinations against the database (ADR-IMPL-045): the sync job, its photos, its pins, its failures. */
 import { describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb } from "@bbc/db/testing/isolated-db";
 import { createPlatform } from "@bbc/platform";
 import type { Fetch } from "../../src/application/place-photo-sources";
-import { SITE_STORAGE, SiteError } from "../../src/application/site-cms";
+import { LEGACY_SITE_STORAGE, SITE_STORAGE, SiteError } from "../../src/application/site-cms";
 import { toEstimateVM } from "../../src/application/to-fare-vm";
 import { airportsRepo } from "../../src/infrastructure/airports.repo";
 import { SITE_PINS, catalogModule } from "../../src/module";
 import { storedPricingRules } from "../../src/pricing/rules";
 import { FIXTURE_RULES } from "../unit/pricing-rules.fixture";
-import { fakeSiteFetch, siteFixture, type FakeSite } from "../unit/site.fixture";
+import { fakeClock, fakeSiteFetch, siteFixture, type FakeSite } from "../unit/site.fixture";
 
 /** The module on a fresh database, the site answering from `site` (read again on every request: change it and run). */
 async function setup(name: string, site: FakeSite = siteFixture()) {
@@ -21,6 +21,7 @@ async function setup(name: string, site: FakeSite = siteFixture()) {
   const platform = createPlatform(iso.db, { level: "silent" });
   const out = await catalogModule({
     fetch: (url, init) => (tonight ?? fakeSiteFetch(site, calls))(url, init),
+    siteClock: fakeClock(),
   }).init({
     db: iso.db,
     platform,
@@ -93,8 +94,10 @@ async function setup(name: string, site: FakeSite = siteFixture()) {
 }
 
 const siteUrl = (path: string) => SITE_STORAGE + path;
+/** Where the site served its photos before (ADR-IMPL-062): rows a night wrote then. */
+const legacyUrl = (path: string) => LEGACY_SITE_STORAGE + path;
 
-describe("site destinations — the nightly job", () => {
+describe("site destinations — the sync job", () => {
   it("with its photos and its pins off, it asks the site nothing and hands the site's photos back", async () => {
     const t = await setup("site-off");
     await t.operatorPhoto("LHR", siteUrl("bestDeals/23/image/london01.jpg"));
@@ -127,12 +130,12 @@ describe("site destinations — the nightly job", () => {
 
     // New York's price lands on its three airports; a US city without an airport (Atlantis) and Boston (no price) don't.
     expect(await t.routes(23)).toEqual([
-      { from: "EWR", price: 788, published: 2288 },
-      { from: "JAX", price: 1083, published: 1740 },
-      { from: "JFK", price: 788, published: 2288 },
-      { from: "LGA", price: 788, published: 2288 },
-      { from: "MDW", price: 1250, published: 2258 },
-      { from: "ORD", price: 1250, published: 2258 },
+      { from: "EWR", price: 801, published: 2101 },
+      { from: "JAX", price: 1101, published: 1801 },
+      { from: "JFK", price: 801, published: 2101 },
+      { from: "LGA", price: 801, published: 2101 },
+      { from: "MDW", price: 1301, published: 2401 },
+      { from: "ORD", price: 1301, published: 2401 },
     ]);
 
     // The site's photo, as an operator's: no expiry, no credit line.
@@ -163,6 +166,49 @@ describe("site destinations — the nightly job", () => {
     expect(off.photosCleared).toBeGreaterThan(5);
     expect(await t.photo("LHR")).toMatchObject({ status: "pending", source: null });
     expect(await t.photo("LGW")).toMatchObject({ cardUrl: "https://photos.example.test/gatwick.jpg" });
+    await t.iso.drop();
+  });
+
+  it("a photo stored under the site's former address is the site's: the next night moves it or hands it back", async () => {
+    const t = await setup("site-legacy");
+    await t.operatorPhoto("LHR", legacyUrl("bestDeals/23/image/london01.jpg"));
+    await t.operatorPhoto("SEZ", legacyUrl("bestDeals/858/image/victoria-old.jpg"));
+    await t.operatorPhoto("CDG", legacyUrl("bestDeals/9999/image/paris.jpg")); // a city the site no longer lists
+    await t.operatorPhoto("LGW", "https://photos.example.test/gatwick.jpg");
+    await t.flags.set("catalog.site_photos", { enabled: true });
+
+    await t.run();
+    expect(await t.photo("LHR")).toEqual({
+      status: "photo",
+      source: "override",
+      cardUrl: siteUrl("bestDeals/23/image/london01.jpg"),
+      forever: true,
+    });
+    expect(await t.photo("SEZ")).toMatchObject({ cardUrl: siteUrl("bestDeals/858/image/victoria.jpg") });
+    expect(await t.photo("CDG")).toMatchObject({ status: "pending", source: null, cardUrl: null });
+    // An operator's own photo, at an address that is not the site's, stays as ever.
+    expect(await t.photo("LGW")).toMatchObject({ cardUrl: "https://photos.example.test/gatwick.jpg" });
+    await t.iso.drop();
+  });
+
+  it("a city skipped, or the photos off, hands back its photo under the former address too", async () => {
+    const t = await setup("site-legacy-off");
+    await t.operatorPhoto("LHR", legacyUrl("bestDeals/23/image/london01.jpg"));
+    await t.operatorPhoto("SEZ", legacyUrl("bestDeals/858/image/victoria.jpg"));
+
+    // A night the site does not answer: the skip acts first, by address — London's goes, Victoria's stays.
+    t.site.broken = [603];
+    await t.flags.set("catalog.site_photos", { enabled: true, skip: [23] });
+    await expect(t.run()).rejects.toThrow("HTTP 500");
+    expect(await t.photo("LHR")).toMatchObject({ status: "pending", source: null });
+    expect(await t.photo("SEZ")).toMatchObject({
+      status: "photo",
+      cardUrl: legacyUrl("bestDeals/858/image/victoria.jpg"),
+    });
+
+    await t.flags.set("catalog.site_photos", { enabled: false });
+    expect(await t.run()).toMatchObject({ read: 0, photosCleared: 1 });
+    expect(await t.photo("SEZ")).toMatchObject({ status: "pending", source: null });
     await t.iso.drop();
   });
 
@@ -216,6 +262,43 @@ describe("site destinations — the nightly job", () => {
     await expect(t.run()).rejects.toThrow("HTTP 500");
     expect(await t.places()).toEqual(before);
     expect(await t.photo("LHR")).toMatchObject({ status: "photo" });
+    await t.iso.drop();
+  });
+
+  it("a site that keeps listing far fewer cities is taken once the last good read's day is ending (ADR-IMPL-067)", async () => {
+    const t = await setup("site-shrink-lasting");
+    await t.flags.set("catalog.site_photos", { enabled: true });
+    await t.run();
+    const before = await t.places();
+    /** Time passes for the snapshot: its read, and the day of every route it wrote. */
+    const age = async (hours: number) => {
+      await t.iso.db.execute(sql`
+        UPDATE catalog.site_places SET synced_at = synced_at - make_interval(hours => ${hours})`);
+      await t.iso.db.execute(sql`
+        UPDATE catalog.site_routes
+        SET synced_at = synced_at - make_interval(hours => ${hours}), valid_until = valid_until - make_interval(hours => ${hours})`);
+    };
+
+    t.site.regions = [t.site.regions[2]!]; // only Asia, from now on: 2 cities of 7
+    // The next run, twelve hours on: the snapshot serves another twelve — the read is refused, nothing changes.
+    await age(12);
+    await expect(t.run()).rejects.toThrow("the last night 6: nothing changed");
+    expect(await t.places()).toEqual(before);
+    // The run after, a day on: the snapshot serves nothing more — the site's list as it now is, Tokyo served again.
+    await age(12);
+    expect(await t.run()).toMatchObject({ read: 1, cities: 2, places: 1 });
+    expect((await t.places()).map((p) => p.cmsId)).toEqual([283]);
+    const [tokyo] = (await t.iso.db.execute(sql`
+      SELECT count(*)::int AS n FROM catalog.site_routes WHERE cms_id = 283 AND valid_until > now()`)) as unknown as {
+      n: number;
+    }[];
+    expect(tokyo?.n).toBeGreaterThan(0);
+    // And it guards again: the next run, an hour on, weighs a read against Tokyo alone — Kyoto, with no airport, is no
+    // city placed.
+    const japan = t.site.regions[0]!.countries[0]!;
+    japan.cities = japan.cities.filter((c) => c.id !== 283);
+    await age(1);
+    await expect(t.run()).rejects.toThrow("the last night 1: nothing changed");
     await t.iso.drop();
   });
 
@@ -349,6 +432,41 @@ describe("site destinations — the pins", () => {
 
     // From an airport the site lists nothing from: the fares' pins only.
     expect(await t.facade.destinations(undefined, "MIA")).toEqual([]);
+    await t.iso.drop();
+  });
+
+  it("a city whose route from home is past its day is no pin (ADR-IMPL-067): the others stay", async () => {
+    const t = await pinsSetup("site-pins-expired");
+    // Tokyo's route from JFK, read a day and an hour ago: past its day — the site has not listed it since.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes SET synced_at = now() - interval '25 hours', valid_until = now() - interval '1 hour'
+      WHERE route_from = 'JFK' AND cms_id IN (SELECT cms_id FROM catalog.site_places WHERE airport = 'HND')`);
+    const pins = await t.facade.destinations(undefined, "JFK");
+    expect(pins[0]?.code).toBe("LGW");
+    expect(
+      pins
+        .slice(1)
+        .map((p) => p.code)
+        .sort(),
+    ).toEqual(["HER", "JTR", "SEZ", "VLC"]);
+    await t.iso.drop();
+  });
+
+  it("a route whose day ends while Home keeps its pins is no pin: a minute, up to 66 s under Redis", async () => {
+    const t = await pinsSetup("site-pins-last-minute");
+    // Tokyo's route from JFK has 70 seconds of its day left.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes
+      SET synced_at = now() - interval '1438 minutes 50 seconds', valid_until = now() + interval '70 seconds'
+      WHERE route_from = 'JFK' AND cms_id IN (SELECT cms_id FROM catalog.site_places WHERE airport = 'HND')`);
+    const pins = await t.facade.destinations(undefined, "JFK");
+    expect(pins[0]?.code).toBe("LGW");
+    expect(
+      pins
+        .slice(1)
+        .map((p) => p.code)
+        .sort(),
+    ).toEqual(["HER", "JTR", "SEZ", "VLC"]);
     await t.iso.drop();
   });
 

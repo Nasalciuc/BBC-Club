@@ -76,3 +76,9 @@ the offer and suppress its pending pushes. To reach them the event is published 
 `seed-staging-demo.ts` builds the app as `loadtest-staging.ts` does (`buildApp`, role `api`, no poller) instead of
 `scriptAuth`, whose registry knows no consumer; the worker delivers the event. A second run finds none active and
 publishes nothing. Tested in `apps/api/test/staging-demo.test.ts`.
+
+**Amendment — 25 Oct 2026: a withdrawn demo offer stays withdrawn (ADR-IMPL-067).** Once the company site's deals are
+on, the demo's broadcast offers (Paris, Tokyo) are not what staging's members should see — Tokyo would stand twice on
+Explore. An operator withdraws them once through `POST /v1/internal/offers/:id/withdraw` (RUNBOOK, "Staging demo
+data"); the script's upsert no longer sets a withdrawn demo offer back to `active` (its dates still move) and writes no
+inbox item for it, and its count of offers is the ones members can see. Tested in `apps/api/test/staging-demo.test.ts`.

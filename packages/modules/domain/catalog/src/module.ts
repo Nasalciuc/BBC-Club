@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { desc, gte, sql } from "drizzle-orm";
@@ -12,20 +13,49 @@ import type { AppEnv } from "@bbc/shared/http/app-env";
 import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
+import { placeLandmarksRepo } from "./infrastructure/place-landmarks.repo";
 import { placePhotosRepo } from "./infrastructure/place-photos.repo";
 import { siteRepo } from "./infrastructure/site.repo";
+import { sitePricesRepo } from "./infrastructure/site-prices.repo";
 import { createDestinationsCache } from "./application/destinations-cache";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
 import { formatInZone } from "./application/flight-local";
 import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody, ImportError } from "./application/import";
-import { PlacePhotoOverride, parseCodes, resolvePlacePhotos, toPlacePhotoVM } from "./application/place-photos";
+import { readLandmarksFlag, resolvePlaceLandmarks, toPlaceLandmarksVM } from "./application/place-landmarks";
+import {
+  PlacePhotoOverride,
+  parseCodes,
+  resolvePlacePhotos,
+  toPlacePhotoVM,
+  withLandmarkPhotos,
+} from "./application/place-photos";
 import type { Fetch } from "./application/place-photo-sources";
+import { systemClock, type SiteClock } from "./application/site-cms";
+import { refreshSitePrices, type FailedRoutes } from "./application/refresh-site-prices";
+import {
+  SEARCH_TIMEOUT_MS,
+  resolveIndicative,
+  sitePriceClient,
+  type Resolution,
+  type SiteUnavailable,
+  type StoredSitePrice,
+} from "./application/site-prices";
+import { metrosFor, originMetros, pickDeals, type DealCandidate } from "./application/site-deals";
 import { syncSite } from "./application/site-sync";
-import { toAirportVM, toEstimateVM, toFareVM } from "./application/to-fare-vm";
-import { estimateRules as readEstimateRules } from "./pricing/estimate-rules";
-import type { CatalogFacade, DestinationPin } from "./api";
+import {
+  pricedAirport,
+  sourcedEstimateVM,
+  toAirportVM,
+  toEstimateVM,
+  toFareVM,
+  type AirportRow,
+} from "./application/to-fare-vm";
+import { estimateFare } from "./pricing/estimate";
+import { estimateSources as readEstimateSources, type StoredRules } from "./pricing/estimate-rules";
+import { bookableFrom } from "./application/bookable";
+import type { BookablePlace, CatalogFacade, DestinationPin, SiteDeal } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
   return row.published && row.validFrom <= now && row.validUntil > now;
@@ -50,10 +80,35 @@ function searchWhenInRange(when: Date, now = new Date()): boolean {
 
 /** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
 export const SITE_PINS = 12;
+/** How long Home's site pins are kept, in seconds (createDestinationsCache's minute, or Redis's). */
+const SITE_PINS_CACHE_S = 60;
+/** ADR-IMPL-067: how long one home's site deals are kept, in seconds. */
+const SITE_DEALS_CACHE_S = 60;
+/**
+ * ADR-IMPL-067: what a read kept `ttlS` seconds asks of a route's day (and of a stored answer's), so nothing kept is
+ * served past it: the cache's time, 10 % more since Redis keeps a key up to 1.1 × its TTL (the platform's cache spreads
+ * its expiries), and a few seconds for the read itself — 75 s for a minute.
+ */
+const keptMargin = (ttlS: number) => Math.ceil(ttlS * 1.1) + 9;
 
-/** `fetch` is for tests: the place-photo sources (Wikidata, Commons, Pexels) and the site answered by fixtures. */
+/** A strong ETag over the body as JSON: whatever the answer shows changes it. */
+const etagOf = (value: unknown) => `"${createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 16)}"`;
+
+/** If-None-Match as RFC 9110 §13.1.2 reads it: `*`, or a list of entity tags compared weakly. */
+function ifNoneMatchHits(header: string | undefined, etag: string): boolean {
+  if (!header) return false;
+  const opaque = (tag: string) => tag.trim().replace(/^W\//, "");
+  return header.split(",").some((tag) => tag.trim() === "*" || opaque(tag) === opaque(etag));
+}
+
+/** Kept by the phone, asked again each time (the ETag's 304 spares the body); never by a shared cache. */
+const REVALIDATE = { "Cache-Control": "private, no-cache", Vary: "Cookie, Authorization" } as const;
+
+/** For tests: `fetch` answers for the place-photo sources (Wikidata, Commons, Pexels) and the site — its API and its
+ *  price search (ADR-IMPL-063); `siteClock` is the time the site's API pacing, the price job's pacing and the price
+ *  breaker wait on, so a test's night takes no real time. */
 export const catalogModule = (
-  opts: { fetch?: Fetch } = {},
+  opts: { fetch?: Fetch; siteClock?: SiteClock } = {},
 ): ModuleDescriptor<Record<string, never>, CatalogFacade> => ({
   name: "catalog",
   layer: "domain",
@@ -63,49 +118,173 @@ export const catalogModule = (
     const placePhotosOn = () => platform.flags.isEnabled("catalog.place_photos", true);
     const destinationsCache = createDestinationsCache();
     const sitePinsCache = createDestinationsCache<DestinationPin & { airports: string[] }>();
+    const siteDealsCache = createDestinationsCache<SiteDeal>();
+    const bookableCache = createDestinationsCache<BookablePlace>();
     const invalidateMaps = async () => {
       destinationsCache.clear();
       sitePinsCache.clear();
+      siteDealsCache.clear();
+      bookableCache.clear();
       await platform.cache.bump("catalog:dest:gen");
       await platform.cache.bump("catalog:airports:gen");
     };
-    const estimateRules = (metric: "search" | "request" | "home") => readEstimateRules(platform, metric);
+    const estimateSources = (metric: "search" | "request" | "home") => readEstimateSources(platform, metric);
+    const siteClock = opts.siteClock ?? systemClock;
+    /** ADR-IMPL-063: the company's site's price search — one client, and one breaker, per process. */
+    const sitePrices = sitePriceClient({
+      fetch: (url, init) => (opts.fetch ?? fetch)(url, init),
+      userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; site prices)`,
+      clock: siteClock,
+    });
+
+    /** ADR-IMPL-063: the routes the site failed the refresh job, remembered from run to run in this process (as the
+     *  breaker is), so a route it keeps failing waits its hour and goes last. */
+    const siteFailures: FailedRoutes = new Map();
+    /** ADR-IMPL-063: the refresh job asks the site only while estimates (the master switch), the site's prices and
+     *  Home's site pins — the routes it keeps are theirs — are all on. Read before each question (cached, ~35 s to
+     *  reach every replica): one turned off stops a run already going. */
+    const refreshSitePricesOn = async () =>
+      (await platform.flags.isEnabled("catalog.estimates", false)) &&
+      (await platform.flags.isEnabled("catalog.site_prices", false)) &&
+      (await platform.flags.isEnabled("catalog.site_pins", false));
+
+    /** The search's one live question to the site (ADR-IMPL-063), within a second; what it learns is stored, so Home's
+     *  pins and the quote that follows show the same number. An error stores nothing: the formula stands in. */
+    async function askSiteNow(q: {
+      from: string;
+      to: string;
+    }): Promise<{ row: StoredSitePrice } | { unavailable: SiteUnavailable }> {
+      const route = { ...q, trip: "round_trip" as const };
+      const answer = await sitePrices.ask(route, { timeoutMs: SEARCH_TIMEOUT_MS });
+      if (answer.kind === "unavailable") {
+        platform.metrics.inc("site_prices_unavailable", { reason: answer.reason });
+        // Codes and the reason only — never a price. While the breaker is open every search would say it: not logged.
+        if (answer.reason === "bad_request") {
+          platform.logger.error({ from: q.from, to: q.to }, "site price refused our request (400)");
+        } else if (answer.reason !== "breaker") {
+          platform.logger.warn({ reason: answer.reason }, "site price unavailable, the formula stands in");
+        }
+        return { unavailable: answer.reason };
+      }
+      platform.metrics.inc("site_prices_answered", { status: answer.kind });
+      try {
+        return { row: await sitePricesRepo.store(conn, route, answer) };
+      } catch (err) {
+        // The answer is the site's either way; only the next reader will not find it.
+        platform.logger.warn({ err: errorForLog(err) }, "site price not stored");
+        const figures =
+          answer.kind === "priced" ? answer.figures : { business: null, first: null, premiumEconomy: null };
+        return { row: { status: answer.kind, ...figures, fetchedAt: new Date() } };
+      }
+    }
+
+    /**
+     * D6's order for one route and cabin once a published fare is ruled out (ADR-IMPL-063): the site's stored answer;
+     * then, for an undated search only (`live`), one live question; then the formula where the site could not be asked —
+     * or, for Home's pins and a quote, which never ask it, where nothing is stored. `stored` reads the route's row (the
+     * pins pass the one batch they read).
+     */
+    function siteResolution(
+      from: AirportRow,
+      to: AirportRow,
+      cabin: "business" | "first",
+      rules: StoredRules | null,
+      opts: { live: boolean; stored: () => Promise<StoredSitePrice | null> },
+    ) {
+      const a = pricedAirport(from);
+      const b = pricedAirport(to);
+      return resolveIndicative(
+        { from: a, to: b, cabin },
+        {
+          stored: opts.stored,
+          live: opts.live ? () => askSiteNow({ from: a.code, to: b.code }) : undefined,
+          formula: () => (rules ? (estimateFare(rules.rules, a, b, cabin)?.amount ?? null) : null),
+        },
+      );
+    }
+
+    /** A resolution as the estimate a member sees, with its source; null when there is no number. */
+    function resolvedVM(r: Resolution, cabin: "business" | "first") {
+      if (r.kind === "site") return sourcedEstimateVM(r.amount, cabin, { kind: "site", asOf: r.asOf });
+      if (r.kind === "club") return sourcedEstimateVM(r.amount, cabin, { kind: "club" });
+      return null;
+    }
 
     async function indicativeEstimate(
-      from: Parameters<typeof toEstimateVM>[1],
-      to: Parameters<typeof toEstimateVM>[2],
+      from: AirportRow,
+      to: AirportRow,
       cabin: "business" | "first",
     ): Promise<ReturnType<typeof toEstimateVM>> {
-      const stored = await estimateRules("search");
-      if (!stored) return null;
-      const estimate = toEstimateVM(stored.rules, from, to, cabin);
+      const sources = await estimateSources("search");
+      if (!sources) return null;
+      let estimate: ReturnType<typeof toEstimateVM>;
+      if (!sources.site) {
+        // The site off: the formula alone, exactly as before ADR-IMPL-063.
+        if (!sources.rules) return null;
+        estimate = toEstimateVM(sources.rules.rules, from, to, cabin);
+      } else {
+        const r = await siteResolution(from, to, cabin, sources.rules, {
+          live: true,
+          stored: () => sitePricesRepo.fresh(conn, from.code.trim(), to.code.trim(), "round_trip"),
+        });
+        platform.metrics.inc("search_site_prices", { source: r.kind, how: r.how });
+        estimate = resolvedVM(r, cabin);
+      }
       if (estimate) platform.metrics.inc("search_estimates_shown", { cabin });
       return estimate;
     }
 
     /**
      * ADR-IMPL-045: the site's cities listed from `home`, as pins priced the way their search will be — the formula, in
-     * the member's cabin (ADR-IMPL-037), so a pin, its estimate row and the quote it leads to show one number. Nothing
-     * unless `catalog.site_pins` is on and estimates are (no price, no pin). Cached like the fares' pins: 60 s, and
-     * dropped when the sync or an import bumps the generation.
+     * the member's cabin (ADR-IMPL-037), so a pin, its estimate row and the quote it leads to show one number. With
+     * `catalog.site_prices` on (ADR-IMPL-063): the site's stored answers, read in one batch, else the formula — never a
+     * call to the site; a city the company has no price for gets no pin. Nothing unless `catalog.site_pins` is on and
+     * estimates are (no price, no pin). Cached like the fares' pins: 60 s, and dropped when the sync or an import bumps
+     * the generation; the site's answers the job stores are seen within the minute.
      */
     async function sitePins(
       home: string,
       cabin: "business" | "first",
     ): Promise<(DestinationPin & { airports: string[] })[]> {
       if (!(await platform.flags.isEnabled("catalog.site_pins", false))) return [];
-      const stored = await estimateRules("home");
-      if (!stored) return [];
-      const key = `${home.toUpperCase()}:${cabin}:${stored.fingerprint}`;
+      const sources = await estimateSources("home");
+      if (!sources) return [];
+      const { site, rules } = sources;
+      const key = site
+        ? `${home.toUpperCase()}:${cabin}:${rules?.fingerprint ?? "-"}:site`
+        : `${home.toUpperCase()}:${cabin}:${rules?.fingerprint}`;
       const load = async () => {
         const [homeRow, rows] = await Promise.all([
           airportsRepo.get(conn, home),
-          siteRepo.pinsFrom(conn, home, SITE_PINS * 3),
+          siteRepo.pinsFrom(conn, home, SITE_PINS * 3, keptMargin(SITE_PINS_CACHE_S)),
         ]);
         if (!homeRow) return [];
-        return rows.flatMap((r) => {
-          const estimate = toEstimateVM(stored.rules, homeRow, r.airport, cabin);
-          if (!estimate) return [];
+        // Kept for the pins' minute: an answer that would pass its 24 hours within it is not read.
+        const answers = site
+          ? await sitePricesRepo.freshFrom(
+              conn,
+              homeRow.code.trim(),
+              rows.map((r) => r.airport.code.trim()),
+              "round_trip",
+              keptMargin(SITE_PINS_CACHE_S),
+            )
+          : null;
+        const priced = await Promise.all(
+          rows.map(async (r): Promise<{ amount: number; source?: "site" | "club" } | null> => {
+            if (!answers) {
+              const estimate = rules ? toEstimateVM(rules.rules, homeRow, r.airport, cabin) : null;
+              return estimate ? { amount: estimate.amount } : null;
+            }
+            const resolved = await siteResolution(homeRow, r.airport, cabin, rules, {
+              live: false,
+              stored: async () => answers.get(r.airport.code.trim()) ?? null,
+            });
+            return resolved.kind === "none" ? null : { amount: resolved.amount, source: resolved.kind };
+          }),
+        );
+        return rows.flatMap((r, i) => {
+          const price = priced[i];
+          if (!price) return [];
           return [
             {
               code: r.airport.code.trim(),
@@ -116,7 +295,8 @@ export const catalogModule = (
               lat: Number(r.airport.lat),
               lng: Number(r.airport.lng),
               description: r.airport.description,
-              fromPrice: estimate.amount,
+              fromPrice: price.amount,
+              ...(price.source ? { priceSource: price.source } : {}),
               airports: r.airports,
             },
           ];
@@ -124,8 +304,89 @@ export const catalogModule = (
       };
       const gen = await platform.cache.generation("catalog:dest:gen");
       if (gen == null) return sitePinsCache.get(key, load);
-      return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, 60, load);
+      return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, SITE_PINS_CACHE_S, load);
     }
+
+    /**
+     * ADR-IMPL-067: the site's deals for `home`, at most `limit` — from home and its metro first, then from the nearest
+     * cities the site sells from, one deal per destination city (`application/site-deals.ts`). Read from the snapshot
+     * the sync writes twice a day, never from the site; only deals served `marginS` seconds from now. Two reads (home,
+     * the origins), then one per round of metros — one round unless the nearest metros' deals overlap past what they
+     * hold.
+     */
+    async function loadSiteDeals(
+      e: Executor,
+      home: string,
+      limit: number,
+      photos: boolean,
+      marginS: number,
+    ): Promise<SiteDeal[]> {
+      const [homeRow, origins] = await Promise.all([airportsRepo.get(e, home), siteRepo.dealOrigins(e, marginS)]);
+      if (!homeRow || origins.length === 0 || limit <= 0) return [];
+      const at = { code: homeRow.code.trim(), lat: Number(homeRow.lat), lng: Number(homeRow.lng) };
+      const metros = originMetros(at, origins);
+      const counts = new Map(origins.map((o) => [o.code, o.deals]));
+      type Row = Awaited<ReturnType<typeof siteRepo.dealsFrom>>[number] & DealCandidate;
+      const rows: Row[] = [];
+      let asked = 0;
+      let picked: ReturnType<typeof pickDeals<Row>> = [];
+      while (asked < metros.length) {
+        const next = metros.slice(asked);
+        const n = metrosFor(next, counts, limit - picked.length);
+        const from = next.slice(0, n).flatMap((m) => m.airports);
+        for (const r of await siteRepo.dealsFrom(e, from, marginS, photos)) {
+          rows.push({ ...r, to: { lat: Number(r.airport.lat), lng: Number(r.airport.lng) } });
+        }
+        asked += n;
+        picked = pickDeals(at, metros.slice(0, asked), rows, limit);
+        if (picked.length >= limit) break;
+      }
+      return picked.map(({ deal, metro }) => {
+        const photo = deal.photo ? toPlacePhotoVM(deal.photo) : null;
+        return {
+          id: `site-${deal.deal}-${deal.routeFrom}`,
+          destination: {
+            ...toAirportVM(deal.airport),
+            photo: photo?.kind === "photo" ? { card: photo.card, hero: photo.hero, credit: photo.credit } : null,
+          },
+          origin: { code: deal.routeFrom, city: metro.city },
+          price: { amount: deal.price, currency: "USD" as const, basis: "site" as const, from: true as const },
+          validUntil: deal.validUntil.toISOString(),
+          airports: [...deal.airports],
+          originAirports: [...metro.airports],
+        };
+      });
+    }
+
+    /** ADR-IMPL-067: Home's site deals, behind `catalog.site_offers` (seeded off); cached like the site's pins — a minute,
+     *  dropped when the sync or an import bumps the generation. With an executor, read now, uncached. */
+    async function siteDeals(exec: Executor | undefined, home: string, limit: number): Promise<SiteDeal[]> {
+      if (!(await platform.flags.isEnabled("catalog.site_offers", false))) return [];
+      const photos = await placePhotosOn();
+      if (exec) return loadSiteDeals(exec, home, limit, photos, 0);
+      const key = `${home.toUpperCase()}:${limit}:${photos ? "photos" : "-"}`;
+      const load = () => loadSiteDeals(conn, home, limit, photos, keptMargin(SITE_DEALS_CACHE_S));
+      const gen = await platform.cache.generation("catalog:dest:gen");
+      if (gen == null) return siteDealsCache.get(key, load);
+      return platform.cache.getOrLoad(`catalog:deals:${gen}:${key}`, SITE_DEALS_CACHE_S, load);
+    }
+
+    /**
+     * ADR-IMPL-068: the site's part of what a tap on the globe may open — the same for every member (home is taken out
+     * per call), so one entry, cached like the site's pins: a minute, dropped when the sync or an import bumps the
+     * generation, so its routes are asked to be served the time it is kept. `exec` (a caller's transaction) reads it
+     * uncached.
+     */
+    async function siteBookable(exec: Executor | undefined): Promise<BookablePlace[]> {
+      if (exec) return siteRepo.bookable(exec);
+      const load = () => siteRepo.bookable(conn, keptMargin(SITE_PINS_CACHE_S));
+      const gen = await platform.cache.generation("catalog:dest:gen");
+      if (gen == null) return bookableCache.get("ALL", load);
+      return platform.cache.getOrLoad(`catalog:bookable:${gen}`, SITE_PINS_CACHE_S, load);
+    }
+
+    /** ADR-IMPL-064: landmarks, off until an operator turns the flag row on; `skip`: landmarks kept out (QIDs). */
+    const landmarksFlag = async () => readLandmarksFlag(await platform.flags.read("catalog.landmarks"));
 
     /** ADR-IMPL-045: the site's photos, and the cities kept out of them (`skip`: the site's ids). Null: off. */
     async function sitePhotos(): Promise<{ skip: ReadonlySet<number> } | null> {
@@ -160,14 +421,19 @@ export const catalogModule = (
         }
         return [...fares, ...added];
       },
+      bookable: async (exec, q) => {
+        // The cached flag row first: off (every environment until an operator turns it on), nothing of the set is read.
+        if (!(await platform.flags.isEnabled("catalog.globe_tap", false))) return null;
+        return bookableFrom(await siteBookable(exec), q.home, q.also);
+      },
       searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
       getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
       getAirports: (exec, codes) => airportsRepo.getMany(exec ?? conn, [...codes]),
       indicativeFor: async (exec, q) => {
         // The cached flag rows first: with estimates off (production today) or no valid rules, the question costs no
         // query. The request module counts what it stores (`request_estimates_stored`), after its insert.
-        const stored = await estimateRules("request");
-        if (!stored) return null;
+        const sources = await estimateSources("request");
+        if (!sources) return null;
         const from = q.from.toUpperCase();
         const to = q.to.toUpperCase();
         const e = exec ?? conn;
@@ -179,9 +445,23 @@ export const catalogModule = (
         const toApt = airports.find((a) => a.code === to);
         // Published fares always win: the search showed them, not an estimate.
         if (!fromApt || !toApt || rows.length > 0) return null;
-        const estimate = toEstimateVM(stored.rules, fromApt, toApt, q.cabin);
-        return estimate ? { ...estimate, rules: stored.fingerprint } : null;
+        const { site, rules } = sources;
+        if (!site) {
+          // The site off: the formula alone, exactly as before ADR-IMPL-063.
+          const estimate = rules ? toEstimateVM(rules.rules, fromApt, toApt, q.cabin) : null;
+          return estimate && rules ? { ...estimate, rules: rules.fingerprint } : null;
+        }
+        // ADR-IMPL-063: the site's stored answer — the one the search stored — else the formula. Never a call to the
+        // site: a quote asks this inside its transaction, under its lock.
+        const r = await siteResolution(fromApt, toApt, q.cabin, rules, {
+          live: false,
+          stored: () => sitePricesRepo.fresh(e, from, to, "round_trip"),
+        });
+        const estimate = resolvedVM(r, q.cabin);
+        if (!estimate) return null;
+        return r.kind === "club" && rules ? { ...estimate, rules: rules.fingerprint } : estimate;
       },
+      siteDeals,
       importCsv: (input) => importCatalog({ db: conn as Db }, ImportBody.parse(input)),
     };
 
@@ -400,7 +680,43 @@ export const catalogModule = (
           if (vm) return [vm];
           return added.has(code) ? [{ code, kind: "none" }] : [];
         });
-        return c.json({ items });
+        // ADR-IMPL-064, amendment 1: where the photo job found a city no photograph of its own (its satellite view), its
+        // first landmark's stands in — composed here, at read time, so the next answer follows the flag and its `skip`,
+        // and a photo of the city's own (the operator's included) stays first. A city not looked up yet stays `none`:
+        // phones ask again within a minute, but keep a photo for twelve hours. With `catalog.landmarks` off nothing is
+        // read and nothing changes.
+        const onSatellite = items.filter((i) => i.kind === "satellite").map((i) => i.code);
+        const flag = onSatellite.length > 0 ? await landmarksFlag() : null;
+        if (!flag?.enabled) return c.json({ items });
+        const standIns = await placeLandmarksRepo.standIns(conn, onSatellite, flag.skip);
+        return c.json({ items: withLandmarkPhotos(items, standIns) });
+      },
+    );
+
+    // ADR-IMPL-064: up to three landmarks of the city an airport serves, from the table at once (the job looks them
+    // up); an operator's `skip` takes effect here before the job looks again. An ETag over the body: a 304 when unchanged.
+    registerRoute("GET", "/v1/places/:code/landmarks", "fares:read", "read");
+    routes.get(
+      "/places/:code/landmarks",
+      rateLimit(platform.rateLimit, "read"),
+      authorize("fares:read", {
+        module: "catalog",
+        flags: platform.flags,
+        log: platform.logger.warn.bind(platform.logger),
+      }),
+      async (c) => {
+        const code = c.req.param("code").toUpperCase();
+        if (!IATA.test(code) || !(await airportsRepo.get(conn, code))) {
+          return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+        }
+        const flag = await landmarksFlag();
+        const rows = flag.enabled ? await placeLandmarksRepo.forPlace(conn, code) : [];
+        const body = toPlaceLandmarksVM(code, rows, flag.skip);
+        const etag = etagOf(body);
+        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+          return c.body(null, 304, { ETag: etag, ...REVALIDATE });
+        }
+        return c.json(body, 200, { ETag: etag, ...REVALIDATE });
       },
     );
 
@@ -578,16 +894,30 @@ export const catalogModule = (
           },
         },
         {
-          // ADR-IMPL-045: the site's destinations, once a night. With its photos and its pins off, nothing is asked
-          // and the site's photos go back to Wikimedia. Four requests at a time end well inside the worker's 120 s.
+          // ADR-IMPL-045: the site's destinations. With its photos, its pins, its deals and the globe's tap
+          // (ADR-IMPL-068: what a tap may open is the site's cities) off, nothing is asked and the site's photos go back
+          // to Wikimedia. ADR-IMPL-062: the site's API allows 120 requests a minute per IP, so
+          // its ~241 pages start 1.2 s apart (about five minutes), then ~150 photo checks four at a time. That minute is
+          // the host's: staging's cron reads the site at the same minutes from the same address, and at about 50 a
+          // minute each the two reads stay under the 120 together. Ten minutes leave room for the pages, the photos and
+          // a 429 waited out. ADR-IMPL-067: twice a day, 07:40 and 19:40 UTC — a deal is served for a day after its
+          // read, so one run that fails leaves the deals another twelve hours, and one run never ends a day's deals
+          // before the next has written its own.
+          // Longer than the worker's 120-s HTTP idle timeout: the cron's request is closed while the run goes on, and
+          // platform.job_runs holds its outcome (as for `retention`).
           name: "sync-site-destinations",
           spec: {
-            cron: "40 7 * * *",
+            cron: "40 7,19 * * *",
             singleton: true,
-            timeoutMs: 100_000,
+            timeoutMs: 600_000,
             handler: async (ctx) => {
               const photos = await sitePhotos();
-              const pins = await platform.flags.isEnabled("catalog.site_pins", false);
+              // ADR-IMPL-067: the deals need the snapshot as the pins do, and neither needs the other. ADR-IMPL-068: the
+              // globe's tap needs it too (what a tap may open is the site's cities).
+              const snapshot =
+                (await platform.flags.isEnabled("catalog.site_pins", false)) ||
+                (await platform.flags.isEnabled("catalog.site_offers", false)) ||
+                (await platform.flags.isEnabled("catalog.globe_tap", false));
               const report = await syncSite(
                 {
                   db: conn,
@@ -595,10 +925,11 @@ export const catalogModule = (
                     fetch: opts.fetch ?? fetch,
                     userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; site destinations)`,
                     signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                    clock: opts.siteClock,
                   },
                   logger: platform.logger,
                 },
-                { read: photos !== null || pins, photos },
+                { read: photos !== null || snapshot, photos },
               );
               if (report.read) await invalidateMaps();
               return report;
@@ -606,7 +937,36 @@ export const catalogModule = (
           },
         },
         {
-          // ADR-IMPL-043: ten due airports a minute — new ones first. Nothing due: one query, no request outside.
+          // ADR-IMPL-063: the company's site's answers for the routes Home's site pins show, so a pin shows the site's
+          // price without asking it. At most 150 questions a run, about two a second (75 s and more); it stops at the
+          // site's first 429, when the breaker opens, or when one of its flags is turned off. Ten minutes apart, five
+          // to finish. With estimates, the site's prices or the site's pins off, nothing is asked — and the expired
+          // answers are still deleted, so none outlives its day once the feature is off.
+          name: "refresh-site-prices",
+          spec: {
+            cron: "*/10 * * * *",
+            singleton: true,
+            timeoutMs: 300_000,
+            handler: async (ctx) => {
+              if (!(await refreshSitePricesOn())) {
+                return { skipped: 1, purged: await sitePricesRepo.purgeExpired(conn) };
+              }
+              return refreshSitePrices({
+                db: conn,
+                client: sitePrices,
+                clock: siteClock,
+                signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                metrics: platform.metrics,
+                logger: platform.logger,
+                stillOn: refreshSitePricesOn,
+                failed: siteFailures,
+              });
+            },
+          },
+        },
+        {
+          // ADR-IMPL-043: ten due airports a minute — new ones first. Nothing due: one query, no request outside. Its
+          // requests end within 40 s (PLACE_PHOTOS_REQUESTS_MS), its writes inside the 50 (ADR-IMPL-064).
           name: "resolve-place-photos",
           spec: {
             cron: "* * * * *",
@@ -623,6 +983,34 @@ export const catalogModule = (
                   signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
                 },
                 pexelsKey: env.PEXELS_API_KEY,
+                metrics: platform.metrics,
+                logger: platform.logger,
+              });
+            },
+          },
+        },
+        {
+          // ADR-IMPL-064: two due places every five minutes — one WDQS question each (a second when the city item
+          // it remembers answers nothing; 3–33 s, WDQS stops one at 60 s) and Commons once per 50 files, a hundred
+          // at most (two questions). Nothing while the flag is off or a Wikimedia source holds the club off. A place
+          // starts only while its slowest look ends within 225 s (LANDMARK_RUN_REQUESTS_MS), its writes inside the 240.
+          name: "resolve-place-landmarks",
+          spec: {
+            cron: "*/5 * * * *",
+            singleton: true,
+            timeoutMs: 240_000,
+            handler: async (ctx) => {
+              const flag = await landmarksFlag();
+              if (!flag.enabled) return { skipped: 1 };
+              return resolvePlaceLandmarks({
+                db: conn,
+                sources: {
+                  fetch: opts.fetch ?? fetch,
+                  // Wikimedia's User-Agent policy: who is asking, and where to reach them.
+                  userAgent: `BBCClub/1.0 (${env.APP_ORIGIN}; landmarks)`,
+                  signal: (ctx as { signal?: AbortSignal }).signal ?? platform.signal,
+                },
+                skip: flag.skip,
                 metrics: platform.metrics,
                 logger: platform.logger,
               });

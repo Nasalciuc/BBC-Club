@@ -79,5 +79,19 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test:unit": "bun test app.config.test.ts src",
     "export": "expo export --platform ios"
+  },
+  "reanimated": {
+    "staticFeatureFlags": {
+      "FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS": false
+    }
+  },
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "buildFromSource": [
+          "react-native-reanimated"
+        ]
+      }
+    }
   }
 }

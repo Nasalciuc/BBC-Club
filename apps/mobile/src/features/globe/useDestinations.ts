@@ -34,9 +34,6 @@ export function useDestinations(home: HomeVM | null, selected: AirportVM | null)
   // 13: home's code at the route's start.
   const homeCoord = home?.home ? { lat: home.home.lat, lng: home.home.lng, code: home.home.code } : null;
 
-  function pinToAirport(code: string): DestinationPinVM | null {
-    return home?.destinations.find((d) => d.code === code) ?? null;
-  }
-
-  return { pins, homeCoord, selected: selectedCode, pinToAirport };
+  // What a pin's tap opens is `cityToOpen`'s (open-city.ts), a snapped city's too.
+  return { pins, homeCoord, selected: selectedCode };
 }

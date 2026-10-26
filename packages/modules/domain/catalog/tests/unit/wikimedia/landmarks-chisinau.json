@@ -1,0 +1,2137 @@
+{
+  "wdqs": {
+    "head": {
+      "vars": ["item", "itemLabel", "sitelinks", "view", "file"]
+    },
+    "results": {
+      "bindings": [
+        {
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Arch%20of%20Triumph%2C%20Chisinau%2C%20Republic%20of%20Moldova%20%2851160304626%20cropped%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "city"
+          }
+        },
+        {
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ansamblul%20Catedralei%20%E2%80%9ENa%C8%99terea%20Domnului%E2%80%9D%203.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "city"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q20432537"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "St. Pantaleon church in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "6"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Biserica%20Sf.%20Panteleimon.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q20432537"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "St. Pantaleon church in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "6"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Biserica%20Sf.%20Panteleimon%20-%201.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q20440432"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Wooden church of Hirișeni"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "9"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/MD.C.Chi%C8%99in%C4%83u%20-%20Biserica%20de%20lemn%20din%20Hiri%C8%99eni%20%281%29%20-%20jul%202015.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q20440432"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Wooden church of Hirișeni"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "9"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Biserica%20de%20lemn%20din%20Hiri%C8%99eni.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q25463492"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Building of Dadiani's former girls gymnasium in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ki%C5%A1in%C4%9Bv%2C%20N%C3%A1rodn%C3%AD%20um%C4%9Bleck%C3%A9%20muzeum%20%282019-03-16%3B%2001%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q25463492"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Building of Dadiani's former girls gymnasium in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/AIRM%20-%20Restoration%20of%20building%20of%20Dadiani%27s%20former%20girls%20gymnasium%20in%20Chi%C8%99in%C4%83u%20-%20sep%202016%20-%2024.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q39058860"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Eternity Memorial Complex, Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "8"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Chi%C8%99in%C4%83u%20-%20Memorial%20complex%20Eternitate.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q53548130"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Vladimir Hertza's urban villa"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Vila%20urban%C4%83%20a%20lui%20V.%20Her%C8%9Ba.%20Foto%204.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q53548130"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Vladimir Hertza's urban villa"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Vila%20urban%C4%83%20a%20lui%20V.%20Her%C8%9Ba.%20Foto%201.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q61086021"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Historic center of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Nucleul%20Chi%C8%99in%C4%83ului.%20Foto%203.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q1716140"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Jewish cemetery in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cimitir%20evreiesc%20Chi%C8%99in%C4%83u%202022%20foto%204.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q1716140"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Jewish cemetery in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cimitir%20cu%20complexul%20de%20monumente%2C%20foto%206.png"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q1968696"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "National Museum of Ethnography and Natural History"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Museo%20nacional%20de%20etnograf%C3%ADa%20e%20historia%20natural%2C%20Chisin%C3%A1u%2C%20Moldavia%2C%202023-11-03%2C%20DD%2057.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q1968696"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "National Museum of Ethnography and Natural History"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cl%C4%83direa%20Muzeului%20Zooagricol%20%C8%99i%20de%20Me%C8%99te%C8%99uguri%20Populare%20%28%C3%AEn%20prezent%20Muzeul%20de%20Etnografie%20%C8%99i%20Istorie%20Natural%C4%83%29.%20Foto%201.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q2091959"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "St. Teodora de la Sihla Church"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ki%C5%A1in%C4%9Bv%2C%20chr%C3%A1m%20sv.%20Teodory%20ze%20Sihly%20%282019-03-16%3B%2001%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q2373521"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "National Museum of Romanian Literature"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "6"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Stamp%20of%20Moldova%20md046st.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q2378710"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Ghidighici Reservoir"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "8"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ghidighici%2005.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q2501338"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Water Tower of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "13"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Moldova-chisineu-city-museum.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q2501338"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Water Tower of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "13"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cl%C4%83direa%20fostului%20castel%20de%20ap%C4%83%20cu%20foi%C8%99or%20de%20foc.%20Foto%206.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4062622"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Alley of Classics"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "12"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Alley%20of%20Classics.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4222663"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chișinău Circus"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "8"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Circul%20Chisinau.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4222663"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chișinău Circus"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "8"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Circ%20015.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4222663"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chișinău Circus"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "8"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Circul%20din%20Chi%C8%99in%C4%83u%20-%20amurg.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4222665"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chișinău Zoo"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "7"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Chi%C8%99in%C4%83u%20Zoo%20June%202016%20001.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4274472"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Măzărache Church"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "8"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/AIRM%20-%20Biserica%20M%C4%83z%C4%83rache%20-%20octombrie%202013%20-%20680137952010961.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4274472"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Măzărache Church"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "8"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Biserica%20Mazarache%20009.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12723696"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Cathedral of Divine Providence, Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "14"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cathedral%20of%20Divine%20Providence%2C%20Chi%C5%9Fin%C4%83u.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12736098"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "National Museum of History of Moldova"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "14"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Museum%20of%20History%20%28AP4L0086%201PS%29%20%2828922487610%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q15212003"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Cricova"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "8"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/MD.C.Cricova%20-%20vin%C4%83ria%20-%20feb%202021%20-%2003.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q15260464"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Muzeul Memoriei Neamului"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "4"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Museum%20of%20History%20%28AP4L0086%201PS%29%20%2828922487610%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q16695453"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "St. George church in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Biserica%20Sf%C3%A2ntul%20Mare%20Mucenic%20Gheorghe%20din%20Chi%C8%99in%C4%83u.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q18405702"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Central cemetery of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "6"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Chisinau%2C%20Moldova%20-%20panoramio%20%2815%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q19315589"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Ciuflea Monastery"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Moldavian%20orthodox%20church.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q19315589"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Ciuflea Monastery"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Catedrala%20Sf.%20Teodor%20Tiron.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q20429811"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Army Museum (Moldova)"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "6"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/SU-100%2C%20PT-76%20and%20T-34-85%20in%20a%20msuem%20in%20Chisinau%2C%20Moldova%202.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q20429837"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Village museum of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Wooden%20Orthodox%20Church%20-%20Moldova.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q20430109"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Memorial house of Aleksandr Pushkin, Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "7"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Stejar%20puskin%20IMG%208804.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q20432529"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "St. Haralambios church in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Biserica%20Sf%C3%A2ntul%20Mucenic%20Haralambie%20din%20Chi%C8%99in%C4%83u.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4335799"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Organ Hall of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "6"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/%D0%9E%D1%80%D0%B3%D0%B0%D0%BD%D0%BD%D1%8B%D0%B9%20%D0%B7%D0%B0%D0%BB%2C%20%D0%9A%D0%B8%D1%88%D0%B8%D0%BD%D0%B5%D0%B2%2C%20%D0%A0%D0%B5%D1%81%D0%BF%D1%83%D0%B1%D0%BB%D0%B8%D0%BA%D0%B0%20%D0%9C%D0%BE%D0%BB%D0%B4%D0%BE%D0%B2%D0%B0%20Sala%20cu%20orga%2C%20Chisinau%2C%20Republica%20Moldova%20Organ%20Hall%2C%20Chisinau%2C%20Republic%20of%20Moldova%20%2850698302796%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4335799"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Organ Hall of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "6"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cl%C4%83direa%20fostei%20B%C4%83nci%20Publice%20Urbane%20%28din%201978%20Sala%20cu%20org%C4%83%29.%20Foto%203.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4343360"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Stephen the Great Monument"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Monumentul%20lui%20%C8%98tefan%20cel%20Mare%20%C8%99i%20Sf%C3%A2nt%20din%20Chi%C8%99in%C4%83u%2025%20-%20December%20-%202019%2014.29.35%2049.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q4343360"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Stephen the Great Monument"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "10"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Monument%20lui%20%C8%98tefan%20cel%20Mare%20%C8%99i%20Sf%C3%A2nt.%20Foto%2011.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q5035974"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Capitoline Wolf, Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "6"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Chi%C8%99in%C4%83u%20%2819777317505%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q5102676"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chișinău City Hall"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "11"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Consiliul%20Municipal%20Chi%C8%99in%C4%83u%20%28cropped%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q5102676"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chișinău City Hall"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "11"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cl%C4%83direa%20fostei%20Dume%20Or%C4%83%C8%99ene%C8%99ti.%20Ast%C4%83zi%20Prim%C4%83ria%20%C8%99i%20Consiliul%20Municipal%20Chi%C8%99in%C4%83u.%20Foto%204.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q5102676"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chișinău City Hall"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "11"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cl%C4%83direa%20prim%C4%83riei%20municipiului%20Chi%C8%99in%C4%83u%204.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q5102682"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chișinău Theological Seminary"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Kiszyni%C3%B3w%20seminarium%20duchowne.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q6974468"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "National Museum of Fine Arts"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "14"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Hertza%20House%20in%20Chisinau%2C%20Moldova%20%2848160397397%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q7459711"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Sfatul Țării Palace"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "7"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/MD.C.C%20-%20Cl%C4%83direa%20fostului%20gimnaziu%20de%20b%C4%83ie%C8%9Bi%20nr.%203%2C%20unde%20s-a%20votat%20Actul%20Unirii%20de%20c%C4%83tre%20Sfatul%20%C8%9A%C4%83rii%20la%2027%20martie%201918%20-%20sep%202021%20-%2002.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q9349822"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Synagogue of the Glaziers, Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "5"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Synagoga%20Szklarzy.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12721762"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Church of the Dormition in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "4"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Cerkiew%20Za%C5%9Bni%C4%99cia%20Matki%20Bo%C5%BCej%20w%20Kiszyniowie%20dawna%20jednowiercza.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12721780"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Armenian church \"Saint Mary\" of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "7"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/AIRM%20-%20Armenian%20church%20of%20Chi%C8%99in%C4%83u%20-%20nov%202015%20-%2001.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12721787"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Church of the Annunciation in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "4"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/AIRM%20-%20Church%20of%20the%20Annunciation%20-%20feb%202013%20-%2003.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12721876"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Transfiguration Church of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "7"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Iglesia%20de%20la%20Transfiguraci%C3%B3n%2C%20Chisin%C3%A1u%2C%20Moldavia%2C%202023-11-03%2C%20DD%2055.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12721876"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Transfiguration Church of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "7"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Biserica%20Schimbarea%20la%20Fa%C8%9B%C4%83%20din%20Chi%C8%99in%C4%83u.%20Foto%205.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "aerial"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12721876"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Transfiguration Church of Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "7"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Biserica%20%E2%80%9ESchimbarea%20la%20Fa%C8%9B%C4%83%20a%20M%C3%A2ntuitorului%E2%80%9D%20%28noapte%29.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "night"
+          }
+        },
+        {
+          "item": {
+            "type": "uri",
+            "value": "http://www.wikidata.org/entity/Q12723401"
+          },
+          "itemLabel": {
+            "xml:lang": "en",
+            "type": "literal",
+            "value": "Chapel-Memorial to the Russian Army and Bulgarian Volunteers in Chișinău"
+          },
+          "sitelinks": {
+            "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+            "type": "literal",
+            "value": "4"
+          },
+          "file": {
+            "type": "uri",
+            "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Kaplica%20ochotnik%C3%B3w%20bu%C5%82garskich.jpg"
+          },
+          "view": {
+            "type": "literal",
+            "value": "image"
+          }
+        }
+      ]
+    }
+  },
+  "commons": {
+    "AIRM - Armenian church of Chișinău - nov 2015 - 01.jpg": {
+      "width": 1024,
+      "height": 768,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/AIRM_-_Armenian_church_of_Chi%C8%99in%C4%83u_-_nov_2015_-_01.jpg",
+      "thumbwidth": 1024,
+      "thumbheight": 768,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:AIRM_-_Armenian_church_of_Chi%C8%99in%C4%83u_-_nov_2015_-_01.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 28",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "AIRM - Biserica Măzărache - octombrie 2013 - 680137952010961.jpg": {
+      "width": 800,
+      "height": 600,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/AIRM_-_Biserica_M%C4%83z%C4%83rache_-_octombrie_2013_-_680137952010961.jpg",
+      "thumbwidth": 800,
+      "thumbheight": 600,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:AIRM_-_Biserica_M%C4%83z%C4%83rache_-_octombrie_2013_-_680137952010961.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 28",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Alley of Classics.jpg": {
+      "width": 3072,
+      "height": 2304,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Alley_of_Classics.jpg/1280px-Alley_of_Classics.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Alley_of_Classics.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "Public domain",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 29",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Biserica Mazarache 009.jpg": {
+      "width": 4032,
+      "height": 3024,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Biserica_Mazarache_009.jpg/1280px-Biserica_Mazarache_009.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Biserica_Mazarache_009.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY 4.0",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 30",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Catedrala Sf. Teodor Tiron.jpg": {
+      "width": 700,
+      "height": 467,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Catedrala_Sf._Teodor_Tiron.jpg",
+      "thumbwidth": 700,
+      "thumbheight": 467,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Catedrala_Sf._Teodor_Tiron.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 3.0",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 31",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Cathedral of Divine Providence, Chişinău.jpg": {
+      "width": 848,
+      "height": 683,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Cathedral_of_Divine_Providence%2C_Chi%C5%9Fin%C4%83u.jpg",
+      "thumbwidth": 848,
+      "thumbheight": 683,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Cathedral_of_Divine_Providence%2C_Chi%C5%9Fin%C4%83u.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 32",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Chișinău - Memorial complex Eternitate.jpg": {
+      "width": 2904,
+      "height": 2044,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Chi%C8%99in%C4%83u_-_Memorial_complex_Eternitate.jpg/1280px-Chi%C8%99in%C4%83u_-_Memorial_complex_Eternitate.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 901,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Chi%C8%99in%C4%83u_-_Memorial_complex_Eternitate.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 33",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Chișinău Zoo June 2016 001.jpg": {
+      "width": 4288,
+      "height": 2848,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Chi%C8%99in%C4%83u_Zoo_June_2016_001.jpg/1280px-Chi%C8%99in%C4%83u_Zoo_June_2016_001.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 850,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Chi%C8%99in%C4%83u_Zoo_June_2016_001.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 34",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Cimitir evreiesc Chișinău 2022 foto 4.jpg": {
+      "width": 4000,
+      "height": 2250,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Cimitir_evreiesc_Chi%C8%99in%C4%83u_2022_foto_4.jpg/1280px-Cimitir_evreiesc_Chi%C8%99in%C4%83u_2022_foto_4.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 720,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Cimitir_evreiesc_Chi%C8%99in%C4%83u_2022_foto_4.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 35",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Circul Chisinau.jpg": {
+      "width": 3072,
+      "height": 2304,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Circul_Chisinau.jpg/1280px-Circul_Chisinau.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Circul_Chisinau.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "Public domain",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 36",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Clădirea fostului castel de apă cu foișor de foc. Foto 6.jpg": {
+      "width": 4000,
+      "height": 2250,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Cl%C4%83direa_fostului_castel_de_ap%C4%83_cu_foi%C8%99or_de_foc._Foto_6.jpg/1280px-Cl%C4%83direa_fostului_castel_de_ap%C4%83_cu_foi%C8%99or_de_foc._Foto_6.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 720,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Cl%C4%83direa_fostului_castel_de_ap%C4%83_cu_foi%C8%99or_de_foc._Foto_6.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 35",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Consiliul Municipal Chișinău (cropped).jpg": {
+      "width": 3292,
+      "height": 2195,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Consiliul_Municipal_Chi%C8%99in%C4%83u_%28cropped%29.jpg/1280px-Consiliul_Municipal_Chi%C8%99in%C4%83u_%28cropped%29.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Consiliul_Municipal_Chi%C8%99in%C4%83u_%28cropped%29.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 35",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Ghidighici 05.jpg": {
+      "width": 3264,
+      "height": 2448,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Ghidighici_05.jpg/1280px-Ghidighici_05.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Ghidighici_05.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "Public domain",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 37",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Hertza House in Chisinau, Moldova (48160397397).jpg": {
+      "width": 5687,
+      "height": 3601,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Hertza_House_in_Chisinau%2C_Moldova_%2848160397397%29.jpg/1280px-Hertza_House_in_Chisinau%2C_Moldova_%2848160397397%29.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 810,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Hertza_House_in_Chisinau%2C_Moldova_%2848160397397%29.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 38",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Iglesia de la Transfiguración, Chisináu, Moldavia, 2023-11-03, DD 55.jpg": {
+      "width": 6283,
+      "height": 5322,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Iglesia_de_la_Transfiguraci%C3%B3n%2C_Chisin%C3%A1u%2C_Moldavia%2C_2023-11-03%2C_DD_55.jpg/1280px-Iglesia_de_la_Transfiguraci%C3%B3n%2C_Chisin%C3%A1u%2C_Moldavia%2C_2023-11-03%2C_DD_55.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 1084,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Iglesia_de_la_Transfiguraci%C3%B3n%2C_Chisin%C3%A1u%2C_Moldavia%2C_2023-11-03%2C_DD_55.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 39",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Kišiněv, chrám sv. Teodory ze Sihly (2019-03-16; 01).jpg": {
+      "width": 3881,
+      "height": 2848,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Ki%C5%A1in%C4%9Bv%2C_chr%C3%A1m_sv._Teodory_ze_Sihly_%282019-03-16%3B_01%29.jpg/1280px-Ki%C5%A1in%C4%9Bv%2C_chr%C3%A1m_sv._Teodory_ze_Sihly_%282019-03-16%3B_01%29.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 939,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Ki%C5%A1in%C4%9Bv%2C_chr%C3%A1m_sv._Teodory_ze_Sihly_%282019-03-16%3B_01%29.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 40",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "MD.C.C - Clădirea fostului gimnaziu de băieți nr. 3, unde s-a votat Actul Unirii de către Sfatul Țării la 27 martie 1918 - sep 2021 - 02.jpg": {
+      "width": 4624,
+      "height": 3468,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/MD.C.C_-_Cl%C4%83direa_fostului_gimnaziu_de_b%C4%83ie%C8%9Bi_nr._3%2C_unde_s-a_votat_Actul_Unirii_de_c%C4%83tre_Sfatul_%C8%9A%C4%83rii_la_27_martie_1918_-_sep_2021_-_02.jpg/1280px-MD.C.C_-_Cl%C4%83direa_fostului_gimnaziu_de_b%C4%83ie%C8%9Bi_nr._3%2C_unde_s-a_votat_Actul_Unirii_de_c%C4%83tre_Sfatul_%C8%9A%C4%83rii_la_27_martie_1918_-_sep_2021_-_02.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:MD.C.C_-_Cl%C4%83direa_fostului_gimnaziu_de_b%C4%83ie%C8%9Bi_nr._3%2C_unde_s-a_votat_Actul_Unirii_de_c%C4%83tre_Sfatul_%C8%9A%C4%83rii_la_27_martie_1918_-_sep_2021_-_02.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 36",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "MD.C.Chișinău - Biserica de lemn din Hirișeni (1) - jul 2015.jpg": {
+      "width": 5472,
+      "height": 3648,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/MD.C.Chi%C8%99in%C4%83u_-_Biserica_de_lemn_din_Hiri%C8%99eni_%281%29_-_jul_2015.jpg/1280px-MD.C.Chi%C8%99in%C4%83u_-_Biserica_de_lemn_din_Hiri%C8%99eni_%281%29_-_jul_2015.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:MD.C.Chi%C8%99in%C4%83u_-_Biserica_de_lemn_din_Hiri%C8%99eni_%281%29_-_jul_2015.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 36",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "MD.C.Cricova - vinăria - feb 2021 - 03.jpg": {
+      "width": 4624,
+      "height": 3468,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/MD.C.Cricova_-_vin%C4%83ria_-_feb_2021_-_03.jpg/1280px-MD.C.Cricova_-_vin%C4%83ria_-_feb_2021_-_03.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:MD.C.Cricova_-_vin%C4%83ria_-_feb_2021_-_03.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 41",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Moldavian orthodox church.jpg": {
+      "width": 800,
+      "height": 600,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Moldavian_orthodox_church.jpg",
+      "thumbwidth": 800,
+      "thumbheight": 600,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Moldavian_orthodox_church.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "Public domain",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Moldova-chisineu-city-museum.jpg": {
+      "width": 1245,
+      "height": 2500,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Moldova-chisineu-city-museum.jpg",
+      "thumbwidth": 1245,
+      "thumbheight": 2500,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Moldova-chisineu-city-museum.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 3.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 42",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Monument lui Ștefan cel Mare și Sfânt. Foto 11.jpg": {
+      "width": 4000,
+      "height": 2250,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Monument_lui_%C8%98tefan_cel_Mare_%C8%99i_Sf%C3%A2nt._Foto_11.jpg/1280px-Monument_lui_%C8%98tefan_cel_Mare_%C8%99i_Sf%C3%A2nt._Foto_11.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 720,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Monument_lui_%C8%98tefan_cel_Mare_%C8%99i_Sf%C3%A2nt._Foto_11.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 35",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Monumentul lui Ștefan cel Mare și Sfânt din Chișinău 25 - December - 2019 14.29.35 49.jpg": {
+      "width": 4016,
+      "height": 6016,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Monumentul_lui_%C8%98tefan_cel_Mare_%C8%99i_Sf%C3%A2nt_din_Chi%C8%99in%C4%83u_25_-_December_-_2019_14.29.35_49.jpg/1280px-Monumentul_lui_%C8%98tefan_cel_Mare_%C8%99i_Sf%C3%A2nt_din_Chi%C8%99in%C4%83u_25_-_December_-_2019_14.29.35_49.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 1917,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Monumentul_lui_%C8%98tefan_cel_Mare_%C8%99i_Sf%C3%A2nt_din_Chi%C8%99in%C4%83u_25_-_December_-_2019_14.29.35_49.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 43",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Museo nacional de etnografía e historia natural, Chisináu, Moldavia, 2023-11-03, DD 57.jpg": {
+      "width": 7257,
+      "height": 4470,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Museo_nacional_de_etnograf%C3%ADa_e_historia_natural%2C_Chisin%C3%A1u%2C_Moldavia%2C_2023-11-03%2C_DD_57.jpg/1280px-Museo_nacional_de_etnograf%C3%ADa_e_historia_natural%2C_Chisin%C3%A1u%2C_Moldavia%2C_2023-11-03%2C_DD_57.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 788,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Museo_nacional_de_etnograf%C3%ADa_e_historia_natural%2C_Chisin%C3%A1u%2C_Moldavia%2C_2023-11-03%2C_DD_57.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 39",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Museum of History (AP4L0086 1PS) (28922487610).jpg": {
+      "width": 3475,
+      "height": 2606,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Museum_of_History_%28AP4L0086_1PS%29_%2828922487610%29.jpg/1280px-Museum_of_History_%28AP4L0086_1PS%29_%2828922487610%29.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 960,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Museum_of_History_%28AP4L0086_1PS%29_%2828922487610%29.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY 2.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 44",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Stamp of Moldova md046st.jpg": {
+      "width": 328,
+      "height": 203,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Stamp_of_Moldova_md046st.jpg",
+      "thumbwidth": 328,
+      "thumbheight": 203,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Stamp_of_Moldova_md046st.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "Public domain",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 45",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Stejar puskin IMG 8804.jpg": {
+      "width": 5184,
+      "height": 3456,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Stejar_puskin_IMG_8804.jpg/1280px-Stejar_puskin_IMG_8804.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 853,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:Stejar_puskin_IMG_8804.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC BY-SA 4.0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "true",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 46",
+          "source": "commons-desc-page"
+        }
+      }
+    },
+    "Органный зал, Кишинев, Республика Молдова Sala cu orga, Chisinau, Republica Moldova Organ Hall, Chisinau, Republic of Moldova (50698302796).jpg": {
+      "width": 5705,
+      "height": 3566,
+      "mime": "image/jpeg",
+      "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/%D0%9E%D1%80%D0%B3%D0%B0%D0%BD%D0%BD%D1%8B%D0%B9_%D0%B7%D0%B0%D0%BB%2C_%D0%9A%D0%B8%D1%88%D0%B8%D0%BD%D0%B5%D0%B2%2C_%D0%A0%D0%B5%D1%81%D0%BF%D1%83%D0%B1%D0%BB%D0%B8%D0%BA%D0%B0_%D0%9C%D0%BE%D0%BB%D0%B4%D0%BE%D0%B2%D0%B0_Sala_cu_orga%2C_Chisinau%2C_Republica_Moldova_Organ_Hall%2C_Chisinau%2C_Republic_of_Moldova_%2850698302796%29.jpg/1280px-%D0%9E%D1%80%D0%B3%D0%B0%D0%BD%D0%BD%D1%8B%D0%B9_%D0%B7%D0%B0%D0%BB%2C_%D0%9A%D0%B8%D1%88%D0%B8%D0%BD%D0%B5%D0%B2%2C_%D0%A0%D0%B5%D1%81%D0%BF%D1%83%D0%B1%D0%BB%D0%B8%D0%BA%D0%B0_%D0%9C%D0%BE%D0%BB%D0%B4%D0%BE%D0%B2%D0%B0_Sala_cu_orga%2C_Chisinau%2C_Republica_Moldova_Organ_Hall%2C_Chisinau%2C_Republic_of_Moldova_%2850698302796%29.jpg",
+      "thumbwidth": 1280,
+      "thumbheight": 800,
+      "descriptionurl": "https://commons.wikimedia.org/wiki/File:%D0%9E%D1%80%D0%B3%D0%B0%D0%BD%D0%BD%D1%8B%D0%B9_%D0%B7%D0%B0%D0%BB%2C_%D0%9A%D0%B8%D1%88%D0%B8%D0%BD%D0%B5%D0%B2%2C_%D0%A0%D0%B5%D1%81%D0%BF%D1%83%D0%B1%D0%BB%D0%B8%D0%BA%D0%B0_%D0%9C%D0%BE%D0%BB%D0%B4%D0%BE%D0%B2%D0%B0_Sala_cu_orga%2C_Chisinau%2C_Republica_Moldova_Organ_Hall%2C_Chisinau%2C_Republic_of_Moldova_%2850698302796%29.jpg",
+      "extmetadata": {
+        "LicenseShortName": {
+          "value": "CC0",
+          "source": "commons-desc-page"
+        },
+        "AttributionRequired": {
+          "value": "false",
+          "source": "commons-desc-page"
+        },
+        "Restrictions": {
+          "value": "",
+          "source": "commons-desc-page"
+        },
+        "Artist": {
+          "value": "Photographer 47",
+          "source": "commons-desc-page"
+        }
+      }
+    }
+  }
+}

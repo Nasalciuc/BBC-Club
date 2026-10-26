@@ -12,8 +12,35 @@ import { readStoredRules, type RulesLookup } from "./rules";
 export async function estimateRules(
   platform: Pick<ModulePlatform, "flags" | "metrics" | "logger">,
   metric: "search" | "request" | "home",
-): Promise<Extract<RulesLookup, { ok: true }> | null> {
+): Promise<StoredRules | null> {
   if (!(await platform.flags.isEnabled("catalog.estimates", false))) return null;
+  return readRules(platform, metric);
+}
+
+export type StoredRules = Extract<RulesLookup, { ok: true }>;
+
+/**
+ * What may price an estimate now (ADR-IMPL-063): null while `catalog.estimates` — the master switch — is off; else
+ * whether the company's site prices them (`catalog.site_prices`, off unless set) and the formula's rules, when this
+ * environment holds valid ones (missing ones are counted as `estimateRules` counts them). With the site off, no valid
+ * rules is no estimate, as before: null. With it on, the site's answers are shown without rules; only the fallback is
+ * missing.
+ */
+export async function estimateSources(
+  platform: Pick<ModulePlatform, "flags" | "metrics" | "logger">,
+  metric: "search" | "request" | "home",
+): Promise<{ site: boolean; rules: StoredRules | null } | null> {
+  if (!(await platform.flags.isEnabled("catalog.estimates", false))) return null;
+  const site = await platform.flags.isEnabled("catalog.site_prices", false);
+  const rules = await readRules(platform, metric);
+  if (!site && !rules) return null;
+  return { site, rules };
+}
+
+async function readRules(
+  platform: Pick<ModulePlatform, "flags" | "metrics" | "logger">,
+  metric: "search" | "request" | "home",
+): Promise<StoredRules | null> {
   let value: Record<string, unknown> | null;
   try {
     value = await platform.flags.readStrict("catalog.pricing_rules");

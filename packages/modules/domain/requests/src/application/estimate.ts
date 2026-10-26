@@ -1,9 +1,10 @@
 import type { EstimateVM } from "@bbc/shared/api/v1/fares";
 import { askWithin, type AskFailure } from "./ask-within";
 
-/** The estimate a quote's search showed, as the catalog answers it: the number and the fingerprint of the rules that
- *  computed it (16 hex — it identifies the rules, it does not reveal them; ADR-IMPL-037). */
-export type ShownEstimate = Pick<EstimateVM, "amount" | "currency" | "cabin"> & { rules?: string };
+/** The estimate a quote's search showed, as the catalog answers it: the number, the fingerprint of the rules that
+ *  computed it (16 hex — it identifies the rules, it does not reveal them; ADR-IMPL-037) and who priced it — the
+ *  company's site or the club's formula (ADR-IMPL-063; absent while the site's prices are off: the formula). */
+export type ShownEstimate = Pick<EstimateVM, "amount" | "currency" | "cabin" | "source"> & { rules?: string };
 
 export type EstimateUnavailable = AskFailure | "invalid";
 
