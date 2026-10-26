@@ -9,7 +9,8 @@
     "./icons": "./src/icons.tsx",
     "./calendar-logic": "./src/calendar/calendar-logic.ts",
     "./flight-facts": "./src/cards/flight-facts.ts",
-    "./status-copy": "./src/primitives/status-copy.ts"
+    "./status-copy": "./src/primitives/status-copy.ts",
+    "./globe-tap": "./src/globe/globe-tap.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

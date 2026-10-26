@@ -202,6 +202,11 @@ describe("query budget per route", () => {
       postLog.length + 2,
     );
 
+    // ADR-IMPL-068: what a tap on the globe may open is read only with `catalog.globe_tap` on — off (as seeded), no
+    // member's Home reads the site's set at all, with the site's pins off or on (below).
+    const setReads = (qs: string[]) => qs.filter((q) => /site_places/.test(q) && /\bunion\b/i.test(q));
+    expect(setReads(home), `the globe's set was read with its flag off:\n${home.join("\n")}`).toEqual([]);
+
     // ADR-IMPL-045: with the site's pins on, the home screen adds the site's cities from home — one read of the pins and
     // one of the home airport, whatever their number (the formula prices them in memory), then cached for a minute.
     await t.db.execute(sql`
@@ -220,6 +225,24 @@ describe("query budget per route", () => {
       siteHome.length,
       "the site's pins cost at most four reads over the home screen without them",
     ).toBeLessThanOrEqual(home.length + 4);
+    expect(setReads(siteHome), `the globe's set was read with its flag off:\n${siteHome.join("\n")}`).toEqual([]);
+
+    // ADR-IMPL-068: with the globe's tap on, Home adds the site's set — one read (the cities and the origins in one
+    // UNION) beside the flag row, however many cities — then cached for a minute like the pins: the next Home reads
+    // none of it.
+    await t.flags.set("catalog.globe_tap", { enabled: true });
+    const tapHome = await queriesFor("/v1/home", cookie);
+    expect(
+      tapHome.length,
+      `home with the globe's tap ran ${tapHome.length} queries (budget ${BUDGET["GET /v1/home"]}):\n${tapHome.join("\n")}`,
+    ).toBeLessThanOrEqual(BUDGET["GET /v1/home"]!);
+    expect(setReads(tapHome).length, `the set is one read:\n${tapHome.join("\n")}`).toBe(1);
+    expect(
+      tapHome.length,
+      "the globe's tap costs at most two reads over Home with the site's pins",
+    ).toBeLessThanOrEqual(siteHome.length + 2);
+    const tapAgain = setReads(await queriesFor("/v1/home", cookie));
+    expect(tapAgain, `the set was read again within its minute:\n${tapAgain.join("\n")}`).toEqual([]);
 
     // ADR-IMPL-067: with the site's deals on (the pins off), the home screen adds them — the home airport, the origins and
     // one read of the deals for the nearest metros, whatever their number — then keeps them a minute. Measured on this

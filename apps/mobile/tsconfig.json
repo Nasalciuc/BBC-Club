@@ -13,7 +13,8 @@
       "@bbc/ui/icons": ["../../packages/ui/src/icons.tsx"],
       "@bbc/ui/calendar-logic": ["../../packages/ui/src/calendar/calendar-logic.ts"],
       "@bbc/ui/flight-facts": ["../../packages/ui/src/cards/flight-facts.ts"],
-      "@bbc/ui/status-copy": ["../../packages/ui/src/primitives/status-copy.ts"]
+      "@bbc/ui/status-copy": ["../../packages/ui/src/primitives/status-copy.ts"],
+      "@bbc/ui/globe-tap": ["../../packages/ui/src/globe/globe-tap.ts"]
     },
     "noUncheckedIndexedAccess": false,
     "verbatimModuleSyntax": false

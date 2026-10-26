@@ -23,7 +23,9 @@ is the Seychelles' capital; "Benglaru" is misspelled; Kyoto has no airport of it
   three) city pages unanswered — the run fails and changes nothing. (Amended by ADR-IMPL-067: twice a day, 07:40 and
   19:40 UTC; "last night" is the snapshot while its day has more than an hour to run, and a run a day after the last
   good one is not held back.) One city page that does not answer keeps last night's rows; a photo that cannot be asked
-  about (no answer, a 5xx) keeps last night's verdict.
+  about (no answer, a 5xx) keeps last night's verdict. (Amended by ADR-IMPL-068: the job also reads the site while
+  `catalog.globe_tap` is on, whose list is the snapshot's cities; it asks the site nothing only with that flag,
+  `catalog.site_photos` and `catalog.site_pins` all off — and, since ADR-IMPL-067, `catalog.site_offers`.)
 - **From names to airports** — a city is matched to the airports whose city, or one of whose search terms, is its name,
   inside the country the site puts it in (London, not London, Ontario; Victoria, the Seychelles' through SEZ's search
   term); our country names and the site's meet through the airports' `COUNTRY_ALIASES` (Turkiye). When the names cannot

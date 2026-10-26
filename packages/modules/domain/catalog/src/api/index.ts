@@ -37,6 +37,16 @@ export type DestinationPin = {
  */
 export type SiteDeal = SiteDealVM & { airports: string[]; originAirports: string[] };
 
+/** A city a tap on the globe may open (ADR-IMPL-068): where it is, and what names it. */
+export type BookablePlace = {
+  code: string;
+  name: string;
+  city: string;
+  countryCode: string;
+  lat: number;
+  lng: number;
+};
+
 /** The only import surface of @bbc/catalog. module.ts implements it; consumers import it. */
 export type CatalogFacade = {
   /** At most 30 fares, cheapest first — the same bound the future full-text path will use. */
@@ -56,6 +66,18 @@ export type CatalogFacade = {
     home: string,
     opts?: { cabin?: "business" | "first" },
   ): Promise<DestinationPin[]>;
+  /**
+   * ADR-IMPL-068: the cities a tap anywhere on the globe may open from `home` — the site's cities (each by its main
+   * airport) and the US airports the site lists a price from, read from the night's snapshot and cached like the site's
+   * pins, with `also` (the arrivals of the fares and offers the caller holds); never `home` itself, nor an airport
+   * within 100 km of it when its coordinates are given (one metro: a tap there gets the home answer). A formula price
+   * alone never makes a city bookable. Null while `catalog.globe_tap` is off: only the flag's row is read (through the
+   * flags' cache), nothing of the set.
+   */
+  bookable(
+    exec: Executor | undefined,
+    q: { home: { code: string; lat?: number; lng?: number }; also?: readonly BookablePlace[] },
+  ): Promise<BookablePlace[] | null>;
   searchAirports(exec: Executor | undefined, q: string): Promise<AirportRow[]>;
   getAirport(exec: Executor | undefined, code: string): Promise<AirportRow | null>;
   /** Batch lookup; order is not guaranteed. Replaces getAirport in loops. */
