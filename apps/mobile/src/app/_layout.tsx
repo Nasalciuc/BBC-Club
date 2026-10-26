@@ -1,16 +1,5 @@
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
-import { MaterialSymbols_400Regular } from "@expo-google-fonts/material-symbols";
-import { Fraunces_400Regular, Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
-import { Geist_400Regular, Geist_500Medium } from "@expo-google-fonts/geist";
-import { GeistMono_400Regular, GeistMono_500Medium } from "@expo-google-fonts/geist-mono";
-import {
-  InterTight_400Regular,
-  InterTight_500Medium,
-  InterTight_600SemiBold,
-  InterTight_700Bold,
-} from "@expo-google-fonts/inter-tight";
 import NetInfo from "@react-native-community/netinfo";
-import { useFonts } from "expo-font";
 import * as Linking from "expo-linking";
 import * as Notifications from "expo-notifications";
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
@@ -22,6 +11,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { tokens } from "@bbc/ui";
 
 import { AppGate } from "@/components/app-gate";
+import { FontsReadyProvider, fontGateLayout, useFontGate } from "@/components/font-gate";
 import { Club } from "@/constants/club";
 import { useSession } from "@/features/auth/client";
 import { endRevokedSession } from "@/features/auth/flows";
@@ -73,25 +63,12 @@ export default function RootLayout() {
   // gate() returns early on !session and never calls resolvePostAuthRoute; only onSessionRevoked
   // (apiFetch 401) and explicit signOut navigate to /sign-in.
 
-  // Fonts swap in when ready (RN 0.72+); do not block Stack on useFonts (Expo Router migrate).
-  // Inside the club, Inter Tight (DESIGN.md 3.0, ADR-IMPL-056); the entry keeps the 1.0 Fraunces, Geist and Geist
-  // Mono (constants/club.ts).
-  useFonts({
-    InterTight_400Regular,
-    InterTight_500Medium,
-    InterTight_600SemiBold,
-    InterTight_700Bold,
-    Fraunces_400Regular,
-    Fraunces_600SemiBold,
-    Geist_400Regular,
-    Geist_500Medium,
-    GeistMono_400Regular,
-    GeistMono_500Medium,
-    MaterialSymbols_400Regular,
-    Fraunces: Fraunces_400Regular,
-    Geist: Geist_400Regular,
-    "Geist Mono": GeistMono_400Regular,
-  });
+  // The fonts (Inter Tight inside the club, DESIGN.md 3.0; the entry's 1.0 Fraunces, Geist and Geist Mono,
+  // constants/club.ts): React Native lays a text out once, in the font it has then, and never again when the font
+  // arrives — so the splash stays up and every screen's content waits for them, at most FONT_WAIT_CAP_MS
+  // (components/font-gate.tsx, ADR-IMPL-072). Only the screens wait: the Stack mounts at once and the session is never
+  // waited for (f26870c: get-session has no timeout).
+  const fontsReady = useFontGate();
 
   // Another member signed in (after a sign-out or a deleted account) empties the one profile every screen shares
   // (F104): a member never sees the name or the phone of the member signed in before. A session that reads null for a
@@ -103,11 +80,6 @@ export default function RootLayout() {
     if (lastMember.current !== null && lastMember.current !== sessionUserId) resetProfile();
     lastMember.current = sessionUserId;
   }, [sessionUserId]);
-
-  // Hide splash on first paint — never wait for get-session (Better Auth has no client timeout).
-  useEffect(() => {
-    void SplashScreen.hideAsync().catch(() => undefined);
-  }, []);
 
   useEffect(() => () => clearPendingOtp(), []);
 
@@ -284,88 +256,91 @@ export default function RootLayout() {
               {/* The entry's and Welcome's bar; a screen on another surface mounts its own while it is in view
                   (components/screen-status-bar.tsx, ADR-IMPL-047). */}
               <StatusBar style="light" />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: Club.colors.black },
-                  animation: "fade",
-                }}
-              >
-                <Stack.Screen name="index" />
-                <Stack.Screen name="sign-in" />
-                <Stack.Screen name="join" />
-                <Stack.Screen name="verify-code" />
-                <Stack.Screen name="set-password" />
-                <Stack.Screen name="reset-password" />
-                <Stack.Screen
-                  name="onboarding"
-                  options={{ contentStyle: { backgroundColor: tokens.colors.surfacePage } }}
-                />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen
-                  name="search"
-                  options={{
+              <FontsReadyProvider ready={fontsReady}>
+                <Stack
+                  screenLayout={fontGateLayout}
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: Club.colors.black },
                     animation: "fade",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
                   }}
-                />
-                <Stack.Screen
-                  name="destination/[code]"
-                  options={{
-                    animation: "slide_from_right",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
-                  }}
-                />
-                <Stack.Screen
-                  name="fare/[id]"
-                  options={{
-                    animation: "slide_from_right",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
-                  }}
-                />
-                <Stack.Screen
-                  name="request/[id]"
-                  options={{
-                    animation: "slide_from_right",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
-                  }}
-                />
-                <Stack.Screen
-                  name="request/confirmed"
-                  options={{
-                    animation: "fade",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
-                  }}
-                />
-                <Stack.Screen
-                  name="request/limited"
-                  options={{
-                    animation: "fade",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
-                  }}
-                />
-                <Stack.Screen
-                  name="settings"
-                  options={{
-                    animation: "slide_from_right",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
-                  }}
-                />
-                <Stack.Screen
-                  name="edit-profile"
-                  options={{
-                    animation: "slide_from_right",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
-                  }}
-                />
-                <Stack.Screen
-                  name="dev/gallery"
-                  options={{
-                    animation: "slide_from_right",
-                    contentStyle: { backgroundColor: tokens.colors.surfacePage },
-                  }}
-                />
-              </Stack>
+                >
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="sign-in" />
+                  <Stack.Screen name="join" />
+                  <Stack.Screen name="verify-code" />
+                  <Stack.Screen name="set-password" />
+                  <Stack.Screen name="reset-password" />
+                  <Stack.Screen
+                    name="onboarding"
+                    options={{ contentStyle: { backgroundColor: tokens.colors.surfacePage } }}
+                  />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen
+                    name="search"
+                    options={{
+                      animation: "fade",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                  <Stack.Screen
+                    name="destination/[code]"
+                    options={{
+                      animation: "slide_from_right",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                  <Stack.Screen
+                    name="fare/[id]"
+                    options={{
+                      animation: "slide_from_right",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                  <Stack.Screen
+                    name="request/[id]"
+                    options={{
+                      animation: "slide_from_right",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                  <Stack.Screen
+                    name="request/confirmed"
+                    options={{
+                      animation: "fade",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                  <Stack.Screen
+                    name="request/limited"
+                    options={{
+                      animation: "fade",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                  <Stack.Screen
+                    name="settings"
+                    options={{
+                      animation: "slide_from_right",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                  <Stack.Screen
+                    name="edit-profile"
+                    options={{
+                      animation: "slide_from_right",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                  <Stack.Screen
+                    name="dev/gallery"
+                    options={{
+                      animation: "slide_from_right",
+                      contentStyle: { backgroundColor: tokens.colors.surfacePage },
+                    }}
+                  />
+                </Stack>
+              </FontsReadyProvider>
             </AppGate>
           </BottomSheetModalProvider>
         </ThemeProvider>

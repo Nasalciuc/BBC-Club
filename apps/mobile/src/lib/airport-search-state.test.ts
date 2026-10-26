@@ -68,11 +68,11 @@ describe("homeAirportLabel", () => {
 });
 
 describe("nearFirst", () => {
-  const ny = (code: string) => ({ code, tz: "America/New_York" });
-  const msy = { code: "MSY", tz: "America/Chicago" };
-  const ncl = { code: "NCL", tz: "Europe/London" };
-  // An airport the server knows no zone for.
-  const old: { code: string; tz?: string } = { code: "OLD" };
+  const ny = (code: string) => ({ code, city: "New York", tz: "America/New_York" });
+  const msy = { code: "MSY", city: "New Orleans", tz: "America/Chicago" };
+  const ncl = { code: "NCL", city: "Newcastle", tz: "Europe/London" };
+  // An airport the server knows no zone for (a made-up code).
+  const old: { code: string; city: string; tz?: string } = { code: "OLD", city: "Old Town" };
 
   test("the phone's zone first, each group in the server's order (14: New → JFK, EWR, LGA)", () => {
     const server = [ny("JFK"), ny("EWR"), msy, ncl, ny("LGA"), old];
@@ -91,6 +91,23 @@ describe("nearFirst", () => {
     const out = nearFirst(server, null);
     expect(out).toEqual(server);
     expect(out).not.toBe(server);
+  });
+
+  // `Ho` typed in Vietnam: what the server answers (its order), the catalogue's rows (seeds/airports-reference.tsv).
+  const hcmc = [
+    { code: "HBA", city: "Hobart", tz: "Australia/Hobart" },
+    { code: "HKG", city: "Hong Kong", tz: "Asia/Hong_Kong" },
+    { code: "SGN", city: "Ho Chi Minh City", tz: "Asia/Ho_Chi_Minh" },
+  ];
+
+  test("Ho Chi Minh City first for a phone in Asia/Ho_Chi_Minh (iOS) and in Asia/Saigon (Android's name)", () => {
+    expect(nearFirst(hcmc, "Asia/Ho_Chi_Minh").map((a) => a.code)).toEqual(["SGN", "HBA", "HKG"]);
+    expect(nearFirst(hcmc, "Asia/Saigon").map((a) => a.code)).toEqual(["SGN", "HBA", "HKG"]);
+  });
+
+  test("an airport sent without its zone comes first when its city is the zone's (Ho Chi Minh City)", () => {
+    const noZone = hcmc.map(({ code, city }) => ({ code, city }));
+    expect(nearFirst(noZone, "Asia/Saigon").map((a) => a.code)).toEqual(["SGN", "HBA", "HKG"]);
   });
 });
 

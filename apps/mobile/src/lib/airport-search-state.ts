@@ -1,3 +1,5 @@
+import { inZone } from "./zone-match";
+
 export type AirportSearchPhase = "idle" | "loading" | "results" | "empty" | "error";
 
 export type AirportSearchView<T> = {
@@ -42,12 +44,14 @@ export function wantsAirportSearch(query: string, chosen: { city: string; code: 
 
 /**
  * 14: the airports of the phone's time zone first — the home airport is most likely near the member, as the field's
- * helper says (`suggested from your time zone`) — each group in the server's order. Without a zone, the server's
- * order as it is.
+ * helper says (`suggested from your time zone`) — each group in the server's order. A zone the phone spells otherwise
+ * than the catalogue (Android's `Asia/Saigon` for SGN's `Asia/Ho_Chi_Minh`) is the same zone; an airport without a
+ * zone is near when its city is the zone's (lib/zone-match.ts). Without a zone, the server's order as it is.
  */
-export function nearFirst<T extends { tz?: string }>(airports: readonly T[], zone: string | null): T[] {
+export function nearFirst<T extends { tz?: string; city: string }>(airports: readonly T[], zone: string | null): T[] {
   if (!zone) return [...airports];
-  return [...airports.filter((a) => a.tz === zone), ...airports.filter((a) => a.tz !== zone)];
+  const near = airports.map((a) => inZone(a, zone));
+  return [...airports.filter((_, i) => near[i]), ...airports.filter((_, i) => !near[i])];
 }
 
 /** An airport's own name without the words every airport shares: `LaGuardia Airport` → `LaGuardia`. */

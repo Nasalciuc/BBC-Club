@@ -79,6 +79,24 @@
         {
           "RNMapboxMapsVersion": "11.23.1"
         }
+      ],
+      [
+        "expo-font",
+        {
+          "android": {
+            "fonts": [
+              "@expo-google-fonts/inter-tight/400Regular/InterTight_400Regular.ttf",
+              "@expo-google-fonts/inter-tight/500Medium/InterTight_500Medium.ttf",
+              "@expo-google-fonts/inter-tight/600SemiBold/InterTight_600SemiBold.ttf",
+              "@expo-google-fonts/inter-tight/700Bold/InterTight_700Bold.ttf",
+              "@expo-google-fonts/fraunces/400Regular/Fraunces_400Regular.ttf",
+              "@expo-google-fonts/geist/400Regular/Geist_400Regular.ttf",
+              "@expo-google-fonts/geist/500Medium/Geist_500Medium.ttf",
+              "@expo-google-fonts/geist-mono/400Regular/GeistMono_400Regular.ttf",
+              "@expo-google-fonts/geist-mono/500Medium/GeistMono_500Medium.ttf"
+            ]
+          }
+        }
       ]
     ],
     "experiments": {
