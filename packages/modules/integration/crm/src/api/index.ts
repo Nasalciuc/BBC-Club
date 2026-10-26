@@ -18,8 +18,9 @@ export type CrmRequestPayload = {
   flights: { from: string; to: string; date: string }[];
   passengers: { adult: number; child: number; infant: number };
   note?: string | null;
-  /** The indicative price the member's search showed, recomputed by the server (ADR-IMPL-042). Round trip. */
-  shown_estimate?: { amount: number; currency: string; cabin: string } | null;
+  /** The indicative price the member's search showed, recomputed by the server (ADR-IMPL-042). Round trip. `source`:
+   *  who priced it (ADR-IMPL-063) — the company's site, or the club's formula; absent, the formula (as before). */
+  shown_estimate?: { amount: number; currency: string; cabin: string; source?: "site" | "club" } | null;
   phone_valid?: boolean;
   intent?: "quote" | "alternative" | "fare" | "offer";
   replaces_fare_id?: string | null;

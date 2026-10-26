@@ -102,6 +102,16 @@ export function projector(size: number, rotation: Rotation, zoom = 1) {
       const xy = projection([p[0], p[1]]);
       return xy ? [xy[0], xy[1]] : null;
     },
+    /**
+     * The place under a screen point, or null off the globe's disc (ADR-IMPL-068). d3's inverse does not fail there: it
+     * clamps a point on the sky to the limb (200 pt right of a 168-pt globe's centre gives 145°E on the equator), so a
+     * tap on the sky would land on a real place — the disc is checked first.
+     */
+    invert(x: number, y: number): LonLat | null {
+      if (Math.hypot(x - size / 2, y - size / 2) > radiusFor(size, zoom)) return null;
+      const at = projection.invert?.([x, y]);
+      return at && Number.isFinite(at[0]) && Number.isFinite(at[1]) ? [at[0], at[1]] : null;
+    },
     path: (geo: GeoPermissibleObjects): string => path(geo) ?? "",
     sphere: (): string => path({ type: "Sphere" }) ?? "",
     /**
@@ -242,3 +252,51 @@ export const atView = (v: View, target: View) =>
   Math.abs(normalizeLambda(v.rotation[0] - target.rotation[0])) < 0.05 &&
   Math.abs(v.rotation[1] - target.rotation[1]) < 0.05 &&
   Math.abs(v.zoom - target.zoom) < 0.002;
+
+/**
+ * A tap, never a drag (ADR-IMPL-068): the finger lifts within 500 ms having moved less than 8 pt — where the pan starts
+ * (`PAN_START`, its minDistance). The gesture library's Tap has no distance limit of its own, so it is given this one,
+ * and it races the pan and the pinch: whichever starts first cancels the other (globe-engine.ts; its test pins the
+ * composition, a phone the behaviour).
+ */
+export const TAP = { maxDistance: 8, maxDurationMs: 500 } as const;
+export const PAN_START = TAP.maxDistance;
+
+/**
+ * A tap on the globe's disc (ADR-IMPL-068): the place under the finger, where the finger was, and where any other place
+ * stood in the view the finger saw — so the app can tell how far, on screen, the city it snaps to is from the finger.
+ */
+export type GlobeTap = {
+  lng: number;
+  lat: number;
+  /** The finger, in the points `project` answers in. */
+  x: number;
+  y: number;
+  /** A place on screen in that view; null — out of sight. */
+  project: (p: { lng: number; lat: number }) => { x: number; y: number } | null;
+};
+
+/** A pin's own press and the globe's tap may both see one touch — or the tap cancel the press: within this window the
+ *  second is the same touch. */
+export const PRESS_GUARD_MS = 400;
+
+/**
+ * One choice per touch (ADR-IMPL-068). A pin is a Pressable on the globe, and the globe now has a Tap of its own: both
+ * may answer one touch, in either order, or the Tap's activation may cancel the press. Whichever comes first chooses;
+ * the same pin again within PRESS_GUARD_MS is that touch, not a new choice. `pressedLately` tells a map press that
+ * follows a pin's press (Mapbox on iOS, unchecked) that the touch was the pin's.
+ */
+export function createPressGuard(now: () => number = Date.now, windowMs: number = PRESS_GUARD_MS) {
+  let last: { code: string; at: number } | null = null;
+  return {
+    choose(code: string): boolean {
+      const t = now();
+      if (last && last.code === code && t - last.at < windowMs) return false;
+      last = { code, at: t };
+      return true;
+    },
+    pressedLately(): boolean {
+      return last !== null && now() - last.at < windowMs;
+    },
+  };
+}

@@ -58,7 +58,8 @@ JS_ERROR_ALLOWLIST=()
 
 # E/ReactNativeJS is the app's own JS. A FATAL EXCEPTION counts only when the line after it names the app's process
 # ($APP, launcher-guard.sh): disabling the launcher can crash com.android.systemui (its OverviewProxyService on the
-# PACKAGE_CHANGED broadcast), which is not under test. Another process's crash is shown, never counted.
+# PACKAGE_CHANGED broadcast), which is not under test. Another process's crash is shown, never counted. A logcat that
+# cannot be read fails the run: no line must mean no crash, never no look.
 js_error_lines() {
   adb logcat -d -v brief '*:S' ReactNativeJS:E AndroidRuntime:E | tr -d '\r' |
     awk -v app="$APP" '
@@ -68,7 +69,7 @@ js_error_lines() {
         if (index($0, "Process: " app ",") > 0) print fatal " (" app ")"
         else print "  not under test: " $0 > "/dev/stderr"
         fatal = ""
-      }' || true
+      }'
 }
 
 status=0
@@ -83,7 +84,11 @@ for flow in register sign-in search-and-request delete-account; do
     flow_failed=1
     status=1
   fi
-  errors=$(js_error_lines)
+  if ! errors=$(js_error_lines); then
+    echo "::error::Could not read logcat for the crash check after $flow"
+    status=1
+    errors=""
+  fi
   if [ -n "$errors" ]; then
     while IFS= read -r line; do
       [ -z "$line" ] && continue

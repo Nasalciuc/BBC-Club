@@ -143,6 +143,20 @@ ssh <server> 'cd <checkout> && docker compose -f infra/docker-compose.yml -f inf
 
 Windows PowerShell has no `<`: `Get-Content -Raw pricing-rules.json | ssh <server> '…'` does the same.
 
+Before loading a new file, compare it with the company's site (ADR-IMPL-062) — on any computer with the repository, or
+on the server as above with `--check-site` in place of `--dry-run`:
+
+```bash
+bun run scripts/load-pricing-rules.ts --check-site < pricing-rules.json
+```
+
+It asks the site's own search for 24 routes (two per continent pair, both trips; Istanbul, Québec and Seville among
+them), one at a time, half a second apart, and prints per cabin how many matched, differed or got no answer, and the
+routes that differ — never a price. It writes nothing. Exit 1: a route differs — those rules are not the ones the site
+prices by — or the site gave no business figure for a route (a timeout, a 404, its rate limit): the check did not cover
+it, so it is not a pass; run it again. A route without a first-class figure does not fail it. With the reference set it
+is expected to fail on the routes with a Q and on first class; the company's current rules should pass.
+
 The poster check must equal the poster (JFK → ZRH, business, round trip). Searches use the new rules within ~35 s. Then
 estimates on, in that environment's database (staging: `docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`;
 production only after the company's written approval). Off is the same with `false` (~35 s):
@@ -154,7 +168,8 @@ ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
 
 With estimates on, a quote request whose app showed the estimate (A2c and later) carries it — stored on the request,
 published with the rules' fingerprint and written into the specialist's e-mail as `Indicative estimate shown: $2,055
-round trip, business (formula)` (ADR-IMPL-042). `catalog.estimates` off stops estimates everywhere; `catalog.killed`
+round trip, business (formula)` (ADR-IMPL-042); `(company site)` when the company's site priced it (ADR-IMPL-063, "The
+site's prices" below). `catalog.estimates` off stops estimates everywhere, the site's prices included; `catalog.killed`
 stops Explore but not the estimate a queued request may still ask for.
 
 Which rules are live: `SELECT value->>'fingerprint', value->>'loadedAt' FROM platform.flags WHERE key = 'catalog.pricing_rules';`.
@@ -196,7 +211,41 @@ time gets a row in `catalog.place_photos`, and `resolve-place-photos` (worker, e
 first) looks it up: Wikimedia Commons through Wikidata; then Pexels, only when `PEXELS_API_KEY` is set (three
 questions a run at most — Pexels allows 200 an hour, 20,000 a month); else the satellite view, which the app draws
 from Mapbox with its `pk.` token. Until a city is looked up, and whenever a photo does not load, the app shows its own
-image. Every city is looked at again after 30–33 days. Only addresses and credits are stored — never an image.
+image. Every city is looked at again after 30–33 days. Only addresses and credits are stored — never an image. A run
+starts no request after its first 32 s (each may take 8; the job is stopped at 50): when the sources are slow, the
+cities it has not reached are put back (`deferred` in the run's counts in `platform.job_runs`), their look not counted.
+
+What Commons may give a city (ADR-IMPL-043, amended by ADR-IMPL-064): a JPEG photograph in landscape (1.2 to 2.4 wide
+for 1 high), wider than 1280 px, under CC0, public domain, CC BY / BY-SA or the Free Art License (`FAL`), with its
+author whenever the licence asks. A TIFF, PNG, SVG or GIF never (on Commons a TIFF is mostly a scan or a satellite
+image: the one a site city had was).
+
+**A landmark stands in** (ADR-IMPL-064, amendment 1): while `catalog.landmarks` is on (Landmarks, below), a city whose
+row is `satellite` is answered with its first landmark's photograph instead, credited as that photograph
+(`Photo: <author> · <licence> · Wikimedia Commons`, linked to its Commons page). A city not looked up yet (`pending`)
+is not: phones ask about it again within a minute, and would keep a stand-in for twelve hours past the city's own photo.
+The route composes it on each answer and never stores it: the row stays as it is and the job looks again on its own
+schedule, so a photo the city gets later, or an operator's photo, wins on the server's next answer. Phones keep a photo
+they have read for up to twelve hours, or until the app restarts: a change reaches a phone that already shows the city
+only then. To see which cities show one (the flag's `skip` aside):
+
+```sql
+SELECT p.code, p.status, l.rank, l.landmark_qid, l.name, l.licence
+FROM catalog.place_photos p
+JOIN LATERAL (SELECT * FROM catalog.place_landmarks x
+              WHERE x.code = p.code AND x.kind = 'landmark' ORDER BY x.rank LIMIT 1) l ON true
+WHERE p.status = 'satellite';
+```
+
+A stand-in the city should not have: put its `landmark_qid` in the flag's `skip` (Landmarks, below) — the server then
+answers with the next landmark, or the satellite view when none is left, within ~35 s — or give the city the club's own
+photo (below). Either way, phones that already show the stand-in keep it for up to twelve hours (or until the app
+restarts): the photos route has no revalidation, so nothing on the server reaches them sooner. A photograph Commons
+deletes is not taken down by the deletion: the landmark's row keeps its address until the landmarks job looks at the
+place again (30–33 days), so the server keeps answering it; a phone that has shown it keeps drawing it from its image
+cache (a photograph is kept on disk, across restarts), and only a phone that never loaded it shows the slot's fallback
+(the club's image, or the light tint). Take it down as any stand-in — its `landmark_qid` in `skip`, or the club's
+photo: the address changes, and the twelve hours above hold. A faster takedown than that is an app change.
 
 The worker reaches `query.wikidata.org`, `commons.wikimedia.org` and `api.pexels.com` over 443; members' phones load
 the photos from `upload.wikimedia.org` (or Wikimedia's newer thumbnail host) and `images.pexels.com`, and satellite
@@ -221,7 +270,36 @@ docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file 
 ```
 
 After setting `PEXELS_API_KEY` (restart the worker), let the satellite cities be looked at again now rather than within
-a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`.
+a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`. The same line after the release
+that accepted the Free Art License (ADR-IMPL-064, amendment 2): the cities it rescues get their own photo within
+minutes (ten a minute) instead of within a month.
+
+A city stuck on an old satellite view: read its row, then let the job look again now. Chișinău (RMO) is one: Wikidata
+answers the club's code, RMO, with the city and its photographs, so its `satellite` row is one resolved before this
+release (it waits out its 30–33 days otherwise) or one whose look a 429 cut short (before ADR-IMPL-064 that put it off
+for up to a day). The same lines, with the city's own code, also bring back now the cities that got no photo before
+ADR-IMPL-064 for reasons it fixed: an airport the club keeps under a code Wikidata has since demoted (now matched at
+any rank), and a city whose airport Wikidata does not know (now found by its name):
+
+```sql
+SELECT code, status, source, author, license, attempts, resolved_at, expires_at
+FROM catalog.place_photos WHERE code = 'RMO';
+UPDATE catalog.place_photos SET expires_at = now() WHERE code = 'RMO' AND status = 'satellite';
+```
+
+Within a minute (unless a hold is on, below) the row is `photo` with a Wikimedia credit — for RMO the cathedral's night
+view — or `satellite` again if Commons has no photograph that passes. Never on an operator's photo (`source =
+'override'`): that is `DELETE …/photo`'s job.
+
+Wikimedia asks a client it wants slower to wait (429 with `Retry-After`: WDQS up to 1000 s during an outage, Commons
+20–60 s). That is not the city's fault: the cities claimed wait that long, their look not counted, and the source is held
+for both Wikimedia jobs (place photos and landmarks) until `not_before`; a run that claims cities meanwhile asks nothing
+and puts them back. The holds, and ending one early (only when the 429 came from something already fixed):
+
+```sql
+SELECT source, not_before, not_before - now() AS left FROM catalog.source_holds;
+UPDATE catalog.source_holds SET not_before = now() WHERE source = 'wikidata';
+```
 
 Off: the flag row `catalog.place_photos` (seeded on by `scripts/seed-flags.ts`) — `{"enabled":false}` and within ~35 s
 the route answers no photos (the app shows its own image everywhere) and the job asks nothing outside:
@@ -236,19 +314,78 @@ Metrics: `bbc_place_photos_resolved{status,source}` (photos and satellite views 
 a day at most; `write`: the database refused a row; `airport`: a claimed city the airports query cannot match — a code
 not in upper case — tried again the same way, log line `place photos: no airport for a claimed city`),
 `bbc_place_photos_requested` (cities asked about for the first time). The log line `place photos: a source failed`
-carries the stage and the error — never the Pexels key. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
+carries the stage and the error — never the Pexels key; `place photos: a source asked the club to wait` carries the stage
+and the seconds, and `bbc_place_photos_held{stage}` counts the holds. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
 means the key is wrong or revoked: until it is replaced, a city that shows a photo keeps it, and one Commons has no
 photo for gets its satellite view, looked at again each day.
 
+## Landmarks (ADR-IMPL-064)
+
+The app asks for a destination's landmarks (`GET /v1/places/:code/landmarks`): up to three, each with its photograph's
+address on Wikimedia, its size and its credit, from `catalog.place_landmarks` at once. `resolve-place-landmarks`
+(worker, every five minutes, two places a run) looks up the cities the app has shown a photo for and the site's
+cities: one WDQS question a city (a second when the city item it remembers answers nothing; 3–33 s, WDQS stops one at
+60 s) and Commons once per 50 files, a hundred files at most (two questions). A city is looked at again
+after 30–33 days; a look that failed, after six hours (what the city had stays). Only addresses and credits are stored.
+A place starts only while its slowest look (162 s) can end inside the run's 225 s (the job is stopped at 240): when
+WDQS is slow the second place waits for the next run, untouched (`later` in the run's counts in `platform.job_runs`).
+
+On: the flag row `catalog.landmarks` (seeded off by `scripts/seed-flags.ts`, with the skip list below). Off, the route
+answers no landmarks, the job asks nothing, and no landmark stands in for a city photo:
+
+```sql
+UPDATE platform.flags SET value = jsonb_set(value, '{enabled}', 'true'), updated_at = now() WHERE key = 'catalog.landmarks';
+```
+
+What a city shows, and how far the job has got:
+
+```sql
+SELECT rank, kind, city_qid, landmark_qid, name, licence, credit, fetched_at, expires_at
+FROM catalog.place_landmarks WHERE code = 'CDG' ORDER BY rank;
+SELECT kind, count(*) FROM catalog.place_landmarks GROUP BY kind;
+```
+
+`landmark` rows are shown, best first; a `fewer` row after them means the job found fewer than three and will not ask
+again for a month (rank 1 and `city_qid` null: no city found for the airport); a `failed` row alone means no look has
+worked yet (the job tries again in six hours).
+
+A wrong or unwanted landmark: add its Wikidata item (`landmark_qid`) to the flag's `skip` list — the route leaves it out
+within ~35 s; an app that already showed the city drops it at its next question for it, never sooner than 12 hours after
+the app's last answer for that city: within a minute of them while a screen showing the city is on screen, else when one
+next is, or at the app's next cold start. The server's city photo it may stand in for changes as fast, but phones that
+already show that photo keep it for up to twelve hours (Place photos, above); a destination never shows the stand-in's
+photograph twice, whichever of the two a phone has refreshed first (it compares photographs, not landmarks: a look that
+gives the same landmark another file can show it in both for up to twelve hours). Then let the city be looked at again
+so that another takes its place. The seeded list holds Q177174, Reykjavík's most written-about sight (the Icelandic
+Phallological Museum):
+
+```sql
+UPDATE platform.flags SET value = jsonb_set(value, '{skip}', coalesce(value->'skip', '[]') || '["Q243"]'), updated_at = now()
+WHERE key = 'catalog.landmarks';
+UPDATE catalog.place_landmarks SET fetched_at = now() - interval '1 minute', expires_at = now() WHERE code = 'CDG';
+```
+
+A 429 from WDQS or Commons holds that source (`catalog.source_holds`, above) for its Retry-After and stops the run: no
+place is marked for it. Metrics: `bbc_place_landmarks_resolved{found}` (places written, by how many landmarks they
+got), `bbc_place_landmarks_failed{stage}` (`wikidata`, `commons`: the source failed, the places keep what they have;
+`write`: the database refused a row), `bbc_place_landmarks_held{stage}`. Log lines `landmarks: a source failed`,
+`landmarks: a source asked the club to wait`, `landmarks: write refused`. The worker reaches `query.wikidata.org` and
+`commons.wikimedia.org` over 443; phones load the photographs from `upload.wikimedia.org`.
+
 ## The site's destinations (ADR-IMPL-045)
 
-Once a night (07:40 UTC, night in the US) `sync-site-destinations` (worker) reads the company's site through its own
-API — `weba.buybusinessclass.com`: regions, their countries, their cities, about 240 pages, then a HEAD request for each
-city's photo, four requests at a time — and keeps a snapshot: `catalog.site_places` (each city, its main airport, every
-airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price from, and that
-price — kept, never shown). The site has no airport codes: a city is matched by name inside the country the site puts
-it in; the few names that need help are listed in `SITE_CITY_AIRPORTS` (catalog `application/site-places.ts`). Two
-flags, both seeded off; with both off the job asks the site nothing.
+Twice a day (07:40 and 19:40 UTC; twice since ADR-IMPL-067) `sync-site-destinations` (worker) reads the company's site through its own API
+— `buybusinessclass.com/api` (ADR-IMPL-062; `weba.buybusinessclass.com` until it stopped resolving): regions, their
+countries, their cities, about 240 pages, one starting every 1.2 s (the API allows 120 requests a minute per address,
+and staging's night, on this host at the same minute, reads beside it: about 50 a minute each), then a HEAD request for each city's photo,
+four at a time — and keeps a snapshot: `catalog.site_places` (each city, its main
+airport, every airport it covers, its photo's path) and `catalog.site_routes` (the US airports the site lists a price
+from, that price — shown only as a site deal — and the "Old Price", never shown), each route served until
+`valid_until`, a day after the run that wrote it (CHECK `site_routes_validity`, D6). The site has no airport codes: a
+city is matched by name inside the country the site puts it in; the few names that need help are listed in
+`SITE_CITY_AIRPORTS` (catalog `application/site-places.ts`). Three flags, all seeded off; with all three off — and
+`catalog.globe_tap` off, whose cities are the site's (ADR-IMPL-068, "Tap anywhere on the globe" below) — the job asks
+the site nothing.
 
 - `catalog.site_photos`: each city's own photo on all its airports, stored as an operator's photo (it never expires, has
   no credit line, and `resolve-place-photos` never touches it). An operator's own photo from anywhere else stays; one
@@ -259,28 +396,40 @@ flags, both seeded off; with both off the job asks the site nothing.
   about twenty minutes for all of them, the club's image meanwhile; off and `skip` work even on a night the site does
   not answer. An operator's `DELETE …/photo` on a site photo lasts until the next night: keep a city off with `skip`,
   or give it the club's own photo (`PUT …/photo` with an address elsewhere), which the job never touches. Members'
-  phones load these photos from `weba.buybusinessclass.com`.
+  phones load these photos from `buybusinessclass.com/storage/`. A photo stored under `weba.buybusinessclass.com` is
+  still the site's: the next run moves it to the new address, or hands it back.
 - `catalog.site_pins`: after the fares' pins, up to twelve of the site's cities listed from the member's home airport
   (the site's home page first, then the busiest), priced by the formula in the member's cabin (ADR-IMPL-037), so the
   pin, its search's estimate row and the quote show one number. Nothing while `catalog.estimates` is off: no price, no
-  pin.
+  pin. With `catalog.site_prices` on, the pins show the site's stored answers, and `refresh-site-prices` keeps them
+  only while this flag is on too ("The site's prices" below).
+- `catalog.site_offers`: the site's deals in Explore's "Offers to inspire", after the member's own offers ("The site's
+  deals" below). Needs neither of the other two, nor `catalog.estimates`.
 
 All or nothing: a region or a country that does not answer, fewer than 80 % of last night's cities listed or placed on
 their airports, or more than 10 % (at least three) city pages unanswered, and the run fails and changes nothing:
 `platform.job_runs` says `failed` and why, and the worker's `/metrics` counts it in
-`bbc_job_failed{job="sync-site-destinations"}`, and `/status` turns red with the job in `failingJobs` until a run succeeds. A
-single city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no answer, a 5xx)
-keeps last night's verdict. The run's counts are in `platform.job_runs`; the log lines `site: no airport`,
-`site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`, `site: photo does not answer`,
-`site: photo not checked, kept`, `site: unknown US city` and `site: city page did not answer, kept` name the cities.
-Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is Osaka's. A city
-under `site: main airport by a tie` got the alphabetically first of its busiest airports: list it in
+`bbc_job_failed{job="sync-site-destinations"}`, and `/status` turns red with the job in `failingJobs` until a run
+succeeds. "Last night" is the snapshot while its day has more than an hour to run (ADR-IMPL-067): a run twelve hours
+after a good one is weighed against it, the run a day after is not — that snapshot serves no deal and no pin from then
+on — so a site that really lists a fifth fewer cities is taken a day after its last good read, with no step of yours;
+until then the failures above say so, and the deals and site pins stay on the last good read for its day. A single
+city page that does not answer keeps last night's rows; a photo the site cannot be asked about (no answer, a 5xx) keeps
+last night's verdict. The site's rate limit (HTTP 429) holds the read for what its `Retry-After`
+asks (a minute without one, two at most), then the page is asked again; a second 429 on any page, a city's included,
+fails the night — unlike a city page that merely does not answer (`site getOne?id=…: HTTP 429 again after waiting`). The
+pace leaves room for staging's read at the same minute (about 50 a minute each against the address's 120), so a 429
+means something else asked the site from this address. The run's counts are in `platform.job_runs`; the log
+lines `site: no airport`, `site: main airport by a tie`, `site: borrowed photo`, `site: odd photo`,
+`site: photo does not answer`, `site: photo not checked, kept`, `site: unknown US city` and
+`site: city page did not answer, kept` name the cities. Kyoto is listed under `site: no airport` on purpose: it has no airport of its own, and Osaka's photo is
+Osaka's. A city under `site: main airport by a tie` got the alphabetically first of its busiest airports: list it in
 `SITE_CITY_AIRPORTS` (a PR), main airport first.
 
 Before turning either on, see what the site holds today, with no database: `bun run scripts/site-destinations-report.ts`
-on any computer with the repository reads the site as the job does (about 400 requests, a minute or two), prints a
-summary and writes one HTML page in the temporary folder — every city with its photo, its airports, whether its photo
-answers and how heavy it is (the app shows the site's file as is), and the site's prices.
+on any computer with the repository reads the site as the job does (about 400 requests, paced: about six minutes),
+prints a summary and writes one HTML page in the temporary folder — every city with its photo, its airports, whether its
+photo answers and how heavy it is (the app shows the site's file as is), and the site's prices.
 
 Turn one on (or off) in that environment's database (staging:
 `docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`), wait a minute (a flag is read through a cache of about
@@ -301,16 +450,145 @@ docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
   bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET}}).then(async r=>console.log(r.status,await r.text()))"
 ```
 
-It answers `200` with the run: `"status":"succeeded"` and its counts under `metrics` (`read`, `cities`, `places`,
-`photosSet`, …); `"failed"` changed nothing, and its `error` says why; `"skipped"` — a run was already going: try again
-in two minutes.
+A night's run takes three to five minutes (up to about seven when staging's run reads the site at the same time; the
+job's timeout is ten), longer than the worker's HTTP idle timeout (120 s): the command above then
+ends with the connection closed while the run goes on (the cron's own call logs `FAIL` the same way). Its outcome is in
+`platform.job_runs`, a few minutes later:
 
-What the snapshot holds:
+```sql
+SELECT status, error, metrics, duration_ms FROM platform.job_runs
+WHERE job = 'sync-site-destinations' ORDER BY started_at DESC LIMIT 1;
+```
+
+`succeeded` with its counts under `metrics` (`read`, `cities`, `places`, `photosSet`, …); `failed` changed nothing, and
+its `error` says why; `skipped` — a run was already going: try again in five minutes. A run that ends within 120 s (the
+flags off) still answers `200` with the same fields.
+
+What the snapshot holds, and how much of it is still within its day:
 
 ```sql
 SELECT cms_id, name, country, airport, airports, promoted, image IS NOT NULL AS photo FROM catalog.site_places ORDER BY name;
-SELECT route_from, count(*) FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
+SELECT route_from, count(*), count(*) FILTER (WHERE valid_until > now()) AS served, max(synced_at) AS read_at
+FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
 ```
+
+### The site's deals (ADR-IMPL-067)
+
+With `catalog.site_offers` on (seeded off), Explore's "Offers to inspire" shows, after the member's own offers, up to 24
+of the site's deals: from the member's airport and its metro first (New York is JFK, EWR and LGA), then from the nearest
+city the site sells from — Seattle sees San Francisco's, Toronto Washington's, Boston its five and then New York's — one
+deal per city, each card saying `from $X` (the site's "Price Today": per person, indicative; no trip, no cabin) and,
+when it leaves from another city than the member's, `from New York`. Never `Save X%`: the site's "Old Price" has no
+source and is never served. A tap opens the destination as a pin does. The deals are read from the snapshot, never from
+the site; a deal is shown for a day after the run that read it and is gone with the next run if the site dropped it.
+A run that fails changes nothing: the deals it leaves end within the day (two runs a day: one failure leaves twelve
+more hours). Home keeps them a minute; the run's end shows at once.
+
+Turn it on as the others (above): the flag row, a minute for the flag's cache, then run `sync-site-destinations` through
+the worker if the snapshot is older than a day (the query above: `served` 0). What a member at an airport sees:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.site_offers','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+-- Deals from JFK still served, the site's home page first, as Home orders them:
+SELECT p.name, r.price, r.valid_until FROM catalog.site_routes r JOIN catalog.site_places p USING (cms_id)
+JOIN catalog.airports a ON a.code = p.airport
+WHERE r.route_from = 'JFK' AND r.valid_until > now() ORDER BY p.promoted DESC, a.popularity DESC LIMIT 24;
+```
+
+Off: the next Home has none (the flag's cache aside), with no question to the database. On staging, once it is on,
+withdraw the demo's broadcast offers ("Staging demo data", below), or Tokyo stands twice on Explore.
+
+## The site's prices (ADR-IMPL-063)
+
+With `catalog.site_prices` on (seeded off; it needs `catalog.estimates`, which stays the master switch), an estimate is
+the company's own price from its site's search (`webapi.buybusinessclass.com/flights/search`) wherever the company
+prices the route: a published fare first, then the site's answer stored less than 24 hours ago
+(`catalog.site_prices`), then — an undated search only — one question to the site within a second, whose answer is
+stored; the formula only where the site could not be asked. Home's site pins and a quote request never ask the site:
+they read the stored answer, else the formula. Off, everything is as before and the site is never asked.
+
+**What a `none` row means.** The site answered that the company has no price for that route — 404 `Offer not found`
+(no end in North America) or `Not found` (an airport code it does not know, such as `DJT`, which it spells `PBI`). The
+member sees no number at all — not the formula — and "Request a quote"; the pin is not shown. It is the company's
+answer, kept 24 hours like a price. An error (a timeout, a 5xx, a 429, a body the club cannot read) stores nothing.
+
+**Turn it on** (staging first: members' numbers change — first class appears on routes the club hid, Cyprus, Russia and
+Kazakhstan get the site's prices, airports the site does not know lose theirs), in that environment's database; off is
+the same with `false`. A flag is read through a cache of about 35 s:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.site_prices','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+```
+
+**The job** `refresh-site-prices` (worker, every ten minutes) keeps the answers for the routes Home's site pins show:
+from each airport `catalog.site_routes` lists, its first 36 cities in the pins' order, round trip. Routes without an
+answer first, then answers 18 hours old or more; at most 150 questions a run, one every 500 ms. It asks only while
+`catalog.estimates`, `catalog.site_prices` and `catalog.site_pins` are all on — without the pins no member sees those
+routes, and a search asks for its own — and reads them again before each question, so turning one off stops a run
+already going (`stopped: 1`, within the flags' cache of about 35 s). With one off it asks nothing (`skipped: 1`) and
+still deletes the expired answers (`purged`). It stops at the site's first 429 (`rateLimited: 1` in its run) and when
+the breaker opens (`breakerOpen: 1`); the next run, ten minutes later, goes on. A route the site could not answer is not
+asked again for an hour (`backingOff` counts them), then after every other route due: one the site keeps failing costs
+at most a question an hour and holds nothing back. The worker remembers those failures until it restarts. Run it now, as
+`sync-site-destinations` above, with `refresh-site-prices` in the path. Its outcome:
+
+```sql
+SELECT status, metrics, duration_ms FROM platform.job_runs
+WHERE job = 'refresh-site-prices' ORDER BY started_at DESC LIMIT 5;
+```
+
+**The breaker** (one per process, the API's and the worker's apart): five failures in a row — timeouts, 5xx, 429s,
+bodies not its shape — open it for a minute; then one question goes, and its answer closes or reopens it. While it is
+open the search shows the formula at once, the job asks nothing, and `bbc_site_prices_unavailable{reason="breaker"}`
+counts it. Nothing to reset: it closes itself when the site answers. If the site stays down, the formula stands in
+everywhere; turning the flag off changes nothing more but stops the questions — a run already going included, before
+its next one.
+
+**Watch:** `bbc_site_prices_answered{status}` (priced, none), `bbc_site_prices_unavailable{reason}` (`breaker`,
+`timeout`, `error`, `invalid` — the site changed its answer's shape, `rate_limited`, `bad_request` — a request of ours
+the site refused: a bug, logged `site price refused our request (400)` with the codes), and
+`bbc_search_site_prices{source,how}`: how each search was priced (`site` stored or asked, `club` fallback, `none` none,
+cabin or guarded). A cold start of the site's host can take seconds: the first search then shows the formula and the
+next one asks again. What is stored:
+
+```sql
+SELECT status, count(*), min(fetched_at), max(fetched_at) FROM catalog.site_prices GROUP BY status;
+SELECT route_from, route_to, status, fetched_at, expires_at FROM catalog.site_prices
+WHERE route_from = 'JFK' ORDER BY route_to;
+```
+
+A wrong row (the company corrected a price): delete it — the next search or run asks again. Never edit a figure by hand.
+
+```sql
+DELETE FROM catalog.site_prices WHERE route_from = 'JFK' AND route_to = 'ZRH';
+```
+
+## Tap anywhere on the globe (ADR-IMPL-068)
+
+With `catalog.globe_tap` on (seeded off), `GET /v1/home` sends `bookable`: the cities a tap anywhere on Explore's globe
+may open — the site's cities (by their main airport) and the US airports the site lists a price from, from the night's
+snapshot ("The site's destinations" above), with the arrivals of the member's fares and offers; never the member's home
+airport nor another within 100 km of it. A formula price alone never adds a city. The app snaps a tap to the nearest of
+them within 600 km and opens it as a pin's tap does (its search prices it); farther, or over the sea, it says
+`No destination near there.` and points to the search; within 100 km of the member's home airport, the home answer. Off:
+the field is absent and a tap off the pins does nothing, as before — an app built before this ignores the field either
+way.
+
+The list needs the snapshot: with this flag on, the night's `sync-site-destinations` reads the site even with the site's
+photos and pins off. Turn it on in staging first, then run the night's job (above) if `catalog.site_places` is empty:
+
+```sql
+INSERT INTO platform.flags(key,value) VALUES ('catalog.globe_tap','{"enabled":true}')
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();
+SELECT count(*) AS cities FROM catalog.site_places;
+SELECT count(DISTINCT route_from) AS origins FROM catalog.site_routes;
+```
+
+It costs Home one read of the set (cached a minute, and dropped when the night's sync or an import changes it) and
+about 21 KB of JSON (today's 169 airports) inside Home's ETag. Off is the same with `false`, seen within the flags' cache of about 35 s; the
+app keeps the last Home it parsed until its next load.
 
 ## The queue is stuck (oldest pending > 5 min)
 
@@ -700,6 +978,24 @@ cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f
 ```
 
 It prints `staging demo ready — … dates from <today>`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing. The poster route JFK → ZRH is left without a fare on purpose, so the estimate (ADR-IMPL-037) can be shown there once `catalog.estimates` is on and the rules are loaded.
+
+**Once the site's deals are on in staging (`catalog.site_offers`, ADR-IMPL-067)** the demo's two broadcast offers — Paris
+and Tokyo, seen by every staging member — should not be what members see: withdraw them once, as the internal route
+does it (status `withdrawn` and `offer.withdrawn`, so pending pushes are suppressed). The demo seed keeps a withdrawn
+demo offer withdrawn at every later deploy and writes no inbox item for it; London, the review account's own, stays.
+
+```bash
+# staging: the two ids, then the withdraw route through the staging worker (the secret is read from its environment)
+docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc -Atc \
+  "SELECT id FROM proposals.offers WHERE idempotency_key IN ('staging-demo:paris','staging-demo:tokyo') AND status = 'active'"
+for id in <id-1> <id-2>; do
+  docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
+    bun -e "fetch('http://localhost:8001/v1/internal/offers/$id/withdraw',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET,'Content-Type':'application/json'},body:JSON.stringify({reason:'site deals on'})}).then(async r=>console.log(r.status,await r.text()))"
+done
+```
+
+Each answers `200 {"ok":true}`. To bring them back (the deals off again), set their `status` to `active` in
+`proposals.offers` and run the demo seed: it dates them from today.
 
 ## Redis, Kafka, Streams, and demand
 

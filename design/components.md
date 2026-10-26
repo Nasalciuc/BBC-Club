@@ -172,6 +172,20 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
 - **Save** — `Save 48%` only where the published fare is on record, in the tint each card draws it with:
   `surface-save-soft` across an offer's foot, `surface-tint-blue` on 05's fare, `surface-save` on a quote, words alone
   on 06's trip. `SavePill` (`border-default`, 28 tall) is the gallery's.
+- **Landmarks** (04, 13; ADR-IMPL-064) — **not drawn in 3.0**: up to three landmarks of the destination, built from
+  what 04, 13, 03, 05 and 08 draw until a designer draws it. Under the flight options of the look it follows (their
+  measures, `optionsColumn`): `Landmarks` in their title's role and pen (04 `placeOptions` 17.93 in; 13
+  `routeOptions` 20.4 in), the photographs as far under its baseline as the flight cards are (9.5; 13.5), in a
+  `CarouselRow` from the cards' left edge (11.2; 16.2) to the screen's edge, 8.55 apart (08's three fares). Each
+  photograph 118 tall (03's popular ones), radius 10 (`sm`, 05's thumbnails), as wide as its own shape within 1.2–2.4
+  (outside the band, its nearest edge, cropped); its name under it in `subtitle` navy, the baseline 18.7 under the
+  photograph (03's city); then its `PhotoCredit`, opening the photograph's page on Commons. The photograph and its
+  name are one image for a screen reader (`<name>, photo`), the credit after it. States: fewer than three — what
+  exists; none — nothing (no title, no frame); a photograph that will not load leaves with its name and credit until
+  the screen comes back into view or the phone back online; on 04, the landmark whose photograph is already the city's
+  over the page (one standing in for it, ADR-IMPL-064 amendment 1) is left out before the three are counted — the
+  server sends three, so a stand-in's city shows at most two there, and one with no other landmark nothing
+  (ADR-IMPL-064, left to the owner); 13 draws the globe and keeps it; no skeleton, no error, no placeholder.
 
 ## Feedback (sheet 41)
 
@@ -236,7 +250,12 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   drawn globe in the `globe-*` colours. Destinations are navy drop pins (18 × 25, the tip on the place) with a white
   label beside the head — the city over its price (`pin`, `pin-detail`) — placed right of the pin or else left, and left
   out where it would cover another label, a pin or a button; a chosen route shows only its two ends with their codes, a
-  white line arcing between them and the plane at its middle.
+  white line arcing between them and the plane at its middle. At rest a tap anywhere on the disc (ADR-IMPL-068) opens
+  the nearest city the club sells within 600 km as its pin would; a tap on the sky is nothing, a drag never a tap. No
+  image draws its answers, so these are proposed until design draws them (ADR-IMPL-068, reported): the distance
+  (`Nearest: Rome · 180 km`) is a second line under the country (13), and nothing near — or the member's own city — the
+  `attention` NoticeCard under the search bar, linking to Search; while they show, 13's first flight is no longer whole
+  above the docked pill, nor 02's offer cards above the tab bar.
 - **Wordmark** — `BuyBusinessClass` Semibold and ` Club` Regular, one line, navy — over 08's daylight photograph too
   (white only over a dark one); 07 sets `BuyBusinessClass` Bold (`wordmarkDates`).
 - **Avatar** — the member's portrait in a white ring; their initials on navy until the club keeps a photo.

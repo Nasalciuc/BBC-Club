@@ -155,6 +155,8 @@ export async function submit(
         replacesFareId: body.replacesFareId ?? null,
         shownEstimateAmount: shown ? shown.amount : null,
         shownEstimateCurrency: shown ? shown.currency : null,
+        // ADR-IMPL-063: who priced it, as the catalog said; none while the site's prices are off (the formula).
+        shownEstimateSource: shown?.source ?? null,
         tripType: body.tripType,
         cabin: body.cabin,
         legs: body.legs,
@@ -201,12 +203,14 @@ export async function submit(
         offerId: body.offerId ?? null,
         intent: body.intent ?? null,
         replacesFareId: body.replacesFareId ?? null,
-        // The rules' fingerprint rides along only in its own shape: the event's schema must never refuse a request.
+        // The rules' fingerprint and the source ride along only in their own shape: the event's schema must never
+        // refuse a request.
         shownEstimate: shown
           ? {
               amount: shown.amount,
               currency: shown.currency,
               ...(shown.rules && /^[0-9a-f]{16}$/.test(shown.rules) ? { rules: shown.rules } : {}),
+              ...(shown.source === "site" || shown.source === "club" ? { source: shown.source } : {}),
             }
           : null,
         submittedAt: new Date().toISOString(),

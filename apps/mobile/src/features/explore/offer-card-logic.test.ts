@@ -1,8 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import type { DestinationPinVM } from "@bbc/shared/api/v1/fares";
+import type { DestinationPinVM, HomeVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 
-import { offerCardModel, sheetExpandedState } from "./offer-card-logic";
+import {
+  dealCardModel,
+  dealDestination,
+  dealLive,
+  homeDeals,
+  offerCardModel,
+  sheetExpandedState,
+  withLiveDeals,
+} from "./offer-card-logic";
 
 describe("every offer (16) while Home loads — never 'No offers yet.' before it answered (ADR-IMPL-047)", () => {
   const card = { id: "x" } as unknown as ProposalCardVM;
@@ -82,6 +90,98 @@ describe("offerCardModel", () => {
       fromPrice: "$4,650",
       savePercent: null,
       rating: null,
+    });
+  });
+});
+
+// ADR-IMPL-067: the company site's deals after the member's own offers. Made-up prices.
+const deal = (origin: { code: string; city: string }, amount = 1101): SiteDealVM => ({
+  id: `site-9001-${origin.code}`,
+  destination: {
+    code: "LHR",
+    city: "London",
+    name: "Heathrow Airport",
+    countryCode: "GB",
+    lat: 51.47,
+    lng: -0.45,
+    photo: null,
+  },
+  origin,
+  price: { amount, currency: "USD", basis: "site", from: true },
+  validUntil: "2026-10-26T07:46:00.000Z",
+});
+const JFK_HOME = { code: "JFK", city: "New York" };
+
+describe("dealCardModel (ADR-IMPL-067)", () => {
+  it("the city, its country and `from` the site's price — never a saving, never a star", () => {
+    expect(dealCardModel(deal(JFK_HOME), JFK_HOME)).toEqual({
+      city: "London",
+      country: "United Kingdom",
+      fromPrice: "$1,101",
+      savePercent: null,
+      rating: null,
+      origin: null,
+    });
+  });
+
+  it("names the origin when the deal leaves from another city than the member's", () => {
+    const seattle = { code: "SEA", city: "Seattle" };
+    expect(dealCardModel(deal({ code: "SFO", city: "San Francisco" }), seattle).origin).toBe("from San Francisco");
+    expect(dealCardModel(deal({ code: "IAD", city: "Washington" }), { code: "YYZ", city: "Toronto" }).origin).toBe(
+      "from Washington",
+    );
+  });
+
+  it("no line for the member's own airport or own city (Newark's member and New York's deal from JFK)", () => {
+    expect(dealCardModel(deal({ code: "EWR", city: "New York" }), { code: "ewr", city: "Newark" }).origin).toBeNull();
+    expect(dealCardModel(deal({ code: "JFK", city: "New York" }), { code: "LGA", city: "New York" }).origin).toBeNull();
+  });
+
+  it("names the origin when Home does not know the member's airport", () => {
+    expect(dealCardModel(deal(JFK_HOME), null).origin).toBe("from New York");
+  });
+});
+
+describe("the deals on Home (ADR-IMPL-067)", () => {
+  it("none from a server without them, or before Home answered", () => {
+    expect(homeDeals(null)).toEqual([]);
+    expect(homeDeals({})).toEqual([]);
+    expect(homeDeals({ deals: [deal(JFK_HOME)] }).map((d) => d.id)).toEqual(["site-9001-JFK"]);
+  });
+
+  it("every offer (16) shows the deals when the member has no offer of their own", () => {
+    expect(sheetExpandedState({ sections: [], deals: [deal(JFK_HOME)] }, false)).toBe("offers");
+    expect(sheetExpandedState({ sections: [], deals: [] }, false)).toBe("empty");
+  });
+
+  it("a deal past its day leaves a Home the app has held since (D6): the others stay, the same Home when none is", () => {
+    const until = Date.parse("2026-10-26T07:46:00.000Z");
+    const tomorrow = { ...deal({ code: "BOS", city: "Boston" }), validUntil: "2026-10-27T07:46:00.000Z" };
+    const held: Pick<HomeVM, "sections" | "deals"> = { sections: [], deals: [deal(JFK_HOME), tomorrow] };
+    expect(dealLive(deal(JFK_HOME), until - 1)).toBe(true);
+    expect(dealLive(deal(JFK_HOME), until)).toBe(false);
+    expect(dealLive({ validUntil: "not a day" }, until)).toBe(false);
+    // Still within its day: the very same Home, so nothing draws again.
+    expect(withLiveDeals(held, until - 60_000)).toBe(held);
+    // Its day over: that deal leaves, the other stays, the offers untouched.
+    const after = withLiveDeals(held, until);
+    expect(after?.deals?.map((d) => d.id)).toEqual(["site-9001-BOS"]);
+    expect(after?.sections).toBe(held.sections);
+    expect(homeDeals(withLiveDeals(held, Date.parse("2026-10-28T00:00:00.000Z")))).toEqual([]);
+    // No Home yet, or one from a server without deals: as it is.
+    expect(withLiveDeals(null, until)).toBeNull();
+    const old: Pick<HomeVM, "sections" | "deals"> = { sections: [] };
+    expect(withLiveDeals(old, until)).toBe(old);
+  });
+
+  it("a tap chooses the deal's destination as a pin does: the airport, without the photo", () => {
+    expect(dealDestination(deal(JFK_HOME))).toEqual({
+      code: "LHR",
+      city: "London",
+      name: "Heathrow Airport",
+      countryCode: "GB",
+      lat: 51.47,
+      lng: -0.45,
     });
   });
 });

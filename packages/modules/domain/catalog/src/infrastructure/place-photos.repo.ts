@@ -20,6 +20,15 @@ export type StoredPhoto = {
 /** Where a satellite view, or the city behind a photo, is centred. */
 export type Centre = { lat: number; lng: number };
 
+/** The row's address starts with one of `prefixes` — the site's addresses, today's and before (ADR-IMPL-062). */
+function startsWithAny(prefixes: readonly string[], path = "") {
+  if (prefixes.length === 0) throw new Error("place photos: no site address to match");
+  return sql`(${sql.join(
+    prefixes.map((prefix) => sql`starts_with(${placePhotos.cardUrl}, ${prefix + path})`),
+    sql` OR `,
+  )})`;
+}
+
 const columns = {
   code: placePhotos.code,
   status: placePhotos.status,
@@ -132,12 +141,16 @@ export const placePhotosRepo = {
       .where(and(inArray(placePhotos.code, codes), notOverride));
   },
 
-  /** Not looked at this run (Pexels' share of the run was spent): due again at once, and the look not counted. */
-  async writeDeferred(exec: Executor, codes: string[]): Promise<void> {
+  /** Not looked at this run, and not for the city's fault — Pexels' share of the run was spent, or a source asked the
+   *  club to wait (a 429, ADR-IMPL-064): due again in `afterSeconds` (at once by default), the look not counted. */
+  async writeDeferred(exec: Executor, codes: string[], afterSeconds = 0): Promise<void> {
     if (codes.length === 0) return;
     await exec
       .update(placePhotos)
-      .set({ expiresAt: sql`now()`, attempts: sql`greatest(${placePhotos.attempts} - 1, 0)` })
+      .set({
+        expiresAt: sql`now() + make_interval(secs => ${Math.max(0, Math.ceil(afterSeconds))})`,
+        attempts: sql`greatest(${placePhotos.attempts} - 1, 0)`,
+      })
       .where(and(inArray(placePhotos.code, codes), notOverride));
   },
 
@@ -187,10 +200,11 @@ export const placePhotosRepo = {
 
   /**
    * The site's photo for an airport (ADR-IMPL-045): stored as an operator's photo — it never expires and the resolve job
-   * never touches it — but owned by the sync-site-destinations job, which knows it by its address on the site
-   * (`prefix`). An operator's own photo from anywhere else stays as it is. True only when the row changed.
+   * never touches it — but owned by the sync-site-destinations job, which knows it by its address on the site (any of
+   * `prefixes`: a row stored under the site's former address is the site's too, ADR-IMPL-062). An operator's own photo
+   * from anywhere else stays as it is. True only when the row changed.
    */
-  async setSitePhoto(exec: Executor, code: string, url: string, prefix: string): Promise<boolean> {
+  async setSitePhoto(exec: Executor, code: string, url: string, prefixes: readonly string[]): Promise<boolean> {
     const values = {
       status: "photo" as const,
       source: "override" as const,
@@ -209,7 +223,7 @@ export const placePhotosRepo = {
       .onConflictDoUpdate({
         target: placePhotos.code,
         set: values,
-        setWhere: sql`${placePhotos.source} IS DISTINCT FROM 'override' OR (starts_with(${placePhotos.cardUrl}, ${prefix}) AND ${placePhotos.cardUrl} IS DISTINCT FROM ${url})`,
+        setWhere: sql`${placePhotos.source} IS DISTINCT FROM 'override' OR (${startsWithAny(prefixes)} AND ${placePhotos.cardUrl} IS DISTINCT FROM ${url})`,
       })
       .returning({ code: placePhotos.code });
     return rows.length > 0;
@@ -218,15 +232,16 @@ export const placePhotosRepo = {
   /**
    * The site's photos back to the resolve job (pending, due at once): all of them, all but those on the airports in
    * `keep`, or only the photos of the cities in `of` (the site's ids: their addresses are `bestDeals/<id>/…`). Only
-   * photos whose address is on the site (`prefix`); an operator's own photo from anywhere else stays. Returns the
-   * airports.
+   * photos whose address is on the site (any of `prefixes`, today's and before); an operator's own photo from anywhere
+   * else stays. Returns the airports.
    */
   async clearSitePhotos(
     exec: Executor,
-    prefix: string,
+    prefixes: readonly string[],
     on: { keep?: readonly string[]; of?: readonly number[] } = {},
   ): Promise<string[]> {
-    if (on.of && on.of.length === 0) return [];
+    const of = on.of;
+    if (of && of.length === 0) return [];
     const rows = await exec
       .update(placePhotos)
       .set({
@@ -244,11 +259,9 @@ export const placePhotosRepo = {
       .where(
         and(
           eq(placePhotos.source, "override"),
-          sql`starts_with(${placePhotos.cardUrl}, ${prefix})`,
+          startsWithAny(prefixes),
           on.keep && on.keep.length > 0 ? notInArray(placePhotos.code, [...on.keep]) : undefined,
-          on.of
-            ? or(...on.of.map((id) => sql`starts_with(${placePhotos.cardUrl}, ${`${prefix}bestDeals/${id}/`})`))
-            : undefined,
+          of ? or(...of.map((id) => startsWithAny(prefixes, `bestDeals/${id}/`))) : undefined,
         ),
       )
       .returning({ code: placePhotos.code });
