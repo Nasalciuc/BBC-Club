@@ -26,7 +26,8 @@ image.
   from the table at once: `photo` (`card`, `hero`, `credit`), `satellite` (`lat`, `lng`) or `none` (not looked up yet).
   A known airport never asked about gets a `pending` row in the same request (one insert from `catalog.airports`; a
   row another request added a moment ago comes back unchanged, so it is answered too); an unknown code is left out. Two queries in steady state, three when a city is new, however many
-  codes (`query-budget.test.ts`). The contract (`packages/shared/src/api/v1/places.ts`, a change to shared this ADR covers)
+  codes (`query-budget.test.ts`). (Amended by ADR-IMPL-064, amendment 1: when a city asked is on its satellite view,
+  the landmarks flag is read too, cached 30 s, and with it on one more read for all such cities, however many.) The contract (`packages/shared/src/api/v1/places.ts`, a change to shared this ADR covers)
   drops an item an app cannot read — a later kind, an address that is not https — never the whole answer.
 - **Looked up by a job, ten cities a minute** — `resolve-place-photos` (worker, every minute, singleton, 50 s) claims
   up to ten due rows, new ones first (`FOR UPDATE SKIP LOCKED`, held ten minutes so a run that dies leaves them to the
@@ -34,12 +35,16 @@ image.
   1. **Wikidata** (one SPARQL question for the run): the items with the IATA code (P238); ours is the one within 50 km
      of our coordinates (P625) — a code reused elsewhere, or none near, gives nothing. The city it serves (P931): the
      one whose English name is the city we show, else the oldest item. Its night view (P3451) first, then its main
-     image (P18), files named as a montage, map, flag or coat of arms left out, three at most.
+     image (P18), files named as a montage, map, flag or coat of arms left out, three at most. (Amended by
+     ADR-IMPL-064: the code is matched at any rank, so a demoted one — KIV under RMO — still finds its airport; with no
+     airport within 50 km, or one that names no city, the city is found by its own name near the airport, two a run.)
   2. **Commons** (two questions for the run, at 1280 and 500 px — two of Wikimedia's standard thumbnail widths; it
      refuses or slows others): the first file that is a JPEG in landscape (1.2–2.4 wide for 1 high), wider than 1280 px
      (so both widths are real thumbnails, never the original), under CC0, public domain or CC BY / BY-SA, without
      restrictions (personality rights, trademarks), with an author when the licence asks for one. The credit is its
-     Artist and LicenseShortName as text (80 characters at most) and its Commons page.
+     Artist and LicenseShortName as text (80 characters at most) and its Commons page. (Amended by ADR-IMPL-064,
+     amendment 2: the Free Art License is accepted as CC BY / BY-SA is, an author still required. Its amendment 3, a
+     one-page TIFF with JPEG thumbnails, was withdrawn: the city photo stays JPEG only.)
   3. **Pexels**, only with `PEXELS_API_KEY` and three cities a run at most (60 runs an hour stay under Pexels' 200; its
      month allows 20,000): `<city> skyline`, landscape; the first photo whose description names the city and no person
      (Pexels answers every search with something, and people are not the club's material). Credit: the photographer,
@@ -48,13 +53,17 @@ image.
      gets its satellite view for a day, and the log has an error for an operator to replace the key. A 403 may come
      from the network in front of Pexels: it counts as down.
   4. **Satellite**: the city's centre from Wikidata when it lies within 150 km of the airport, else the airport.
+     (Amended by ADR-IMPL-064, amendment 1: with `catalog.landmarks` on, the route answers a city on its satellite
+     view with its first landmark's photograph and that photograph's credit instead, composed when it reads; a city not
+     looked up yet stays `none`; the row and this order are unchanged.)
 - **Politely, and never downgraded** — the club's User-Agent goes with every request
   (`BBCClub/1.0 (<APP_ORIGIN>; place photos)`, Wikimedia's policy), eight seconds each. A source that fails (an error,
   a timeout, a shape other than its documentation's — Commons' own errors come with HTTP 200 and no pages, and count as
   failures) leaves the row as it was and tries again after
   `least(attempts, 24)` hours — a city keeps the photo it has, and is never downgraded to a satellite view because a
   server was down; a row the database refuses is tried again the same way, without holding the others. Every resolved
-  row is looked at again after 30 days, spread over three more.
+  row is looked at again after 30 days, spread over three more. (Amended by ADR-IMPL-064: a 429 from Wikidata or Commons
+  is not a failure — the cities wait for its Retry-After, uncounted, and the source is held for both Wikimedia jobs.)
 - **The club's own photo** — `PUT /v1/internal/places/:code/photo` (`catalog:import`, the internal secret) sets two
   https addresses and the credit if the photo needs one; it never expires and no job write touches it (each carries
   `source IS DISTINCT FROM 'override'`). `DELETE` hands the city back to the job. For a wrong or poor photo; the RUNBOOK

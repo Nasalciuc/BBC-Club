@@ -11,6 +11,17 @@ describe("deleteFailureCopy — why the account was not deleted, where the membe
     expect(copy.text).toContain("hour");
   });
 
+  it("points at a call only when the club's general line is configured", () => {
+    expect(deleteFailureCopy("RATE_LIMITED", false, true).text).toBe(
+      "Too many attempts. Try again in an hour, or call your specialist.",
+    );
+    expect(deleteFailureCopy("RATE_LIMITED", false, false).text).toBe("Too many attempts. Try again in an hour.");
+    expect(deleteFailureCopy("UNKNOWN", false, true).text).toContain("call your specialist");
+    for (const code of ["RATE_LIMITED", "UNKNOWN", undefined]) {
+      expect(deleteFailureCopy(code).text.toLowerCase()).not.toContain("call");
+    }
+  });
+
   it("a session older than a day, or an empty field, asks for the password on the field", () => {
     expect(deleteFailureCopy("SESSION_EXPIRED")).toEqual({ at: "field", text: DELETE_ENTER_PASSWORD });
     expect(deleteFailureCopy("INVALID_PASSWORD", true)).toEqual({ at: "field", text: DELETE_ENTER_PASSWORD });

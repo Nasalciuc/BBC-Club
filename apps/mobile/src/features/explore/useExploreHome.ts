@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
+import { AppState } from "react-native";
 import type { AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
 
 import { loadProfile } from "@/features/profile/profile-store";
@@ -6,6 +7,7 @@ import { airportByCode } from "@/lib/airport-by-code";
 import { fetchHome, fetchProfile } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { DEFAULT_ORIGIN } from "./default-origin";
+import { withLiveDeals } from "./offer-card-logic";
 
 export { DEFAULT_ORIGIN };
 
@@ -70,6 +72,23 @@ export function useExploreHome(opts: { origin?: boolean } = {}) {
 
   useEffect(() => {
     retryHome();
+  }, []);
+
+  // ADR-IMPL-067 (D6): a site deal is good for a day after the site was read, and Home is read once, when the screen
+  // mounts. A phone can keep the app a day in the background: back in the foreground, the deals past their day leave at
+  // once — even with no network — and Home is read again for today's. An effect event: it reads the Home on screen
+  // when the app comes back, and the listener stays the one added on mount.
+  const onForeground = useEffectEvent(() => {
+    const live = withLiveDeals(home, Date.now());
+    if (live === home) return;
+    setHome(live);
+    retryHome();
+  });
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") onForeground();
+    });
+    return () => subscription.remove();
   }, []);
 
   // The search starts from the member's home airport: Home's own `home` once it has loaded, else the profile's airport

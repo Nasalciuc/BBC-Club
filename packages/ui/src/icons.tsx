@@ -134,6 +134,21 @@ export function CheckMark({ height, color }: { height: number; color: string }) 
 /** The active tabs' filled glyphs (05, 11, 12), traced: a filled navy compass, clipboard and person. */
 export const TAB_ACTIVE = { explore: TAB_EXPLORE, requests: TAB_REQUESTS, profile: TAB_PROFILE } as const;
 
+/**
+ * The member's own `Name` row on Edit profile (brief 3.4.1; 36 draws no such row): the active Profile tab's person,
+ * traced — filled like 36's other marks, never redrawn. It stands 18 of the box's 24, as Lucide's `user` does, so it is
+ * as tall as `users-fill` under it.
+ */
+function UserFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  const [x, y, w, h] = box(TAB_PROFILE);
+  const side = (h * 24) / 18;
+  return (
+    <Svg width={size} height={size} viewBox={`${x - (side - w) / 2} ${y - (side - h) / 2} ${side} ${side}`}>
+      <Path d={TAB_PROFILE.d} fill={color} fillRule="evenodd" />
+    </Svg>
+  );
+}
+
 /** Lucide's handset (the pinned `phone`, sheet 43), filled: 11 and 30–33 draw it solid in its circle and on the pill. */
 const PHONE_D =
   "M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384";
@@ -193,6 +208,23 @@ function LockFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) 
       />
       <SvgCircle cx={12} cy={15.6} r={1.6} fill={tokens.colors.surfaceCard} />
       <Path d="M12 16.4v2.2" stroke={tokens.colors.surfaceCard} strokeWidth={1.4} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/**
+ * Edit profile's `Photo` row (brief 3.4.2; 36 draws no such row): Lucide's `camera`, solid like 36's other marks, its
+ * lens cut out in the card's white.
+ */
+function CameraFill({ size = 24, color = tokens.colors.textPrimary }: GlyphProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M14 4a2 2 0 0 1 1.76 1.05l.49.9A2 2 0 0 0 18 7h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2a2 2 0 0 0 1.76-1.05l.49-.9A2 2 0 0 1 10 4Z"
+        fill={color}
+      />
+      <SvgCircle cx={12} cy={13} r={3.6} fill={tokens.colors.surfaceCard} />
+      <SvgCircle cx={12} cy={13} r={2} fill={color} />
     </Svg>
   );
 }
@@ -387,8 +419,10 @@ export const icons = {
   "phone-fill": PhoneFill,
   "plane-right-fill": PlaneRightFill,
   "users-fill": UsersFill,
+  "user-fill": UserFill,
   "lock-fill": LockFill,
   "user-pen-fill": UserPenFill,
+  "camera-fill": CameraFill,
   "info-fill": InfoFill,
   "star-fill": StarFill,
   bell: Bell,

@@ -12,7 +12,6 @@ import {
   otherFares,
   retryMinutes,
   savedCopy,
-  telHref,
   tripFacts,
 } from "./confirmation-logic";
 test("the confirmation follows the source; offline always wins", () => {
@@ -58,13 +57,6 @@ test("the rate-limit page blames the member only for the member's own limit (F08
   expect(limitScope({ scope: "office" })).toBeNull();
   expect(limitScope(undefined)).toBeNull();
   expect(limitScope("member")).toBeNull();
-});
-
-test("no verified number, no call button", () => {
-  expect(telHref(undefined)).toBeNull();
-  expect(telHref("")).toBeNull();
-  expect(telHref("+1 (212) 555-0148")).toBe("tel:+12125550148");
-  expect(telHref("123")).toBeNull();
 });
 
 test("a request whose details cannot go says what to fix, calmly — never zod's own words", () => {

@@ -13,8 +13,17 @@ Set these on the EAS **production** environment (dashboard or `eas env:create`),
 
 - `EXPO_PUBLIC_PRIVACY_URL` — https URL (required; `assertProductionEnv` refuses the build without it)
 - `EXPO_PUBLIC_TERMS_URL` — https URL (required)
-- `EXPO_PUBLIC_SUPPORT_PHONE` — optional E.164. Empty hides every call to the club (Profile's `Call us`, a request's
-  `Call your specialist` and `Call us`).
+- `EXPO_PUBLIC_SUPPORT_PHONE` — the company's **general line**, in E.164 (`+` and the digits, no spaces). Every call
+  button of the app dials it and nothing else (`apps/mobile/src/lib/support-phone.ts`; `support-phone.test.ts` holds the
+  seven buttons to it): Profile's `Call us`, a request's `Call your specialist` and `Call us`, the rate-limit page's
+  `Call your specialist`, and the update and maintenance pages' `Call a specialist`. The company's phone system routes
+  the call to a free specialist; the app has no telephony of its own. A set number must be one the app can dial: a
+  production or staging build or update refuses one with an extension, a national `(0)`, a missing `+` or the wrong
+  number of digits (`assertProductionEnv`, `assertStagingEnv`). Set it for production: the build still passes
+  without it, but then no call button is drawn anywhere, and one message only still asks the member to call: Join's
+  `We couldn't send a code to that address. Check it, or call us.` (`apps/mobile/src/features/auth/otp-send-logic.ts`,
+  when the mail service refuses the address). It belongs to the entry, which stays exactly as it is (ADR-IMPL-047),
+  and says it in every build (ADR-IMPL-065, Left to the owner).
 - `EXPO_PUBLIC_MAPBOX_TOKEN` — the Mapbox **public** token, `pk.…` (required; ADR-IMPL-035). Visibility _Sensitive_.
   Never a secret `sk.` token: `assertProductionEnv` refuses it.
 - `GOOGLE_SERVICES_JSON` — optional, a **file** variable: Firebase's `google-services.json` for the Android app
@@ -36,9 +45,29 @@ The `preview` profile reads the EAS **preview** environment; `eas.json` sets onl
   once the company DNS points there. `assertStagingEnv` refuses a build or an update without it. Changing it needs an
   OTA update only, never a new build.
 - `EXPO_PUBLIC_MAPBOX_TOKEN` — the same `pk.` token. Without it the app draws the fallback globe.
-- `EXPO_PUBLIC_SUPPORT_PHONE` — the club's line, E.164. Without it a quoted request shows no `Call your specialist`
-  and a request that could not be passed on no `Call us` (ADR-IMPL-041, A2c), and Profile has no `Call us`.
+- `EXPO_PUBLIC_SUPPORT_PHONE` — the same **general line**, E.164, as production. Without it no call button is drawn (a
+  quoted request has no `Call your specialist`, a request that could not be passed on no `Call us`, Profile no
+  `Call us`; ADR-IMPL-041, A2c), and the messages that would ask the member to call say what else to do instead —
+  all but Join's, which is the entry's (section 1).
+  Changing it needs an OTA update only, never a new build.
 - `GOOGLE_SERVICES_JSON` — the same Firebase file, for push on a staging APK (a new build).
+
+**Checking the call buttons** (a development build, as in the README; `--clear` because an `EXPO_PUBLIC_*` value is
+written into the bundle; a value set in the shell wins over `apps/mobile/.env`, and an empty one means none):
+
+```bash
+# With a made-up number (the fictional 555 range): every call button is drawn and opens the dialer on it.
+cd apps/mobile && EXPO_PUBLIC_SUPPORT_PHONE=+12125550148 bun run start --clear
+# Without one: no call button anywhere, and no words that ask the member to call but Join's (otp-send-logic.ts, the
+# entry's, section 1).
+cd apps/mobile && EXPO_PUBLIC_SUPPORT_PHONE= bun run start --clear
+```
+
+Look at Profile (`Call us` beside `Edit profile`), a request's detail (`Call your specialist` on a request the club
+holds; `Call us` on one not passed on, whose notice then has a phone glyph — an info glyph and no `call` without the
+number), the Requests banner over a request not passed on, the rate-limit page (`Call your specialist`, else `Done`),
+and the update and maintenance pages (`Call a specialist`). Without the number, a request the server holds but could not
+pass on says the club will try again; the member is not asked to send it again (infra/RUNBOOK.md).
 
 **Native modules change the runtime.** Adding or upgrading one (Mapbox, for instance) needs a new build _and_ a new
 `version` in `app.json`: `runtimeVersion` follows the app version, so OTA updates for the new version never reach an

@@ -84,6 +84,48 @@ describe("query budget per route", () => {
       `place photos grew from ${placesQ.length} to ${morePlaces.length} queries with six more cities:\n${morePlaces.join("\n")}`,
     ).toBeLessThanOrEqual(placesQ.length);
 
+    // ADR-IMPL-064, amendment 1: the cities on their satellite view read the landmarks flag (cached 30 s), and with it on
+    // their first landmarks in one more read — however many cities; with it off, no landmark is read. (Made-up rows.)
+    const onSatellite = ["LHR", "CDG", "HND", "DXB", "JFK"];
+    for (const [i, code] of onSatellite.entries()) {
+      await t.db.execute(sql`
+        INSERT INTO catalog.place_photos (code, status, lat, lng, expires_at)
+        VALUES (${code}, 'satellite', ${10 + i}, ${20 + i}, now() + interval '30 days')
+        ON CONFLICT (code) DO UPDATE SET status = 'satellite', lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+          expires_at = EXCLUDED.expires_at`);
+      await t.db.execute(sql`
+        INSERT INTO catalog.place_landmarks (code, rank, kind, city_qid, landmark_qid, name, file, image_url, width,
+          height, licence, licence_url, credit, expires_at)
+        VALUES (${code}, 1, 'landmark', ${`Q${90 + i}`}, ${`Q${100 + i}`}, ${`Sight ${i}`}, ${`Sight ${i}.jpg`},
+          ${`https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Sight_${i}.jpg/1280px-Sight_${i}.jpg`},
+          1280, 853, 'CC BY-SA 4.0', 'https://creativecommons.org/licenses/by-sa/4.0', 'Ana Pop · Wikimedia Commons',
+          now() + interval '30 days')`);
+    }
+    const landmarkReads = (qs: string[]) => qs.filter((q) => /place_landmarks/.test(q));
+    const satellitePath = `/v1/places/photos?codes=${onSatellite.join(",")}`;
+    // Each `set` drops the flag's cache: both first answers read it.
+    await t.flags.set("catalog.landmarks", { enabled: false, skip: [] });
+    const landmarksOff = await queriesFor(satellitePath, cookie);
+    expect(landmarkReads(landmarksOff), `landmarks off, yet read:\n${landmarksOff.join("\n")}`).toEqual([]);
+    await t.flags.set("catalog.landmarks", { enabled: true, skip: [] });
+    const landmarksOn = await queriesFor(satellitePath, cookie);
+    expect(
+      landmarksOn.length,
+      `five satellite cities with landmarks ran ${landmarksOn.length} queries, ${landmarksOff.length} with them off:\n${landmarksOn.join("\n")}`,
+    ).toBeLessThanOrEqual(landmarksOff.length + 1);
+    expect(landmarkReads(landmarksOn)).toHaveLength(1);
+    expect(landmarksOn.length).toBeLessThanOrEqual(BUDGET["GET /v1/places/photos"]!);
+    const oneOn = await queriesFor("/v1/places/photos?codes=CDG", cookie);
+    const fiveOn = await queriesFor(satellitePath, cookie);
+    expect(
+      fiveOn.length,
+      `the stand-ins grew from ${oneOn.length} to ${fiveOn.length} queries with four more cities:\n${fiveOn.join("\n")}`,
+    ).toBeLessThanOrEqual(oneOn.length);
+    const standIns = (await (await t.app.request(satellitePath, cookie)).json()) as {
+      items: { code: string; kind: string }[];
+    };
+    expect(standIns.items.map((i) => i.kind)).toEqual(onSatellite.map(() => "photo"));
+
     // ADR-IMPL-042: the list reads a page's timelines and cities in one batch each — more requests, not more queries.
     for (const to of ["CDG", "ZRH"]) {
       const more = await t.submitRequestAs(
@@ -160,6 +202,11 @@ describe("query budget per route", () => {
       postLog.length + 2,
     );
 
+    // ADR-IMPL-068: what a tap on the globe may open is read only with `catalog.globe_tap` on — off (as seeded), no
+    // member's Home reads the site's set at all, with the site's pins off or on (below).
+    const setReads = (qs: string[]) => qs.filter((q) => /site_places/.test(q) && /\bunion\b/i.test(q));
+    expect(setReads(home), `the globe's set was read with its flag off:\n${home.join("\n")}`).toEqual([]);
+
     // ADR-IMPL-045: with the site's pins on, the home screen adds the site's cities from home — one read of the pins and
     // one of the home airport, whatever their number (the formula prices them in memory), then cached for a minute.
     await t.db.execute(sql`
@@ -167,7 +214,7 @@ describe("query budget per route", () => {
         (283, 'Tokyo', 'Japan', 'Asia', 'HND', ARRAY['HND'], true),
         (512, 'Dubai', 'United Arab Emirates', 'Middle East', 'DXB', ARRAY['DXB'], false)`);
     await t.db.execute(sql`
-      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price) VALUES ('JFK', 283, 1508, 1745), ('JFK', 512, 1, 1365)`);
+      INSERT INTO catalog.site_routes (route_from, cms_id, deal, price) VALUES ('JFK', 283, 9103, 1301), ('JFK', 512, 9104, 1401)`);
     await t.flags.set("catalog.site_pins", { enabled: true });
     const siteHome = await queriesFor("/v1/home", cookie);
     expect(
@@ -178,6 +225,46 @@ describe("query budget per route", () => {
       siteHome.length,
       "the site's pins cost at most four reads over the home screen without them",
     ).toBeLessThanOrEqual(home.length + 4);
+    expect(setReads(siteHome), `the globe's set was read with its flag off:\n${siteHome.join("\n")}`).toEqual([]);
+
+    // ADR-IMPL-068: with the globe's tap on, Home adds the site's set — one read (the cities and the origins in one
+    // UNION) beside the flag row, however many cities — then cached for a minute like the pins: the next Home reads
+    // none of it.
+    await t.flags.set("catalog.globe_tap", { enabled: true });
+    const tapHome = await queriesFor("/v1/home", cookie);
+    expect(
+      tapHome.length,
+      `home with the globe's tap ran ${tapHome.length} queries (budget ${BUDGET["GET /v1/home"]}):\n${tapHome.join("\n")}`,
+    ).toBeLessThanOrEqual(BUDGET["GET /v1/home"]!);
+    expect(setReads(tapHome).length, `the set is one read:\n${tapHome.join("\n")}`).toBe(1);
+    expect(
+      tapHome.length,
+      "the globe's tap costs at most two reads over Home with the site's pins",
+    ).toBeLessThanOrEqual(siteHome.length + 2);
+    const tapAgain = setReads(await queriesFor("/v1/home", cookie));
+    expect(tapAgain, `the set was read again within its minute:\n${tapAgain.join("\n")}`).toEqual([]);
+
+    // ADR-IMPL-067: with the site's deals on (the pins off), the home screen adds them — the home airport, the origins and
+    // one read of the deals for the nearest metros, whatever their number — then keeps them a minute. Measured on this
+    // fixture: 12 queries against 8 with every cache cold (the flag and those three), 4 against 4 while kept.
+    await t.flags.set("catalog.site_pins", { enabled: false });
+    await t.flags.set("catalog.site_offers", { enabled: true });
+    const dealsHome = await queriesFor("/v1/home", cookie);
+    const siteReads = (queries: string[]) => queries.filter((q) => q.includes('"site_routes"')).length;
+    expect(siteReads(dealsHome), `the origins and one read of the deals:\n${dealsHome.join("\n")}`).toBe(2);
+    expect(
+      dealsHome.length,
+      `home with the site's deals ran ${dealsHome.length} queries (budget ${BUDGET["GET /v1/home"]}):\n${dealsHome.join("\n")}`,
+    ).toBeLessThanOrEqual(BUDGET["GET /v1/home"]!);
+    expect(
+      dealsHome.length,
+      "the site's deals cost at most four reads over the home screen without them",
+    ).toBeLessThanOrEqual(home.length + 4);
+    const dealsAgain = await queriesFor("/v1/home", cookie);
+    expect(dealsAgain.length, "kept a minute: the next home screen reads none of them").toBeLessThanOrEqual(
+      home.length,
+    );
+    expect(siteReads(dealsAgain)).toBe(0);
 
     await t.seedMoreJfkLhrFares();
     const largerSearch = await queriesFor("/v1/search?from=JFK&to=LHR&cabin=business", cookie);

@@ -6,7 +6,7 @@ import { baselineOffset, belowBaseline, rn } from "../rn-type";
 import { tokens } from "../tokens";
 
 type Props = {
-  /** The member's name. */
+  /** The member's name, as long as they saved it (up to 80 characters): it wraps, never cut. */
   name: string;
   /** `Flies from JFK`; null — no home airport, no line. */
   home: string | null;
@@ -35,7 +35,9 @@ type Props = {
  * 16.6 under it, centred.
  */
 const BAND_BELOW_INSET = 95.3;
-const AVATAR = 113.6;
+/** The portrait's diameter on Profile (12), its ring included — Edit profile's Photo sheet shows it at the same size. */
+export const PROFILE_AVATAR = 113.6;
+const AVATAR = PROFILE_AVATAR;
 const AVATAR_OVER = 75.8;
 const NAME_BASELINE = 63.4;
 const HOME_PITCH = 16.6;
@@ -83,7 +85,9 @@ export function ProfileHero({
         <View style={styles.avatar}>
           <Avatar initials={initials} photo={portrait} size={AVATAR} testID={`${testID}.avatar`} />
         </View>
-        <Text style={styles.name} accessibilityRole="header" numberOfLines={2}>
+        {/* The member's own name wraps and the block grows — what follows on Profile moves down with it (DESIGN.md,
+            Layout: nothing truncates). */}
+        <Text style={styles.name} accessibilityRole="header">
           {name}
         </Text>
         {home ? <Text style={styles.home}>{home}</Text> : null}

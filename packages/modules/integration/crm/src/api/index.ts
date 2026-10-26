@@ -18,8 +18,9 @@ export type CrmRequestPayload = {
   flights: { from: string; to: string; date: string }[];
   passengers: { adult: number; child: number; infant: number };
   note?: string | null;
-  /** The indicative price the member's search showed, recomputed by the server (ADR-IMPL-042). Round trip. */
-  shown_estimate?: { amount: number; currency: string; cabin: string } | null;
+  /** The indicative price the member's search showed, recomputed by the server (ADR-IMPL-042). Round trip. `source`:
+   *  who priced it (ADR-IMPL-063) — the company's site, or the club's formula; absent, the formula (as before). */
+  shown_estimate?: { amount: number; currency: string; cabin: string; source?: "site" | "club" } | null;
   phone_valid?: boolean;
   intent?: "quote" | "alternative" | "fare" | "offer";
   replaces_fare_id?: string | null;
@@ -40,6 +41,11 @@ export type CrmRequestPayload = {
   _request_id?: string;
   _actions?: { quoted: string; booked: string; closed: string };
 };
+
+/** What a failed CRM call throws (ADR-IMPL-065). `retryable` false: the CRM refused this request as it is (a 4xx other
+ *  than 408 and 429, a redirect, a request without its reference) — the same request sent again would be refused again.
+ *  Anything else, an error without the field included, is worth trying again. */
+export type CrmFailure = Error & { code: string; retryable: boolean };
 
 /** The only import surface of @bbc/crm. module.ts implements it; consumers import it. */
 export type CrmFacade = {

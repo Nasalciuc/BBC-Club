@@ -1,12 +1,12 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, baselineOffset, belowBaseline, rn, tokens } from "@bbc/ui";
 
 import { RootTabBar } from "@/components/RootTabBar";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
-import { limitScope, limitedCopy, telHref } from "@/features/requests/confirmation-logic";
-import { env } from "@/lib/env";
+import { limitScope, limitedCopy } from "@/features/requests/confirmation-logic";
+import { CAN_CALL, clubCall } from "@/lib/support-phone";
 
 /**
  * 27, measured from the safe area's top (47 on the image): the title centred on 308.41 and 341.15, the words on 380.23
@@ -35,7 +35,7 @@ const body = {
 /**
  * Too many requests this hour (27): the message in the middle of the page — the member's own limit, or the neutral
  * words for an address shared with others (`limitedCopy`) — `Call your specialist` under it — only where the club's
- * number is configured; `Done` otherwise. The tab bar shows Requests: the others are there.
+ * general line is configured (support-phone.ts); `Done` otherwise. The tab bar shows Requests: the others are there.
  */
 export default function RequestLimitedScreen() {
   const router = useRouter();
@@ -43,9 +43,9 @@ export default function RequestLimitedScreen() {
   const params = useLocalSearchParams<{ minutes?: string; scope?: string }>();
   const minutes = Number(params.minutes);
   const shown = Number.isFinite(minutes) && minutes > 0 ? minutes : 1;
-  const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
+  const call = clubCall("request.rateLimited.call", "Call your specialist");
   // The member's own limit blames the member; an address shared with others, or an unknown one, does not (F086).
-  const copy = limitedCopy({ scope: limitScope({ scope: params.scope }), minutes: shown, canCall: call !== null });
+  const copy = limitedCopy({ scope: limitScope({ scope: params.scope }), minutes: shown, canCall: CAN_CALL });
   const g = PAGE;
   return (
     <View style={styles.root} testID="request.rateLimited">
@@ -77,8 +77,8 @@ export default function RequestLimitedScreen() {
           {copy.body}
         </Text>
         <Button
-          testID={call ? "request.rateLimited.call" : "request.rateLimited.done"}
-          label={call ? "Call your specialist" : "Done"}
+          testID={call ? call.testID : "request.rateLimited.done"}
+          label={call ? call.label : "Done"}
           variant="primary"
           icon={call ? "phone-fill" : undefined}
           iconSize={g.pill.icon}
@@ -91,10 +91,7 @@ export default function RequestLimitedScreen() {
             marginRight: g.pill.right,
             marginTop: g.pill.top - (g.body.baseline + g.body.pitch) - belowBaseline(body),
           }}
-          onPress={() => {
-            if (call) Linking.openURL(call).catch(() => undefined);
-            else router.back();
-          }}
+          onPress={call ? call.onPress : () => router.back()}
         />
       </View>
       <RootTabBar active="requests" />

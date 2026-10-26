@@ -30,21 +30,18 @@ import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhoto
 import { CabinSheet } from "@/features/profile/CabinSheet";
 import { DeleteAccountSheet } from "@/features/profile/DeleteAccountSheet";
 import { HomeAirportSheet } from "@/features/profile/HomeAirportSheet";
-import {
-  mergeSavedProfile,
-  offersSwitchValue,
-  withOffers,
-  type SavedProfile,
-} from "@/features/profile/notifications-logic";
+import { profileName } from "@/features/profile/name-logic";
+import { offersSwitchValue, withOffers } from "@/features/profile/notifications-logic";
 import { NotificationsSheet } from "@/features/profile/NotificationsSheet";
 import { PasswordSheet } from "@/features/profile/PasswordSheet";
 import { PhoneSheet } from "@/features/profile/PhoneSheet";
+import { portraitOf } from "@/features/profile/portrait";
 import { cabinLabel, openRequestsFor, profileStats, travelersLabel } from "@/features/profile/profile-logic";
+import { profileCopy } from "@/features/profile/profile-save-logic";
 import { TravelersSheet } from "@/features/profile/TravelersSheet";
 import type { ProfileSheetHandle } from "@/features/profile/types";
 import { useSignOut } from "@/features/profile/useSignOut";
 import { useSaved } from "@/features/saved/saved";
-import { telHref } from "@/features/requests/confirmation-logic";
 import { requestCard } from "@/features/requests/request-card";
 import { recentRequests } from "@/features/requests/request-view-logic";
 import { airportByCode } from "@/lib/airport-by-code";
@@ -54,6 +51,7 @@ import { env } from "@/lib/env";
 import { errorFrameActions, readFailureCopy, stateCopy } from "@/lib/error-context";
 import { monogram } from "@/lib/monogram";
 import { displayPhone } from "@/lib/phone";
+import { CAN_CALL, clubCall } from "@/lib/support-phone";
 
 type Requests = { items: RequestVM[]; hasMore: boolean };
 
@@ -93,8 +91,9 @@ export default function ProfileScreen() {
   const notificationsRef = useRef<ProfileSheetHandle>(null);
   const passwordRef = useRef<ProfileSheetHandle>(null);
   const deleteRef = useRef<ProfileSheetHandle>(null);
-  // Each save a sheet answered: a load that began before it brings back the profile as it was, and is not shown.
-  const saves = useRef(0);
+  // Each save a sheet answered — here, on Edit profile or in Settings — is this page's and every screen's at once; a
+  // load that began before it brings back the profile as it was, and is not shown (profile-save-logic).
+  const [copy] = useState(() => profileCopy(setProfile));
   const home = profile?.homeAirport ?? null;
   const trips = requests ? recentRequests(requests.items) : [];
   const tripCards = trips.map((r) => ({ id: r.id, card: requestCard(r) }));
@@ -106,7 +105,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (!focused) return;
     let cancelled = false;
-    const savesBefore = saves.current;
+    const fresh = copy.loadBegun();
     void (async () => {
       const [profileResult, requestsResult] = await Promise.all([fetchProfile(), fetchRequests()]);
       if (cancelled) return;
@@ -117,7 +116,7 @@ export default function ProfileScreen() {
       }
       setError(null);
       // A sheet saved while this was asked: its answer is newer than this one.
-      if (saves.current === savesBefore) setProfile(profileResult.data);
+      if (fresh()) setProfile(profileResult.data);
       if (requestsResult.ok) setRequests({ items: requestsResult.data.items, hasMore: requestsResult.data.hasMore });
     })().catch(() => {
       if (!cancelled) {
@@ -128,7 +127,11 @@ export default function ProfileScreen() {
     return () => {
       cancelled = true;
     };
-  }, [focused, reloadToken]);
+  }, [focused, reloadToken, copy]);
+
+  // A save made on Edit profile — the member's name above all — or in Settings shows here at once, not when Profile
+  // next asks: never `Member` once a name exists (brief 3.4.1).
+  useEffect(() => copy.follow(), [copy]);
 
   useEffect(() => {
     if (!home) return;
@@ -180,8 +183,8 @@ export default function ProfileScreen() {
   if (!profile && error) {
     // The settings button stays: Settings keeps Sign out and Delete account, and a profile that keeps failing must not
     // take them away (ADR-IMPL-047). `Call us` beside `Try again` when the club's number is known (F114).
-    const callUs = errorFrameActions("profile", env.EXPO_PUBLIC_SUPPORT_PHONE).includes("call")
-      ? telHref(env.EXPO_PUBLIC_SUPPORT_PHONE)
+    const callUs = errorFrameActions("profile", CAN_CALL).includes("call")
+      ? clubCall("profile.error.call", "Call us")
       : null;
     return (
       <View testID="profile.root" style={styles.root}>
@@ -204,25 +207,17 @@ export default function ProfileScreen() {
                 setReloadToken((n) => n + 1);
               },
             }}
-            secondary={
-              callUs
-                ? {
-                    label: "Call us",
-                    testID: "profile.error.call",
-                    onPress: () => {
-                      Linking.openURL(callUs).catch(() => undefined);
-                    },
-                  }
-                : undefined
-            }
+            secondary={callUs ?? undefined}
           />
         </View>
       </View>
     );
   }
 
-  const displayName = profile?.displayName?.trim() || "Member";
-  const call = telHref(env.EXPO_PUBLIC_SUPPORT_PHONE);
+  // The name as saved; `Member` only while there is none (name-logic.ts says why it is not replaced).
+  const displayName = profileName(profile?.displayName);
+  // The club's general line (support-phone.ts); without one, no `Call us`.
+  const call = clubCall("profile.call", "Call us");
   const city = home && homeCity?.code === home ? homeCity.city : null;
   // A satellite view is drawn at the band's size: the column (capped on large phones) by the band's height.
   const picture = bandPicture(null, photoFor(home), {
@@ -243,11 +238,6 @@ export default function ProfileScreen() {
   const openRequests = requests ? openRequestsFor(requests.items, requests.hasMore) : null;
   const ready = profile !== null;
 
-  function onSheetSaved(next: SavedProfile) {
-    saves.current += 1;
-    setProfile((prev) => (prev ? mergeSavedProfile(prev, next) : prev));
-  }
-
   return (
     <View style={styles.root}>
       {/* Light glyphs over the photograph once it is drawn; dark ones over the tint band without one (no home airport,
@@ -266,7 +256,7 @@ export default function ProfileScreen() {
           testID="profile.hero"
           name={displayName}
           initials={monogram(profile?.displayName)}
-          portrait={profile?.avatarUrl ? { uri: profile.avatarUrl } : null}
+          portrait={portraitOf(profile)}
           home={home ? `Flies from ${home}` : null}
           image={heroImage}
           fallback={null}
@@ -306,8 +296,8 @@ export default function ProfileScreen() {
           {call ? (
             <View style={styles.action}>
               <Button
-                testID="profile.call"
-                label="Call us"
+                testID={call.testID}
+                label={call.label}
                 icon="phone-fill"
                 iconSize={17.2}
                 iconGap={11.8}
@@ -315,9 +305,7 @@ export default function ProfileScreen() {
                 height={PILL}
                 text="profilePill"
                 style={StyleSheet.flatten([styles.pill, { paddingLeft: 26, paddingRight: 22 }])}
-                onPress={() => {
-                  Linking.openURL(call).catch(() => undefined);
-                }}
+                onPress={call.onPress}
               />
             </View>
           ) : null}
@@ -471,18 +459,17 @@ export default function ProfileScreen() {
       </ScrollView>
       {profile ? (
         <>
-          <HomeAirportSheet ref={homeAirportRef} profile={profile} homeCity={city} onSaved={onSheetSaved} />
-          <CabinSheet ref={cabinRef} profile={profile} onSaved={onSheetSaved} />
-          <TravelersSheet ref={travelersRef} profile={profile} onSaved={onSheetSaved} />
-          <PhoneSheet ref={phoneRef} profile={profile} onSaved={onSheetSaved} />
-          <PasswordSheet ref={passwordRef} profile={profile} onSaved={onSheetSaved} />
+          <HomeAirportSheet ref={homeAirportRef} profile={profile} homeCity={city} onSaved={copy.saved} />
+          <CabinSheet ref={cabinRef} profile={profile} onSaved={copy.saved} />
+          <TravelersSheet ref={travelersRef} profile={profile} onSaved={copy.saved} />
+          <PhoneSheet ref={phoneRef} profile={profile} onSaved={copy.saved} />
+          {/* A new password changes nothing on the profile (the sheet hands back the one it was given): nothing to
+              merge, nothing to share. */}
+          <PasswordSheet ref={passwordRef} profile={profile} onSaved={() => undefined} />
           <NotificationsSheet
             ref={notificationsRef}
             savedOffers={offersSwitchValue(profile)}
-            onSaved={(offers) => {
-              saves.current += 1;
-              setProfile((prev) => (prev ? withOffers(prev, offers) : prev));
-            }}
+            onSaved={(offers) => copy.change((prev) => (prev ? withOffers(prev, offers) : prev))}
           />
         </>
       ) : null}

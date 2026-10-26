@@ -27,7 +27,9 @@ export async function onRequestStatusChanged(
     return;
   }
   if (evt.to !== "quoted" || !evt.memberId) return;
-  const body = `${evt.route ?? "Your trip"} — tap to call your specialist`;
+  // What happens next, true in every build: the specialist calls the member (11). The server cannot know whether the app
+  // has the club's line to dial, so the push never asks the member to call (brief 3.5).
+  const body = `${evt.route ?? "Your trip"} — a specialist will call you shortly`;
   const deepLink = `bbcclub://requests/${evt.requestId}`;
   const n = notificationsTable;
   // The partial unique index notif_member_request_cat: ON CONFLICT names its columns and its WHERE.

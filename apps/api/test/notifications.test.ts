@@ -157,10 +157,12 @@ describe("quote-ready push", () => {
     expect(quoted.status).toBe(200);
     await t.drainAll();
     const inbox: any[] = await t.db.execute(sql`
-      SELECT id, title, status, attempts FROM notifications.notifications
+      SELECT id, title, body, status, attempts FROM notifications.notifications
       WHERE member_id = ${t.memberA.id} AND request_id = ${id} AND category = 'transactional'`);
     expect(inbox.length).toBe(1);
     expect(inbox[0].title).toBe("Your quote is ready");
+    // The route, then what happens next; never "call": the server cannot know whether the app has a line to dial.
+    expect(inbox[0].body).toMatch(/^[A-Z]{3} → [A-Z]{3} — a specialist will call you shortly$/);
 
     await t.db.execute(sql`
       UPDATE notifications.notifications SET scheduled_for = now() - interval '1 second' WHERE id = ${inbox[0].id}`);

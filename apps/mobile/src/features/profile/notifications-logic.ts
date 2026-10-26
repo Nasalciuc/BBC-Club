@@ -1,6 +1,9 @@
 import type { Profile } from "@/lib/api";
 
-/** What a profile sheet hands back. PATCH /v1/profile answers with the raw row, which has no `notifications`. */
+/**
+ * What a profile sheet hands back: PATCH /v1/profile's answer, the whole profile as GET answers it (ADR-IMPL-025). An
+ * older server answered with the raw row, which has no `notifications`.
+ */
 export type SavedProfile = Omit<Profile, "notifications"> & { notifications?: Profile["notifications"] };
 
 /** The offers switch shows what the member saved — or null while that is unknown (the switch stays disabled).

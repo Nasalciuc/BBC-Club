@@ -12,7 +12,9 @@
 */10 * * * * queue-health
 15 * * * * receipts
 */15 * * * * reconcile-profiles
+*/10 * * * * refresh-site-prices
+*/5 * * * * resolve-place-landmarks
 * * * * * resolve-place-photos
 0 4 * * * retention
 * * * * * send-requests
-40 7 * * * sync-site-destinations
+40 7,19 * * * sync-site-destinations

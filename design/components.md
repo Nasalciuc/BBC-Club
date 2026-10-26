@@ -162,14 +162,30 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   `text-on-tint`; `settings` (34) radius 9, rows 47.1 (34 draws Phone 45.4, Password 48, Privacy policy 46.6, Terms of
   use 48.4 and `Delete account` 46.8 — the screen passes each), the icon 19.4, `settingsRow` / `settingsValue` navy;
   `edit` (36) radius 11, rows 48.2, the icon 21, `text-on-tint`; `fare` (05) radius 9, rows 37, `fareRow`, `rule-line`
-  rules, a hairline and the soft shadow, the value in slate. `danger`: the trash and the words in red. `stacked` (the
-  label small over the value) and the 56-pt rows are 1.0's.
+  rules, a hairline and the soft shadow, the value in slate. Beside a value the label keeps its own line; a value too
+  long for what is left (a member's own name, a long city at 1.3× text) wraps, `xs` clear of the label, and its row
+  grows — neither is cut. `danger`: the trash and the words in red. `stacked` (the label small over the value) and the
+  56-pt rows are 1.0's.
 - **StatusBadge** (sheet 41) — `Quote ready` navy fill (`badgeStrong`), `Received` light blue, `Booked` navy outline
   with a check, `Closed` on `surface-closed` with `text-on-closed` words, `Not sent` on a 0.9 `border-strong` ring; the
   others' words in `badge`; 25 tall (26.7 beside a title, in `badgeTitle`; 23 small).
 - **Save** — `Save 48%` only where the published fare is on record, in the tint each card draws it with:
   `surface-save-soft` across an offer's foot, `surface-tint-blue` on 05's fare, `surface-save` on a quote, words alone
   on 06's trip. `SavePill` (`border-default`, 28 tall) is the gallery's.
+- **Landmarks** (04, 13; ADR-IMPL-064) — **not drawn in 3.0**: up to three landmarks of the destination, built from
+  what 04, 13, 03, 05 and 08 draw until a designer draws it. Under the flight options of the look it follows (their
+  measures, `optionsColumn`): `Landmarks` in their title's role and pen (04 `placeOptions` 17.93 in; 13
+  `routeOptions` 20.4 in), the photographs as far under its baseline as the flight cards are (9.5; 13.5), in a
+  `CarouselRow` from the cards' left edge (11.2; 16.2) to the screen's edge, 8.55 apart (08's three fares). Each
+  photograph 118 tall (03's popular ones), radius 10 (`sm`, 05's thumbnails), as wide as its own shape within 1.2–2.4
+  (outside the band, its nearest edge, cropped); its name under it in `subtitle` navy, the baseline 18.7 under the
+  photograph (03's city); then its `PhotoCredit`, opening the photograph's page on Commons. The photograph and its
+  name are one image for a screen reader (`<name>, photo`), the credit after it. States: fewer than three — what
+  exists; none — nothing (no title, no frame); a photograph that will not load leaves with its name and credit until
+  the screen comes back into view or the phone back online; on 04, the landmark whose photograph is already the city's
+  over the page (one standing in for it, ADR-IMPL-064 amendment 1) is left out before the three are counted — the
+  server sends three, so a stand-in's city shows at most two there, and one with no other landmark nothing
+  (ADR-IMPL-064, left to the owner); 13 draws the globe and keeps it; no skeleton, no error, no placeholder.
 
 ## Feedback (sheet 41)
 
@@ -234,10 +250,17 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   drawn globe in the `globe-*` colours. Destinations are navy drop pins (18 × 25, the tip on the place) with a white
   label beside the head — the city over its price (`pin`, `pin-detail`) — placed right of the pin or else left, and left
   out where it would cover another label, a pin or a button; a chosen route shows only its two ends with their codes, a
-  white line arcing between them and the plane at its middle.
+  white line arcing between them and the plane at its middle. At rest a tap anywhere on the disc (ADR-IMPL-068) opens
+  the nearest city the club sells within 600 km as its pin would; a tap on the sky is nothing, a drag never a tap. No
+  image draws its answers, so these are proposed until design draws them (ADR-IMPL-068, reported): the distance
+  (`Nearest: Rome · 180 km`) is a second line under the country (13), and nothing near — or the member's own city — the
+  `attention` NoticeCard under the search bar, linking to Search; while they show, 13's first flight is no longer whole
+  above the docked pill, nor 02's offer cards above the tab bar.
 - **Wordmark** — `BuyBusinessClass` Semibold and ` Club` Regular, one line, navy — over 08's daylight photograph too
   (white only over a dark one); 07 sets `BuyBusinessClass` Bold (`wordmarkDates`).
-- **Avatar** — the member's portrait in a white ring; their initials on navy until the club keeps a photo.
+- **Avatar** — the member's portrait in a white ring: the photo they added themselves (Edit profile's `Photo` row, on a
+  build that has the photo picker; ADR-IMPL-070), else their initials on navy. The photo is asked of the club with the
+  member's session, its tag in the address; while it loads, and if it cannot, the initials stay under it.
 - **Also in the library** — `SectionHeader` (a section's title with its action: 02, 03, 18), `CloseButton`,
   `ProgressLine` (01, 4.4 tall), `PhotoThumbs` and `PageDots` (05's photographs), `PhotoCredit`, `GlobePin` and
   `RouteEnd`, `PricePair` (20's comparison); the app's own `HomeAirportCard` (01), `GreetingHeader` (02), `FareHero`
