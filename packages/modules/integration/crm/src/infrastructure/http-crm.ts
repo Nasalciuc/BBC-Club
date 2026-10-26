@@ -49,10 +49,47 @@ function networkReason(err: unknown): string {
 }
 
 /**
+ * On a 2xx, keep the CRM's own id when the answer names one (`crmRequestId` or `data.id` as a non-empty string).
+ * Anything else — empty body, non-JSON, other shapes — falls back to `http:<reference>`. The body is never logged.
+ */
+export async function crmRequestIdFrom(res: Response, reference: string): Promise<string> {
+  const fallback = `http:${reference}`;
+  let text: string;
+  try {
+    text = await res.text();
+  } catch {
+    return fallback;
+  }
+  if (!text) return fallback;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object") return fallback;
+    const obj = parsed as Record<string, unknown>;
+    if (typeof obj.crmRequestId === "string") {
+      const id = obj.crmRequestId.trim();
+      if (id) return id;
+    }
+    const data = obj.data;
+    if (data && typeof data === "object") {
+      const nested = (data as { id?: unknown }).id;
+      if (typeof nested === "string") {
+        const id = nested.trim();
+        if (id) return id;
+      }
+    }
+  } catch {
+    // Not JSON: keep the fallback. Never log the body (may hold member details).
+  }
+  return fallback;
+}
+
+/**
  * The CRM over https. `submitRequest` POSTs the request, signed (`X-BBC-Timestamp`, `X-BBC-Signature`) and keyed on its
  * reference (`Idempotency-Key`), within the call's ceiling. Any answer but a 2xx throws (`CrmHttpError`, retryable for
  * 408, 429 and 5xx), as do a timeout and a network error (retryable): `send-requests` stores the failure and tries
- * again, or gives up at once on a refusal. Nothing is logged here; the answer's body is not read.
+ * again, or gives up at once on a refusal. Nothing is logged here. On a refusal the answer's body is not read (it may
+ * repeat the member's details); on a 2xx only the CRM's id field is kept (`crmRequestId` / `data.id`), else
+ * `http:<reference>`.
  *
  * `findByEmail` answers null, as the e-mail adapter does: it runs inside the profile's insert, at sign-up, and a call
  * there would hold the transaction on the CRM and make joining depend on it. Matching a member to the CRM is the mirror's
@@ -95,10 +132,11 @@ export function httpCrm(config: HttpCrmConfig): CrmFacade {
         if (signal.aborted) throw new CrmTimeoutError("submitRequest", ms);
         throw new CrmUnreachableError("submitRequest", networkReason(err));
       }
-      // Not read: nothing in it is needed, and it may repeat the member's details.
-      await res.body?.cancel().catch(() => undefined);
-      if (res.status < 200 || res.status > 299) throw new CrmHttpError("submitRequest", res.status);
-      return { crmRequestId: `http:${reference}` };
+      if (res.status < 200 || res.status > 299) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new CrmHttpError("submitRequest", res.status);
+      }
+      return { crmRequestId: await crmRequestIdFrom(res, reference) };
     },
   };
 }

@@ -13,7 +13,7 @@ import {
   CrmUnreachableError,
   withCrmTimeout,
 } from "../../src/module";
-import { httpCrm, signCrmCall } from "../../src/infrastructure/http-crm";
+import { crmRequestIdFrom, httpCrm, signCrmCall } from "../../src/infrastructure/http-crm";
 
 /** Made up for the tests: 40 characters. */
 const SECRET = "crm-secret-made-up-for-tests-0000000000";
@@ -109,6 +109,7 @@ describe("http CRM — signed", () => {
     const crm = httpCrm({ url, secret: SECRET });
     const before = Math.floor(Date.now() / 1000);
     const result = await crm.submitRequest(payload());
+    // Empty 2xx body: fall back to http:<reference>.
     expect(result).toEqual({ crmRequestId: "http:R-T001" });
     expect(seen).toHaveLength(1);
     const call = seen[0]!;
@@ -125,6 +126,26 @@ describe("http CRM — signed", () => {
     // The secret itself is sent nowhere.
     expect(JSON.stringify([...call.headers.entries()])).not.toContain(SECRET);
     expect(call.body).not.toContain(SECRET);
+  });
+
+  it("keeps the CRM's crmRequestId from a 2xx JSON answer", async () => {
+    answer = { status: 200, body: JSON.stringify({ crmRequestId: "crm-live-id-42" }) };
+    const result = await httpCrm({ url, secret: SECRET }).submitRequest(payload());
+    expect(result).toEqual({ crmRequestId: "crm-live-id-42" });
+  });
+
+  it("keeps data.id when crmRequestId is absent", async () => {
+    answer = { status: 201, body: JSON.stringify({ data: { id: "nested-crm-9" } }) };
+    const result = await httpCrm({ url, secret: SECRET }).submitRequest(payload());
+    expect(result).toEqual({ crmRequestId: "nested-crm-9" });
+  });
+
+  it("crmRequestIdFrom falls back when the body is not a usable id", async () => {
+    expect(await crmRequestIdFrom(new Response(null, { status: 200 }), "R-T001")).toBe("http:R-T001");
+    expect(await crmRequestIdFrom(new Response("not-json", { status: 200 }), "R-T001")).toBe("http:R-T001");
+    expect(
+      await crmRequestIdFrom(new Response(JSON.stringify({ crmRequestId: "  " }), { status: 200 }), "R-T001"),
+    ).toBe("http:R-T001");
   });
 
   it("the body is the request without the e-mail's links and attempt; the request id stays for the status call", async () => {

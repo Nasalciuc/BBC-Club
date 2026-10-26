@@ -74,21 +74,22 @@ by itself" (the call, its words and the list's hint at it only with the club's g
 6. **Retries.** Failures propagate (AGENTS.md rules 3 and 4). Every error says whether trying again can help
    (`retryable`, `CrmFailure` in the api):
 
-   | Outcome                                        | Error                    | Retryable | `send-requests`                                  |
-   | ---------------------------------------------- | ------------------------ | --------- | ------------------------------------------------ |
-   | 2xx                                            | —                        | —         | marked sent; `crm_request_id` `http:<reference>` |
-   | no answer within 5 s                           | `CrmTimeoutError`        | yes       | tried again 5 minutes later, 6 attempts in all   |
-   | DNS, refused or reset connection, TLS          | `CrmUnreachableError`    | yes       | the same                                         |
-   | 408, 429, 5xx                                  | `CrmHttpError`           | yes       | the same (a 429's `Retry-After` is not read)     |
-   | any other 4xx (400, 401, 403, 404, 409, 422 …) | `CrmHttpError`           | no        | given up at once: counted as the sixth attempt   |
-   | 1xx, 3xx (a redirect, not followed)            | `CrmHttpError`           | no        | the same                                         |
-   | the request has no reference                   | `CrmRequestInvalidError` | no        | the same; nothing is sent                        |
+   | Outcome                                        | Error                    | Retryable | `send-requests`                                                                                                             |
+   | ---------------------------------------------- | ------------------------ | --------- | --------------------------------------------------------------------------------------------------------------------------- |
+   | 2xx                                            | —                        | —         | marked sent; `crm_request_id` from the answer (`crmRequestId` / `data.id` when a non-empty string), else `http:<reference>` |
+   | no answer within 5 s                           | `CrmTimeoutError`        | yes       | tried again 5 minutes later, 6 attempts in all                                                                              |
+   | DNS, refused or reset connection, TLS          | `CrmUnreachableError`    | yes       | the same                                                                                                                    |
+   | 408, 429, 5xx                                  | `CrmHttpError`           | yes       | the same (a 429's `Retry-After` is not read)                                                                                |
+   | any other 4xx (400, 401, 403, 404, 409, 422 …) | `CrmHttpError`           | no        | given up at once: counted as the sixth attempt                                                                              |
+   | 1xx, 3xx (a redirect, not followed)            | `CrmHttpError`           | no        | the same                                                                                                                    |
+   | the request has no reference                   | `CrmRequestInvalidError` | no        | the same; nothing is sent                                                                                                   |
 
    A request given up at once follows the path the sixth failure already had. The member reads `Not sent`, the log
    says `request send gave up` (`refused: true`), `bbc_request_sends_given_up` rises, and `OPS_WEBHOOK` gets one
    line. That line says the CRM refused the request and that the log says why. An operator re-queues the request once
-   the cause is fixed (RUNBOOK). An error names the call and the status only: the answer's body is never read, since it
-   may repeat the member's details. The adapter logs nothing, and `send-requests` stores `errorLine(err)` as before.
+   the cause is fixed (RUNBOOK). An error names the call and the status only: on a refusal the answer's body is never
+   read, since it may repeat the member's details. On a 2xx the adapter reads only the CRM's id field (see the table).
+   The adapter logs nothing, and `send-requests` stores `errorLine(err)` as before.
 
 7. **`findByEmail` answers null, without a call**, as the e-mail adapter does. It runs inside the profile's insert, at
    `member.registered` and right after the join code. A call there would hold a pooled connection on the CRM for up to
@@ -150,11 +151,16 @@ by itself" (the call, its words and the list's hint at it only with the club's g
   ADR-IMPL-047), so it is not changed here; `support-phone.test.ts` lets it through by name, and `docs/release.md`, the
   app's `.env.example` and `lib/env.ts` name it where they say no words ask for a call. Dropping `or call us` from a
   build without the line amends ADR-IMPL-047: the owner's decision.
-- **The CRM's real address and authentication.** Is an HMAC signature acceptable to the CRM, or does it need its own
-  (an API key in a header, OAuth)? A different scheme changes the adapter.
-- **The payload mapping.** Today the CRM receives `CrmRequestPayload` as it is: snake_case, the fields of
-  `packages/modules/integration/crm/src/api/index.ts`. The CRM's own field names, its required fields, and whether it
-  answers with its own id, which `crm_request_id` would then keep instead of `http:<reference>`.
+- **The CRM's real address and authentication.** Live mobile endpoint (2026-10-26):
+  `https://webapi.buybusinessclass.com/requests/mobile` accepts `CrmRequestPayload` and answers 2xx with
+  `{ "crmRequestId": "<id>" }`. Probes: re-POST of the same reference returned the same id (idempotent on the body /
+  reference); optional `shown_estimate` / `intent` accepted; dummy `X-BBC-Timestamp` / `X-BBC-Signature` still got
+  2xx — the CRM does **not** verify the HMAC yet. We still require `CRM_API_SECRET` at boot and send the ADR-065
+  headers so verification can turn on without another adapter change. Is HMAC the scheme they will keep, or do they
+  need their own (API key, OAuth)? A different scheme changes the adapter.
+- **The payload mapping.** Live answers with `crmRequestId`; the adapter keeps that string (or `data.id`) in
+  `crm_request_id`, else `http:<reference>`. Field names remain `CrmRequestPayload` as in
+  `packages/modules/integration/crm/src/api/index.ts` until the CRM asks for a rename.
 - **Questions for the CRM team:**
   1. **Members (`findByEmail`).** Is there a lookup by e-mail, or a read-only export for the mirror? Which fields
      (client id, name, home airport), and how fresh?
@@ -163,12 +169,13 @@ by itself" (the call, its words and the list's hint at it only with the club's g
      who keeps it on its side? The `note` is shown to the member.
   3. **The idempotency window.** How long does the CRM remember an `Idempotency-Key`? What does it answer for a key it
      has seen: we expect a 2xx, and a 409 would give the request up as refused. What happens to a key reused with a
-     changed body (an offer repriced between two tries)?
+     changed body (an offer repriced between two tries)? Live re-POST of `R-TEST0001` returned the same `crmRequestId`.
   4. **Rate limits.** How many calls a minute, and does it answer 429 with `Retry-After`? We send at most 20 a minute,
      one at a time.
   5. **The rest of the signature.** Is 300 seconds of clock difference acceptable? Does it answer 401 to a bad
      signature? Will it key the secret as text (point 3), and refuse an `Idempotency-Key` that is not the body's
-     `reference`? If it would rather have the key signed too, the scheme becomes `<timestamp>.<key>.<body>`.
+     `reference`? If it would rather have the key signed too, the scheme becomes `<timestamp>.<key>.<body>`. As of the
+     2026-10-26 probe, a dummy signature is still accepted — turn verification on when ready.
   6. **Refusals.** Which statuses mean "this request will never be accepted" and which mean "try later"? That decides
      whether point 6's table holds for its 4xx.
   7. **Network.** Does it allow calls only from known addresses? Then it needs the API's outbound address.
