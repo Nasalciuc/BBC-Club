@@ -108,10 +108,18 @@ export function createIdentityFacade(
     if (!isOtpSendRequest(req)) return auth.handler(req);
     const receivedAt = performance.now();
     const target = await otpSendTarget(req);
-    const res = target ? await withOtpSendLock(target, () => auth.handler(req)) : await auth.handler(req);
     // Only what the club read as a sign-in code answers at once. A reset or verification code waits, and so does a body
     // the club could not read the way Better Auth reads it (another content type): it may be a reset code all the same.
-    if (target?.type !== "sign-in" && res.status !== 429) await waitUntil(receivedAt + answerFloorMs);
+    // A failure (a query that failed leaves Better Auth's handler for the host's 500) waits too.
+    const held = target?.type !== "sign-in";
+    let res: Response;
+    try {
+      res = target ? await withOtpSendLock(target, () => auth.handler(req)) : await auth.handler(req);
+    } catch (err) {
+      if (held) await waitUntil(receivedAt + answerFloorMs);
+      throw err;
+    }
+    if (held && res.status !== 429) await waitUntil(receivedAt + answerFloorMs);
     return res;
   };
 

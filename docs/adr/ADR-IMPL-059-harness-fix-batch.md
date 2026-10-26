@@ -42,7 +42,8 @@ or an operator will notice.
 4. **One fare per route, cabin, carrier, valid_from and trip (0034).** The fares key gains `trip` and is
    `UNIQUE NULLS NOT DISTINCT`, so a fare without a carrier is one fare. Before this, three imports of one file made
    three rows, and one route sold one way and round trip overwrote itself in place. The migration keeps the most
-   recently updated copy of each duplicate and deletes the others. Requests keep their own copy of the price (0029,
+   recently updated copy of each duplicate and deletes the others. (Amended by ADR-IMPL-061: 0037 runs first and keeps
+   the copy on sale, since expire-fares updates the copy it unpublishes.) Requests keep their own copy of the price (0029,
    0030). Seeds and the import target the new key.
 5. **Catalogue CHECKs (0035).** `fares_duration_pos` (a duration is positive or NULL; stored zero or negative
    durations become NULL) and `airports_coordinates` (on the globe). Both are added `NOT VALID` and validated in a

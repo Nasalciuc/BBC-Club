@@ -93,6 +93,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog fares key applied/);
     expect(second.out).not.toMatch(/catalog checks applied/);
     expect(second.out).not.toMatch(/notifications campaign not before applied/);
+    expect(second.out).not.toMatch(/catalog fares keep live copy/);
 
     await db.execute(sql`SELECT platform.ensure_event_partitions(1)`);
 
@@ -133,6 +134,7 @@ describe("extras ledger", () => {
       "0034_catalog_fares_key.sql",
       "0035_catalog_checks.sql",
       "0036_notifications_campaign_not_before.sql",
+      "0037_catalog_fares_keep_live_copy.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

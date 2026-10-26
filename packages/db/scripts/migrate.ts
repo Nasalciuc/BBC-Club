@@ -18,6 +18,36 @@ if (!url) {
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "../migrations");
 
+/** Why a pending step would fail half-way, one line each; empty when every pending step can run. Reads only. */
+async function preflight(exec: ReturnType<typeof createDb>): Promise<string[]> {
+  const [state] = (await exec.execute(sql`
+    SELECT to_regclass('platform.extras_applied') IS NOT NULL AS ledger,
+           to_regclass('catalog.airports') IS NOT NULL AS airports`)) as unknown as {
+    ledger: boolean;
+    airports: boolean;
+  }[];
+  if (!state?.ledger || !state.airports) return []; // a new database: every step runs on empty tables
+  const pending = async (name: string) =>
+    ((await exec.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${name}`)) as unknown[]).length === 0;
+  const lines: string[] = [];
+  // 0035 validates airports_coordinates: an airport off the globe would stop it after 0034 had committed.
+  if (await pending("0035_catalog_checks.sql")) {
+    const off = (await exec.execute(sql`
+      SELECT code, lat::text AS lat, lng::text AS lng FROM catalog.airports
+      WHERE NOT (lat BETWEEN -90 AND 90 AND lng BETWEEN -180 AND 180) ORDER BY code`)) as unknown as {
+      code: string;
+      lat: string;
+      lng: string;
+    }[];
+    for (const a of off) {
+      lines.push(
+        `0035: airport ${a.code} is off the globe (lat ${a.lat}, lng ${a.lng}): re-import it with its real coordinates`,
+      );
+    }
+  }
+  return lines;
+}
+
 const db = createDb(url, { max: 1, applicationName: "bbc-migrate" });
 try {
   const [lock] = (await db.execute(sql`SELECT pg_try_advisory_lock(hashtext('bbc.migrate')) AS ok`)) as unknown as {
@@ -32,6 +62,16 @@ try {
   // the deploy stops with the previous release serving. Session-wide for the statements outside a transaction
   // (Drizzle's migrator, CONCURRENTLY builds); each transactional block also sets it LOCAL.
   await db.execute(sql`SET lock_timeout = '5s'`);
+
+  // Check first, change nothing until the checks pass: a pending step that would stop half-way is refused before any
+  // step runs, so an earlier one is never left applied alone (0034 committed, then 0035's VALIDATE failed and 0036
+  // never ran).
+  const refused = await preflight(db);
+  if (refused.length) {
+    for (const line of refused) console.error(line);
+    console.error("migration not started: nothing was changed. Fix the rows above, then run the migration again.");
+    process.exit(1);
+  }
 
   await migrate(db, { migrationsFolder: migrationsDir });
 
@@ -577,6 +617,29 @@ try {
         );
       });
       console.log("members profile avatar url applied");
+    }
+  }
+
+  // Before 0034, on purpose (ADR-IMPL-061): which copy of a duplicate fare stays — the one on sale, not the one
+  // expire-fares touched last. Only while 0034 has not run; on a database that ran it the key already holds, and this
+  // step is recorded without running.
+  const faresKeepLive = join(migrationsDir, "0037_catalog_fares_keep_live_copy.sql");
+  if (existsSync(faresKeepLive)) {
+    const done = (await db.execute(
+      sql`SELECT 1 FROM platform.extras_applied WHERE name = '0037_catalog_fares_keep_live_copy.sql'`,
+    )) as unknown[];
+    if (!done.length) {
+      const keyDone = (await db.execute(
+        sql`SELECT 1 FROM platform.extras_applied WHERE name = '0034_catalog_fares_key.sql'`,
+      )) as unknown[];
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+        if (!keyDone.length) await tx.execute(sql.raw(readFileSync(faresKeepLive, "utf8")));
+        await tx.execute(
+          sql`INSERT INTO platform.extras_applied (name) VALUES ('0037_catalog_fares_keep_live_copy.sql')`,
+        );
+      });
+      console.log(`catalog fares keep live copy ${keyDone.length ? "recorded (0034 had run)" : "applied"}`);
     }
   }
 

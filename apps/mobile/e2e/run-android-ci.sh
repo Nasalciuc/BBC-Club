@@ -56,9 +56,19 @@ screen_state() {
 # and the comment above it must say why that line is not a product bug. Empty means every such line fails the job.
 JS_ERROR_ALLOWLIST=()
 
+# E/ReactNativeJS is the app's own JS. A FATAL EXCEPTION counts only when the line after it names the app's process
+# ($APP, launcher-guard.sh): disabling the launcher can crash com.android.systemui (its OverviewProxyService on the
+# PACKAGE_CHANGED broadcast), which is not under test. Another process's crash is shown, never counted.
 js_error_lines() {
-  adb logcat -d -v brief '*:S' ReactNativeJS:E AndroidRuntime:E |
-    grep -E 'E/ReactNativeJS|FATAL EXCEPTION' || true
+  adb logcat -d -v brief '*:S' ReactNativeJS:E AndroidRuntime:E | tr -d '\r' |
+    awk -v app="$APP" '
+      /E\/ReactNativeJS/ { print; next }
+      /FATAL EXCEPTION/ { fatal = $0; next }
+      fatal != "" {
+        if (index($0, "Process: " app ",") > 0) print fatal " (" app ")"
+        else print "  not under test: " $0 > "/dev/stderr"
+        fatal = ""
+      }' || true
 }
 
 status=0

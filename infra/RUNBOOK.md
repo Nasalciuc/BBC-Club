@@ -366,6 +366,24 @@ Never edit a migration that already ran. Named steps that correct one another ru
 `0025_requests_estimate_pair_and_list.sql` replaces the CHECK `0024_requests_shown_estimate.sql` added, so deleting
 0024's ledger row alone would run it again after 0025 and put the weaker CHECK back — delete both rows, or neither.
 
+**A migration that did not start.** Before any step runs, the runner checks what would stop a pending step half-way
+and refuses the whole run, changing nothing (ADR-IMPL-061). The log names each row, then:
+
+```text
+0035: airport XXX is off the globe (lat 999.000000, lng 500.000000): re-import it with its real coordinates
+migration not started: nothing was changed. Fix the rows above, then run the migration again.
+```
+
+Re-import those airports with their real coordinates (the airports import), then run the same `deploy.sh` again.
+
+**A database that ran 0034 before 0037.** 0034 kept, of each duplicate fare, the most recently updated copy, and
+`expire-fares` updates a fare when it unpublishes it, so a route could lose its fare on sale to an expired copy
+(ADR-IMPL-061). 0037 prevents it where 0034 has not run yet; where it already ran, the deleted rows are gone and
+nothing tells which. To know which state a database is in:
+`SELECT name, applied_at FROM platform.extras_applied WHERE name IN ('0034_catalog_fares_key.sql', '0037_catalog_fares_keep_live_copy.sql');`.
+If 0034's `applied_at` is earlier than 0037's, import the catalogue again after the deploy: the import upserts on the
+key and republishes each fare it carries.
+
 **3. Data was lost or corrupted.** Restore, from the smallest scope that works:
 
 - **One table, just after a deploy:** step 1/8 wrote `/var/backups/pre-deploy/<mode>-<timestamp>.dump`; files are kept 7 days. Restore that table into a scratch database, then copy the rows back:

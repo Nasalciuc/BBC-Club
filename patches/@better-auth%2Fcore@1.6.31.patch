@@ -1,0 +1,25 @@
+diff --git a/dist/db/adapter/factory.mjs b/dist/db/adapter/factory.mjs
+index 1a7b075c96a88a384985dad0c6e324d1b3e5c31a..efb495b00cba1ef196235cb5690342b434ffab5c 100644
+--- a/dist/db/adapter/factory.mjs
++++ b/dist/db/adapter/factory.mjs
+@@ -382,7 +382,6 @@ const createAdapterFactory = ({ adapter: customAdapter, config: cfg }) => (optio
+ 				where,
+ 				limit: joinConfig.limit
+ 			});
+-			console.error(error);
+ 			throw error;
+ 		}
+ 		return result;
+diff --git a/dist/utils/json.mjs b/dist/utils/json.mjs
+index 71965f87370bf2d366dffdaf7c7f7048862d0e45..3e9813a36887a3145844e95c46fc1e497b30a60a 100644
+--- a/dist/utils/json.mjs
++++ b/dist/utils/json.mjs
+@@ -33,7 +33,7 @@ function safeJSONParse(data) {
+ 		}
+ 		return JSON.parse(data, (_, value) => reviveDate(value));
+ 	} catch (e) {
+-		logger.error("Error parsing JSON", { error: e });
++		logger.error("Error parsing JSON");
+ 		return null;
+ 	}
+ }
