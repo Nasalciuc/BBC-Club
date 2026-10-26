@@ -135,6 +135,7 @@ describe("extras ledger", () => {
       "0035_catalog_checks.sql",
       "0036_notifications_campaign_not_before.sql",
       "0037_catalog_fares_keep_live_copy.sql",
+      "0044_notifications_offer_send_day.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

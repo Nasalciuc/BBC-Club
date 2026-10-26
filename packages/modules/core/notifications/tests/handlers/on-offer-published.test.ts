@@ -137,3 +137,79 @@ describe("onOfferPublished — published for later", () => {
     expect(new Date(row!.scheduled_for).getTime()).toBeGreaterThanOrEqual(publishedAt.getTime());
   });
 });
+
+/** At most one offer push per member per day — the day it is sent, in the member's zone (4.1.10), whatever day the
+ *  earlier push was created on. */
+describe("onOfferPublished — the daily cap counts the day of sending", () => {
+  const facadeIn = (timezone: string) =>
+    ({
+      getStatus: async () => "active",
+      preferencesOf: async () => ({ offers_personal: true, offers_broadcast: true }),
+      timezoneOf: async () => timezone,
+    }) as unknown as MembersFacade;
+  const publish = (memberId: string, offerId: string, publishedAt: string, now: Date, timezone: string) =>
+    iso.db.transaction(async (tx) => {
+      await onOfferPublished(
+        { tx, members: facadeIn(timezone), sourceEventId: `cap-${offerId}`, now: () => now },
+        {
+          type: "offer.published",
+          version: 1,
+          offerId,
+          targeting: "user",
+          targetMemberId: memberId,
+          routeFrom: "JFK",
+          routeTo: "LHR",
+          cabin: "business",
+          title: "Your October in London",
+          validUntil: "2027-12-31T23:59:59.000Z",
+          publishedAt,
+        },
+      );
+    });
+  const pushed = (memberId: string, scheduledFor: string, createdAt?: string) =>
+    iso.db.execute(sql`
+      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id, scheduled_for, created_at)
+      VALUES (${memberId}, 'offers_broadcast', 'an earlier offer', 'sent', gen_random_uuid(),
+              ${scheduledFor}::timestamptz, coalesce(${createdAt ?? null}::timestamptz, now()))`);
+  const written = async (offerId: string) =>
+    (
+      (await iso.db.execute(
+        sql`SELECT scheduled_for FROM notifications.notifications WHERE offer_id = ${offerId}::uuid`,
+      )) as unknown as { scheduled_for: string }[]
+    ).map((r) => new Date(r.scheduled_for).toISOString());
+
+  it("capped by a push sent the same local day, created the evening before", async () => {
+    const memberId = `cap-london-${crypto.randomUUID()}`;
+    // Created at 23:10 on the 25th, moved past quiet hours to 08:00 on the 26th in London.
+    await pushed(memberId, "2026-10-26T08:00:00.000Z", "2026-10-25T23:10:00.000Z");
+    const offerId = crypto.randomUUID();
+    const noon = new Date("2026-10-26T12:00:00.000Z"); // 12:00 in London, sent at once
+    await publish(memberId, offerId, "2026-10-26T11:00:00.000Z", noon, "Europe/London");
+    expect(await written(offerId)).toEqual([]);
+  });
+
+  it("not capped by one created today but sent on another local day", async () => {
+    const memberId = `cap-tokyo-${crypto.randomUUID()}`;
+    // Created now, in the database's clock, but sent at 08:00 on the 27th in Tokyo.
+    await pushed(memberId, "2026-10-26T23:00:00.000Z");
+    const offerId = crypto.randomUUID();
+    const at = new Date("2026-10-26T00:30:00.000Z"); // 09:30 on the 26th in Tokyo, sent at once
+    await publish(memberId, offerId, "2026-10-26T00:00:00.000Z", at, "Asia/Tokyo");
+    expect(await written(offerId)).toEqual([at.toISOString()]);
+  });
+
+  it("an offer published for later is counted on the day it is sent, not the day it arrives", async () => {
+    const memberId = `cap-later-${crypto.randomUUID()}`;
+    await pushed(memberId, "2026-10-26T09:00:00.000Z"); // today's push, 09:00 in London on the 26th
+    await pushed(memberId, "2026-10-28T09:00:00.000Z"); // one already going at 09:00 on the 28th
+    const noon = new Date("2026-10-26T12:00:00.000Z");
+    // Published at 10:00 on the 28th: the 28th already has its push.
+    const capped = crypto.randomUUID();
+    await publish(memberId, capped, "2026-10-28T10:00:00.000Z", noon, "Europe/London");
+    expect(await written(capped)).toEqual([]);
+    // Published at 10:00 on the 27th: a day with none, though today has one.
+    const sent = crypto.randomUUID();
+    await publish(memberId, sent, "2026-10-27T10:00:00.000Z", noon, "Europe/London");
+    expect(await written(sent)).toEqual(["2026-10-27T10:00:00.000Z"]);
+  });
+});

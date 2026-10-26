@@ -8,6 +8,7 @@ import { dispatchClaimSql, dispatchReaperSql } from "../../modules/core/notifica
 import { faresRepo } from "../../modules/domain/catalog/src/infrastructure/fares.repo";
 import { claimUnsentSql, createRequestsRepo } from "../../modules/domain/requests/src/infrastructure/requests.repo";
 import { notificationsRepo } from "../../modules/core/notifications/src/infrastructure/notifications.repo";
+import { offerSendsSelect } from "../../modules/core/notifications/src/application/daily-cap";
 
 const MEMBER = "hot-member";
 const ROWS = 200_000;
@@ -135,6 +136,21 @@ describe("hot queries choose their index", () => {
       name: "inbox by member",
       statement: () => sqlOf(notificationsRepo.inboxSelect(iso.db, MEMBER, 30)),
       index: "notif_inbox",
+      noSeqScanOn: ["notifications"],
+    },
+    {
+      // The daily offer cap (0044): a member's offer pushes around the new one's send day, never every row they have.
+      name: "daily offer cap",
+      statement: () =>
+        sqlOf(
+          offerSendsSelect(
+            iso.db,
+            [MEMBER, "hot-other"],
+            new Date(Date.now() - 36 * 3_600_000),
+            new Date(Date.now() + 36 * 3_600_000),
+          ),
+        ),
+      index: "notif_offer_sends",
       noSeqScanOn: ["notifications"],
     },
     {

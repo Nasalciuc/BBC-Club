@@ -115,17 +115,22 @@ describe("campaign-fanout job", () => {
     await db.execute(sql`
       INSERT INTO members.notification_preferences (member_id, category, enabled)
       VALUES (${mid(3)}, 'offers_broadcast', false), (${mid(4)}, 'offers_personal', false)`);
-    // Already notified with an offer today → capped (server day). An older offer does not cap.
+    // Already an offer push on the day this one goes out (in the member's zone) → capped. An older one does not cap.
+    const noon = new Date("2026-10-26T12:00:00.000Z"); // 12:00 in London: no quiet hours, sent at once
     await db.execute(sql`
-      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id)
-      VALUES (${mid(5)}, 'offers_personal', 'earlier today', 'pending', gen_random_uuid())`);
+      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id, scheduled_for, created_at)
+      VALUES (${mid(5)}, 'offers_personal', 'earlier today', 'pending', gen_random_uuid(),
+              ${new Date(noon.getTime() - 2 * 3_600_000).toISOString()}::timestamptz,
+              ${new Date(noon.getTime() - 2 * 3_600_000).toISOString()}::timestamptz)`);
     await db.execute(sql`
-      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id, created_at)
-      VALUES (${mid(6)}, 'offers_personal', 'last week', 'pending', gen_random_uuid(), now() - interval '7 days')`);
+      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id, scheduled_for, created_at)
+      VALUES (${mid(6)}, 'offers_personal', 'last week', 'pending', gen_random_uuid(),
+              ${new Date(noon.getTime() - 7 * 86_400_000).toISOString()}::timestamptz,
+              ${new Date(noon.getTime() - 7 * 86_400_000).toISOString()}::timestamptz)`);
     const offerId = crypto.randomUUID();
     await deliver(broadcast(offerId), "303");
 
-    const m = await run({ pageSize: 100 });
+    const m = await run({ pageSize: 100, now: () => noon });
     expect(m).toEqual({ campaigns: 1, pages: 11, inserted: 1_048, capped: 1 });
 
     const rows = (await db.execute(sql`
@@ -146,7 +151,7 @@ describe("campaign-fanout job", () => {
     expect(c.last_member_id).toBeNull(); // the cursor goes with the work: no member id stays behind
     expect(c.finished_at).not.toBeNull();
 
-    expect(await run({ pageSize: 100 })).toEqual({ campaigns: 0, pages: 0, inserted: 0, capped: 0 });
+    expect(await run({ pageSize: 100, now: () => noon })).toEqual({ campaigns: 0, pages: 0, inserted: 0, capped: 0 });
   });
 
   it("schedules each row after the member's quiet hours", async () => {
@@ -288,6 +293,77 @@ describe("campaign-fanout job", () => {
     const [c] = (await db.execute(sql`SELECT status, last_member_id FROM notifications.campaigns`)) as any[];
     expect(c).toEqual({ status: "running", last_member_id: mid(200) });
     expect(await run({ pageSize: 100 })).toEqual({ campaigns: 1, pages: 1, inserted: 100, capped: 0 });
+  });
+});
+
+/** At most one offer push per member per day: the day it is sent, in the member's zone (4.1.10). The cap once counted
+ *  the rows created since the server's UTC midnight, while quiet hours move a push to the next morning: two pushes
+ *  landed on one local evening across UTC midnight, and a push sent today was dropped for one created today but sent
+ *  tomorrow. */
+describe("the daily cap counts the day of sending, in the member's zone", () => {
+  // 00:30 UTC on 26 Oct 2026: 20:30 on the 25th in New York (sent at once), 00:30 on the 26th in London (quiet hours:
+  // sent at 08:00), 09:30 on the 26th in Tokyo (sent at once).
+  const at = new Date("2026-10-26T00:30:00.000Z");
+  const pushed = (memberId: string, scheduledFor: string, createdAt = scheduledFor) =>
+    db.execute(sql`
+      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id, scheduled_for, created_at)
+      VALUES (${memberId}, 'offers_personal', 'an earlier offer', 'sent', gen_random_uuid(),
+              ${scheduledFor}::timestamptz, ${createdAt}::timestamptz)`);
+  const profile = (memberId: string, timezone: string) =>
+    db.execute(
+      sql`INSERT INTO members.profile (member_id, status, timezone) VALUES (${memberId}, 'active', ${timezone})`,
+    );
+
+  it("around UTC midnight and across quiet hours, a member is capped only by a push on the same local day", async () => {
+    await profile("day-1-ny-same-evening", "America/New_York");
+    await profile("day-2-ny-day-before", "America/New_York");
+    await profile("day-3-london-this-morning", "Europe/London");
+    await profile("day-4-london-yesterday", "Europe/London");
+    await profile("day-5-tokyo-tomorrow", "Asia/Tokyo");
+    // 19:30 in New York on the 25th, an hour before this one, the day before in UTC: the same evening.
+    await pushed("day-1-ny-same-evening", "2026-10-25T23:30:00.000Z");
+    // 23:00 in New York on the 24th, though the same UTC day as the push above.
+    await pushed("day-2-ny-day-before", "2026-10-25T03:00:00.000Z");
+    // Created at 23:10 on the 25th and moved past quiet hours to 08:00 on the 26th — when this one goes too.
+    await pushed("day-3-london-this-morning", "2026-10-26T08:00:00.000Z", "2026-10-25T23:10:00.000Z");
+    // Sent at 21:00 on the 25th in London: this one goes on the 26th.
+    await pushed("day-4-london-yesterday", "2026-10-25T21:00:00.000Z");
+    // Created now (in the database's clock, as the old cap read it) but sent at 08:00 on the 27th in Tokyo; this one goes
+    // on the 26th.
+    await db.execute(sql`
+      INSERT INTO notifications.notifications (member_id, category, title, status, offer_id, scheduled_for)
+      VALUES ('day-5-tokyo-tomorrow', 'offers_broadcast', 'tomorrow morning', 'pending', gen_random_uuid(),
+              '2026-10-26T23:00:00.000Z'::timestamptz)`);
+    const offerId = crypto.randomUUID();
+    await deliver(broadcast(offerId), "460");
+
+    const m = await run({ now: () => at });
+    expect(m).toMatchObject({ campaigns: 1, inserted: 3, capped: 2 });
+    const rows = (await db.execute(sql`
+      SELECT member_id, scheduled_for FROM notifications.notifications WHERE offer_id = ${offerId}::uuid
+      ORDER BY member_id`)) as unknown as { member_id: string; scheduled_for: string }[];
+    expect(rows.map((r) => [r.member_id, new Date(r.scheduled_for).toISOString()])).toEqual([
+      ["day-2-ny-day-before", at.toISOString()],
+      ["day-4-london-yesterday", "2026-10-26T08:00:00.000Z"],
+      ["day-5-tokyo-tomorrow", at.toISOString()],
+    ]);
+  });
+
+  it("a London evening: sent at once it is capped by that morning's push; moved by quiet hours to tomorrow it is not", async () => {
+    await profile("eve-london", "Europe/London");
+    await pushed("eve-london", "2026-10-26T08:00:00.000Z"); // 08:00 in London on the 26th
+    const first = crypto.randomUUID();
+    await deliver(broadcast(first), "461");
+    // 21:30 in London on the 26th: sent at once, the same day as the morning's.
+    expect(await run({ now: () => new Date("2026-10-26T21:30:00.000Z") })).toMatchObject({ inserted: 0, capped: 1 });
+    const second = crypto.randomUUID();
+    await deliver(broadcast(second), "462");
+    // 22:30: quiet hours, so it goes at 08:00 on the 27th — a day with no push yet.
+    expect(await run({ now: () => new Date("2026-10-26T22:30:00.000Z") })).toMatchObject({ inserted: 1, capped: 0 });
+    const [row] = (await db.execute(
+      sql`SELECT scheduled_for FROM notifications.notifications WHERE offer_id = ${second}::uuid`,
+    )) as unknown as { scheduled_for: string }[];
+    expect(new Date(row!.scheduled_for).toISOString()).toBe("2026-10-27T08:00:00.000Z");
   });
 });
 
