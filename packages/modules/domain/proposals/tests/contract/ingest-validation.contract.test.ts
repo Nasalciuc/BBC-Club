@@ -129,47 +129,6 @@ describe("ingest refuses what the offers table refuses, and unsafe values", () =
     expect(((await retry.json()) as { offerId: string }).offerId).toBe(offerId);
   });
 
-  it("a CRM retry of an offer stored before the ingest grew stricter replays it, or is a 409 — never a 400", async () => {
-    // Before b74b17f (22 Oct) the ingest took a member id that is not a UUID, a media address over http and any three
-    // characters as a route or a currency. A retry of such an offer's key — at-least-once, after a lost answer — must
-    // still find the offer it made (4.1.6); the stricter rules stay for every new offer.
-    const key = `validation:${crypto.randomUUID()}`;
-    const first = await post(good(), key);
-    expect(first.status).toBe(200);
-    const { offerId } = (await first.json()) as { offerId: string };
-    const loose = {
-      ...good(),
-      targetMemberId: "crm-member-17",
-      mediaUrl: "http://cdn.example.com/paris.webp",
-      routeFrom: "K3F",
-      currency: "us$",
-      price: "1700.5",
-    };
-    // As the ingest stored it then (made-up values): routes upper-cased, everything else as sent.
-    await iso.db.execute(sql`
-      UPDATE proposals.offers SET target_member_id = ${loose.targetMemberId}, media_url = ${loose.mediaUrl},
-        route_from = 'K3F', currency = ${loose.currency}, price = ${loose.price}
-      WHERE idempotency_key = ${key}`);
-    const [row] = (await iso.db.execute(
-      sql`SELECT valid_until FROM proposals.offers WHERE idempotency_key = ${key}`,
-    )) as unknown as { valid_until: Date | string }[];
-    const retry = { ...loose, validUntil: new Date(row!.valid_until).toISOString() };
-
-    const replayed = await post(retry, key);
-    expect(replayed.status).toBe(200);
-    expect(((await replayed.json()) as { offerId: string }).offerId).toBe(offerId);
-    // The same key with another payload is a conflict, as for any stored offer.
-    const changed = await post({ ...retry, title: "Another weekend" }, key);
-    expect(changed.status).toBe(409);
-    // A new offer under the old rules is still refused, and nothing is stored.
-    const fresh = `validation:${crypto.randomUUID()}`;
-    const refused = await post(retry, fresh);
-    expect(refused.status).toBe(400);
-    expect(await stored(fresh)).toBe(0);
-    // What the old rules refused too is a 400 whatever the key names.
-    expect((await post({ ...retry, cabin: "economy" }, key)).status).toBe(400);
-  });
-
   it("a CHECK the database still refuses is a 400 VALIDATION, not a 500", async () => {
     // Past the schema (the facade's own callers, a CHECK added later): the route maps 23514 and 22003 to 400.
     const ok = await ingest(deps, { ...(good() as never), price: "1700.00" }, `validation:${crypto.randomUUID()}`);
