@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "a52222f1-6e28-4b8d-b6ae-7f72a1eeab0b",
-  "prevIds": ["1923bcf6-58f5-4f34-8519-b45f82ee44e3", "a7f8f4a7-5dc0-48c8-bb2e-4edc7f53d437"],
+  "id": "6fa94409-3c17-4d81-b14c-9715f9eeb1a6",
+  "prevIds": ["8f9ac98a-d046-435f-acb3-75aee9ae2f9b", "bacfa0e5-c7b9-4f9f-b4c9-a0b5e8ba2b1a"],
   "ddl": [
     {
       "name": "platform",
@@ -171,6 +171,18 @@
       "schema": "catalog"
     },
     {
+      "values": ["wikidata", "commons"],
+      "name": "outside_source",
+      "entityType": "enums",
+      "schema": "catalog"
+    },
+    {
+      "values": ["landmark", "fewer", "failed"],
+      "name": "place_landmark_kind",
+      "entityType": "enums",
+      "schema": "catalog"
+    },
+    {
       "values": ["wikimedia", "pexels", "override"],
       "name": "place_photo_source",
       "entityType": "enums",
@@ -179,6 +191,12 @@
     {
       "values": ["pending", "photo", "satellite"],
       "name": "place_photo_status",
+      "entityType": "enums",
+      "schema": "catalog"
+    },
+    {
+      "values": ["priced", "none"],
+      "name": "site_price_status",
       "entityType": "enums",
       "schema": "catalog"
     },
@@ -334,6 +352,12 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "place_landmarks",
+      "entityType": "tables",
+      "schema": "catalog"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "place_photos",
       "entityType": "tables",
       "schema": "catalog"
@@ -346,7 +370,19 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "site_prices",
+      "entityType": "tables",
+      "schema": "catalog"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "site_routes",
+      "entityType": "tables",
+      "schema": "catalog"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "source_holds",
       "entityType": "tables",
       "schema": "catalog"
     },
@@ -2588,6 +2624,19 @@
       "table": "requests"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "shown_estimate_source",
+      "entityType": "columns",
+      "schema": "requests",
+      "table": "requests"
+    },
+    {
       "type": "trip_type",
       "typeSchema": "requests",
       "notNull": true,
@@ -3521,6 +3570,214 @@
       "name": "code",
       "entityType": "columns",
       "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "rank",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "place_landmark_kind",
+      "typeSchema": "catalog",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "city_qid",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "landmark_qid",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "file",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "image_url",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "width",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "height",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "licence",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "licence_url",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "credit",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "fetched_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "type": "char(3)",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "code",
+      "entityType": "columns",
+      "schema": "catalog",
       "table": "place_photos"
     },
     {
@@ -3833,6 +4090,136 @@
       "name": "route_from",
       "entityType": "columns",
       "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "char(3)",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "route_to",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "fare_trip",
+      "typeSchema": "catalog",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "trip",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "site_price_status",
+      "typeSchema": "catalog",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "business",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "first",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "premium_economy",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "fetched_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "type": "char(3)",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "route_from",
+      "entityType": "columns",
+      "schema": "catalog",
       "table": "site_routes"
     },
     {
@@ -3905,6 +4292,19 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": "(now() + interval '24 hours')",
+      "generated": null,
+      "identity": null,
+      "name": "valid_until",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "site_routes"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": "now()",
       "generated": null,
       "identity": null,
@@ -3912,6 +4312,45 @@
       "entityType": "columns",
       "schema": "catalog",
       "table": "site_routes"
+    },
+    {
+      "type": "outside_source",
+      "typeSchema": "catalog",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "source_holds"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "not_before",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "source_holds"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "catalog",
+      "table": "source_holds"
     },
     {
       "type": "text",
@@ -6307,6 +6746,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "code",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"kind\" <> 'landmark'",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "place_landmarks_one_marker",
+      "entityType": "indexes",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "expires_at",
           "isExpression": false,
           "asc": true,
@@ -6344,6 +6804,27 @@
       "entityType": "indexes",
       "schema": "catalog",
       "table": "site_places"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "expires_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "site_prices_due",
+      "entityType": "indexes",
+      "schema": "catalog",
+      "table": "site_prices"
     },
     {
       "nameExplicit": true,
@@ -6525,6 +7006,19 @@
       "columnsTo": ["code"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
+      "name": "place_landmarks_code_airports_code_fkey",
+      "entityType": "fks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["code"],
+      "schemaTo": "catalog",
+      "tableTo": "airports",
+      "columnsTo": ["code"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "place_photos_code_airports_code_fkey",
       "entityType": "fks",
       "schema": "catalog",
@@ -6650,6 +7144,22 @@
       "entityType": "pks",
       "schema": "catalog",
       "table": "demand_daily"
+    },
+    {
+      "columns": ["code", "rank"],
+      "nameExplicit": false,
+      "name": "place_landmarks_pkey",
+      "entityType": "pks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "columns": ["route_from", "route_to", "trip"],
+      "nameExplicit": false,
+      "name": "site_prices_pkey",
+      "entityType": "pks",
+      "schema": "catalog",
+      "table": "site_prices"
     },
     {
       "columns": ["route_from", "cms_id"],
@@ -6801,6 +7311,14 @@
       "name": "site_places_pkey",
       "schema": "catalog",
       "table": "site_places",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["source"],
+      "nameExplicit": false,
+      "name": "source_holds_pkey",
+      "schema": "catalog",
+      "table": "source_holds",
       "entityType": "pks"
     },
     {
@@ -7103,6 +7621,13 @@
       "table": "requests"
     },
     {
+      "value": "\"shown_estimate_source\" IS NULL OR (\"shown_estimate_amount\" IS NOT NULL AND \"shown_estimate_source\" IN ('site', 'club'))",
+      "name": "requests_shown_estimate_source",
+      "entityType": "checks",
+      "schema": "requests",
+      "table": "requests"
+    },
+    {
       "value": "(\"published_at_request\" IS NULL AND \"published_source_at_request\" IS NULL) OR (\"published_at_request\" IS NOT NULL AND \"published_source_at_request\" IS NOT NULL AND \"published_at_request\" > 0 AND length(btrim(\"published_source_at_request\")) > 0)",
       "name": "requests_published_at_request",
       "entityType": "checks",
@@ -7201,6 +7726,62 @@
       "table": "fares"
     },
     {
+      "value": "\"rank\" BETWEEN 1 AND 3",
+      "name": "place_landmarks_rank",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "value": "\"kind\" <> 'landmark' OR (\"city_qid\" IS NOT NULL AND \"landmark_qid\" IS NOT NULL AND \"name\" IS NOT NULL AND \"file\" IS NOT NULL AND \"image_url\" IS NOT NULL AND \"width\" IS NOT NULL AND \"height\" IS NOT NULL AND \"licence\" IS NOT NULL AND \"credit\" IS NOT NULL)",
+      "name": "place_landmarks_landmark",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "value": "\"kind\" = 'landmark' OR (\"landmark_qid\" IS NULL AND \"name\" IS NULL AND \"file\" IS NULL AND \"image_url\" IS NULL AND \"width\" IS NULL AND \"height\" IS NULL AND \"licence\" IS NULL AND \"licence_url\" IS NULL AND \"credit\" IS NULL)",
+      "name": "place_landmarks_marker",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "value": "\"kind\" <> 'failed' OR \"rank\" = 1",
+      "name": "place_landmarks_failed",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "value": "(\"width\" IS NULL OR \"width\" > 0) AND (\"height\" IS NULL OR \"height\" > 0)",
+      "name": "place_landmarks_size",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "value": "(\"image_url\" IS NULL OR \"image_url\" LIKE 'https://%') AND (\"licence_url\" IS NULL OR \"licence_url\" LIKE 'https://%')",
+      "name": "place_landmarks_https",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "value": "(\"city_qid\" IS NULL OR \"city_qid\" ~ '^Q[1-9][0-9]*$') AND (\"landmark_qid\" IS NULL OR \"landmark_qid\" ~ '^Q[1-9][0-9]*$')",
+      "name": "place_landmarks_qids",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
+      "value": "\"expires_at\" > \"fetched_at\"",
+      "name": "place_landmarks_expiry",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "place_landmarks"
+    },
+    {
       "value": "(\"status\" = 'photo') = (\"source\" IS NOT NULL)",
       "name": "place_photos_source",
       "entityType": "checks",
@@ -7257,6 +7838,34 @@
       "table": "site_places"
     },
     {
+      "value": "\"route_from\" <> \"route_to\"",
+      "name": "site_prices_route",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "value": "(\"status\" = 'priced' AND \"business\" IS NOT NULL) OR (\"status\" = 'none' AND \"business\" IS NULL AND \"first\" IS NULL AND \"premium_economy\" IS NULL)",
+      "name": "site_prices_status",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "value": "(\"business\" IS NULL OR \"business\" > 0) AND (\"first\" IS NULL OR \"first\" > 0) AND (\"premium_economy\" IS NULL OR \"premium_economy\" > 0)",
+      "name": "site_prices_amounts",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
+      "value": "\"expires_at\" > \"fetched_at\" AND \"expires_at\" <= \"fetched_at\" + interval '24 hours'",
+      "name": "site_prices_expiry",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_prices"
+    },
+    {
       "value": "\"deal\" > 0",
       "name": "site_routes_deal",
       "entityType": "checks",
@@ -7273,6 +7882,13 @@
     {
       "value": "\"published_price\" IS NULL OR \"published_price\" > 0",
       "name": "site_routes_published_price",
+      "entityType": "checks",
+      "schema": "catalog",
+      "table": "site_routes"
+    },
+    {
+      "value": "\"valid_until\" > \"synced_at\" AND \"valid_until\" <= \"synced_at\" + interval '24 hours'",
+      "name": "site_routes_validity",
       "entityType": "checks",
       "schema": "catalog",
       "table": "site_routes"
