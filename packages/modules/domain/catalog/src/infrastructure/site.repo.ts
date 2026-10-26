@@ -2,6 +2,7 @@ import type { Executor } from "@bbc/db";
 import { and, asc, desc, eq, gt, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import { airports, placePhotos, sitePlaces, siteRoutes } from "@bbc/db/schema/catalog";
 
+import type { BookablePlace } from "../api";
 import type { MappingAirport, SitePlace, SiteRoute } from "../application/site-places";
 import type { PlacePhotoRow } from "./place-photos.repo";
 
@@ -193,6 +194,32 @@ export const siteRepo = {
       airports: r.airports.map((c) => c.trim()),
       airport: r.airport,
       photo: r.photo && r.photo.code !== null ? (r.photo as PlacePhotoRow) : null,
+    }));
+  },
+
+  /** ADR-IMPL-068: the airports a tap on the globe may open — every city's main airport and every US airport the site
+   *  lists a price from — with their names and places, in one round trip (UNION drops an airport listed twice). */
+  async bookable(exec: Executor): Promise<BookablePlace[]> {
+    const columns = {
+      code: airports.code,
+      name: airports.name,
+      city: airports.city,
+      countryCode: airports.countryCode,
+      lat: airports.lat,
+      lng: airports.lng,
+    };
+    const rows = await exec
+      .select(columns)
+      .from(sitePlaces)
+      .innerJoin(airports, eq(airports.code, sitePlaces.airport))
+      .union(exec.select(columns).from(siteRoutes).innerJoin(airports, eq(airports.code, siteRoutes.routeFrom)));
+    return rows.map((r) => ({
+      code: r.code.trim(),
+      name: r.name,
+      city: r.city,
+      countryCode: r.countryCode,
+      lat: Number(r.lat),
+      lng: Number(r.lng),
     }));
   },
 };

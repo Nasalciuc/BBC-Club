@@ -61,6 +61,11 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
     { enabled: false },
     "ADR-IMPL-067: the site's deals in Explore's Offers to inspire, after the member's own offers (from home, else the nearest city the site sells from); needs neither catalog.site_pins nor catalog.estimates",
   ],
+  [
+    "catalog.globe_tap",
+    { enabled: false },
+    "ADR-IMPL-068: Home sends the cities a tap anywhere on the globe may open (the site's cities and origins, the fares' and offers' arrivals); off = taps open pins only",
+  ],
 ];
 
 try {

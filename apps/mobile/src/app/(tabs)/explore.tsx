@@ -2,7 +2,7 @@ import { type Href, useIsFocused, useLocalSearchParams, useRouter } from "expo-r
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, type LayoutChangeEvent, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AirportVM, FareVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, BookablePlaceVM, FareVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import {
   BackButton,
@@ -14,11 +14,13 @@ import {
   RoundButton,
   SearchField,
   tokens,
+  type GlobeTap,
 } from "@bbc/ui";
 
 import { RequestSheet, type RequestSheetHandle } from "@/components/RequestSheet";
 import { ScreenStatusBar } from "@/components/screen-status-bar";
 import { DestinationDetails } from "@/features/explore/DestinationDetails";
+import { HOME_AIRPORT_MESSAGE } from "@/features/explore/discovery-logic";
 import { globeCentreY, sheetSnaps, sheetTop } from "@/features/explore/explore-layout";
 import { firstName } from "@/features/explore/greeting";
 import { GreetingHeader } from "@/features/explore/GreetingHeader";
@@ -37,6 +39,8 @@ import { SkyBackdrop, SkyClouds } from "@/features/explore/SkyBackdrop";
 import { useExploreHome } from "@/features/explore/useExploreHome";
 import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
+import { NOTHING_NEAR, exploreTap } from "@/features/globe/globe-tap-logic";
+import { cityToOpen } from "@/features/globe/open-city";
 import { useDestinations } from "@/features/globe/useDestinations";
 import { Landmarks } from "@/features/places/Landmarks";
 import { usePlaceLandmarks } from "@/features/places/usePlaceLandmarks";
@@ -89,7 +93,7 @@ export default function ExploreScreen() {
   const { offline, refresh } = useOffline();
   const { home, homeLoading, homeError, defaultFrom, retryHome } = useExploreHome();
   const { state, dispatch, retry } = useSearch({ defaultFrom });
-  const { pins, homeCoord, pinToAirport } = useDestinations(home, state.to);
+  const { pins, homeCoord } = useDestinations(home, state.to);
   // A chosen route's city shows its landmarks under its flight options, as the destination's page does (ADR-IMPL-064).
   const landmarks = usePlaceLandmarks(state.to?.code, offline);
 
@@ -111,9 +115,17 @@ export default function ExploreScreen() {
     if (state.to) setSheetIndex(STOP.route);
   }, [state.to, choices]);
 
+  // ADR-IMPL-068: what the last tap on the globe off the pins answered — nothing near there, or the member's own city —
+  // shown at rest under the search bar until the next choice; and the distance to the city a tap snapped to, shown under
+  // its country while that city is the one chosen.
+  const [tapAnswer, setTapAnswer] = useState<"none" | "home" | null>(null);
+  const [tapNote, setTapNote] = useState<{ code: string; line: string } | null>(null);
+  const nearest = tapNote && tapNote.code === state.to?.code ? tapNote.line : undefined;
+
   // The destination chosen on the globe comes with the dates it was last searched for, as from Search's recent list
   // (03, 04): Search and the globe keep one list.
   function selectDestination(airport: AirportVM) {
+    setTapAnswer(null);
     const dates = rememberSearch(airport)[0]?.dates;
     dispatch({ type: "selectDestination", airport });
     if (dates?.depart) {
@@ -122,9 +134,42 @@ export default function ExploreScreen() {
     setChoices((n) => n + 1);
   }
 
+  // A pin's tap and a tap on the globe that snapped to a city open the city one way (ADR-IMPL-068, decision 4): the same
+  // airport (`cityToOpen`: a city with a pin opens with its pin's), so the same search, `state.to` and recent search. A
+  // snap brings its distance line, when it has one; a pin's tap clears the last.
+  function openCity(code: string, snap: { place: BookablePlaceVM; note: string | null } | null) {
+    const airport = cityToOpen(code, home?.destinations ?? [], snap?.place ?? null);
+    if (!airport) return;
+    setTapNote(snap?.note ? { code: airport.code, line: snap.note } : null);
+    selectDestination(airport);
+  }
+
   function clearDestination() {
     dispatch({ type: "clearDestination" });
     setSheetIndex(STOP.rest);
+    setTapNote(null);
+  }
+
+  // ADR-IMPL-068: a tap anywhere on the globe at rest snaps to the nearest city the club sells within 600 km, opened as
+  // a pin's is; farther or over the sea, the calm answer; the member's own city, the home answer. Without Home's list
+  // (the flag off, an older server) the globe gets no handler, so no tap of its own: its pins and gestures are as
+  // before. The search stays the screen reader's way to a city: the globe gains no element.
+  const canTapGlobe = (home?.bookable?.length ?? 0) > 0;
+  function onTapGlobe(tap: GlobeTap) {
+    const what = exploreTap(mode, tap, home?.bookable, home?.home ?? null);
+    if (!what) return;
+    if (what.kind === "answer") {
+      setTapNote(null);
+      setTapAnswer(what.answer);
+      return;
+    }
+    // Opened as a pin's tap opens it.
+    openCity(what.place.code, { place: what.place, note: what.note });
+  }
+
+  function openSearch() {
+    setTapAnswer(null);
+    router.push("/search" as Href);
   }
 
   useEffect(() => {
@@ -147,16 +192,7 @@ export default function ExploreScreen() {
   }, [focused, mode]);
 
   function onSelectPin(code: string) {
-    const pin = pinToAirport(code);
-    if (!pin) return;
-    selectDestination({
-      code: pin.code,
-      city: pin.city,
-      name: pin.name,
-      countryCode: pin.countryCode,
-      lat: pin.lat,
-      lng: pin.lng,
-    });
+    openCity(code, null);
   }
 
   const search: SearchContext = { dates: state.dates, cabin: state.cabin, passengers: state.passengers };
@@ -263,6 +299,8 @@ export default function ExploreScreen() {
         home={homeCoord}
         selected={state.to?.code ?? null}
         onSelect={onSelectPin}
+        onTapPlace={canTapGlobe ? onTapGlobe : undefined}
+        offline={offline}
         centreY={centreY}
         band={band}
         sheetTop={sheetTop(sheetIndex, height, insets.top)}
@@ -320,6 +358,7 @@ export default function ExploreScreen() {
             <DestinationDetails
               look="route"
               testIDPrefix="explore"
+              nearest={nearest}
               state={state}
               offline={offline}
               onRetry={retrySearch}
@@ -395,16 +434,32 @@ export default function ExploreScreen() {
                 testID="explore.search"
                 tone="bar"
                 placeholder="Where would you like to go?"
-                onPress={() => router.push("/search" as Href)}
+                onPress={openSearch}
               />
             </View>
+            {/* ADR-IMPL-068: the answer to a tap that found no city to open. No image draws it: the attention notice
+                of sheet 41, read out as it appears. */}
+            {tapAnswer ? (
+              <View style={styles.answer}>
+                <NoticeCard
+                  testID={`explore.tap.${tapAnswer}`}
+                  tone="attention"
+                  title={tapAnswer === "home" ? HOME_AIRPORT_MESSAGE.title : NOTHING_NEAR.title}
+                  body={tapAnswer === "home" ? HOME_AIRPORT_MESSAGE.body : NOTHING_NEAR.body}
+                  link={{ label: NOTHING_NEAR.link, onPress: openSearch, testID: "explore.tap.search" }}
+                />
+              </View>
+            ) : null}
             <SheetRest
               home={home}
               homeLoading={homeLoading}
               onOpenOffer={onOpenOffer}
               onOpenDeal={onOpenDeal}
-              onSeeAll={() => setSheetIndex(STOP.all)}
-              onSearch={() => router.push("/search" as Href)}
+              onSeeAll={() => {
+                setTapAnswer(null);
+                setSheetIndex(STOP.all);
+              }}
+              onSearch={openSearch}
             />
           </View>
         )}
@@ -444,4 +499,6 @@ const styles = StyleSheet.create({
   rest: { gap: tokens.space.lg },
   // 13: the landmarks under the flight options, as far as the destination's page puts them (04's sheet gap).
   route: { gap: tokens.space.md },
+  // The answer under the search bar, inside the sheet's gutter as the bar is.
+  answer: { marginTop: tokens.space.md },
 });

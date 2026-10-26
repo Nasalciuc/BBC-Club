@@ -11,7 +11,7 @@ remains the fallback — e2e builds, no Mapbox token or native module, a Mapbox 
 
 **Revisit** for street-level zoom, terrain or offline tile regions.
 
-**Not in Figma:** drag and pinch (owner's request), zoom 1–3×, tilt ±80°, resume after 4 s idle.
+**Not in Figma:** drag and pinch (owner's request), zoom 1–3×, tilt ±80°, resume after 4 s idle. (Amended by ADR-IMPL-068: while Home sends what a tap may open — `catalog.globe_tap` on — a tap anywhere on the disc at rest, raced against the drag and the pinch, opens the nearest city the club sells within 600 km; a pin, its label or its 44-pt target stays the pin's.)
 
 **Open — DECISION (designer):** P3.RM2 shows the selected pin white; Globe · Map style says bronze only. The code follows the Map style.
 
