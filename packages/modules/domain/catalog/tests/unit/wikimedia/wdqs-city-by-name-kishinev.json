@@ -1,0 +1,71 @@
+{
+  "head": {
+    "vars": ["code", "city", "cityLabel", "cityCoord", "night", "image", "rank"]
+  },
+  "results": {
+    "bindings": [
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q21197"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Chișinău"
+        },
+        "code": {
+          "type": "literal",
+          "value": "RMO"
+        },
+        "rank": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#int",
+          "type": "literal",
+          "value": "0"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(28.835277777 47.022777777)"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Arch%20of%20Triumph%2C%20Chisinau%2C%20Republic%20of%20Moldova%20%2851160304626%20cropped%29.jpg"
+        },
+        "night": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ansamblul%20Catedralei%20%E2%80%9ENa%C8%99terea%20Domnului%E2%80%9D%203.jpg"
+        }
+      },
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q4222668"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Chișinău Ghetto"
+        },
+        "code": {
+          "type": "literal",
+          "value": "RMO"
+        },
+        "rank": {
+          "datatype": "http://www.w3.org/2001/XMLSchema#int",
+          "type": "literal",
+          "value": "2"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(28.833333333 47.0)"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/%D0%9A%D0%B8%D1%88%D0%B8%D0%BD%D1%91%D0%B2%D1%81%D0%BA%D0%BE%D0%B5%20%D0%B3%D0%B5%D1%82%D1%82%D0%BE%2C%201941.jpg"
+        }
+      }
+    ]
+  }
+}

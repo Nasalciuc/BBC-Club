@@ -41,6 +41,12 @@ const FLAGS: [string, Record<string, unknown>, string][] = [
     "ADR-IMPL-045: the site's city photos on their airports, synced nightly; on once the company confirms the rights; skip: [site ids]",
   ],
   [
+    "catalog.landmarks",
+    // Q177174: the Icelandic Phallological Museum, Reykjavík's most written-about sight (ADR-IMPL-064).
+    { enabled: false, skip: ["Q177174"] },
+    "ADR-IMPL-064: three landmarks per city from Wikidata and Commons, looked up by resolve-place-landmarks; off = none served, nothing asked; skip: [Wikidata items kept out]",
+  ],
+  [
     "catalog.site_pins",
     { enabled: false },
     "ADR-IMPL-045: up to 12 of the site's cities as pins from the member's home, priced by the formula; needs catalog.estimates",
