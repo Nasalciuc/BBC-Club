@@ -8,6 +8,7 @@ infra/caddy/cloudflare_ranges.caddy
 
 # Agent scratch / local worktrees — not part of the product tree.
 .claude/**
+.cursor/**
 
 # Reference-only design snapshots — not product code; keep source formatting as-is.
 isolated/**

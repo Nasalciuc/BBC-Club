@@ -84,6 +84,48 @@ describe("query budget per route", () => {
       `place photos grew from ${placesQ.length} to ${morePlaces.length} queries with six more cities:\n${morePlaces.join("\n")}`,
     ).toBeLessThanOrEqual(placesQ.length);
 
+    // ADR-IMPL-064, amendment 1: the cities on their satellite view read the landmarks flag (cached 30 s), and with it on
+    // their first landmarks in one more read — however many cities; with it off, no landmark is read. (Made-up rows.)
+    const onSatellite = ["LHR", "CDG", "HND", "DXB", "JFK"];
+    for (const [i, code] of onSatellite.entries()) {
+      await t.db.execute(sql`
+        INSERT INTO catalog.place_photos (code, status, lat, lng, expires_at)
+        VALUES (${code}, 'satellite', ${10 + i}, ${20 + i}, now() + interval '30 days')
+        ON CONFLICT (code) DO UPDATE SET status = 'satellite', lat = EXCLUDED.lat, lng = EXCLUDED.lng,
+          expires_at = EXCLUDED.expires_at`);
+      await t.db.execute(sql`
+        INSERT INTO catalog.place_landmarks (code, rank, kind, city_qid, landmark_qid, name, file, image_url, width,
+          height, licence, licence_url, credit, expires_at)
+        VALUES (${code}, 1, 'landmark', ${`Q${90 + i}`}, ${`Q${100 + i}`}, ${`Sight ${i}`}, ${`Sight ${i}.jpg`},
+          ${`https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Sight_${i}.jpg/1280px-Sight_${i}.jpg`},
+          1280, 853, 'CC BY-SA 4.0', 'https://creativecommons.org/licenses/by-sa/4.0', 'Ana Pop · Wikimedia Commons',
+          now() + interval '30 days')`);
+    }
+    const landmarkReads = (qs: string[]) => qs.filter((q) => /place_landmarks/.test(q));
+    const satellitePath = `/v1/places/photos?codes=${onSatellite.join(",")}`;
+    // Each `set` drops the flag's cache: both first answers read it.
+    await t.flags.set("catalog.landmarks", { enabled: false, skip: [] });
+    const landmarksOff = await queriesFor(satellitePath, cookie);
+    expect(landmarkReads(landmarksOff), `landmarks off, yet read:\n${landmarksOff.join("\n")}`).toEqual([]);
+    await t.flags.set("catalog.landmarks", { enabled: true, skip: [] });
+    const landmarksOn = await queriesFor(satellitePath, cookie);
+    expect(
+      landmarksOn.length,
+      `five satellite cities with landmarks ran ${landmarksOn.length} queries, ${landmarksOff.length} with them off:\n${landmarksOn.join("\n")}`,
+    ).toBeLessThanOrEqual(landmarksOff.length + 1);
+    expect(landmarkReads(landmarksOn)).toHaveLength(1);
+    expect(landmarksOn.length).toBeLessThanOrEqual(BUDGET["GET /v1/places/photos"]!);
+    const oneOn = await queriesFor("/v1/places/photos?codes=CDG", cookie);
+    const fiveOn = await queriesFor(satellitePath, cookie);
+    expect(
+      fiveOn.length,
+      `the stand-ins grew from ${oneOn.length} to ${fiveOn.length} queries with four more cities:\n${fiveOn.join("\n")}`,
+    ).toBeLessThanOrEqual(oneOn.length);
+    const standIns = (await (await t.app.request(satellitePath, cookie)).json()) as {
+      items: { code: string; kind: string }[];
+    };
+    expect(standIns.items.map((i) => i.kind)).toEqual(onSatellite.map(() => "photo"));
+
     // ADR-IMPL-042: the list reads a page's timelines and cities in one batch each — more requests, not more queries.
     for (const to of ["CDG", "ZRH"]) {
       const more = await t.submitRequestAs(

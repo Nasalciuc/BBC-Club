@@ -1,0 +1,83 @@
+{
+  "head": {
+    "vars": ["iata", "airport", "airportCoord", "city", "cityLabel", "cityCoord", "night", "image"]
+  },
+  "results": {
+    "bindings": [
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q21197"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Chișinău"
+        },
+        "airport": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q844951"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(28.835277777 47.022777777)"
+        },
+        "night": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ansamblul%20Catedralei%20%E2%80%9ENa%C8%99terea%20Domnului%E2%80%9D%203.jpg"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Arch%20of%20Triumph%2C%20Chisinau%2C%20Republic%20of%20Moldova%20%2851160304626%20cropped%29.jpg"
+        },
+        "iata": {
+          "type": "literal",
+          "value": "KIV"
+        },
+        "airportCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(28.930833333 46.927777777)"
+        }
+      },
+      {
+        "city": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q21197"
+        },
+        "cityLabel": {
+          "xml:lang": "en",
+          "type": "literal",
+          "value": "Chișinău"
+        },
+        "airport": {
+          "type": "uri",
+          "value": "http://www.wikidata.org/entity/Q844951"
+        },
+        "cityCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(28.835277777 47.022777777)"
+        },
+        "night": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Ansamblul%20Catedralei%20%E2%80%9ENa%C8%99terea%20Domnului%E2%80%9D%203.jpg"
+        },
+        "image": {
+          "type": "uri",
+          "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Arch%20of%20Triumph%2C%20Chisinau%2C%20Republic%20of%20Moldova%20%2851160304626%20cropped%29.jpg"
+        },
+        "iata": {
+          "type": "literal",
+          "value": "RMO"
+        },
+        "airportCoord": {
+          "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+          "type": "literal",
+          "value": "Point(28.930833333 46.927777777)"
+        }
+      }
+    ]
+  }
+}
