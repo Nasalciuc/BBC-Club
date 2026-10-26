@@ -141,12 +141,16 @@ export const placePhotosRepo = {
       .where(and(inArray(placePhotos.code, codes), notOverride));
   },
 
-  /** Not looked at this run (Pexels' share of the run was spent): due again at once, and the look not counted. */
-  async writeDeferred(exec: Executor, codes: string[]): Promise<void> {
+  /** Not looked at this run, and not for the city's fault — Pexels' share of the run was spent, or a source asked the
+   *  club to wait (a 429, ADR-IMPL-064): due again in `afterSeconds` (at once by default), the look not counted. */
+  async writeDeferred(exec: Executor, codes: string[], afterSeconds = 0): Promise<void> {
     if (codes.length === 0) return;
     await exec
       .update(placePhotos)
-      .set({ expiresAt: sql`now()`, attempts: sql`greatest(${placePhotos.attempts} - 1, 0)` })
+      .set({
+        expiresAt: sql`now() + make_interval(secs => ${Math.max(0, Math.ceil(afterSeconds))})`,
+        attempts: sql`greatest(${placePhotos.attempts} - 1, 0)`,
+      })
       .where(and(inArray(placePhotos.code, codes), notOverride));
   },
 

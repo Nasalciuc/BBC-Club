@@ -42,6 +42,7 @@ describe("extras ledger", () => {
         'deliveries_paused',
         'fares_home_destinations',
         'notif_sending_claimed',
+        'place_landmarks_one_marker',
         'place_photos_due',
         'requests_member_list',
         'site_places_airport',
@@ -55,6 +56,7 @@ describe("extras ledger", () => {
       "deliveries_pending_created",
       "fares_home_destinations",
       "notif_sending_claimed",
+      "place_landmarks_one_marker",
       "place_photos_due",
       "requests_member_list",
       "site_places_airport",
@@ -96,6 +98,7 @@ describe("extras ledger", () => {
     expect(second.out).not.toMatch(/catalog checks applied/);
     expect(second.out).not.toMatch(/notifications campaign not before applied/);
     expect(second.out).not.toMatch(/catalog fares keep live copy/);
+    expect(second.out).not.toMatch(/catalog place landmarks applied/);
     expect(second.out).not.toMatch(/catalog site prices applied/);
     expect(second.out).not.toMatch(/requests shown estimate source applied/);
     expect(second.out).not.toMatch(/catalog site route validity applied/);
@@ -141,6 +144,7 @@ describe("extras ledger", () => {
       "0036_notifications_campaign_not_before.sql",
       "0037_catalog_fares_keep_live_copy.sql",
       "0038_catalog_site_prices.sql",
+      "0039_catalog_place_landmarks.sql",
       "0040_requests_shown_estimate_source.sql",
       "0042_catalog_site_route_validity.sql",
     ]);

@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["expo/types", "bun"]
   },
-  "include": ["src/**/*.test.ts", "app.config.test.ts", "expo-env.d.ts"],
+  "include": ["src/**/*.test.ts", "src/types/**/*.d.ts", "app.config.test.ts", "expo-env.d.ts"],
   "exclude": ["node_modules"]
 }

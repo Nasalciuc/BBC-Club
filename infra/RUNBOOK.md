@@ -211,7 +211,41 @@ time gets a row in `catalog.place_photos`, and `resolve-place-photos` (worker, e
 first) looks it up: Wikimedia Commons through Wikidata; then Pexels, only when `PEXELS_API_KEY` is set (three
 questions a run at most — Pexels allows 200 an hour, 20,000 a month); else the satellite view, which the app draws
 from Mapbox with its `pk.` token. Until a city is looked up, and whenever a photo does not load, the app shows its own
-image. Every city is looked at again after 30–33 days. Only addresses and credits are stored — never an image.
+image. Every city is looked at again after 30–33 days. Only addresses and credits are stored — never an image. A run
+starts no request after its first 32 s (each may take 8; the job is stopped at 50): when the sources are slow, the
+cities it has not reached are put back (`deferred` in the run's counts in `platform.job_runs`), their look not counted.
+
+What Commons may give a city (ADR-IMPL-043, amended by ADR-IMPL-064): a JPEG photograph in landscape (1.2 to 2.4 wide
+for 1 high), wider than 1280 px, under CC0, public domain, CC BY / BY-SA or the Free Art License (`FAL`), with its
+author whenever the licence asks. A TIFF, PNG, SVG or GIF never (on Commons a TIFF is mostly a scan or a satellite
+image: the one a site city had was).
+
+**A landmark stands in** (ADR-IMPL-064, amendment 1): while `catalog.landmarks` is on (Landmarks, below), a city whose
+row is `satellite` is answered with its first landmark's photograph instead, credited as that photograph
+(`Photo: <author> · <licence> · Wikimedia Commons`, linked to its Commons page). A city not looked up yet (`pending`)
+is not: phones ask about it again within a minute, and would keep a stand-in for twelve hours past the city's own photo.
+The route composes it on each answer and never stores it: the row stays as it is and the job looks again on its own
+schedule, so a photo the city gets later, or an operator's photo, wins on the server's next answer. Phones keep a photo
+they have read for up to twelve hours, or until the app restarts: a change reaches a phone that already shows the city
+only then. To see which cities show one (the flag's `skip` aside):
+
+```sql
+SELECT p.code, p.status, l.rank, l.landmark_qid, l.name, l.licence
+FROM catalog.place_photos p
+JOIN LATERAL (SELECT * FROM catalog.place_landmarks x
+              WHERE x.code = p.code AND x.kind = 'landmark' ORDER BY x.rank LIMIT 1) l ON true
+WHERE p.status = 'satellite';
+```
+
+A stand-in the city should not have: put its `landmark_qid` in the flag's `skip` (Landmarks, below) — the server then
+answers with the next landmark, or the satellite view when none is left, within ~35 s — or give the city the club's own
+photo (below). Either way, phones that already show the stand-in keep it for up to twelve hours (or until the app
+restarts): the photos route has no revalidation, so nothing on the server reaches them sooner. A photograph Commons
+deletes is not taken down by the deletion: the landmark's row keeps its address until the landmarks job looks at the
+place again (30–33 days), so the server keeps answering it; a phone that has shown it keeps drawing it from its image
+cache (a photograph is kept on disk, across restarts), and only a phone that never loaded it shows the slot's fallback
+(the club's image, or the light tint). Take it down as any stand-in — its `landmark_qid` in `skip`, or the club's
+photo: the address changes, and the twelve hours above hold. A faster takedown than that is an app change.
 
 The worker reaches `query.wikidata.org`, `commons.wikimedia.org` and `api.pexels.com` over 443; members' phones load
 the photos from `upload.wikimedia.org` (or Wikimedia's newer thumbnail host) and `images.pexels.com`, and satellite
@@ -236,7 +270,36 @@ docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file 
 ```
 
 After setting `PEXELS_API_KEY` (restart the worker), let the satellite cities be looked at again now rather than within
-a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`.
+a month: `UPDATE catalog.place_photos SET expires_at = now() WHERE status = 'satellite';`. The same line after the release
+that accepted the Free Art License (ADR-IMPL-064, amendment 2): the cities it rescues get their own photo within
+minutes (ten a minute) instead of within a month.
+
+A city stuck on an old satellite view: read its row, then let the job look again now. Chișinău (RMO) is one: Wikidata
+answers the club's code, RMO, with the city and its photographs, so its `satellite` row is one resolved before this
+release (it waits out its 30–33 days otherwise) or one whose look a 429 cut short (before ADR-IMPL-064 that put it off
+for up to a day). The same lines, with the city's own code, also bring back now the cities that got no photo before
+ADR-IMPL-064 for reasons it fixed: an airport the club keeps under a code Wikidata has since demoted (now matched at
+any rank), and a city whose airport Wikidata does not know (now found by its name):
+
+```sql
+SELECT code, status, source, author, license, attempts, resolved_at, expires_at
+FROM catalog.place_photos WHERE code = 'RMO';
+UPDATE catalog.place_photos SET expires_at = now() WHERE code = 'RMO' AND status = 'satellite';
+```
+
+Within a minute (unless a hold is on, below) the row is `photo` with a Wikimedia credit — for RMO the cathedral's night
+view — or `satellite` again if Commons has no photograph that passes. Never on an operator's photo (`source =
+'override'`): that is `DELETE …/photo`'s job.
+
+Wikimedia asks a client it wants slower to wait (429 with `Retry-After`: WDQS up to 1000 s during an outage, Commons
+20–60 s). That is not the city's fault: the cities claimed wait that long, their look not counted, and the source is held
+for both Wikimedia jobs (place photos and landmarks) until `not_before`; a run that claims cities meanwhile asks nothing
+and puts them back. The holds, and ending one early (only when the 429 came from something already fixed):
+
+```sql
+SELECT source, not_before, not_before - now() AS left FROM catalog.source_holds;
+UPDATE catalog.source_holds SET not_before = now() WHERE source = 'wikidata';
+```
 
 Off: the flag row `catalog.place_photos` (seeded on by `scripts/seed-flags.ts`) — `{"enabled":false}` and within ~35 s
 the route answers no photos (the app shows its own image everywhere) and the job asks nothing outside:
@@ -251,9 +314,63 @@ Metrics: `bbc_place_photos_resolved{status,source}` (photos and satellite views 
 a day at most; `write`: the database refused a row; `airport`: a claimed city the airports query cannot match — a code
 not in upper case — tried again the same way, log line `place photos: no airport for a claimed city`),
 `bbc_place_photos_requested` (cities asked about for the first time). The log line `place photos: a source failed`
-carries the stage and the error — never the Pexels key. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
+carries the stage and the error — never the Pexels key; `place photos: a source asked the club to wait` carries the stage
+and the seconds, and `bbc_place_photos_held{stage}` counts the holds. An error `place photos: Pexels refused PEXELS_API_KEY` (401)
 means the key is wrong or revoked: until it is replaced, a city that shows a photo keeps it, and one Commons has no
 photo for gets its satellite view, looked at again each day.
+
+## Landmarks (ADR-IMPL-064)
+
+The app asks for a destination's landmarks (`GET /v1/places/:code/landmarks`): up to three, each with its photograph's
+address on Wikimedia, its size and its credit, from `catalog.place_landmarks` at once. `resolve-place-landmarks`
+(worker, every five minutes, two places a run) looks up the cities the app has shown a photo for and the site's
+cities: one WDQS question a city (a second when the city item it remembers answers nothing; 3–33 s, WDQS stops one at
+60 s) and Commons once per 50 files, a hundred files at most (two questions). A city is looked at again
+after 30–33 days; a look that failed, after six hours (what the city had stays). Only addresses and credits are stored.
+A place starts only while its slowest look (162 s) can end inside the run's 225 s (the job is stopped at 240): when
+WDQS is slow the second place waits for the next run, untouched (`later` in the run's counts in `platform.job_runs`).
+
+On: the flag row `catalog.landmarks` (seeded off by `scripts/seed-flags.ts`, with the skip list below). Off, the route
+answers no landmarks, the job asks nothing, and no landmark stands in for a city photo:
+
+```sql
+UPDATE platform.flags SET value = jsonb_set(value, '{enabled}', 'true'), updated_at = now() WHERE key = 'catalog.landmarks';
+```
+
+What a city shows, and how far the job has got:
+
+```sql
+SELECT rank, kind, city_qid, landmark_qid, name, licence, credit, fetched_at, expires_at
+FROM catalog.place_landmarks WHERE code = 'CDG' ORDER BY rank;
+SELECT kind, count(*) FROM catalog.place_landmarks GROUP BY kind;
+```
+
+`landmark` rows are shown, best first; a `fewer` row after them means the job found fewer than three and will not ask
+again for a month (rank 1 and `city_qid` null: no city found for the airport); a `failed` row alone means no look has
+worked yet (the job tries again in six hours).
+
+A wrong or unwanted landmark: add its Wikidata item (`landmark_qid`) to the flag's `skip` list — the route leaves it out
+within ~35 s; an app that already showed the city drops it at its next question for it, never sooner than 12 hours after
+the app's last answer for that city: within a minute of them while a screen showing the city is on screen, else when one
+next is, or at the app's next cold start. The server's city photo it may stand in for changes as fast, but phones that
+already show that photo keep it for up to twelve hours (Place photos, above); a destination never shows the stand-in's
+photograph twice, whichever of the two a phone has refreshed first (it compares photographs, not landmarks: a look that
+gives the same landmark another file can show it in both for up to twelve hours). Then let the city be looked at again
+so that another takes its place. The seeded list holds Q177174, Reykjavík's most written-about sight (the Icelandic
+Phallological Museum):
+
+```sql
+UPDATE platform.flags SET value = jsonb_set(value, '{skip}', coalesce(value->'skip', '[]') || '["Q243"]'), updated_at = now()
+WHERE key = 'catalog.landmarks';
+UPDATE catalog.place_landmarks SET fetched_at = now() - interval '1 minute', expires_at = now() WHERE code = 'CDG';
+```
+
+A 429 from WDQS or Commons holds that source (`catalog.source_holds`, above) for its Retry-After and stops the run: no
+place is marked for it. Metrics: `bbc_place_landmarks_resolved{found}` (places written, by how many landmarks they
+got), `bbc_place_landmarks_failed{stage}` (`wikidata`, `commons`: the source failed, the places keep what they have;
+`write`: the database refused a row), `bbc_place_landmarks_held{stage}`. Log lines `landmarks: a source failed`,
+`landmarks: a source asked the club to wait`, `landmarks: write refused`. The worker reaches `query.wikidata.org` and
+`commons.wikimedia.org` over 443; phones load the photographs from `upload.wikimedia.org`.
 
 ## The site's destinations (ADR-IMPL-045)
 
