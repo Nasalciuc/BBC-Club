@@ -1,8 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { errorForLog, type Executor } from "@bbc/db";
 import { flags as flagsTable } from "../infrastructure/schema";
-import type { Cache } from "../cache";
+import { createGenerations, createSnapshot, type Generations } from "../generations";
 
 export type FlagValue = { enabled?: boolean; variant?: string; segment?: string[]; [k: string]: unknown };
 
@@ -19,39 +19,43 @@ function parseValue(raw: unknown): FlagValue | null {
   return r.success ? (r.data as FlagValue) : null;
 }
 
-/** Feature flags cache 30s. Kill/pause skip the cache. A read error on kill/pause is fail-closed (treat as killed).
- *  A missing row is not killed. isEnabled/variant still fall back to the caller default. killState is the kill flag
- *  without that fallback: it throws when the flag cannot be read, for boot, which must not take an unreadable flag for
- *  a killed module (that would unmount it for the life of the process). */
+/** A kill or pause flag read longer ago than this is not trusted: the module counts as killed (ADR-IMPL-075). */
+export const KILL_STALE_MS = 10_000;
+
+/**
+ * Feature, kill and pause flags, from one snapshot of `platform.flags` per process (ADR-IMPL-075). The table's trigger
+ * bumps its generation in the writing statement, so a write — `set()` here, a job, an operator in psql — reaches every
+ * replica in about a second; reading a flag costs no query in between.
+ *
+ * Failure: an ordinary flag that cannot be read falls back to the caller's default (the last value read, when there is
+ * one). A kill or pause flag fails closed — killed, paused — when it cannot be read, or when this process has not been
+ * able to ask Postgres for more than KILL_STALE_MS. `killState` is the kill flag without that fallback: it throws when
+ * the flag cannot be read, for boot, which must not take an unreadable flag for a killed module (that would unmount it
+ * for the life of the process). `readStrict` throws the same way, for app-config, which keeps its own last good answer.
+ */
 export function createFlags(
   db: Executor,
   opts: {
-    ttlMs?: number;
     logger?: { warn: (o: object, m?: string) => void };
-    /** When set, ordinary flag reads go through it. Kill and pause never do. */
-    cache?: Cache;
+    /** The process's counters (createPlatform passes its own); a flags object made alone makes its own. */
+    generations?: Generations;
+    now?: () => number;
   } = {},
 ) {
-  const ttl = opts.ttlMs ?? 30_000;
-  const cache = new Map<string, { value: FlagValue | null; at: number }>();
+  const generations = opts.generations ?? createGenerations(db, { logger: opts.logger, now: opts.now });
+  const snapshot = createSnapshot(
+    generations,
+    "platform.flags",
+    async () => {
+      const rows = await db.select({ key: flagsTable.key, value: flagsTable.value }).from(flagsTable);
+      return new Map(rows.map((r) => [r.key, parseValue(r.value)] as const));
+    },
+    { now: opts.now },
+  );
 
-  async function readDb(key: string): Promise<FlagValue | null> {
-    const [row] = await db.select({ value: flagsTable.value }).from(flagsTable).where(eq(flagsTable.key, key)).limit(1);
-    return parseValue(row?.value);
-  }
-
-  const localMs = 5_000;
-
-  /** The flag row through the same caches as `read`, or the error that kept it from being read: no fallback. For a
-   *  caller that keeps its own last good answer (app-config) and must not take a default for what the database holds. */
+  /** The flag row as the snapshot holds it, or the error that kept the table from being read: no fallback. */
   async function readStrict(key: string): Promise<FlagValue | null> {
-    const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < (opts.cache ? localMs : ttl)) return hit.value;
-    const value = opts.cache
-      ? await opts.cache.getOrLoad(`flags:${key}`, Math.max(1, Math.ceil(ttl / 1000)), () => readDb(key))
-      : await readDb(key);
-    cache.set(key, { value, at: Date.now() });
-    return value;
+    return (await snapshot.get()).get(key) ?? null;
   }
 
   async function read(key: string): Promise<FlagValue | null> {
@@ -59,18 +63,20 @@ export function createFlags(
       return await readStrict(key);
     } catch (e) {
       opts.logger?.warn({ key, err: errorForLog(e) }, "flag read failed, using fallback");
-      // Without the shared cache, the last value this process read stands in for the one it could not.
-      return opts.cache ? null : (cache.get(key)?.value ?? null);
+      return null;
     }
   }
 
-  async function readKill(key: string): Promise<FlagValue | null> {
-    const [row] = await db.select({ value: flagsTable.value }).from(flagsTable).where(eq(flagsTable.key, key)).limit(1);
-    return parseValue(row?.value);
+  /** A kill or pause flag: throws when it cannot be read or when the counters are older than KILL_STALE_MS. */
+  async function readGuard(key: string): Promise<FlagValue | null> {
+    const value = await readStrict(key);
+    const stale = generations.staleMs();
+    if (stale > KILL_STALE_MS) throw new Error(`flags unread for ${Math.round(stale / 1000)} s`);
+    return value;
   }
 
   async function killState(module: string): Promise<boolean> {
-    const v = await readKill(`${module}.killed`);
+    const v = await readStrict(`${module}.killed`);
     return v?.enabled === true;
   }
 
@@ -83,11 +89,11 @@ export function createFlags(
       const v = await read(key);
       return typeof v?.variant === "string" ? v.variant : fallback;
     },
-    /** The kill flag as the database holds it; throws when it cannot be read. Per request, use isKilled. */
+    /** The kill flag as the snapshot holds it; throws when it cannot be read. Per request, use isKilled. */
     killState,
     async isKilled(module: string): Promise<boolean> {
       try {
-        return await killState(module);
+        return (await readGuard(`${module}.killed`))?.enabled === true;
       } catch (e) {
         opts.logger?.warn({ module, err: errorForLog(e) }, "kill flag unreadable, failing closed");
         return true;
@@ -95,8 +101,7 @@ export function createFlags(
     },
     async isConsumerPaused(consumer: string): Promise<boolean> {
       try {
-        const v = await readKill(`consumer.${consumer}.paused`);
-        return v?.enabled === true;
+        return (await readGuard(`consumer.${consumer}.paused`))?.enabled === true;
       } catch (e) {
         opts.logger?.warn({ consumer, err: errorForLog(e) }, "pause flag unreadable, failing closed");
         return true;
@@ -112,18 +117,14 @@ export function createFlags(
         .insert(flagsTable)
         .values({ key, value, description })
         .onConflictDoUpdate({ target: flagsTable.key, set: { value, description, updatedAt: sql`now()` } });
-      cache.delete(key);
-      await opts.cache?.invalidate(`flags:${key}`);
+      // The trigger bumped the counter; this process asks for it at once rather than within the second.
+      generations.invalidate();
     },
-    invalidate: (key?: string) => (key ? cache.delete(key) : cache.clear()),
-    /** Cached flag row. The limiter reads `ratelimit.<rule>` here — never a query the facade exposes. */
+    /** The next read asks Postgres whether the table changed (after a write this process made outside `set`). */
+    invalidate: () => generations.invalidate(),
+    /** The flag row, from the snapshot. The limiter reads `ratelimit.<rule>` here — never a query the facade exposes. */
     read,
     readStrict,
-    async killSwitches(modules: string[]): Promise<Record<string, boolean>> {
-      const out: Record<string, boolean> = {};
-      for (const m of modules) out[m] = await this.isKilled(m);
-      return out;
-    },
   };
 }
 export type Flags = ReturnType<typeof createFlags>;

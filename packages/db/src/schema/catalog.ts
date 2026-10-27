@@ -128,6 +128,8 @@ export const airports = catalog.table(
   (t) => [
     index("airports_city").on(t.city),
     index("airports_region").on(t.region),
+    // "Popular from" and the hubs: the busiest first, read in index order (0046, ADR-IMPL-075).
+    index("airports_popularity").on(t.popularity.desc().nullsFirst(), t.code),
     check("airports_description", sql`${t.description} IS NULL OR length(btrim(${t.description})) BETWEEN 1 AND 160`),
     // On the globe (0035).
     check("airports_coordinates", sql`${t.lat} BETWEEN -90 AND 90 AND ${t.lng} BETWEEN -180 AND 180`),

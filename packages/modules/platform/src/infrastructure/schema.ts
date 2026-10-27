@@ -119,6 +119,20 @@ export const flags = platform.table("flags", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** One counter per reference table (ADR-IMPL-075): a trigger on the table bumps it in the writing transaction, through
+ *  `platform.bump_generation(key)`, so a write from the app, a job or psql reaches every replica's snapshot in about a
+ *  second. Each process reads the whole table at most once a second. */
+export const generations = platform.table(
+  "generations",
+  {
+    key: text("key").primaryKey(),
+    value: bigint("value", { mode: "number" }).notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("generations_value_nonneg", sql`${t.value} >= 0`)],
+);
+
 export const jobRuns = platform.table(
   "job_runs",
   {
