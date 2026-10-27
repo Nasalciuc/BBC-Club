@@ -34,9 +34,10 @@ existed. Per request, measured on `main` faf33dd:
    in the statement that writes — the app, a job and psql alike: `platform.flags`; `catalog.airports`; `catalog.fares`;
    the site's places and routes (`catalog.site`); the offers and their targets (`proposals.offers`). The site's stored
    prices have no trigger: a member's search stores one, and a bump per search would empty every replica's pins all day.
-2. **Each process reads the counters at most once a second** (`createGenerations`: one small query, shared by every
-   caller of that moment, given up after 500 ms). A failed or slow read keeps the last counters; `staleMs()` says how old
-   they are. `invalidate()` makes the next read immediate, for the process that just wrote.
+2. **Each process reads the counters at most once a second on its own** (`createGenerations`: one small query, shared
+   by every caller of that moment, given up after 500 ms). `invalidate()` makes the next read immediate, for the process
+   that just wrote, so a process that writes reference tables may read them more often. A failed or slow read keeps the
+   last counters until a read succeeds (Postgres is asked again a second later); `staleMs()` says how old they are.
 3. **Snapshots and memos** (`platform.reference.snapshot`, `.memo`): a whole table, or results keyed by request, kept
    until a named generation moves, with an optional age bound for what changes with the clock and a cap on entries.
    While Postgres is away a snapshot serves what it holds. Hits and misses are counted (`cache_hit`/`cache_miss` by
@@ -59,7 +60,8 @@ existed. Per request, measured on `main` faf33dd:
 7. **Home's and the feed's fast 304.** The ETag stays the hash of the body as sent (serialised once). Beside it each
    process remembers, per member, the versions the body came from — the member's home and cabin, the generations of the
    tables the body reads, and the minute — and answers a phone holding that body 304 before any of the body's reads.
-   What moves with time alone (an offer's publish or expiry, a fare's day, a stored site price) moves the minute.
+   What moves with time alone (an offer's publish or expiry, a fare's day, a stored site price) moves the minute. The
+   member's responses to offers are not among the versions: the body shows none (8).
 8. **⚑7a: no response is read.** Home, the feed and an offer's page show `unseen`: nothing writes
    `engagement.offer_responses` in production. The read comes back with the feature that writes it.
 9. **Proposals owns the offer's verdict** (`verdict`: `visible`, `gone`, `not_yours`, `missing`), one read: an offer
@@ -77,16 +79,20 @@ existed. Per request, measured on `main` faf33dd:
 - Statements per request, measured through PgBouncer with the token alone (`load/bench/perf.ts`): Home 7 → 2 (the
   profile, the feed; the counters once a second), 1 on a fast 304; the feed 5 → 1; a fare 6 → 1; app-config 8 → 0; the
   typeahead and "Popular from" 4–6 → 0. With ADR-IMPL-074 and -076 the API's CPU on the launch mix falls from 4.4 to
-  0.9 ms a request (−80 %; −72 % with a fresh cookie; two runs over `main` at 0328ce3, 2 vCPU locally); k6 on staging
-  gives the absolute numbers.
-- A write is seen everywhere within about a second instead of up to 30 s (flags) or 60 s (pins on the API replicas). A
-  kill takes effect within a second, not at the next request; a process cut off from Postgres for 10 s counts every
-  module killed, as a failed read did before.
+  0.9 ms a request (−80 %; −72 % with a fresh cookie; two runs over `main` at 0328ce3, 2 vCPU locally); k6 on staging,
+  not run yet, is to give the absolute numbers.
+- A write is seen everywhere within about a second instead of up to 30 s (flags) or 60 s (pins on the API replicas),
+  by every process whose counters read; one whose reads fail keeps what it holds until they succeed again. A kill takes
+  effect within a second, not at the next request; a process cut off from Postgres for 10 s counts every module
+  killed, as a failed read did before.
 - Memory per replica: the airports ~4 MB, typeahead ≤ 5 000 answers, ≤ 2 000 entries per memo, ≤ 20 000 members'
   versions per BFF route — bounded, against a 512 MB limit.
 - A body may be up to a minute behind what its versions do not see: a site price stored meanwhile, as the pins'
   minute already allowed.
-- A trigger's bump holds its counter's row until the writing transaction ends: two transactions writing the same
-  reference table wait for each other at commit. Writers of these tables are an import, a job, an operator.
+- A trigger's bump updates its counter's row in the statement that writes, and the row stays locked until that
+  transaction ends: a second transaction writing a table with the same counter waits at its own write until the first
+  one ends (`proposals.offers` and `proposals.offer_targets` share one counter). Writers of these tables are an import,
+  a job, an operator: their transactions stay short. Two transactions that each write two reference tables, in
+  opposite orders, can deadlock on the counters; Postgres ends one of them.
 - Tests that change a reference table under a running app call `platform.reference.generations.invalidate()` — the
   second every other process would wait.
