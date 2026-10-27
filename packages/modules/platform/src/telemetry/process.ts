@@ -12,6 +12,9 @@ const WINDOW_MS = 1_000;
 let sampler: ReturnType<typeof monitorEventLoopDelay> | null = null;
 let read = { at: 0, p50: 0, p99: 0, max: 0 };
 
+/** When the process started, once: every platform reports the same second, never one past the true start. */
+const PROCESS_START_SECONDS = Math.floor(Date.now() / 1000 - process.uptime());
+
 function delayWindow() {
   if (sampler && Date.now() - read.at > WINDOW_MS) {
     const seconds = (ns: number) => (Number.isFinite(ns) ? ns / 1e9 : 0);
@@ -36,7 +39,6 @@ export function registerProcessMetrics(metrics: Metrics) {
     sampler = monitorEventLoopDelay({ resolution: 20 });
     sampler.enable();
   }
-  const startedAt = Math.round(Date.now() / 1000 - process.uptime());
   metrics.gauge(
     "process_cpu_seconds_total",
     () => {
@@ -47,7 +49,7 @@ export function registerProcessMetrics(metrics: Metrics) {
   );
   metrics.gauge("process_resident_memory_bytes", () => process.memoryUsage().rss);
   metrics.gauge("process_heap_used_bytes", () => process.memoryUsage().heapUsed);
-  metrics.gauge("process_start_time_seconds", () => startedAt);
+  metrics.gauge("process_start_time_seconds", () => PROCESS_START_SECONDS);
   metrics.gauge("event_loop_delay_p50_seconds", () => delayWindow().p50);
   metrics.gauge("event_loop_delay_p99_seconds", () => delayWindow().p99);
   metrics.gauge("event_loop_delay_max_seconds", () => delayWindow().max);
