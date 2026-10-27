@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
+import { namedStatements } from "./named-statements";
 
 export { query, queryEach, RowShapeError } from "./query";
 export { errorForLog, errorLine, type LoggedError } from "./errors";
@@ -12,9 +13,11 @@ export type Executor = Db | Tx;
 export type DbOptions = {
   /** app: small pool (Bun runs one process; Postgres holds ~100 connections). migrate/seed: 1. */
   max?: number;
-  /** Prepared statements are fine on a direct Postgres connection; disable behind pgbouncer (transaction mode). */
+  /** Named prepared statements (default): every query is parsed and planned once per server connection. Off sends each
+   *  query unnamed, planned at every call — the switch back if a pooler ever loses them (`DB_PREPARE=off`). Through
+   *  PgBouncer they need 1.21+ with `max_prepared_statements` above 0 (ADR-IMPL-074). */
   prepare?: boolean;
-  /** "transaction" when connecting through PgBouncer in transaction mode: no prepared statements, no startup params. */
+  /** "transaction" when connecting through PgBouncer in transaction mode: no startup parameters. */
   pooler?: "none" | "transaction";
   logger?: boolean | { logQuery: (q: string, params: unknown[]) => void };
   applicationName?: string;
@@ -22,9 +25,10 @@ export type DbOptions = {
 
 export function createDb(url: string, opts: DbOptions = {}) {
   const pooled = opts.pooler === "transaction";
+  const named = opts.prepare ?? true;
   const client = postgres(url, {
     max: opts.max ?? 10,
-    prepare: pooled ? false : (opts.prepare ?? true),
+    prepare: named,
     idle_timeout: 30,
     max_lifetime: 60 * 30,
     connect_timeout: 10,
@@ -37,7 +41,7 @@ export function createDb(url: string, opts: DbOptions = {}) {
   // No `schema` / `relations`: nothing uses Relational Queries (`db.query.*`), and passing them is what made this
   // file type-check only with checking switched off. Every query goes through the builder or `sql`.
   const db = drizzle({
-    client,
+    client: named ? namedStatements(client) : client,
     logger: opts.logger ?? false,
   });
   return Object.assign(db, {

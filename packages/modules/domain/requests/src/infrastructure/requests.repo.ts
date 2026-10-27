@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { query, queryEach, type Executor } from "@bbc/db";
+import { statement } from "@bbc/db/statements";
 import { col } from "@bbc/db/helpers";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 
@@ -78,6 +79,24 @@ export function claimUnsentSql(limit: number) {
 }
 
 /** Ownership is in the WHERE. Someone else's request returns undefined → route 404. */
+/** A member's list and one of their requests, built once per executor (ADR-IMPL-074); the list's order as
+ *  `listForMemberSelect` (the hot-query test's twin) has it. */
+const listRead = statement("requests_list", (e) =>
+  e
+    .select()
+    .from(requests)
+    .where(eq(requests.memberId, sql.placeholder("member")))
+    .orderBy(sql`(${requests.status} IN ('booked', 'closed'))`, desc(requests.createdAt))
+    .limit(51),
+);
+const oneRead = statement("requests_one", (e) =>
+  e
+    .select()
+    .from(requests)
+    .where(and(eq(requests.id, sql.placeholder("id")), eq(requests.memberId, sql.placeholder("member"))))
+    .limit(1),
+);
+
 export function createRequestsRepo(db: Executor) {
   return {
     /** Requests in progress first, newest first within each group: past the 50 the list shows, an older request still
@@ -94,15 +113,11 @@ export function createRequestsRepo(db: Executor) {
     },
 
     async listForMember(exec: Executor | undefined, memberId: string) {
-      return this.listForMemberSelect(exec, memberId);
+      return listRead(exec ?? db, { member: memberId });
     },
 
     async getForMember(exec: Executor | undefined, memberId: string, id: string) {
-      const [row] = await (exec ?? db)
-        .select()
-        .from(requests)
-        .where(and(eq(requests.id, id), eq(requests.memberId, memberId)))
-        .limit(1);
+      const [row] = await oneRead(exec ?? db, { member: memberId, id });
       return row;
     },
 

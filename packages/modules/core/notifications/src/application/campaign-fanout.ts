@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { inConst } from "@bbc/db/helpers";
 import { withTx, type Executor, type Tx } from "@bbc/db";
 import { campaigns, notificationsTable } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
@@ -30,7 +31,7 @@ async function claimCampaign(tx: Tx): Promise<Campaign | null> {
     .from(campaigns)
     .where(
       and(
-        inArray(campaigns.status, ["pending", "running"]),
+        inConst(campaigns.status, ["pending", "running"]),
         or(isNull(campaigns.notBefore), lte(campaigns.notBefore, sql`now()`)),
       ),
     )

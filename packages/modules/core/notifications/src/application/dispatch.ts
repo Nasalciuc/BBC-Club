@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { query, withTx, type Executor } from "@bbc/db";
-import { col } from "@bbc/db/helpers";
+import { col, eqConst } from "@bbc/db/helpers";
 import { event } from "@bbc/shared/events";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
@@ -110,7 +110,7 @@ function outcomeWhere(id: string, claim: string | null | undefined): SQL {
       ? sql`${notificationsTable.claimedAt} is null`
       : sql`${notificationsTable.claimedAt} = ${claim}::timestamptz`;
   return (
-    and(eq(notificationsTable.id, id), eq(notificationsTable.status, "sending"), sameClaim) ??
+    and(eq(notificationsTable.id, id), eqConst(notificationsTable.status, "sending"), sameClaim) ??
     eq(notificationsTable.id, id)
   );
 }
@@ -194,7 +194,7 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
       const tokens = await tx
         .select()
         .from(deviceTokens)
-        .where(and(eq(deviceTokens.memberId, memberId), eq(deviceTokens.active, true)));
+        .where(and(eq(deviceTokens.memberId, memberId), eqConst(deviceTokens.active, true)));
 
       if (tokens.length === 0) {
         await tx
@@ -264,7 +264,7 @@ export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise
       claimedAtText: sql<string | null>`${notificationsTable.claimedAt}::text`,
     })
     .from(notificationsTable)
-    .where(and(inArray(notificationsTable.id, ids), eq(notificationsTable.status, "sending")));
+    .where(and(inArray(notificationsTable.id, ids), eqConst(notificationsTable.status, "sending")));
   await deps.beforeTokens?.();
   const work: ClaimedWork[] = [];
   for (const row of rows) {
@@ -298,7 +298,7 @@ export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise
     const tokens = await deps.db
       .select()
       .from(deviceTokens)
-      .where(and(eq(deviceTokens.memberId, row.memberId), eq(deviceTokens.active, true)));
+      .where(and(eq(deviceTokens.memberId, row.memberId), eqConst(deviceTokens.active, true)));
     if (tokens.length === 0) {
       const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
         status: "sent",

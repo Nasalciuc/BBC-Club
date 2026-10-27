@@ -1,4 +1,4 @@
-/** createDb({ max: 2 }) queues the third waiter; statement_timeout still bounds runaways; pooled clients set prepare false. */
+/** createDb({ max: 2 }) queues the third waiter; statement_timeout still bounds runaways; pooled clients keep named statements unless prepare is false. */
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb } from "../src/testing/isolated-db";
@@ -38,10 +38,13 @@ describe("pool full", () => {
     expect((performance.now() - t0) / 1000).toBeLessThan(18);
   }, 25_000);
 
-  test("transaction pooler option disables prepare", () => {
+  test("named statements stay on behind the pooler; prepare: false turns them off", () => {
     const url = process.env.DATABASE_URL ?? "postgres://bbc:bbc@localhost:55432/bbc_test";
-    const db = createDb(url, { pooler: "transaction", max: 1 });
-    expect((db.raw as { options?: { prepare?: boolean } }).options?.prepare).toBe(false);
-    void db.close();
+    const pooled = createDb(url, { pooler: "transaction", max: 1 });
+    expect((pooled.raw as { options?: { prepare?: boolean } }).options?.prepare).toBe(true);
+    const off = createDb(url, { pooler: "transaction", prepare: false, max: 1 });
+    expect((off.raw as { options?: { prepare?: boolean } }).options?.prepare).toBe(false);
+    void pooled.close();
+    void off.close();
   });
 });
