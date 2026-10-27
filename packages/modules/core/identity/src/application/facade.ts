@@ -6,6 +6,7 @@ import { user } from "../infrastructure/schema";
 import { isOtpSendRequest, otpSendLock, otpSendTarget } from "../infrastructure/otp-send-lock";
 import { POSTMARK_TIMEOUT_MS } from "@bbc/email";
 import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
+import { sessionKey, type SessionCache } from "./session-cache";
 
 export type { Member, AuthVars, SessionInfo, IdentityFacade };
 
@@ -15,6 +16,8 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 export type IdentityFacadeOptions = {
   /** The floor under a reset or verification code's answer. Default: Postmark's timeout. Tests make it short. */
   otpAnswerFloorMs?: number;
+  /** ADR-IMPL-076: the sessions this process keeps (module.ts makes one); without it every read asks Better Auth. */
+  sessions?: SessionCache;
 };
 
 /** Implementation — imported by module.ts, not by other packages via api/index.ts. */
@@ -23,25 +26,51 @@ export function createIdentityFacade(
   db: Executor,
   options: IdentityFacadeOptions = {},
 ): Omit<IdentityFacade, "auth"> {
+  const sessions = options.sessions;
+
   /** `fresh` reads the session row and its user from the database instead of the signed cookie cache
-   *  (SESSION_COOKIE_CACHE_SECONDS): a deleted member or an ended session is anonymous at once, not a minute later. */
+   *  (SESSION_COOKIE_CACHE_SECONDS): a deleted member or an ended session is anonymous at once, not a minute later.
+   *  A read answers from what this process keeps for the token (ADR-IMPL-076); on a miss it reads fresh, so nothing is
+   *  kept that the database did not say within the minute. A fresh read puts its answer back. */
   async function getSession(headers: Headers, opts: { fresh?: boolean } = {}): Promise<SessionInfo | null> {
-    let s = await auth.api.getSession({ headers, query: opts.fresh ? { disableCookieCache: true } : undefined });
-    if (s?.user && !s.user.emailVerified && !opts.fresh) {
+    const key = sessions ? sessionKey(headers) : null;
+    if (key && sessions && !opts.fresh) {
+      const kept = sessions.get(key);
+      if (kept) return kept;
+    }
+    const fresh = opts.fresh === true || key !== null;
+    const info = await readSession(headers, fresh);
+    if (key && sessions) {
+      if (info) sessions.put(key, info.session, info.expiresAt);
+      else sessions.forget(key);
+    }
+    return info?.session ?? null;
+  }
+
+  async function readSession(
+    headers: Headers,
+    fresh: boolean,
+  ): Promise<{ session: SessionInfo; expiresAt: Date | null } | null> {
+    let s = await auth.api.getSession({ headers, query: fresh ? { disableCookieCache: true } : undefined });
+    if (s?.user && !s.user.emailVerified && !fresh) {
       // A code sign-in verifies an account registered unverified earlier, but Better Auth writes the user as it was
       // (emailVerified: false) into the cookie cache: read once more past the cache before calling the member unverified.
       s = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
     }
     if (!s?.user) return null;
     if (!s.user.emailVerified) return null;
+    const expiresAt = s.session.expiresAt ? new Date(s.session.expiresAt) : null;
     return {
-      member: {
-        id: s.user.id,
-        email: s.user.email,
-        emailVerified: true,
-        role: (s.user as { role?: string }).role ?? "member",
+      session: {
+        member: {
+          id: s.user.id,
+          email: s.user.email,
+          emailVerified: true,
+          role: (s.user as { role?: string }).role ?? "member",
+        },
+        sessionId: s.session.id,
       },
-      sessionId: s.session.id,
+      expiresAt,
     };
   }
 
@@ -64,7 +93,25 @@ export function createIdentityFacade(
 
   /** The same rule as the app's route: the password is asked for every time (club-guards runs for in-process calls). */
   async function deleteAccount(headers: Headers, password: string): Promise<void> {
+    const key = sessions ? sessionKey(headers) : null;
+    const member = key ? sessions?.memberOf(key) : null;
     await auth.api.deleteUser({ headers, body: { password } });
+    if (key) sessions?.forget(key);
+    if (member) sessions?.forgetMember(member);
+  }
+
+  /** ADR-IMPL-076: a write to /api/auth (a sign-out, a revoke, a change) forgets what this process keeps for the token's
+   *  member, whatever it answered: the next read asks the database. */
+  async function forgettingSessions(req: Request, run: () => Promise<Response>): Promise<Response> {
+    if (!sessions || SAFE_METHODS.has(req.method)) return run();
+    const key = sessionKey(req.headers);
+    const member = key ? sessions.memberOf(key) : null;
+    try {
+      return await run();
+    } finally {
+      if (key) sessions.forget(key);
+      if (member) sessions.forgetMember(member);
+    }
   }
 
   async function listUsersCreatedBefore(
@@ -104,7 +151,8 @@ export function createIdentityFacade(
    *  counted before the lock, so waiting on it tells nothing either, and waited out after the lock is released, so no
    *  connection is held meanwhile. A sign-in code goes to every address asked (nothing to hide, and a failure must
    *  reach Join at once); a 429 stays immediate (it is per IP). */
-  const handler: Auth["handler"] = async (req) => {
+  const handler: Auth["handler"] = (req) => forgettingSessions(req, () => answer(req));
+  const answer: Auth["handler"] = async (req) => {
     if (!isOtpSendRequest(req)) return auth.handler(req);
     const receivedAt = performance.now();
     const target = await otpSendTarget(req);

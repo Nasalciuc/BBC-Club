@@ -4,7 +4,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { rolePermissions } from "@bbc/shared/authz/permissions";
 
-/** authorize("x:y") with a permission nobody declared returns 403 to everyone, silently. */
+/** authorize("x:y") (or a gate's `permission`) with a permission nobody declared returns 403 to everyone, silently. */
 const declared = new Set(Object.values(rolePermissions).flat());
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const walk = (d: string): string[] =>
@@ -16,7 +16,8 @@ const walk = (d: string): string[] =>
 describe("every authorize() permission is declared", () => {
   const used = new Set<string>();
   for (const f of [...walk(join(repoRoot, "apps/api/src")), ...walk(join(repoRoot, "packages/modules"))]) {
-    for (const m of readFileSync(f, "utf8").matchAll(/authorize\("([a-z-]+:[a-z-]+)"/g)) {
+    // authorize("x:y") directly, or a route gate's policy { permission: "x:y" } (ADR-IMPL-075).
+    for (const m of readFileSync(f, "utf8").matchAll(/(?:authorize\(|permission: )"([a-z-]+:[a-z-]+)"/g)) {
       if (m[1]) used.add(m[1]);
     }
   }

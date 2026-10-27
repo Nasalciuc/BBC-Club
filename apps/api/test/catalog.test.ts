@@ -793,6 +793,8 @@ describe("GET /v1/home", () => {
       (await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie, "If-None-Match": etag } })).status,
     ).toBe(304);
     await t.db.execute(sql`UPDATE catalog.airports SET country_code = 'MX' WHERE code = 'GRU'`);
+    // The trigger bumped the airports' generation; every process sees it within a second (ADR-IMPL-075) — this one now.
+    t.platform.reference.generations.invalidate();
     const moved = await t.app.request("/v1/home", { headers: { Cookie: t.memberA.cookie, "If-None-Match": etag } });
     expect(moved.status).toBe(200);
     expect(

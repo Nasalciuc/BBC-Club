@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PhotoCreditVM } from "./places";
 import { PricePair, ProposalCardVM } from "./proposals";
+import { isIanaZone } from "../../time-zone";
 
 // Prices are numeric(10,2) in Postgres → string from Drizzle → parseFloat in the mapper.
 // No .int() on prices: fares have cents. PricePair lives in proposals.ts — never a second price shape.
@@ -72,22 +73,9 @@ export const FareVM = z.object({
 });
 export type FareVM = z.infer<typeof FareVM>;
 
-/** Whether this runtime can show a time in `tz` — the check the catalogue import makes (assertIanaZone). Remembered per
- *  name: a home screen repeats the same few zones. */
-const formattable = new Map<string, boolean>();
-function isFormattableZone(tz: string): boolean {
-  let ok = formattable.get(tz);
-  if (ok === undefined) {
-    try {
-      new Intl.DateTimeFormat("en-US", { timeZone: tz });
-      ok = true;
-    } catch {
-      ok = false; // "", "not/a_zone", or a runtime without Intl
-    }
-    if (formattable.size < 1000) formattable.set(tz, ok);
-  }
-  return ok;
-}
+/** Whether this runtime can show a time in `tz` — the one rule (shared/time-zone, ADR-IMPL-075), the catalogue
+ *  import's too; remembered per name there. */
+const isFormattableZone = isIanaZone;
 
 export const AirportVM = z.object({
   code: z.string().length(3),

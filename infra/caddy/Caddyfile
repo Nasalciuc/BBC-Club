@@ -31,7 +31,9 @@
 }
 
 (api_site) {
-	encode zstd gzip
+	# No `encode` (ADR-IMPL-075): every member request reaches the box through Cloudflare, which compresses towards the
+	# phone (brotli or gzip) whatever the origin sends; compressing here too spent the box's CPU on bytes that travel
+	# between Cloudflare and the origin for free. Measured in Grafana (the box, Caddy's CPU) before and after.
 
 	# operator-only endpoints: 404 to every address but Caddy's own; on the box, ask the containers (RUNBOOK § Daily shape)
 	@ops path /metrics /ready /status

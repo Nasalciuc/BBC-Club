@@ -7,6 +7,9 @@ import { testApp } from "./helpers/test-app";
 
 type Flag = { enabled?: boolean; variant?: string };
 
+/** The modules a process runs, as index.ts passes them (the registry's). */
+const MODULES = ["identity", "members", "catalog", "requests", "proposals", "notifications"] as const;
+
 /** Flags as the real ones behave: the strict reads (readStrict, killState) throw or hang with the database; variant
  *  and killSwitches swallow the error into the caller's fallback and a fail-closed kill. */
 function fakePlatform(values: Record<string, Flag>) {
@@ -39,30 +42,30 @@ function fakePlatform(values: Record<string, Flag>) {
 describe("appConfig", () => {
   it("serves the last answer it read in full while the database is down, within 2 s", async () => {
     const f = fakePlatform({ "app.min_supported_version": { variant: "2.0.0" }, "requests.killed": { enabled: true } });
-    const good = await appConfig(f.platform);
+    const good = await appConfig(f.platform, MODULES);
     expect(good.minSupportedVersion).toBe("2.0.0");
     expect(good.killSwitches).toMatchObject({ requests: true, proposals: false });
 
     f.state.mode = "down";
     const started = Date.now();
-    expect(await appConfig(f.platform)).toEqual(good);
+    expect(await appConfig(f.platform, MODULES)).toEqual(good);
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(f.warned).toContain("app-config served its last good answer");
 
     f.state.mode = "hang";
     const hangStarted = Date.now();
-    expect(await appConfig(f.platform)).toEqual(good);
+    expect(await appConfig(f.platform, MODULES)).toEqual(good);
     expect(Date.now() - hangStarted).toBeLessThan(2_000);
 
     f.state.mode = "ok";
     f.state.values["app.min_supported_version"] = { variant: "2.1.0" };
-    expect((await appConfig(f.platform)).minSupportedVersion).toBe("2.1.0");
+    expect((await appConfig(f.platform, MODULES)).minSupportedVersion).toBe("2.1.0");
   });
 
   it("a cold process with the database down answers the built-in values, not every module killed", async () => {
     const f = fakePlatform({});
     f.state.mode = "down";
-    const cold = await appConfig(f.platform);
+    const cold = await appConfig(f.platform, MODULES);
     expect(cold.minSupportedVersion).toBe("0.1.0");
     expect(Object.values(cold.killSwitches).some(Boolean)).toBe(false);
   });
@@ -71,17 +74,17 @@ describe("appConfig", () => {
     const ios = "itms-apps://apps.apple.com/app/id1234567890";
     const android = "market://details?id=com.buybusinessclass.club";
     const f = fakePlatform({ "app.store_url_ios": { variant: ios }, "app.store_url_android": { variant: android } });
-    expect((await appConfig(f.platform)).storeUrl).toEqual({ ios, android });
+    expect((await appConfig(f.platform, MODULES)).storeUrl).toEqual({ ios, android });
 
     f.state.values["app.store_url_android"] = { variant: "javascript:alert(1)" };
     f.state.values["app.store_url_ios"] = { variant: "https://apps.apple.com/app/id1234567890" };
-    expect((await appConfig(f.platform)).storeUrl).toEqual({ ios: "https://apps.apple.com/app/id1234567890" });
+    expect((await appConfig(f.platform, MODULES)).storeUrl).toEqual({ ios: "https://apps.apple.com/app/id1234567890" });
 
     f.state.values["app.store_url_ios"] = { variant: "http://apps.apple.com/app/id1234567890" };
-    expect(await appConfig(f.platform)).not.toHaveProperty("storeUrl");
+    expect(await appConfig(f.platform, MODULES)).not.toHaveProperty("storeUrl");
 
     const unset = fakePlatform({});
-    expect(await appConfig(unset.platform)).not.toHaveProperty("storeUrl");
+    expect(await appConfig(unset.platform, MODULES)).not.toHaveProperty("storeUrl");
   });
 
   it("GET /v1/app-config reads the flags the operator set", async () => {

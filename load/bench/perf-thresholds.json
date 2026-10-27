@@ -1,0 +1,57 @@
+{
+  "home": {
+    "stmtsPerReq": 2.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 10.0
+  },
+  "proposals": {
+    "stmtsPerReq": 1.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 4.0
+  },
+  "search": {
+    "stmtsPerReq": 1.25,
+    "plansPerReq": 1.3,
+    "cpuVsHealth": 18.0
+  },
+  "fare": {
+    "stmtsPerReq": 1.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 5.5
+  },
+  "profile": {
+    "stmtsPerReq": 2.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 6.5
+  },
+  "requests": {
+    "stmtsPerReq": 1.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 3.5
+  },
+  "inbox": {
+    "stmtsPerReq": 2.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 4.5
+  },
+  "airports-q": {
+    "stmtsPerReq": 0.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 2.0
+  },
+  "airports-popular": {
+    "stmtsPerReq": 0.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 2.0
+  },
+  "places-photos": {
+    "stmtsPerReq": 1.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 6.5
+  },
+  "app-config": {
+    "stmtsPerReq": 0.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 2.0
+  }
+}

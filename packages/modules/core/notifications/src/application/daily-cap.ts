@@ -1,23 +1,16 @@
 import { and, gte, inArray, lt, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { notificationsTable } from "@bbc/db/schema/notifications";
+import { zoneClock } from "@bbc/shared/time-zone";
 
 /** The categories the daily cap counts: one offer push a day, personal or broadcast. */
 export const OFFER_CATEGORIES = ["offers_personal", "offers_broadcast"] as const;
 
-const dayParts = new Map<string, Intl.DateTimeFormat>();
-
-/** The calendar day `at` falls on in `timeZone` (`2026-10-26`), by the same Intl data quiet hours read. The zone must be
- *  one (`safeTimeZone`'s answer). One formatter per zone for the life of the process. */
+/** The calendar day `at` falls on in `timeZone` (`2026-10-26`), by the same clock quiet hours read (shared/time-zone,
+ *  one formatter per zone). The zone must be one (`safeTimeZone`'s answer). */
 export function localDay(at: Date, timeZone: string): string {
-  let f = dayParts.get(timeZone);
-  if (!f) {
-    f = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
-    dayParts.set(timeZone, f);
-  }
-  const parts = f.formatToParts(at);
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
+  const t = zoneClock(at, timeZone);
+  return `${t.year}-${t.month}-${t.day}`;
 }
 
 /** Any send on the same local day as another is within a day and a DST hour of it; the window reaches further. */
