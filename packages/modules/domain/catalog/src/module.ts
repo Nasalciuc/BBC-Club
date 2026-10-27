@@ -4,6 +4,7 @@ import { z } from "zod";
 import { desc, gte, sql } from "drizzle-orm";
 import { errorForLog, type Db, type Executor } from "@bbc/db";
 import { demandDaily } from "@bbc/db/schema/catalog";
+import { deleteInBatches } from "@bbc/db/helpers";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { routeGate } from "@bbc/platform/ratelimit";
 import { SearchEvent } from "@bbc/platform";
@@ -506,12 +507,12 @@ export const catalogModule = (
       // An empty list, as for any day without one — an error would come back on every Try again.
       const sold = !when || searchWhenInRange(when);
 
-      const [fromApt, toApt, rows] = await Promise.all([
-        airportsRef.get(from),
-        airportsRef.get(to),
-        sold ? faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }) : Promise.resolve([]),
-      ]);
+      // The airports from memory first (ADR-IMPL-075): the origin's zone bounds a dated search's day (ADR-IMPL-077).
+      const [fromApt, toApt] = await Promise.all([airportsRef.get(from), airportsRef.get(to)]);
       if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+      const rows = sold
+        ? await faresRepo.search(conn, { from, to, cabin, ...(when ? { when, originTz: fromApt.tz } : {}) })
+        : [];
 
       const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
       // Demand counts the days fares are sold for; a day outside them is no route's demand.
@@ -772,6 +773,22 @@ export const catalogModule = (
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [],
       jobs: [
+        {
+          // ADR-IMPL-077: "Popular from" reads seven days; a search count is kept 400 days (a year and its season).
+          name: "retention-demand",
+          spec: {
+            cron: "30 4 * * *",
+            singleton: true,
+            timeoutMs: 120_000,
+            handler: async () => ({
+              demandDaysDeleted: await deleteInBatches(
+                conn,
+                demandDaily,
+                sql`${demandDaily.day} < now() - interval '400 days'`,
+              ),
+            }),
+          },
+        },
         {
           name: "expire-fares",
           spec: {

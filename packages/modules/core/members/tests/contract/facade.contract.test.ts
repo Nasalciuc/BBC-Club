@@ -226,6 +226,44 @@ describe("@bbc/members facade", () => {
     }
   });
 
+  it("deliverabilityOf answers what getStatus and preferencesOf answer, for a batch, in two statements (ADR-IMPL-077)", async () => {
+    const [a, b, none] = [randomId(), randomId(), randomId()];
+    const facade = createMembersFacade(db);
+    try {
+      await db.execute(
+        sql`INSERT INTO members.profile (member_id, status) VALUES (${a}, 'active'), (${b}, 'waitlist')`,
+      );
+      await db.execute(
+        sql`INSERT INTO members.notification_preferences (member_id, category, enabled) VALUES (${a}, 'offers_broadcast', false)`,
+      );
+      let statements = 0;
+      const counted = new Proxy(db, {
+        get(t, k) {
+          const v = Reflect.get(t, k);
+          if (k === "select")
+            return (...args: unknown[]) => {
+              statements++;
+              return (v as (...x: unknown[]) => unknown).apply(t, args);
+            };
+          return typeof v === "function" ? v.bind(t) : v;
+        },
+      });
+      const got = await facade.deliverabilityOf(counted as never, [a, b, none, a]);
+      expect(statements).toBe(2);
+      for (const id of [a, b, none]) {
+        expect(got.get(id)).toEqual({
+          status: await facade.getStatus(db, id),
+          prefs: await facade.preferencesOf(db, id),
+        });
+      }
+      expect(got.get(a)?.prefs).toEqual({ offers_personal: true, offers_broadcast: false });
+      expect(got.get(none)?.status).toBe("pending");
+      expect((await facade.deliverabilityOf(db, [])).size).toBe(0);
+    } finally {
+      await cleanup([a, b]);
+    }
+  });
+
   it("getProfile returns null for unknown member", async () => {
     const facade = createMembersFacade(db);
     const p = await facade.getProfile(undefined, randomId());

@@ -802,6 +802,37 @@ try {
     console.log(done);
   }
 
+  // ADR-IMPL-077: the lookups Better Auth makes on auth.*, and "Popular from"'s origin-first index — CONCURRENTLY,
+  // outside a transaction; then autovacuum on the tables that change most, one transaction each.
+  await applyConcurrentIndexFile(
+    db,
+    "0048_identity_auth_lookups.sql",
+    join(migrationsDir, "0048_identity_auth_lookups.sql"),
+    "auth lookups indexes applied",
+  );
+  await applyConcurrentIndexFile(
+    db,
+    "0049_catalog_demand_from_route.sql",
+    join(migrationsDir, "0049_catalog_demand_from_route.sql"),
+    "catalog demand by origin index applied",
+  );
+  for (const [file, done] of [
+    ["0050_platform_autovacuum.sql", "platform autovacuum applied"],
+    ["0051_notifications_autovacuum.sql", "notifications autovacuum applied"],
+    ["0052_platform_monitor_role.sql", "platform monitor role applied"],
+  ] as const) {
+    const path = join(migrationsDir, file);
+    if (!existsSync(path)) continue;
+    const applied = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${file}`)) as unknown[];
+    if (applied.length) continue;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+      await tx.execute(sql.raw(readFileSync(path, "utf8")));
+      await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES (${file})`);
+    });
+    console.log(done);
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);

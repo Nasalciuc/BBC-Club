@@ -153,6 +153,11 @@ describe("extras ledger", () => {
       "0045_platform_generations.sql",
       "0046_catalog_generations.sql",
       "0047_proposals_generations.sql",
+      "0048_identity_auth_lookups.sql",
+      "0049_catalog_demand_from_route.sql",
+      "0050_platform_autovacuum.sql",
+      "0051_notifications_autovacuum.sql",
+      "0052_platform_monitor_role.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

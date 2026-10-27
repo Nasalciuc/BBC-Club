@@ -94,6 +94,8 @@ export const demandDaily = catalog.table(
   },
   (t) => [
     primaryKey({ columns: [t.day, t.routeFrom, t.routeTo, t.cabin] }),
+    // "Popular from": one origin, the last days — equality first, then the range (0049, ADR-IMPL-077).
+    index("demand_daily_from_day").on(t.routeFrom, t.day),
     check("demand_daily_counts_nonneg", sql`${t.searches} >= 0 AND ${t.searchesWithoutFare} >= 0`),
     check("demand_daily_nofare_lte", sql`${t.searchesWithoutFare} <= ${t.searches}`),
   ],

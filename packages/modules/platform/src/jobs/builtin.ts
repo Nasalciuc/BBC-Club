@@ -1,4 +1,13 @@
 import { sql } from "drizzle-orm";
+import { deleteInBatches, eqConst } from "@bbc/db/helpers";
+import {
+  eventDeliveries,
+  eventDlq,
+  jobRuns,
+  kafkaProcessed,
+  rateLimitState,
+  rateLimits,
+} from "../infrastructure/schema";
 import type { Jobs } from "./index";
 import type { Metrics } from "../telemetry/metrics";
 import { applyDbGauges, collectDbReport, collectDbSnapshot, maybeAlertOps } from "../observe/db-health";
@@ -17,28 +26,41 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
   });
 
   jobs.register("retention", {
-    description: "drop journal partitions older than 24 months; delete done deliveries older than 30 days",
+    description:
+      "drop journal partitions older than 24 months; delete, in batches, what platform keeps for a while (ADR-IMPL-077)",
     cron: "0 4 * * *",
     singleton: true,
     timeoutMs: 300_000,
     handler: async ({ db }) => {
       const [{ dropped }]: any = await db.execute(sql`SELECT platform.drop_old_event_partitions(24) AS dropped`);
-      const del: any = await db.execute(
-        sql`DELETE FROM platform.event_deliveries WHERE status='done' AND processed_at < now() - interval '30 days'`,
-      );
-      const rl: any = await db.execute(sql`DELETE FROM platform.rate_limits WHERE expires_at < now()`);
-      const rlState: any = await db.execute(
-        sql`DELETE FROM platform.rate_limit_state WHERE tat < now() - interval '1 day'`,
-      );
-      const otpCd: any = await db.execute(
-        sql`DELETE FROM auth.otp_cooldown WHERE last_sent_at < now() - interval '1 day'`,
-      );
       return {
         partitionsDropped: dropped,
-        deliveriesDeleted: del.count ?? del.rowCount ?? 0,
-        rateLimitsDeleted: rl.count ?? rl.rowCount ?? 0,
-        rateLimitStateDeleted: rlState.count ?? rlState.rowCount ?? 0,
-        otpCooldownsDeleted: otpCd.count ?? otpCd.rowCount ?? 0,
+        // A delivery done 30 days ago is history; a dead or paused one waits for its operator.
+        deliveriesDeleted: await deleteInBatches(
+          db,
+          eventDeliveries,
+          sql`${eqConst(eventDeliveries.status, "done")} AND ${eventDeliveries.processedAt} < now() - interval '30 days'`,
+        ),
+        rateLimitsDeleted: await deleteInBatches(db, rateLimits, sql`${rateLimits.expiresAt} < now()`),
+        rateLimitStateDeleted: await deleteInBatches(
+          db,
+          rateLimitState,
+          sql`${rateLimitState.tat} < now() - interval '1 day'`,
+        ),
+        // 30 days of runs, and each job's last run whenever it was (/status reads it).
+        jobRunsDeleted: await deleteInBatches(
+          db,
+          jobRuns,
+          sql`${jobRuns.startedAt} < now() - interval '30 days' AND EXISTS (
+            SELECT 1 FROM platform.job_runs later WHERE later.job = ${jobRuns.job} AND later.started_at > ${jobRuns.startedAt})`,
+        ),
+        // Twice Kafka's default retention (7 days): a message a topic still holds is still recognised as processed.
+        kafkaProcessedDeleted: await deleteInBatches(
+          db,
+          kafkaProcessed,
+          sql`${kafkaProcessed.processedAt} < now() - interval '14 days'`,
+        ),
+        deadLettersDeleted: await deleteInBatches(db, eventDlq, sql`${eventDlq.failedAt} < now() - interval '90 days'`),
       };
     },
   });

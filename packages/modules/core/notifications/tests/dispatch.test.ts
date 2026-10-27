@@ -14,10 +14,11 @@ beforeAll(async () => {
 });
 afterAll(() => iso.drop());
 
+/** Every member active with both offer categories off — the batched read dispatch makes (ADR-IMPL-077). */
 const members = {
-  getStatus: async () => "active",
-  preferencesOf: async () => ({ offers_personal: false, offers_broadcast: false }),
-} as MembersFacade;
+  deliverabilityOf: async (_e: unknown, ids: readonly string[]) =>
+    new Map(ids.map((id) => [id, { status: "active", prefs: { offers_personal: false, offers_broadcast: false } }])),
+} as unknown as MembersFacade;
 
 function deps(push: PushSender, extra: Partial<DispatchDeps> = {}): DispatchDeps {
   return {
@@ -317,9 +318,8 @@ function membersOf(
   },
 ): MembersFacade {
   return {
-    getStatus: async () => status,
-    preferencesOf: async () => prefs,
-  } as MembersFacade;
+    deliverabilityOf: async (_e: unknown, ids: readonly string[]) => new Map(ids.map((id) => [id, { status, prefs }])),
+  } as unknown as MembersFacade;
 }
 
 test("a suspended member is suppressed before the stream send", async () => {

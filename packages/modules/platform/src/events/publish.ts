@@ -31,21 +31,22 @@ export function createPublisher(
         payload: input.payload,
         publishedBy: input.publishedBy,
       })
-      .returning({ id: domainEvents.id });
+      // occurred_at as Postgres writes it, to the microsecond: a JS Date keeps milliseconds and would break the poller's
+      // JOIN on (event_id, event_occurred_at).
+      .returning({ id: domainEvents.id, occurredAt: sql<string>`${domainEvents.occurredAt}::text` });
     if (!evt) throw new Error(`publish: the journal insert for ${input.type} returned no row`);
 
     const consumers = registry.consumersOf(input.type);
     if (consumers.length) {
-      // Copy occurred_at in SQL — JS Date only has ms precision and would break the poller JOIN.
+      // The event's key from the insert above, not read back from the journal: a read by id alone, without the
+      // partition key, probed every monthly partition (22 buffers against 3, ADR-IMPL-077).
       await tx.execute(sql`
         INSERT INTO platform.event_deliveries (event_id, event_occurred_at, consumer, aggregate_id)
-        SELECT e.id, e.occurred_at, v.consumer, ${input.aggregateId}
-        FROM platform.domain_events e
-        CROSS JOIN (VALUES ${sql.join(
+        SELECT ${evt.id}::bigint, ${evt.occurredAt}::timestamptz, v.consumer, ${input.aggregateId}
+        FROM (VALUES ${sql.join(
           consumers.map((c) => sql`(${c})`),
           sql`, `,
-        )}) AS v(consumer)
-        WHERE e.id = ${evt.id}`);
+        )}) AS v(consumer)`);
     } else if (!def.noConsumer && !def.deprecated) {
       metrics?.inc("events_without_consumer", { type: input.type });
     }

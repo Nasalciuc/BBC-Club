@@ -144,6 +144,19 @@ async function commitOutcome(
   return true;
 }
 
+/** Each member's active devices, for a batch of rows: one read (ADR-IMPL-077). */
+async function activeTokensOf(exec: Executor, memberIds: readonly string[]): Promise<Map<string, TokenRow[]>> {
+  const out = new Map<string, TokenRow[]>();
+  const ids = [...new Set(memberIds)];
+  if (ids.length === 0) return out;
+  const rows = await exec
+    .select()
+    .from(deviceTokens)
+    .where(and(inArray(deviceTokens.memberId, ids), eqConst(deviceTokens.active, true)));
+  for (const t of rows) out.set(t.memberId, [...(out.get(t.memberId) ?? []), t]);
+  return out;
+}
+
 /** Claim due rows, send outside the transaction, then record one outcome per notification. */
 export async function dispatch(deps: DispatchDeps): Promise<Record<string, number>> {
   const metrics: Metrics = {
@@ -162,13 +175,20 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
 
   const work = await withTx(deps.db, async (tx) => {
     const rows = await query(tx, dispatchClaimSql(CLAIM), PendingRow);
+    // ADR-IMPL-077: the claim's members and their devices in two reads, not two to three per row.
+    const memberIds = rows.map((r) => r.member_id);
+    const [context, tokensOf] = await Promise.all([
+      deps.members.deliverabilityOf(tx, memberIds),
+      activeTokensOf(tx, memberIds),
+    ]);
     const out: { row: PendingRow; tokens: TokenRow[] }[] = [];
     for (const row of rows) {
       metrics.claimed++;
       const memberId = row.member_id;
       const notificationId = row.id;
+      const member = context.get(memberId);
 
-      const status = await deps.members.getStatus(tx, memberId);
+      const status = member?.status ?? "pending";
       if (status !== "active") {
         await tx
           .update(notificationsTable)
@@ -179,7 +199,7 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
       }
 
       if (row.category === "offers_personal" || row.category === "offers_broadcast") {
-        const prefs = await deps.members.preferencesOf(tx, memberId);
+        const prefs = member?.prefs ?? { offers_personal: true, offers_broadcast: true };
         const allowed = row.category === "offers_personal" ? prefs.offers_personal : prefs.offers_broadcast;
         if (!allowed) {
           await tx
@@ -191,10 +211,7 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
         }
       }
 
-      const tokens = await tx
-        .select()
-        .from(deviceTokens)
-        .where(and(eq(deviceTokens.memberId, memberId), eqConst(deviceTokens.active, true)));
+      const tokens = tokensOf.get(memberId) ?? [];
 
       if (tokens.length === 0) {
         await tx
@@ -266,11 +283,18 @@ export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise
     .from(notificationsTable)
     .where(and(inArray(notificationsTable.id, ids), eqConst(notificationsTable.status, "sending")));
   await deps.beforeTokens?.();
+  // The same two reads as the inline claim's, for every row of the batch (ADR-IMPL-077).
+  const memberIds = rows.map((r) => r.memberId);
+  const [context, tokensOf] = await Promise.all([
+    deps.members.deliverabilityOf(deps.db, memberIds),
+    activeTokensOf(deps.db, memberIds),
+  ]);
   const work: ClaimedWork[] = [];
   for (const row of rows) {
     // The stream worker runs after the row waited in the queue: re-check what the inline path checks inside its claim
-    // transaction (dispatch.ts:171–192) — the member's status, then the offer preferences — through the same claim guard.
-    const status = await deps.members.getStatus(deps.db, row.memberId);
+    // transaction — the member's status, then the offer preferences — through the same claim guard.
+    const member = context.get(row.memberId);
+    const status = member?.status ?? "pending";
     if (status !== "active") {
       const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
         status: "suppressed",
@@ -282,7 +306,7 @@ export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise
       continue;
     }
     if (row.category === "offers_personal" || row.category === "offers_broadcast") {
-      const prefs = await deps.members.preferencesOf(deps.db, row.memberId);
+      const prefs = member?.prefs ?? { offers_personal: true, offers_broadcast: true };
       const allowed = row.category === "offers_personal" ? prefs.offers_personal : prefs.offers_broadcast;
       if (!allowed) {
         const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
@@ -295,10 +319,7 @@ export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise
         continue;
       }
     }
-    const tokens = await deps.db
-      .select()
-      .from(deviceTokens)
-      .where(and(eq(deviceTokens.memberId, row.memberId), eqConst(deviceTokens.active, true)));
+    const tokens = tokensOf.get(row.memberId) ?? [];
     if (tokens.length === 0) {
       const wrote = await commitOutcome(deps.db, deps, row.id, row.claimedAtText, {
         status: "sent",

@@ -84,3 +84,32 @@ export function inConst(column: PgColumn, values: readonly string[]): SQL {
   if (values.length === 0) throw new Error("inConst needs at least one constant");
   return sql`${column} IN (${sql.join(values.map(literal), sql`, `)})`;
 }
+
+/** Rows one retention statement deletes; the next batch is its own statement, so no delete holds a year's locks. */
+export const RETENTION_BATCH = 5_000;
+
+/**
+ * DELETE the rows of `table` that `where` names, `batch` at a time, each batch its own statement — its own transaction
+ * on the pool — until a batch comes back short (ADR-IMPL-077). One statement over a year of rows held its locks and
+ * its WAL to the end; batches let vacuum and the writers in between. Idempotent: run twice, the second deletes what
+ * aged meanwhile. `maxBatches` bounds one run; the next run carries on. Rows are picked by `ctid`, so any table works.
+ */
+export async function deleteInBatches(
+  exec: Executor,
+  table: PgTable,
+  where: SQL,
+  opts: { batch?: number; maxBatches?: number } = {},
+): Promise<number> {
+  const batch = opts.batch ?? RETENTION_BATCH;
+  const maxBatches = opts.maxBatches ?? 200;
+  let total = 0;
+  for (let i = 0; i < maxBatches; i++) {
+    const r = (await (exec as any).execute(
+      sql`DELETE FROM ${table} WHERE ctid IN (SELECT ctid FROM ${table} WHERE ${where} LIMIT ${sql.raw(String(batch))})`,
+    )) as { count?: number; rowCount?: number };
+    const n = r.count ?? r.rowCount ?? 0;
+    total += n;
+    if (n < batch) break;
+  }
+  return total;
+}

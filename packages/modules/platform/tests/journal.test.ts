@@ -67,6 +67,51 @@ describe("publish", () => {
     expect(r.deliveries).toBe(2);
   });
 
+  it("each delivery carries the event's key to the microsecond, without reading the journal back (ADR-IMPL-077)", async () => {
+    const p = platformWith(async () => {});
+    p.events.registerConsumer("test.happened", "testing.onHappenedToo", async () => {});
+    const log: string[] = [];
+    const spy = new Proxy(db, {
+      get(t, k) {
+        const v = Reflect.get(t, k);
+        if (k === "transaction")
+          return (fn: (tx: unknown) => unknown) =>
+            (v as (f: unknown) => unknown).call(t, (tx: any) =>
+              fn(
+                new Proxy(tx, {
+                  get(tt, kk) {
+                    const vv = Reflect.get(tt, kk);
+                    if (kk === "execute")
+                      return (q: any) => {
+                        log.push((db as any).dialect.sqlToQuery(q).sql);
+                        return vv.call(tt, q);
+                      };
+                    return typeof vv === "function" ? vv.bind(tt) : vv;
+                  },
+                }),
+              ),
+            );
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    const r = await spy.transaction((tx: any) =>
+      p.events.publish(tx, {
+        type: "test.happened",
+        aggregateType: "test",
+        aggregateId: "agg-key",
+        payload: { type: "test.happened", version: 1, value: "k" },
+        publishedBy: "tests",
+      }),
+    );
+    expect(r.deliveries).toBe(2);
+    expect(log.some((q) => q.includes("domain_events"))).toBe(false);
+    const [{ n }]: any = await db.execute(sql`
+      SELECT count(*)::int n FROM platform.event_deliveries d
+      JOIN platform.domain_events e ON e.id = d.event_id AND e.occurred_at = d.event_occurred_at
+      WHERE e.id = ${BigInt(r.eventId)}`);
+    expect(n).toBe(2);
+  });
+
   it("rejects an unknown type and an invalid payload at the source", async () => {
     const p = platformWith(async () => {});
     await expect(

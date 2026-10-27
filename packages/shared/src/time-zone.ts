@@ -28,6 +28,39 @@ export function isIanaZone(tz: string): boolean {
   return ok;
 }
 
+/**
+ * The instants a calendar day `ymd` (`2026-10-26`) of `timeZone` spans: [start, end), where start is the first instant
+ * whose wall clock in the zone shows that date and end the first that shows the next one — what Postgres reads as
+ * `(t AT TIME ZONE zone)::date = ymd`, so a column compared to the two bounds keeps its index (ADR-IMPL-077). A day
+ * whose midnight does not exist (a clock that springs forward at 00:00) starts when the clock reaches it; a day of 23
+ * or 25 hours spans 23 or 25. Found by bisection on the zone's clock, to the millisecond.
+ */
+export function zoneDayBounds(ymd: string, timeZone: string): { start: Date; end: Date } {
+  const [y, m, d] = ymd.split("-").map(Number) as [number, number, number];
+  const firstOf = (year: number, month: number, day: number): Date => {
+    const target = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const utcMidnight = Date.UTC(year, month - 1, day);
+    // Every zone is within 15 hours of UTC: the day's first instant lies in this window.
+    let lo = utcMidnight - 15 * 3_600_000;
+    let hi = utcMidnight + 15 * 3_600_000;
+    const dateAt = (t: number) => {
+      const c = zoneClock(new Date(t), timeZone);
+      return `${c.year}-${c.month}-${c.day}`;
+    };
+    while (hi - lo > 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (dateAt(mid) >= target) hi = mid;
+      else lo = mid;
+    }
+    return new Date(hi);
+  };
+  const next = new Date(Date.UTC(y, m - 1, d + 1));
+  return {
+    start: firstOf(y, m, d),
+    end: firstOf(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate()),
+  };
+}
+
 /** The wall clock in a zone, as numbers' text (`2026`, `10`, `26`, `09`, `05`). */
 export type ZoneClock = { year: string; month: string; day: string; hour: string; minute: string };
 

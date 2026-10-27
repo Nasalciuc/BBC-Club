@@ -7,6 +7,7 @@ import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { errorForLog, type Executor } from "@bbc/db";
+import { deleteInBatches, eqConst, inConst } from "@bbc/db/helpers";
 import type { JobContext } from "@bbc/platform";
 import { MemberDeletedV1 } from "@bbc/shared/events/member";
 import { campaigns, notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
@@ -247,6 +248,28 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
             singleton: true,
             timeoutMs: 60_000,
             handler: async () => cleanupDevices(conn),
+          },
+        },
+        {
+          // ADR-IMPL-077: the inbox shows the last 30; a notification that reached its end is kept 90 days, a finished
+          // campaign 180. A pending or sending one is never touched. In batches.
+          name: "retention-notifications",
+          spec: {
+            cron: "20 4 * * *",
+            singleton: true,
+            timeoutMs: 120_000,
+            handler: async () => ({
+              notificationsDeleted: await deleteInBatches(
+                conn,
+                notificationsTable,
+                sql`${inConst(notificationsTable.status, ["sent", "delivered", "failed", "suppressed"])} AND ${notificationsTable.createdAt} < now() - interval '90 days'`,
+              ),
+              campaignsDeleted: await deleteInBatches(
+                conn,
+                campaigns,
+                sql`${eqConst(campaigns.status, "done")} AND ${campaigns.finishedAt} < now() - interval '180 days'`,
+              ),
+            }),
           },
         },
       ],

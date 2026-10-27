@@ -46,7 +46,33 @@ try {
       AND (a.attname LIKE '%\\_id' ESCAPE '\\' OR a.attname = 'member_id')
       AND NOT EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = c.oid AND a.attnum = ANY(i.indkey))
   `);
-  for (const u of unindexed) problems.push(`unindexed reference column ${u.schema}.${u.table}.${u.column}`);
+  // A reference column nothing reads by needs no index (ADR-IMPL-077): an index costs at every insert and at every
+  // update of its column. While its index exists the entry is a candidate to drop — once production's `idx_scan` for it
+  // has stayed at 0 for two weeks under real members (⚑E, a PR of its own). Each entry says why nothing reads by it.
+  const NO_INDEX_NEEDED: Record<string, string> = {
+    "requests.requests.fare_id": "kept with the request and sent with it; no read looks a request up by its fare",
+    "requests.requests.offer_id": "kept with the request and sent with it; no read looks a request up by its offer",
+    "requests.requests.replaces_fare_id": "written into the specialist's e-mail; never a WHERE",
+    "requests.requests.crm_request_id": "the CRM's answer, stored; nothing looks a request up by it",
+    "notifications.notifications.ticket_id": "Expo's ticket, sent back to Expo by receipts; never a WHERE",
+    "notifications.notifications.source_event_id":
+      "where the row came from, for an operator; idempotency is the unique key",
+    "engagement.offer_responses.crm_activity_id": "the CRM's id, stored; nothing looks a response up by it",
+    "personalization.proposal_candidates.published_offer_id": "the offer a candidate became; never a WHERE",
+    "platform.event_deliveries.aggregate_id": "ordering reads it with the consumer (deliveries_ready), never alone",
+    "platform.event_dlq.event_id": "the journal's id beside the delivery's; replay reads by delivery_id",
+  };
+  for (const u of unindexed) {
+    const key = `${u.schema}.${u.table}.${u.column}`;
+    if (!(key in NO_INDEX_NEEDED)) problems.push(`unindexed reference column ${key}`);
+  }
+  const listed = await q(sql`
+    SELECT n.nspname || '.' || c.relname || '.' || a.attname AS key
+    FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname IN (${schemasIn()}) AND a.attnum > 0 AND NOT a.attisdropped`);
+  const columns = new Set(listed.map((r) => r.key));
+  for (const key of Object.keys(NO_INDEX_NEEDED))
+    if (!columns.has(key)) problems.push(`NO_INDEX_NEEDED names ${key}, which is no column: remove the entry`);
 
   // 4. Every timestamp column is timestamptz (guide §15.8)
   const naive = await q(sql`
@@ -133,6 +159,26 @@ try {
     if (!deleteTest.includes(t.table_name as string)) {
       problems.push(`member_id table ${t.table_schema}.${t.table_name} is not named in delete.test.ts`);
     }
+  }
+
+  // 13. The tables that change most of their rows every day vacuum after a fiftieth of them (0050, 0051, ADR-IMPL-077)
+  const TUNED = [
+    "platform.event_deliveries",
+    "platform.job_runs",
+    "platform.rate_limit_state",
+    "notifications.notifications",
+  ];
+  const tuned = await q(sql`
+    SELECT n.nspname || '.' || c.relname AS name, coalesce(c.reloptions, '{}')::text AS options
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname || '.' || c.relname IN (${sql.join(
+      TUNED.map((t) => sql`${t}`),
+      sql`, `,
+    )})`);
+  for (const name of TUNED) {
+    const row = tuned.find((r) => r.name === name);
+    for (const option of ["autovacuum_vacuum_scale_factor=0.02", "autovacuum_vacuum_insert_scale_factor=0.02"])
+      if (!row || !String(row.options).includes(option)) problems.push(`${name} lacks ${option}`);
   }
 } catch (e) {
   problems.push(`verify crashed: ${String(e)}`);

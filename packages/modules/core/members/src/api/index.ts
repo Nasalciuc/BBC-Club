@@ -63,6 +63,13 @@ export type MembersFacade = {
     q: { category: "offers_broadcast" | "offers_personal"; after: string | null; limit: number },
   ): Promise<AudienceMember[]>;
   preferencesOf(exec: Executor | undefined, memberId: string): Promise<NotificationPrefView>;
+  /** Each member's status and offer preferences, for a batch of notifications (ADR-IMPL-077): two statements whatever
+   *  the number of members — what getStatus and preferencesOf answer one by one. A member with no profile is `pending`;
+   *  a missing preference row means enabled. */
+  deliverabilityOf(
+    exec: Executor | undefined,
+    memberIds: readonly string[],
+  ): Promise<Map<string, { status: MemberStatus; prefs: NotificationPrefView }>>;
   updateProfile(
     exec: Executor | undefined,
     actorMemberId: string,

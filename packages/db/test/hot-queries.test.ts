@@ -3,7 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
 import { nodes, planOf, seqScans, sqlOf, usesIndex } from "../src/testing/plan";
-import { pollerClaimSql, pollerStatsSql } from "@bbc/platform";
+import { lastRunsSql, pollerClaimSql, pollerStatsSql } from "@bbc/platform";
+import { discoveryRepo } from "../../modules/domain/catalog/src/infrastructure/discovery.repo";
 import { dispatchClaimSql, dispatchReaperSql } from "../../modules/core/notifications/src/application/dispatch";
 import { faresRepo } from "../../modules/domain/catalog/src/infrastructure/fares.repo";
 import { claimUnsentSql, createRequestsRepo } from "../../modules/domain/requests/src/infrastructure/requests.repo";
@@ -68,6 +69,31 @@ async function seedVolume() {
   await iso.db.execute(
     sql.raw(`UPDATE requests.requests SET sent_to_crm = true, sent_at = now(), crm_request_id = 'crm-' || reference
              WHERE reference LIKE 'HOT%' AND substring(reference from 4)::int % 100 <> 0`),
+  );
+  // ADR-IMPL-077: the tables that grow by the day — a year of job runs (six jobs, one a minute each would be 3.1 million;
+  // 300 000 keep the test quick and the plans the same), a month of demand for 200 origins and 40 destinations each
+  // (8 000 routes a day: where the origin-first index wins, 2.6× fewer buffers, measured), and Better Auth's rate-limit
+  // rows of 50 000 addresses.
+  await iso.db.execute(
+    sql.raw(`
+    INSERT INTO platform.job_runs (job, status, started_at, finished_at, duration_ms)
+    SELECT (ARRAY['dispatch','campaign-fanout','send-requests','resolve-place-photos','db-observe','retention'])[1 + (g % 6)],
+           'succeeded', now() - (g || ' minutes')::interval, now() - (g || ' minutes')::interval, 10
+    FROM generate_series(1, 300000) g`),
+  );
+  await iso.db.execute(
+    sql.raw(`
+    INSERT INTO catalog.demand_daily (day, route_from, route_to, cabin, searches, searches_without_fare)
+    SELECT date_trunc('day', now()) - (d || ' days')::interval, lpad(o::text, 3, '0'), lpad(t::text, 3, '0'),
+           'business', 1 + (d % 7), 0
+    FROM generate_series(0, 29) d, generate_series(1, 200) o, generate_series(1, 40) t
+    ON CONFLICT DO NOTHING`),
+  );
+  await iso.db.execute(
+    sql.raw(`
+    INSERT INTO auth.rate_limit (id, key, count, last_request)
+    SELECT 'rl-' || g, '10.0.' || (g / 256) || '.' || (g % 256) || '/sign-in/email', 1, 0
+    FROM generate_series(1, 50000) g`),
   );
   await iso.db.execute(sql`ANALYZE`);
 }
@@ -152,6 +178,37 @@ describe("hot queries choose their index", () => {
         ),
       index: "notif_offer_sends",
       noSeqScanOn: ["notifications"],
+    },
+    {
+      // ADR-IMPL-077: /status's last run per job — one probe per job, newest first, never a sort of the table.
+      name: "last run per job",
+      statement: () =>
+        lastRunsSql([
+          "dispatch",
+          "campaign-fanout",
+          "send-requests",
+          "resolve-place-photos",
+          "db-observe",
+          "retention",
+        ]),
+      index: "job_runs_job_started",
+      noSeqScanOn: ["job_runs"],
+      noSort: true,
+    },
+    {
+      // ADR-IMPL-077: "Popular from" — one origin's last seven days, on the origin-first index (0049).
+      name: "searched from an origin",
+      statement: () =>
+        sqlOf(discoveryRepo.searchedFromSelect(iso.db, "007", new Date(Date.now() - 7 * 86_400_000), 5, 12)),
+      index: "demand_daily_from_day",
+      noSeqScanOn: ["demand_daily"],
+    },
+    {
+      // ADR-IMPL-077: Better Auth reads a request's rate-limit row by key, on every /api/auth/* request (0048).
+      name: "auth rate limit by key",
+      statement: () => sql`SELECT * FROM auth.rate_limit WHERE key = ${"10.0.1.7/sign-in/email"}`,
+      index: "rate_limit_key",
+      noSeqScanOn: ["rate_limit"],
     },
     {
       name: "delivery stats",
