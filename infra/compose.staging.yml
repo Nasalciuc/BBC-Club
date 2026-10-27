@@ -1,6 +1,9 @@
 # Adds staging as EXTRA services in the same project. Same Caddy, second domain, separate DB.
 # Disposable: no backups, no WAL archiving, no error tracking. Removed when staging gets its own machine.
 # Every service here has a memory limit and goes first when the box runs out (oom_score_adj 500, docker-compose.yml).
+# 2 048 MB in all (ADR-IMPL-073): 384 per API replica and the worker, 768 for Postgres, so the monitoring fits beside
+# production. API_MEMORY_STAGING, WORKER_MEMORY_STAGING and POSTGRES_MEMORY_STAGING in staging.env give one back when its
+# memory runs close to the limit (RUNBOOK § Monitoring, the memory panel).
 services:
   pgbouncer-staging:
     image: edoburu/pgbouncer:v1.24.1-p0
@@ -59,7 +62,7 @@ services:
     oom_score_adj: 500
     deploy:
       replicas: ${API_REPLICAS_STAGING:-2}
-      resources: { limits: { cpus: "1.0", memory: 512m } }
+      resources: { limits: { cpus: "1.0", memory: "${API_MEMORY_STAGING:-384m}" } }
 
   worker-staging:
     image: ${API_IMAGE_STAGING:?set API_IMAGE_STAGING to a SHA-tagged image (deploy.sh writes it)}
@@ -91,7 +94,7 @@ services:
       start_period: 20s
     stop_grace_period: 60s
     oom_score_adj: 500
-    deploy: { resources: { limits: { cpus: "1.0", memory: 512m } } }
+    deploy: { resources: { limits: { cpus: "1.0", memory: "${WORKER_MEMORY_STAGING:-384m}" } } }
 
   postgres-staging:
     image: postgres:16 # plain image: no archiving here
@@ -116,7 +119,7 @@ services:
     volumes: ["postgres_staging_data:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
     oom_score_adj: 500
-    deploy: { resources: { limits: { cpus: "1.0", memory: 1g } } }
+    deploy: { resources: { limits: { cpus: "1.0", memory: "${POSTGRES_MEMORY_STAGING:-768m}" } } }
 
   cron-staging:
     image: alpine:3.20

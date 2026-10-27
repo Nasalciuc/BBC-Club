@@ -1,0 +1,471 @@
+{
+  "uid": "bbc-app",
+  "title": "BBC Club · the app",
+  "description": "Requests, latency, CPU per request and the database's work per request — the before and after of the performance PRs (ADR-IMPL-073).",
+  "tags": ["bbc"],
+  "timezone": "browser",
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "env",
+        "label": "Environment",
+        "type": "custom",
+        "query": "production,staging",
+        "current": { "selected": true, "text": "production", "value": "production" },
+        "options": [
+          { "selected": true, "text": "production", "value": "production" },
+          { "selected": false, "text": "staging", "value": "staging" }
+        ],
+        "hide": 0,
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Requests per second, by route",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum by (route) (rate(bbc_http_requests{env=\"$env\",route!~\"/health|/ready|/status|/metrics|/v1/internal/run/:job\"}[5m]))",
+          "legendFormat": "{{route}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "The club's requests: the probes (/health, /ready, /status, /metrics) and the cron's job runs are left out, here and below."
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "p95 by route (ms)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "histogram_quantile(0.95, sum by (route, le) (rate(bbc_http_duration_ms_bucket{env=\"$env\",route!~\"/health|/ready|/status|/metrics|/v1/internal/run/:job\"}[5m])))",
+          "legendFormat": "{{route}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never", "thresholdsStyle": { "mode": "line" } },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 300 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "300 ms is the launch p99 target (docs/perf/CAPACITY.md)."
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "p99 by route (ms)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "histogram_quantile(0.99, sum by (route, le) (rate(bbc_http_duration_ms_bucket{env=\"$env\",route!~\"/health|/ready|/status|/metrics|/v1/internal/run/:job\"}[5m])))",
+          "legendFormat": "{{route}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never", "thresholdsStyle": { "mode": "line" } },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 300 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "4xx and 5xx per second",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum by (status) (rate(bbc_http_requests{env=\"$env\",status=~\"[45]..\",route!~\"/health|/ready|/status|/metrics|/v1/internal/run/:job\"}[5m]))",
+          "legendFormat": "{{status}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "More than 2 % of production's requests in 5xx for 10 minutes is an alert."
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "API CPU per request (ms)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "1000 * sum(rate(bbc_process_cpu_seconds_total{job=~\"api|api-staging\",env=\"$env\"}[5m])) / sum(rate(bbc_http_requests{job=~\"api|api-staging\",env=\"$env\",route!~\"/health|/ready|/status|/metrics|/v1/internal/run/:job\"}[5m]))",
+          "legendFormat": "CPU per request",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" }, "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "The API replicas' CPU seconds, the probes' included, over the club's requests: what decides how many requests two cores carry (docs/perf/CAPACITY.md). Read it under traffic: idle, the probes' share is all there is."
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Event-loop delay, p99 (ms)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "1000 * max by (job, instance) (bbc_event_loop_delay_p99_seconds{env=\"$env\"})",
+          "legendFormat": "{{job}} {{instance}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms", "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" }, "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "How late the event loop runs: a replica with more work than its core shows it here first."
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Database statements per request",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum(rate(bbc_db_statements_total{env=\"$env\"}[5m])) / sum(rate(bbc_http_requests{job=~\"api|api-staging\",env=\"$env\",route!~\"/health|/ready|/status|/metrics|/v1/internal/run/:job\"}[5m]))",
+          "legendFormat": "statements per request",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "Every statement of the database, the worker's jobs and the probes' included, over the club's requests. Read it under traffic."
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Plans per statement",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum(rate(bbc_db_statement_plans_total{env=\"$env\"}[5m])) / sum(rate(bbc_db_statements_total{env=\"$env\"}[5m]))",
+          "legendFormat": "plans per statement",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "1 when every statement is planned again; near 0 once statements are prepared and kept. Needs pg_stat_statements.track_planning."
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Postgres time: execution and planning (s per s)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum(rate(bbc_db_statement_exec_seconds_total{env=\"$env\"}[5m]))",
+          "legendFormat": "execution",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum(rate(bbc_db_statement_plan_seconds_total{env=\"$env\"}[5m]))",
+          "legendFormat": "planning",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" }, "min": 0 },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "PgBouncer: parses and binds per second",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum(rate(bbc_pgbouncer_binds_total{env=\"$env\"}[5m]))",
+          "legendFormat": "binds",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum(rate(bbc_pgbouncer_client_parses_total{env=\"$env\"}[5m]))",
+          "legendFormat": "client parses",
+          "range": true
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum(rate(bbc_pgbouncer_server_parses_total{env=\"$env\"}[5m]))",
+          "legendFormat": "server parses",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "A bind with no parse beside it runs a statement prepared before (PgBouncer 1.24)."
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Cache hit ratio, by namespace",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum by (ns) (rate(bbc_cache_hit{env=\"$env\"}[5m])) / (sum by (ns) (rate(bbc_cache_hit{env=\"$env\"}[5m])) + sum by (ns) (rate(bbc_cache_miss{env=\"$env\"}[5m])))",
+          "legendFormat": "{{ns}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Event queue",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "max(bbc_queue_pending{env=\"$env\"})",
+          "legendFormat": "pending",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "max(bbc_queue_dead{env=\"$env\"})",
+          "legendFormat": "dead",
+          "range": true
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "max(bbc_queue_oldest_pending_seconds{env=\"$env\"})",
+          "legendFormat": "oldest pending (s)",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "description": "From the worker, where the poller runs."
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Failed jobs (10 min)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "sum by (exported_job) (increase(bbc_job_failed{env=\"$env\"}[10m]))",
+          "legendFormat": "{{exported_job}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Process memory (RSS)",
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+          "expr": "max by (job, instance) (bbc_process_resident_memory_bytes{env=\"$env\"})",
+          "legendFormat": "{{job}} {{instance}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "lineWidth": 1, "fillOpacity": 0, "showPoints": "never" },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    }
+  ]
+}

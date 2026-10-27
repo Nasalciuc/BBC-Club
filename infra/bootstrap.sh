@@ -147,6 +147,8 @@ POSTGRES_PASSWORD="$(env_value "$ENV_FILE" POSTGRES_PASSWORD)"
 missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET API_DOMAIN ACME_EMAIL API_IMAGE; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done
 if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 if glitchtip_wanted "$ENV_FILE"; then for k in GLITCHTIP_DB_PASSWORD GLITCHTIP_SECRET ERRORS_DOMAIN; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
+# Grafana will not start its alerting without a webhook to send to, nor without its admin's password (ADR-IMPL-073).
+if monitoring_wanted "$ENV_FILE"; then for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 [[ ${#missing[@]} -eq 0 ]] || { echo "❌ not filled in, or unreadable, in $ENV_FILE: ${missing[*]}"; exit 2; }
 url_safe POSTGRES_PASSWORD "$POSTGRES_PASSWORD" "$ENV_FILE"
 if glitchtip_wanted "$ENV_FILE"; then url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"; fi
@@ -185,6 +187,12 @@ if redis_kafka_wanted "$ENV_FILE" "$stg_file"; then
 fi
 if glitchtip_wanted "$ENV_FILE"; then
   DC="$DC --profile glitchtip"
+fi
+if monitoring_wanted "$ENV_FILE"; then
+  DC="$DC --profile monitoring"
+fi
+if media_wanted "$ENV_FILE"; then
+  DC="$DC --profile media"
 fi
 export ENV_FILE
 $DC build -q postgres
@@ -231,6 +239,7 @@ for i in {1..60}; do
     echo "  1. DNS: $(env_value "$ENV_FILE" API_DOMAIN) → $(curl -s ifconfig.me) (Cloudflare proxied, Full strict)"
     [[ "$MODE" == "production" ]] && echo "  2. backups: bash $INFRA_DIR/pgbackrest-init.sh   then   bash $INFRA_DIR/restore-test.sh"
     echo "  3. Uptime Kuma via tunnel: ssh -L 3001:uptime-kuma:3001 root@$(hostname) — add http://api:8000/health (1m) + /status (5m)"
+    monitoring_wanted "$ENV_FILE" && echo "     Grafana via tunnel: ssh -L 3000:127.0.0.1:3000 root@$(hostname) — http://localhost:3000, user admin (RUNBOOK § Monitoring)"
     echo "  4. put every secret in the company password manager"
     exit 0
   fi

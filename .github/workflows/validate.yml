@@ -129,3 +129,68 @@ jobs:
             check "$PWD/infra/caddy" "$tls"
             check "$work/pulls" "$tls"
           done
+
+  # A job of its own beside validate, whose 15 minutes are spoken for (ADR-IMPL-073).
+  monitoring:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Monitoring stack
+        # The profile ADR-IMPL-073 adds, the way the box runs it: Compose reads it with every overlay; VictoriaMetrics
+        # checks its scrape file (-dryRun), then runs with the compose file's flags; Grafana starts beside it with the
+        # compose file's image, environment and memory limit and the repository's provisioning, reaches it, and holds its
+        # datasource, the two dashboards, the contact point and the five alert rules — no provisioning or plugin error in
+        # its log, no kill for memory. Nothing here reaches the box.
+        run: |
+          set -euo pipefail
+          export API_IMAGE=ci/api:0000000 API_IMAGE_STAGING=ci/api:0000000
+          compose="docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml -f infra/compose.staging.yml"
+          $compose --profile monitoring --profile media config -q
+          $compose --profile monitoring config --format json > "$RUNNER_TEMP/compose.json"
+          svc() { jq -r ".services[\"$1\"]$2" "$RUNNER_TEMP/compose.json"; }
+          docker run --rm -v "$PWD/infra/monitoring/victoriametrics:/etc/victoriametrics:ro" \
+            "$(svc victoriametrics .image)" -promscrape.config=/etc/victoriametrics/scrape.yml -dryRun
+          # The two on a network of their own, VictoriaMetrics under the name Grafana's datasource asks for: the alert
+          # rules then read no data, as on a quiet box, instead of failing to reach it.
+          docker network create monitoring-check >/dev/null
+          mapfile -t vm_flags < <(svc victoriametrics '.command[]')
+          docker run -d --name vm-check --network monitoring-check --network-alias victoriametrics \
+            -v "$PWD/infra/monitoring/victoriametrics:/etc/victoriametrics:ro" \
+            "$(svc victoriametrics .image)" "${vm_flags[@]}" >/dev/null
+          for _ in $(seq 1 30); do docker exec vm-check wget -qO- http://127.0.0.1:8428/health >/dev/null 2>&1 && break; sleep 1; done
+          docker exec vm-check wget -qO- http://127.0.0.1:8428/health >/dev/null
+          # Grafana's own environment, but for an anonymous admin who reads it here (no password on a command line, none
+          # set: the box's comes from production.env) and a webhook that goes nowhere.
+          jq -r '.services.grafana.environment | to_entries[]
+            | select(.key | test("^(GF_AUTH_ANONYMOUS_ENABLED|GF_SECURITY_ADMIN_PASSWORD|GRAFANA_ALERTS_WEBHOOK)$") | not)
+            | "\(.key)=\(.value)"' \
+            "$RUNNER_TEMP/compose.json" > "$RUNNER_TEMP/grafana.env"
+          docker run -d --name grafana-check --network monitoring-check -p 127.0.0.1:3300:3000 \
+            --memory "$(svc grafana .deploy.resources.limits.memory)" --env-file "$RUNNER_TEMP/grafana.env" \
+            -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Admin \
+            -e GRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/ci \
+            -v "$PWD/infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro" \
+            -v "$PWD/infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro" \
+            "$(svc grafana .image)" >/dev/null
+          api() { curl -fsS "http://127.0.0.1:3300$1"; }
+          # Grafana answers /api/health before its provisioning has finished: each check waits up to two minutes.
+          wait_for() {
+            for _ in $(seq 1 60); do
+              [ "$(api "$1" 2>/dev/null | jq -r "$2" 2>/dev/null)" = "$3" ] && return 0
+              sleep 2
+            done
+            echo "::error::Grafana: $1 | $2 is not $3"
+            docker logs grafana-check 2>&1 | tail -40
+            return 1
+          }
+          wait_for /api/health .database ok
+          wait_for /api/datasources/uid/victoriametrics .uid victoriametrics
+          wait_for /api/datasources/uid/victoriametrics/health .status OK
+          wait_for '/api/search?type=dash-db&tag=bbc' length 2
+          wait_for /api/v1/provisioning/alert-rules length 5
+          wait_for /api/v1/provisioning/contact-points '[.[] | select(.name == "ops")] | length' 1
+          test "$(docker inspect -f '{{.State.Running}} {{.State.OOMKilled}}' grafana-check)" = "true false"
+          if docker logs grafana-check 2>&1 | grep -iE 'level=error.*(provision|plugin)'; then exit 1; fi
+          docker rm -f grafana-check vm-check >/dev/null
+          docker network rm monitoring-check >/dev/null

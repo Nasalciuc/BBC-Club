@@ -688,6 +688,56 @@ describe("GlitchTip profile", () => {
   });
 });
 
+describe("monitoring and media profiles (ADR-IMPL-073)", () => {
+  async function wanted(fn: "monitoring_wanted" | "media_wanted", content: string) {
+    const result = await withEnv(content, `if ${fn} "$F"; then echo on; else echo off; fi`);
+    expect(result.code, result.err).toBe(0);
+    return result.out.trim();
+  }
+
+  it("each is on only for its own key set to on", async () => {
+    expect(await wanted("monitoring_wanted", "MONITORING=on\n")).toBe("on");
+    expect(await wanted("monitoring_wanted", "MONITORING=on   # metrics only\r\n")).toBe("on");
+    expect(await wanted("media_wanted", "MEDIA=on\n")).toBe("on");
+    expect(await wanted("monitoring_wanted", "MEDIA=on\n")).toBe("off");
+    expect(await wanted("media_wanted", "MONITORING=on\n")).toBe("off");
+  });
+
+  it("stay off when absent, off, empty, or a comment Compose would keep", async () => {
+    for (const [fn, key] of [
+      ["monitoring_wanted", "MONITORING"],
+      ["media_wanted", "MEDIA"],
+    ] as const) {
+      for (const content of ["OTHER=1\n", `${key}=off\n`, `${key}=\n`, `${key}=     # on|off\n`, `${key}=ON\n`]) {
+        expect(await wanted(fn, content)).toBe("off");
+      }
+    }
+  });
+
+  it("staging.env keeps its own OPS_WEBHOOK; Grafana's two keys are production's alone", async () => {
+    const composeFiles = "infra/docker-compose.yml infra/compose.prod.yml";
+    const own = await withFiles(
+      "OTHER=1\n",
+      "OPS_WEBHOOK=https://hooks.example.com/staging\nAPI_MEMORY_STAGING=512m\n",
+      `guard_staging "$S" ${composeFiles}`,
+    );
+    expect(own.code, own.err).toBe(0);
+    const grafana = await withFiles(
+      "OTHER=1\n",
+      "GRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\n",
+      `guard_staging "$S" ${composeFiles}`,
+    );
+    expect(grafana.code).not.toBe(0);
+    expect(grafana.err).toContain("sets GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK: production's services read");
+  });
+
+  it("the example this repository ships keeps both off: MinIO waits for R1b, the monitoring for its owner", async () => {
+    const example = readFileSync(join(root, "infra/env/production.env.example"), "utf8");
+    expect(await wanted("monitoring_wanted", example)).toBe("off");
+    expect(await wanted("media_wanted", example)).toBe("off");
+  });
+});
+
 const opensslReason =
   spawnSync("openssl", ["version"], { encoding: "utf8" }).status === 0 ? null : "openssl unavailable";
 // Git Bash on Windows has no real file modes (chmod 600 reads back as 644), so the certificate cases run on Linux and macOS.
