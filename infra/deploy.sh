@@ -291,11 +291,13 @@ elif ! { $DC up -d --no-deps caddy && $DC exec -T caddy caddy reload --config /e
 fi
 # The monitoring takes this commit's images and settings, production only: one stack serves both environments, as
 # Caddy does. Its files (scrape targets, dashboards) are read from the checkout; only a changed setting or image
-# recreates a container. A failure here leaves the API as it is: it is live already; the deploy still ends with an
-# error, after the prune, so a monitoring that asked to run and did not is never reported as a deploy that went well.
+# recreates a container. --wait holds until VictoriaMetrics and Grafana answer their healthchecks (the other two: until
+# they run), so a container that starts and then fails counts as not started. A failure here leaves the API as it is:
+# it is live already; the deploy still ends with an error, after the prune, whether or not the webhook answered, so a
+# monitoring that asked to run and did not is never reported as a deploy that went well.
 MONITORING_FAILED=""
 if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
-  if ! $DC up -d --no-deps victoriametrics grafana node-exporter cadvisor; then
+  if ! $DC up -d --no-deps --wait --wait-timeout 120 victoriametrics grafana node-exporter cadvisor; then
     notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
     MONITORING_FAILED=1
   fi
