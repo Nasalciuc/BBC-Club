@@ -22,7 +22,15 @@ export type DbSnapshot = {
   /** null when the admin URL is unset or SHOW POOLS failed. A number is cl_waiting. */
   poolWaiting: number | null;
   oldestTxSeconds: number;
+  /** PgBouncer's pools and totals (SHOW POOLS, SHOW STATS); null with poolWaiting. */
+  pooler?: PoolSample | null;
+  /** pg_stat_statements summed over this database since its last reset; null when the extension cannot be read. */
+  statements?: StatementTotals | null;
 };
+
+/** What every statement of this database has cost since pg_stat_statements was last reset (ADR-IMPL-073). Plans stay
+ *  at 0 while `pg_stat_statements.track_planning` is off. */
+export type StatementTotals = { calls: number; plans: number; execSeconds: number; planSeconds: number };
 
 export type DbReport = {
   generatedAt: string;
@@ -43,7 +51,25 @@ let oldestAlerted = false;
 
 type WarnLog = { warn: (o: object, m?: string) => void };
 
-export type PoolSample = { waiting: number; pools: number };
+/** SHOW POOLS summed over every pool, and SHOW STATS summed over every database (ADR-IMPL-073). The parse and bind
+ *  counts, from PgBouncer 1.24, show whether prepared statements are reused: a client parse the server did not repeat
+ *  is one it kept. `stats` is null when SHOW STATS could not be read; a column the version lacks reads 0. */
+export type PoolSample = {
+  waiting: number;
+  pools: number;
+  clientsActive: number;
+  serversActive: number;
+  serversIdle: number;
+  maxWaitSeconds: number;
+  stats: {
+    transactions: number;
+    queries: number;
+    waitSeconds: number;
+    clientParses: number;
+    serverParses: number;
+    binds: number;
+  } | null;
+};
 
 /** Tests only — module-level alert windows must not leak across cases. */
 export function resetDbAlertState() {
@@ -76,26 +102,49 @@ export async function collectDbSnapshot(db: Db, logger: WarnLog): Promise<DbSnap
   const deadlockRows = (await db.execute(
     sql.raw(`SELECT deadlocks::int AS n FROM pg_stat_database WHERE datname = current_database()`),
   )) as { n: number }[];
-  const poolWaiting = await pgbouncerWaiting(logger);
+  const pooler = await pgbouncerSample(logger);
   const oldestTxSeconds = oldestTx.reduce((m, r) => Math.max(m, r.s), 0);
   return {
     connections,
     oldestTx,
     lockWaits: Number(lockRows[0]?.n ?? 0),
     deadlocks: Number(deadlockRows[0]?.n ?? 0),
-    poolWaiting,
+    poolWaiting: pooler?.waiting ?? null,
     oldestTxSeconds,
+    pooler,
+    statements: await statementTotals(db),
   };
 }
 
-async function pgbouncerWaiting(logger: WarnLog): Promise<number | null> {
+async function pgbouncerSample(logger: WarnLog): Promise<PoolSample | null> {
   const url = loadEnv().PGBOUNCER_ADMIN_URL;
   if (!url) return null;
-  const sample = await pgbouncerWaitingClients(url, logger);
-  return sample?.waiting ?? null;
+  return pgbouncerWaitingClients(url, logger);
 }
 
-/** SHOW POOLS on the PgBouncer admin console. fetch_types stays off: the console rejects the extended protocol. */
+/** One row for the whole database: the totals Grafana divides by the requests (ADR-IMPL-073). */
+async function statementTotals(db: Db): Promise<StatementTotals | null> {
+  try {
+    const [row] = (await db.execute(
+      sql.raw(`
+      SELECT coalesce(sum(calls), 0)::float8 AS calls, coalesce(sum(plans), 0)::float8 AS plans,
+             coalesce(sum(total_exec_time), 0)::float8 AS exec_ms, coalesce(sum(total_plan_time), 0)::float8 AS plan_ms
+      FROM pg_stat_statements WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())`),
+    )) as { calls: number; plans: number; exec_ms: number; plan_ms: number }[];
+    if (!row) return null;
+    return {
+      calls: Number(row.calls),
+      plans: Number(row.plans),
+      execSeconds: Number(row.exec_ms) / 1000,
+      planSeconds: Number(row.plan_ms) / 1000,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** SHOW POOLS and SHOW STATS on the PgBouncer admin console. fetch_types stays off: the console rejects the extended
+ *  protocol. */
 export async function pgbouncerWaitingClients(url: string, logger: WarnLog): Promise<PoolSample | null> {
   const c = postgres(url, {
     max: 1,
@@ -106,10 +155,31 @@ export async function pgbouncerWaitingClients(url: string, logger: WarnLog): Pro
     onnotice: () => {},
   });
   try {
-    const rows = (await c.unsafe("SHOW POOLS")) as { cl_waiting?: number | string }[];
+    const rows = (await c.unsafe("SHOW POOLS")) as Record<string, number | string | null | undefined>[];
+    const sum = (list: Record<string, number | string | null | undefined>[], col: string) =>
+      list.reduce((total, r) => total + (Number(r[col] ?? 0) || 0), 0);
+    let stats: PoolSample["stats"] = null;
+    try {
+      const totals = (await c.unsafe("SHOW STATS")) as Record<string, number | string | null | undefined>[];
+      stats = {
+        transactions: sum(totals, "total_xact_count"),
+        queries: sum(totals, "total_query_count"),
+        waitSeconds: sum(totals, "total_wait_time") / 1e6,
+        clientParses: sum(totals, "total_client_parse_count"),
+        serverParses: sum(totals, "total_server_parse_count"),
+        binds: sum(totals, "total_bind_count"),
+      };
+    } catch (err) {
+      logger.warn({ err: errorForLog(err) }, "pgbouncer SHOW STATS failed");
+    }
     return {
-      waiting: rows.reduce((sum, r) => sum + Number(r.cl_waiting ?? 0), 0),
+      waiting: sum(rows, "cl_waiting"),
       pools: rows.length,
+      clientsActive: sum(rows, "cl_active"),
+      serversActive: sum(rows, "sv_active"),
+      serversIdle: sum(rows, "sv_idle"),
+      maxWaitSeconds: rows.reduce((m, r) => Math.max(m, Number(r.maxwait ?? 0) || 0), 0),
+      stats,
     };
   } catch (err) {
     logger.warn({ err: errorForLog(err) }, "pgbouncer SHOW POOLS failed");
@@ -128,6 +198,41 @@ export function applyDbGauges(metrics: Metrics, snap: DbSnapshot) {
   metrics.setGauge("db_deadlocks_total", snap.deadlocks);
   if (snap.poolWaiting == null) metrics.clearPrefix("pgbouncer_waiting_clients");
   else metrics.setGauge("pgbouncer_waiting_clients", snap.poolWaiting);
+  const pooler = snap.pooler ?? null;
+  const poolGauges = [
+    ["pgbouncer_clients_active", pooler?.clientsActive],
+    ["pgbouncer_servers_active", pooler?.serversActive],
+    ["pgbouncer_servers_idle", pooler?.serversIdle],
+    ["pgbouncer_max_wait_seconds", pooler?.maxWaitSeconds],
+  ] as const;
+  for (const [name, value] of poolGauges) {
+    if (value == null) metrics.clearPrefix(name);
+    else metrics.setGauge(name, value);
+  }
+  const stats = pooler?.stats ?? null;
+  const poolCounters = [
+    ["pgbouncer_transactions_total", stats?.transactions],
+    ["pgbouncer_queries_total", stats?.queries],
+    ["pgbouncer_wait_seconds_total", stats?.waitSeconds],
+    ["pgbouncer_client_parses_total", stats?.clientParses],
+    ["pgbouncer_server_parses_total", stats?.serverParses],
+    ["pgbouncer_binds_total", stats?.binds],
+  ] as const;
+  for (const [name, value] of poolCounters) {
+    if (value == null) metrics.clearPrefix(name);
+    else metrics.setCounter(name, value);
+  }
+  const st = snap.statements ?? null;
+  const statementCounters = [
+    ["db_statements_total", st?.calls],
+    ["db_statement_plans_total", st?.plans],
+    ["db_statement_exec_seconds_total", st?.execSeconds],
+    ["db_statement_plan_seconds_total", st?.planSeconds],
+  ] as const;
+  for (const [name, value] of statementCounters) {
+    if (value == null) metrics.clearPrefix(name);
+    else metrics.setCounter(name, value);
+  }
 }
 
 export async function maybeAlertOps(
