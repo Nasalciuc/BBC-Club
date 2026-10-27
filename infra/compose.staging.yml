@@ -106,6 +106,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STAGING}
       POSTGRES_DB: bbc
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    # Planning counted too, as production counts it (ADR-IMPL-073): the two read the same panels.
     command:
       [
         "postgres",
@@ -115,6 +116,8 @@ services:
         "pg_stat_statements.max=10000",
         "-c",
         "pg_stat_statements.track=all",
+        "-c",
+        "pg_stat_statements.track_planning=on",
       ]
     volumes: ["postgres_staging_data:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
