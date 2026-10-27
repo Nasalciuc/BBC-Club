@@ -291,10 +291,13 @@ elif ! { $DC up -d --no-deps caddy && $DC exec -T caddy caddy reload --config /e
 fi
 # The monitoring takes this commit's images and settings, production only: one stack serves both environments, as
 # Caddy does. Its files (scrape targets, dashboards) are read from the checkout; only a changed setting or image
-# recreates a container. A failure here leaves the API as it is: it is live already.
+# recreates a container. A failure here leaves the API as it is: it is live already; the deploy still ends with an
+# error, after the prune, so a monitoring that asked to run and did not is never reported as a deploy that went well.
+MONITORING_FAILED=""
 if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
   if ! $DC up -d --no-deps victoriametrics grafana node-exporter cadvisor; then
     notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
+    MONITORING_FAILED=1
   fi
 fi
 docker image prune -f >/dev/null
@@ -308,4 +311,8 @@ while read -r ref; do
   if docker image rm "$ref" >/dev/null 2>&1; then removed=$((removed + 1)); fi
 done < <(docker image ls "${IMAGE%:*}" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$' | tail -n +6)
 echo "old API images removed: $removed"
+if [[ -n "$MONITORING_FAILED" ]]; then
+  echo "❌ deploy $MODE: $IMAGE is live, but the monitoring did not start (above)"
+  exit 1
+fi
 notify "✅ deploy $MODE ok — $IMAGE in $(( $(date +%s) - started ))s"
