@@ -49,7 +49,7 @@ MONITORING_ON=""
 if monitoring_wanted "$PROD_ENV"; then
   DC="$DC --profile monitoring"
   MONITORING_ON=1
-  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK; do
+  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD; do
     env_known "$PROD_ENV" "$k" || { echo "❌ MONITORING=on needs $k in $PROD_ENV (RUNBOOK § Monitoring)"; exit 1; }
   done
 fi
@@ -297,6 +297,13 @@ fi
 # monitoring that asked to run and did not is never reported as a deploy that went well.
 MONITORING_FAILED=""
 if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
+  # Grafana's database dashboard reads Postgres as bbc_monitor (0052, ADR-IMPL-077): the role takes its password from
+  # production.env here, through psql's stdin — never on a command line, never in a migration.
+  pg_pw="$(env_value "$PROD_ENV" GRAFANA_PG_PASSWORD)"
+  if ! printf "ALTER ROLE bbc_monitor LOGIN PASSWORD '%s';\n" "${pg_pw//\'/\'\'}" \
+    | $DC exec -T postgres psql -q -v ON_ERROR_STOP=1 -U bbc -d bbc >/dev/null; then
+    notify "⚠ deploy production: $IMAGE is live, but Grafana's database role took no password — the database dashboard stays empty (RUNBOOK § Monitoring)" "${OPS_WEBHOOK:-}"
+  fi
   if ! $DC up -d --no-deps --wait --wait-timeout 120 victoriametrics grafana node-exporter cadvisor; then
     notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
     MONITORING_FAILED=1

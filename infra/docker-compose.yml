@@ -164,8 +164,12 @@ services:
       - maintenance_work_mem=128MB
       - -c
       - max_connections=100
+      # auto_explain (ADR-IMPL-077): the plan of a statement slower than 500 ms in the log, estimated only
+      # (no log_analyze: it would time every statement).
       - -c
-      - shared_preload_libraries=pg_stat_statements
+      - shared_preload_libraries=pg_stat_statements,auto_explain
+      - -c
+      - auto_explain.log_min_duration=500ms
       - -c
       - pg_stat_statements.max=10000
       - -c
@@ -181,8 +185,14 @@ services:
       - archive_command=pgbackrest --stanza=bbc archive-push %p
       - -c
       - archive_timeout=300
+      # ADR-IMPL-077, while the queries are tuned: statements over 250 ms in the log; I/O timed per statement (cheap on
+      # Linux's clock); no JIT — it compiles on exactly the long statements (a year of job runs sorted) and adds to them.
       - -c
-      - log_min_duration_statement=1000
+      - log_min_duration_statement=250
+      - -c
+      - track_io_timing=on
+      - -c
+      - jit=off
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - pgbackrest_spool:/var/spool/pgbackrest
@@ -389,10 +399,12 @@ services:
       GF_PLUGINS_PREINSTALL_DISABLED: "true"
       # Grafana 13 ships its data sources as plugins, each backend its own process inside this limit: only Prometheus's
       # (VictoriaMetrics speaks it) is loaded. The expressions the alerts use are part of Grafana itself.
-      GF_PLUGINS_DISABLE_PLUGINS: elasticsearch,tempo,zipkin,opentsdb,stackdriver,mssql,jaeger,loki,mysql,influxdb,grafana-postgresql-datasource,grafana-pyroscope-datasource
+      GF_PLUGINS_DISABLE_PLUGINS: elasticsearch,tempo,zipkin,opentsdb,stackdriver,mssql,jaeger,loki,mysql,influxdb,grafana-pyroscope-datasource
       # The contact point reads it (provisioning/alerting/alerts.yml). A name of its own, not OPS_WEBHOOK: staging.env may
       # set that one for staging, and guard_staging refuses in staging.env every name this file substitutes.
       GRAFANA_ALERTS_WEBHOOK: ${GRAFANA_ALERTS_WEBHOOK:-}
+      # The database dashboard reads Postgres as bbc_monitor (pg_monitor, ADR-IMPL-077); deploy.sh gives the role this.
+      GRAFANA_PG_PASSWORD: ${GRAFANA_PG_PASSWORD:-}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro

@@ -853,3 +853,41 @@ describe("origin certificate", () => {
     });
   });
 });
+
+describe("Postgres's planning settings (ADR-IMPL-077)", () => {
+  /** The `-c key=value` pairs of a compose service's command. */
+  const settingsOf = async (file: string, service: string) => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, file)).text()) as {
+      services: Record<string, { command: string[] }>;
+    };
+    const command = doc.services[service]!.command;
+    const out: Record<string, string> = {};
+    command.forEach((arg, i) => {
+      if (command[i - 1] !== "-c") return;
+      const [k, ...v] = arg.split("=");
+      out[k!] = v.join("=");
+    });
+    return out;
+  };
+  const PLANNING = [
+    "effective_cache_size",
+    "work_mem",
+    "jit",
+    "random_page_cost",
+    "shared_preload_libraries",
+    "auto_explain.log_min_duration",
+    "pg_stat_statements.track_planning",
+    "log_min_duration_statement",
+    "track_io_timing",
+  ];
+
+  it("staging plans as production does, and both log the slow statements with their plans", async () => {
+    const prod = await settingsOf("infra/docker-compose.yml", "postgres");
+    const staging = await settingsOf("infra/compose.staging.yml", "postgres-staging");
+    for (const key of PLANNING) expect(staging[key], key).toBe(prod[key]);
+    expect(prod.jit).toBe("off");
+    expect(prod.shared_preload_libraries).toBe("pg_stat_statements,auto_explain");
+    expect(prod["auto_explain.log_min_duration"]).toBe("500ms");
+    expect(prod.log_min_duration_statement).toBe("250");
+  });
+});

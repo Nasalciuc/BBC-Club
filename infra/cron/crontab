@@ -16,5 +16,8 @@
 */5 * * * * resolve-place-landmarks
 * * * * * resolve-place-photos
 0 4 * * * retention
+10 4 * * * retention-auth
+30 4 * * * retention-demand
+20 4 * * * retention-notifications
 * * * * * send-requests
 40 7,19 * * * sync-site-destinations

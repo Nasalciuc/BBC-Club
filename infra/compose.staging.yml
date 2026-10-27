@@ -109,18 +109,31 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_STAGING}
       POSTGRES_DB: bbc
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
-    # Planning counted too, as production counts it (ADR-IMPL-073): the two read the same panels.
+    # Production's planning settings, so a plan read on staging is production's (ADR-IMPL-077); production's memory
+    # (shared_buffers) is not: these settings take none.
     command:
       [
         "postgres",
         "-c",
-        "shared_preload_libraries=pg_stat_statements",
+        "shared_preload_libraries=pg_stat_statements,auto_explain",
+        "-c",
+        "auto_explain.log_min_duration=500ms",
         "-c",
         "pg_stat_statements.max=10000",
         "-c",
         "pg_stat_statements.track=all",
         "-c",
         "pg_stat_statements.track_planning=on",
+        "-c",
+        "effective_cache_size=1536MB",
+        "-c",
+        "work_mem=8MB",
+        "-c",
+        "log_min_duration_statement=250",
+        "-c",
+        "track_io_timing=on",
+        "-c",
+        "jit=off",
       ]
     volumes: ["postgres_staging_data:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL", "pg_isready -U bbc -d bbc"], interval: 5s, timeout: 3s, retries: 10 }
