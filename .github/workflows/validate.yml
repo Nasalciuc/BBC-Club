@@ -136,6 +136,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { persist-credentials: false }
       - name: Monitoring stack
         # The profile ADR-IMPL-073 adds, the way the box runs it: Compose reads it with every overlay; VictoriaMetrics
         # checks its scrape file (-dryRun), then runs with the compose file's flags; Grafana starts beside it with the
