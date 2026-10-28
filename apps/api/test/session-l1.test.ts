@@ -30,8 +30,9 @@ describe("session kept per process", () => {
     expect(first.sessions).toBeGreaterThan(0);
     for (let i = 0; i < 5; i++) expect(await read()).toEqual({ status: 200, sessions: 0 });
 
-    // The session ended in psql (another device's sign-out on another replica): a read here answers for the rest of
-    // the minute, as the phone's cookie cache would; a write reads the database and is refused.
+    // B's session ended in psql (another device's sign-out on another replica) before this process read it: a token it
+    // does not keep reads the database, and is refused at once. One it keeps answers for the rest of the minute, as the
+    // phone's cookie cache would, and a write is refused: "a session ended elsewhere" below.
     await t.db.execute(sql`DELETE FROM auth.session WHERE user_id = ${t.memberB.id}`);
     const b = tokenOnly(t.memberB.cookie);
     expect((await t.app.request("/v1/profile", { headers: { Cookie: b } })).status).toBe(401);
