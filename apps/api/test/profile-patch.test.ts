@@ -106,6 +106,19 @@ describe("PATCH /v1/profile", () => {
     expect(await stored()).toBe("Asia/Tokyo");
     expect((await patch("UTC")).status).toBe(200);
     expect(await stored()).toBe("UTC");
+
+    // Stored as Postgres spells it, which quiet hours read by (#114): a case variant is the zone itself.
+    expect((await patch("europe/london")).status).toBe(200);
+    expect(await stored()).toBe("Europe/London");
+    // A name Intl takes and Postgres's tzdata does not read (gone from tzdata in 2020b) is refused, not kept to count as
+    // New York at every push.
+    const unread = await patch("US/Pacific-New");
+    expect(unread.status).toBe(400);
+    expect(((await unread.json()) as { error: { details: unknown[] } }).error.details).toContainEqual({
+      path: "timezone",
+      message: "Choose a time zone from the list.",
+    });
+    expect(await stored()).toBe("Europe/London");
     await t.close();
   });
 

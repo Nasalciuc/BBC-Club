@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { OfferPublishedV1 } from "@bbc/shared/events/offer";
 import { campaigns } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
-import { afterQuietHoursIn, safeTimeZone } from "../application/quiet-hours";
+import { afterQuietHoursIn, DEFAULT_TIME_ZONE, zonesForPostgres } from "../application/quiet-hours";
 import { cappedOnSendDay } from "../application/daily-cap";
 import type { Executor } from "@bbc/db";
 
@@ -51,10 +51,16 @@ export async function onOfferPublished(
   const prefs = await deps.members.preferencesOf(deps.tx, memberId);
   if (!prefs.offers_personal) return;
 
-  // A stored zone that is not one never fails the delivery: the club's default, and the member named in the log.
-  const tz = safeTimeZone(await deps.members.timezoneOf(deps.tx, memberId), () =>
-    deps.logger?.warn({ memberId, reason: "invalid_time_zone" }, "member time zone not valid; default used"),
-  );
+  // A stored zone Postgres cannot read never fails the delivery: the club's default, and the member named in the log
+  // with why.
+  const stored = await deps.members.timezoneOf(deps.tx, memberId);
+  const read = (await zonesForPostgres(deps.tx, [stored])).get(stored);
+  if (!read || read.fallback)
+    deps.logger?.warn(
+      { memberId, reason: read?.fallback ?? "invalid_time_zone" },
+      "member time zone not read; default used",
+    );
+  const tz = read?.zone ?? DEFAULT_TIME_ZONE;
   // Not before the offer is published: a push for one published later would open a 404 until then.
   const now = deps.now?.() ?? new Date();
   const from = new Date(Math.max(now.getTime(), new Date(evt.publishedAt).getTime()));

@@ -48,11 +48,35 @@ describe("quiet hours, by Postgres's clocks", () => {
     ).toEqual(["2026-12-16", "2026-12-16", "2027-01-15"]);
   });
 
-  it("a zone name Postgres does not read counts as the club's default, never failing the statement", async () => {
-    const read = await zonesForPostgres(iso.db, ["Europe/London", "Mars/Olympus_Mons"]);
-    expect(read.get("Europe/London")).toBe("Europe/London");
-    expect(read.get("Mars/Olympus_Mons")).toBe(DEFAULT_TIME_ZONE);
-    const out = await afterQuietHours(iso.db, new Date("2026-09-28T03:00:00Z"), ["Mars/Olympus_Mons"]);
-    expect(out.get("Mars/Olympus_Mons")?.toISOString()).toBe("2026-09-28T12:00:00.000Z");
+  it("a zone in another case is that zone: 23:30 in London, written europe/london, is quiet until 08:00 there", async () => {
+    // 28 October 2026, GMT: 23:30 UTC is 23:30 in London and 19:30 in New York, the club's default.
+    const at = new Date("2026-10-28T23:30:00Z");
+    const out = await afterQuietHours(iso.db, at, ["Europe/London", "europe/london", "EUROPE/LONDON"]);
+    expect(Object.fromEntries([...out].map(([z, d]) => [z, d.toISOString()]))).toEqual({
+      "Europe/London": "2026-10-29T08:00:00.000Z",
+      "europe/london": "2026-10-29T08:00:00.000Z",
+      "EUROPE/LONDON": "2026-10-29T08:00:00.000Z",
+    });
+    // 03:30 UTC on the 29th is the 29th in London, still the 28th in New York.
+    const early = new Date("2026-10-29T03:30:00Z");
+    expect(
+      await localDays(iso.db, [
+        { at: early, timeZone: "Europe/London" },
+        { at: early, timeZone: "europe/london" },
+      ]),
+    ).toEqual(["2026-10-29", "2026-10-29"]);
+  });
+
+  it("a zone Postgres does not read is the club's default, said why: no zone at all, or one Intl takes and tzdata lacks", async () => {
+    // US/Pacific-New: gone from tzdata in 2020b, still taken by ICU (and so by the profile's rule before #114's fix).
+    const read = await zonesForPostgres(iso.db, ["europe/london", "US/Pacific-New", "Not/AZone"]);
+    expect(Object.fromEntries(read)).toEqual({
+      "europe/london": { zone: "Europe/London" },
+      "US/Pacific-New": { zone: DEFAULT_TIME_ZONE, fallback: "time_zone_unknown_to_postgres" },
+      "Not/AZone": { zone: DEFAULT_TIME_ZONE, fallback: "invalid_time_zone" },
+    });
+    // The statement never fails on it: 23:00 in New York waits for 08:00 there.
+    const out = await afterQuietHours(iso.db, new Date("2026-09-28T03:00:00Z"), ["US/Pacific-New"]);
+    expect(out.get("US/Pacific-New")?.toISOString()).toBe("2026-09-28T12:00:00.000Z");
   });
 });

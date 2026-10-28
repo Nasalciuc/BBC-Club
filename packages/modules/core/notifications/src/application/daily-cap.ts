@@ -7,8 +7,8 @@ import { DEFAULT_TIME_ZONE, zonesForPostgres } from "./quiet-hours";
 export const OFFER_CATEGORIES = ["offers_personal", "offers_broadcast"] as const;
 
 /** The calendar day each instant falls on in its zone (`2026-10-26`), by Postgres's tzdata — the clock quiet hours read
- *  (#114); one statement for all of them. Zones are `safeTimeZone`'s answers; one Postgres cannot read counts as the
- *  club's default. */
+ *  (#114); one statement for all of them. Each zone is read as `zonesForPostgres` reads it — the callers have logged a
+ *  fallback already. */
 export async function localDays(exec: Executor, at: readonly { at: Date; timeZone: string }[]): Promise<string[]> {
   if (at.length === 0) return [];
   const read = await zonesForPostgres(
@@ -20,7 +20,7 @@ export async function localDays(exec: Executor, at: readonly { at: Date; timeZon
   const rows = (await exec.execute(sql`
     SELECT u.i, to_char(u.t AT TIME ZONE u.z, 'YYYY-MM-DD') AS local_day
     FROM unnest(${sql.param(at.map((a) => a.at.toISOString()))}::text[]::timestamptz[],
-                ${sql.param(at.map((a) => read.get(a.timeZone) ?? DEFAULT_TIME_ZONE))}::text[]) WITH ORDINALITY AS u(t, z, i)`)) as unknown as {
+                ${sql.param(at.map((a) => read.get(a.timeZone)?.zone ?? DEFAULT_TIME_ZONE))}::text[]) WITH ORDINALITY AS u(t, z, i)`)) as unknown as {
     i: string | number;
     local_day: string;
   }[];
@@ -50,7 +50,7 @@ export function offerSendsSelect(exec: Executor, memberIds: readonly string[], f
 
 /**
  * The daily cap: at most one offer push per member per day — the day it is sent, in the member's time zone. `sends` is
- * each member's zone (`safeTimeZone`'s answer) and when this push would go out (after quiet hours, and not before its
+ * each member's zone (`zonesForPostgres`'s answer) and when this push would go out (after quiet hours, and not before its
  * offer is published). A member is capped when another offer push of theirs, personal or broadcast and whatever its
  * status, is scheduled on that same local day — whenever it was created. One query for all of them, over the window that
  * holds every such day, then one for the days of the sends and of the pushes it found, by Postgres's tzdata as quiet

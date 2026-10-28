@@ -171,7 +171,8 @@ describe("campaign-fanout job", () => {
     await db.execute(sql`
       INSERT INTO members.profile (member_id, status, timezone) VALUES
         ('tz-1-london', 'active', 'Europe/London'), ('tz-2-bad', 'active', 'Europe/London'),
-        ('tz-3-tokyo', 'active', 'Asia/Tokyo')`);
+        ('tz-3-tokyo', 'active', 'Asia/Tokyo'), ('tz-4-case', 'active', 'europe/london'),
+        ('tz-5-gone', 'active', 'US/Pacific-New')`);
     // A value stored before time zones were checked: the audience hands it on as it is.
     const withBadZone = {
       audiencePage: async (exec: unknown, q: Parameters<Page>[1]) =>
@@ -194,11 +195,20 @@ describe("campaign-fanout job", () => {
     const rows = (await db.execute(sql`
       SELECT member_id, scheduled_for FROM notifications.notifications WHERE offer_id = ${offerId}::uuid
       ORDER BY member_id`)) as any[];
-    expect(rows.map((r) => r.member_id)).toEqual(["tz-1-london", "tz-2-bad", "tz-3-tokyo"]);
-    const bad = rows.find((r) => r.member_id === "tz-2-bad");
+    expect(rows.map((r) => r.member_id)).toEqual(["tz-1-london", "tz-2-bad", "tz-3-tokyo", "tz-4-case", "tz-5-gone"]);
+    const at8 = (id: string) => new Date(rows.find((r) => r.member_id === id).scheduled_for).toISOString();
     // The club's default zone: 23:00 in New York on 27 September (−04) waits for 08:00 there, 12:00 UTC.
-    expect(new Date(bad.scheduled_for).toISOString()).toBe("2026-09-28T12:00:00.000Z");
+    expect(at8("tz-2-bad")).toBe("2026-09-28T12:00:00.000Z");
     expect(warned).toContainEqual(expect.objectContaining({ memberId: "tz-2-bad", reason: "invalid_time_zone" }));
+    // A case variant is London itself (Postgres reads a zone in any case): 04:00 BST waits for 08:00 BST, 07:00 UTC.
+    expect(at8("tz-4-case")).toBe(at8("tz-1-london"));
+    expect(at8("tz-4-case")).toBe("2026-09-28T07:00:00.000Z");
+    // A zone Intl takes and this Postgres's tzdata lacks: the default, and the log says why.
+    expect(at8("tz-5-gone")).toBe("2026-09-28T12:00:00.000Z");
+    expect(warned).toContainEqual(
+      expect.objectContaining({ memberId: "tz-5-gone", reason: "time_zone_unknown_to_postgres" }),
+    );
+    expect(warned).not.toContainEqual(expect.objectContaining({ memberId: "tz-4-case" }));
   });
 
   it("an offer published for later: its campaign is not claimed before then, and is after", async () => {

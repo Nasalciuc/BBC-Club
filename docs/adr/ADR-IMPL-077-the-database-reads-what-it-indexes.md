@@ -63,8 +63,10 @@ Postgres 16), the data layer had reads that grow worse with time:
    the club reads the zones' rules from one copy, Postgres's tzdata (#114). Bun's ICU, which fell behind tzdata 2026b
    in seven of the airports' zones (Vancouver, Edmonton, Winnipeg and Inuvik keep their summer offset from 1 Nov
    2026; Casablanca and El_Aaiun +00 from 20 Sep 2026; Asuncion −03 all year), now only checks that a name is a
-   zone (`isIanaZone`, the app's rule too); a name Postgres does not read counts as the club's default in
-   notifications (`zonesForPostgres`, the names listed once per process). `scripts/tz-parity.test.ts` (`bun run
+   zone (`isIanaZone`, the app's rule too). Postgres's names (`@bbc/db/time-zones`, listed once per process, matched in
+   any case, else through Intl's spelling) decide what is stored and read: the profile stores a zone as Postgres spells
+   it and refuses one its tzdata lacks; notifications read a member's zone the same way, and one Postgres does not read
+   counts as the club's default, logged with why (`zonesForPostgres`). `scripts/tz-parity.test.ts` (`bun run
 test:tz`, a few seconds, after the database suites, in `validate` and CI) checks that every airport's zone is one
    Postgres reads and that the bounds are where Postgres's day begins and ends, for every one of those zones and
    every day of the two years from the run; it fails on the plain `day::timestamp AT TIME ZONE zone` in Havana and

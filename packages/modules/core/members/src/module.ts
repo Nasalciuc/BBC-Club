@@ -16,6 +16,7 @@ import { ProfilePatchBody, NotificationPreferencesBody, TravelPreferencesBody } 
 import { event } from "@bbc/shared/events";
 import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
+import { postgresZone } from "@bbc/db/time-zones";
 import type { Principal } from "@bbc/shared/authz/principal";
 import { PHOTO_CONTENT_TYPE, PHOTO_MAX_BYTES, checkPhotoWebp, type PhotoProblem } from "@bbc/shared/media/webp";
 
@@ -111,10 +112,22 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
           400,
         );
       }
+      // Quiet hours and the daily cap read the zone in Postgres (#114): stored as Postgres spells it (`europe/london` is
+      // Europe/London), and one this Postgres's tzdata does not read is refused, not kept to count as New York later.
+      let data = parsed.data;
+      if (data.timezone !== undefined) {
+        const read = await postgresZone(conn, data.timezone);
+        if (read.zone === null)
+          return c.json(
+            apiError("VALIDATION", { details: [{ path: "timezone", message: "Choose a time zone from the list." }] }),
+            400,
+          );
+        data = { ...data, timezone: read.zone };
+      }
       const updated = await withTx(conn, async (tx) => {
-        const p = await writeOrCreate(tx, actor, () => facade.updateProfile(tx, actor, parsed.data));
+        const p = await writeOrCreate(tx, actor, () => facade.updateProfile(tx, actor, data));
         if (!p) return null;
-        const fields = Object.keys(parsed.data);
+        const fields = Object.keys(data);
         await publish(tx, {
           type: "member.profile_updated",
           version: 1,

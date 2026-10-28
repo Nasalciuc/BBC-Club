@@ -3,7 +3,7 @@ import { inConst } from "@bbc/db/helpers";
 import { withTx, type Executor, type Tx } from "@bbc/db";
 import { campaigns, notificationsTable } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
-import { afterQuietHours, safeTimeZone } from "./quiet-hours";
+import { afterQuietHours, DEFAULT_TIME_ZONE, zonesForPostgres } from "./quiet-hours";
 import { cappedOnSendDay } from "./daily-cap";
 
 const PAGE = 1_000;
@@ -61,19 +61,22 @@ async function fanOutPage(
     .where(eq(campaigns.id, c.id))
     .for("update");
   if (open?.status !== "running") return null;
-  // A stored zone that is not one never fails the page (and so every later campaign): that member's row follows the
-  // club's default zone, and the member is named in the log.
-  const valid = new Map<string, boolean>();
-  const zoneOf = (p: { memberId: string; timezone: string }) => {
-    let ok = valid.get(p.timezone);
-    if (ok === undefined) valid.set(p.timezone, (ok = safeTimeZone(p.timezone) === p.timezone));
-    if (ok) return p.timezone;
-    return safeTimeZone(p.timezone, () =>
-      logger?.warn({ memberId: p.memberId, reason: "invalid_time_zone" }, "member time zone not valid; default used"),
-    );
-  };
-  const zones = page.map((p) => ({ memberId: p.memberId, timeZone: zoneOf(p) }));
-  // Once per time zone, not per member, and one statement for them all: a page shares `now` (Postgres's clocks, #114).
+  // A stored zone Postgres cannot read never fails the page (and so every later campaign): that member's row follows
+  // the club's default zone, and the member is named in the log with why. Once per zone, not per member, and one
+  // statement for them all: a page shares `now` (Postgres's clocks, #114).
+  const read = await zonesForPostgres(
+    tx,
+    page.map((p) => p.timezone),
+  );
+  const zones = page.map((p) => {
+    const r = read.get(p.timezone);
+    if (!r || r.fallback)
+      logger?.warn(
+        { memberId: p.memberId, reason: r?.fallback ?? "invalid_time_zone" },
+        "member time zone not read; default used",
+      );
+    return { memberId: p.memberId, timeZone: r?.zone ?? DEFAULT_TIME_ZONE };
+  });
   const sendAt = await afterQuietHours(
     tx,
     now,

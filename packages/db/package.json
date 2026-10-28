@@ -9,6 +9,7 @@
     "./schema/*": "./src/schema/*.ts",
     "./helpers": "./src/helpers.ts",
     "./statements": "./src/statements.ts",
+    "./time-zones": "./src/time-zones.ts",
     "./testing/isolated-db": "./src/testing/isolated-db.ts",
     "./testing/plan": "./src/testing/plan.ts"
   },
