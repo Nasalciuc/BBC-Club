@@ -78,7 +78,8 @@ covers `infra/monitoring` too).
    VictoriaMetrics asks for basic auth on its query and import API (user `bbc`, `VM_PASSWORD`, read from its
    environment with `-envflag.enable`, never from its command line); `/health` and its own `/metrics` answer before
    that check, as v1.154.0 orders them. Grafana's datasource sends the password; the two checks refuse `MONITORING=on`
-   without it too.
+   without it too. Grafana encrypts what it stores with `GRAFANA_SECRET_KEY` (`GF_SECURITY_SECRET_KEY`), not its
+   built-in default.
 9. **The room.** MinIO is a profile of its own, `media`: `MEDIA=on` puts it back in bootstrap's start (R1b). Staging's
    API replicas and worker get 384 MB each and its Postgres 768 MB: 2 048 in all, and `API_MEMORY_STAGING`,
    `WORKER_MEMORY_STAGING` and `POSTGRES_MEMORY_STAGING` in `staging.env` give one back. The limits add up to 6 752 MB

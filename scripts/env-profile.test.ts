@@ -929,7 +929,7 @@ describe("Grafana's database role and Postgres's settings (ADR-IMPL-077)", () =>
     return result;
   }
   const monitored =
-    "MONITORING=on\nGRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\nVM_PASSWORD=x\n";
+    "MONITORING=on\nGRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\nVM_PASSWORD=x\nGRAFANA_SECRET_KEY=x\n";
   const noDaemon = `docker() { return 1; }`;
 
   it("only a production deploy asks for the database role's password, the one that gives it", async () => {
@@ -1215,6 +1215,19 @@ describe("VictoriaMetrics' basic auth (A-S1)", () => {
     for (const file of ["infra/deploy.sh", "infra/bootstrap.sh"]) {
       const text = await Bun.file(join(root, file)).text();
       expect(/for k in GRAFANA_ADMIN_PASSWORD [^;]*VM_PASSWORD/.test(text), file).toBe(true);
+    }
+  });
+});
+
+describe("Grafana's secret key (A-S2)", () => {
+  it("comes from production.env, and a deploy and a bootstrap with MONITORING=on ask for it", async () => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { environment?: Record<string, string> }>;
+    };
+    expect(doc.services.grafana!.environment!.GF_SECURITY_SECRET_KEY).toBe("${GRAFANA_SECRET_KEY:-}");
+    for (const file of ["infra/deploy.sh", "infra/bootstrap.sh"]) {
+      const text = await Bun.file(join(root, file)).text();
+      expect(/for k in GRAFANA_ADMIN_PASSWORD [^;]*GRAFANA_SECRET_KEY/.test(text), file).toBe(true);
     }
   });
 });
