@@ -145,7 +145,8 @@ jobs:
         # checks its scrape file (-dryRun), then runs with the compose file's flags; Grafana starts beside it with the
         # compose file's image, environment and memory limit and the repository's provisioning, reaches it, and holds its
         # datasources, the three dashboards, the contact point and the seven alert rules — no provisioning or plugin error in
-        # its log, no kill for memory; every alert rule's query returns a result on sample points. Nothing here reaches the box.
+        # its log, no kill for memory; every alert rule's query returns a result on hand-written sample points. Nothing
+        # here reaches the box.
         run: |
           set -euo pipefail
           export API_IMAGE=ci/api:0000000 API_IMAGE_STAGING=ci/api:0000000
@@ -174,8 +175,10 @@ jobs:
             echo "::error::VictoriaMetrics answered a query without its password"; exit 1
           fi
           docker exec vm-check wget -qO- "http://bbc:${VM_PASSWORD}@127.0.0.1:8428/api/v1/query?query=1" >/dev/null
-          # A point for every name the alert rules read, a minute and two minutes ago (A-Q1): each rule's expression is
-          # run against them below, so a rule that reads a name or a label nothing publishes fails here.
+          # Points typed in by hand (infra/monitoring/ci/sample-metrics.txt) for every name the alert rules read, a minute
+          # and two minutes ago (A-Q1): each rule's expression is run against them below, so a query Grafana or
+          # VictoriaMetrics refuses, or one that no longer matches the sample's names and labels, fails here. Whether the
+          # app and cAdvisor still publish those names is their own tests' (e.g. platform's jobs-flags.test.ts).
           t2=$(( ($(date +%s) - 60) * 1000 )); t1=$(( t2 - 60000 ))
           sed -e "s/__T1__/$t1/" -e "s/__T2__/$t2/" infra/monitoring/ci/sample-metrics.txt > "$RUNNER_TEMP/sample.txt"
           curl -fsS -u "bbc:${VM_PASSWORD}" --data-binary @"$RUNNER_TEMP/sample.txt" http://127.0.0.1:8428/api/v1/import/prometheus
