@@ -31,6 +31,7 @@ mock.module("@/lib/timeout", () => real.timeout);
 mock.module("@/lib/fare-gone", () => real.fareGone);
 
 const { fetchHome } = await import("./api");
+const { nextShownHome } = await import("./home-shown-logic");
 
 let sentTags: (string | null)[] = [];
 let answer: () => Response = () => new Response(null, { status: 500 });
@@ -107,5 +108,46 @@ describe("fetchHome — Home revalidated from the first load", () => {
     const b = await fetchHome();
     expect(sentTags).toEqual([null, null]);
     expect(b.ok && b.data.home.home).toBeNull();
+  });
+});
+
+describe("nextShownHome — the tag is shared by every screen, what each shows is its own", () => {
+  it("Explore showing v1 takes v2 when Search received v2 and Explore's next load is a 304", async () => {
+    cookie = sessionOf("member-a");
+    answer = () => ok(homeOf("JFK", "New York"), '"v1"');
+    const first = await fetchHome(); // Explore mounts
+    if (!first.ok) throw new Error("first load failed");
+    let explore = nextShownHome(null, first.data);
+    // Home changed on the server; Search mounts and receives it, and the client now holds v2.
+    answer = () => ok(homeOf("LHR", "London"), '"v2"');
+    const search = await fetchHome();
+    // Explore reads again (back in the foreground, or `Try again`): the client asks with v2's tag.
+    answer = notModified;
+    const again = await fetchHome();
+    if (!again.ok) throw new Error("second Explore load failed");
+    explore = nextShownHome(explore, again.data);
+    expect(sentTags).toEqual([null, '"v1"', '"v2"']);
+    expect(search.ok && search.data.home.home?.code).toBe("LHR");
+    expect(explore.home.home?.code).toBe("LHR");
+    expect(explore.etag).toBe('"v2"');
+  });
+
+  it("a 304 for the tag a screen's copy came with keeps that copy, deals already filtered included", async () => {
+    cookie = sessionOf("member-a");
+    answer = () => ok(homeOf("JFK", "New York"), '"k1"');
+    const first = await fetchHome();
+    if (!first.ok) throw new Error("first load failed");
+    // The screen dropped the deals past their day (useExploreHome's foreground): still k1's copy, a new object.
+    const filtered = { home: { ...first.data.home }, etag: first.data.etag };
+    answer = notModified;
+    const again = await fetchHome();
+    if (!again.ok) throw new Error("second load failed");
+    expect(nextShownHome(filtered, again.data)).toBe(filtered);
+  });
+
+  it("a 304 with no tag sent never keeps a screen's copy", () => {
+    const shown = { home: homeOf("JFK", "New York"), etag: null };
+    const empty = { home: null, destinations: [], sections: [] };
+    expect(nextShownHome(shown, { home: empty, etag: null, notModified: true }).home).toBe(empty);
   });
 });
