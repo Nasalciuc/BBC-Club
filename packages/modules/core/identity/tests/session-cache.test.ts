@@ -1,20 +1,40 @@
 /** ADR-IMPL-076: what the process keeps per session token — never past the minute, never past the session's expiry. */
 import { describe, expect, it } from "bun:test";
-import { createSessionCache, sessionKey } from "../src/application/session-cache";
+import { createSessionCache, FORGOTTEN_MARGIN_MS, keyedToken, sessionKey } from "../src/application/session-cache";
 
 const info = (id: string) => ({
   member: { id, email: `${id}@test.dev`, emailVerified: true as const, role: "member" },
   sessionId: `s-${id}`,
 });
 
+const COOKIE = "bbc.session_token";
+const SECURE = "__Secure-bbc.session_token";
+const cookie = (value: string) => new Headers({ Cookie: value });
+
 describe("sessionKey", () => {
-  it("hashes the session token, secure or not, and ignores the rest of the cookie", () => {
-    const a = sessionKey(new Headers({ Cookie: "bbc.session_token=abc.sig; bbc.session_data=xyz" }));
-    const b = sessionKey(new Headers({ Cookie: "x=1; __Secure-bbc.session_token=abc.sig" }));
-    expect(a).toBe(b);
+  it("hashes the session cookie Better Auth reads, never another, and ignores the rest of the cookie", () => {
+    const a = sessionKey(cookie(`${COOKIE}=abc.sig; bbc.session_data=xyz`), COOKIE);
+    expect(a).toBe(sessionKey(cookie(`x=1; ${SECURE}=abc.sig`), SECURE));
     expect(a).not.toContain("abc");
-    expect(sessionKey(new Headers({ Cookie: "bbc.session_data=xyz" }))).toBeNull();
-    expect(sessionKey(new Headers())).toBeNull();
+    // Read as better-call reads it: trimmed, unquoted, decoded.
+    expect(sessionKey(cookie(`x=1;  ${COOKIE}="abc.sig" `), COOKIE)).toBe(a);
+    expect(sessionKey(cookie(`${COOKIE}=abc%2Esig`), COOKIE)).toBe(a);
+    // The other name is not the cookie: absent, it keys nothing; beside it, it changes nothing.
+    expect(sessionKey(cookie(`${SECURE}=abc.sig`), COOKIE)).toBeNull();
+    expect(sessionKey(cookie(`${COOKIE}=abc.sig`), SECURE)).toBeNull();
+    expect(sessionKey(cookie(`${COOKIE}=other.sig; ${SECURE}=abc.sig`), SECURE)).toBe(a);
+    // The first of two cookies of the name, as Better Auth takes it.
+    expect(sessionKey(cookie(`${COOKIE}=abc.sig; ${COOKIE}=other.sig`), COOKIE)).toBe(a);
+    expect(sessionKey(cookie(`${COOKIE}=; ${COOKIE}=abc.sig`), COOKIE)).toBeNull();
+    expect(sessionKey(cookie("bbc.session_data=xyz"), COOKIE)).toBeNull();
+    expect(sessionKey(new Headers(), COOKIE)).toBeNull();
+  });
+
+  it("names the token in that cookie, split from its signature as Better Auth splits it", () => {
+    expect(keyedToken(cookie(`${COOKIE}=tok.c2ln%3D`), COOKIE)).toBe("tok");
+    expect(keyedToken(cookie(`${COOKIE}=other.sig; ${SECURE}=tok.sig`), SECURE)).toBe("tok");
+    expect(keyedToken(cookie(`${COOKIE}=nosignature`), COOKIE)).toBeNull();
+    expect(keyedToken(cookie(`${COOKIE}=.sig`), COOKIE)).toBeNull();
   });
 });
 
@@ -49,6 +69,93 @@ describe("createSessionCache", () => {
     expect(c.memberOf("4")).toBe("c");
     c.forget("4");
     expect(c.size()).toBe(1);
+  });
+
+  it("a read begun before its token or its member was forgotten puts nothing back; other forgets do not stop it", () => {
+    const c = createSessionCache({ ttlMs: 60_000 });
+
+    const sameKey = c.begin();
+    c.forget("t");
+    c.put("t", info("a"), null, sameKey);
+    expect(c.get("t")).toBeNull();
+
+    const sameMember = c.begin();
+    c.forgetMember("a");
+    c.put("u", info("a"), null, sameMember);
+    expect(c.get("u")).toBeNull();
+
+    const others = c.begin();
+    c.forget("someone-else");
+    c.forgetMember("b");
+    c.put("v", info("a"), null, others);
+    expect(c.get("v")?.member.id).toBe("a");
+
+    // Begun after the forget: kept.
+    c.put("t", info("a"), null, c.begin());
+    expect(c.get("t")?.member.id).toBe("a");
+  });
+
+  it("keeps its notes of what was forgotten for the cache's time and a margin, and no more than its cap", () => {
+    let clock = 1_000_000;
+    const c = createSessionCache({ ttlMs: 60_000, maxEntries: 3, now: () => clock });
+    c.forget("1");
+    c.forgetMember("a");
+    expect(c.notes()).toBe(2);
+    clock += 60_000 + FORGOTTEN_MARGIN_MS + 1;
+    c.forget("2");
+    c.forgetMember("b");
+    expect(c.notes()).toBe(2);
+    c.forget("3");
+    c.forget("4");
+    c.forget("5");
+    expect(c.notes()).toBe(4);
+  });
+
+  it("a note dropped while a read waits, by the cap or by age, still stops that read's answer", () => {
+    let clock = 1_000_000;
+    const c = createSessionCache({ ttlMs: 60_000, maxEntries: 3, now: () => clock });
+    const byCap = c.begin();
+    c.forget("T");
+    for (const junk of ["j1", "j2", "j3"]) c.forget(junk); // T's note is pushed out
+    c.put("T", info("a"), null, byCap);
+    expect(c.get("T")).toBeNull();
+
+    const byAge = c.begin();
+    c.forgetMember("b");
+    clock += 60_000 + FORGOTTEN_MARGIN_MS + 1;
+    c.forgetMember("c"); // b's note has aged out
+    c.put("U", info("b"), null, byAge);
+    expect(c.get("U")).toBeNull();
+
+    // A read begun after both: kept.
+    c.put("T", info("a"), null, c.begin());
+    expect(c.get("T")?.member.id).toBe("a");
+  });
+
+  it("an answer not put back still tells whose token it was", () => {
+    const c = createSessionCache({ ttlMs: 60_000 });
+    const since = c.begin();
+    c.forgetMember("m");
+    c.put("A", info("m"), null, since);
+    expect(c.get("A")).toBeNull();
+    expect(c.memberOf("A")).toBe("m");
+  });
+
+  it("remembers the members of answers not put back for the notes' time, and no more of them than its cap", () => {
+    let clock = 1_000_000;
+    const c = createSessionCache({ ttlMs: 60_000, maxEntries: 3, now: () => clock });
+    const since = c.begin();
+    c.forgetMember("m");
+    for (const key of ["1", "2", "3", "4", "5"]) c.put(key, info("m"), null, since);
+    expect(c.size()).toBe(0);
+    expect(c.notes()).toBe(1 + 3); // the member's note and the three newest answers
+    expect(c.memberOf("1")).toBeNull();
+    expect(c.memberOf("5")).toBe("m");
+    clock += 60_000 + FORGOTTEN_MARGIN_MS + 1;
+    c.put("6", info("m"), null, since);
+    expect(c.notes()).toBe(1 + 1);
+    expect(c.memberOf("5")).toBeNull();
+    expect(c.memberOf("6")).toBe("m");
   });
 
   it("counts hits and misses under identity.session", () => {

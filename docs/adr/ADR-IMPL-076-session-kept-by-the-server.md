@@ -14,12 +14,22 @@ cookie back. After the first minute every request carries the token alone and Be
 **Decision.**
 
 1. **Each process keeps the session behind a token** for at most `SESSION_COOKIE_CACHE_SECONDS`, never past the
-   session's own expiry, keyed by a hash of the signed token (never the token). Only a verified member's session is
+   session's own expiry, keyed by a hash of the signed token (never the token) in the one cookie Better Auth reads the
+   session from (`authCookies.sessionToken`: `__Secure-` only with secure cookies; the first of that name, read as
+   Better Auth reads it), never another cookie of the same name, and kept only when the token Better Auth verified is
+   that cookie's. A request with a bearer token (`Authorization: bearer …`, any case), which Better Auth's `bearer()`
+   reads instead of the cookie, is neither answered from nor kept in the cache; it reads fresh. Only a verified member's session is
    kept; an anonymous or unverified answer is asked again.
 2. **A miss reads fresh** (`disableCookieCache`), so nothing is kept that the database did not say within the minute.
    A write (`POST`, `PUT`, `PATCH`, `DELETE`) reads fresh as before and puts its answer back, or forgets the token.
 3. **Forgetting.** A write to `/api/auth/*` (sign-out, revoke, change), a password change through
-   `/v1/account/password` and an account deletion forget what this process keeps for the member.
+   `/v1/account/password` and an account deletion forget what this process keeps for the member. A read that began
+   before its token or its member was forgotten puts nothing back: the cache notes each forget per token and per
+   member (for the cache's time and 30 s more; a note dropped earlier or later raises a floor no older read puts
+   under), never one counter for all, since a read that finds no session forgets its token too and a shared counter
+   would drop every other member's answer under load. An answer not put back still names its member, so a sign-out or
+   a deletion with that token forgets the member's other entries. A write sent with a bearer token forgets the member
+   a fresh read finds behind it, before the write.
 4. At most 10 000 sessions per process (~2 MB), the oldest first past it; hits and misses counted as `cache_hit` /
    `cache_miss` with `ns="identity.session"`.
 
