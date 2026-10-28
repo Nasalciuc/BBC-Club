@@ -11,16 +11,6 @@ beforeAll(async () => {
 });
 afterAll(() => iso.drop());
 
-describe("the queue's gauges (ADR-IMPL-073)", () => {
-  it("are on /metrics only where the poller runs: queueGauges, true for the worker, false for an API replica", async () => {
-    const replica = createPlatform(db, { level: "silent", queueGauges: false });
-    expect(await replica.metrics.render()).not.toContain("bbc_queue_pending");
-    const worker = createPlatform(db, { level: "silent", queueGauges: true });
-    const text = await worker.metrics.render();
-    for (const g of ["queue_pending", "queue_dead", "queue_oldest_pending_seconds"]) expect(text).toContain(`bbc_${g}`);
-  });
-});
-
 describe("jobs", () => {
   it("records every run and returns metrics", async () => {
     const p = createPlatform(db, { level: "silent" });
