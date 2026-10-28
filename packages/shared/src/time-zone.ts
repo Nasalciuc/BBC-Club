@@ -5,7 +5,11 @@ const ZONE_NAME = /^[A-Za-z][A-Za-z0-9_+\-/]*$/;
 /** Names asked about, per process: a few hundred zones at most (ADR-IMPL-075). Past the cap a name is still checked,
  *  only not remembered. */
 const REMEMBERED = 1_000;
+/** Names that are no zone, remembered at most this many: anyone can send one in a profile, and a stream of made-up
+ *  names would otherwise fill the map and leave the real zones checked again on every call. */
+const INVALID_REMEMBERED = 100;
 const known = new Map<string, boolean>();
+let invalidKept = 0;
 
 /** True when `tz` is a time-zone name the app's and the server's clocks can read — the name only: the club reads a
  *  zone's rules (a day's bounds, a fare's clocks, quiet hours) from Postgres's tzdata (#114, ADR-IMPL-077 §5). Not
@@ -23,6 +27,14 @@ export function isIanaZone(tz: string): boolean {
       ok = false;
     }
   }
-  if (known.size < REMEMBERED) known.set(tz, ok);
+  if (known.size < REMEMBERED && (ok || invalidKept < INVALID_REMEMBERED)) {
+    known.set(tz, ok);
+    if (!ok) invalidKept++;
+  }
   return ok;
+}
+
+/** How many names this process remembers, valid and not (tests). */
+export function zoneNamesKept(): { all: number; invalid: number } {
+  return { all: known.size, invalid: invalidKept };
 }
