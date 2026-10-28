@@ -44,12 +44,14 @@ if media_wanted "$PROD_ENV"; then
   DC="$DC --profile media"
 fi
 # The monitoring is the box's, like Caddy: a production deploy keeps it current (step 8). Grafana's admin password and
-# the alerts' webhook are checked here, while nothing has changed yet (ADR-IMPL-073).
+# the alerts' webhook are checked here, while nothing has changed yet (ADR-IMPL-073); the database role's password only
+# by a production deploy, the one that gives it (ADR-IMPL-077).
 MONITORING_ON=""
 if monitoring_wanted "$PROD_ENV"; then
   DC="$DC --profile monitoring"
   MONITORING_ON=1
   for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD; do
+    [[ "$k" == GRAFANA_PG_PASSWORD && "$MODE" != "production" ]] && continue
     env_known "$PROD_ENV" "$k" || { echo "❌ MONITORING=on needs $k in $PROD_ENV (RUNBOOK § Monitoring)"; exit 1; }
   done
 fi
@@ -94,6 +96,12 @@ notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X
 if [[ "$MODE" == "production" ]] && [[ "${LOADTEST:-}" == "1" ]]; then
   echo "❌ LOADTEST=1 is refused in production"; exit 1
 fi
+# Postgres reads its -c settings only when its container is made, and no step here makes it again (every `up` is
+# --no-deps): a server still on an older command line than the compose files is said here and the deploy goes on — a
+# recreate stops the database for its restart, a minute the operator picks (ADR-IMPL-077).
+for pg_svc in $(stale_postgres $DC); do
+  notify "⚠ deploy $MODE: Postgres ($pg_svc) runs older settings than compose: recreate it in a quiet minute: $DC up -d --no-deps $pg_svc"
+done
 
 PREVIOUS="$(env_value "$ENVF" "$VAR")"
 [[ -z "$PREVIOUS" || "$PREVIOUS" =~ ^[^:]+:[0-9a-f]{7,40}$ ]] || { echo "❌ $VAR must be empty or an image tagged with a commit SHA (got: $PREVIOUS)"; exit 1; }
@@ -299,14 +307,8 @@ fi
 MONITORING_FAILED=""
 if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
   # Grafana's database dashboard reads Postgres as bbc_monitor (0052, ADR-IMPL-077): the role takes its password from
-  # production.env here, through psql's stdin — never on a command line, never in a migration, nor in the log, nor in
-  # pg_stat_statements: the session first stops Postgres logging every statement it runs (log_statement, should anyone
-  # set it to ddl or all for a while), a failed or slow one (an ALTER that fails, the role not there yet, would be
-  # logged whole, password and all) and recording utility statements (a successful one would be kept word for word,
-  # where the dashboard's own role reads). bbc is the superuser, so it may set all four.
-  pg_pw="$(env_value "$PROD_ENV" GRAFANA_PG_PASSWORD)"
-  if ! printf "SET log_statement = 'none';\nSET log_min_error_statement = panic;\nSET log_min_duration_statement = -1;\nSET pg_stat_statements.track_utility = off;\nALTER ROLE bbc_monitor LOGIN PASSWORD '%s';\n" "${pg_pw//\'/\'\'}" \
-    | $DC exec -T postgres psql -q -v ON_ERROR_STOP=1 -U bbc -d bbc >/dev/null; then
+  # production.env, through psql's stdin and with Postgres's statement logging off for that session (env-value.sh).
+  if ! set_monitor_password "$PROD_ENV" $DC; then
     notify "⚠ deploy production: $IMAGE is live, but Grafana's database role took no password — the database dashboard stays empty (RUNBOOK § Monitoring)" "${OPS_WEBHOOK:-}"
   fi
   if ! $DC up -d --no-deps --wait --wait-timeout 120 victoriametrics grafana node-exporter cadvisor; then

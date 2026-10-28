@@ -38,9 +38,9 @@ flock /var/lock/bbc-deploy.lock bash infra/deploy.sh production ghcr.io/nasalciu
 
 The `api-deploy` workflow holds `/var/lock/bbc-deploy.lock` from its `git checkout` to the end of the deploy, so two dispatches never swap the shared checkout under each other; its SSH step has an hour in all, up to 25 minutes of it waiting for the lock. By hand, `flock` (above) waits its turn the same way. A staging dispatch whose `infra/caddy` or `infra/monitoring` differs from `origin/main`'s stops before its checkout: production's Caddy and monitoring read those directories from this checkout (§ Staging on the same box).
 
-Before step 1, nothing changes unless `staging.env` sets no key that production's services read (§ Staging on the same box), the origin certificate passes `origin_tls_check` (§ Certificates), and N, the number of API replicas, is 1–9: `API_REPLICAS` (`API_REPLICAS_STAGING` on staging), default 2, read the way Compose reads it — the shell, then `staging.env`, then `production.env`.
+Before step 1, nothing changes unless `staging.env` sets no key that production's services read (§ Staging on the same box), the origin certificate passes `origin_tls_check` (§ Certificates), and N, the number of API replicas, is 1–9: `API_REPLICAS` (`API_REPLICAS_STAGING` on staging), default 2, read the way Compose reads it — the shell, then `staging.env`, then `production.env`. A Postgres (`postgres`, `postgres-staging`) whose running command line is not the one the compose files give it now is said there, to `OPS_WEBHOOK` too, and the deploy goes on: `Postgres (postgres) runs older settings than compose: recreate it in a quiet minute: … up -d --no-deps postgres` (§ The first deploy after ADR-IMPL-077).
 
-Sequence: (1) `pg_dump` (2) pull API+worker images, then `scripts/check-env.ts` in the new image, as the API and as the worker: the server's own boot rules on this env file. A failed pull or a refusal (which names the setting) puts the previous image tag back and stops; nothing else has changed (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d --no-deps` the pooler — never Postgres, which takes new settings only when recreated on purpose (§ Memory and replicas) — then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to the replicas there were plus N (2N, unless `API_REPLICAS` just changed; a stopped container counts, as Compose counts it), wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) staging only: the demo data (8) Caddy, where the box has one, takes this commit's Caddyfile — a one-off `caddy validate` first (certificates included), then `up -d --no-deps caddy`, which makes a new container only when one of its four settings changed, then a graceful `caddy reload`. Caddy serves production too, so a staging deploy applies `infra/caddy` only when it is exactly `origin/main`'s; a branch's is validated and left for review. Then old API images are removed, except this one, the one it replaced, the other environment's and the five newest. A Caddy failure leaves the API deployed and Caddy on its previous config, and the deploy reports it red. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
+Sequence: (1) `pg_dump` (2) pull API+worker images, then `scripts/check-env.ts` in the new image, as the API and as the worker: the server's own boot rules on this env file. A failed pull or a refusal (which names the setting) puts the previous image tag back and stops; nothing else has changed (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer (4) `up -d --no-deps` the pooler — never Postgres, which takes new settings only when recreated on purpose (§ Memory and replicas) — then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to the replicas there were plus N (2N, unless `API_REPLICAS` just changed; a stopped container counts, as Compose counts it), wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) staging only: the demo data (8) Caddy, where the box has one, takes this commit's Caddyfile — a one-off `caddy validate` first (certificates included), then `up -d --no-deps caddy`, which makes a new container only when one of its four settings changed, then a graceful `caddy reload`; production with `MONITORING=on`: `bbc_monitor` takes `GRAFANA_PG_PASSWORD` and the monitoring this commit's settings (§ Monitoring). Caddy serves production too, so a staging deploy applies `infra/caddy` only when it is exactly `origin/main`'s; a branch's is validated and left for review. Then old API images are removed, except this one, the one it replaced, the other environment's and the five newest. A Caddy failure leaves the API deployed and Caddy on its previous config, and the deploy reports it red. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
 
 Compose healthcheck is `/health`; the deploy gate is `/ready`. Caddy `api_site` resolves replicas with `dynamic a` (refresh 5 s), `least_conn`, passive health on 5xx.
 
@@ -59,6 +59,16 @@ After `shared_preload_libraries=pg_stat_statements` changes, Postgres must resta
 - Postgres keeps its old container settings until it is recreated on purpose (§ Memory and replicas); `oom_score_adj` -500 and the 60 s stop grace period start then. On staging, step 4 recreates `pgbouncer-staging` once (its new memory limit): a moment of errors on staging only.
 - Uptime Kuma monitors made before R1 watch `/ready`, which now answers for one process: point the system monitor at `http://api:8000/status`, red on a dead letter, a stuck queue, a scheduled job gone late (a stopped worker shows there) or one whose last finished run failed.
 - Until Caddy takes R1's Caddyfile, the old one sends `/status` to the API like any path, so it answers from outside: the queue's counts and the names of late jobs, nothing about members.
+
+### The first deploy after ADR-IMPL-077 (once)
+
+Postgres reads its `-c` settings only when its container is made, and a deploy never makes it again: until then production keeps its old command line — statements over 1 s logged with their bound values, JIT on, no `auto_explain`, an error's DETAIL in the log. In this order:
+
+1. With `MONITORING=on`: `GRAFANA_PG_PASSWORD=` in `production.env` (`openssl rand -base64 24`, into the password manager). A production deploy refuses without it (§ Monitoring).
+2. Deploy production. Its migrations build the new indexes `CONCURRENTLY` (writes go on meanwhile; a lock not granted stops the migration and the deploy is run again, § Database recovery) and make `bbc_monitor` with its limits (0052, 0053); step 8 gives it its password and recreates Grafana. The pre-flight warns `Postgres (postgres) runs older settings than compose` — expected until step 3.
+3. In a quiet minute, recreate production's Postgres: `docker compose ... up -d --no-deps postgres` — 10 to 60 seconds of errors while it restarts (§ Memory and replicas).
+4. The same for staging's, with the staging files: `docker compose ... up -d --no-deps postgres-staging`.
+5. Check: `docker compose ... exec -T postgres psql -U bbc -d bbc -Atc "SHOW log_error_verbosity" -c "SHOW jit" -c "SHOW shared_preload_libraries"` reads `terse`, `off`, `pg_stat_statements,auto_explain`; the next deploy's pre-flight says nothing; Grafana's `the database` shows its panels.
 
 ## Roll back right now
 
@@ -761,8 +771,12 @@ Then run `db:migrate` again (or the deploy): the build starts over.
 bash infra/rotate-secret.sh production INTERNAL_API_SECRET             # both values accepted
 # update CRM / marketing / CI, then:
 bash infra/rotate-secret.sh production INTERNAL_API_SECRET --promote
-docker compose ... up -d api
+docker compose ... up -d --no-deps api worker cron
 ```
+
+The worker checks the secret on cron's jobs and cron sends it: until both are made again they keep the old one, and
+the worker still takes it. `--no-deps` leaves Postgres as it is: it reads `production.env` too, so a plain `up` makes it
+again after any deploy (ADR-IMPL-077).
 
 Staging has no rotation window: its secret is `INTERNAL_API_SECRET_STAGING` in `staging.env` (`compose.staging.yml` hands it to staging's API, worker and cron). Write a new one there (`openssl rand -base64 48`), then deploy staging; `rotate-secret.sh staging INTERNAL_API_SECRET` says so and stops.
 
@@ -774,7 +788,8 @@ Symptoms: `deliveries_dead` climbing, `notification.failed` with `InvalidProvide
 
 1. Generate a new `.p8` in the Apple Developer account (Keys → APNs).
 2. `base64 -w0 AuthKey_XXXX.p8` → `APNS_P8_BASE64` in the env file, update `APNS_KEY_ID`.
-3. `docker compose ... up -d api`, then replay the dead deliveries.
+3. `docker compose ... up -d --no-deps api worker` (the worker sends the pushes cron asks for; `--no-deps` leaves
+   Postgres as it is), then replay the dead deliveries.
    Inbox rows already exist, so nothing is lost — pushes are late, not missing.
 
 Day-to-day states, sandbox versus production, and how to replay one failed row are under **Push**.
@@ -793,7 +808,7 @@ Keys live in env, base64-encoded. Nothing in the repo is a `.p8` or a Firebase s
 | `APNS_ENVIRONMENT`           | `sandbox` for a development or TestFlight build that uses the sandbox gateway. `production` for an App Store build. A sandbox token sent to the production gateway is rejected, and the reverse is too.                                                                                                                                                                                   |
 | `FCM_SERVICE_ACCOUNT_BASE64` | Base64 of the Firebase service-account JSON.                                                                                                                                                                                                                                                                                                                                              |
 
-Rotate the APNs key the same way as the incident above: new `.p8`, new `APNS_P8_BASE64` and `APNS_KEY_ID`, restart the API. The old key stops working as soon as Apple revokes it, so put the new values in env before you revoke.
+Rotate the APNs key the same way as the incident above: new `.p8`, new `APNS_P8_BASE64` and `APNS_KEY_ID`, then `docker compose ... up -d --no-deps api worker`. The old key stops working as soon as Apple revokes it, so put the new values in env before you revoke.
 
 `notifications.notifications.status`:
 
@@ -929,7 +944,7 @@ Metrics only: VictoriaMetrics scrapes each API replica and each worker, producti
    ```bash
    $DC --profile media stop minio && $DC --profile media rm -f minio
    ```
-2. In `production.env`: `MONITORING=on`, `GRAFANA_ADMIN_PASSWORD=` (`openssl rand -base64 24`, into the password manager), `GRAFANA_ALERTS_WEBHOOK=` (where the alerts go; usually `OPS_WEBHOOK`'s URL) and `GRAFANA_PG_PASSWORD=` (`openssl rand -base64 24`: the database dashboard's read-only role; each production deploy gives it to `bbc_monitor`, step 8) — bootstrap.sh and deploy.sh refuse `MONITORING=on` without all three. Until the first production deploy after it is set, `the database` answers `password authentication failed`. `staging.env` sets neither: the deploy refuses there every name production's compose file substitutes (§ Staging on the same box), and its own `OPS_WEBHOOK` stays its own.
+2. In `production.env`: `MONITORING=on`, `GRAFANA_ADMIN_PASSWORD=` (`openssl rand -base64 24`, into the password manager), `GRAFANA_ALERTS_WEBHOOK=` (where the alerts go; usually `OPS_WEBHOOK`'s URL) and `GRAFANA_PG_PASSWORD=` (`openssl rand -base64 24`: the database dashboard's read-only role; each production deploy gives it to `bbc_monitor`, step 8, and a production bootstrap after its migrations) — bootstrap.sh and a production deploy refuse `MONITORING=on` without all three (a staging deploy asks for the first two). Until the first production deploy after it is set, `the database` answers `password authentication failed`. `staging.env` sets neither: the deploy refuses there every name production's compose file substitutes (§ Staging on the same box), and its own `OPS_WEBHOOK` stays its own.
 3. The next production deploy starts it (step 8). Or now: `$DC --profile monitoring up -d --no-deps victoriametrics grafana node-exporter cadvisor`.
 4. Plans per statement need `pg_stat_statements.track_planning`, which Postgres takes when it is recreated: `$DC up -d --no-deps postgres`, in a quiet minute (§ Memory and replicas). Until then that panel reads 0. The same recreate brings ADR-IMPL-077's settings: `auto_explain` loaded but off (§ Tuning a statement), errors without their DETAIL (`log_error_verbosity=terse`), `jit=off`, `track_io_timing`, and statements over 250 ms in the log without their bound values (`$DC logs postgres --since 1h | grep duration`).
 

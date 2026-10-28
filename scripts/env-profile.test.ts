@@ -738,6 +738,112 @@ describe("monitoring and media profiles (ADR-IMPL-073)", () => {
   });
 });
 
+describe("Grafana's database role and Postgres's settings (ADR-IMPL-077)", () => {
+  /** A compose command that says what it was asked and what it read on stdin, on stderr. */
+  const recordingCompose = `dc() { echo "ARGV $*" >&2; cat >&2; }`;
+
+  it("set_monitor_password: the password through stdin only, after the session stops logging and recording", async () => {
+    const result = await withEnv(
+      `GRAFANA_PG_PASSWORD="it's-a-pw"\n`,
+      `${recordingCompose}\nset_monitor_password "$F" dc compose -f x.yml; echo "rc=$?"`,
+    );
+    expect(result.out.trim()).toBe("rc=0");
+    const [argv, ...stdin] = result.err.trim().split("\n");
+    expect(argv).toBe("ARGV compose -f x.yml exec -T postgres psql -q -v ON_ERROR_STOP=1 -U bbc -d bbc");
+    expect(stdin).toEqual([
+      "SET log_statement = 'none';",
+      "SET log_min_error_statement = panic;",
+      "SET log_min_duration_statement = -1;",
+      "SET pg_stat_statements.track_utility = off;",
+      "ALTER ROLE bbc_monitor LOGIN PASSWORD 'it''s-a-pw';",
+    ]);
+  });
+
+  it("set_monitor_password sends nothing without a real password", async () => {
+    for (const content of ["OTHER=1\n", "GRAFANA_PG_PASSWORD=\n", "GRAFANA_PG_PASSWORD=   # openssl rand\n"]) {
+      const result = await withEnv(content, `${recordingCompose}\nset_monitor_password "$F" dc; echo "rc=$?"`);
+      expect(result.out.trim()).toBe("rc=1");
+      expect(result.err).toBe("");
+    }
+  });
+
+  /** A compose command and a docker whose Postgres services run `running`, keyed by service; compose asks for jit=off. */
+  const composeRunning = (running: Record<string, string>) => `
+    dc() {
+      case "$*" in
+        "config --format json") echo '{"services":{"postgres":{"command":["postgres","-c","jit=off"]},"postgres-staging":{"command":["postgres","-c","jit=off"]},"api":{"command":null}}}' ;;
+        ${Object.keys(running)
+          .map((svc) => `"ps -q ${svc}") echo ct-${svc} ;;`)
+          .join("\n        ")}
+        *) return 0 ;;
+      esac
+    }
+    docker() {
+      case "$*" in
+        ${Object.entries(running)
+          .map(([svc, args]) => `"inspect -f {{json .Args}} ct-${svc}") echo '${args}' ;;`)
+          .join("\n        ")}
+        *) return 1 ;;
+      esac
+    }`;
+
+  it("stale_postgres names each running Postgres whose command line is not compose's, and only those", async () => {
+    const stale = async (running: Record<string, string>) =>
+      (await withEnv("", `${composeRunning(running)}\nstale_postgres dc`)).out.trim();
+    expect(
+      await stale({ postgres: '["postgres","-c","jit=on"]', "postgres-staging": '["postgres", "-c", "jit=off"]' }),
+    ).toBe("postgres");
+    expect(await stale({ "postgres-staging": '["postgres","-c","jit=off","-c","x=1"]' })).toBe("postgres-staging");
+    expect(await stale({ postgres: '["postgres","-c","jit=off"]' })).toBe(""); // staging not running: left out
+  });
+
+  /** A copy of deploy.sh in a throwaway infra/ with these env files and the docker given, as far as it gets. */
+  async function deploy(mode: string, prod: string, docker: string) {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    mkdirSync(join(dir, "infra", "env"), { recursive: true });
+    for (const name of ["deploy.sh", "env-value.sh", "docker-compose.yml", "compose.prod.yml", "compose.staging.yml"]) {
+      copyFileSync(join(root, "infra", name), join(dir, "infra", name));
+    }
+    writeFileSync(
+      join(dir, "infra", "env", "production.env"),
+      `POSTGRES_PASSWORD=a1\nPOSTGRES_PASSWORD_STAGING=b2\n${prod}`,
+    );
+    writeFileSync(join(dir, "infra", "env", "staging.env"), "OTHER=1\n");
+    const result = await bash(
+      `${docker}\nexport -f docker\nbash ${shPath(join(dir, "infra", "deploy.sh"))} ${mode} ghcr.io/x/bbc-api:abcdef1`,
+    );
+    rmSync(dir, { recursive: true, force: true });
+    return result;
+  }
+  const monitored = "MONITORING=on\nGRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\n";
+  const noDaemon = `docker() { return 1; }`;
+
+  it("only a production deploy asks for the database role's password, the one that gives it", async () => {
+    const production = await deploy("production", monitored, noDaemon);
+    expect(production.out).toContain("❌ MONITORING=on needs GRAFANA_PG_PASSWORD");
+    const staging = await deploy("staging", monitored, noDaemon);
+    expect(staging.out).not.toContain("GRAFANA_PG_PASSWORD");
+    expect(staging.out).toContain("1/8 pre-deploy dump (staging)");
+  });
+
+  it("a deploy says when Postgres runs older settings than compose, and goes on", async () => {
+    const docker = `docker() {
+      case "$*" in
+        *" config --format json") echo '{"services":{"postgres":{"command":["postgres","-c","jit=off"]}}}' ;;
+        *" ps -q postgres") echo ct-pg ;;
+        "inspect -f {{json .Args}} ct-pg") echo '["postgres","-c","jit=on"]' ;;
+        *) return 1 ;;
+      esac
+    }`;
+    const result = await deploy("staging", "OTHER=1\n", docker);
+    expect(result.out).toContain(
+      "⚠ deploy staging: Postgres (postgres) runs older settings than compose: recreate it in a quiet minute: docker compose",
+    );
+    expect(result.out).toContain("up -d --no-deps postgres");
+    expect(result.out).toContain("1/8 pre-deploy dump (staging)");
+  });
+});
+
 const opensslReason =
   spawnSync("openssl", ["version"], { encoding: "utf8" }).status === 0 ? null : "openssl unavailable";
 // Git Bash on Windows has no real file modes (chmod 600 reads back as 644), so the certificate cases run on Linux and macOS.

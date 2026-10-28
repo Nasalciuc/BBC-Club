@@ -33,5 +33,7 @@ for i in {1..30}; do $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>
 schemas=$($DC exec -T postgres psql -U bbc -d bbc -tAc "SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('platform','auth','members','notifications','proposals','engagement','crm','personalization')" | tr -d '[:space:]')
 [[ "$schemas" == "8" ]] || { echo "❌ restored database has $schemas of 8 schemas — NOT starting the API"; exit 1; }
 echo "✓ 8 schemas"
-$DC up -d api cron
+# --no-deps: Postgres was just restored and checked; a plain `up` would make it again (it reads production.env, which
+# every deploy rewrites) and cron would take the worker with it.
+$DC up -d --no-deps api cron
 echo "✅ restore complete — check /ready and the newest journal event"

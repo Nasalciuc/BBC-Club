@@ -94,9 +94,12 @@ CONCURRENTLY`) in a small PR of their own once production's `idx_scan` has staye
     (RUNBOOK § Tuning a statement). `db:verify` warns when a role or database setting turns `auto_explain.*` or
     `log_min_duration_statement` on for the app's role. `random_page_cost` stays 4 until the box's disk is confirmed
     an SSD (⚑F: `lsblk -d -o name,rota`, `0`).
-    `scripts/env-profile.test.ts` checks that both say the same.
+    `scripts/env-profile.test.ts` checks that both say the same. Postgres takes these only when its container is made,
+    which no deploy does: a deploy compares each running Postgres's command line with compose's (`stale_postgres`)
+    and warns, to `OPS_WEBHOOK` too, then goes on (RUNBOOK § The first deploy after ADR-IMPL-077).
 11. **Grafana reads Postgres** (⚑A): the role `bbc_monitor`, a member of `pg_monitor` (statistics, no table's rows), a
-    login only once a production deploy with `MONITORING=on` gives it `GRAFANA_PG_PASSWORD`; three connections at
+    login only once a production deploy or bootstrap with `MONITORING=on` gives it `GRAFANA_PG_PASSWORD`
+    (`set_monitor_password`, `infra/env-value.sh`: through psql's stdin, the session's logging off); three connections at
     most, no statement past 10 s and every transaction read-only (0053; Grafana opens two); Grafana's PostgreSQL
     datasource (its plugin loaded again) and a third dashboard, `the database`: the slowest statements, the indexes
     never read, dead rows, HOT updates, sizes, temporary files.

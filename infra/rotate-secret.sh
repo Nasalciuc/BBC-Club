@@ -36,7 +36,7 @@ if [[ "$ACTION" == "--promote" ]]; then
   # Without a line to replace, the sed below would only delete ${KEY}_NEXT: the new secret gone, the old one kept.
   grep -qE "^${KEY}=" "$ENV_FILE" || { echo "❌ $ENV_FILE has no ${KEY}= line to promote ${KEY}_NEXT into"; exit 1; }
   sed -i "s|^${KEY}=.*|${KEY}=${NEXT}|; /^${KEY}_NEXT=/d" "$ENV_FILE"
-  echo "✅ ${KEY} promoted. Restart: docker compose ... up -d api"
+  echo "✅ ${KEY} promoted. Restart: docker compose ... up -d --no-deps api worker cron"
 else
   NEW=$(openssl rand -base64 48 | tr -d '\n=+/' | cut -c1-48)
   grep -qE "^${KEY}_NEXT=" "$ENV_FILE" && sed -i "s|^${KEY}_NEXT=.*|${KEY}_NEXT=${NEW}|" "$ENV_FILE" || echo "${KEY}_NEXT=${NEW}" >> "$ENV_FILE"

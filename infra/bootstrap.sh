@@ -219,6 +219,12 @@ $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTG
 # Seeding runs before PgBouncer exists (--no-deps): connect straight to postgres, as the migration above does.
 $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc" api bun run scripts/seed-flags.ts \
   || { echo "❌ flag seeding failed"; exit 1; }
+# Grafana's database role (0052, made by the migrations above) takes its password now, as each production deploy gives
+# it again (deploy.sh, step 8): the database dashboard answers from the first start (ADR-IMPL-077).
+if [[ "$MODE" == "production" ]] && monitoring_wanted "$ENV_FILE"; then
+  set_monitor_password "$ENV_FILE" $DC ||
+    echo "⚠ Grafana's database role took no password — the database dashboard stays empty until the next production deploy (RUNBOOK § Monitoring)"
+fi
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   $DC up -d postgres-staging
   for i in {1..30}; do $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
