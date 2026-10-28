@@ -150,33 +150,35 @@ describe("createGenerations", () => {
   });
 
   it("a write by this process is seen by its next read, even with an older read still running", async () => {
-    let release!: () => void;
-    let held = true;
+    // The read's transaction runs, then its answer is held back: what its SELECT saw is fixed before the write below.
+    let gate: PromiseWithResolvers<void> | null = null;
+    let ran = Promise.withResolvers<void>();
     const db = new Proxy(iso.db, {
       get(t, k) {
         const v = Reflect.get(t, k);
         if (k === "transaction")
           return async (...a: unknown[]) => {
-            if (held) await new Promise<void>((r) => (release = r));
-            return (v as (...x: unknown[]) => Promise<unknown>).apply(t, a);
+            const result = await (v as (...x: unknown[]) => Promise<unknown>).apply(t, a);
+            ran.resolve();
+            if (gate) await gate.promise;
+            return result;
           };
         return typeof v === "function" ? v.bind(t) : v;
       },
     });
     let clock = 0;
     const g = createGenerations(db, { now: () => clock });
-    const first = g.current("test.own-write"); // the first read, held back
-    await Bun.sleep(5);
-    held = false;
-    release();
-    const was = (await first) ?? 0;
+    const was = (await g.current("test.own-write")) ?? 0;
     clock += 2_000;
-    held = true;
-    await g.current("test.own-write"); // a second read starts and is held back, before the write below
-    await g.bump("test.own-write", iso.db); // this process writes: the held read cannot see it
+    const older = Promise.withResolvers<void>();
+    gate = older;
+    ran = Promise.withResolvers<void>();
+    await g.current("test.own-write"); // a second read starts and answers nobody yet
+    await ran.promise; // its SELECT has run: it cannot see the write below
+    gate = null;
+    await g.bump("test.own-write", iso.db); // this process writes
     const after = g.current("test.own-write");
-    held = false;
-    release();
+    older.resolve(); // the older read ends, with the counter from before the write
     expect(await after).toBe(was + 1);
   });
 
