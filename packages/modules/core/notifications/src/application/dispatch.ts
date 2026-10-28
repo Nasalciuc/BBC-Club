@@ -153,7 +153,11 @@ async function activeTokensOf(exec: Executor, memberIds: readonly string[]): Pro
     .select()
     .from(deviceTokens)
     .where(and(inArray(deviceTokens.memberId, ids), eqConst(deviceTokens.active, true)));
-  for (const t of rows) out.set(t.memberId, [...(out.get(t.memberId) ?? []), t]);
+  for (const t of rows) {
+    const list = out.get(t.memberId);
+    if (list) list.push(t);
+    else out.set(t.memberId, [t]);
+  }
   return out;
 }
 
