@@ -80,7 +80,8 @@ covers `infra/monitoring` too).
    `WORKER_MEMORY_STAGING` and `POSTGRES_MEMORY_STAGING` in `staging.env` give one back. The limits add up to 6 752 MB
    of 8 192: production 3 840, staging 2 048, Uptime Kuma 128, the monitoring 736 (Grafana 384, VictoriaMetrics 192,
    cAdvisor 128, node-exporter 32); a deploy adds 1 024 for a few minutes (7 776). Each of the four has a CPU limit too:
-   1.3 cores in all.
+   1.3 cores in all. These are limits, not use: one-off `run` containers and the host itself are outside them. Under
+   pressure the four go after staging and before production (`oom_score_adj` 300).
 10. **Main's files only.** Production's monitoring reads `infra/monitoring` from the box's one checkout, its scrape
     targets and dashboards within a minute, as Caddy reads `infra/caddy`: the `api-deploy` workflow refuses a staging
     dispatch whose copy of either is not `origin/main`'s (ADR-IMPL-044).

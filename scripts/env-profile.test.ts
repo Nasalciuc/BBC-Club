@@ -1135,3 +1135,14 @@ describe("PgBouncer after a Postgres restart (X6)", () => {
     }
   });
 });
+
+describe("who the kernel kills first (A-R1)", () => {
+  it("the monitoring goes after staging and before production", async () => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { oom_score_adj?: number }>;
+    };
+    for (const svc of ["victoriametrics", "grafana", "node-exporter", "cadvisor"])
+      expect(doc.services[svc]!.oom_score_adj, svc).toBe(300);
+    expect(doc.services.postgres!.oom_score_adj).toBe(-500);
+  });
+});

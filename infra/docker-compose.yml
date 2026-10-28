@@ -3,11 +3,13 @@
 #
 # Memory on the 8 GB box (limits, MB): production 3 840 (Caddy 128, 2 × API 512, worker 512, PgBouncer 64, Postgres
 # 2 048, cron 64) + staging 2 048 + Uptime Kuma 128 + monitoring 736 (MONITORING=on: VictoriaMetrics 192, Grafana 384,
-# node-exporter 32, cAdvisor 128) = 6 752, so the limits never add up past the RAM; a deploy runs twice the API replicas
+# node-exporter 32, cAdvisor 128) = 6 752 of limits; a deploy runs twice the API replicas
 # for a few minutes (+1 024): 7 776 (ADR-IMPL-073). Off unless asked for: MinIO 256 (MEDIA=on, with R1b), GlitchTip 1 664
 # (GLITCHTIP=on) and Redis + Kafka 1 344 (REDIS_URL or KAFKA_BROKERS) — each needs that sum looked at again first.
 # API_MEMORY, WORKER_MEMORY and POSTGRES_MEMORY move a limit without editing this file. Under pressure the kernel kills
-# staging first (oom_score_adj 500) and Postgres last (-500).
+# staging first (oom_score_adj 500), the monitoring next (300) and Postgres last (-500). Not in these sums: one-off `run`
+# containers (a migration, a check), canary-compare, a restore drill's Postgres, and the host itself (dockerd,
+# containerd, the kernel): check `free -m` on the box before raising a limit.
 name: bbc
 
 x-logging: &logging
@@ -375,6 +377,7 @@ services:
     image: victoriametrics/victoria-metrics:v1.154.0
     profiles: ["monitoring"]
     <<: [*restart, *logging]
+    oom_score_adj: 300
     networks: [data] # the replicas, the worker and the exporters are all on it; no internet
     command:
       - -storageDataPath=/storage
@@ -397,6 +400,7 @@ services:
     image: grafana/grafana:13.2.3
     profiles: ["monitoring"]
     <<: [*restart, *logging]
+    oom_score_adj: 300
     networks: [data, edge] # edge for the alerts' webhook, which is outside the box; data for VictoriaMetrics
     # Loopback only: `ssh -L 3000:127.0.0.1:3000 root@<host>`, then http://localhost:3000 (RUNBOOK § Monitoring).
     ports: ["127.0.0.1:3000:3000"]
@@ -436,6 +440,7 @@ services:
     image: prom/node-exporter:v1.12.1
     profiles: ["monitoring"]
     <<: [*restart, *logging]
+    oom_score_adj: 300
     networks: [data]
     pid: host
     command:
@@ -457,6 +462,7 @@ services:
     image: ghcr.io/google/cadvisor:0.60.6
     profiles: ["monitoring"]
     <<: [*restart, *logging]
+    oom_score_adj: 300
     networks: [data]
     privileged: true
     devices: ["/dev/kmsg"]
