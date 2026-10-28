@@ -1,27 +1,62 @@
-# Manual deploy of the API image: build → push to GHCR (7-char SHA tag only) → SSH → infra/deploy.sh.
-# workflow_dispatch only. The push trigger below stays commented out: enabling it is a separate, owner-approved decision.
+# Main deploys itself (ADR-IMPL-079): a green `validate` on a push to main builds that commit's API image (7-char SHA
+# tag only, GHCR), deploys it to staging over SSH (infra/deploy.sh), and deploys production once Scaler approves it
+# (GitHub → Environments → production). Every job uses the commit `gate` names: the one validate checked, never main's
+# tip at the time. workflow_dispatch runs one target by hand.
 name: api-deploy
 on:
+  workflow_run:
+    workflows: [validate]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       target:
         description: "staging | production"
         required: true
         default: staging
-# on:
-#   push:
-#     branches: [main]
-#     paths: ["apps/api/**", "packages/**", "package.json", "bun.lock", ".github/workflows/api-deploy.yml"]
-#     tags: ["v*"]
 
 permissions:
   contents: read
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
+  gate:
+    # A validate run that passed on a push to main, or a run by hand. Nothing else goes on.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      current: ${{ steps.sha.outputs.current }}
+    steps:
+      - id: sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCHED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # At workflow_run, github.sha is main's tip now, not the commit validate checked: the run's head_sha is.
+          if [ "$EVENT" = "workflow_run" ]; then sha="$VALIDATED_SHA"; else sha="$DISPATCHED_SHA"; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          main=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$EVENT" = "workflow_run" ] && [ "$main" != "$sha" ]; then
+            # A newer commit is on main: its own run deploys it, and this one stops before building anything.
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Superseded"
+              echo "main is at \`${main::7}\`, past \`${sha::7}\`: the newer commit's run deploys."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: gate
+    if: needs.gate.outputs.current == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -30,6 +65,8 @@ jobs:
       image: ${{ steps.meta.outputs.image }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -37,9 +74,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        run: |
-          SHA=${GITHUB_SHA::7}
-          echo "image=ghcr.io/nasalciuc/bbc-api:${SHA}" >> "$GITHUB_OUTPUT"
+        env:
+          SHA: ${{ needs.gate.outputs.sha }}
+        run: echo "image=ghcr.io/nasalciuc/bbc-api:${SHA::7}" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -51,12 +88,16 @@ jobs:
           cache-to: type=gha,mode=max
 
   staging:
-    needs: build
+    needs: [gate, build]
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && inputs.target == 'staging')
+      needs.gate.outputs.current == 'true' &&
+      (github.event_name == 'workflow_run' || inputs.target == 'staging')
     runs-on: ubuntu-24.04
     environment: staging
+    # Concurrency per job, never per workflow: see production.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
     steps:
       - uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         with:
@@ -76,18 +117,26 @@ jobs:
             git fetch -q --all
             # Production's Caddy reads infra/caddy from this checkout (its well-known files at once), and the monitoring
             # infra/monitoring (its scrape targets and dashboards within a minute): staging takes main's (ADR-IMPL-073).
-            git diff --quiet origin/main ${{ github.sha }} -- infra/caddy infra/monitoring ||
+            git diff --quiet origin/main ${{ needs.gate.outputs.sha }} -- infra/caddy infra/monitoring ||
               { echo "❌ this commit's infra/caddy or infra/monitoring is not main's, and production reads them from this checkout: deploy it to staging after the merge"; exit 1; }
-            git checkout -q ${{ github.sha }}
+            git checkout -q ${{ needs.gate.outputs.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" staging ${{ needs.build.outputs.image }}
 
   production:
-    needs: build
+    needs: [gate, build, staging]
+    # !cancelled(): a run by hand for production skips staging, which would otherwise skip this job with it.
     if: >-
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
+      !cancelled() && needs.gate.outputs.current == 'true' && needs.build.result == 'success' &&
+      ((github.event_name == 'workflow_run' && needs.staging.result == 'success') ||
+       (github.event_name == 'workflow_dispatch' && inputs.target == 'production'))
     runs-on: ubuntu-24.04
     environment: production # protected: requires manual approval in GitHub → Environments
+    # Concurrency per job, never per workflow: a production deploy waiting for its approval keeps the run open, and a
+    # workflow-level group would hold every later merge's staging deploy behind it. An older run still waiting when a
+    # newer one arrives is rejected in Environments, and only the newest is approved (ADR-IMPL-079).
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         with:
@@ -105,5 +154,5 @@ jobs:
             exec 9>/var/lock/bbc-deploy.lock
             flock -w 1500 9 || { echo "❌ another deploy has held the box for 25 minutes"; exit 1; }
             git fetch -q --all
-            git checkout -q ${{ github.sha }}
+            git checkout -q ${{ needs.gate.outputs.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" production ${{ needs.build.outputs.image }}
