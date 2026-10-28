@@ -156,6 +156,12 @@ export function createSessionCache(opts: {
       note(keyForgot, key);
       entries.delete(key);
     },
+    /** Every session this process keeps, of every member: after a write that ends sessions it cannot name (a reset by
+     *  code carries no session). No read begun before it puts its answer back. */
+    forgetAll(): void {
+      floor = ++seq;
+      entries.clear();
+    },
     /** Every session this process keeps for the member: after a sign-out, a password change, a deletion. */
     forgetMember(memberId: string): void {
       note(memberForgot, memberId);

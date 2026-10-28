@@ -60,16 +60,19 @@ type RouteReport = {
 };
 
 const LIFTED = ["ratelimit.read", "ratelimit.search", "ratelimit.anon"];
-// The run empties pg_stat_statements for the whole server and lifts the read limits: a test database only, by the
-// rule every database test keeps (its name says `test`, as preload.ts and isolatedDb ask), before anything connects.
+// The run empties its database's pg_stat_statements and lifts that database's read limits: a test database only, one
+// whose name has `test` as a word of its own (compose.test.yml's bbc_test; never `contest`), before anything connects.
 const env = loadEnv();
-if (!/test/i.test(new URL(env.DATABASE_URL).pathname)) {
+const database = decodeURIComponent(new URL(env.DATABASE_URL).pathname.slice(1));
+if (!/(^|[_-])test($|[_-])/i.test(database)) {
   console.error(
-    `perf.ts refuses to run: DATABASE_URL names "${new URL(env.DATABASE_URL).pathname.slice(1)}", not a test database. ` +
-      "It resets pg_stat_statements for the whole server; point it at compose.test.yml's bbc_test (header).",
+    `perf.ts refuses to run: DATABASE_URL names "${database}", not a test database ("test" a word of its own). ` +
+      "It resets pg_stat_statements and lifts the rate limits there; point it at compose.test.yml's bbc_test (header).",
   );
   process.exit(1);
 }
+/** This database in pg_stat_statements: the reset and the reading are its own, never another database's. */
+const thisDb = sql`(SELECT oid FROM pg_database WHERE datname = current_database())`;
 const built = await buildApp({ startPoller: false, env });
 const { app, db } = built;
 await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_stat_statements`);
@@ -117,7 +120,7 @@ try {
       seen(r.status);
       await r.arrayBuffer();
     }
-    await db.execute(sql`SELECT pg_stat_statements_reset()`);
+    await db.execute(sql`SELECT pg_stat_statements_reset(0::oid, ${thisDb}, 0::bigint)`);
     const cpu0 = process.cpuUsage();
     const lat: number[] = [];
     for (let i = 0; i < N; i++) {
@@ -131,7 +134,7 @@ try {
     const stats = (await db.execute(sql`
       SELECT query, calls::int, plans::int, total_exec_time::float8 AS exec_ms, total_plan_time::float8 AS plan_ms
       FROM pg_stat_statements
-      WHERE query NOT ILIKE '%pg_stat_statements%'
+      WHERE dbid = ${thisDb} AND query NOT ILIKE '%pg_stat_statements%'
       ORDER BY total_exec_time + total_plan_time DESC`)) as unknown as Stat[];
     lat.sort((a, b) => a - b);
     const sum = (k: keyof Stat) => stats.reduce((s, r) => s + Number(r[k]), 0);
