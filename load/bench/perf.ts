@@ -91,9 +91,19 @@ try {
   for (const c of CASES) {
     const headers = "anonymous" in c ? {} : { cookie };
     let status = 0;
+    // Every answer counts, not only the last: a route that fails between successes still fails the run.
+    let bad = 0;
+    let firstBad = 0;
+    const seen = (s: number) => {
+      status = s;
+      if (s >= 400) {
+        bad++;
+        firstBad ||= s;
+      }
+    };
     for (let i = 0; i < 200; i++) {
       const r = await app.request(c.path, { headers });
-      status = r.status;
+      seen(r.status);
       await r.arrayBuffer();
     }
     await db.execute(sql`SELECT pg_stat_statements_reset()`);
@@ -103,7 +113,7 @@ try {
       const t = performance.now();
       const r = await app.request(c.path, { headers });
       await r.arrayBuffer();
-      status = r.status;
+      seen(r.status);
       lat.push(performance.now() - t);
     }
     const cpu = process.cpuUsage(cpu0);
@@ -136,7 +146,7 @@ try {
       `${c.name.padEnd(17)} ${String(status).padEnd(4)} cpu ${r.appCpuMsPerReq} ms (×${r.cpuVsHealth} health) · ` +
         `${r.stmtsPerReq} stmts · ${r.plansPerReq} plans · p50 ${r.p50} ms`,
     );
-    if (status >= 400) failures.push(`${c.name}: answered ${status}`);
+    if (bad) failures.push(`${c.name}: ${bad} of ${200 + N} answers ≥ 400 (the first ${firstBad})`);
     const t = THRESHOLDS[c.name];
     if (t) {
       if (r.stmtsPerReq > t.stmtsPerReq)
