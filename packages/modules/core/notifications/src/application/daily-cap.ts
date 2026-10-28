@@ -1,6 +1,8 @@
-import { and, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, gte, lt, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
+import { anyText } from "@bbc/db/helpers";
 import { notificationsTable } from "@bbc/db/schema/notifications";
+import { calendarDaysIn } from "../infrastructure/local-clock";
 import { DEFAULT_TIME_ZONE, zonesForPostgres } from "./quiet-hours";
 
 /** The categories the daily cap counts: one offer push a day, personal or broadcast. */
@@ -15,32 +17,25 @@ export async function localDays(exec: Executor, at: readonly { at: Date; timeZon
     exec,
     at.map((a) => a.timeZone),
   );
-  // The instants bound as ISO text (postgres.js binds a text[], not a timestamptz[]); the day as to_char writes it,
-  // whatever the session's DateStyle.
-  const rows = (await exec.execute(sql`
-    SELECT u.i, to_char(u.t AT TIME ZONE u.z, 'YYYY-MM-DD') AS local_day
-    FROM unnest(${sql.param(at.map((a) => a.at.toISOString()))}::text[]::timestamptz[],
-                ${sql.param(at.map((a) => read.get(a.timeZone)?.zone ?? DEFAULT_TIME_ZONE))}::text[]) WITH ORDINALITY AS u(t, z, i)`)) as unknown as {
-    i: string | number;
-    local_day: string;
-  }[];
-  const days: string[] = new Array(at.length);
-  for (const r of rows) days[Number(r.i) - 1] = r.local_day;
-  return days;
+  return calendarDaysIn(
+    exec,
+    at.map((a) => ({ at: a.at, zone: read.get(a.timeZone)?.zone ?? DEFAULT_TIME_ZONE })),
+  );
 }
 
 /** Any send on the same local day as another is within a day and a DST hour of it; the window reaches further. */
 const SAME_DAY_REACH_MS = 36 * 3_600_000;
 
 /** The offer pushes of `memberIds` scheduled in [`from`, `to`): one indexed read (`notif_offer_sends`, 0044). The
- *  categories are written into the statement, not bound, so the partial index's predicate holds for any plan. */
+ *  categories are written into the statement, not bound, so the partial index's predicate holds for any plan; the
+ *  members are one array (`= ANY($1::text[])`), so a page of one and a page of five hundred are one statement text. */
 export function offerSendsSelect(exec: Executor, memberIds: readonly string[], from: Date, to: Date) {
   return exec
     .select({ memberId: notificationsTable.memberId, scheduledFor: notificationsTable.scheduledFor })
     .from(notificationsTable)
     .where(
       and(
-        inArray(notificationsTable.memberId, [...memberIds]),
+        anyText(notificationsTable.memberId, memberIds),
         sql`${notificationsTable.category} IN ('offers_personal', 'offers_broadcast')`,
         gte(notificationsTable.scheduledFor, from),
         lt(notificationsTable.scheduledFor, to),

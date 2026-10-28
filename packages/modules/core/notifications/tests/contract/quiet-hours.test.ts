@@ -4,7 +4,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { afterQuietHours, DEFAULT_TIME_ZONE, zonesForPostgres } from "../../src/application/quiet-hours";
-import { localDays } from "../../src/application/daily-cap";
+import { localDays, offerSendsSelect } from "../../src/application/daily-cap";
 
 let iso: IsolatedDb;
 beforeAll(async () => {
@@ -78,5 +78,19 @@ describe("quiet hours, by Postgres's clocks", () => {
     // The statement never fails on it: 23:00 in New York waits for 08:00 there.
     const out = await afterQuietHours(iso.db, new Date("2026-09-28T03:00:00Z"), ["US/Pacific-New"]);
     expect(out.get("US/Pacific-New")?.toISOString()).toBe("2026-09-28T12:00:00.000Z");
+  });
+});
+
+describe("the daily cap's read of a page's pushes", () => {
+  it("is one statement text for a page of one member and a page of three: the members are one array", () => {
+    const text = (n: number) =>
+      offerSendsSelect(
+        iso.db,
+        Array.from({ length: n }, (_, i) => `m${i}`),
+        new Date("2026-10-28T00:00:00Z"),
+        new Date("2026-10-29T00:00:00Z"),
+      ).toSQL().sql;
+    expect(text(3)).toBe(text(1));
+    expect(text(1)).toMatch(/= ANY\(\$\d+::text\[\]\)/);
   });
 });
