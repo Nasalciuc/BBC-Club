@@ -1,6 +1,6 @@
 /** #114 (ADR-IMPL-077 §5): the catalogue's days and clocks, and the notifications' quiet hours and send days, are read
- *  by Postgres from its tzdata — no second copy of the zone rules (Bun's ICU fell behind tzdata 2026b in seven of the
- *  airports' zones). Here: every zone the airports use is one Postgres reads, and the day's bounds a dated search binds
+ *  by Postgres from its tzdata — no second copy of the zone rules (against tzdata 2026c, Bun 1.4.2's ICU reads four of
+ *  the airports' zones otherwise and Bun 1.3.4's five: ADR-IMPL-077 §5). Here: every zone the airports use is one Postgres reads, and the day's bounds a dated search binds
  *  (fares.repo `dayStartIn`) are the instants where Postgres's own day `(t AT TIME ZONE zone)::date` begins, for every
  *  one of those zones and every day of the two years from the run. `bun run test:tz` runs it on its own after the
  *  database suites (validate, CI). */

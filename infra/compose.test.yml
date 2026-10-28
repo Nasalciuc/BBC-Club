@@ -1,8 +1,11 @@
 name: bbc-test
 services:
   postgres-test:
-    image: postgres:16-alpine
-    environment: { POSTGRES_USER: bbc, POSTGRES_PASSWORD: bbc, POSTGRES_DB: bbc_test }
+    # Production's base image (infra/postgres/Dockerfile): the suites and `test:tz` read the tzdata production reads
+    # (ADR-IMPL-077 §5, #114). C.UTF-8: text sorted by code point, as on the local test cluster the suites pass on.
+    image: postgres:16
+    environment:
+      { POSTGRES_USER: bbc, POSTGRES_PASSWORD: bbc, POSTGRES_DB: bbc_test, POSTGRES_INITDB_ARGS: "--locale=C.UTF-8" }
     command:
       [
         "postgres",

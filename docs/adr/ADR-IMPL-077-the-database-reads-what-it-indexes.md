@@ -60,18 +60,40 @@ Postgres 16), the data layer had reads that grow worse with time:
    (`departLocal`, `arriveLocal`, `departDate`, which the request draft takes) are read in the same select
    (`wallAt`: `to_char(t AT TIME ZONE zone, …)`, the search's zones bound, a fare's page joining its airports), and
    so are quiet hours and the daily cap's day (notifications `afterQuietHours`, `localDays`, one statement a page):
-   the club reads the zones' rules from one copy, Postgres's tzdata (#114). Bun's ICU, which fell behind tzdata 2026b
-   in seven of the airports' zones (Vancouver, Edmonton, Winnipeg and Inuvik keep their summer offset from 1 Nov
-   2026; Casablanca and El_Aaiun +00 from 20 Sep 2026; Asuncion −03 all year), now only checks that a name is a
-   zone (`isIanaZone`, the app's rule too). Postgres's names (`@bbc/db/time-zones`, listed once per process, matched in
-   any case, else through Intl's spelling) decide what is stored and read: the profile stores a zone as Postgres spells
-   it and refuses one its tzdata lacks; notifications read a member's zone the same way, and one Postgres does not read
-   counts as the club's default, logged with why (`zonesForPostgres`). `scripts/tz-parity.test.ts` (`bun run
-test:tz`, a few seconds, after the database suites, in `validate` and CI) checks that every airport's zone is one
-   Postgres reads and that the bounds are where Postgres's day begins and ends, for every one of those zones and
-   every day of the two years from the run; it fails on the plain `day::timestamp AT TIME ZONE zone` in Havana and
-   the Azores. Production's Postgres is Debian's `postgres:16`, its tag not pinned: its tzdata is the club's, and it
-   moves with an image bump.
+   the club reads the zones' rules from one copy, Postgres's tzdata (#114). Bun's ICU now only checks that a name is a
+   zone (`isIanaZone`, the app's rule too). Where the two disagree, measured on 28 Oct 2026 for the 369 airport zones
+   at noon UTC on every day of two years, against tzdata 2026c (the local Postgres 16.15, Ubuntu 24.04): Bun 1.4.2
+   (ICU 78.3) in four — Vancouver and Edmonton keep −07/−06 from 1 Nov 2026, Casablanca and El_Aaiun are +00 now;
+   Bun 1.3.4 (ICU 75.1, CI's) in five, Asuncion's −03 from 28 Mar 2027 too. Winnipeg and Inuvik, named here before,
+   agree under 2026c: that list held for no tzdata measured here. Postgres's names (`@bbc/db/time-zones`, listed
+   once per process, matched in any case, else through Intl's spelling) decide what is stored and read: the profile
+   and the catalogue import store a zone as Postgres spells it and refuse one its tzdata lacks; notifications read a
+   member's zone the same way, and one Postgres does not read counts as the club's default, logged with why
+   (`zonesForPostgres`). `scripts/tz-parity.test.ts` (`bun run test:tz`, a few seconds, after the database suites,
+   in `validate` and CI) checks that every airport's zone is one Postgres reads and that the bounds are where
+   Postgres's day begins and ends, for every one of those zones and every day of the two years from the run; it
+   fails on the plain `day::timestamp AT TIME ZONE zone` in Havana and the Azores.
+
+   **Which tzdata.** Production's Postgres is Debian's `postgres:16` (`infra/postgres/Dockerfile`, the tag not
+   pinned): its tzdata is the club's, and it moves with an image bump. CI's database suites and `test:tz` run on the
+   same base image (`infra/compose.test.yml`, initialised `C.UTF-8`: text sorted by code point, as on the local test
+   cluster), so they read the tzdata production would read from an image pulled that day; production reads the one
+   of the image it was built from — the gap is the time between the two pulls, closed only by pinning both to one
+   digest. Debian from trixie, and Ubuntu from 23.10, keep the old link names (`Asia/Calcutta`, `US/Eastern`,
+   `Europe/Kiev`, `Asia/Saigon`) in `tzdata-legacy`; where it is not installed — the local cluster, and any image
+   for which `docker run --rm postgres:16 test -e /usr/share/zoneinfo/Asia/Calcutta` fails — a phone that reports
+   such a name has its zone refused by the profile (the app keeps the member's zone, America/New_York by default),
+   and a member already holding one is pushed by New York's clock, each push logged `time_zone_unknown_to_postgres`.
+
+   **After a Postgres or tzdata update** (a new `postgres:16` image, a minor release, a tzdata package): run `bun run
+test:tz` against the new server before the deploy (every airport's zone still read, the day's bounds still
+   Postgres's day); on the production database, before and after, list the members' zones it no longer reads —
+   `SELECT timezone, count(*) FROM members.profile p WHERE NOT EXISTS (SELECT 1 FROM pg_timezone_names n WHERE
+lower(n.name) = lower(p.timezone)) GROUP BY 1` — and the airports' (`catalog.airports.tz`, the same test); read
+   the tzdata release's NEWS for the airports' zones and the members' (a rule change moves the fares' clocks and days
+   and the quiet hours at once, with no second copy to disagree; pushes already scheduled keep the time the old
+   rules gave them); and watch `member time zone not read` in the logs for a new `time_zone_unknown_to_postgres`.
+
 6. **Retention, in batches of 5 000** (`deleteInBatches`: each batch its own statement, picked by `(tableoid, ctid)` —
    a ctid is unique within one table only, and a partitioned table's partitions share them), each module for its own
    tables, daily, idempotent; business records (requests and their events, offers, fares) are never deleted here.
