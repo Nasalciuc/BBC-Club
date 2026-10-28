@@ -91,8 +91,9 @@ jobs:
           PRICING_PARITY_REQUIRED: "1"
         run: bun test tests/parity
       - run: bunx turbo run test:db
-      # Bun's zones against Postgres's, two years of every catalogue zone (ADR-IMPL-077): ~50 s of one core, so on its
-      # own, after the suites whose tests time the clock.
+      # Postgres's tzdata against itself (#114, ADR-IMPL-077 §5): every airport's zone is one it reads, and a dated
+      # search's bounds are where its own day begins and ends, every catalogue zone, every day of two years — a few
+      # seconds, after the suites.
       - run: bun run test:tz
       - run: bun run db:verify
       - name: Graph shape (G9-G11)
