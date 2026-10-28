@@ -1251,3 +1251,23 @@ describe("Grafana's alerts (A-R2, H1)", () => {
     expect(compose.services.cadvisor!.command!.some((a) => /--enable_metrics=.*oom_event/.test(a))).toBe(true);
   });
 });
+
+describe("the sample points CI runs the alerts on (A-Q1)", () => {
+  it("hold every name an alert rule reads, each with the label keys the rule selects on", async () => {
+    const doc = Bun.YAML.parse(
+      await Bun.file(join(root, "infra/monitoring/grafana/provisioning/alerting/alerts.yml")).text(),
+    ) as { groups: { rules: { uid: string; data: { model: { expr?: string } }[] }[] }[] };
+    const sample = (await Bun.file(join(root, "infra/monitoring/ci/sample-metrics.txt")).text())
+      .split("\n")
+      .filter((l) => l && !l.startsWith("#"));
+    for (const rule of doc.groups[0]!.rules) {
+      const expr = rule.data.find((d) => d.model.expr)!.model.expr!;
+      for (const [, name, selector] of expr.matchAll(/([a-z_][a-z0-9_]*)\{([^}]*)\}/g)) {
+        const keys = [...selector!.matchAll(/([a-z_]+)\s*(?:=~|!~|!=|=)/g)].map((m) => m[1]!);
+        const points = sample.filter((l) => l.startsWith(`${name}{`));
+        expect(points.length, `${rule.uid}: ${name}`).toBeGreaterThanOrEqual(2);
+        for (const key of keys) expect(points[0], `${rule.uid}: ${name} ${key}`).toContain(`${key}="`);
+      }
+    }
+  });
+});

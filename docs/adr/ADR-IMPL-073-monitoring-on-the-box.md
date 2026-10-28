@@ -99,7 +99,9 @@ covers `infra/monitoring` too).
     checks its scrape file (`-dryRun`), then runs with the compose file's flags; beside it, a throwaway Grafana starts
     with the compose file's image, environment and memory limit and the repository's provisioning, reaches it, and must
     hold the datasource, the two dashboards, the seven rules and the contact point, with no provisioning or plugin error
-    in its log and no kill for memory.
+    in its log and no kill for memory. It pulls the four images first (a tag that does not exist fails there), and runs
+    each rule's query, as Grafana loaded it, on sample points for every name the rules read
+    (`infra/monitoring/ci/sample-metrics.txt`): a rule that returns nothing fails the job.
 
 **Rejected.**
 
