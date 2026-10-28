@@ -69,7 +69,8 @@ export const rateLimit = auth.table("rate_limit", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** App-owned (not Better Auth): last OTP send per sha256(type:email). Purged daily by the retention job. */
+/** App-owned (not Better Auth): last OTP send per sha256(type:email). Deleted a day after it was sent by identity's
+ *  `retention-auth` job (ADR-IMPL-077; apps/api/test/retention.test.ts). */
 export const otpCooldown = auth.table("otp_cooldown", {
   key: text("key").primaryKey(),
   lastSentAt: timestamp("last_sent_at", { withTimezone: true }).notNull(),

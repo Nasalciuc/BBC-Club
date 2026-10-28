@@ -115,7 +115,14 @@ The JSON has `statsAgeDays` and `statementsReset` from `pg_stat_statements_info`
 
 Trigger now: `POST /v1/internal/run/db-report` with `X-Internal-Secret` against the **worker** (`http://worker:8001`).
 
-**Retention (ADR-IMPL-077).** Four daily jobs delete, 5 000 rows a statement, what is kept only for a while — `retention` (04:00: done deliveries after 30 days, dead letters after 90, `kafka_processed` after 14, job runs after 30 days but each job's last, the journal's partitions after 24 months), `retention-auth` (04:10: sessions 7 days after they expired, verifications a day after, Better Auth's rate-limit rows idle for 2 hours, OTP cooldowns after a day), `retention-notifications` (04:20: notifications that reached their end after 90 days — never a pending or sending one — and done campaigns after 180) and `retention-demand` (04:30: search counts after 400 days). Requests, their events, offers and fares are records and are never deleted here. Each run's counts are in its `job_runs.metrics`; a run that hit its bound (200 batches) carries on the next night. Run one now: `POST /v1/internal/run/<name>` against the worker.
+**Retention (ADR-IMPL-077).** Four daily jobs delete, 5 000 rows a statement, what is kept only for a while — `retention` (04:00: done deliveries after 30 days, dead letters after 90, `kafka_processed` after 14, job runs after 30 days but each job's last, the journal's partitions after 24 months), `retention-auth` (04:10: sessions 7 days after they expired, verifications a day after, Better Auth's rate-limit rows idle for 2 hours, OTP cooldowns after a day), `retention-notifications` (04:20: notifications that reached their end after 90 days — never a pending or sending one — and done campaigns after 180) and `retention-demand` (04:30: search counts after 400 days). Requests, their events, offers and fares are records and are never deleted here. Each run's counts are in its `job_runs.metrics`, one step a table: `<table>Deleted`; `<table>Capped: 1` when a table hit its bound (200 batches) — it carries on the next night, and a table capped night after night gains more than a night deletes; a run that could not finish a table fails, its metrics still there with `<table>Stopped: 1` (an error, named in `error`) or `<table>Skipped: 1` (not reached before the job's time ran out). No Grafana alert reads them: `bbc_monitor` reads no table and these counts are not metrics VictoriaMetrics scrapes. Look after a failed retention, or once a week:
+
+```bash
+docker compose ... exec -T postgres psql -U bbc -d bbc -c "SELECT job, started_at, status, metrics FROM platform.job_runs
+  WHERE job LIKE 'retention%' AND (status = 'failed' OR metrics::text LIKE '%Capped%') ORDER BY started_at DESC LIMIT 20;"
+```
+
+Run one now: `POST /v1/internal/run/<name>` against the worker.
 
 ## Tuning a statement
 
@@ -887,7 +894,10 @@ There is no second email provider: nothing reads `EMAIL_ADAPTER` and no SES send
 df -h /; docker system df
 docker image prune -f; docker builder prune -af
 # `-af` would delete the previous release image that `deploy.sh` needs for rollback.
-docker compose ... exec -T postgres psql -U bbc -d bbc -c "SELECT platform.drop_old_event_partitions(24);"
+# As the retention job drops them (ADR-IMPL-077): 3 s at most for the journal's lock — past it (`canceling statement
+# due to lock timeout`) nothing changed; run it again in a quieter minute — and months cut in UTC (X7, X8).
+docker compose ... exec -T postgres psql -U bbc -d bbc -v ON_ERROR_STOP=1 \
+  -c "BEGIN; SET LOCAL lock_timeout = '3s'; SET LOCAL TimeZone = 'UTC'; SELECT platform.drop_old_event_partitions(24); COMMIT;"
 ```
 
 Every deploy removes old API images itself (step 8): it keeps the image it deployed, the one it replaced, the other environment's and the five newest, so a rollback always finds its image. Log rotation is configured (10 MB × 5 per service); if a service escapes it, that is the bug.

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { errorForLog, withTx } from "@bbc/db";
-import { deleteInBatches, eqConst, inConst } from "@bbc/db/helpers";
+import { DeleteStopped, deleteInBatches, eqConst, inConst, retainEach } from "@bbc/db/helpers";
 import {
   eventDeliveries,
   eventDlq,
@@ -54,77 +54,80 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
     cron: "0 4 * * *",
     singleton: true,
     timeoutMs: 300_000,
-    handler: async ({ db, logger, signal }) => {
-      // X8: dropping a partition takes ACCESS EXCLUSIVE on the journal, and while it waits behind a long read every event
-      // insert (every write that publishes) queues behind it — locally a 12 s SELECT held each one 10 s. The drop waits
-      // 3 s at most (SET LOCAL: PgBouncer pools by transaction) and is otherwise left for tomorrow's run; the rest of the
-      // retention runs either way. Any other failure fails the job as before. In UTC, as the partitions job (X7).
-      let partitionsDropped = 0;
-      let partitionsDeferred = 0;
-      try {
-        partitionsDropped = await withTx(db, async (tx) => {
-          await tx.execute(sql`SET LOCAL lock_timeout = '3s'`);
-          await tx.execute(sql`SET LOCAL TimeZone = 'UTC'`);
-          const [{ dropped }]: any = await tx.execute(sql`SELECT platform.drop_old_event_partitions(24) AS dropped`);
-          return dropped;
-        });
-      } catch (err) {
-        if (errorForLog(err).sqlstate !== "55P03") throw err; // lock_not_available
-        partitionsDeferred = 1;
-        logger.warn({ job: "retention" }, "journal partitions left for tomorrow: the journal stayed locked past 3 s");
-      }
-      return {
-        partitionsDropped,
-        partitionsDeferred,
+    handler: async ({ db, logger, signal }) =>
+      // Each step on its own (retainEach): one that fails leaves the others to run, and the run fails at the end with
+      // what each did; the steps the job's time did not reach are `<step>Skipped`.
+      retainEach(signal, {
+        // X8: dropping a partition takes ACCESS EXCLUSIVE on the journal, and while it waits behind a long read every
+        // event insert (every write that publishes) queues behind it — locally a 12 s SELECT held each one 10 s. The
+        // drop waits 3 s at most (SET LOCAL: PgBouncer pools by transaction) and is otherwise left for tomorrow's run.
+        // In UTC, as the partitions job (X7).
+        partitions: async () => {
+          try {
+            const partitionsDropped = await withTx(db, async (tx) => {
+              await tx.execute(sql`SET LOCAL lock_timeout = '3s'`);
+              await tx.execute(sql`SET LOCAL TimeZone = 'UTC'`);
+              const [{ dropped }]: any = await tx.execute(
+                sql`SELECT platform.drop_old_event_partitions(24) AS dropped`,
+              );
+              return dropped as number;
+            });
+            return { partitionsDropped, partitionsDeferred: 0 };
+          } catch (err) {
+            if (errorForLog(err).sqlstate !== "55P03") throw err; // lock_not_available
+            logger.warn(
+              { job: "retention" },
+              "journal partitions left for tomorrow: the journal stayed locked past 3 s",
+            );
+            return { partitionsDropped: 0, partitionsDeferred: 1 };
+          }
+        },
         // A delivery done 30 days ago is history; a dead or paused one waits for its operator.
-        deliveriesDeleted: await deleteInBatches(
-          db,
-          eventDeliveries,
-          sql`${eqConst(eventDeliveries.status, "done")} AND ${eventDeliveries.processedAt} < now() - interval '30 days'`,
-          { signal },
-        ),
-        rateLimitsDeleted: await deleteInBatches(db, rateLimits, sql`${rateLimits.expiresAt} < now()`, { signal }),
-        rateLimitStateDeleted: await deleteInBatches(
-          db,
-          rateLimitState,
-          sql`${rateLimitState.tat} < now() - interval '1 day'`,
-          { signal },
-        ),
+        deliveries: () =>
+          deleteInBatches(
+            db,
+            eventDeliveries,
+            sql`${eqConst(eventDeliveries.status, "done")} AND ${eventDeliveries.processedAt} < now() - interval '30 days'`,
+            { signal },
+          ),
+        rateLimits: () => deleteInBatches(db, rateLimits, sql`${rateLimits.expiresAt} < now()`, { signal }),
+        rateLimitState: () =>
+          deleteInBatches(db, rateLimitState, sql`${rateLimitState.tat} < now() - interval '1 day'`, { signal }),
         // 30 days of runs, and each job's last run and last finished run whenever they were (/status reads both: a
         // failure followed only by skipped or running runs still fails). A finished run goes unless it is its job's last
-        // finished one, in lastFinishedRunsSql's order (started_at, then id); any other run once a newer run exists. Two
-        // statements, each on job_runs_job_started: one OR of the two kept the planner off it (3.7 s a batch, not 30 ms).
-        jobRunsDeleted:
-          (await deleteInBatches(
+        // finished one, in lastFinishedRunsSql's order (started_at, then id; job_runs_last_finished); any other run once
+        // a newer run exists (job_runs_job_started). Two statements: one OR of the two kept the planner off the index
+        // (3.7 s a batch, not 30 ms).
+        jobRuns: async () => {
+          const finished = await deleteInBatches(
             db,
             jobRuns,
             sql`${jobRuns.startedAt} < now() - interval '30 days' AND ${inConst(jobRuns.status, FINISHED)} AND ${jobRuns.id} <> (
               SELECT ${last.id} FROM ${jobRuns} AS ${last} WHERE ${last.job} = ${jobRuns.job} AND ${inConst(last.status, FINISHED)}
               ORDER BY ${last.startedAt} DESC, ${last.id} DESC LIMIT 1)`,
             { signal },
-          )) +
-          (await deleteInBatches(
-            db,
-            jobRuns,
-            sql`${jobRuns.startedAt} < now() - interval '30 days' AND NOT ${inConst(jobRuns.status, FINISHED)} AND EXISTS (
-              SELECT 1 FROM ${jobRuns} AS ${later} WHERE ${later.job} = ${jobRuns.job} AND ${later.startedAt} > ${jobRuns.startedAt})`,
-            { signal },
-          )),
+          );
+          try {
+            const others = await deleteInBatches(
+              db,
+              jobRuns,
+              sql`${jobRuns.startedAt} < now() - interval '30 days' AND NOT ${inConst(jobRuns.status, FINISHED)} AND EXISTS (
+                SELECT 1 FROM ${jobRuns} AS ${later} WHERE ${later.job} = ${jobRuns.job} AND ${later.startedAt} > ${jobRuns.startedAt})`,
+              { signal },
+            );
+            return { deleted: finished.deleted + others.deleted, capped: finished.capped || others.capped };
+          } catch (err) {
+            throw err instanceof DeleteStopped ? new DeleteStopped(finished.deleted + err.deleted, err.cause) : err;
+          }
+        },
         // Twice Kafka's default retention (7 days): a message a topic still holds is still recognised as processed.
-        kafkaProcessedDeleted: await deleteInBatches(
-          db,
-          kafkaProcessed,
-          sql`${kafkaProcessed.processedAt} < now() - interval '14 days'`,
-          { signal },
-        ),
-        deadLettersDeleted: await deleteInBatches(
-          db,
-          eventDlq,
-          sql`${eventDlq.failedAt} < now() - interval '90 days'`,
-          { signal },
-        ),
-      };
-    },
+        kafkaProcessed: () =>
+          deleteInBatches(db, kafkaProcessed, sql`${kafkaProcessed.processedAt} < now() - interval '14 days'`, {
+            signal,
+          }),
+        deadLetters: () =>
+          deleteInBatches(db, eventDlq, sql`${eventDlq.failedAt} < now() - interval '90 days'`, { signal }),
+      }),
   });
 
   jobs.register("queue-health", {

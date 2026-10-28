@@ -1,6 +1,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 import type { Executor } from "./client";
+import { errorLine } from "./errors";
 
 /** Atomic counter: INSERT ... ON CONFLICT DO UPDATE SET count = count + 1 RETURNING.
  *  The ATS Hero lesson: never SELECT then UPDATE a counter. `cap` makes it a reservation (returns null when exhausted). */
@@ -97,30 +98,112 @@ export function anyText(column: PgColumn, values: readonly string[]): SQL {
 /** Rows one retention statement deletes; the next batch is its own statement, so no delete holds a year's locks. */
 export const RETENTION_BATCH = 5_000;
 
+/** What deleteInBatches deleted, and whether it stopped at its bound (`maxBatches` batches, the last one full): the
+ *  next run carries on, and a table that reaches it night after night gains more than a night deletes. */
+export type Deleted = { deleted: number; capped: boolean };
+
+/** deleteInBatches stopped by a failed batch or by the job's time: what it had deleted by then. The error is its
+ *  `cause`; the batches before it stay deleted. */
+export class DeleteStopped extends Error {
+  constructor(
+    readonly deleted: number,
+    cause: unknown,
+  ) {
+    super(`stopped after ${deleted} rows`, { cause });
+    this.name = "DeleteStopped";
+  }
+}
+
 /**
  * DELETE the rows of `table` that `where` names, `batch` at a time, each batch its own statement — its own transaction
  * on the pool — until a batch comes back short (ADR-IMPL-077). One statement over a year of rows held its locks and
  * its WAL to the end; batches let vacuum and the writers in between. Idempotent: run twice, the second deletes what
- * aged meanwhile. `maxBatches` bounds one run; the next run carries on. Rows are picked by `ctid`, so any table works.
- * `signal` (the job's) is checked before each batch: a run past its timeout stops there, and what it deleted stays deleted.
+ * aged meanwhile. `maxBatches` bounds one run (`capped`); the next run carries on. Rows are picked by `(tableoid,
+ * ctid)`: a ctid is unique within one table only, and a partitioned table's partitions share them. `signal` (the
+ * job's) is checked before each batch: a run past its timeout stops there, and what it deleted stays deleted.
  */
 export async function deleteInBatches(
   exec: Executor,
   table: PgTable,
   where: SQL,
   opts: { batch?: number; maxBatches?: number; signal?: AbortSignal } = {},
-): Promise<number> {
+): Promise<Deleted> {
   const batch = opts.batch ?? RETENTION_BATCH;
   const maxBatches = opts.maxBatches ?? 200;
   let total = 0;
-  for (let i = 0; i < maxBatches; i++) {
-    opts.signal?.throwIfAborted();
-    const r = (await (exec as any).execute(
-      sql`DELETE FROM ${table} WHERE ctid IN (SELECT ctid FROM ${table} WHERE ${where} LIMIT ${sql.raw(String(batch))})`,
-    )) as { count?: number; rowCount?: number };
-    const n = r.count ?? r.rowCount ?? 0;
-    total += n;
-    if (n < batch) break;
+  try {
+    for (let i = 0; i < maxBatches; i++) {
+      opts.signal?.throwIfAborted();
+      const r = (await (exec as any).execute(
+        sql`DELETE FROM ${table} WHERE (tableoid, ctid) IN (SELECT tableoid, ctid FROM ${table} WHERE ${where} LIMIT ${sql.raw(String(batch))})`,
+      )) as { count?: number; rowCount?: number };
+      const n = r.count ?? r.rowCount ?? 0;
+      total += n;
+      if (n < batch) return { deleted: total, capped: false };
+    }
+  } catch (err) {
+    throw new DeleteStopped(total, err);
   }
-  return total;
+  return { deleted: total, capped: true };
+}
+
+/** A retention run that did not reach the end of every table: `metrics` holds what it did, the job runner records them
+ *  with the failure; the first error is its `cause`. */
+export class RetentionIncomplete extends Error {
+  constructor(
+    readonly metrics: Record<string, number>,
+    stopped: string[],
+    skipped: string[],
+    cause: unknown,
+  ) {
+    const what = [
+      stopped.length ? `stopped: ${stopped.join(", ")}` : "",
+      skipped.length ? `skipped, the job's time up: ${skipped.join(", ")}` : "",
+    ].filter(Boolean);
+    super(`retention incomplete — ${what.join("; ")}${cause ? ` (${errorLine(cause)})` : ""}`, { cause });
+    this.name = "RetentionIncomplete";
+  }
+}
+
+/**
+ * A retention job's steps in order, each on its own (ADR-IMPL-077): one that fails — a statement past its time, a lock
+ * — leaves the next to run, and once the job's time is up the steps not reached are `<key>Skipped: 1`, never missing.
+ * A table's step gives `<key>Deleted` (what a stopped one deleted before it stopped, too), `<key>Capped: 1` at its
+ * bound, `<key>Stopped: 1` on an error; a step that counts something else returns its own metrics. When every step ran
+ * to its end it returns the metrics; otherwise it throws them in a RetentionIncomplete, so the run fails and still says
+ * what it deleted.
+ */
+export async function retainEach(
+  signal: AbortSignal | undefined,
+  steps: Record<string, () => Promise<Deleted | Record<string, number>>>,
+): Promise<Record<string, number>> {
+  const metrics: Record<string, number> = {};
+  const stopped: string[] = [];
+  const skipped: string[] = [];
+  let first: unknown = null;
+  for (const [key, step] of Object.entries(steps)) {
+    if (signal?.aborted) {
+      metrics[`${key}Skipped`] = 1;
+      skipped.push(key);
+      continue;
+    }
+    try {
+      const r = await step();
+      if (isDeleted(r)) {
+        metrics[`${key}Deleted`] = r.deleted;
+        if (r.capped) metrics[`${key}Capped`] = 1;
+      } else Object.assign(metrics, r);
+    } catch (err) {
+      if (err instanceof DeleteStopped) metrics[`${key}Deleted`] = err.deleted;
+      metrics[`${key}Stopped`] = 1;
+      stopped.push(key);
+      first ??= err instanceof DeleteStopped ? err.cause : err;
+    }
+  }
+  if (stopped.length || skipped.length) throw new RetentionIncomplete(metrics, stopped, skipped, first);
+  return metrics;
+}
+
+function isDeleted(r: Deleted | Record<string, number>): r is Deleted {
+  return typeof r.deleted === "number" && typeof r.capped === "boolean";
 }

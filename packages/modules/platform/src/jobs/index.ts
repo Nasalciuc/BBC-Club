@@ -19,6 +19,16 @@ export type { JobSpec };
 /** The jobs asked about, bound as one array: one statement whatever the number of jobs a process registers. */
 const jobList = (names: readonly string[]) => sql`unnest(${sql.param(names)}::text[]) AS j(job_name)`;
 
+/** A job's counts, kept in job_runs.metrics: an object of finite numbers, or nothing. */
+function numbersOnly(raw: unknown): Record<string, number> | undefined {
+  return raw !== null &&
+    typeof raw === "object" &&
+    !Array.isArray(raw) &&
+    Object.values(raw).every((v) => typeof v === "number" && Number.isFinite(v))
+    ? (raw as Record<string, number>)
+    : undefined;
+}
+
 /** Each job's last run: one probe per job on `job_runs_job_started`, read backwards — never a sort of the table, which
  *  grows by every run (ADR-IMPL-077: a year of runs sorted 134 MB on disk, 5 s; this reads 0.2 ms). The hot-query
  *  test checks its plan. */
@@ -95,13 +105,7 @@ export function createJobs(
       if (!runRow) throw new Error(`job ${name}: the job_runs insert returned no row`);
       runId = runRow.id;
       const raw = await spec.handler({ db, logger: deps.logger, signal: ac.signal });
-      const metrics =
-        raw !== null &&
-        typeof raw === "object" &&
-        !Array.isArray(raw) &&
-        Object.values(raw).every((v) => typeof v === "number" && Number.isFinite(v))
-          ? (raw as Record<string, number>)
-          : undefined;
+      const metrics = numbersOnly(raw);
       const durationMs = Date.now() - started;
       await db
         .update(jobRuns)
@@ -115,15 +119,17 @@ export function createJobs(
       const durationMs = Date.now() - started;
       // Never the error's own text: a failed query's message holds its parameters (AGENTS.md rule 6).
       const error = errorLine(e).slice(0, 2000);
+      // A job that stopped part way may say what it did before (retainEach's RetentionIncomplete: its `metrics`).
+      const metrics = numbersOnly((e as { metrics?: unknown } | null)?.metrics);
       // No row when the insert itself failed; the result and the log still say so.
       if (runId !== null)
         await db
           .update(jobRuns)
-          .set({ status: "failed", finishedAt: sql`now()`, durationMs, error })
+          .set({ status: "failed", finishedAt: sql`now()`, durationMs, error, metrics })
           .where(sql`${jobRuns.id} = ${runId}`);
       deps.metrics?.inc("job_failed", { job: name });
-      deps.logger.error({ job: name, durationMs, err: errorForLog(e) }, "job failed");
-      return { status: "failed", durationMs, error };
+      deps.logger.error({ job: name, durationMs, err: errorForLog(e), ...(metrics ?? {}) }, "job failed");
+      return { status: "failed", durationMs, error, metrics };
     } finally {
       clearTimeout(timeout);
       if (reserved) {

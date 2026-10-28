@@ -2,10 +2,10 @@
 
 Status: proposed · Date: 2026-10-26 · Scope: `packages/modules/platform` (`jobs/index.ts`: `lastRuns`,
 `lastFinishedRuns`; `jobs/builtin.ts`: `retention`; `events/publish.ts`), `packages/shared` (`time-zone.ts`:
-`zoneDayBounds`), `packages/db` (`helpers.ts`: `deleteInBatches`; `scripts/verify.ts`: rules 3, 13 and 14;
-`scripts/migrate.ts`; the hot-query test), migrations `0048_identity_auth_lookups.sql`,
+`zoneDayBounds`), `packages/db` (`helpers.ts`: `deleteInBatches`, `retainEach`, `anyText`; `scripts/verify.ts`:
+rules 3, 13 and 14; `scripts/migrate.ts`; the hot-query test), migrations `0048_identity_auth_lookups.sql`,
 `0049_catalog_demand_from_route.sql`, `0050_platform_autovacuum.sql`, `0051_notifications_autovacuum.sql`,
-`0052_platform_monitor_role.sql`, `0053_platform_monitor_role_limits.sql`, the catalog
+`0052_platform_monitor_role.sql`, `0053_platform_monitor_role_limits.sql`, `0054_retention_indexes.sql`, the catalog
 (`fares.repo.ts`: a dated search; `discovery.repo.ts`; `retention-demand`), identity (`retention-auth`), notifications
 (`dispatch.ts`; `retention-notifications`), members (`deliverabilityOf`), `infra` (Postgres's settings in
 `docker-compose.yml` and `compose.staging.yml`; Grafana's Postgres datasource and the database dashboard; `deploy.sh`,
@@ -48,9 +48,21 @@ Postgres 16), the data layer had reads that grow worse with time:
 5. **A dated search** with the origin's zone at hand (the route reads the airports from memory) compares `depart_at`
    with the day's two instants, `zoneDayBounds` — the same day Postgres reads, across a clock change and a midnight that
    does not exist (tested against Postgres for ten zones).
-6. **Retention, in batches of 5 000** (`deleteInBatches`: each batch its own statement, picked by `ctid`), each module
-   for its own tables, daily, idempotent; business records (requests and their events, offers, fares) are never
-   deleted here:
+6. **Retention, in batches of 5 000** (`deleteInBatches`: each batch its own statement, picked by `(tableoid, ctid)` —
+   a ctid is unique within one table only, and a partitioned table's partitions share them), each module for its own
+   tables, daily, idempotent; business records (requests and their events, offers, fares) are never deleted here.
+   Each table is a step of its own (`retainEach`): one that fails (a statement past its time, a lock) leaves the next
+   to run, and once the job's time is up the steps not reached are `<table>Skipped: 1`. A run that did not finish
+   every table fails, and its `job_runs.metrics` still say what it did (`<table>Deleted`, `<table>Stopped`,
+   `<table>Skipped`); a table that stopped at its bound (200 batches) says `<table>Capped: 1` and carries on the next
+   night (`platform/tests/retention.test.ts`). Measured at five times the hot-query volume (1–1.5 M rows a table, rows
+   oldest first, synchronized scans off as on production): no batch over 1 s — `kafka_processed` at most 62 ms,
+   `auth.session` 90, `auth.verification` 42, `auth.rate_limit` 29, `auth.otp_cooldown` 41, the empty last batch's
+   scan 15–68 ms — so none of those takes an index. Two partial indexes do (0054): `notifications_retention`
+   (`created_at`, the job's own status list; the empty batch 30 ms instead of 94, a batch over the newest rows 13 ms
+   instead of 162) and `job_runs_last_finished` (`job, started_at DESC, id DESC`, succeeded or failed: each job's last
+   finished run without a sort, `lastFinishedRunsSql` 0.18 ms instead of 0.82). At that volume the first night's
+   finished job runs (1.38 M) reach the bound at 1 M and finish the next night:
 
    | table                                                               | kept                                                                                           | job                       |
    | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------- |

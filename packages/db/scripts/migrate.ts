@@ -833,6 +833,14 @@ try {
     });
     console.log(done);
   }
+  // ADR-IMPL-077 (R4, R5): the nightly retention's notifications and each job's last finished run, by partial
+  // indexes — CONCURRENTLY, outside a transaction: both tables keep being written while they build.
+  await applyConcurrentIndexFile(
+    db,
+    "0054_retention_indexes.sql",
+    join(migrationsDir, "0054_retention_indexes.sql"),
+    "retention indexes applied",
+  );
 
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).

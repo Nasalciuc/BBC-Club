@@ -4,7 +4,7 @@ import { z } from "zod";
 import { desc, gte, sql } from "drizzle-orm";
 import { errorForLog, type Db, type Executor } from "@bbc/db";
 import { demandDaily } from "@bbc/db/schema/catalog";
-import { deleteInBatches } from "@bbc/db/helpers";
+import { deleteInBatches, retainEach } from "@bbc/db/helpers";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { routeGate } from "@bbc/platform/ratelimit";
 import { SearchEvent } from "@bbc/platform";
@@ -781,14 +781,13 @@ export const catalogModule = (
             cron: "30 4 * * *",
             singleton: true,
             timeoutMs: 120_000,
-            handler: async (ctx: JobContext) => ({
-              demandDaysDeleted: await deleteInBatches(
-                conn,
-                demandDaily,
-                sql`${demandDaily.day} < now() - interval '400 days'`,
-                { signal: ctx.signal },
-              ),
-            }),
+            handler: (ctx: JobContext) =>
+              retainEach(ctx.signal, {
+                demandDays: () =>
+                  deleteInBatches(conn, demandDaily, sql`${demandDaily.day} < now() - interval '400 days'`, {
+                    signal: ctx.signal,
+                  }),
+              }),
           },
         },
         {
