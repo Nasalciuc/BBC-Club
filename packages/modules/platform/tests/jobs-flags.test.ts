@@ -98,6 +98,8 @@ describe("metrics", () => {
     expect(out).toContain('bbc_deliveries_done{consumer="x.onY"} 1');
     expect(out).toContain("bbc_delivery_duration_ms_count");
     expect(out).toContain("bbc_queue_pending");
+    // The gauge the `bbc-queue-paused` alert reads (alerts.yml): published, not only typed into CI's samples.
+    expect(out).toContain("bbc_queue_paused");
     await p.close();
   });
 

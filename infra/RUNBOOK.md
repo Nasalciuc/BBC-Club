@@ -162,7 +162,7 @@ docker compose ... exec -T postgres psql -U bbc -d bbc \
       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();"
 ```
 
-Modules: every module the API runs — `identity`, `members`, `catalog`, `requests`, `proposals`, `engagement`, `notifications`, `personalization` and the others in `apps/api/src/modules.ts` (one list: `/v1/app-config` names them all, ADR-IMPL-075). Within a second every process answers the module's routes 503 — and the routes that read it too (Home reads `members` and `proposals`) — and pauses its consumers; the next boot stops mounting them. A process that cannot read the flags for 10 s counts every module killed until it can again.
+Modules: every module the API runs — `identity`, `members`, `catalog`, `requests`, `proposals`, `engagement`, `notifications`, `personalization` and the others in `apps/api/src/modules.ts` (one list: `/v1/app-config` names them all, ADR-IMPL-075). Within a second every process answers the module's routes 503 — and the routes that read it too (Home reads `members` and `proposals`) — and pauses its consumers; the next boot stops mounting them. A process that cannot read the flags for 10 s answers its gated routes 503 `OVERLOADED` with `Retry-After: 5` (not `SERVICE_DISABLED`: the module is not off) and leaves deliveries pending, until it can read them again (ADR-IMPL-080).
 
 **Prepared statements off** (ADR-IMPL-074), if PgBouncer or Postgres misbehaves with them: `DB_PREPARE=off` in the environment's env file, then `up -d --no-deps` the api replicas and the worker. Every statement is then sent unnamed and planned at each call, as before 074 — slower, nothing else changes.
 
@@ -1139,7 +1139,7 @@ Each answers `200 {"ok":true}`. To bring them back (the deals off again), set th
 
 ## Redis, Kafka, Streams, and demand
 
-Unset `REDIS_URL` and `KAFKA_BROKERS` and the API stays on Postgres: flags, the airports and the catalogue's pins are held in each process and read again when their table's generation moves (within a second of any write, psql's included; ADR-IMPL-075), read and search rate limits use the in-process GCRA store, push dispatch sends inline, and search does not emit events. Kill switches and consumer pause come from the same snapshot and fail closed — killed, paused — when a process has not been able to read the flags for 10 s.
+Unset `REDIS_URL` and `KAFKA_BROKERS` and the API stays on Postgres: flags, the airports and the catalogue's pins are held in each process and read again when their table's generation moves (within a second of any write, psql's included; ADR-IMPL-075), read and search rate limits use the in-process GCRA store, push dispatch sends inline, and search does not emit events. Kill switches and consumer pause come from the same snapshot; when a process has not been able to read the flags for 10 s, its gated routes answer `OVERLOADED` and its deliveries wait, pending (ADR-IMPL-080).
 
 **Turn Redis on.** Set `REDIS_APP_PASSWORD` (Compose only) and `REDIS_URL=redis://:PASSWORD@redis-app:6379` on the api and worker. A password inside `REDIS_URL` must be URL-safe or percent-encoded. Read and search limits move to Redis and fall back to memory if Redis errors, so a down Redis does not 503 those routes. Postgres rules (writes, auth) do not move. Reference data stays in each process on Postgres's generations (ADR-IMPL-075): Redis adds nothing there.
 
