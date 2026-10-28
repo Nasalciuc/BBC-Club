@@ -61,16 +61,17 @@ covers `infra/monitoring` too).
    totals read `pg_stat_statements(false)`, without the statements' text, and carry pg_stat_statements' `dealloc` as
    an `epoch` label: when it drops its least-run entries to make room, the sums fall, and new series start instead of
    a fall a rate would read as a counter reset.
-7. **Two dashboards and five alerts, as files.** `the box` (CPU and memory by container against the limit, throttling,
+7. **Two dashboards and six alerts, as files.** `the box` (CPU and memory by container against the limit, throttling,
    network, kills for memory, the host, Postgres connections, the oldest transaction, PgBouncer, targets) and `the app`
    (requests, p95 and p99 by route, errors, API CPU per request, event-loop delay, statements per request, plans per
    statement, Postgres time, PgBouncer parses and binds, cache hits, the queue, failed jobs, memory), with an `env`
    variable. The request panels leave out the probes — Compose's healthchecks, the scrapes, Uptime Kuma — and the cron's
-   job runs; the integrations' internal routes (offers, request status, imports) stay in. The five alerts: a container
+   job runs; the integrations' internal routes (offers, request status, imports) stay in. The six alerts: a container
    above 90 % of its memory limit for 5 minutes; CPU steal above 20 % for 10; no `dispatch` finished in 10 minutes while
    the worker answers; an API replica or the worker that answered in the last day not answering a scrape for 5 (a
    replica that hangs, or the worker gone: one that crashed restarts and leaves no target); more than 2 % of
-   production's requests answering 5xx for 10, the probes and the cron's job runs left out. Those on production look
+   production's requests answering 5xx for 10, the probes and the cron's job runs left out; a production container
+   killed for memory (at once). Those on production look
    only at what production has run, so on a box that runs staging alone they stay quiet. The worker keeps its own two
    (RUNBOOK § Database health). Provisioned from `infra/monitoring/grafana`: the UI cannot change them.
 8. **Closed by default.** Everything is on the internal `data` network; Grafana is also on `edge`, for the webhook, and
@@ -97,7 +98,7 @@ covers `infra/monitoring` too).
 11. **CI checks it** in a job of its own: Compose reads the files with every overlay and both profiles; VictoriaMetrics
     checks its scrape file (`-dryRun`), then runs with the compose file's flags; beside it, a throwaway Grafana starts
     with the compose file's image, environment and memory limit and the repository's provisioning, reaches it, and must
-    hold the datasource, the two dashboards, the five rules and the contact point, with no provisioning or plugin error
+    hold the datasource, the two dashboards, the six rules and the contact point, with no provisioning or plugin error
     in its log and no kill for memory.
 
 **Rejected.**

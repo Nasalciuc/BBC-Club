@@ -1231,3 +1231,22 @@ describe("Grafana's secret key (A-S2)", () => {
     }
   });
 });
+
+describe("Grafana's alerts (A-R2)", () => {
+  it("six rules, the CI check counts six, and the kill rule reads what cAdvisor publishes", async () => {
+    const doc = Bun.YAML.parse(
+      await Bun.file(join(root, "infra/monitoring/grafana/provisioning/alerting/alerts.yml")).text(),
+    ) as { groups: { rules: { uid: string; data: { model: { expr?: string } }[] }[] }[] };
+    const rules = doc.groups[0]!.rules;
+    expect(rules).toHaveLength(6);
+    const expr = (uid: string) => rules.find((r) => r.uid === uid)!.data[0]!.model.expr!;
+    expect(expr("bbc-container-oom")).toContain("container_oom_events_total");
+    const validate = await Bun.file(join(root, ".github/workflows/validate.yml")).text();
+    expect(validate).toContain(`wait_for /api/v1/provisioning/alert-rules length ${rules.length}`);
+    // cAdvisor publishes the kills only with its oom_event metrics on.
+    const compose = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { command?: string[] }>;
+    };
+    expect(compose.services.cadvisor!.command!.some((a) => /--enable_metrics=.*oom_event/.test(a))).toBe(true);
+  });
+});
