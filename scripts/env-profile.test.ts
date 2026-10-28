@@ -1189,6 +1189,48 @@ describe("Grafana's provisioning after a deploy (A-D1)", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  /** refresh_grafana with a compose command that records its calls and fails the ones named in `fail`. */
+  async function refresh(changedAfterStart: boolean, fail: string) {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    try {
+      const file = join(dir, "alerts.yml");
+      writeFileSync(file, "x\n");
+      spawnSync("touch", ["-d", changedAfterStart ? "2026-10-28T20:00:05Z" : "2026-10-28T19:59:55Z", file]);
+      const log = join(dir, "calls.log");
+      const result = await bash(
+        `source ${lib}\n` +
+          `dc() { echo "$*" >> ${shPath(log)}; case "$*" in ${fail ? `*"${fail}"*) return 1 ;;` : ""} *) return 0 ;; esac; }\n` +
+          `refresh_grafana ${shPath(dir)} 2026-10-28T20:00:00.123456789Z dc; echo "rc=$?"`,
+      );
+      let calls: string[] = [];
+      try {
+        calls = readFileSync(log, "utf8").trim().split("\n").filter(Boolean);
+      } catch {
+        calls = [];
+      }
+      return { rc: result.out.trim(), calls };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("a changed provisioning restarts Grafana and waits for its healthcheck; unchanged, nothing is done", async () => {
+    expect(await refresh(true, "")).toEqual({
+      rc: "rc=0",
+      calls: ["restart grafana", "up -d --no-deps --wait --wait-timeout 240 grafana"],
+    });
+    expect(await refresh(false, "")).toEqual({ rc: "rc=0", calls: [] });
+  });
+
+  it("a Grafana that does not come back healthy, or does not restart, is a failure the deploy reports", async () => {
+    expect((await refresh(true, "--wait")).rc).toBe("rc=1");
+    const noRestart = await refresh(true, "restart");
+    expect(noRestart).toEqual({ rc: "rc=1", calls: ["restart grafana"] });
+    // deploy.sh sets MONITORING_FAILED when refresh_grafana fails, as for a monitoring that did not start.
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    expect(deploy).toMatch(/! refresh_grafana [^\n]*\n[^\n]*notify[^\n]*\n\s*MONITORING_FAILED=1/);
+  });
 });
 
 describe("VictoriaMetrics' basic auth (A-S1)", () => {

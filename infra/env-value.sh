@@ -196,6 +196,17 @@ changed_since() {
   [[ -n "$(find "$1" -type f -newermt "$2" -print -quit 2>/dev/null)" ]]
 }
 
+# Grafana again, once it has read <dir> anew: a restart, then `up --wait` holds until its healthcheck answers, as for a
+# start (two minutes' start period, then six probes). Nothing is done when no file under <dir> changed after <time>.
+# Returns 1 when the restart or the wait fails (ADR-IMPL-073).
+#   refresh_grafana <dir> <time> <compose command…>
+refresh_grafana() {
+  local dir="$1" started="$2"
+  shift 2
+  changed_since "$dir" "$started" || return 0
+  "$@" restart grafana >/dev/null && "$@" up -d --no-deps --wait --wait-timeout 240 grafana >/dev/null
+}
+
 # MinIO runs again when production asks for it, for R1b's offer photography: MEDIA=on (ADR-IMPL-073). Off, nothing
 # reads it (ADR-IMPL-047) and its 256 MB go to the monitoring.
 media_wanted() {

@@ -331,11 +331,9 @@ if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
     notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
     MONITORING_FAILED=1
   elif [[ -n "$gstarted" && "$($DC ps -q grafana 2>/dev/null || true)" == "$gcid" ]] &&
-    changed_since "$INFRA_DIR/monitoring/grafana/provisioning" "$gstarted"; then
-    if ! $DC restart grafana >/dev/null; then
-      notify "⚠ deploy production: $IMAGE is live, but Grafana kept its previous alerts — $DC restart grafana" "${OPS_WEBHOOK:-}"
-      MONITORING_FAILED=1
-    fi
+    ! refresh_grafana "$INFRA_DIR/monitoring/grafana/provisioning" "$gstarted" $DC; then
+    notify "⚠ deploy production: $IMAGE is live, but Grafana did not come back healthy with the new alerts — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
+    MONITORING_FAILED=1
   fi
 fi
 docker image prune -f >/dev/null
