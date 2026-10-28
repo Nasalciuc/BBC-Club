@@ -237,7 +237,7 @@ export const DatesPage = forwardRef<DatesPageHandle, Props>(function DatesPage({
             Preferred dates
           </Text>
           <Text style={[styles.rowBody, styles.preferredBody]} numberOfLines={1}>
-            Your specialist confirms availability.
+            Your agent confirms availability.
           </Text>
         </View>
       </BottomSheetScrollView>

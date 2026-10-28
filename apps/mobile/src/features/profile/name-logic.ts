@@ -14,7 +14,7 @@ export const NAME_MIN = 2;
 export const NAME_MAX = REQUEST_NAME_MAX;
 
 /** The request sheet's own words for the same faults (confirmation-logic `bodyProblem`). */
-const NAME_MISSING = "Add your name, so your specialist knows who to ask for.";
+const NAME_MISSING = "Add your name, so your agent knows who to ask for.";
 const NAME_SHORT = "Use your full name.";
 
 export type NameCheck = { ok: true; name: string } | { ok: false; error: string };

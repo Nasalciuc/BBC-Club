@@ -11,14 +11,14 @@ type Props = {
   title: string;
   body: string;
   primary: { label: string; testID: string; onPress: () => void };
-  /** `Call a specialist`: the club's general line with its words (`clubCall`, support-phone.ts), null without one
+  /** `Call an agent`: the club's general line with its words (`clubCall`, support-phone.ts), null without one
    *  (240:5129, 240:5163). */
   call?: ClubCall | null;
 };
 
 /**
  * Figma's page-wide messages (240:5093 generic error, 240:5129 update required, 240:5163 maintenance): the wordmark at
- * the safe area, the message 48 pt under it, and `Call a specialist` — a secondary button — 12 pt under the message's
+ * the safe area, the message 48 pt under it, and `Call an agent` — a secondary button — 12 pt under the message's
  * action.
  */
 export function SystemScreen({ testID, messageTestID, title, body, primary, call }: Props) {
@@ -47,6 +47,6 @@ const styles = StyleSheet.create({
   // Figma 240:5095: the wordmark and the message 24 pt apart in the gutters.
   content: { paddingHorizontal: tokens.space.lg, gap: tokens.space.lg },
   wordmark: { ...rn(tokens.type.label), color: tokens.colors.textPrimary },
-  // Figma 240:5153: 48 pt above the message; `Call a specialist` 12 pt under it.
+  // Figma 240:5153: 48 pt above the message; `Call an agent` 12 pt under it.
   message: { paddingTop: tokens.space.xxl, gap: tokens.space.sm },
 });

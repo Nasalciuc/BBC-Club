@@ -75,7 +75,7 @@ type Geometry = {
     /** What the price buys after a dot: its baseline `rise` over the price's; the dot `dotGap` after the price's box
      *  and the words `wordsGap` after the dot's. */
     basis: { role: Role; rise: number; dotGap: number; wordsGap: number; tone: "navy" | "slate" };
-    /** `Indicative · your specialist confirms the fare.`: one line in 13 and 04; at the reading sizes it wraps. */
+    /** `Indicative · your agent confirms the fare.`: one line in 13 and 04; at the reading sizes it wraps. */
     note: { role: Role; baseline: number };
     clock: {
       left: number;
@@ -187,8 +187,8 @@ const MESSAGE = {
 
 const PAUSED = "Searching paused for a moment. Try again shortly.";
 /** The note under an indicative fare (13, 04), and how it is read aloud. */
-const NOTE = "Indicative · your specialist confirms the fare.";
-const NOTE_SPOKEN = "Indicative. Your specialist confirms the fare.";
+const NOTE = "Indicative · your agent confirms the fare.";
+const NOTE_SPOKEN = "Indicative. Your agent confirms the fare.";
 
 /**
  * A destination (13, 04, 19): the city and its country (13) or its line (04), the trip's three chips, the fare's
@@ -582,7 +582,7 @@ function Summary({
 }
 
 /**
- * `INDICATIVE FARE` · `From $3,900 · round trip` · `Indicative · your specialist confirms the fare.` (13, 04): the lowest
+ * `INDICATIVE FARE` · `From $3,900 · round trip` · `Indicative · your agent confirms the fare.` (13, 04): the lowest
  * fare is indicative until the specialist confirms it, and says what it buys as the catalogue does.
  */
 function Fare({

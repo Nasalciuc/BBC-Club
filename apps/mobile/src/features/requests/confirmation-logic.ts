@@ -13,7 +13,7 @@ export function confirmationKind(source: RequestSource, queuedOffline: boolean):
  * online (a timeout, DNS, the server down), it never says "offline" (F110). The title stays within 26's two lines.
  */
 export function savedCopy(unreachable: boolean): { title: string; body: string } {
-  const after = "Nothing more to do — a specialist will call you shortly after it arrives.";
+  const after = "Nothing more to do — an agent will call you shortly after it arrives.";
   return unreachable
     ? { title: "Saved. It goes out when the club answers.", body: `We can’t reach the club right now. ${after}` }
     : { title: "Saved. It goes out when you’re back online.", body: `You’re offline right now. ${after}` };
@@ -33,7 +33,7 @@ export function limitScope(context: unknown): "ip" | "member" | null {
 }
 
 /**
- * The rate-limit page's words (27): the member's own limit says they sent several and their specialist has the others;
+ * The rate-limit page's words (27): the member's own limit says they sent several and their agent has the others;
  * any other — an address shared with others, or a server that does not say — is neutral: the member may have sent
  * nothing (F086).
  */
@@ -45,12 +45,12 @@ export function limitedCopy(s: { scope?: "ip" | "member" | null; minutes: number
   if (s.scope === "member") {
     return {
       title: "You’ve sent several requests this hour.",
-      body: `You can send another in ${when}. Your specialist already has the others.`,
+      body: `You can send another in ${when}. Your agent already has the others.`,
     };
   }
   return {
     title: "We couldn’t take this request just now.",
-    body: `Try again in ${when}${s.canCall ? ", or call your specialist" : ""}.`,
+    body: `Try again in ${when}${s.canCall ? ", or call your agent" : ""}.`,
   };
 }
 
@@ -74,7 +74,7 @@ export function bodyProblem(
     const name = body?.contact?.name?.trim() ?? "";
     if (name.length > REQUEST_NAME_MAX) return `Shorten the name to ${REQUEST_NAME_MAX} characters.`;
     if (name.length > 0) return "Use your full name.";
-    return "Add your name, so your specialist knows who to ask for.";
+    return "Add your name, so your agent knows who to ask for.";
   }
   if (where === "contact.email") return "Add an email address we can write to.";
   if (where === "contact.phone") return first.message;

@@ -79,7 +79,7 @@ export const PhoneSheet = forwardRef<ProfileSheetHandle, Props>(function PhoneSh
         />
       }
     >
-      <Text style={styles.intro}>The number a specialist calls you on.</Text>
+      <Text style={styles.intro}>The number an agent calls you on.</Text>
       <View style={styles.group}>
         <TextField
           testID="profile.phone.input"

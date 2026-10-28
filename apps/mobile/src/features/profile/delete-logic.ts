@@ -10,7 +10,7 @@ export function canConfirmDelete(password: string, busy: boolean): boolean {
  *  when the club's general line is configured (`canCall`, support-phone.ts). */
 export function deleteRateLimited(canCall: boolean): string {
   return canCall
-    ? "Too many attempts. Try again in an hour, or call your specialist."
+    ? "Too many attempts. Try again in an hour, or call your agent."
     : "Too many attempts. Try again in an hour.";
 }
 /** The deletion is confirmed with the password: a session older than a day, or an empty field, needs it typed. */

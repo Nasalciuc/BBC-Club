@@ -85,12 +85,12 @@ export function noFareCopy(
     return {
       kind: "on_request",
       title: `Fares from ${from.city} are on request.`,
-      body: "We publish fares from North America for now. Tell us where you're going — your specialist will find the fare.",
+      body: "We publish fares from North America for now. Tell us where you're going — your agent will find the fare.",
     };
   }
   return {
     kind: "no_fare_now",
     title: "Let us find your fare.",
-    body: "No fares match this route right now. Tell us your plans and a specialist will call you shortly.",
+    body: "No fares match this route right now. Tell us your plans and an agent will call you shortly.",
   };
 }

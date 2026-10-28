@@ -52,7 +52,7 @@ import { savingPercent } from "@/lib/saving";
 import { CAN_CALL, clubCall } from "@/lib/support-phone";
 
 /** 11: the line under the number we call. */
-const BOOKING_NOTE = "Your specialist confirms availability and books by phone.\nNo payment is taken in the app.";
+const BOOKING_NOTE = "Your agent confirms availability and books by phone.\nNo payment is taken in the app.";
 
 /** Under `Send now` when it did not go: still offline; the club's server not answering while the phone is online (never
  *  "offline", F110); or the server did not take it this time. */
@@ -359,8 +359,8 @@ export default function RequestDetailScreen() {
   // The club's general line (support-phone.ts); without one, no button. A request we could not pass on: `Call us`, the
   // one thing left.
   const call =
-    view.call === "specialist"
-      ? clubCall("request.call", "Call your specialist")
+    view.call === "agent"
+      ? clubCall("request.call", "Call your agent")
       : view.call === "us"
         ? clubCall("request.callUs", "Call us")
         : null;

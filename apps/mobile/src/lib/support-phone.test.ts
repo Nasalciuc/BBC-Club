@@ -21,16 +21,16 @@ const SOURCES = ["apps/mobile/src", "packages/ui/src"];
 /** Every call button of the app: where it is made, its testID and its words. A new one is made with `clubCall` and
  *  named here. */
 const CALL_SITES = [
-  { file: "apps/mobile/src/components/app-gate.tsx", testID: "appGate.update.call", label: "Call a specialist" },
-  { file: "apps/mobile/src/components/app-gate.tsx", testID: "appGate.maintenance.call", label: "Call a specialist" },
+  { file: "apps/mobile/src/components/app-gate.tsx", testID: "appGate.update.call", label: "Call an agent" },
+  { file: "apps/mobile/src/components/app-gate.tsx", testID: "appGate.maintenance.call", label: "Call an agent" },
   { file: "apps/mobile/src/app/(tabs)/profile.tsx", testID: "profile.call", label: "Call us" },
   { file: "apps/mobile/src/app/(tabs)/profile.tsx", testID: "profile.error.call", label: "Call us" },
-  { file: "apps/mobile/src/app/request/[id].tsx", testID: "request.call", label: "Call your specialist" },
+  { file: "apps/mobile/src/app/request/[id].tsx", testID: "request.call", label: "Call your agent" },
   { file: "apps/mobile/src/app/request/[id].tsx", testID: "request.callUs", label: "Call us" },
   {
     file: "apps/mobile/src/app/request/limited.tsx",
     testID: "request.rateLimited.call",
-    label: "Call your specialist",
+    label: "Call your agent",
   },
 ] as const;
 
@@ -114,7 +114,7 @@ function filesWith(re: RegExp): string[] {
 const CLUB_CALL = /\bclubCall\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/g;
 
 /** A button's words, as a string of their own. */
-const CALL_WORDS = /(["'`])Call (us|your specialist|a specialist)\1/;
+const CALL_WORDS = /(["'`])Call (us|your agent|an agent)\1/;
 
 /** The arguments of each call to `fn` in `src`, as written: split at the top level, nesting and strings respected. A
  *  definition (`function fn(`) is not a call. */
@@ -299,7 +299,7 @@ describe("words that ask the member to call", () => {
   test("live only in the copy that takes canCall (and the frozen entry)", () => {
     const asking = files
       .filter((f) =>
-        /["'`][^"'`\n]*\b[Cc]all (us|your specialist|a specialist)\b[^"'`\n]*["'`]/.test(f.src.replace(CLUB_CALL, "")),
+        /["'`][^"'`\n]*\b[Cc]all (us|your agent|an agent)\b[^"'`\n]*["'`]/.test(f.src.replace(CLUB_CALL, "")),
       )
       .map((f) => f.path);
     const allowed = new Set<string>([...CALL_COPY, GALLERY, WORDS_TYPE]);

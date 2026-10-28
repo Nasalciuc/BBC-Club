@@ -10,7 +10,7 @@ export function stateCopy(kind: MessageKind, canCall = false): { title: string; 
     case "gone":
       return {
         title: "This fare has changed.",
-        body: "This fare is no longer available. A specialist can help you find another option.",
+        body: "This fare is no longer available. An agent can help you find another option.",
       };
     case "notSent":
       return {
@@ -42,7 +42,7 @@ export function stateCopy(kind: MessageKind, canCall = false): { title: string; 
       return {
         title: "Something went wrong.",
         body: canCall
-          ? "Your account could not be deleted. Try again or call your specialist."
+          ? "Your account could not be deleted. Try again or call your agent."
           : "Your account could not be deleted. Try again in a moment.",
       };
     case "generic":

@@ -338,7 +338,7 @@ export default function RequestConfirmedScreen() {
             Request received.
           </Text>
           <Text style={[rn(body), styles.slate, styles.centred, { marginTop: after(g.body, title, body) }]}>
-            {phone ? "A specialist will call you shortly on" : "A specialist will call you shortly."}
+            {phone ? "An agent will call you shortly on" : "An agent will call you shortly."}
           </Text>
           {phone ? (
             <Text style={[rn(phoneRole), styles.navy, styles.centred, { marginTop: after(g.phone, body, phoneRole) }]}>
