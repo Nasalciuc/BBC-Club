@@ -72,7 +72,9 @@ export default function SearchScreen() {
         setHomeLoad({ state: "failed", code: res.code });
         return;
       }
-      if (!res.data.notModified) setHome(res.data.home);
+      // Asked with the tag of what this session last received (lib/api.ts): a 304 brings that copy back.
+      const answer = res.data;
+      setHome((shown) => (answer.notModified && shown ? shown : answer.home));
       setHomeLoad({ state: "ok" });
     })().catch(() => {
       if (!cancelled) setHomeLoad({ state: "failed" });

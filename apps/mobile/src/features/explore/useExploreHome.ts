@@ -42,7 +42,6 @@ export async function profileOrigin(destinations: HomeVM["destinations"] = []): 
 export function useExploreHome(opts: { origin?: boolean } = {}) {
   const wantsOrigin = opts.origin !== false;
   const [home, setHome] = useState<HomeVM | null>(null);
-  const [homeEtag, setHomeEtag] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(true);
   // The words of a failed load, never the network layer's own line (ADR-IMPL-047): offline says when it will load.
   const [homeError, setHomeError] = useState<{ title: string; body: string } | null>(null);
@@ -51,16 +50,16 @@ export function useExploreHome(opts: { origin?: boolean } = {}) {
   async function loadHome() {
     setHomeLoading(true);
     setHomeError(null);
-    const result = await fetchHome(homeEtag);
+    // The client asks with the tag of what this session last received, from the first load on (lib/api.ts): a 304
+    // keeps what is on screen, or, on a new screen, brings back the copy held for the session.
+    const result = await fetchHome();
     setHomeLoading(false);
     if (!result.ok) {
       setHomeError(readFailureCopy(result.code, "explore"));
       return;
     }
-    if (!result.data.notModified) {
-      setHome(result.data.home);
-      setHomeEtag(result.data.etag);
-    }
+    const answer = result.data;
+    setHome((shown) => (answer.notModified && shown ? shown : answer.home));
   }
 
   function retryHome() {

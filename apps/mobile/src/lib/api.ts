@@ -51,7 +51,7 @@ import { env } from "@/lib/env";
 import { maintenanceValue, storeUrlValue, type StoreUrl } from "@/lib/app-gate-logic";
 import { UNREACHABLE_MESSAGE, classifyFetchFailure, passwordChangedNotice } from "@/lib/error-context";
 import { appPlatform, appVersion } from "@/lib/app-meta";
-import { emitSessionRevoked } from "@/lib/session-events";
+import { emitSessionRevoked, onSessionRevoked } from "@/lib/session-events";
 import { API_TIMEOUT_MS, NetworkError, networkFail, timeoutSignal } from "@/lib/timeout";
 import { parseFareGoneContext, type FareGoneContext } from "@/lib/fare-gone";
 
@@ -409,18 +409,40 @@ export async function fetchLastOtpForTest(email: string): Promise<string | null>
 
 export type HomeResult = { home: HomeVMType; etag: string | null; notModified: boolean };
 
-/** GET /v1/home — ETag revalidation (`private, no-cache`): a 304 keeps the member's stored copy. */
-export async function fetchHome(etag?: string | null): Promise<ApiResult<HomeResult>> {
+/**
+ * Home's last answer on this phone, so every load — the first of a screen included — asks with its ETag and a 304 keeps
+ * it (ADR-IMPL-075). In this process only, never on disk, and only for the session it came with: the session token is
+ * the key, so after a sign-out, an account deletion or another member's sign-in no tag goes out and no body comes back
+ * (the entry, which ends sessions, stays as it is: ADR-IMPL-047). A session the server ended forgets it at once.
+ */
+let lastHome: { session: string; etag: string; home: HomeVMType } | null = null;
+onSessionRevoked(() => {
+  lastHome = null;
+});
+
+/** The session token the request will carry (the one cookie Better Auth reads it from), or null without a session. */
+function sessionOf(headers: Record<string, string>): string | null {
+  const cookie = headers.Cookie;
+  if (!cookie) return null;
+  const match = /(?:^|;\s*)[^=;\s]*session_token=([^;]+)/.exec(cookie);
+  return match?.[1] ?? null;
+}
+
+/** GET /v1/home — ETag revalidation (`private, no-cache`): a 304 answers with the copy this session last received. */
+export async function fetchHome(): Promise<ApiResult<HomeResult>> {
   return asResult<HomeResult>(async () => {
+    const session = sessionOf(authHeaders());
+    const held = session !== null && lastHome?.session === session ? lastHome : null;
+    if (!held) lastHome = null;
     const res = await apiFetch("/v1/home", {
-      headers: etag ? { "If-None-Match": etag } : {},
+      headers: held ? { "If-None-Match": held.etag } : {},
     });
     if (res.status === 304) {
       return {
         ok: true,
         data: {
-          home: { home: null, destinations: [], sections: [] },
-          etag: etag ?? null,
+          home: held?.home ?? { home: null, destinations: [], sections: [] },
+          etag: held?.etag ?? null,
           notModified: true,
         },
       };
@@ -433,7 +455,9 @@ export async function fetchHome(etag?: string | null): Promise<ApiResult<HomeRes
     if (!parsed.success) {
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }
-    return { ok: true, data: { home: parsed.data, etag: res.headers.get("ETag"), notModified: false } };
+    const etag = res.headers.get("ETag");
+    lastHome = session !== null && etag ? { session, etag, home: parsed.data } : null;
+    return { ok: true, data: { home: parsed.data, etag, notModified: false } };
   });
 }
 
