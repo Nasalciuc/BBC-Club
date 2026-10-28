@@ -83,6 +83,16 @@ describe("api-deploy: the preview update", () => {
     expect(needsOf(ota)).toEqual(expect.arrayContaining(["gate", "staging"]));
   });
 
+  it("hands EXPO_TOKEN only to the steps that call eas-cli, never to the job or `bun install`", () => {
+    expect(ota.env ?? {}).not.toHaveProperty("EXPO_TOKEN");
+    const callsEas = ota.steps.filter((step) => (step.run ?? "").includes("eas-cli@$EAS_CLI_VERSION"));
+    expect(callsEas.length).toBeGreaterThan(0);
+    for (const step of ota.steps) {
+      const hasToken = Object.hasOwn(step.env ?? {}, "EXPO_TOKEN");
+      expect(hasToken, step.name ?? step.run ?? "(action)").toBe(callsEas.includes(step));
+    }
+  });
+
   // eas-cli reads app.config.ts with the shell's env before it loads an EAS environment, and the config refuses a
   // staging one without the preview API's address: both commands run inside the environment (`eas env:exec`).
   it("publishes only to the preview channel, with the preview environment, from inside it", () => {

@@ -142,8 +142,8 @@ jobs:
     concurrency:
       group: ota-preview
       cancel-in-progress: false
+    # EXPO_TOKEN only in the two steps that call EAS, as in release.yml: never in `bun install` or the runtime step.
     env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       # One eas-cli for every workflow (release.yml too), run with bunx at this version: kept out of the workspace,
       # whose Expo tooling it would otherwise re-resolve (ADR-IMPL-079).
       EAS_CLI_VERSION: "26.0.0"
@@ -163,6 +163,8 @@ jobs:
       - name: Anything to publish
         id: changes
         working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           set -euo pipefail
           eas() { bunx "eas-cli@$EAS_CLI_VERSION" "$@"; }
@@ -200,6 +202,7 @@ jobs:
         if: steps.changes.outputs.publish == 'true'
         working-directory: apps/mobile
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           RUNTIME: ${{ steps.runtime.outputs.version }}
           LAST: ${{ steps.changes.outputs.last }}
         run: |
