@@ -15,7 +15,7 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
 - **Button · primary** — a navy pill (`action-primary`), its words white and centred, in the role and at the height each
   screen draws: 44 by default; 01 `Continue →` 45 (radius 19, `buttonOnboard`); 02/13 `Request a quote` 40.6; 04 36.6;
   05 39.3; 06 29; 07 `Use these dates →` 32.8; 08 `View request ›` 34.36; 10 53.8 (`buttonLg`); 11 40.2; 12 33.9; 17
-  43.4; 20 39.2; 21 41.5; 25 44.25; 26 42.93; 27 42.75. An icon before the words (`Call your specialist`,
+  43.4; 20 39.2; 21 41.5; 25 44.25; 26 42.93; 27 42.75. An icon before the words (`Call your agent`,
   `Edit profile`) or an arrow or chevron after them (`trailingIcon`; `trailingInset` puts it at the pill's right edge),
   each at the size and gap the screen draws (`iconSize`, `iconGap`, `labelOffset`, `trailingOffset`). Pressed:
   `action-pressed`. Disabled: as the screen draws it (24: `pill-disabled` with `text-pill-disabled` words); light tint

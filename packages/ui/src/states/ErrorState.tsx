@@ -10,7 +10,7 @@ type Props = {
   title: string;
   body?: string;
   primary?: { label: string; onPress: () => void; testID?: string; icon?: IconName };
-  /** A quiet support link under the pill (`Call a specialist`). */
+  /** A quiet support link under the pill (`Call an agent`). */
   secondary?: { label: string; onPress: () => void; testID?: string };
   reference?: string;
   /** `center` for a page with nothing else on it (21, 27); `start` under a header (26). */

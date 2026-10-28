@@ -2076,7 +2076,7 @@ motion:
 ## Overview
 
 BuyBusinessClass Club is a private business-class travel club: members see fares from their home airport, request a
-quote, and a travel specialist arranges the trip by phone. 3.0 (ADR-IMPL-055, as drawn since ADR-IMPL-056, at reading
+quote, and a travel agent arranges the trip by phone. 3.0 (ADR-IMPL-055, as drawn since ADR-IMPL-056, at reading
 sizes since ADR-IMPL-057) makes the inside a bright, modern 2026 travel app — airy white space, daylight photography of
 the cities, white cards with soft shadows, sheets that overlap the photographs, round white buttons over photos, navy
 pills and chips, thin line icons, Apple-level clean UI with luxury travel branding.
@@ -2183,7 +2183,7 @@ their widths, so lines break where the images break them (ADR-IMPL-056 §2).
 Documented in `design/components.md`. The rules an agent most often gets wrong:
 
 - One filled navy pill per screen; it may carry an arrow after its label (`Continue →`) or an icon before it
-  (`Call your specialist`). A second action is an outline pill or a text button.
+  (`Call your agent`). A second action is an outline pill or a text button.
 - Destructive actions are red: the outline pill `Sign out`, the row `Delete account`, and the filled red pill only to
   confirm a deletion.
 - Badges: `Quote ready` navy, `Received` light blue, `Booked` navy outline with a check, `Closed` light grey,
@@ -2218,11 +2218,11 @@ Documented in `design/components.md`. The rules an agent most often gets wrong:
 
 ## Product Content
 
-- Sentence case; buttons start with a verb (`Request a quote`, `Use these dates`, `Call your specialist`).
+- Sentence case; buttons start with a verb (`Request a quote`, `Use these dates`, `Call your agent`).
 - Facts are facts: a fare says what its price covers (`one way` until the catalogue says `round trip`); a starting
   fare says `from`; `Save 48%` only where the published fare is on record, its source beside it; a rating, a saved
   count, the weather and a city's line only where the club has them (ADR-IMPL-056 §5); the member's own photo when
-  they add one, seen only by them (ADR-IMPL-070). The specialist confirms availability and books by phone; no payment
+  they add one, seen only by them (ADR-IMPL-070). The agent confirms availability and books by phone; no payment
   in the app.
 - Errors say what happened and what to do next, calmly. No urgency, no scarcity, no exclamation marks.
 

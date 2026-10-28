@@ -21,7 +21,7 @@ type Props = {
    */
   busy?: boolean;
   variant?: Variant;
-  /** An icon before the label (`Call your specialist`, `Edit profile`). */
+  /** An icon before the label (`Call your agent`, `Edit profile`). */
   icon?: IconName;
   /** After the label: `arrow` (`Continue →`) or `chevron` (`View request ›`, `Request a quote ›`). */
   trailing?: "arrow" | "chevron";
