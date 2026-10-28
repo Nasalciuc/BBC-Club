@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { findUnannounced } from "./check-destructive-migrations";
 
 const root = join(import.meta.dir, "..");
 const lib = "infra/env-value.sh";
@@ -1311,5 +1312,46 @@ describe("the sample points CI runs the alerts on (A-Q1)", () => {
         for (const key of keys) expect(points[0], `${rule.uid}: ${name} ${key}`).toContain(`${key}="`);
       }
     }
+  });
+});
+
+describe("migrations:destructive (ADR-IMPL-074)", () => {
+  const lines = (sql: string) => findUnannounced(sql).map((p) => p.line);
+
+  it("catches a column's type change with or without COLUMN, and with SET DATA TYPE", () => {
+    expect(lines("ALTER TABLE t ALTER COLUMN c TYPE bigint;")).toEqual([1]);
+    expect(lines("ALTER TABLE t ALTER c TYPE bigint;")).toEqual([1]);
+    expect(lines("ALTER TABLE t ALTER COLUMN c SET DATA TYPE bigint;")).toEqual([1]);
+    expect(lines("ALTER TABLE t ALTER c SET DATA TYPE bigint;")).toEqual([1]);
+    expect(lines("ALTER TABLE t ALTER COLUMN type TYPE text;")).toEqual([1]);
+    expect(findUnannounced("ALTER TABLE t ALTER c TYPE bigint;")[0]!.typeChange).toBe(true);
+  });
+
+  it("catches a statement split across lines, on the line its operation starts", () => {
+    expect(lines("ALTER TABLE t\n  ALTER COLUMN c\n  TYPE bigint;")).toEqual([2]);
+    expect(lines("ALTER TABLE t ADD COLUMN a int,\n  ALTER c SET DATA\n  TYPE bigint;")).toEqual([2]);
+    expect(lines("DROP\n  TABLE t;")).toEqual([1]);
+  });
+
+  it("passes with the reason above the operation's line or above its statement", () => {
+    expect(lines("-- destructive: widen to bigint\nALTER TABLE t ALTER c TYPE bigint;")).toEqual([]);
+    expect(lines("-- destructive: widen to bigint\nALTER TABLE t\n  ALTER c TYPE bigint;")).toEqual([]);
+    expect(lines("ALTER TABLE t\n  -- destructive: widen to bigint\n  ALTER c TYPE bigint;")).toEqual([]);
+    expect(lines("-- destructive: one\nDROP TABLE a;\nDROP TABLE b;")).toEqual([3]);
+  });
+
+  it("leaves alone what changes no column's type", () => {
+    expect(lines("ALTER TYPE status ADD VALUE 'closed';")).toEqual([]);
+    expect(lines("ALTER TABLE t ALTER COLUMN c SET DEFAULT 0;")).toEqual([]);
+    expect(lines("ALTER TABLE t ADD COLUMN type text;")).toEqual([]);
+    expect(lines("ALTER TABLE t ALTER COLUMN type SET NOT NULL;")).toEqual([]);
+    expect(lines("ALTER TABLE type ADD COLUMN a int;")).toEqual([]);
+    expect(lines("DROP INDEX CONCURRENTLY i;")).toEqual([]);
+    expect(lines("-- ALTER TABLE t ALTER c TYPE bigint;\nSELECT 1;")).toEqual([]);
+  });
+
+  it("still catches a DELETE without WHERE across lines", () => {
+    expect(lines("SELECT 1;\nDELETE\n  FROM t;")).toEqual([2]);
+    expect(lines("DELETE FROM t\n  WHERE id = 1;")).toEqual([]);
   });
 });
