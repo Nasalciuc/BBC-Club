@@ -30,11 +30,12 @@ const release = await read("release.yml");
 const needsOf = (job: Job) => (typeof job.needs === "string" ? [job.needs] : (job.needs ?? []));
 /** Every run script of a job, and the `with` inputs of its actions (the SSH script lives there). */
 const textOf = (job: Job) => JSON.stringify([job.if ?? "", job.env ?? {}, job.steps]);
-/** The eas-cli invocations in a workflow's run scripts. */
+/** The eas-cli invocations in a workflow's run scripts: comments and the summary's `echo` lines are words, not calls. */
 const easCalls = (wf: Workflow) =>
   Object.values(wf.jobs)
     .flatMap((job) => job.steps)
     .flatMap((step) => (step.run ?? "").split("\n"))
+    .filter((line) => !/^\s*(#|echo\b)/.test(line))
     .filter((line) => /\beas-cli\b|\beas (update|build)\b/.test(line));
 
 describe("api-deploy: the chain starts from a green validate on main", () => {
@@ -82,20 +83,26 @@ describe("api-deploy: the preview update", () => {
     expect(needsOf(ota)).toEqual(expect.arrayContaining(["gate", "staging"]));
   });
 
-  it("publishes only to the preview channel, with the preview environment", () => {
-    // The publishing command alone: `eas update --…`, not update:list or update:view.
-    const updates = easCalls(deploy).filter((line) => /\beas update\s+--/.test(line));
+  // eas-cli reads app.config.ts with the shell's env before it loads an EAS environment, and the config refuses a
+  // staging one without the preview API's address: both commands run inside the environment (`eas env:exec`).
+  it("publishes only to the preview channel, with the preview environment, from inside it", () => {
+    // The publishing command alone: `update --channel …`, not update:list or update:view.
+    const updates = easCalls(deploy).filter((line) => /\bupdate --channel\b/.test(line));
     expect(updates.length).toBeGreaterThan(0);
     for (const line of updates) {
       expect(line).toContain("--channel preview");
       expect(line).toContain("--environment preview");
+      expect(line).toMatch(/\benv:exec preview '/);
     }
   });
 
-  it("a native change starts a preview build, never a production one", () => {
-    const builds = easCalls(deploy).filter((line) => /\beas build\s+--profile\b/.test(line));
+  it("a native change starts a preview build, never a production one, from inside the preview environment", () => {
+    const builds = easCalls(deploy).filter((line) => /\bbuild --profile\b/.test(line));
     expect(builds.length).toBeGreaterThan(0);
-    for (const line of builds) expect(line).toContain("--profile preview");
+    for (const line of builds) {
+      expect(line).toContain("--profile preview");
+      expect(line).toMatch(/\benv:exec preview '/);
+    }
   });
 });
 

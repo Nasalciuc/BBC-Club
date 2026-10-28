@@ -221,9 +221,11 @@ jobs:
               exit 0
             fi
             # The bundle is the preview build's: EXPO_PUBLIC_APP_ENV as eas.json's preview profile sets it, and the rest
-            # from the EAS preview environment (assertStagingEnv refuses an update without its staging API).
-            EXPO_PUBLIC_APP_ENV=staging eas update --channel preview --environment preview --platform android \
-              --message "${SHA::7} $title" --non-interactive
+            # from the EAS preview environment. eas-cli reads app.config.ts with this shell's env before it loads that
+            # environment, and assertStagingEnv refuses a staging config without its API: so the update runs inside
+            # the environment (env:exec, its own sh), and the message goes in by name, never into the command's text.
+            export UPDATE_MESSAGE="${SHA::7} $title"
+            eas env:exec preview 'EXPO_PUBLIC_APP_ENV=staging bunx "eas-cli@$EAS_CLI_VERSION" update --channel preview --environment preview --platform android --message "$UPDATE_MESSAGE" --non-interactive' --non-interactive
             echo "- published to channel preview: open the app, close it, and open it again" >> "$GITHUB_STEP_SUMMARY"
           elif [ -n "$pending" ]; then
             # It may carry an earlier commit's JavaScript: nothing is published now, and the next merge (or a run by
@@ -234,8 +236,11 @@ jobs:
               echo "- dry run: no preview build has this runtime; it would start one (eas build --profile preview)" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
-            out=$(eas build --profile preview --platform android --non-interactive --no-wait --json)
-            url=$(jq -r '.[0] | "https://expo.dev/accounts/\(.app.ownerAccount.name)/projects/\(.app.slug)/builds/\(.id)"' <<<"$out")
+            # Inside the preview environment too, for the same first config read; its JSON goes to a file, so nothing
+            # env:exec prints can reach jq.
+            export BUILD_JSON="$RUNNER_TEMP/preview-build.json"
+            eas env:exec preview 'bunx "eas-cli@$EAS_CLI_VERSION" build --profile preview --platform android --non-interactive --no-wait --json > "$BUILD_JSON"' --non-interactive
+            url=$(jq -r '.[0] | "https://expo.dev/accounts/\(.app.ownerAccount.name)/projects/\(.app.slug)/builds/\(.id)"' "$BUILD_JSON")
             echo "- something native changed: a new preview build, $url — testers install the new APK once (the build carries this commit's JavaScript, so no update is published)" >> "$GITHUB_STEP_SUMMARY"
           fi
 

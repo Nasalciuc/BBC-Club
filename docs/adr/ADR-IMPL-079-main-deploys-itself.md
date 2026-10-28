@@ -28,8 +28,10 @@ update could reach a binary without the modules it called.
    runtime is looked up among the preview builds. A finished build gets an EAS update on channel `preview` with the
    `preview` environment; a queued or running one is left to finish, and the next merge (or a run by hand with `ota`)
    publishes onto it, since the comparison runs from the last update, not the parent; with none, a new
-   preview build is started and no update is published, since the build carries the JavaScript. iOS waits for an
-   Apple Developer account.
+   preview build is started and no update is published, since the build carries the JavaScript. Both commands run
+   inside the EAS `preview` environment (`eas env:exec preview`): eas-cli reads `app.config.ts` with the runner's own
+   env before it loads an environment, and `assertStagingEnv` refuses a staging config without the preview API's
+   address. iOS waits for an Apple Developer account.
 4. **The runtime is the native fingerprint** (`runtimeVersion: { policy: "fingerprint" }`), and the version is 0.3.0.
    `fingerprint.config.js` leaves out of the hash the one input that depends on the machine — the Firebase file EAS
    Build hands the build through `GOOGLE_SERVICES_JSON` — so a runner and EAS compute the same runtime for one commit.

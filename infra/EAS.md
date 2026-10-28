@@ -10,7 +10,10 @@
   0.2.0 APK (runtime `0.2.0`) receives no more updates: testers install the 0.3.0 preview build once.
 - By itself (`api-deploy`, after `validate` on main, staging first): an EAS update on channel `preview` (Android, the
   `preview` environment) when a finished preview build has the commit's runtime, else a new preview build; nothing when
-  the app is unchanged since the last preview update. Production builds, submits and channel `production` stay by hand.
+  the app is unchanged since the last preview update. Both run inside the environment (`eas env:exec preview '…'`):
+  eas-cli reads `app.config.ts` with the shell's env before it loads the EAS environment, and the config's staging
+  and production checks refuse it without the environment's values. Production builds, submits and channel
+  `production` stay by hand.
   Dry run, and rejecting an older production approval: `docs/release.md` section 1c. `eas-cli` is pinned to one version
   in both workflows (`EAS_CLI_VERSION`), run with `bunx`.
 - Channels: development · preview (TestFlight internal / Play internal) · production. JS-only fixes: `eas update --channel production`.
