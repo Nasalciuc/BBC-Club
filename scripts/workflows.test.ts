@@ -106,6 +106,17 @@ describe("api-deploy: the preview update", () => {
   });
 });
 
+describe("release: the production build", () => {
+  it("runs inside the EAS production environment, so the config read sees its values", () => {
+    const builds = easCalls(release).filter((line) => /\bbuild --profile\b/.test(line));
+    expect(builds.length).toBeGreaterThan(0);
+    for (const line of builds) {
+      expect(line).toContain("--profile production");
+      expect(line).toMatch(/\benv:exec production '/);
+    }
+  });
+});
+
 describe("one eas-cli, pinned", () => {
   it("api-deploy and release run the same exact eas-cli version, never an unpinned one", () => {
     const pinned = deploy.jobs["ota-preview"]!.env!.EAS_CLI_VERSION;

@@ -123,10 +123,11 @@ Do **not** edit `e2e-android.yml`. `.github/workflows/release.yml` closes the ga
 
 ```bash
 cd apps/mobile
-eas build --profile production --platform android --non-interactive
+eas env:exec production 'eas build --profile production --platform android --non-interactive' --non-interactive
 ```
 
-Or dispatch **release** (`platform=android`, `submit=false`). Needs repo secret `EXPO_TOKEN`. Never run a production build or submit from a pull request.
+Inside the production environment: eas-cli reads `app.config.ts` with the shell's env before it loads the EAS
+environment, and `assertProductionEnv` refuses a production config without the section 1 values. Or dispatch **release** (`platform=android`, `submit=false`). Needs repo secret `EXPO_TOKEN`. Never run a production build or submit from a pull request.
 
 ## 5. Android submit
 

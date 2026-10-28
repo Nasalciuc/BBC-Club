@@ -81,11 +81,16 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          PLATFORM: ${{ inputs.platform }}
         run: |
           set -euo pipefail
-          out=$(bunx "eas-cli@$EAS_CLI_VERSION" build --profile production --platform "${{ inputs.platform }}" --non-interactive --json --wait)
-          id=$(printf '%s' "$out" | jq -r '.[0].id // empty')
-          status=$(printf '%s' "$out" | jq -r '.[0].status // empty' | tr '[:upper:]' '[:lower:]')
+          # eas-cli reads app.config.ts with this shell's env before it loads the EAS production environment, and
+          # assertProductionEnv refuses a production config without its privacy and terms pages and Mapbox token: the
+          # build runs inside that environment (env:exec, its own sh), its JSON to a file nothing else writes to.
+          export BUILD_JSON="$RUNNER_TEMP/production-build.json"
+          bunx "eas-cli@$EAS_CLI_VERSION" env:exec production 'bunx "eas-cli@$EAS_CLI_VERSION" build --profile production --platform "$PLATFORM" --non-interactive --json --wait > "$BUILD_JSON"' --non-interactive
+          id=$(jq -r '.[0].id // empty' "$BUILD_JSON")
+          status=$(jq -r '.[0].status // empty' "$BUILD_JSON" | tr '[:upper:]' '[:lower:]')
           if [ -z "$id" ] || [ "$status" != "finished" ]; then
             echo "EAS build did not finish: id=${id:-none} status=${status:-none}"
             exit 1
