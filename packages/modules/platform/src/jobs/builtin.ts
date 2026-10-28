@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
-import { deleteInBatches, eqConst } from "@bbc/db/helpers";
+import { alias } from "drizzle-orm/pg-core";
+import { deleteInBatches, eqConst, inConst } from "@bbc/db/helpers";
 import {
   eventDeliveries,
   eventDlq,
@@ -11,6 +12,12 @@ import {
 import type { Jobs } from "./index";
 import type { Metrics } from "../telemetry/metrics";
 import { applyDbGauges, collectDbReport, collectDbSnapshot, maybeAlertOps } from "../observe/db-health";
+
+/** A run that finished: what lastFinishedRunsSql reads. */
+const FINISHED = ["succeeded", "failed"] as const;
+/** job_runs again, inside the retention's subqueries: its columns through the schema, never as text. */
+const last = alias(jobRuns, "last");
+const later = alias(jobRuns, "later");
 
 /** Jobs platform owns. Modules register their own (expire-offers, sync-mirror, receipts…). */
 export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
@@ -49,14 +56,26 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
           sql`${rateLimitState.tat} < now() - interval '1 day'`,
           { signal },
         ),
-        // 30 days of runs, and each job's last run whenever it was (/status reads it).
-        jobRunsDeleted: await deleteInBatches(
-          db,
-          jobRuns,
-          sql`${jobRuns.startedAt} < now() - interval '30 days' AND EXISTS (
-            SELECT 1 FROM platform.job_runs later WHERE later.job = ${jobRuns.job} AND later.started_at > ${jobRuns.startedAt})`,
-          { signal },
-        ),
+        // 30 days of runs, and each job's last run and last finished run whenever they were (/status reads both: a
+        // failure followed only by skipped or running runs still fails). A finished run goes unless it is its job's last
+        // finished one, in lastFinishedRunsSql's order (started_at, then id); any other run once a newer run exists. Two
+        // statements, each on job_runs_job_started: one OR of the two kept the planner off it (3.7 s a batch, not 30 ms).
+        jobRunsDeleted:
+          (await deleteInBatches(
+            db,
+            jobRuns,
+            sql`${jobRuns.startedAt} < now() - interval '30 days' AND ${inConst(jobRuns.status, FINISHED)} AND ${jobRuns.id} <> (
+              SELECT ${last.id} FROM ${jobRuns} AS ${last} WHERE ${last.job} = ${jobRuns.job} AND ${inConst(last.status, FINISHED)}
+              ORDER BY ${last.startedAt} DESC, ${last.id} DESC LIMIT 1)`,
+            { signal },
+          )) +
+          (await deleteInBatches(
+            db,
+            jobRuns,
+            sql`${jobRuns.startedAt} < now() - interval '30 days' AND NOT ${inConst(jobRuns.status, FINISHED)} AND EXISTS (
+              SELECT 1 FROM ${jobRuns} AS ${later} WHERE ${later.job} = ${jobRuns.job} AND ${later.startedAt} > ${jobRuns.startedAt})`,
+            { signal },
+          )),
         // Twice Kafka's default retention (7 days): a message a topic still holds is still recognised as processed.
         kafkaProcessedDeleted: await deleteInBatches(
           db,

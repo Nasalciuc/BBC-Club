@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { deleteInBatches } from "@bbc/db/helpers";
-import { createPlatform, registerPlatformJobs } from "../src/api";
+import { createPlatform, lastFinishedRunsSql, registerPlatformJobs } from "../src/api";
 import { jobRuns, kafkaProcessed } from "../src/infrastructure/schema";
 
 let iso: IsolatedDb;
@@ -43,6 +43,32 @@ describe("retention", () => {
     const second = await p.jobs.run("retention");
     expect(second.metrics?.jobRunsDeleted).toBe(0);
     expect(second.metrics?.kafkaProcessedDeleted).toBe(0);
+  });
+
+  it("keeps each job's last finished run however old: a failure followed only by skipped runs stays", async () => {
+    await iso.db.execute(sql`
+      INSERT INTO platform.job_runs (job, status, started_at) VALUES
+        ('r.failing', 'failed', now() - interval '40 days'),
+        ('r.failing', 'skipped', now() - interval '35 days'),
+        ('r.failing', 'skipped', now() - interval '1 day'),
+        ('r.fixed', 'failed', now() - interval '40 days'),
+        ('r.fixed', 'succeeded', now() - interval '35 days'),
+        ('r.fixed', 'skipped', now() - interval '1 day')`);
+    const statuses = async (job: string) =>
+      (
+        (await iso.db.execute(
+          sql`SELECT status FROM platform.job_runs WHERE job = ${job} ORDER BY started_at`,
+        )) as unknown as { status: string }[]
+      ).map((r) => r.status);
+    const p = createPlatform(iso.db, { level: "silent" });
+    registerPlatformJobs(p.jobs, p.metrics);
+    const run = await p.jobs.run("retention");
+    expect(run.error ?? run.status).toBe("succeeded");
+    expect(await statuses("r.failing")).toEqual(["failed", "skipped"]);
+    expect(await statuses("r.fixed")).toEqual(["succeeded", "skipped"]);
+    // /status still reads the old failure as the job's last finished run.
+    const [last] = (await iso.db.execute(lastFinishedRunsSql(["r.failing"]))) as unknown as { status: string }[];
+    expect(last?.status).toBe("failed");
   });
 
   it("deleteInBatches deletes batch by batch until one comes back short", async () => {
