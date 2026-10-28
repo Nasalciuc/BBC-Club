@@ -300,8 +300,9 @@ elif ! { $DC up -d --no-deps caddy && $DC exec -T caddy caddy reload --config /e
 fi
 # The monitoring takes this commit's images and settings, production only: one stack serves both environments, as
 # Caddy does. Its files (scrape targets, dashboards) are read from the checkout; only a changed setting or image
-# recreates a container. --wait holds until each container's healthcheck answers: VictoriaMetrics' and Grafana's (six
-# probes 10 s apart, so a start has about a minute) and cAdvisor's, which its image brings (every 30 s); node-exporter
+# recreates a container. --wait holds until each container's healthcheck answers: VictoriaMetrics' (six probes 10 s
+# apart, so a start has about a minute), Grafana's (the same after a two-minute start period: its first start runs its
+# own migrations, so up to 3 minutes) and cAdvisor's, which its image brings (every 30 s); node-exporter
 # has none and counts once it runs. A container that starts and then fails therefore counts as not started. A failure
 # here leaves the API as it is: it is live already; the deploy still ends with an error, after the prune, whether or
 # not the webhook answered, so a monitoring that asked to run and did not is never reported as a deploy that went well.
@@ -312,7 +313,7 @@ if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
   if ! set_monitor_password "$PROD_ENV" $DC; then
     notify "⚠ deploy production: $IMAGE is live, but Grafana's database role took no password — the database dashboard stays empty (RUNBOOK § Monitoring)" "${OPS_WEBHOOK:-}"
   fi
-  if ! $DC up -d --no-deps --wait --wait-timeout 120 victoriametrics grafana node-exporter cadvisor; then
+  if ! $DC up -d --no-deps --wait --wait-timeout 240 victoriametrics grafana node-exporter cadvisor; then
     notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
     MONITORING_FAILED=1
   fi

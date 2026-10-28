@@ -1146,3 +1146,17 @@ describe("who the kernel kills first (A-R1)", () => {
     expect(doc.services.postgres!.oom_score_adj).toBe(-500);
   });
 });
+
+describe("Grafana's first start (A-R4)", () => {
+  it("has two minutes before a failed probe counts, and the deploy waits past them", async () => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { healthcheck: { start_period?: string; interval: string; retries: number } }>;
+    };
+    const hc = doc.services.grafana!.healthcheck;
+    expect(hc.start_period).toBe("120s");
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    const wait = Number(/--wait-timeout (\d+) victoriametrics grafana/.exec(deploy)?.[1]);
+    // start period, then every retry 10 s apart, must fit in the deploy's wait.
+    expect(wait).toBeGreaterThanOrEqual(120 + hc.retries * Number.parseInt(hc.interval));
+  });
+});

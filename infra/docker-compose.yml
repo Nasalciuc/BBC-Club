@@ -432,6 +432,9 @@ services:
       interval: 10s
       timeout: 3s
       retries: 6
+      # The first start runs Grafana's own migrations at half a CPU: a probe that fails in its first two minutes does
+      # not count against it.
+      start_period: 120s
     deploy: { resources: { limits: { cpus: "0.5", memory: 384m } } }
 
   # The host: CPU (steal included), memory, disk. Its network figures are its container's own; cAdvisor has each
