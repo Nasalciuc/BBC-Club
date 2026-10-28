@@ -690,7 +690,7 @@ bash infra/restore.sh --to-time "2026-09-11 14:00:00+00" # point in time
 
 Backups run inside the postgres container (pgbackrest lives there); schedule is in `/etc/cron.d/bbc`: full 01:30 UTC daily, diff every 6 h, restore drill on the 1st at 06:00.
 Asks twice. RTO ≈ 45 min, RPO ≈ 5 min (continuous WAL). **Drill it monthly** — the cron job `restore-test` does it automatically; if `#bbc-ops` has not shown "restore drill ok" this month, run `bash infra/restore-test.sh` by hand.
-The script aborts before starting the API if Postgres does not come back or the restored database does not contain all 8 schemas.
+It stops the API, the worker and cron first, so nothing reads or writes the database while it is restored, and waits until Postgres has replayed its WAL and been promoted (`pg_is_in_recovery()` false, an hour at most: it answers `pg_isready` long before, read-only). It aborts before starting them if Postgres does not come back or the restored database does not contain all 8 schemas; then it starts the API and the worker (`--no-deps`: Postgres is left as restored), and cron only once the worker answers `/ready` — cron sends its jobs there.
 
 ## Database recovery (a bad or stuck migration)
 

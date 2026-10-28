@@ -628,6 +628,86 @@ describe("rotate-secret.sh", () => {
   });
 });
 
+describe("restore.sh (ADR-IMPL-077)", () => {
+  /** A copy of restore.sh in a throwaway infra/, its two questions answered, with a `docker` that records each command
+   *  (the compose files and env file left out) and answers the checks; `sleep` returns at once. */
+  async function restore(opts: { promoted: boolean; workerReady: boolean }) {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    try {
+      mkdirSync(join(dir, "infra", "env"), { recursive: true });
+      for (const name of ["restore.sh", "docker-compose.yml", "compose.prod.yml"]) {
+        copyFileSync(join(root, "infra", name), join(dir, "infra", name));
+      }
+      writeFileSync(join(dir, "infra", "env", "production.env"), "OTHER=1\n");
+      const log = join(dir, "docker.log");
+      writeFileSync(log, "");
+      const result = await bash(`
+        export LOG=${JSON.stringify(log.replace(/\\/g, "/"))} # absolute: restore.sh changes directory
+        docker() {
+          echo "$*" >> "$LOG"
+          case "$*" in
+            *" exec -T postgres psql "*"pg_is_in_recovery"*) echo ${opts.promoted ? "f" : "t"} ;;
+            *" exec -T postgres psql "*) echo 8 ;;
+            *" ps -q worker") echo ct-worker ;;
+            "exec ct-worker bun -e "*"http://localhost:8001/ready"*) return ${opts.workerReady ? 0 : 1} ;;
+          esac
+        }
+        sleep() { :; }
+        export -f docker sleep
+        printf 'production\nyes\n' | bash ${shPath(join(dir, "infra", "restore.sh"))}`);
+      const commands = readFileSync(log, "utf8")
+        .trim()
+        .split("\n")
+        .map((l) => l.replace(/(-f|--env-file) \S+ /g, ""));
+      return { ...result, commands };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  const at = (commands: string[], prefix: string) => commands.findIndex((c) => c.startsWith(prefix));
+  const starts = (commands: string[]) => commands.filter((c) => /^compose (up|start|restart) /.test(c));
+  const probes = (commands: string[]) => commands.filter((c) => c.startsWith("exec ct-worker bun -e"));
+
+  it("stops the worker with the API and cron; once promoted, starts the API and the worker, and cron after /ready", async () => {
+    const { code, out, commands } = await restore({ promoted: true, workerReady: true });
+    expect(code).toBe(0);
+    expect(out).toContain("restore complete");
+    expect(commands[0]).toBe("compose stop api worker cron");
+    const restored = at(commands, "compose exec -T -u postgres postgres pgbackrest");
+    const promoted = commands.findIndex((c) => c.includes("pg_is_in_recovery"));
+    const checked = commands.findIndex((c) => c.includes("information_schema.schemata"));
+    const ready = at(commands, "exec ct-worker bun -e");
+    expect([0 < restored, restored < promoted, promoted < checked, checked < ready]).toEqual([true, true, true, true]);
+    // Postgres restarted once; then the API and the worker, then cron after the one /ready probe it took.
+    expect(starts(commands)).toEqual([
+      "compose restart postgres",
+      "compose up -d --no-deps api worker",
+      "compose up -d --no-deps cron",
+    ]);
+    expect(commands.indexOf("compose up -d --no-deps api worker")).toBeLessThan(ready);
+    expect(commands.indexOf("compose up -d --no-deps cron")).toBeGreaterThan(ready);
+    expect(probes(commands)).toHaveLength(1);
+    expect(probes(commands)[0]).toContain("http://localhost:8001/ready");
+  });
+
+  it("a Postgres still replaying WAL starts nothing", async () => {
+    const { code, out, commands } = await restore({ promoted: false, workerReady: true });
+    expect(code).toBe(1);
+    expect(out).toContain("still replaying WAL after an hour");
+    expect(starts(commands)).toEqual(["compose restart postgres"]);
+    expect(commands.some((c) => c.includes("information_schema.schemata"))).toBe(false);
+  });
+
+  it("a worker whose /ready stays red leaves cron stopped and says how to start it", async () => {
+    const { code, out, commands } = await restore({ promoted: true, workerReady: false });
+    expect(code).toBe(1);
+    expect(out).toContain("cron NOT started");
+    expect(out).toContain("up -d --no-deps cron");
+    expect(starts(commands)).toEqual(["compose restart postgres", "compose up -d --no-deps api worker"]);
+    expect(probes(commands)).toHaveLength(12);
+  });
+});
+
 describe("each environment's internal secret, as Compose hands it out", () => {
   if (dockerReason) {
     it("needs docker compose", () => {
