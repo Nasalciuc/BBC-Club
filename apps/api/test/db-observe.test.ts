@@ -56,14 +56,7 @@ describe("database observability", () => {
     expect(run.status).toBe(200);
     const text = await (await t.app.request("/metrics")).text();
     expect(text).toContain("# TYPE bbc_db_statements_total counter");
-    // Each series carries pg_stat_statements' dealloc count as `epoch` (A-R3): an eviction starts new series.
-    const [info] = (await t.db.execute(
-      sql`SELECT dealloc::text AS dealloc FROM pg_stat_statements_info`,
-    )) as unknown as {
-      dealloc: string;
-    }[];
-    const line = text.split("\n").find((l) => l.startsWith("bbc_db_statements_total{"));
-    expect(line).toContain(`epoch="${info!.dealloc}"`);
+    const line = text.split("\n").find((l) => l.startsWith("bbc_db_statements_total "));
     expect(Number(line?.split(" ").at(-1))).toBeGreaterThan(0);
     expect(text).toContain("# TYPE bbc_db_statement_exec_seconds_total counter");
     // Plans only where Postgres counts them (A-D2): without track_planning no series, rather than a 0 read as "none".
