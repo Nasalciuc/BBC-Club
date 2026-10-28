@@ -84,7 +84,10 @@ covers `infra/monitoring` too).
    environment with `-envflag.enable`, never from its command line); `/health` and its own `/metrics` answer before
    that check, as v1.154.0 orders them. Grafana's datasource sends the password; the two checks refuse `MONITORING=on`
    without it too. Grafana encrypts what it stores with `GRAFANA_SECRET_KEY` (`GF_SECURITY_SECRET_KEY`), not its
-   built-in default.
+   built-in default. These keys live in `production.env`, which Compose also hands whole to production's `api`,
+   `worker` and `postgres` (`env_file`), as every key there: accepted for now, since those three already hold the
+   database's password and the app's secrets and the monitoring keys reach only the monitoring, inside the box; a
+   file of its own per service would narrow it.
 9. **The room.** MinIO is a profile of its own, `media`: `MEDIA=on` puts it back in bootstrap's start (R1b). Staging's
    API replicas and worker get 384 MB each and its Postgres 768 MB: 2 048 in all, and `API_MEMORY_STAGING`,
    `WORKER_MEMORY_STAGING` and `POSTGRES_MEMORY_STAGING` in `staging.env` give one back. The limits add up to 6 752 MB
