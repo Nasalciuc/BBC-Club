@@ -89,6 +89,9 @@ const DESTINATIONS_CACHE_S = 60;
 const POPULAR_CACHE_S = 300;
 /** Distinct keys each process keeps per memo (homes × cabins × rule sets); the oldest goes first past it. */
 const MEMO_ENTRIES = 2_000;
+/** Homes whose site deals each process keeps: one home's 74 deals take about 56 KB (measured on the recorded site,
+ *  photos on), so 300 homes about 17 MB per replica where MEMO_ENTRIES would let them reach about 110 MB. */
+const SITE_DEALS_ENTRIES = 300;
 /** ADR-IMPL-067: how long one home's site deals are kept, in seconds. */
 const SITE_DEALS_CACHE_S = 60;
 /** The minute a per-member answer's versions keep (`VERSION_MINUTE_MS`, apps/api http-cache.ts — catalog does not
@@ -146,7 +149,7 @@ export const catalogModule = (
       { maxEntries: MEMO_ENTRIES, ttlMs: SITE_PINS_CACHE_S * 1000, ns: "catalog.site_pins" },
     );
     const siteDealsMemo = platform.reference.memo<SiteDeal[]>(["catalog.site", "catalog.airports"], {
-      maxEntries: MEMO_ENTRIES,
+      maxEntries: SITE_DEALS_ENTRIES,
       ns: "catalog.site_deals",
       ttlMs: SITE_DEALS_CACHE_S * 1000,
     });
