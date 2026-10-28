@@ -161,7 +161,7 @@ jobs:
           docker run --rm -v "$PWD/infra/monitoring/victoriametrics:/etc/victoriametrics:ro" \
             "$(svc victoriametrics .image)" -promscrape.config=/etc/victoriametrics/scrape.yml -dryRun
           # The two on a network of their own, VictoriaMetrics under the name Grafana's datasource asks for: the alert
-          # rules then read no data, as on a quiet box, instead of failing to reach it.
+          # rules read the sample points imported below, under every threshold, instead of failing to reach it.
           docker network create monitoring-check >/dev/null
           mapfile -t vm_flags < <(svc victoriametrics '.command[]')
           mapfile -t vm_env < <(svc victoriametrics '.environment | to_entries[] | "--env=\(.key)=\(.value)"')
@@ -219,7 +219,9 @@ jobs:
           api /api/v1/provisioning/alert-rules |
             jq -r '.[] | [.uid, (.data[] | select(.datasourceUid == "victoriametrics") | .model.expr)] | @tsv' |
             while IFS=$'\t' read -r uid expr; do
-              out="$(curl -fsS -u "bbc:${VM_PASSWORD}" --data-urlencode "query=${expr}" http://127.0.0.1:8428/api/v1/query)"
+              # At the second point's time: Grafana's start in between can take minutes, past an instant query's lookback.
+              out="$(curl -fsS -u "bbc:${VM_PASSWORD}" --data-urlencode "query=${expr}" --data-urlencode "time=$(( t2 / 1000 ))" \
+                http://127.0.0.1:8428/api/v1/query)"
               if ! jq -e '.status == "success" and (.data.result | length) > 0' <<<"$out" >/dev/null; then
                 echo "::error::alert ${uid} returns nothing on the sample points (infra/monitoring/ci/sample-metrics.txt): ${out}"
                 exit 1

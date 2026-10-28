@@ -1,6 +1,7 @@
 # CI only (.github/workflows/validate.yml, job monitoring): one series for each name an alert rule reads, with the
 # labels the rule selects, two points a minute apart (__T1__, __T2__: the job writes epoch milliseconds), so that every
-# rule's expression returns a result. A rule that reads a name or label no sample here has must have one added.
+# rule's expression returns a result, with values under every rule's threshold. A rule that reads a name or label
+# no sample here has must have one added.
 container_memory_working_set_bytes{container_label_com_docker_compose_service="api"} 400000000 __T1__
 container_memory_working_set_bytes{container_label_com_docker_compose_service="api"} 410000000 __T2__
 container_spec_memory_limit_bytes{container_label_com_docker_compose_service="api"} 536870912 __T1__
@@ -16,6 +17,6 @@ bbc_http_requests{env="production",route="/v1/home",status="200"} 1100 __T2__
 bbc_http_requests{env="production",route="/v1/home",status="500"} 1 __T1__
 bbc_http_requests{env="production",route="/v1/home",status="500"} 2 __T2__
 container_oom_events_total{container_label_com_docker_compose_service="api"} 0 __T1__
-container_oom_events_total{container_label_com_docker_compose_service="api"} 1 __T2__
+container_oom_events_total{container_label_com_docker_compose_service="api"} 0 __T2__
 bbc_queue_paused{env="production"} 0 __T1__
 bbc_queue_paused{env="production"} 0 __T2__
