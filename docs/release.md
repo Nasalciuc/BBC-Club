@@ -69,9 +69,35 @@ number), the Requests banner over a request not passed on, the rate-limit page (
 and the update and maintenance pages (`Call an agent`). Without the number, a request the server holds but could not
 pass on says the club will try again; the member is not asked to send it again (infra/RUNBOOK.md).
 
-**Native modules change the runtime.** Adding or upgrading one (Mapbox, for instance) needs a new build _and_ a new
-`version` in `app.json`: `runtimeVersion` follows the app version, so OTA updates for the new version never reach an
-older APK that lacks the module — `@rnmapbox/maps` throws on import there.
+**Native modules change the runtime.** `runtimeVersion` is the project's native fingerprint (`policy: "fingerprint"`,
+ADR-IMPL-079): adding or upgrading one (Mapbox, for instance) gives a new runtime, so OTA updates never reach an older
+APK that lacks the module — `@rnmapbox/maps` throws on import there — and the change needs a new build. Bump `version`
+in `app.json` with it, so testers can tell the builds apart. The Firebase file (`GOOGLE_SERVICES_JSON`) is left out of
+the fingerprint (`apps/mobile/fingerprint.config.js`): a change to it alone needs a `version` bump to start a build.
+
+## 1c. What main does by itself (ADR-IMPL-079)
+
+A green `validate` on a push to `main` starts **api-deploy** for that commit: the API image, staging, then the preview
+app, then production once approved. A commit main has already moved past stops at `gate` (its summary says
+`Superseded`); the newer commit's run deploys.
+
+- **Preview app** (Android, channel `preview`), after staging: when nothing under `apps/mobile`, `packages/ui`,
+  `packages/shared`, `package.json` or `bun.lock` changed since the last preview update, nothing happens. Otherwise,
+  with a finished preview build of this commit's runtime, an EAS update is published (open the app, close it, open it
+  again); with one still queued or running, nothing is published and the next merge publishes onto it; with none, a
+  preview build starts and testers install that APK once. The run's summary says which, with the build's link. iOS
+  waits for an Apple Developer account.
+- **Production**: waits for approval in the run (Review deployments) or in GitHub → Environments → `production`.
+  When several wait, approve **only the newest** and reject the older ones: an older one approved last would put
+  production back on its commit.
+- **Not automatic**: the production app (sections 4–5, `release`), any iOS build, an OTA to channel `production`.
+
+**Dry run** (no update published, no build started): Actions → api-deploy → Run workflow on `main`, `target`
+`staging`, `ota` and `dry_run` on. Staging is deployed as usual; the preview step's summary gives the commit's runtime
+and says whether it would publish or build. After the first merge, `eas build:view <id>` of the new preview build must
+show that same runtime; if it differs, CI would build on every merge — stop the preview step and say so.
+
+A run by hand without the dry run deploys one `target`; `ota` adds the preview step after staging.
 
 ## 2. Review account
 
