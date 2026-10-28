@@ -50,7 +50,8 @@ export function createFlags(
       const rows = await db.select({ key: flagsTable.key, value: flagsTable.value }).from(flagsTable);
       return new Map(rows.map((r) => [r.key, parseValue(r.value)] as const));
     },
-    { now: opts.now },
+    // A minute at most, whatever the counters say (G4): a flag written by a path no trigger sees still arrives.
+    { now: opts.now, maxAgeMs: 60_000 },
   );
 
   /** The flag row as the snapshot holds it, or the error that kept the table from being read: no fallback. */

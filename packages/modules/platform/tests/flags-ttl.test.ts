@@ -64,6 +64,23 @@ describe("flags snapshot", () => {
     expect(await flags.isKilled("engagement")).toBe(false);
   });
 
+  it("a flag written where no trigger sees it still arrives within a minute (maxAgeMs, G4)", async () => {
+    let clock = 5_000_000;
+    const flags = createFlags(iso.db, { now: () => clock });
+    expect(await flags.isEnabled("g4.untriggered", false)).toBe(false);
+    // session_replication_role = replica skips the table's trigger: the counter does not move.
+    await iso.db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL session_replication_role = replica`);
+      await tx.execute(sql`INSERT INTO platform.flags (key, value) VALUES ('g4.untriggered', '{"enabled":true}')`);
+    });
+    clock += 30_000;
+    await flags.isEnabled("g4.untriggered", false);
+    await Bun.sleep(20);
+    expect(await flags.isEnabled("g4.untriggered", false)).toBe(false); // the counter did not move
+    clock += 31_000;
+    expect(await flags.isEnabled("g4.untriggered", false)).toBe(true); // past the minute: loaded again
+  });
+
   it("set() is read back at once by the process that wrote it", async () => {
     const flags = createFlags(iso.db);
     await flags.set("personalization.ranker", { variant: "rules" });
