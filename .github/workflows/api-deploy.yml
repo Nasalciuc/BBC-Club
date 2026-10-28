@@ -74,9 +74,10 @@ jobs:
             exec 9>/var/lock/bbc-deploy.lock
             flock -w 1500 9 || { echo "❌ another deploy has held the box for 25 minutes"; exit 1; }
             git fetch -q --all
-            # Production's Caddy reads infra/caddy from this checkout (its well-known files at once): staging takes main's.
-            git diff --quiet origin/main ${{ github.sha }} -- infra/caddy ||
-              { echo "❌ this commit's infra/caddy is not main's, and production's Caddy reads it from this checkout: deploy it to staging after the merge"; exit 1; }
+            # Production's Caddy reads infra/caddy from this checkout (its well-known files at once), and the monitoring
+            # infra/monitoring (its scrape targets and dashboards within a minute): staging takes main's (ADR-IMPL-073).
+            git diff --quiet origin/main ${{ github.sha }} -- infra/caddy infra/monitoring ||
+              { echo "❌ this commit's infra/caddy or infra/monitoring is not main's, and production reads them from this checkout: deploy it to staging after the merge"; exit 1; }
             git checkout -q ${{ github.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" staging ${{ needs.build.outputs.image }}
 

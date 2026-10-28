@@ -46,6 +46,33 @@ describe("database observability", () => {
     await t.close();
   });
 
+  it("db-observe puts the statements' totals on /metrics, as counters (ADR-IMPL-073)", async () => {
+    const t = await testApp({ suite: "db-observe-statements" });
+    const run = await t.app.request("/v1/internal/run/db-observe", {
+      method: "POST",
+      headers: { "X-Internal-Secret": t.internalSecret },
+    });
+    expect(run.status).toBe(200);
+    const text = await (await t.app.request("/metrics")).text();
+    expect(text).toContain("# TYPE bbc_db_statements_total counter");
+    const calls = Number(
+      text
+        .split("\n")
+        .find((l) => l.startsWith("bbc_db_statements_total "))
+        ?.split(" ")[1],
+    );
+    expect(calls).toBeGreaterThan(0);
+    for (const name of [
+      "db_statement_plans_total",
+      "db_statement_exec_seconds_total",
+      "db_statement_plan_seconds_total",
+    ])
+      expect(text).toContain(`# TYPE bbc_${name} counter`);
+    // No PGBOUNCER_ADMIN_URL here: no pooler series at all, rather than zeros that read as an idle pooler.
+    expect(text).not.toContain("bbc_pgbouncer_");
+    await t.close();
+  });
+
   it("GET /v1/internal/db-report is ops:read", async () => {
     const t = await testApp({ suite: "db-report-get" });
     expect((await t.app.request("/v1/internal/db-report")).status).toBe(401);
@@ -149,6 +176,12 @@ describe("database observability", () => {
       expect(sample).not.toBeNull();
       expect(typeof sample?.waiting).toBe("number");
       expect(sample?.pools).toBeGreaterThanOrEqual(1);
+      // SHOW STATS too: the totals the dashboard divides; the client above ran at least one query through it.
+      expect(sample?.stats).not.toBeNull();
+      expect(sample?.stats?.queries).toBeGreaterThanOrEqual(1);
+      for (const n of [sample?.clientsActive, sample?.serversActive, sample?.serversIdle, sample?.maxWaitSeconds])
+        expect(typeof n).toBe("number");
+      for (const n of Object.values(sample?.stats ?? {})) expect(Number.isFinite(n)).toBe(true);
     } finally {
       await client.end({ timeout: 1 });
     }

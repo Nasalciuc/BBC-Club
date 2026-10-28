@@ -1,0 +1,4 @@
+# No plugin is provisioned (ADR-IMPL-073). Grafana reads this folder at every start and logs an error when it is
+# missing, so it exists, empty.
+apiVersion: 1
+apps: []

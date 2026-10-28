@@ -1,0 +1,170 @@
+# Five alerts, to GRAFANA_ALERTS_WEBHOOK (production.env), a Slack-compatible incoming webhook — usually where deploy.sh
+# posts its notes, OPS_WEBHOOK (ADR-IMPL-073). The worker already posts two of its own there — PgBouncer clients waiting
+# for 2 min and a transaction open past 30 s (db-observe) — so they are not repeated here. Grafana expands environment
+# variables in this file: a literal dollar sign is written twice, and the templates below read `.Labels` rather than
+# `$labels` for that reason. The alerts on production look only at what production has run: on a box that runs staging
+# alone they stay quiet.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: ops
+    receivers:
+      - uid: bbc-ops-webhook
+        type: slack
+        settings:
+          url: ${GRAFANA_ALERTS_WEBHOOK}
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: ops
+    group_by: ["alertname"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+
+groups:
+  - orgId: 1
+    name: bbc
+    folder: BBC Club
+    interval: 1m
+    rules:
+      - uid: bbc-memory-near-limit
+        title: A container is above 90 % of its memory limit
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: max by (container_label_com_docker_compose_service) (container_memory_working_set_bytes{container_label_com_docker_compose_service!=""} / (container_spec_memory_limit_bytes{container_label_com_docker_compose_service!=""} > 0))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.9] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ .Labels.container_label_com_docker_compose_service }} is above 90 % of its memory limit: the kernel kills it next (staging first, Postgres last)."
+          runbook: "infra/RUNBOOK.md § Monitoring, the five alerts"
+
+      - uid: bbc-cpu-steal
+        title: The VPS steals more than 20 % of the CPU
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: 100 * avg(rate(node_cpu_seconds_total{mode="steal"}[5m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [20] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: "The hypervisor takes more than 20 % of the CPU: the box is slower than its two cores (a noisy neighbour, or an undersized plan)."
+          runbook: "infra/RUNBOOK.md § Monitoring, the five alerts"
+
+      # While the worker answers: none finished, or none since it started (the counter then has no series yet).
+      - uid: bbc-dispatch-stalled
+        title: No push dispatch has finished in 10 minutes
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(bbc_job_succeeded{env="production",exported_job="dispatch"}[10m])) or on() (0 * count(up{job="worker"} == 1))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: "The dispatch job runs each minute and none has finished for 10 minutes: quote-ready and offer pushes are waiting."
+          runbook: "infra/RUNBOOK.md § The queue is stuck, and § Push"
+
+      # A target that answered in the last day and does not now: a replica that hangs, or the worker gone. A replica that
+      # crashed restarts by itself and leaves no target (Compose's DNS names running containers only); one that went
+      # away with a deploy neither; a worker production never ran is not one. Uptime Kuma watches the whole.
+      - uid: bbc-target-down
+        title: An API replica or the worker does not answer /metrics
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: max by (job, instance) (up{job=~"api|worker"}) and max by (job, instance) (max_over_time(up{job=~"api|worker"}[1d])) == 1
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ .Labels.job }} {{ .Labels.instance }} has not answered a scrape for 5 minutes."
+          runbook: "infra/RUNBOOK.md § Roll back right now"
+
+      - uid: bbc-http-5xx
+        title: More than 2 % of production requests fail with a 5xx
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: sum(rate(bbc_http_requests{env="production",status=~"5..",route!~"/health|/ready|/status|/metrics|/v1/internal/run/:job"}[5m])) / sum(rate(bbc_http_requests{env="production",route!~"/health|/ready|/status|/metrics|/v1/internal/run/:job"}[5m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.02] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: critical }
+        annotations:
+          summary: "More than 2 % of production's requests answer 5xx for 10 minutes (the probes and the cron's job runs left out)."
+          runbook: "infra/RUNBOOK.md § Roll back right now"

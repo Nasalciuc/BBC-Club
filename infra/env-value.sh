@@ -146,6 +146,18 @@ glitchtip_wanted() {
   [[ "$(env_optional "$1" GLITCHTIP)" == "on" ]]
 }
 
+# The monitoring (VictoriaMetrics, Grafana, node-exporter, cAdvisor; 736 MB) runs only when production asks for it:
+# MONITORING=on (ADR-IMPL-073). Grafana then needs GRAFANA_ADMIN_PASSWORD, and GRAFANA_ALERTS_WEBHOOK for its alerts.
+monitoring_wanted() {
+  [[ "$(env_optional "$1" MONITORING)" == "on" ]]
+}
+
+# MinIO runs again when production asks for it, for R1b's offer photography: MEDIA=on (ADR-IMPL-073). Off, nothing
+# reads it (ADR-IMPL-047) and its 256 MB go to the monitoring.
+media_wanted() {
+  [[ "$(env_optional "$1" MEDIA)" == "on" ]]
+}
+
 # ORIGIN_TLS=on: Caddy serves the Cloudflare Origin CA certificate from ORIGIN_CERT_DIR (RUNBOOK § Certificates) and will
 # not start without it, so this runs before anything restarts: both files there, the key readable by its owner only and
 # matching the certificate, not expired, and naming each domain Caddy serves; under 30 days left is a warning. Each

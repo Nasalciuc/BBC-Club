@@ -1,0 +1,13 @@
+# The one datasource (ADR-IMPL-073): VictoriaMetrics speaks the Prometheus query API.
+apiVersion: 1
+datasources:
+  - name: VictoriaMetrics
+    uid: victoriametrics
+    type: prometheus
+    access: proxy
+    url: http://victoriametrics:8428
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 30s
+      httpMethod: POST

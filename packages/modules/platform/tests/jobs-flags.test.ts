@@ -98,5 +98,14 @@ describe("metrics", () => {
     expect(out).toContain('bbc_deliveries_done{consumer="x.onY"} 1');
     expect(out).toContain("bbc_delivery_duration_ms_count");
     expect(out).toContain("bbc_queue_pending");
+    await p.close();
+  });
+
+  it("an API replica's /metrics reads no table: the queue's gauges stay where the poller runs (ADR-IMPL-073)", async () => {
+    const p = createPlatform(db, { level: "silent", queueGauges: false });
+    const out = await p.metrics.render();
+    expect(out).not.toContain("bbc_queue_");
+    expect(out).toContain("# TYPE bbc_process_cpu_seconds_total counter");
+    await p.close();
   });
 });

@@ -2,13 +2,14 @@
 
 Written for someone who has never seen this system. Every command is copy-paste. If a step needs judgement, it says so.
 
-**Machine:** one EU VPS, `/opt/bbc`, Docker Compose (one project; staging = extra services `api-staging`/`postgres-staging` on the same box). **Only 22, 80, 443 are open.** Everything else (Postgres, MinIO, GlitchTip, Kuma) is reachable only through an SSH tunnel:
+**Machine:** one EU VPS, `/opt/bbc`, Docker Compose (one project; staging = extra services `api-staging`/`postgres-staging` on the same box). **Only 22, 80, 443 are open.** Everything else (Postgres, MinIO, GlitchTip, Kuma, Grafana) is reachable only through an SSH tunnel:
 
 ```bash
 ssh -L 5432:localhost:5432 -L 3001:localhost:3001 root@<host>   # then connect to localhost
+ssh -L 3000:127.0.0.1:3000 root@<host>                          # Grafana (MONITORING=on): http://localhost:3000
 ```
 
-**Alerts:** `#bbc-ops` (disk, queue, failed jobs, crash-free, code mails that fail — "Postmark down / OTP not arriving") · `#bbc-sec` (5xx bursts, rate-limit anomalies, DLQ, failed restore) · phone escalation only for "API down > 5 min" from Uptime Kuma.
+**Alerts:** `#bbc-ops` (disk, queue, failed jobs, crash-free, code mails that fail — "Postmark down / OTP not arriving"; with `MONITORING=on`, Grafana's five, § Monitoring) · `#bbc-sec` (5xx bursts, rate-limit anomalies, DLQ, failed restore) · phone escalation only for "API down > 5 min" from Uptime Kuma.
 
 ---
 
@@ -19,11 +20,11 @@ cd /opt/bbc
 DC="docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml --env-file infra/env/production.env"
 $DC ps
 $DC exec -T api bun -e "fetch('http://localhost:8000/status').then(r=>r.text()).then(t=>console.log(t))" | jq   # db, queue, staleJobs, failingJobs (503 when unwell)
-$DC exec -T api bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'http_|queue_pending|queue_dead|queue_oldest'
-$DC exec -T worker bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'db_|pgbouncer_'
+$DC exec -T api bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'http_|process_|event_loop'
+$DC exec -T worker bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep -E 'queue_|db_|pgbouncer_'
 ```
 
-Request counters on `/metrics` are **per Bun process**; `exec` asks the first API replica. Caddy answers 404 for `/metrics`, `/ready`, `/status` and `/worker-metrics` to every address but its own: closed from the internet, and to a `curl` on the box too, which reaches Caddy from Docker's bridge address. The commands above ask each process directly. `/ready` is that one process — not draining, its database answers — and is what deploys wait on; `/status` is the system — the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job on time (`staleJobs`) and not failing (`failingJobs`: its last finished run failed; the next run that succeeds clears it) — and is what Uptime Kuma watches. A dead letter turns `/status` red and leaves `/ready` green, so the deploy that fixes it still rolls. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_waiting_clients`) are set by the worker job `db-observe`, so they are on the worker's `/metrics` (port 8001), the third command. Alerts POST from that process to `OPS_WEBHOOK`; there is no Prometheus. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
+Request counters on `/metrics` are **per Bun process**; `exec` asks the first API replica. Caddy answers 404 for `/metrics`, `/ready`, `/status` and `/worker-metrics` to every address but its own: closed from the internet, and to a `curl` on the box too, which reaches Caddy from Docker's bridge address. The commands above ask each process directly. `/ready` is that one process — not draining, its database answers — and is what deploys wait on; `/status` is the system — the queue (nothing pending over 5 minutes, no dead letter) and every scheduled job on time (`staleJobs`) and not failing (`failingJobs`: its last finished run failed; the next run that succeeds clears it) — and is what Uptime Kuma watches. A dead letter turns `/status` red and leaves `/ready` green, so the deploy that fixes it still rolls. Database gauges (`db_connections`, `db_oldest_tx_seconds`, `db_lock_waits`, `db_deadlocks_total`, `pgbouncer_*`, the `db_statement*` totals) are set by the worker job `db-observe`, and the queue's gauges are the worker's too, where the poller runs: they are on the worker's `/metrics` (port 8001), the third command. Two of its thresholds POST from that process to `OPS_WEBHOOK` (§ Database health). With `MONITORING=on`, VictoriaMetrics scrapes every process each 30 s and Grafana shows and alerts on it (§ Monitoring); without it, the commands above are the view. Per-IP read limits are in each process's memory: with N replicas a client can receive up to N × the limit until a shared store exists.
 
 GlitchTip uses **its own Postgres** (`glitchtip-postgres`). It is not in the pgBackRest stanza.
 
@@ -35,7 +36,7 @@ flock /var/lock/bbc-deploy.lock bash infra/deploy.sh production ghcr.io/nasalciu
 
 `LOADTEST=1` in production.env is refused. Image tags must be a commit SHA (`:latest` is rejected).
 
-The `api-deploy` workflow holds `/var/lock/bbc-deploy.lock` from its `git checkout` to the end of the deploy, so two dispatches never swap the shared checkout under each other; its SSH step has an hour in all, up to 25 minutes of it waiting for the lock. By hand, `flock` (above) waits its turn the same way. A staging dispatch whose `infra/caddy` differs from `origin/main`'s stops before its checkout: production's Caddy reads that directory from this checkout (§ Staging on the same box).
+The `api-deploy` workflow holds `/var/lock/bbc-deploy.lock` from its `git checkout` to the end of the deploy, so two dispatches never swap the shared checkout under each other; its SSH step has an hour in all, up to 25 minutes of it waiting for the lock. By hand, `flock` (above) waits its turn the same way. A staging dispatch whose `infra/caddy` or `infra/monitoring` differs from `origin/main`'s stops before its checkout: production's Caddy and monitoring read those directories from this checkout (§ Staging on the same box).
 
 Before step 1, nothing changes unless `staging.env` sets no key that production's services read (§ Staging on the same box), the origin certificate passes `origin_tls_check` (§ Certificates), and N, the number of API replicas, is 1–9: `API_REPLICAS` (`API_REPLICAS_STAGING` on staging), default 2, read the way Compose reads it — the shell, then `staging.env`, then `production.env`.
 
@@ -83,7 +84,9 @@ Gauges (worker job `db-observe`, every minute, on `/worker-metrics` and the work
 | `bbc_db_deadlocks_total`        | `pg_stat_database.deadlocks`                                                    | Investigate the pair of statements                                                                       |
 | `bbc_pgbouncer_waiting_clients` | PgBouncer `SHOW POOLS` `cl_waiting` (needs `PGBOUNCER_ADMIN_URL` on the worker) | **> 0 for 2 minutes** posts to `OPS_WEBHOOK`. Raise `default_pool_size` only after checking slow queries |
 
-There is no Prometheus or Alertmanager in this stack. Thresholds are evaluated by the worker and posted to `OPS_WEBHOOK`.
+The worker also sets PgBouncer's pools (`bbc_pgbouncer_clients_active`, `_servers_active`, `_servers_idle`, `_max_wait_seconds`) and its totals from `SHOW STATS` (`bbc_pgbouncer_transactions_total`, `_queries_total`, `_wait_seconds_total`, `_client_parses_total`, `_server_parses_total`, `_binds_total`: a bind with no server parse runs a statement prepared before), and the database's `pg_stat_statements` totals (`bbc_db_statements_total`, `bbc_db_statement_plans_total`, `bbc_db_statement_exec_seconds_total`, `bbc_db_statement_plan_seconds_total`). The totals are counters: read them as rates (Grafana's `the app` dashboard does).
+
+These two thresholds are the worker's own, posted to `OPS_WEBHOOK`; the other alerts are Grafana's (§ Monitoring).
 
 Postgres ends a session that sits **idle in a transaction for 60 s** (role setting, migration 0027): its locks go and vacuum can move again. Nothing in the app waits that long inside a transaction (an event handler's ceiling is 30 s). In `psql`, a `BEGIN` you will keep open longer while you think needs `SET idle_in_transaction_session_timeout = 0;` first in that session.
 
@@ -622,7 +625,7 @@ app keeps the last Home it parsed until its next load.
 
 ## The queue is stuck (oldest pending > 5 min)
 
-1. `curl -s localhost:8000/metrics | grep queue_` — depth, age, dead.
+1. `$DC exec -T worker bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep queue_` — depth, age, dead. The worker's: the queue's gauges are where the poller runs (with `MONITORING=on`, Grafana's `Event queue` panel too).
 2. `docker compose ... logs api --tail 200 | grep delivery` — which consumer.
 3. Dead letters: `SELECT consumer, count(*), max(failed_at) FROM platform.event_dlq GROUP BY 1;`
 4. Fix the cause, then replay: `POST /v1/internal/run/queue-health` or `poller.replay(<delivery_id>)`.
@@ -867,7 +870,9 @@ bootstrap.sh and deploy.sh run the same check before they change anything: both 
 
 ## Memory and replicas
 
-The memory limits in `docker-compose.yml` add up to 6.9 GB of the 8 GB box (the sum is at the top of that file): production 4 GB, staging 2.7 GB, Uptime Kuma 128 MB. A deploy adds N API replicas for a few minutes (1 GB at N = 2). GlitchTip (1.6 GB) and Redis + Kafka (1.3 GB) are off unless asked for. When the box runs short anyway, the kernel kills staging first (`oom_score_adj` 500) and Postgres last (-500).
+The memory limits in `docker-compose.yml` add up to 6.75 GB of the 8 GB box (the sum is at the top of that file): production 3.8 GB, staging 2 GB, Uptime Kuma 128 MB, the monitoring 736 MB (ADR-IMPL-073). A deploy adds N API replicas for a few minutes (1 GB at N = 2). MinIO (256 MB, `MEDIA=on`, with R1b), GlitchTip (1.6 GB) and Redis + Kafka (1.3 GB) are off unless asked for — each needs that sum looked at again first. When the box runs short anyway, the kernel kills staging first (`oom_score_adj` 500) and Postgres last (-500).
+
+Staging's API replicas and its worker have 384 MB each and its Postgres 768 MB. If Grafana's memory panel shows one of them above 80 % of its limit, give it back in `staging.env` — `API_MEMORY_STAGING=512m`, `WORKER_MEMORY_STAGING=512m` or `POSTGRES_MEMORY_STAGING=1g` — with the sum above in view; the next staging deploy applies it (Postgres only when it is recreated, as below).
 
 `API_REPLICAS` and `API_REPLICAS_STAGING` (default 2 each) set the number of API containers; `API_MEMORY`, `WORKER_MEMORY` and `POSTGRES_MEMORY` move a limit. A new value applies to a new container: the next deploy for the API and the worker. A deploy never recreates Postgres, so a new `POSTGRES_MEMORY`, or any change to the `postgres` service in `docker-compose.yml`, waits for `docker compose ... up -d --no-deps postgres` (and `postgres-staging` with the staging files), which restarts it — 10 to 60 seconds of errors, in a quiet minute.
 
@@ -879,6 +884,40 @@ Its four containers (1.6 GB) start only with `GLITCHTIP=on` in `production.env`;
 docker compose ... --profile glitchtip stop redis glitchtip glitchtip-worker glitchtip-postgres
 docker compose ... --profile glitchtip rm -f redis glitchtip glitchtip-worker glitchtip-postgres
 ```
+
+## Monitoring (ADR-IMPL-073)
+
+Metrics only: VictoriaMetrics scrapes each API replica and each worker, production's and staging's, the host (node-exporter) and every container (cAdvisor) each 30 s and keeps 90 days (`vm_data`, about 1–2 GB); Grafana shows two dashboards and sends five alerts to `GRAFANA_ALERTS_WEBHOOK`. Logs and traces wait for staging's own machine. Four containers, 736 MB of limits (VictoriaMetrics 192, Grafana 384, cAdvisor 128, node-exporter 32), all on the internal network; only Grafana is published, on the box's loopback. Production reads `infra/monitoring` from this checkout, as it reads `infra/caddy`: a staging dispatch whose copy is not `origin/main`'s stops (§ Staging on the same box). The commands below use `$DC` from § Daily shape.
+
+**Turn it on (once).**
+
+1. Make room: MinIO is off until R1b (`MEDIA=off`), but a container an earlier bootstrap started is still there. Stop it; its data stays in `minio_data`:
+   ```bash
+   $DC --profile media stop minio && $DC --profile media rm -f minio
+   ```
+2. In `production.env`: `MONITORING=on`, `GRAFANA_ADMIN_PASSWORD=` (`openssl rand -base64 24`, into the password manager) and `GRAFANA_ALERTS_WEBHOOK=` (where the alerts go; usually `OPS_WEBHOOK`'s URL) — bootstrap.sh and deploy.sh refuse `MONITORING=on` without both. `staging.env` sets neither: the deploy refuses there every name production's compose file substitutes (§ Staging on the same box), and its own `OPS_WEBHOOK` stays its own.
+3. The next production deploy starts it (step 8). Or now: `$DC --profile monitoring up -d --no-deps victoriametrics grafana node-exporter cadvisor`.
+4. Plans per statement need `pg_stat_statements.track_planning`, which Postgres takes when it is recreated: `$DC up -d --no-deps postgres`, in a quiet minute (§ Memory and replicas). Until then that panel reads 0.
+
+**Look.** `ssh -L 3000:127.0.0.1:3000 root@<host>`, then http://localhost:3000, user `admin`. Folder `BBC Club`: `the box` (CPU and memory by container against its limit, throttling, the host, Postgres connections, PgBouncer, network, kills for memory) and `the app` (the club's requests and p95/p99 by route — the probes and the cron's job runs left out — errors, API CPU per request, event-loop delay, statements per request, plans per statement, PgBouncer parses and binds, cache hit ratio, the queue, failed jobs). The `env` variable switches production and staging. The dashboards and alerts are files in `infra/monitoring/grafana`: a change is a PR, never an edit in the UI (the UI refuses).
+
+**The five alerts** (to `GRAFANA_ALERTS_WEBHOOK`; the worker sends its own two to `OPS_WEBHOOK`, § Database health):
+
+| Alert                                                                                                | When   | First move                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A container is above 90 % of its memory limit                                                        | 5 min  | The memory panel: which one. Staging: give it back (§ Memory and replicas). Production: the API or the worker — look for a leak before raising it                                                                                 |
+| The VPS steals more than 20 % of the CPU                                                             | 10 min | Not ours to fix: the hypervisor. If it lasts, ask Hostinger, or a larger plan                                                                                                                                                     |
+| No push dispatch has finished in 10 minutes, the worker answering                                    | 5 min  | § The queue is stuck, then § Push. A killed `notifications` module stops the job too: then it is expected                                                                                                                         |
+| An API replica or the worker that answered in the last day does not answer /metrics                  | 5 min  | `$DC ps`; § Roll back right now. It sees a replica that hangs and a worker that is gone; a replica that crashed restarts by itself and leaves no target (`Killed for memory` and `$DC ps` show it). Uptime Kuma watches the whole |
+| More than 2 % of production's requests fail with a 5xx (the probes and the cron's job runs left out) | 10 min | `$DC logs api --tail 200`; § Roll back right now                                                                                                                                                                                  |
+
+The three on production look only at what production has run: on a box that runs staging alone, before production's first deploy, they stay quiet.
+
+**Its own cost.** Grafana has 384 MB, under the 512 MB Grafana 13 documents as its minimum: it fits with Prometheus as its only data source plugin. If its line on `Memory against the limit` stays high (the 90 % alert names it), give it `512m` in `docker-compose.yml`, by PR, with the sum in § Memory and replicas in view. Each of the four has a CPU limit, 1.3 cores in all. cAdvisor is the heaviest for its size, capped at 0.2 of a core: watch its CPU and throttling on `the box`. If it sits at its cap for a day, slow it down by a PR (`--housekeeping_interval=60s` in `docker-compose.yml`): stopping it lasts only until the next production deploy starts it again.
+
+**Changing it.** VictoriaMetrics reads the scrape file again within a minute of a deploy, Grafana the dashboards each minute. Grafana reads its datasource, contact point and alerts only when it starts: `$DC --profile monitoring restart grafana`. `GRAFANA_ADMIN_PASSWORD` counts only while `grafana_data` is new; to change the password later, `read -rs P && $DC --profile monitoring exec grafana grafana cli admin reset-admin-password "$P"; unset P`, then the same value in `production.env` and the password manager.
+
+**Turn it off.** `MONITORING=off`, then `$DC --profile monitoring stop victoriametrics grafana node-exporter cadvisor` and `rm -f` the same four; `vm_data` and `grafana_data` stay until you remove the volumes.
 
 ## "Vladimir is unavailable"
 
@@ -991,7 +1030,7 @@ without Cloudflare’s client cert must fail the TLS handshake.
 
 Every deploy passes both env files to Compose, `staging.env` last, so for any `${KEY}` in `docker-compose.yml` staging's value would replace production's. `staging.env` therefore holds staging's own settings only, under names production never reads (`INTERNAL_API_SECRET_STAGING`, `POSTGRES_PASSWORD_STAGING`, `API_IMAGE_STAGING`); deploy.sh refuses anything else by name before step 1, and bootstrap.sh with its other env checks, before it starts anything. A setting both environments need, like the domains or `ORIGIN_TLS`, lives in `production.env`.
 
-The box has one checkout, and production's long-running containers read files from it: Caddy its Caddyfile and `/.well-known` files (`infra/caddy`, the files at once, the config at its next reload or restart), cron its crontab at its next start (`infra/cron`). So the `api-deploy` workflow refuses a staging dispatch whose `infra/caddy` is not `origin/main`'s: such a branch reaches staging after its merge. A branch's `infra/cron` reaches production's cron only if cron restarts while the checkout is on that branch; the next production deploy recreates cron from its own commit.
+The box has one checkout, and production's long-running containers read files from it: Caddy its Caddyfile and `/.well-known` files (`infra/caddy`, the files at once, the config at its next reload or restart), the monitoring its scrape targets and dashboards (`infra/monitoring`, within a minute), cron its crontab at its next start (`infra/cron`). So the `api-deploy` workflow refuses a staging dispatch whose `infra/caddy` or `infra/monitoring` is not `origin/main`'s: such a branch reaches staging after its merge. A branch's `infra/cron` reaches production's cron only if cron restarts while the checkout is on that branch; the next production deploy recreates cron from its own commit.
 
 ## Load tests on staging
 

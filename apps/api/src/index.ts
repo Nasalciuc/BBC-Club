@@ -50,6 +50,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     pretty: env.NODE_ENV === "development",
     redisUrl: env.REDIS_URL,
     kafkaBrokers: env.KAFKA_BROKERS,
+    queueGauges: runsBackground,
   });
   // A reconnecting client must not hold route registration. connect() already catches a rejection.
   void platform.connect();

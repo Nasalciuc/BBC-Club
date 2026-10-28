@@ -2,7 +2,7 @@ import { EventRegistry, createPublisher, createPoller, tombstoneMember, type Pol
 import { createFlags } from "../flags";
 import { createJobs } from "../jobs";
 import { enqueue, PUSH_GROUP, runWorker } from "../jobs/streams";
-import { createLogger, createMetrics } from "../telemetry";
+import { createLogger, createMetrics, registerProcessMetrics } from "../telemetry";
 import { createRateLimiter } from "../ratelimit";
 import { createCache } from "../cache";
 import { consumeIdempotent } from "../kafka/consume";
@@ -24,10 +24,14 @@ export function createPlatform(
     onDead?: PollerOptions["onDead"];
     redisUrl?: string;
     kafkaBrokers?: string;
+    /** The queue's three gauges, which read the journal at each scrape: only where the poller runs (the worker, or
+     *  `all`). An API replica serving members leaves them out, so a scrape of it reads no table (ADR-IMPL-073). */
+    queueGauges?: boolean;
   } = {},
 ) {
   const logger = createLogger(opts);
   const metrics = createMetrics();
+  registerProcessMetrics(metrics);
   const redisUrl = opts.redisUrl?.trim() || "";
   const redis: Redis | null = redisUrl ? createRedis(redisUrl, logger) : null;
   const guarded = createBreaker(metrics);
@@ -67,9 +71,11 @@ export function createPlatform(
     }
     return statsP;
   };
-  metrics.gauge("queue_pending", async () => (await stats()).pending);
-  metrics.gauge("queue_dead", async () => (await stats()).dead);
-  metrics.gauge("queue_oldest_pending_seconds", async () => (await stats()).oldestPendingSeconds);
+  if (opts.queueGauges ?? true) {
+    metrics.gauge("queue_pending", async () => (await stats()).pending);
+    metrics.gauge("queue_dead", async () => (await stats()).dead);
+    metrics.gauge("queue_oldest_pending_seconds", async () => (await stats()).oldestPendingSeconds);
+  }
 
   const ac = new AbortController();
   const closers: Array<() => Promise<void>> = [];

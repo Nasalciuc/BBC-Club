@@ -1,11 +1,13 @@
 # ONE project, ONE compose file, overlays for prod/staging/test. Staging is extra services in this same
 # project (api-staging, postgres-staging) so a single Caddy can hold certificates for both domains.
 #
-# Memory on the 8 GB box (limits, MB): production 4 096 (Caddy 128, 2 × API 512, worker 512, PgBouncer 64, Postgres
-# 2 048, cron 64, MinIO 256) + staging 2 688 + Uptime Kuma 128 = 6 912, so the limits never add up past the RAM; a
-# deploy runs twice the API replicas for a few minutes (+1 024). Off unless asked for: GlitchTip 1 664 (GLITCHTIP=on)
-# and Redis + Kafka 1 344 (REDIS_URL or KAFKA_BROKERS). API_MEMORY, WORKER_MEMORY and POSTGRES_MEMORY move a limit
-# without editing this file. Under pressure the kernel kills staging first (oom_score_adj 500) and Postgres last (-500).
+# Memory on the 8 GB box (limits, MB): production 3 840 (Caddy 128, 2 × API 512, worker 512, PgBouncer 64, Postgres
+# 2 048, cron 64) + staging 2 048 + Uptime Kuma 128 + monitoring 736 (MONITORING=on: VictoriaMetrics 192, Grafana 384,
+# node-exporter 32, cAdvisor 128) = 6 752, so the limits never add up past the RAM; a deploy runs twice the API replicas
+# for a few minutes (+1 024): 7 776 (ADR-IMPL-073). Off unless asked for: MinIO 256 (MEDIA=on, with R1b), GlitchTip 1 664
+# (GLITCHTIP=on) and Redis + Kafka 1 344 (REDIS_URL or KAFKA_BROKERS) — each needs that sum looked at again first.
+# API_MEMORY, WORKER_MEMORY and POSTGRES_MEMORY move a limit without editing this file. Under pressure the kernel kills
+# staging first (oom_score_adj 500) and Postgres last (-500).
 name: bbc
 
 x-logging: &logging
@@ -15,7 +17,7 @@ x-restart: &restart
 
 networks:
   edge: {} # caddy ↔ api
-  data: { internal: true } # postgres, redis, minio, glitchtip, kuma — no internet, no host
+  data: { internal: true } # postgres, redis, minio, glitchtip, kuma, monitoring — no internet, no host
 
 services:
   # ── the only door ─────────────────────────────────────────────────────────
@@ -165,6 +167,9 @@ services:
       - pg_stat_statements.max=10000
       - -c
       - pg_stat_statements.track=all
+      # Planning counted too (ADR-IMPL-073): plans per call show on Grafana whether statements are prepared once.
+      - -c
+      - pg_stat_statements.track_planning=on
       - -c
       - wal_level=replica
       - -c
@@ -202,6 +207,10 @@ services:
     # MinIO stopped publishing its community image on 23 Oct 2025 (minio/minio is gone from Docker Hub).
     # Chainguard's build of the same server, pinned by digest — bump it with infra/RUNBOOK.md, "Images pinned by digest".
     image: cgr.dev/chainguard/minio:latest@sha256:9dcc028b309030afa86fc1fc8d93907ae373ea3fb75277cca3fc77e4645932b7
+    # Off until R1b serves offer photography from it (ADR-IMPL-073): nothing reads it before then (ADR-IMPL-047), and its
+    # 256 MB pay for the monitoring. MEDIA=on in production.env: bootstrap.sh starts it; deploy.sh never starts it, so on a
+    # running box `docker compose ... --profile media up -d minio`.
+    profiles: ["media"]
     <<: [*restart, *logging]
     networks: [data]
     command: server /data --console-address ":9001"
@@ -332,6 +341,112 @@ services:
     volumes: ["kuma_data:/app/data"]
     deploy: { resources: { limits: { memory: 128m } } }
 
+  # ── monitoring: only with MONITORING=on in production.env (bootstrap.sh and deploy.sh add the profile) ─────
+  # Metrics only (ADR-IMPL-073): VictoriaMetrics scrapes every replica, the worker, the host and the containers each 30 s
+  # and keeps 90 days; Grafana shows them and sends five alerts to GRAFANA_ALERTS_WEBHOOK. Logs and traces wait for
+  # staging's own machine. Nothing here is published but Grafana, on the box's loopback only: an SSH tunnel reaches it.
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.154.0
+    profiles: ["monitoring"]
+    <<: [*restart, *logging]
+    networks: [data] # the replicas, the worker and the exporters are all on it; no internet
+    command:
+      - -storageDataPath=/storage
+      - -retentionPeriod=90d
+      - -promscrape.config=/etc/victoriametrics/scrape.yml
+      - -promscrape.configCheckInterval=1m
+      - -selfScrapeInterval=30s
+      - -memory.allowedPercent=40
+    volumes:
+      - vm_data:/storage
+      - ./monitoring/victoriametrics:/etc/victoriametrics:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8428/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    deploy: { resources: { limits: { cpus: "0.5", memory: 192m } } }
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    profiles: ["monitoring"]
+    <<: [*restart, *logging]
+    networks: [data, edge] # edge for the alerts' webhook, which is outside the box; data for VictoriaMetrics
+    # Loopback only: `ssh -L 3000:127.0.0.1:3000 root@<host>`, then http://localhost:3000 (RUNBOOK § Monitoring).
+    ports: ["127.0.0.1:3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      # Grafana 13 ships its data sources as plugins, each backend its own process inside this limit: only Prometheus's
+      # (VictoriaMetrics speaks it) is loaded. The expressions the alerts use are part of Grafana itself.
+      GF_PLUGINS_DISABLE_PLUGINS: elasticsearch,tempo,zipkin,opentsdb,stackdriver,mssql,jaeger,loki,mysql,influxdb,grafana-postgresql-datasource,grafana-pyroscope-datasource
+      # The contact point reads it (provisioning/alerting/alerts.yml). A name of its own, not OPS_WEBHOOK: staging.env may
+      # set that one for staging, and guard_staging refuses in staging.env every name this file substitutes.
+      GRAFANA_ALERTS_WEBHOOK: ${GRAFANA_ALERTS_WEBHOOK:-}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: { victoriametrics: { condition: service_healthy } }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    deploy: { resources: { limits: { cpus: "0.5", memory: 384m } } }
+
+  # The host: CPU (steal included), memory, disk. Its network figures are its container's own; cAdvisor has each
+  # container's.
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    profiles: ["monitoring"]
+    <<: [*restart, *logging]
+    networks: [data]
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.filesystem
+      - --collector.loadavg
+      - --collector.diskstats
+      - --collector.pressure
+      - --collector.stat
+    volumes: ["/:/host:ro,rslave"]
+    deploy: { resources: { limits: { cpus: "0.1", memory: 32m } } }
+
+  # Each container: CPU, memory against its limit, throttling, network. Every 30 s, Docker's containers only, the
+  # compose service as its only label: on two cores its own CPU is watched on its dashboard (RUNBOOK § Monitoring).
+  cadvisor:
+    image: ghcr.io/google/cadvisor:0.60.6
+    profiles: ["monitoring"]
+    <<: [*restart, *logging]
+    networks: [data]
+    privileged: true
+    devices: ["/dev/kmsg"]
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+      - --max_housekeeping_interval=60s
+      - --store_container_labels=false
+      - --whitelisted_container_labels=com.docker.compose.service
+      - --enable_metrics=cpu,memory,network,oom_event
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    deploy: { resources: { limits: { cpus: "0.2", memory: 128m } } }
+
 volumes:
   postgres_data: {}
   pgbackrest_spool: {}
@@ -341,3 +456,5 @@ volumes:
   caddy_data: {}
   caddy_config: {}
   kafka_data: {}
+  vm_data: {}
+  grafana_data: {}

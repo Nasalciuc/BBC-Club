@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rolling deploy: dump → pull and check env → migrate (direct Postgres) → one canary → roll API → recreate worker →
-# staging demo → Caddy → prune.
+# staging demo → Caddy → the monitoring (production, MONITORING=on) → prune.
 #   bash infra/deploy.sh production ghcr.io/nasalciuc/bbc-api:8f3c21a
 #   bash infra/deploy.sh staging    ghcr.io/nasalciuc/bbc-api:8f3c21a
 set -Eeuo pipefail
@@ -39,6 +39,19 @@ if redis_kafka_wanted "$PROD_ENV" "$stg_file"; then
 fi
 if glitchtip_wanted "$PROD_ENV"; then
   DC="$DC --profile glitchtip"
+fi
+if media_wanted "$PROD_ENV"; then
+  DC="$DC --profile media"
+fi
+# The monitoring is the box's, like Caddy: a production deploy keeps it current (step 8). Grafana's admin password and
+# the alerts' webhook are checked here, while nothing has changed yet (ADR-IMPL-073).
+MONITORING_ON=""
+if monitoring_wanted "$PROD_ENV"; then
+  DC="$DC --profile monitoring"
+  MONITORING_ON=1
+  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK; do
+    env_known "$PROD_ENV" "$k" || { echo "❌ MONITORING=on needs $k in $PROD_ENV (RUNBOOK § Monitoring)"; exit 1; }
+  done
 fi
 # Caddy reloads at step 8 and restarts with the box: a missing or wrong origin certificate stops the deploy here, while
 # nothing has changed yet.
@@ -258,7 +271,7 @@ else
   echo "▶ 7/8 staging demo — production: skipped (the review account is created by hand, docs/release.md)"
 fi
 
-echo "▶ 8/8 Caddy, then cleanup"
+echo "▶ 8/8 Caddy and the monitoring, then cleanup"
 # Caddy takes this commit's Caddyfile. A one-off container checks it first (certificates included), so a bad file never
 # replaces a working one; then a new container only if one of its settings changed (docker-compose.yml, a few seconds
 # without traffic), and a graceful reload, which keeps connections open. One Caddy serves both environments, so a staging
@@ -276,6 +289,20 @@ elif ! { $DC up -d --no-deps caddy && $DC exec -T caddy caddy reload --config /e
   notify "🚨 deploy $MODE: $IMAGE is live, but Caddy did not take this commit's config — $DC logs caddy --tail 50" "${SEC_WEBHOOK:-}"
   exit 1
 fi
+# The monitoring takes this commit's images and settings, production only: one stack serves both environments, as
+# Caddy does. Its files (scrape targets, dashboards) are read from the checkout; only a changed setting or image
+# recreates a container. --wait holds until each container's healthcheck answers: VictoriaMetrics' and Grafana's (six
+# probes 10 s apart, so a start has about a minute) and cAdvisor's, which its image brings (every 30 s); node-exporter
+# has none and counts once it runs. A container that starts and then fails therefore counts as not started. A failure
+# here leaves the API as it is: it is live already; the deploy still ends with an error, after the prune, whether or
+# not the webhook answered, so a monitoring that asked to run and did not is never reported as a deploy that went well.
+MONITORING_FAILED=""
+if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
+  if ! $DC up -d --no-deps --wait --wait-timeout 120 victoriametrics grafana node-exporter cadvisor; then
+    notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
+    MONITORING_FAILED=1
+  fi
+fi
 docker image prune -f >/dev/null
 # Old API images are tagged, so prune never takes them, and each is a few hundred MB. Kept: this image and the one it
 # replaced (the rollback), the other environment's image, and the five newest. An image a container uses refuses to go.
@@ -287,4 +314,8 @@ while read -r ref; do
   if docker image rm "$ref" >/dev/null 2>&1; then removed=$((removed + 1)); fi
 done < <(docker image ls "${IMAGE%:*}" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$' | tail -n +6)
 echo "old API images removed: $removed"
+if [[ -n "$MONITORING_FAILED" ]]; then
+  echo "❌ deploy $MODE: $IMAGE is live, but the monitoring did not start (above)"
+  exit 1
+fi
 notify "✅ deploy $MODE ok — $IMAGE in $(( $(date +%s) - started ))s"
