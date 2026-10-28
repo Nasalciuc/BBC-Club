@@ -99,6 +99,10 @@ services:
       # Named prepared statements across transaction pooling; 1.24 defaults to 200, written here so an image change
       # cannot turn them off without a diff (ADR-IMPL-074).
       MAX_PREPARED_STATEMENTS: "200"
+      # A Postgres restart held every request 15 s (server_login_retry's default) before PgBouncer tried again: 1 s.
+      # A client waits 10 s at most for a server connection, then gets an error it can show (query_wait_timeout).
+      SERVER_LOGIN_RETRY: "1"
+      QUERY_WAIT_TIMEOUT: "10"
     depends_on: { postgres: { condition: service_healthy } }
     healthcheck: { test: ["CMD", "pg_isready", "-h", "127.0.0.1"], interval: 5s, timeout: 3s, retries: 10 }
     deploy: { resources: { limits: { memory: 64m } } }

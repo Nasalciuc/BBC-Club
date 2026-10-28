@@ -1119,3 +1119,19 @@ describe("Postgres's planning settings (ADR-IMPL-077)", () => {
     expect(prod.log_error_verbosity).toBe("terse");
   });
 });
+
+describe("PgBouncer after a Postgres restart (X6)", () => {
+  it("both poolers try the server again after a second and keep a client waiting ten seconds at most", async () => {
+    for (const [file, service] of [
+      ["infra/docker-compose.yml", "pgbouncer"],
+      ["infra/compose.staging.yml", "pgbouncer-staging"],
+    ] as const) {
+      const doc = Bun.YAML.parse(await Bun.file(join(root, file)).text()) as {
+        services: Record<string, { environment: Record<string, string> }>;
+      };
+      const env = doc.services[service]!.environment;
+      // edoburu/pgbouncer's entrypoint writes each into pgbouncer.ini as server_login_retry / query_wait_timeout.
+      expect([env.SERVER_LOGIN_RETRY, env.QUERY_WAIT_TIMEOUT], service).toEqual(["1", "10"]);
+    }
+  });
+});
