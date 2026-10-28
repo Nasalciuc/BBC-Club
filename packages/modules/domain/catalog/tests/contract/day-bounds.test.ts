@@ -133,4 +133,39 @@ describe("a dated search's day", () => {
     });
     expect(rows.map((r) => r.departWall)).toEqual(["2026-12-15T00:30"]);
   });
+
+  it("the clocks and the day are Postgres's tzdata whatever the session's time zone: Chișinău and Los Angeles agree", async () => {
+    // fa01 as the fixture has it: JFK 22:55 UTC on 12 October 2026, LHR 06:00 UTC the next morning.
+    await iso.db.execute(sql`
+      INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng, popularity, tz) VALUES
+        ('JFK', 'John F. Kennedy International', 'New York', 'United States', 'US', 'americas', 40.6413, -73.7781, 100, 'America/New_York'),
+        ('LHR', 'Heathrow', 'London', 'United Kingdom', 'GB', 'europe', 51.47, -0.4543, 98, 'Europe/London')
+      ON CONFLICT (code) DO UPDATE SET tz = EXCLUDED.tz`);
+    const [inserted] = (await iso.db.execute(sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, nonstop, price, currency, source, depart_at,
+                                 arrive_at, valid_from, valid_until, published)
+      VALUES ('JFK', 'LHR', 'first', 'BA', true, '9100.00', 'USD', 'manual', '2026-10-12T22:55:00Z',
+              '2026-10-13T06:00:00Z', now() - interval '1 day', now() + interval '30 days', true)
+      RETURNING id`)) as unknown as { id: string }[];
+    const id = inserted?.id ?? "";
+    const when = new Date("2026-10-12T12:00:00Z");
+    const read = (session: "Europe/Chisinau" | "America/Los_Angeles") =>
+      iso.db.transaction(async (tx) => {
+        await tx.execute(sql.raw(`SET LOCAL TIME ZONE '${session}'`));
+        const q = { from: "JFK", to: "LHR", cabin: "first" as const, when };
+        const walls = (rows: { id: string; departWall?: string | null; arriveWall?: string | null }[]) =>
+          rows.map((r) => [r.id, r.departWall, r.arriveWall]);
+        return {
+          zonesAtHand: walls(
+            await faresRepo.search(tx, { ...q, originTz: "America/New_York", destTz: "Europe/London" }),
+          ),
+          perRow: walls(await faresRepo.search(tx, q)),
+          page: walls([(await faresRepo.getAny(tx, id)) ?? { id: "none" }]),
+        };
+      });
+    const fa01 = [[id, "2026-10-12T18:55", "2026-10-13T07:00"]];
+    const chisinau = await read("Europe/Chisinau");
+    expect(chisinau).toEqual({ zonesAtHand: fa01, perRow: fa01, page: fa01 });
+    expect(await read("America/Los_Angeles")).toEqual(chisinau);
+  });
 });
