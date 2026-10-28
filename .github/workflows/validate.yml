@@ -91,6 +91,9 @@ jobs:
           PRICING_PARITY_REQUIRED: "1"
         run: bun test tests/parity
       - run: bunx turbo run test:db
+      # Bun's zones against Postgres's, two years of every catalogue zone (ADR-IMPL-077): ~50 s of one core, so on its
+      # own, after the suites whose tests time the clock.
+      - run: bun run test:tz
       - run: bun run db:verify
       - name: Graph shape (G9-G11)
         run: python3 scripts/graph-shape.py

@@ -1,12 +1,13 @@
 /** T1 (ADR-IMPL-077): the day `zoneDayBounds` bounds — Bun's clocks, from the ICU Bun carries — against the day
  *  Postgres reads, `(t AT TIME ZONE zone)::date`, from its own copy of the zone rules: every zone the catalogue's airports
  *  use, every day of the two years from the run. Where the two copies disagree, a dated search shows the wrong day's
- *  fares. The zones known to disagree are listed with why; any other fails. */
+ *  fares. The zones known to disagree are listed with why; any other fails. About 50 s of one core: `bun run test:tz`
+ *  runs it on its own after the database suites (validate, CI), never beside their clock-bound tests. */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
-import { airports } from "@bbc/db/schema/catalog";
-import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
-import { zoneDayBounds } from "@bbc/shared/time-zone";
+import { airports } from "../packages/db/src/schema/catalog";
+import { isolatedDb, type IsolatedDb } from "../packages/db/src/testing/isolated-db";
+import { zoneDayBounds } from "../packages/shared/src/time-zone";
 
 /** Zones whose next two years Bun's ICU (75.1 in Bun 1.3.4, CI's, and 1.3.14, the image's; 78.3 in 1.4.4) and Postgres's
  *  tzdata (2026e, CI's postgres:16-alpine and Postgres 16 here) read differently, measured on 28 Oct 2026. Bun is behind:

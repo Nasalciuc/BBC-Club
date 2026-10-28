@@ -55,8 +55,8 @@ Postgres 16), the data layer had reads that grow worse with time:
    with the day's two instants, `zoneDayBounds` — the day Postgres reads, across a clock change and a midnight that
    does not exist, by Bun's copy of the zone rules (its ICU). Each zone's day is found once per process (at most 1 000
    kept, the oldest going first; about 190 µs found, under 1 µs kept). Bun's copy and Postgres's (tzdata) are compared
-   for every zone the catalogue's airports use, every day of the two years from the run (`tz-parity.test.ts`, about
-   50 s): today they differ in seven, where Bun is behind tzdata 2026e — Vancouver, Edmonton, Winnipeg and Inuvik
+   for every zone the catalogue's airports use, every day of the two years from the run (`scripts/tz-parity.test.ts`,
+   about 50 s of one core: `bun run test:tz`, on its own after the database suites, in `validate` and CI): today they differ in seven, where Bun is behind tzdata 2026e — Vancouver, Edmonton, Winnipeg and Inuvik
    (summer offset kept as standard time from 1 Nov 2026), Casablanca and El_Aaiun (+00 from 20 Sep 2026), Asuncion
    on Bun 1.3 (−03 all year): there a search's day is an hour off Postgres's. The test lists them and fails on any
    other. The API image pins Bun by digest (`apps/api/Dockerfile`), so its zones change only with a deliberate bump.

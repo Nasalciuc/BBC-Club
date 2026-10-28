@@ -1,7 +1,7 @@
 # Multi-stage: the whole workspace is needed at build (paths, contracts, migrations), a pruned copy at runtime.
 # Bun pinned to one build (1.3-alpine as of 13 May 2026, Bun 1.3.14) in all three stages: its ICU is where the server's
 # time zones come from, and a dated search's day is the zone's day by those rules (zoneDayBounds). A new Bun can move
-# a zone's day: bump the digest on purpose and run the catalogue's tz-parity test against Postgres (ADR-IMPL-077).
+# a zone's day: bump the digest on purpose and run `bun run test:tz` against Postgres (ADR-IMPL-077).
 FROM oven/bun:1.3-alpine@sha256:5acc90a93e91ff07bf72aa90a7c9f0fa189765aec90b47bdbf2152d2196383c0 AS deps
 WORKDIR /repo
 COPY package.json bun.lock turbo.json tsconfig.base.json bunfig.toml ./
