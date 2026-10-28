@@ -1,7 +1,8 @@
 # Main deploys itself (ADR-IMPL-079): a green `validate` on a push to main builds that commit's API image (7-char SHA
-# tag only, GHCR), deploys it to staging over SSH (infra/deploy.sh), and deploys production once Scaler approves it
-# (GitHub → Environments → production). Every job uses the commit `gate` names: the one validate checked, never main's
-# tip at the time. workflow_dispatch runs one target by hand.
+# tag only, GHCR), deploys it to staging over SSH (infra/deploy.sh), then publishes the preview app's update — or starts
+# the preview build a native change needs — and deploys production once Scaler approves it (GitHub → Environments →
+# production). Every job uses the commit `gate` names: the one validate checked, never main's tip at the time.
+# workflow_dispatch runs one target by hand, with the preview step (`ota`) or only its report (`dry_run`).
 name: api-deploy
 on:
   workflow_run:
@@ -14,6 +15,14 @@ on:
         description: "staging | production"
         required: true
         default: staging
+      ota:
+        description: "After staging: publish the preview update, or start the preview build a native change needs"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Preview step only says what it would publish or build (needs ota)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -121,6 +130,114 @@ jobs:
               { echo "❌ this commit's infra/caddy or infra/monitoring is not main's, and production reads them from this checkout: deploy it to staging after the merge"; exit 1; }
             git checkout -q ${{ needs.gate.outputs.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" staging ${{ needs.build.outputs.image }}
+
+  ota-preview:
+    # After staging, so the update never calls an endpoint staging does not have yet; not behind production's approval.
+    needs: [gate, staging]
+    if: >-
+      needs.gate.outputs.current == 'true' && needs.staging.result == 'success' &&
+      (github.event_name == 'workflow_run' || inputs.ota)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    concurrency:
+      group: ota-preview
+      cancel-in-progress: false
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      # One eas-cli for every workflow (release.yml too), run with bunx at this version: kept out of the workspace,
+      # whose Expo tooling it would otherwise re-resolve (ADR-IMPL-079).
+      EAS_CLI_VERSION: "26.0.0"
+      SHA: ${{ needs.gate.outputs.sha }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.gate.outputs.sha }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with: { bun-version: "1.3.4" }
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: "22.14.0" }
+      - run: bun install --frozen-lockfile
+
+      - name: Anything to publish
+        id: changes
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          eas() { bunx "eas-cli@$EAS_CLI_VERSION" "$@"; }
+          # Against the commit of the last update published on the preview branch, not this commit's parent: a run
+          # superseded at the gate published nothing, and its changes must still reach the phones.
+          group=$(eas update:list --branch preview --limit 1 --json --non-interactive | jq -r '.currentPage[0].group // empty' || true)
+          last=""
+          if [ -n "$group" ]; then
+            last=$(eas update:view "$group" --json | jq -r '[.[].gitCommitHash // empty][0] // empty')
+          fi
+          # From the repository's root: the paths are the app's and what it bundles.
+          if [ -n "$last" ] && git cat-file -e "$last^{commit}" 2>/dev/null &&
+            git -C "$GITHUB_WORKSPACE" diff --quiet "$last" "$SHA" -- apps/mobile packages/ui packages/shared package.json bun.lock; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "### Preview app" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nothing to publish: the app has not changed since the last preview update (\`${last::7}\`)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "last=${last:-none}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Runtime of this commit
+        id: runtime
+        if: steps.changes.outputs.publish == 'true'
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          # The fingerprint EAS Build computes for the preview build of this commit: the Firebase file it hands the
+          # build is left out of the hash (fingerprint.config.js), and the EXPO_PUBLIC_* values do not enter it.
+          rv=$(npx expo-updates runtimeversion:resolve --platform android | jq -r '.runtimeVersion // empty')
+          [ -n "$rv" ] || { echo "❌ no runtime version resolved"; exit 1; }
+          echo "version=$rv" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the update, or start the build a native change needs
+        if: steps.changes.outputs.publish == 'true'
+        working-directory: apps/mobile
+        env:
+          RUNTIME: ${{ steps.runtime.outputs.version }}
+          LAST: ${{ steps.changes.outputs.last }}
+        run: |
+          set -euo pipefail
+          eas() { bunx "eas-cli@$EAS_CLI_VERSION" "$@"; }
+          title=$(git log -1 --format=%s "$SHA")
+          builds=$(eas build:list --platform android --build-profile preview --runtime-version "$RUNTIME" --limit 10 --json --non-interactive)
+          finished=$(jq '[.[] | select(.status == "FINISHED")] | length' <<<"$builds")
+          pending=$(jq -r '[.[] | select(.status == "NEW" or .status == "IN_QUEUE" or .status == "IN_PROGRESS")][0].id // empty' <<<"$builds")
+          {
+            echo "### Preview app"
+            echo "- commit: \`${SHA::7}\` $title (last published: \`${LAST::7}\`)"
+            echo "- runtime: \`$RUNTIME\`"
+            echo "- iOS: no Apple Developer account yet"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$finished" -gt 0 ]; then
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "- dry run: a preview build has this runtime; it would publish \`${SHA::7} $title\` to channel preview" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            # The bundle is the preview build's: EXPO_PUBLIC_APP_ENV as eas.json's preview profile sets it, and the rest
+            # from the EAS preview environment (assertStagingEnv refuses an update without its staging API).
+            EXPO_PUBLIC_APP_ENV=staging eas update --channel preview --environment preview --platform android \
+              --message "${SHA::7} $title" --non-interactive
+            echo "- published to channel preview: open the app, close it, and open it again" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -n "$pending" ]; then
+            # It may carry an earlier commit's JavaScript: nothing is published now, and the next merge (or a run by
+            # hand with ota) publishes onto it once it has finished — the diff above runs from the last update.
+            echo "- build \`$pending\` for this runtime is queued or running: nothing published now; the next merge, or a run by hand with ota, publishes onto it once it has finished" >> "$GITHUB_STEP_SUMMARY"
+          else
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "- dry run: no preview build has this runtime; it would start one (eas build --profile preview)" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            out=$(eas build --profile preview --platform android --non-interactive --no-wait --json)
+            url=$(jq -r '.[0] | "https://expo.dev/accounts/\(.app.ownerAccount.name)/projects/\(.app.slug)/builds/\(.id)"' <<<"$out")
+            echo "- something native changed: a new preview build, $url — testers install the new APK once (the build carries this commit's JavaScript, so no update is published)" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   production:
     needs: [gate, build, staging]

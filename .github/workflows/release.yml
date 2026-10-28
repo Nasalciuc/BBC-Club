@@ -24,6 +24,8 @@ jobs:
     timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
+      # The eas-cli api-deploy.yml's preview step runs (ADR-IMPL-079), kept out of the workspace and run with bunx.
+      EAS_CLI_VERSION: "26.0.0"
     steps:
       - name: iOS is not ready
         if: ${{ inputs.platform == 'ios' }}
@@ -81,7 +83,7 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
           set -euo pipefail
-          out=$(bunx eas-cli build --profile production --platform "${{ inputs.platform }}" --non-interactive --json --wait)
+          out=$(bunx "eas-cli@$EAS_CLI_VERSION" build --profile production --platform "${{ inputs.platform }}" --non-interactive --json --wait)
           id=$(printf '%s' "$out" | jq -r '.[0].id // empty')
           status=$(printf '%s' "$out" | jq -r '.[0].status // empty' | tr '[:upper:]' '[:lower:]')
           if [ -z "$id" ] || [ "$status" != "finished" ]; then
@@ -95,4 +97,4 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: bunx eas-cli submit --profile production --platform android --id "${{ steps.build.outputs.id }}" --non-interactive
+        run: bunx "eas-cli@$EAS_CLI_VERSION" submit --profile production --platform android --id "${{ steps.build.outputs.id }}" --non-interactive
