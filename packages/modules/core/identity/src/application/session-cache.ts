@@ -13,26 +13,49 @@ type Entry = { info: SessionInfo; until: number };
 /** When a token or a member was forgotten: its place in the sequence reads begin in, and the clock. */
 type Note = { seq: number; at: number };
 
-/** The session cookie's value (the signed token), under the club's prefix, secure or not (auth.ts `cookiePrefix`). */
-const TOKEN_COOKIE = /(?:^|;\s*)(?:__Secure-)?bbc\.session_token=([^;]+)/;
-
-/** The key a request's session is kept under: a hash of the signed token it carries, never the token itself. */
-export function sessionKey(headers: Headers): string | null {
-  const token = headers.get("cookie")?.match(TOKEN_COOKIE)?.[1];
-  return token ? createHash("sha256").update(token).digest("base64url") : null;
+/**
+ * The value of the cookie `name` as Better Auth reads it (better-call's `parseCookies`, which its `getSignedCookie`
+ * reads): the first cookie of that name only, trimmed, unquoted, decoded when it holds a `%`. Better Auth reads one
+ * name (`authCookies.sessionToken`: `__Secure-` only with secure cookies), so no other cookie may stand for it.
+ */
+function cookieValue(headers: Headers, name: string): string | null {
+  const str = headers.get("cookie");
+  if (!str) return null;
+  for (let index = 0; index < str.length;) {
+    const eq = str.indexOf("=", index);
+    if (eq === -1) return null;
+    let end = str.indexOf(";", index);
+    if (end === -1) end = str.length;
+    else if (end < eq) {
+      index = str.lastIndexOf(";", eq - 1) + 1;
+      continue;
+    }
+    if (str.slice(index, eq).trim() === name) {
+      let value = str.slice(eq + 1, end).trim();
+      if (value.codePointAt(0) === 34) value = value.slice(1, -1);
+      try {
+        return (value.includes("%") ? decodeURIComponent(value) : value) || null;
+      } catch {
+        return value || null;
+      }
+    }
+    index = end + 1;
+  }
+  return null;
 }
 
-/** The session token inside the cookie `sessionKey` hashes (before its signature), to check it against the token
- *  Better Auth verified: Better Auth reads one cookie name only, so another cookie of the same name must never key
- *  its answer. Anything unreadable gives null, and nothing is kept. */
-export function keyedToken(headers: Headers): string | null {
-  const value = headers.get("cookie")?.match(TOKEN_COOKIE)?.[1];
-  if (!value) return null;
-  try {
-    return decodeURIComponent(value).split(".")[0] || null;
-  } catch {
-    return null;
-  }
+/** The key a request's session is kept under: a hash of the signed token in the cookie `name` (the one Better Auth
+ *  reads the session from), never the token itself. */
+export function sessionKey(headers: Headers, name: string): string | null {
+  const value = cookieValue(headers, name);
+  return value ? createHash("sha256").update(value).digest("base64url") : null;
+}
+
+/** The session token inside the cookie `sessionKey` hashes (before its signature, as `getSignedCookie` splits it),
+ *  checked against the token Better Auth verified before an answer is kept. */
+export function keyedToken(headers: Headers, name: string): string | null {
+  const value = cookieValue(headers, name);
+  return value ? value.slice(0, Math.max(value.lastIndexOf("."), 0)) || null : null;
 }
 
 /**

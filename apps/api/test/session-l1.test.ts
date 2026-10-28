@@ -46,6 +46,24 @@ describe("session kept per process", () => {
     expect((await read()).status).toBe(401);
   });
 
+  it("only the cookie Better Auth reads finds what is kept: a cookie of the other name beside it changes nothing", async () => {
+    const t = await testApp({ suite: "session-l1-cookie" });
+    const value = (cookie: string) => tokenOnly(cookie).split("=").slice(1).join("=");
+    const a = value(t.memberA.cookie);
+    const b = value(t.memberB.cookie);
+    const profile = async (cookie: string) => {
+      const res = await t.app.request("/v1/profile", { headers: { Cookie: cookie } });
+      return { status: res.status, body: await res.json() };
+    };
+    const own = await profile(`bbc.session_token=${b}`);
+    expect(own.status).toBe(200);
+
+    // A's session is kept on this process; B's request carries A's value under the name Better Auth does not read here.
+    expect((await profile(`bbc.session_token=${a}`)).status).toBe(200);
+    expect(await profile(`__Secure-bbc.session_token=${a}; bbc.session_token=${b}`)).toEqual(own);
+    expect((await profile(`__Secure-bbc.session_token=${a}`)).status).toBe(401);
+  });
+
   it("a session ended elsewhere: reads keep the minute, a write is refused at once", async () => {
     const t = await testApp({ suite: "session-l1-write" });
     const cookie = tokenOnly(t.memberA.cookie);

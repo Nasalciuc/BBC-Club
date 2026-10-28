@@ -27,26 +27,33 @@ export function createIdentityFacade(
   options: IdentityFacadeOptions = {},
 ): Omit<IdentityFacade, "auth"> {
   const sessions = options.sessions;
+  /** The one cookie Better Auth reads a session from (`authCookies.sessionToken`): what this process keeps is keyed
+   *  on it and on no other cookie of the same name (ADR-IMPL-076). */
+  let tokenCookie: string | undefined;
+  async function sessionCookie(): Promise<string> {
+    tokenCookie ??= (await auth.$context).authCookies.sessionToken.name;
+    return tokenCookie;
+  }
 
   /** `fresh` reads the session row and its user from the database instead of the signed cookie cache
    *  (SESSION_COOKIE_CACHE_SECONDS): a deleted member or an ended session is anonymous at once, not a minute later.
    *  A read answers from what this process keeps for the token (ADR-IMPL-076); on a miss it reads fresh, so nothing is
    *  kept that the database did not say within the minute. A fresh read puts its answer back. */
   async function getSession(headers: Headers, opts: { fresh?: boolean } = {}): Promise<SessionInfo | null> {
-    const key = sessions ? sessionKey(headers) : null;
+    // A sign-out, a password change or a deletion that forgets this token or its member from here on, while the read
+    // waits on the database: what the read found is not put back (ADR-IMPL-076). Taken before anything is awaited.
+    const since = sessions?.begin();
+    const cookie = sessions ? await sessionCookie() : null;
+    const key = cookie ? sessionKey(headers, cookie) : null;
     if (key && sessions && !opts.fresh) {
       const kept = sessions.get(key);
       if (kept) return kept;
     }
     const fresh = opts.fresh === true || key !== null;
-    // A sign-out, a password change or a deletion that forgets this token or its member while the read waits on the
-    // database: what the read found is not put back (ADR-IMPL-076).
-    const since = sessions?.begin();
     const info = await readSession(headers, fresh);
-    if (key && sessions) {
-      // Kept only when Better Auth verified the very token the key was taken from (it reads one cookie name; a request
-      // may carry another of the same name): otherwise answered, never kept.
-      if (info && info.token === keyedToken(headers)) sessions.put(key, info.session, info.expiresAt, since);
+    if (key && cookie && sessions) {
+      // Kept only when Better Auth verified the very token the key was taken from: otherwise answered, never kept.
+      if (info && info.token === keyedToken(headers, cookie)) sessions.put(key, info.session, info.expiresAt, since);
       else if (!info) sessions.forget(key);
     }
     return info?.session ?? null;
@@ -99,7 +106,7 @@ export function createIdentityFacade(
 
   /** The same rule as the app's route: the password is asked for every time (club-guards runs for in-process calls). */
   async function deleteAccount(headers: Headers, password: string): Promise<void> {
-    const key = sessions ? sessionKey(headers) : null;
+    const key = sessions ? sessionKey(headers, await sessionCookie()) : null;
     const member = key ? sessions?.memberOf(key) : null;
     await auth.api.deleteUser({ headers, body: { password } });
     if (key) sessions?.forget(key);
@@ -110,7 +117,7 @@ export function createIdentityFacade(
    *  member, whatever it answered: the next read asks the database. */
   async function forgettingSessions(req: Request, run: () => Promise<Response>): Promise<Response> {
     if (!sessions || SAFE_METHODS.has(req.method)) return run();
-    const key = sessionKey(req.headers);
+    const key = sessionKey(req.headers, await sessionCookie());
     const member = key ? sessions.memberOf(key) : null;
     try {
       return await run();
