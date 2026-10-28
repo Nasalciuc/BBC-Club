@@ -188,6 +188,14 @@ stale_postgres() {
   done
 }
 
+# Whether a file under <dir> was changed after <time> (a container's .State.StartedAt, RFC 3339): Grafana reads its
+# provisioning only when it starts, so a deploy restarts it when one of those files is newer (ADR-IMPL-073).
+#   changed_since <dir> <time>
+changed_since() {
+  [[ -n "${2:-}" ]] || return 1
+  [[ -n "$(find "$1" -type f -newermt "$2" -print -quit 2>/dev/null)" ]]
+}
+
 # MinIO runs again when production asks for it, for R1b's offer photography: MEDIA=on (ADR-IMPL-073). Off, nothing
 # reads it (ADR-IMPL-047) and its 256 MB go to the monitoring.
 media_wanted() {

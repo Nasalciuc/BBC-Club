@@ -313,9 +313,21 @@ if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
   if ! set_monitor_password "$PROD_ENV" $DC; then
     notify "⚠ deploy production: $IMAGE is live, but Grafana's database role took no password — the database dashboard stays empty (RUNBOOK § Monitoring)" "${OPS_WEBHOOK:-}"
   fi
+  # Grafana reads its provisioning (alerts, contact point, datasources) only when it starts, and the files are bind-mounted
+  # from this checkout, so a change to them leaves compose's settings as they were: a provisioning file newer than the
+  # running container's start restarts it.
+  gcid="$($DC ps -q grafana 2>/dev/null || true)"
+  gstarted=""
+  [[ -n "$gcid" ]] && gstarted="$(docker inspect -f '{{.State.StartedAt}}' "$gcid" 2>/dev/null || true)"
   if ! $DC up -d --no-deps --wait --wait-timeout 240 victoriametrics grafana node-exporter cadvisor; then
     notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
     MONITORING_FAILED=1
+  elif [[ -n "$gstarted" && "$($DC ps -q grafana 2>/dev/null || true)" == "$gcid" ]] &&
+    changed_since "$INFRA_DIR/monitoring/grafana/provisioning" "$gstarted"; then
+    if ! $DC restart grafana >/dev/null; then
+      notify "⚠ deploy production: $IMAGE is live, but Grafana kept its previous alerts — $DC restart grafana" "${OPS_WEBHOOK:-}"
+      MONITORING_FAILED=1
+    fi
   fi
 fi
 docker image prune -f >/dev/null

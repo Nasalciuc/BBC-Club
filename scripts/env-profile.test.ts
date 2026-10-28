@@ -1160,3 +1160,30 @@ describe("Grafana's first start (A-R4)", () => {
     expect(wait).toBeGreaterThanOrEqual(120 + hc.retries * Number.parseInt(hc.interval));
   });
 });
+
+describe("Grafana's provisioning after a deploy (A-D1)", () => {
+  it("a file changed after the container started counts; one from before, an empty start time, nothing", async () => {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    try {
+      mkdirSync(join(dir, "alerting"));
+      const file = join(dir, "alerting", "alerts.yml");
+      writeFileSync(file, "x\n");
+      const at = (iso: string) => {
+        const d = new Date(iso);
+        spawnSync("touch", ["-d", d.toISOString(), file]);
+      };
+      const changed = async (started: string) =>
+        (
+          await bash(`source ${lib}\nchanged_since ${shPath(dir)} ${JSON.stringify(started)} && echo yes || echo no`)
+        ).out.trim();
+      at("2026-10-28T20:00:05Z");
+      // docker inspect's .State.StartedAt, nanoseconds and all.
+      expect(await changed("2026-10-28T20:00:00.123456789Z")).toBe("yes");
+      at("2026-10-28T19:59:55Z");
+      expect(await changed("2026-10-28T20:00:00.123456789Z")).toBe("no");
+      expect(await changed("")).toBe("no");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
