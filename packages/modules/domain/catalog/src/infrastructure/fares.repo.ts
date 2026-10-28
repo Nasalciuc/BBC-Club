@@ -1,7 +1,8 @@
 import type { Executor } from "@bbc/db";
 import { statement } from "@bbc/db/statements";
-import { and, asc, eq, gt, gte, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
-import { isIanaZone, zoneDayBounds } from "@bbc/shared/time-zone";
+import { and, asc, eq, getTableColumns, gt, gte, isNotNull, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { isIanaZone } from "@bbc/shared/time-zone";
 import { eqConst } from "@bbc/db/helpers";
 import { alias } from "drizzle-orm/pg-core";
 import { airports, fares } from "@bbc/db/schema/catalog";
@@ -15,20 +16,46 @@ export type SearchQuery = {
   /** For tests: the instant the sale window is read at. */
   now?: Date;
   /** The origin airport's zone, when the caller has it (the route reads the airports from memory): the travel day's
-   *  bounds are then computed here and compared with `depart_at` as they are (ADR-IMPL-077). Absent: read in SQL. */
+   *  bounds and the departures' clocks are then read with it, bound once, instead of an airport read per fare
+   *  (ADR-IMPL-077). Absent: the zone is read per row. */
   originTz?: string;
+  /** The destination airport's zone, likewise, for the arrivals' clocks. */
+  destTz?: string;
 };
 
 /** The fare's origin airport, for the zone its departure day is read in. */
 const origin = alias(airports, "origin");
+/** The fare's destination airport, for the zone its arrival's clock is read in. */
+const dest = alias(airports, "dest");
+
+/** An instant's wall clock in a zone, by Postgres's tzdata — the one rule for a fare's day and its clocks (#114,
+ *  ADR-IMPL-077): `2026-12-15T00:30`, or null with no instant or no zone. */
+const wallAt = (instant: AnyPgColumn, tz: SQL | AnyPgColumn | string) =>
+  sql<string | null>`to_char(${instant} AT TIME ZONE ${tz}, 'YYYY-MM-DD"T"HH24:MI')`;
+
+/**
+ * The first instant whose wall clock in `tz` reads the date `day` — what `(t AT TIME ZONE tz)::date = day` holds from,
+ * by the same tzdata, bound as constants so `depart_at` is compared bare. `day::timestamp AT TIME ZONE tz` alone is
+ * that instant except on a day whose midnight happens twice (a clock turned back at 01:00 to 00:00, as in Havana and
+ * the Azores), where Postgres takes the later one; the instant an hour before 00:00, plus the hour, is then the
+ * earlier. Checked against Postgres's own day for every zone and day of two years (`scripts/tz-parity.test.ts`).
+ */
+export const dayStartIn = (day: SQL, tz: string) =>
+  sql`least((${day})::timestamp AT TIME ZONE ${tz}, (((${day})::timestamp - interval '1 hour') AT TIME ZONE ${tz}) + interval '1 hour')`;
 
 export const SEARCH_LIMIT = 30; // the same page the future FT.SEARCH … LIMIT 0 30 returns — one contract for both paths
 
-/** A fare by id (its page, a quote), built once per executor (ADR-IMPL-074). */
+/** A fare by id (its page, a quote), built once per executor (ADR-IMPL-074), with its clocks in its airports' zones. */
 const fareRead = statement("catalog_fare", (e) =>
   e
-    .select()
+    .select({
+      ...getTableColumns(fares),
+      departWall: wallAt(fares.departAt, origin.tz),
+      arriveWall: wallAt(fares.arriveAt, dest.tz),
+    })
     .from(fares)
+    .leftJoin(origin, eq(origin.code, fares.routeFrom))
+    .leftJoin(dest, eq(dest.code, fares.routeTo))
     .where(eq(fares.id, sql.placeholder("id")))
     .limit(1),
 );
@@ -42,18 +69,27 @@ export const faresRepo = {
   searchSelect(exec: Executor, q: SearchQuery) {
     const now = q.now ?? new Date();
     const originTz = exec.select({ tz: origin.tz }).from(origin).where(eq(origin.code, fares.routeFrom));
+    const destTz = exec.select({ tz: dest.tz }).from(dest).where(eq(dest.code, fares.routeTo));
     const day = q.when?.toISOString().slice(0, 10);
-    // With the origin's zone at hand, the day is two instants and `depart_at` stays bare on its side of the comparison;
-    // without it, the zone is read per row as before.
-    const bounds = day && q.originTz && isIanaZone(q.originTz) ? zoneDayBounds(day, q.originTz) : null;
-    const timedOnDay = bounds
-      ? and(gte(fares.departAt, bounds.start), lt(fares.departAt, bounds.end))
+    const fromZone = q.originTz && isIanaZone(q.originTz) ? q.originTz : null;
+    const toZone = q.destTz && isIanaZone(q.destTz) ? q.destTz : null;
+    // With the origin's zone at hand, the day is two instants Postgres computes once and `depart_at` stays bare on its
+    // side of the comparison; without it, the zone is read per row as before.
+    const timedOnDay = fromZone
+      ? and(
+          gte(fares.departAt, dayStartIn(sql`${day}::date`, fromZone)),
+          lt(fares.departAt, dayStartIn(sql`${day}::date + 1`, fromZone)),
+        )
       : sql`(${fares.departAt} AT TIME ZONE coalesce((${originTz}), 'UTC'))::date = ${day}::date`;
     const onDay = q.when
       ? or(and(isNotNull(fares.departAt), timedOnDay), and(isNull(fares.departAt), gt(fares.validUntil, q.when)))
       : undefined;
     return exec
-      .select()
+      .select({
+        ...getTableColumns(fares),
+        departWall: wallAt(fares.departAt, fromZone ?? sql`(${originTz})`),
+        arriveWall: wallAt(fares.arriveAt, toZone ?? sql`(${destTz})`),
+      })
       .from(fares)
       .where(
         and(

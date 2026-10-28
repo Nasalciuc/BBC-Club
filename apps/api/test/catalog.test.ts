@@ -1029,6 +1029,9 @@ describe("fare parity", () => {
         durationMinutes: f.durationMinutes,
         departAt: f.departAt ? new Date(f.departAt) : null,
         arriveAt: f.arriveAt ? new Date(f.arriveAt) : null,
+        // Its clocks as Postgres reads them in JFK's and LHR's zones (catalog fares.repo `wallAt`, #114).
+        departWall: f.departAt ? "2026-10-12T18:55" : null,
+        arriveWall: f.arriveAt ? "2026-10-13T07:00" : null,
         price: String(f.price.offer),
         publishedPrice: f.price.published != null ? String(f.price.published) : null,
         publishedSource: f.price.publishedSource ?? null,

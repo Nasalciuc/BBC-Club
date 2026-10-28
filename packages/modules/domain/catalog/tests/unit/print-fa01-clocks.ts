@@ -14,6 +14,9 @@ const vm = toFareVM(
     durationMinutes: 425,
     departAt: new Date("2026-10-12T22:55:00.000Z"),
     arriveAt: new Date("2026-10-13T06:00:00.000Z"),
+    // As Postgres reads them in JFK's and LHR's zones (fares.repo `wallAt`): the host's zone never enters.
+    departWall: "2026-10-12T18:55",
+    arriveWall: "2026-10-13T07:00",
     price: "4200.00",
     publishedPrice: "7850.00",
     publishedSource: "Sabre · 16 Sep",

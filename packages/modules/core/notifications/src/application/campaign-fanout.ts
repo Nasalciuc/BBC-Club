@@ -3,7 +3,7 @@ import { inConst } from "@bbc/db/helpers";
 import { withTx, type Executor, type Tx } from "@bbc/db";
 import { campaigns, notificationsTable } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
-import { safeTimeZone, scheduleAfterQuietHours } from "./quiet-hours";
+import { afterQuietHours, safeTimeZone } from "./quiet-hours";
 import { cappedOnSendDay } from "./daily-cap";
 
 const PAGE = 1_000;
@@ -61,10 +61,8 @@ async function fanOutPage(
     .where(eq(campaigns.id, c.id))
     .for("update");
   if (open?.status !== "running") return null;
-  // Once per time zone, not per member: the walk through quiet hours costs ~2 ms at night, and a page shares `now`.
   // A stored zone that is not one never fails the page (and so every later campaign): that member's row follows the
   // club's default zone, and the member is named in the log.
-  const sendAt = new Map<string, Date>();
   const valid = new Map<string, boolean>();
   const zoneOf = (p: { memberId: string; timezone: string }) => {
     let ok = valid.get(p.timezone);
@@ -74,14 +72,17 @@ async function fanOutPage(
       logger?.warn({ memberId: p.memberId, reason: "invalid_time_zone" }, "member time zone not valid; default used"),
     );
   };
-  const scheduledFor = (timeZone: string) => {
-    let at = sendAt.get(timeZone);
-    if (!at) sendAt.set(timeZone, (at = scheduleAfterQuietHours(now, timeZone)));
-    return at;
-  };
-  const sends = page.map((p) => {
-    const timeZone = zoneOf(p);
-    return { memberId: p.memberId, timeZone, sendAt: scheduledFor(timeZone) };
+  const zones = page.map((p) => ({ memberId: p.memberId, timeZone: zoneOf(p) }));
+  // Once per time zone, not per member, and one statement for them all: a page shares `now` (Postgres's clocks, #114).
+  const sendAt = await afterQuietHours(
+    tx,
+    now,
+    zones.map((z) => z.timeZone),
+  );
+  const sends = zones.map((z) => {
+    const at = sendAt.get(z.timeZone);
+    if (!at) throw new Error(`campaign fan-out: no send time for ${z.timeZone}`);
+    return { ...z, sendAt: at };
   });
   // Cap: at most one offer push per member per day — the day this one is sent, in the member's zone (quiet hours can
   // move it to tomorrow). One query for the whole page; the same rule the personal path applies (daily-cap.ts).

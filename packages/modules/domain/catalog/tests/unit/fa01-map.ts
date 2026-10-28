@@ -4,6 +4,26 @@ import { toFareVM } from "../../src/application/to-fare-vm";
 
 const now = new Date("2026-09-01T00:00:00.000Z");
 
+/** The wall clock Postgres's `to_char(t AT TIME ZONE tz, 'YYYY-MM-DD"T"HH24:MI')` gives (fares.repo `wallAt`), for a
+ *  fixture with no database: by Intl, which agrees with tzdata on New York's and London's 2026 rules used here. */
+function wallIn(at: string | null | undefined, tz: string): string | null {
+  if (!at) return null;
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date(at))
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
 /** fa01 through the mapper — `times` sets its instants aside, for a fare with a departure and no arrival, or none;
  *  `trip`, what its price is for (one way, as the catalogue's default). */
 export function mapFa01(
@@ -24,6 +44,8 @@ export function mapFa01(
       durationMinutes: f.durationMinutes,
       departAt: f.departAt ? new Date(f.departAt) : null,
       arriveAt: f.arriveAt ? new Date(f.arriveAt) : null,
+      departWall: wallIn(f.departAt, "America/New_York"),
+      arriveWall: wallIn(f.arriveAt, "Europe/London"),
       price: String(f.price.offer),
       publishedPrice: f.price.published != null ? String(f.price.published) : null,
       publishedSource: f.price.publishedSource ?? null,

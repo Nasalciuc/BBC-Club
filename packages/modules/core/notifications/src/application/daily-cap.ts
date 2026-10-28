@@ -1,16 +1,32 @@
 import { and, gte, inArray, lt, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { notificationsTable } from "@bbc/db/schema/notifications";
-import { zoneClock } from "@bbc/shared/time-zone";
+import { DEFAULT_TIME_ZONE, zonesForPostgres } from "./quiet-hours";
 
 /** The categories the daily cap counts: one offer push a day, personal or broadcast. */
 export const OFFER_CATEGORIES = ["offers_personal", "offers_broadcast"] as const;
 
-/** The calendar day `at` falls on in `timeZone` (`2026-10-26`), by the same clock quiet hours read (shared/time-zone,
- *  one formatter per zone). The zone must be one (`safeTimeZone`'s answer). */
-export function localDay(at: Date, timeZone: string): string {
-  const t = zoneClock(at, timeZone);
-  return `${t.year}-${t.month}-${t.day}`;
+/** The calendar day each instant falls on in its zone (`2026-10-26`), by Postgres's tzdata — the clock quiet hours read
+ *  (#114); one statement for all of them. Zones are `safeTimeZone`'s answers; one Postgres cannot read counts as the
+ *  club's default. */
+export async function localDays(exec: Executor, at: readonly { at: Date; timeZone: string }[]): Promise<string[]> {
+  if (at.length === 0) return [];
+  const read = await zonesForPostgres(
+    exec,
+    at.map((a) => a.timeZone),
+  );
+  // The instants bound as ISO text (postgres.js binds a text[], not a timestamptz[]); the day as to_char writes it,
+  // whatever the session's DateStyle.
+  const rows = (await exec.execute(sql`
+    SELECT u.i, to_char(u.t AT TIME ZONE u.z, 'YYYY-MM-DD') AS local_day
+    FROM unnest(${sql.param(at.map((a) => a.at.toISOString()))}::text[]::timestamptz[],
+                ${sql.param(at.map((a) => read.get(a.timeZone) ?? DEFAULT_TIME_ZONE))}::text[]) WITH ORDINALITY AS u(t, z, i)`)) as unknown as {
+    i: string | number;
+    local_day: string;
+  }[];
+  const days: string[] = new Array(at.length);
+  for (const r of rows) days[Number(r.i) - 1] = r.local_day;
+  return days;
 }
 
 /** Any send on the same local day as another is within a day and a DST hour of it; the window reaches further. */
@@ -37,8 +53,8 @@ export function offerSendsSelect(exec: Executor, memberIds: readonly string[], f
  * each member's zone (`safeTimeZone`'s answer) and when this push would go out (after quiet hours, and not before its
  * offer is published). A member is capped when another offer push of theirs, personal or broadcast and whatever its
  * status, is scheduled on that same local day — whenever it was created. One query for all of them, over the window that
- * holds every such day; the day itself is compared here, with the Intl data quiet hours use (a zone Postgres might not
- * know never fails the read).
+ * holds every such day, then one for the days of the sends and of the pushes it found, by Postgres's tzdata as quiet
+ * hours read it (`localDays`; none when it found no push).
  */
 export async function cappedOnSendDay(
   exec: Executor,
@@ -48,29 +64,38 @@ export async function cappedOnSendDay(
   if (sends.length === 0) return capped;
   let first = Infinity;
   let last = -Infinity;
-  const sendDay = new Map<string, { timeZone: string; day: string }>();
-  // A page shares its `now`: one day per zone and send time, not one per member.
-  const days = new Map<string, string>();
+  const sendOf = new Map<string, { timeZone: string; sendAt: Date }>();
   for (const s of sends) {
     const t = s.sendAt.getTime();
     first = Math.min(first, t);
     last = Math.max(last, t);
-    const k = `${s.timeZone}|${t}`;
-    let day = days.get(k);
-    if (day === undefined) days.set(k, (day = localDay(s.sendAt, s.timeZone)));
-    sendDay.set(s.memberId, { timeZone: s.timeZone, day });
+    sendOf.set(s.memberId, { timeZone: s.timeZone, sendAt: s.sendAt });
   }
   const rows = await offerSendsSelect(
     exec,
-    [...sendDay.keys()],
+    [...sendOf.keys()],
     new Date(first - SAME_DAY_REACH_MS),
     new Date(last + SAME_DAY_REACH_MS),
   );
-  for (const r of rows) {
-    const s = sendDay.get(r.memberId);
-    if (s && !capped.has(r.memberId) && localDay(new Date(r.scheduledFor), s.timeZone) === s.day) {
-      capped.add(r.memberId);
-    }
+  const found = rows.filter((r) => sendOf.has(r.memberId));
+  if (found.length === 0) return capped;
+  // The days of the sends that found a push and of those pushes, each in its member's zone: one statement.
+  const pairs: { at: Date; timeZone: string }[] = [];
+  const sendIndex = new Map<string, number>();
+  const pushes: { memberId: string; index: number }[] = [];
+  for (const r of found) {
+    const s = sendOf.get(r.memberId);
+    if (!s) continue;
+    if (!sendIndex.has(r.memberId)) sendIndex.set(r.memberId, pairs.push({ at: s.sendAt, timeZone: s.timeZone }) - 1);
+    pushes.push({
+      memberId: r.memberId,
+      index: pairs.push({ at: new Date(r.scheduledFor), timeZone: s.timeZone }) - 1,
+    });
+  }
+  const days = await localDays(exec, pairs);
+  for (const p of pushes) {
+    const day = days[p.index];
+    if (day !== undefined && day === days[sendIndex.get(p.memberId) ?? -1]) capped.add(p.memberId);
   }
   return capped;
 }

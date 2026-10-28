@@ -2,9 +2,11 @@ import type { AirportVM, DestinationPinVM, EstimateVM, FareVM } from "@bbc/share
 import type { airports, fares } from "@bbc/db/schema/catalog";
 import { estimateFare } from "../pricing/estimate";
 import type { PricingRules } from "../pricing/rules";
-import { calendarDayOffset, formatInZone } from "./flight-local";
+import { calendarDayOffset } from "./flight-local";
 
-type FareRow = typeof fares.$inferSelect;
+/** A fare row as the catalogue reads it: its departure's and arrival's wall clocks (`2026-12-15T00:30`) come with it,
+ *  read by Postgres in the airports' zones (fares.repo `wallAt`, #114) — the one rule for a fare's day and clocks. */
+type FareRow = typeof fares.$inferSelect & { departWall?: string | null; arriveWall?: string | null };
 /** An airport as the catalog serves it — the one definition. The *Norm search columns are the trigger's (0023). */
 export type AirportRow = Omit<typeof airports.$inferSelect, "cityNorm" | "nameNorm" | "countryNorm" | "termsNorm">;
 
@@ -43,12 +45,7 @@ export function toFareVM(
     durationMinutes: row.durationMinutes,
     departAt: row.departAt ? row.departAt.toISOString() : null,
     arriveAt: row.arriveAt ? row.arriveAt.toISOString() : null,
-    ...localClocks(
-      row.departAt ? row.departAt.toISOString() : null,
-      row.arriveAt ? row.arriveAt.toISOString() : null,
-      airports.from.tz,
-      airports.to.tz,
-    ),
+    ...localClocks(row),
     price: {
       offer: parseFloat(row.price),
       ...(row.publishedPrice
@@ -97,22 +94,24 @@ export function toDestinationPin(
   };
 }
 
-function localClocks(
-  departAt: string | null,
-  arriveAt: string | null,
-  originTz: string,
-  destTz: string,
-): { departLocal: string | null; arriveLocal: string | null; arriveDayOffset: number; departDate: string | null } {
-  if (!departAt) {
+function localClocks(row: FareRow): {
+  departLocal: string | null;
+  arriveLocal: string | null;
+  arriveDayOffset: number;
+  departDate: string | null;
+} {
+  if (!row.departAt) {
     return { departLocal: null, arriveLocal: null, arriveDayOffset: 0, departDate: null };
   }
-  // The departure's clock and its day at the origin, named here from its zone: the app prints them as they are
-  // (ADR-IMPL-019) — a fare with a departure and no arrival keeps both.
-  const dep = formatInZone(departAt, originTz);
-  if (!arriveAt) {
+  // A row read without its clocks is a reader of fares that skipped `wallAt`: no other copy of the zones' rules here.
+  if (!row.departWall) throw new Error(`fare ${row.id}: a departure without its wall clock (read it with wallAt)`);
+  // The departure's clock and its day at the origin: the app prints them as they are (ADR-IMPL-019) — a fare with a
+  // departure and no arrival keeps both.
+  const dep = { hhmm: row.departWall.slice(11, 16), ymd: row.departWall.slice(0, 10) };
+  if (!row.arriveAt || !row.arriveWall) {
     return { departLocal: dep.hhmm, arriveLocal: null, arriveDayOffset: 0, departDate: dep.ymd };
   }
-  const arr = formatInZone(arriveAt, destTz);
+  const arr = { hhmm: row.arriveWall.slice(11, 16), ymd: row.arriveWall.slice(0, 10) };
   return {
     departLocal: dep.hhmm,
     arriveLocal: arr.hhmm,

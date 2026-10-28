@@ -21,7 +21,6 @@ import { sitePricesRepo } from "./infrastructure/site-prices.repo";
 import { createAirportsReference } from "./application/airports-reference";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
-import { formatInZone } from "./application/flight-local";
 import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody, ImportError } from "./application/import";
 import { readLandmarksFlag, resolvePlaceLandmarks, toPlaceLandmarksVM } from "./application/place-landmarks";
@@ -518,7 +517,14 @@ export const catalogModule = (
       const [fromApt, toApt] = await Promise.all([airportsRef.get(from), airportsRef.get(to)]);
       if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
       const rows = sold
-        ? await faresRepo.search(conn, { from, to, cabin, ...(when ? { when, originTz: fromApt.tz } : {}) })
+        ? await faresRepo.search(conn, {
+            from,
+            to,
+            cabin,
+            originTz: fromApt.tz,
+            destTz: toApt.tz,
+            ...(when ? { when } : {}),
+          })
         : [];
 
       const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
@@ -570,7 +576,7 @@ export const catalogModule = (
               toCity: toApt?.city ?? null,
               carrier: row.carrierName,
               cabin: row.cabin,
-              departDate: row.departAt && fromApt ? formatInZone(row.departAt.toISOString(), fromApt.tz).ymd : null,
+              departDate: row.departWall ? row.departWall.slice(0, 10) : null,
             },
           }),
           410,

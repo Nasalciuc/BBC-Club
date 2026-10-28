@@ -2,7 +2,7 @@
 
 Status: proposed · Date: 2026-10-26 · Scope: `packages/modules/platform` (`jobs/index.ts`: `lastRuns`,
 `lastFinishedRuns`; `jobs/builtin.ts`: `retention`; `events/publish.ts`), `packages/shared` (`time-zone.ts`:
-`zoneDayBounds`), `packages/db` (`helpers.ts`: `deleteInBatches`, `retainEach`, `anyText`; `scripts/verify.ts`:
+`isIanaZone`), `packages/db` (`helpers.ts`: `deleteInBatches`, `retainEach`, `anyText`; `scripts/verify.ts`:
 rules 3, 13 and 14; `scripts/migrate.ts`; the hot-query test), migrations `0048_identity_auth_lookups.sql`,
 `0049_catalog_demand_from_route.sql`, `0050_platform_autovacuum.sql`, `0051_notifications_autovacuum.sql`,
 `0052_platform_monitor_role.sql`, `0053_platform_monitor_role_limits.sql`, `0054_retention_indexes.sql`, the catalog
@@ -52,22 +52,24 @@ Postgres 16), the data layer had reads that grow worse with time:
    8 000 routes a day, chosen by the planner from there up (measured). The airports' `(popularity DESC, code)` came with
    ADR-IMPL-075.
 5. **A dated search** with the origin's zone at hand (the route reads the airports from memory) compares `depart_at`
-   with the day's two instants, `zoneDayBounds` — the day Postgres reads, across a clock change and a midnight that
-   does not exist, by Bun's copy of the zone rules (its ICU). No index on `catalog.fares` holds `depart_at`: the
-   bounds spare the origin's airport read per fare (3 005 fares of a route: 64 buffers and 0.75 ms against 9 079 and
-   5–9 ms). Each zone's day is found once per process (at most 1 000 kept, the oldest going first; about 190 µs
-   found, under 1 µs kept). Bun's copy and Postgres's (tzdata) are compared for every zone the catalogue's airports
-   use, every day of the two years from the run (`scripts/tz-parity.test.ts`, about 50 s of one core:
-   `bun run test:tz`, on its own after the database suites, in `validate` and CI). Today they differ in seven, where
-   Bun is behind tzdata 2026e — Vancouver, Edmonton, Winnipeg and Inuvik (summer offset kept as standard time from
-   1 Nov 2026), Casablanca and El_Aaiun (+00 from 20 Sep 2026), Asuncion on Bun 1.3 (−03 all year): there a search's
-   day is an hour off Postgres's, and so are the fare times shown (`zoneClock`) and quiet hours, which read the same
-   ICU — the list and its cards agree with each other. No fare departs from those zones with a time today (the
-   import writes none: an undated fare matches any day it is on sale). The test lists the seven and fails on any
-   other, measured against CI's tzdata (`postgres:16-alpine`); production's Postgres is Debian's `postgres:16`, its
-   tag not pinned. The API image pins Bun by digest (`apps/api/Dockerfile`), so its zones change only with a
-   deliberate bump. Reading those zones' day from Postgres instead is the owner's call (⚑1): alone it would set the
-   search against the times on its cards.
+   with the day's two instants, computed by Postgres in the same statement from the zone bound once (`dayStartIn`,
+   fares.repo: `day::timestamp AT TIME ZONE zone`, or an hour before it plus the hour where midnight comes twice) —
+   the day `(t AT TIME ZONE zone)::date` reads, across a clock change and a midnight that does not exist or comes
+   twice. No index on `catalog.fares` holds `depart_at`: the bounds spare the origin's airport read per fare (3 005
+   fares of a route: 64 buffers and 0.75 ms against 9 079 and 5–9 ms). A fare's clocks on its card and its day
+   (`departLocal`, `arriveLocal`, `departDate`, which the request draft takes) are read in the same select
+   (`wallAt`: `to_char(t AT TIME ZONE zone, …)`, the search's zones bound, a fare's page joining its airports), and
+   so are quiet hours and the daily cap's day (notifications `afterQuietHours`, `localDays`, one statement a page):
+   the club reads the zones' rules from one copy, Postgres's tzdata (#114). Bun's ICU, which fell behind tzdata 2026b
+   in seven of the airports' zones (Vancouver, Edmonton, Winnipeg and Inuvik keep their summer offset from 1 Nov
+   2026; Casablanca and El_Aaiun +00 from 20 Sep 2026; Asuncion −03 all year), now only checks that a name is a
+   zone (`isIanaZone`, the app's rule too); a name Postgres does not read counts as the club's default in
+   notifications (`zonesForPostgres`, the names listed once per process). `scripts/tz-parity.test.ts` (`bun run
+test:tz`, a few seconds, after the database suites, in `validate` and CI) checks that every airport's zone is one
+   Postgres reads and that the bounds are where Postgres's day begins and ends, for every one of those zones and
+   every day of the two years from the run; it fails on the plain `day::timestamp AT TIME ZONE zone` in Havana and
+   the Azores. Production's Postgres is Debian's `postgres:16`, its tag not pinned: its tzdata is the club's, and it
+   moves with an image bump.
 6. **Retention, in batches of 5 000** (`deleteInBatches`: each batch its own statement, picked by `(tableoid, ctid)` —
    a ctid is unique within one table only, and a partitioned table's partitions share them), each module for its own
    tables, daily, idempotent; business records (requests and their events, offers, fares) are never deleted here.

@@ -1,11 +1,12 @@
 /** Quiet hours are 22:00–08:00 in the member's local timezone. Transactional bypasses this. */
-import { isIanaZone, zoneClock } from "@bbc/shared/time-zone";
+import { sql } from "drizzle-orm";
+import type { Executor } from "@bbc/db";
+import { isIanaZone } from "@bbc/shared/time-zone";
 
 /** The zone a member has until they set one (members.profile.timezone's default). */
 export const DEFAULT_TIME_ZONE = "America/New_York";
 
-/** An IANA zone this runtime knows (`Europe/London`); anything else makes Intl throw a RangeError. The shared rule
- *  (ADR-IMPL-075): the profile accepts no other. */
+/** An IANA zone name the profile accepts (`Europe/London`): the shared rule (ADR-IMPL-075), the app's too. */
 export const isTimeZone = isIanaZone;
 
 /**
@@ -18,31 +19,68 @@ export function safeTimeZone(tz: string | null | undefined, onInvalid?: () => vo
   return DEFAULT_TIME_ZONE;
 }
 
-function localHourMinute(now: Date, timeZone: string): { hour: number; minute: number } {
-  const t = zoneClock(now, timeZone);
-  return { hour: Number(t.hour || "0"), minute: Number(t.minute || "0") };
+/** The zone names this Postgres reads (`pg_timezone_names`, about 50 ms to list): read once per process. */
+let postgresZones: Promise<Set<string>> | null = null;
+
+/**
+ * The zones as Postgres will read them (#114): each one, or the club's default where Postgres's tzdata has no such name
+ * (a name the profile accepted from the app's rule), so an `AT TIME ZONE` with it never fails a page or a delivery.
+ */
+export async function zonesForPostgres(exec: Executor, zones: readonly string[]): Promise<Map<string, string>> {
+  // The view's first column, renamed by the alias: `name` written bare reads as one of the club's columns to
+  // scripts/check-raw-sql-columns.ts.
+  postgresZones ??= (
+    exec.execute(sql`SELECT z.zone FROM pg_timezone_names AS z(zone)`) as Promise<{ zone: string }[]>
+  ).then(
+    (rows) => new Set(rows.map((r) => r.zone)),
+    (err: unknown) => {
+      postgresZones = null;
+      throw err;
+    },
+  );
+  const known = await postgresZones;
+  return new Map(zones.map((z) => [z, known.has(z) ? z : DEFAULT_TIME_ZONE]));
 }
 
-export function isInQuietHours(now: Date, timeZone: string): boolean {
-  const { hour } = localHourMinute(now, safeTimeZone(timeZone));
-  return hour >= 22 || hour < 8;
-}
-
-/** If `now` is inside quiet hours, return the next local 08:00 as a Date; otherwise `now`. Never throws: a zone that
- *  is not one counts as the club's default (callers pass `safeTimeZone`'s answer, which logs it). */
-export function scheduleAfterQuietHours(now: Date, zone: string): Date {
-  const timeZone = safeTimeZone(zone);
-  if (!isInQuietHours(now, timeZone)) return now;
-
-  // Walk forward hour-by-hour until local time is 08:00 — DST-safe without an extra tz library.
-  let cursor = new Date(now.getTime());
-  for (let i = 0; i < 48; i++) {
-    cursor = new Date(cursor.getTime() + 30 * 60_000);
-    const { hour, minute } = localHourMinute(cursor, timeZone);
-    if (hour === 8 && minute < 30) {
-      // Snap to the start of the 08:00 half-hour window we landed in.
-      return new Date(cursor.getTime() - minute * 60_000);
-    }
+/**
+ * When a push from `from` may go out in each zone: `from` itself outside 22:00–08:00 local, else the next local 08:00.
+ * The local clock is Postgres's, from its tzdata — the one copy of the zones' rules the club reads (#114, ADR-IMPL-077
+ * §5); one statement for every zone given. Zones are `safeTimeZone`'s answers; one Postgres cannot read counts as the
+ * club's default.
+ */
+export async function afterQuietHours(
+  exec: Executor,
+  from: Date,
+  zones: readonly string[],
+): Promise<Map<string, Date>> {
+  const out = new Map<string, Date>();
+  const distinct = [...new Set(zones)];
+  if (distinct.length === 0) return out;
+  const read = await zonesForPostgres(exec, distinct);
+  const asked = distinct.map((z) => read.get(z) ?? DEFAULT_TIME_ZONE);
+  const at = from.toISOString();
+  const rows = (await exec.execute(sql`
+    SELECT q.i, extract(epoch FROM CASE
+             WHEN q.h >= 22 THEN (q.d + interval '1 day 8 hours') AT TIME ZONE q.z
+             WHEN q.h < 8 THEN (q.d + interval '8 hours') AT TIME ZONE q.z
+             ELSE ${at}::timestamptz END) * 1000 AS ms
+    FROM (SELECT u.i, u.z,
+                 extract(hour FROM ${at}::timestamptz AT TIME ZONE u.z) AS h,
+                 date_trunc('day', ${at}::timestamptz AT TIME ZONE u.z) AS d
+          FROM unnest(${sql.param(asked)}::text[]) WITH ORDINALITY AS u(z, i)) q`)) as unknown as {
+    i: string | number;
+    ms: string | number;
+  }[];
+  for (const r of rows) {
+    const zone = distinct[Number(r.i) - 1];
+    if (zone !== undefined) out.set(zone, new Date(Number(r.ms)));
   }
-  return new Date(now.getTime() + 10 * 60 * 60_000); // fallback ~10h
+  return out;
+}
+
+/** `afterQuietHours` for one zone: when a push from `from` may go out there. */
+export async function afterQuietHoursIn(exec: Executor, from: Date, zone: string): Promise<Date> {
+  const at = (await afterQuietHours(exec, from, [zone])).get(zone);
+  if (!at) throw new Error(`quiet hours: no send time for ${zone}`);
+  return at;
 }

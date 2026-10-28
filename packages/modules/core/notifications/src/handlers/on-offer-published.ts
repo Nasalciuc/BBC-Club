@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { OfferPublishedV1 } from "@bbc/shared/events/offer";
 import { campaigns } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
-import { safeTimeZone, scheduleAfterQuietHours } from "../application/quiet-hours";
+import { afterQuietHoursIn, safeTimeZone } from "../application/quiet-hours";
 import { cappedOnSendDay } from "../application/daily-cap";
 import type { Executor } from "@bbc/db";
 
@@ -58,7 +58,7 @@ export async function onOfferPublished(
   // Not before the offer is published: a push for one published later would open a 404 until then.
   const now = deps.now?.() ?? new Date();
   const from = new Date(Math.max(now.getTime(), new Date(evt.publishedAt).getTime()));
-  const sendAt = scheduleAfterQuietHours(from, tz);
+  const sendAt = await afterQuietHoursIn(deps.tx, from, tz);
 
   // Cap: at most one offer push per member per day — the day this one is sent, in the member's zone, whenever the
   // other was created (daily-cap.ts). Enqueue-time check; the campaign job applies the same.

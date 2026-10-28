@@ -7,7 +7,6 @@ import type { AudienceMember, MembersFacade } from "@bbc/members";
 import { onOfferPublished } from "../../src/handlers/on-offer-published";
 import { campaignFanout, type CampaignFanoutDeps } from "../../src/application/campaign-fanout";
 import { onOfferExpired, onOfferWithdrawn } from "../../src/handlers/on-offer-lifecycle";
-import { scheduleAfterQuietHours } from "../../src/application/quiet-hours";
 
 let iso: IsolatedDb;
 let db: IsolatedDb["db"];
@@ -197,7 +196,8 @@ describe("campaign-fanout job", () => {
       ORDER BY member_id`)) as any[];
     expect(rows.map((r) => r.member_id)).toEqual(["tz-1-london", "tz-2-bad", "tz-3-tokyo"]);
     const bad = rows.find((r) => r.member_id === "tz-2-bad");
-    expect(new Date(bad.scheduled_for).getTime()).toBe(scheduleAfterQuietHours(at, "America/New_York").getTime());
+    // The club's default zone: 23:00 in New York on 27 September (−04) waits for 08:00 there, 12:00 UTC.
+    expect(new Date(bad.scheduled_for).toISOString()).toBe("2026-09-28T12:00:00.000Z");
     expect(warned).toContainEqual(expect.objectContaining({ memberId: "tz-2-bad", reason: "invalid_time_zone" }));
   });
 
