@@ -4,6 +4,11 @@
     "plansPerReq": 0.3,
     "cpuVsHealth": 10.0
   },
+  "home-304": {
+    "stmtsPerReq": 1.25,
+    "plansPerReq": 0.3,
+    "cpuVsHealth": 4.0
+  },
   "proposals": {
     "stmtsPerReq": 1.25,
     "plansPerReq": 0.3,

@@ -39,5 +39,11 @@ cookie back. After the first minute every request carries the token alone and Be
   unchanged.
 - The window ADR-IMPL-027 accepted stays the window: a session ended on one replica (or in psql) may still read on
   another for the rest of its minute, exactly as the phone's cookie cache would; a write is refused at once there.
+  `apps/api/test/session-two-replicas.test.ts` holds the bound: two hosts on one database, a session ended on one by a
+  password change, a deletion, a reset by code or in psql is refused by the other within the cache's time and half a
+  second (the time set to its floor, 10 s).
+- Measured where the work goes: `load/bench/perf.ts` runs on every change to the API, the modules or the database, with
+  the full cookie and with the token alone (`PERF_COOKIE=stale`), and asks Home again with its ETag (`home-304`, a 304
+  at one statement a request, 1.25 at most).
 - A member deleted on another device: `member.deleted` erases the rows, a write reads fresh, and a read elsewhere may
   pass for the rest of the minute, as before. Deletion never depended on reads.

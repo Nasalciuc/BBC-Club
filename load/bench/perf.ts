@@ -7,10 +7,12 @@
  * floor — in the same run (a slower runner slows both). Absolute milliseconds are reported, never judged: they come from k6 on staging and from Grafana.
  *
  *   bun run load/bench/perf.ts                 # PERF_N=1000, report in load/bench/perf-report.json
- *   PERF_ONLY=home,fare PERF_COOKIE=stale bun run load/bench/perf.ts
+ *   PERF_ONLY=home,fare PERF_COOKIE=stale bun run load/bench/perf.ts   # report in load/bench/perf-report-stale.json
  *
  * PERF_COOKIE=stale sends the session token alone — what the app sends after its first minute — so the session is
- * the server's to keep (ADR-IMPL-076). Postgres needs pg_stat_statements (compose.test.yml loads it).
+ * the server's to keep (ADR-IMPL-076). `home-304` asks for Home with the ETag of the answer before it, as the app does
+ * on every open (ADR-IMPL-067): what a revalidation costs, and that it is a 304. Postgres needs pg_stat_statements
+ * (compose.test.yml loads it).
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,13 +25,20 @@ const N = Number(process.env.PERF_N ?? 1000);
 const ONLY = process.env.PERF_ONLY?.split(",");
 const STALE = process.env.PERF_COOKIE === "stale";
 const HERE = import.meta.dir;
+const REPORT = STALE ? "perf-report-stale.json" : "perf-report.json";
+/** Of a revalidation's answers, the share that must be a 304: Home's version turns with the minute (ADR-IMPL-067), so
+ *  the first ask after it is a 200 with the new ETag, which the next one carries. */
+const NOT_MODIFIED_SHARE = 0.99;
 const EMAIL = "bench.member@test.dev";
 const PASSWORD = "atlantic2026!";
 
-const CASES = [
+type Case = { name: string; path: string; anonymous?: true; revalidate?: true };
+const CASES: Case[] = [
   // The unit the CPU is judged in: no cookie, so no session is read — the API's own floor on this machine.
   { name: "health", path: "/health", anonymous: true },
   { name: "home", path: "/v1/home" },
+  // Each request carries the ETag of the answer before it (If-None-Match): a phone reopening Home.
+  { name: "home-304", path: "/v1/home", revalidate: true },
   { name: "proposals", path: "/v1/proposals" },
   { name: "search", path: "/v1/search?from=JFK&to=LHR&cabin=business" },
   { name: "fare", path: "/v1/fares/00000000-0000-4000-8000-00000000fa01" },
@@ -57,6 +66,8 @@ type RouteReport = {
   p50: number;
   p99: number;
   top: { perReq: number; plans: number; q: string }[];
+  /** A revalidation's answers that were a 304, of PERF_N. */
+  notModified?: number;
 };
 
 const LIFTED = ["ratelimit.read", "ratelimit.search", "ratelimit.anon"];
@@ -103,7 +114,15 @@ const failures: string[] = [];
 try {
   const cookie = await cookieOf();
   for (const c of CASES) {
-    const headers = "anonymous" in c ? {} : { cookie };
+    let etag: string | null = null;
+    let notModified = 0;
+    const headers = (): Record<string, string> =>
+      c.anonymous ? {} : c.revalidate && etag ? { cookie, "if-none-match": etag } : { cookie };
+    const answered = (r: Response) => {
+      if (!c.revalidate) return;
+      etag = r.headers.get("etag") ?? etag;
+      if (r.status === 304) notModified++;
+    };
     let status = 0;
     // Every answer counts, not only the last: a route that fails between successes still fails the run.
     let bad = 0;
@@ -116,18 +135,21 @@ try {
       }
     };
     for (let i = 0; i < 200; i++) {
-      const r = await app.request(c.path, { headers });
+      const r = await app.request(c.path, { headers: headers() });
       seen(r.status);
+      answered(r);
       await r.arrayBuffer();
     }
+    notModified = 0;
     await db.execute(sql`SELECT pg_stat_statements_reset(0::oid, ${thisDb}, 0::bigint)`);
     const cpu0 = process.cpuUsage();
     const lat: number[] = [];
     for (let i = 0; i < N; i++) {
       const t = performance.now();
-      const r = await app.request(c.path, { headers });
+      const r = await app.request(c.path, { headers: headers() });
       await r.arrayBuffer();
       seen(r.status);
+      answered(r);
       lat.push(performance.now() - t);
     }
     const cpu = process.cpuUsage(cpu0);
@@ -154,13 +176,17 @@ try {
         plans: s.plans,
         q: s.query.replace(/\s+/g, " ").slice(0, 160),
       })),
+      ...(c.revalidate ? { notModified } : {}),
     };
     const r = routes[c.name]!;
     console.log(
       `${c.name.padEnd(17)} ${String(status).padEnd(4)} cpu ${r.appCpuMsPerReq} ms (×${r.cpuVsHealth} health) · ` +
-        `${r.stmtsPerReq} stmts · ${r.plansPerReq} plans · p50 ${r.p50} ms`,
+        `${r.stmtsPerReq} stmts · ${r.plansPerReq} plans · p50 ${r.p50} ms` +
+        (c.revalidate ? ` · ${notModified}/${N} 304` : ""),
     );
     if (bad) failures.push(`${c.name}: ${bad} of ${200 + N} answers ≥ 400 (the first ${firstBad})`);
+    if (c.revalidate && notModified < N * NOT_MODIFIED_SHARE)
+      failures.push(`${c.name}: ${notModified} of ${N} answers 304 (≥ ${NOT_MODIFIED_SHARE * 100}%)`);
     const t = THRESHOLDS[c.name];
     if (t) {
       if (r.stmtsPerReq > t.stmtsPerReq)
@@ -178,7 +204,7 @@ try {
     else await db.execute(sql`DELETE FROM platform.flags WHERE key = ${key}`);
   }
 }
-writeFileSync(join(HERE, "perf-report.json"), JSON.stringify({ n: N, staleCookie: STALE, routes, failures }, null, 2));
+writeFileSync(join(HERE, REPORT), JSON.stringify({ n: N, staleCookie: STALE, routes, failures }, null, 2));
 await built.shutdown();
 if (failures.length) console.error(`\n${failures.join("\n")}`);
 process.exit(failures.length ? 1 : 0);
