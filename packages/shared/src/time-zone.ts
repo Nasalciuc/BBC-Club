@@ -7,6 +7,9 @@ const ZONE_NAME = /^[A-Za-z][A-Za-z0-9_+\-/]*$/;
 const REMEMBERED = 1_000;
 const known = new Map<string, boolean>();
 const clocks = new Map<string, Intl.DateTimeFormat>();
+/** A day's bounds per zone (`zoneDayBounds`), as many as REMEMBERED: a dated search asks the same few days of the same
+ *  zones again and again. Days move on, so past the cap the oldest goes, not the new one. */
+const dayBounds = new Map<string, { start: number; end: number }>();
 
 /** True when `tz` is a time-zone name this runtime's clocks can read. The member's zone feeds `Intl.DateTimeFormat`
  *  (quiet hours, campaign fan-out), which throws a RangeError on a name it does not know — one stored bad zone stopped
@@ -33,9 +36,20 @@ export function isIanaZone(tz: string): boolean {
  * whose wall clock in the zone shows that date and end the first that shows the next one — what Postgres reads as
  * `(t AT TIME ZONE zone)::date = ymd`, so a column compared to the two bounds keeps its index (ADR-IMPL-077). A day
  * whose midnight does not exist (a clock that springs forward at 00:00) starts when the clock reaches it; a day of 23
- * or 25 hours spans 23 or 25. Found by bisection on the zone's clock, to the millisecond.
+ * or 25 hours spans 23 or 25. Found by bisection on the zone's clock, to the millisecond, once per zone and day for the
+ * life of the process (`dayBounds`: about 190 µs a day's bounds, under 1 µs remembered); each call gets its own Dates.
  */
 export function zoneDayBounds(ymd: string, timeZone: string): { start: Date; end: Date } {
+  const key = `${timeZone}|${ymd}`;
+  const hit = dayBounds.get(key);
+  if (hit) return { start: new Date(hit.start), end: new Date(hit.end) };
+  const bounds = findDayBounds(ymd, timeZone);
+  if (dayBounds.size >= REMEMBERED) dayBounds.delete(dayBounds.keys().next().value as string);
+  dayBounds.set(key, { start: bounds.start.getTime(), end: bounds.end.getTime() });
+  return bounds;
+}
+
+function findDayBounds(ymd: string, timeZone: string): { start: Date; end: Date } {
   const [y, m, d] = ymd.split("-").map(Number) as [number, number, number];
   const firstOf = (year: number, month: number, day: number): Date => {
     const target = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;

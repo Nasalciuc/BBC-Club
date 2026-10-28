@@ -42,6 +42,20 @@ export async function isolatedDb(
     await admin.end();
   }
   const url = withDatabase(root, dbName);
+  // The template keeps the journal's partitions of the day it was built until the migrations change: a clone gets this
+  // month and the next three, in UTC as the partitions job makes them (ADR-IMPL-077), so an event written now or a
+  // month dropped never depends on the template's age. Its own connection: a test's logger sees only its statements.
+  if (opts.fromTemplate !== false) {
+    const clone = postgres(url, { max: 1, onnotice: () => {} });
+    try {
+      await clone.begin(async (tx) => {
+        await tx`SET LOCAL TimeZone = 'UTC'`;
+        await tx`SELECT platform.ensure_event_partitions(3)`;
+      });
+    } finally {
+      await clone.end();
+    }
+  }
   const db = createDb(url, { max: opts.max ?? 2, applicationName: `test-${safe}`, logger: opts.logger });
   return {
     db,

@@ -67,7 +67,7 @@ describe("publish", () => {
     expect(r.deliveries).toBe(2);
   });
 
-  it("each delivery carries the event's key to the microsecond, without reading the journal back (ADR-IMPL-077)", async () => {
+  it("each delivery carries the event's key to the microsecond, in the event's own statement, never reading the journal back (ADR-IMPL-077)", async () => {
     const p = platformWith(async () => {});
     p.events.registerConsumer("test.happened", "testing.onHappenedToo", async () => {});
     const log: string[] = [];
@@ -104,12 +104,36 @@ describe("publish", () => {
       }),
     );
     expect(r.deliveries).toBe(2);
-    expect(log.some((q) => q.includes("domain_events"))).toBe(false);
+    expect(log.length).toBe(1); // the event and its two deliveries
+    expect(log.some((q) => /FROM\s+"platform"\."domain_events"/.test(q))).toBe(false);
     const [{ n }]: any = await db.execute(sql`
       SELECT count(*)::int n FROM platform.event_deliveries d
       JOIN platform.domain_events e ON e.id = d.event_id AND e.occurred_at = d.event_occurred_at
       WHERE e.id = ${BigInt(r.eventId)}`);
     expect(n).toBe(2);
+  });
+
+  it("T3: a delivery points at its event whatever the session's DateStyle and TimeZone", async () => {
+    const p = platformWith(async () => {});
+    // `SQL, DMY` writes a time as `28/10/2026 21:47:12.123456 IST`, and Postgres reads IST as Israel's (+02), not
+    // India's (+05:30): a key that went out as text and came back pointed at no event.
+    const r = await db.transaction(async (tx: any) => {
+      await tx.execute(sql`SET LOCAL DateStyle = 'SQL, DMY'`);
+      await tx.execute(sql`SET LOCAL TimeZone = 'Asia/Kolkata'`);
+      return p.events.publish(tx, {
+        type: "test.happened",
+        aggregateType: "test",
+        aggregateId: "agg-tz",
+        payload: { type: "test.happened", version: 1, value: "tz" },
+        publishedBy: "tests",
+      });
+    });
+    expect(r.deliveries).toBe(1);
+    const [{ n }]: any = await db.execute(sql`
+      SELECT count(*)::int n FROM platform.event_deliveries d
+      JOIN platform.domain_events e ON e.id = d.event_id AND e.occurred_at = d.event_occurred_at
+      WHERE e.id = ${BigInt(r.eventId)}`);
+    expect(n).toBe(1);
   });
 
   it("rejects an unknown type and an invalid payload at the source", async () => {

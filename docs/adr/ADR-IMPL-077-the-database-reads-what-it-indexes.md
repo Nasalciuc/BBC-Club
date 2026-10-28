@@ -38,16 +38,24 @@ Postgres 16), the data layer had reads that grow worse with time:
    database suite (no separate CI job: the seed takes seconds).
 2. **`lastRuns` / `lastFinishedRuns`**: one probe per registered job, `LATERAL … ORDER BY started_at DESC LIMIT 1` on
    `job_runs_job_started` (`lastRunsSql`).
-3. **`publish`** writes the deliveries with the event's key as the insert returned it — `occurred_at` as text, to the
-   microsecond — and reads nothing back.
+3. **`publish`** writes the event and its deliveries in one statement, a data-modifying `WITH` whose insert returns
+   `id, occurred_at` to the deliveries' `INSERT … SELECT`: the deliveries take the event's key inside Postgres and
+   nothing is read back. Not through text: in `SQL, DMY` and Asia/Kolkata a time reads `… IST`, which Postgres takes
+   for Israel's, and the delivery pointed at no event (`journal.test.ts`).
 4. **Indexes**, each built `CONCURRENTLY` by migrate.ts: `auth.rate_limit (key)`, `auth.verification (identifier)` and
    `auth."user" (created_at)` — plain, never unique (Better Auth may write two rows for a key at one moment), in SQL only
    (`schema/auth.ts` is Better Auth's generated file); `catalog.demand_daily (route_from, day)` — 2.6× fewer buffers at
    8 000 routes a day, chosen by the planner from there up (measured). The airports' `(popularity DESC, code)` came with
    ADR-IMPL-075.
 5. **A dated search** with the origin's zone at hand (the route reads the airports from memory) compares `depart_at`
-   with the day's two instants, `zoneDayBounds` — the same day Postgres reads, across a clock change and a midnight that
-   does not exist (tested against Postgres for ten zones).
+   with the day's two instants, `zoneDayBounds` — the day Postgres reads, across a clock change and a midnight that
+   does not exist, by Bun's copy of the zone rules (its ICU). Each zone's day is found once per process (at most 1 000
+   kept, the oldest going first; about 190 µs found, under 1 µs kept). Bun's copy and Postgres's (tzdata) are compared
+   for every zone the catalogue's airports use, every day of the two years from the run (`tz-parity.test.ts`, about
+   50 s): today they differ in seven, where Bun is behind tzdata 2026e — Vancouver, Edmonton, Winnipeg and Inuvik
+   (summer offset kept as standard time from 1 Nov 2026), Casablanca and El_Aaiun (+00 from 20 Sep 2026), Asuncion
+   on Bun 1.3 (−03 all year): there a search's day is an hour off Postgres's. The test lists them and fails on any
+   other. The API image pins Bun by digest (`apps/api/Dockerfile`), so its zones change only with a deliberate bump.
 6. **Retention, in batches of 5 000** (`deleteInBatches`: each batch its own statement, picked by `(tableoid, ctid)` —
    a ctid is unique within one table only, and a partitioned table's partitions share them), each module for its own
    tables, daily, idempotent; business records (requests and their events, offers, fares) are never deleted here.

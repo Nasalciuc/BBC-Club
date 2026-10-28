@@ -32,10 +32,19 @@ async function partitions(): Promise<{ name: string; from: string; to: string }[
     WHERE n.nspname = 'platform' AND c.relname ~ '^domain_events_[0-9]{4}_[0-9]{2}$'
     ORDER BY c.relname`)) as unknown as { name: string; from: string; to: string }[];
 }
+/** The last month of the current horizon — this month and the next three, in UTC, as the job makes them — dropped, so
+ *  the job has one to make again (CodeRabbit on #113: the template keeps the partitions of the day it was built). */
 const dropLast = async () => {
-  const last = (await partitions()).at(-1)!;
-  await iso.db.execute(sql.raw(`DROP TABLE platform.${last.name}`));
-  return last.name;
+  await iso.db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL TimeZone = 'UTC'`);
+    await tx.execute(sql`SELECT platform.ensure_event_partitions(3)`);
+  });
+  const now = new Date();
+  const horizon = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 3, 1));
+  const name = `domain_events_${horizon.getUTCFullYear()}_${String(horizon.getUTCMonth() + 1).padStart(2, "0")}`;
+  expect(await exists(name)).toBe(true);
+  await iso.db.execute(sql.raw(`DROP TABLE platform.${name}`));
+  return name;
 };
 const exists = async (name: string) => (await partitions()).some((p) => p.name === name);
 

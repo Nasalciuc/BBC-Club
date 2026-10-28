@@ -44,6 +44,19 @@ describe("zoneDayBounds", () => {
     }
   });
 
+  it("YVR on a winter day: Bun's day (−08); tzdata 2026e keeps B.C. at −07 from 1 Nov 2026 (tz-parity, KNOWN)", async () => {
+    const { start, end } = zoneDayBounds("2026-12-15", "America/Vancouver");
+    // The image's day: Bun's ICU (75.1, 78.3) still turns Vancouver's clocks back on 1 Nov 2026. A Bun that no longer
+    // does moves it: then this case and tz-parity's list change together.
+    expect([start.toISOString(), end.toISOString()]).toEqual(["2026-12-15T08:00:00.000Z", "2026-12-16T08:00:00.000Z"]);
+    const [row] = (await iso.db.execute(sql`
+      SELECT extract(epoch FROM ('2026-12-15'::timestamp AT TIME ZONE 'America/Vancouver'))::bigint * 1000 AS ms`)) as unknown as {
+      ms: string;
+    }[];
+    // Postgres reads the same midnight on a tzdata before 2026e, the one an hour earlier on 2026e and after.
+    expect([start.getTime(), start.getTime() - 3_600_000]).toContain(Number(row!.ms));
+  });
+
   it("a day lasts as long as the zone's clock makes it", () => {
     const hours = (tz: string, day: string) => {
       const { start, end } = zoneDayBounds(day, tz);
