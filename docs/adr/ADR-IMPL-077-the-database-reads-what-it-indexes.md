@@ -66,7 +66,8 @@ Postgres 16), the data layer had reads that grow worse with time:
    (ICU 78.3) in four — Vancouver and Edmonton keep −07/−06 from 1 Nov 2026, Casablanca and El_Aaiun are +00 now;
    Bun 1.3.4 (ICU 75.1, CI's) in five, Asuncion's −03 from 28 Mar 2027 too. Winnipeg and Inuvik, named here before,
    agree under 2026c: that list held for no tzdata measured here. Postgres's names (`@bbc/db/time-zones`, listed
-   once per process, matched in any case, else through Intl's spelling) decide what is stored and read: the profile
+   once per process, matched in any case, else through Intl's spelling, else through tzdata's links) decide what is
+   stored and read: the profile
    and the catalogue import store a zone as Postgres spells it and refuse one its tzdata lacks; notifications read a
    member's zone the same way, and one Postgres does not read counts as the club's default, logged with why
    (`zonesForPostgres`). `scripts/tz-parity.test.ts` (`bun run test:tz`, a few seconds, after the database suites,
@@ -80,10 +81,14 @@ Postgres 16), the data layer had reads that grow worse with time:
    cluster), so they read the tzdata production would read from an image pulled that day; production reads the one
    of the image it was built from — the gap is the time between the two pulls, closed only by pinning both to one
    digest. Debian from trixie, and Ubuntu from 23.10, keep the old link names (`Asia/Calcutta`, `US/Eastern`,
-   `Europe/Kiev`, `Asia/Saigon`) in `tzdata-legacy`; where it is not installed — the local cluster, and any image
-   for which `docker run --rm postgres:16 test -e /usr/share/zoneinfo/Asia/Calcutta` fails — a phone that reports
-   such a name has its zone refused by the profile (the app keeps the member's zone, America/New_York by default),
-   and a member already holding one is pushed by New York's clock, each push logged `time_zone_unknown_to_postgres`.
+   `Europe/Kiev`, `Asia/Saigon`) in `tzdata-legacy`, not installed on the local cluster and likely not in the image:
+   Android phones still report them (the club has members in India). A name Postgres cannot read is therefore read
+   as the zone tzdata links it to (`packages/db/src/tz-links.ts`, generated from tzdata.zi's `L <target> <alias>`
+   lines by `bun run --filter @bbc/db tz:links`, its tzdata release in its header), when Postgres reads that zone; a
+   name Postgres lists is kept as it lists it (`Europe/Bratislava` stays, though tzdata links it to Prague). The
+   profile and the import store that name; only a name nothing resolves is refused (`US/Pacific-New`), and a member
+   holding one is pushed by New York's clock, logged `time_zone_unknown_to_postgres`. Installing `tzdata-legacy` in
+   `infra/postgres/Dockerfile` is the other way to read those names, not taken.
 
    **After a Postgres or tzdata update** (a new `postgres:16` image, a minor release, a tzdata package): run `bun run
 test:tz` against the new server before the deploy (every airport's zone still read, the day's bounds still
@@ -92,7 +97,8 @@ test:tz` against the new server before the deploy (every airport's zone still re
 lower(n.name) = lower(p.timezone)) GROUP BY 1` — and the airports' (`catalog.airports.tz`, the same test); read
    the tzdata release's NEWS for the airports' zones and the members' (a rule change moves the fares' clocks and days
    and the quiet hours at once, with no second copy to disagree; pushes already scheduled keep the time the old
-   rules gave them); and watch `member time zone not read` in the logs for a new `time_zone_unknown_to_postgres`.
+   rules gave them); after a tzdata release, generate `tz-links.ts` again (`bun run --filter @bbc/db tz:links`); and
+   watch `member time zone not read` in the logs for a new `time_zone_unknown_to_postgres`.
 
 6. **Retention, in batches of 5 000** (`deleteInBatches`: each batch its own statement, picked by `(tableoid, ctid)` —
    a ctid is unique within one table only, and a partitioned table's partitions share them), each module for its own
