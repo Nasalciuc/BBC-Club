@@ -1,5 +1,6 @@
 /** ADR-IMPL-077: retention in batches — what ages out goes, each job's last run stays, a second run deletes nothing. */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { deleteInBatches } from "@bbc/db/helpers";
@@ -131,4 +132,52 @@ describe("retention", () => {
     expect(statements).toBe(1);
     expect(await left()).toBe(4);
   });
+
+  it("X8: a journal held past 3 s keeps its old partition for tomorrow; the rest of the retention runs", async () => {
+    await iso.db.execute(sql`
+      CREATE TABLE platform.domain_events_2020_01 PARTITION OF platform.domain_events
+        FOR VALUES FROM ('2020-01-01') TO ('2020-02-01')`);
+    await iso.db.execute(sql`
+      INSERT INTO platform.kafka_processed (consumer, event_id, processed_at) VALUES ('x8.c', 'old', now() - interval '15 days')`);
+    const partitions = async () =>
+      (
+        (await iso.db.execute(
+          sql`SELECT count(*)::int AS n FROM pg_class WHERE relname = 'domain_events_2020_01'`,
+        )) as unknown as { n: number }[]
+      )[0]!.n;
+    const p = createPlatform(iso.db, { level: "silent" });
+    registerPlatformJobs(p.jobs, p.metrics);
+
+    // Another connection reads the journal and keeps its transaction open, as a long report would.
+    const reader = postgres(iso.url, { max: 1, onnotice: () => {} });
+    const reading = Promise.withResolvers<void>();
+    const done = Promise.withResolvers<void>();
+    const held = reader.begin(async (tx) => {
+      await tx`SELECT id FROM platform.domain_events LIMIT 1`;
+      reading.resolve();
+      await done.promise;
+    });
+    try {
+      await reading.promise;
+      const t = performance.now();
+      const run = await p.jobs.run("retention");
+      expect(performance.now() - t).toBeLessThan(5_000);
+      expect(run.error ?? run.status).toBe("succeeded");
+      expect(run.metrics?.partitionsDropped).toBe(0);
+      expect(run.metrics?.partitionsDeferred).toBe(1);
+      expect(run.metrics?.kafkaProcessedDeleted).toBeGreaterThanOrEqual(1);
+      expect(await iso.db.execute(sql`SELECT 1 FROM platform.kafka_processed WHERE consumer = 'x8.c'`)).toHaveLength(0);
+      expect(await partitions()).toBe(1);
+    } finally {
+      done.resolve();
+      await held;
+      await reader.end();
+    }
+
+    // Tomorrow, nothing holds the journal: the partition goes.
+    const next = await p.jobs.run("retention");
+    expect(next.metrics?.partitionsDropped).toBe(1);
+    expect(next.metrics?.partitionsDeferred).toBe(0);
+    expect(await partitions()).toBe(0);
+  }, 20_000);
 });

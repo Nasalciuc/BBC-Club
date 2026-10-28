@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { errorForLog, withTx } from "@bbc/db";
 import { deleteInBatches, eqConst, inConst } from "@bbc/db/helpers";
 import {
   eventDeliveries,
@@ -38,10 +39,27 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
     cron: "0 4 * * *",
     singleton: true,
     timeoutMs: 300_000,
-    handler: async ({ db, signal }) => {
-      const [{ dropped }]: any = await db.execute(sql`SELECT platform.drop_old_event_partitions(24) AS dropped`);
+    handler: async ({ db, logger, signal }) => {
+      // X8: dropping a partition takes ACCESS EXCLUSIVE on the journal, and while it waits behind a long read every event
+      // insert (every write that publishes) queues behind it — locally a 12 s SELECT held each one 10 s. The drop waits
+      // 3 s at most (SET LOCAL: PgBouncer pools by transaction) and is otherwise left for tomorrow's run; the rest of the
+      // retention runs either way. Any other failure fails the job as before.
+      let partitionsDropped = 0;
+      let partitionsDeferred = 0;
+      try {
+        partitionsDropped = await withTx(db, async (tx) => {
+          await tx.execute(sql`SET LOCAL lock_timeout = '3s'`);
+          const [{ dropped }]: any = await tx.execute(sql`SELECT platform.drop_old_event_partitions(24) AS dropped`);
+          return dropped;
+        });
+      } catch (err) {
+        if (errorForLog(err).sqlstate !== "55P03") throw err; // lock_not_available
+        partitionsDeferred = 1;
+        logger.warn({ job: "retention" }, "journal partitions left for tomorrow: the journal stayed locked past 3 s");
+      }
       return {
-        partitionsDropped: dropped,
+        partitionsDropped,
+        partitionsDeferred,
         // A delivery done 30 days ago is history; a dead or paused one waits for its operator.
         deliveriesDeleted: await deleteInBatches(
           db,
