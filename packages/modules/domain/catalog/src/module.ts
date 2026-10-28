@@ -91,12 +91,15 @@ const POPULAR_CACHE_S = 300;
 const MEMO_ENTRIES = 2_000;
 /** ADR-IMPL-067: how long one home's site deals are kept, in seconds. */
 const SITE_DEALS_CACHE_S = 60;
+/** The minute a per-member answer's versions keep (`VERSION_MINUTE_MS`, apps/api http-cache.ts — catalog does not
+ *  import the host): Home's 304 can serve a body that long after it was computed from what a memo held. */
+const VERSION_MINUTE_S = 60;
 /**
  * ADR-IMPL-067: what a read kept `ttlS` seconds asks of a route's day (and of a stored answer's), so nothing kept is
- * served past it: the memo's time, 10 % more as a margin (the margin Redis's spread expiries needed before
- * ADR-IMPL-075, kept so the figures do not move), and a few seconds for the read itself — 75 s for a minute.
+ * served past it: the memo's time and Home's minute, 10 % more as a margin (the margin Redis's spread expiries needed
+ * before ADR-IMPL-075, kept so the figures do not move), and a few seconds for the read itself — 141 s for a minute.
  */
-const keptMargin = (ttlS: number) => Math.ceil(ttlS * 1.1) + 9;
+const keptMargin = (ttlS: number) => Math.ceil((ttlS + VERSION_MINUTE_S) * 1.1) + 9;
 
 /** A strong ETag over the body as JSON: whatever the answer shows changes it. */
 const etagOf = (value: unknown) => `"${createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 16)}"`;

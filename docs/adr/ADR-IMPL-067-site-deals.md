@@ -49,8 +49,9 @@ a day; a snapshot row is served for a day) and ADR-IMPL-040 (a demo offer an ope
    row the migration's day). The default keeps a binary from before this release writing valid rows during a deploy.
    The sync writes `valid_until = now() + 24 hours` in the transaction that writes `synced_at = now()`. **Every read asks
    `valid_until > now()`**: Home's site pins, `refresh-site-prices`' routes and the deals; the pins and the deals, which
-   Home keeps a minute, ask 75 s more (`valid_until > now() + 75 s`): a minute, the 10 % more Redis may keep a key (the
-   platform's cache spreads its expiries up to 1.1 × the TTL), and the read's own seconds — so none is served past its
+   Home keeps a minute, ask 141 s more (`valid_until > now() + 141 s`): the memo's minute and the minute Home's 304 can
+   serve a body after it (ADR-IMPL-075's versions keep a minute), 10 % more (the margin Redis's spread expiries needed,
+   kept so the figures do not move), and the read's own seconds — so none is served past its
    day while kept. The stored answers the pins read ask the same. A deal the site drops is deleted by the next sync's
    replace (all or nothing, as before); a sync that fails changes nothing, and the deals it leaves expire within the day;
    a city whose own page fails keeps its rows with the day their own read gave them, so it leaves the deals within a day
