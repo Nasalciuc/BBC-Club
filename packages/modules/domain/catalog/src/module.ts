@@ -465,14 +465,15 @@ export const catalogModule = (
         const from = q.from.toUpperCase();
         const to = q.to.toUpperCase();
         const e = exec ?? conn;
-        const [airports, rows] = await Promise.all([
+        const [airports, onSale] = await Promise.all([
           exec && exec !== conn ? airportsRepo.getMany(exec, [from, to]) : airportsRef.getMany([from, to]),
-          faresRepo.search(e, { from, to, cabin: q.cabin }),
+          // Whether the search shows fares, not its rows: no clocks, so no airport read per fare.
+          faresRepo.anyOnSale(e, { from, to, cabin: q.cabin }),
         ]);
         const fromApt = airports.find((a) => a.code === from);
         const toApt = airports.find((a) => a.code === to);
         // Published fares always win: the search showed them, not an estimate.
-        if (!fromApt || !toApt || rows.length > 0) return null;
+        if (!fromApt || !toApt || onSale) return null;
         const { site, rules } = sources;
         if (!site) {
           // The site off: the formula alone, exactly as before ADR-IMPL-063.

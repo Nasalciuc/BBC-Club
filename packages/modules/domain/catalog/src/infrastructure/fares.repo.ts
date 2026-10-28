@@ -43,6 +43,17 @@ const wallAt = (instant: AnyPgColumn, tz: SQL | AnyPgColumn | string) =>
 export const dayStartIn = (day: SQL, tz: string) =>
   sql`least((${day})::timestamp AT TIME ZONE ${tz}, (((${day})::timestamp - interval '1 hour') AT TIME ZONE ${tz}) + interval '1 hour')`;
 
+/** A fare on sale on the route in the cabin at `now`: published, valid_from ≤ now < valid_until (ADR-IMPL-041). */
+const onSale = (q: Pick<SearchQuery, "from" | "to" | "cabin">, now: Date) =>
+  and(
+    eqConst(fares.published, true),
+    eq(fares.routeFrom, q.from.toUpperCase()),
+    eq(fares.routeTo, q.to.toUpperCase()),
+    eq(fares.cabin, q.cabin),
+    lte(fares.validFrom, now),
+    gt(fares.validUntil, now),
+  );
+
 export const SEARCH_LIMIT = 30; // the same page the future FT.SEARCH … LIMIT 0 30 returns — one contract for both paths
 
 /** A fare by id (its page, a quote), built once per executor (ADR-IMPL-074), with its clocks in its airports' zones. */
@@ -91,17 +102,7 @@ export const faresRepo = {
         arriveWall: wallAt(fares.arriveAt, toZone ?? sql`(${destTz})`),
       })
       .from(fares)
-      .where(
-        and(
-          eqConst(fares.published, true),
-          eq(fares.routeFrom, q.from.toUpperCase()),
-          eq(fares.routeTo, q.to.toUpperCase()),
-          eq(fares.cabin, q.cabin),
-          lte(fares.validFrom, now),
-          gt(fares.validUntil, now),
-          onDay,
-        ),
-      )
+      .where(and(onSale(q, now), onDay))
       .orderBy(asc(fares.price))
       .limit(SEARCH_LIMIT);
   },
@@ -109,6 +110,23 @@ export const faresRepo = {
   /** Visible published fares in the validity window. Filters in SQL. At most SEARCH_LIMIT rows, cheapest first. */
   async search(exec: Executor, q: SearchQuery) {
     return this.searchSelect(exec, q);
+  },
+
+  /** Whether the route has a fare on sale in the cabin, any day — the search's rule without its clocks, for a quote's
+   *  estimate, which only asks whether the search showed fares (ADR-IMPL-077: no airport read per row). Ordered as the
+   *  search is, so it plans on the route's index: a bare LIMIT 1 planned on `fares_expiry`, which on a route with no
+   *  fare — the estimate's case — reads every fare on sale. */
+  anyOnSaleSelect(exec: Executor, q: Pick<SearchQuery, "from" | "to" | "cabin" | "now">) {
+    return exec
+      .select({ id: fares.id })
+      .from(fares)
+      .where(onSale(q, q.now ?? new Date()))
+      .orderBy(asc(fares.price))
+      .limit(1);
+  },
+
+  async anyOnSale(exec: Executor, q: Pick<SearchQuery, "from" | "to" | "cabin" | "now">): Promise<boolean> {
+    return (await this.anyOnSaleSelect(exec, q)).length > 0;
   },
 
   /** Any row by id (ignore published/window) — caller maps expired → 410. */
