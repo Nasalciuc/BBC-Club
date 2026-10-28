@@ -16,4 +16,14 @@
   `production` stay by hand.
   Dry run, and rejecting an older production approval: `docs/release.md` section 1c. `eas-cli` is pinned to one version
   in both workflows (`EAS_CLI_VERSION`), run with `bunx`.
-- Channels: development · preview (TestFlight internal / Play internal) · production. JS-only fixes: `eas update --channel production`.
+- Channels: development · preview (TestFlight internal / Play internal) · production. JS-only fixes, from `apps/mobile`:
+
+  ```bash
+  eas env:exec production 'EXPO_PUBLIC_APP_ENV=production EXPO_PUBLIC_API_URL=https://api.buybusinessclass.com eas update --channel production --environment production --platform android --message "<what it fixes>" --non-interactive' --non-interactive
+  ```
+
+  Inside the production environment, as the builds: eas-cli reads `app.config.ts` with the shell's env before it loads
+  the EAS environment, and with `EXPO_PUBLIC_APP_ENV=production` `assertProductionEnv` needs that environment's legal
+  pages and Mapbox token. `--environment` is required on SDK 55 and later. The two inline values are the ones
+  `eas.json`'s production build profile sets, which an update does not read: without them the bundle has no API
+  address, and `src/lib/env.ts` stops the app at startup. Android only until iOS exists.
