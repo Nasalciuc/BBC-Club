@@ -131,6 +131,8 @@ services:
         "-c",
         "log_min_duration_statement=250",
         "-c",
+        "log_parameter_max_length=0",
+        "-c",
         "track_io_timing=on",
         "-c",
         "jit=off",

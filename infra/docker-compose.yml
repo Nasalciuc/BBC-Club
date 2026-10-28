@@ -185,10 +185,13 @@ services:
       - archive_command=pgbackrest --stanza=bbc archive-push %p
       - -c
       - archive_timeout=300
-      # ADR-IMPL-077, while the queries are tuned: statements over 250 ms in the log; I/O timed per statement (cheap on
+      # ADR-IMPL-077, while the queries are tuned: statements over 250 ms in the log, without their bound parameters
+      # (they carry emails and session tokens: the statement and its plan say enough); I/O timed per statement (cheap on
       # Linux's clock); no JIT — it compiles on exactly the long statements (a year of job runs sorted) and adds to them.
       - -c
       - log_min_duration_statement=250
+      - -c
+      - log_parameter_max_length=0
       - -c
       - track_io_timing=on
       - -c

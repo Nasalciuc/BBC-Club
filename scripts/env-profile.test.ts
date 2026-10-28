@@ -878,6 +878,7 @@ describe("Postgres's planning settings (ADR-IMPL-077)", () => {
     "auto_explain.log_min_duration",
     "pg_stat_statements.track_planning",
     "log_min_duration_statement",
+    "log_parameter_max_length",
     "track_io_timing",
   ];
 
@@ -889,5 +890,6 @@ describe("Postgres's planning settings (ADR-IMPL-077)", () => {
     expect(prod.shared_preload_libraries).toBe("pg_stat_statements,auto_explain");
     expect(prod["auto_explain.log_min_duration"]).toBe("500ms");
     expect(prod.log_min_duration_statement).toBe("250");
+    expect(prod.log_parameter_max_length).toBe("0");
   });
 });
