@@ -53,13 +53,15 @@ Postgres 16), the data layer had reads that grow worse with time:
    ADR-IMPL-075.
 5. **A dated search** with the origin's zone at hand (the route reads the airports from memory) compares `depart_at`
    with the day's two instants, computed by Postgres in the same statement from the zone bound once (`dayStartIn`,
-   fares.repo: `day::timestamp AT TIME ZONE zone`, or an hour before it plus the hour where midnight comes twice) —
+   `@bbc/db/time-zones`: `day::timestamp AT TIME ZONE zone`, or an hour before it plus the hour where midnight comes
+   twice) —
    the day `(t AT TIME ZONE zone)::date` reads, across a clock change and a midnight that does not exist or comes
    twice. No index on `catalog.fares` holds `depart_at`: the bounds spare the origin's airport read per fare (3 005
    fares of a route: 64 buffers and 0.75 ms against 9 079 and 5–9 ms). A fare's clocks on its card and its day
    (`departLocal`, `arriveLocal`, `departDate`, which the request draft takes) are read in the same select
    (`wallAt`: `to_char(t AT TIME ZONE zone, …)`, the search's zones bound, a fare's page joining its airports), and
-   so are quiet hours and the daily cap's day (notifications `afterQuietHours`, `localDays`, one statement a page):
+   so are quiet hours and the daily cap's day (notifications `sendTimes`: a page's zones' send times, their days and
+   the days' bounds, one statement a page; the cap compares with the bounds):
    the club reads the zones' rules from one copy, Postgres's tzdata (#114). Bun's ICU now only checks that a name is a
    zone (`isIanaZone`, the app's rule too). Where the two disagree, measured on 28 Oct 2026 for the 369 airport zones
    at noon UTC on every day of two years, against tzdata 2026c (the local Postgres 16.15, Ubuntu 24.04): Bun 1.4.2

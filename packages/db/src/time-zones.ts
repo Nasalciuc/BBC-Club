@@ -6,7 +6,7 @@
  * name Postgres lacks is read as the zone tzdata links it to (`tz-links.ts`, generated from tzdata.zi): Android
  * phones report `Asia/Calcutta`.
  */
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { Executor } from "./client";
 import { TZ_LINKS } from "./tz-links";
 
@@ -80,3 +80,14 @@ export async function postgresZones(exec: Executor, zones: readonly string[]): P
 export async function postgresZone(exec: Executor, tz: string): Promise<PostgresZone> {
   return (await postgresZones(exec, [tz])).get(tz) ?? { zone: null, miss: "not_a_zone" };
 }
+
+/**
+ * The first instant whose wall clock in `tz` reads the date `day` — what `(t AT TIME ZONE tz)::date = day` holds from,
+ * by Postgres's tzdata. `day::timestamp AT TIME ZONE tz` alone is that instant except on a day whose midnight happens
+ * twice (a clock turned back at 01:00 to 00:00, as in Havana and the Azores), where Postgres takes the later one; the
+ * instant an hour before 00:00, plus the hour, is then the earlier. A search binds the zone once (catalog fares.repo);
+ * notifications pass a column. Checked against Postgres's own day for every airport zone and day of two years
+ * (`scripts/tz-parity.test.ts`).
+ */
+export const dayStartIn = (day: SQL, tz: SQL | string) =>
+  sql`least((${day})::timestamp AT TIME ZONE ${tz}, (((${day})::timestamp - interval '1 hour') AT TIME ZONE ${tz}) + interval '1 hour')`;

@@ -5,42 +5,58 @@
  */
 import { sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
+import { dayStartIn } from "@bbc/db/time-zones";
 
-/** For each zone, in order: when a push from `from` may go out there — `from` itself outside 22:00–08:00 local, else
- *  the next local 08:00 (tonight's or this morning's). */
-export async function quietHoursEndIn(exec: Executor, from: Date, zones: readonly string[]): Promise<Date[]> {
+/** When a push from a moment may go out in a zone, and the local day it goes out on. */
+export type SendTime = {
+  /** The moment itself outside 22:00–08:00 local, else the next local 08:00 (tonight's or this morning's). */
+  sendAt: Date;
+  /** The local calendar day of `sendAt` (`2026-10-29`). */
+  sendDay: string;
+  /** That day's first instant in the zone, and the next day's: a push scheduled in [dayStart, dayEnd) is on it. */
+  dayStart: Date;
+  dayEnd: Date;
+};
+
+/**
+ * For each zone, in order, its `SendTime` for a push from `from`: the quiet hours' end, its day and the day's bounds
+ * (`dayStartIn`, the bounds a dated search reads), in one statement over the zones given — a page's zones, not its
+ * members: the send time depends on the zone alone.
+ */
+export async function sendTimesIn(exec: Executor, from: Date, zones: readonly string[]): Promise<SendTime[]> {
   if (zones.length === 0) return [];
   const at = from.toISOString();
+  // The send's local date and the next, in the row's zone: their first instants bound the send's day.
+  const zone = sql`q.z`;
+  const dayStart = dayStartIn(sql`(q.send AT TIME ZONE q.z)::date`, zone);
+  const dayEnd = dayStartIn(sql`(q.send AT TIME ZONE q.z)::date + 1`, zone);
   const rows = (await exec.execute(sql`
-    SELECT q.i, extract(epoch FROM CASE
-             WHEN q.h >= 22 THEN (q.d + interval '1 day 8 hours') AT TIME ZONE q.z
-             WHEN q.h < 8 THEN (q.d + interval '8 hours') AT TIME ZONE q.z
-             ELSE ${at}::timestamptz END) * 1000 AS ms
-    FROM (SELECT u.i, u.z,
-                 extract(hour FROM ${at}::timestamptz AT TIME ZONE u.z) AS h,
-                 date_trunc('day', ${at}::timestamptz AT TIME ZONE u.z) AS d
-          FROM unnest(${sql.param([...zones])}::text[]) WITH ORDINALITY AS u(z, i)) q`)) as unknown as {
+    SELECT q.i,
+           extract(epoch FROM q.send) * 1000 AS send_ms,
+           to_char(q.send AT TIME ZONE q.z, 'YYYY-MM-DD') AS send_day,
+           extract(epoch FROM ${dayStart}) * 1000 AS start_ms,
+           extract(epoch FROM ${dayEnd}) * 1000 AS end_ms
+    FROM (SELECT p.i, p.z, CASE
+                   WHEN p.h >= 22 THEN (p.d + interval '1 day 8 hours') AT TIME ZONE p.z
+                   WHEN p.h < 8 THEN (p.d + interval '8 hours') AT TIME ZONE p.z
+                   ELSE ${at}::timestamptz END AS send
+          FROM (SELECT u.i, u.z,
+                       extract(hour FROM ${at}::timestamptz AT TIME ZONE u.z) AS h,
+                       date_trunc('day', ${at}::timestamptz AT TIME ZONE u.z) AS d
+                FROM unnest(${sql.param([...zones])}::text[]) WITH ORDINALITY AS u(z, i)) p) q`)) as unknown as {
     i: string | number;
-    ms: string | number;
+    send_ms: string | number;
+    send_day: string;
+    start_ms: string | number;
+    end_ms: string | number;
   }[];
-  const out: Date[] = new Array(zones.length);
-  for (const r of rows) out[Number(r.i) - 1] = new Date(Number(r.ms));
+  const out: SendTime[] = new Array(zones.length);
+  for (const r of rows)
+    out[Number(r.i) - 1] = {
+      sendAt: new Date(Number(r.send_ms)),
+      sendDay: r.send_day,
+      dayStart: new Date(Number(r.start_ms)),
+      dayEnd: new Date(Number(r.end_ms)),
+    };
   return out;
-}
-
-/** For each instant, in order: the calendar day it falls on in its zone (`2026-10-26`). The instants are bound as ISO
- *  text (postgres.js binds a text[], not a timestamptz[]); the day as to_char writes it, whatever the session's
- *  DateStyle. */
-export async function calendarDaysIn(exec: Executor, at: readonly { at: Date; zone: string }[]): Promise<string[]> {
-  if (at.length === 0) return [];
-  const rows = (await exec.execute(sql`
-    SELECT u.i, to_char(u.t AT TIME ZONE u.z, 'YYYY-MM-DD') AS local_day
-    FROM unnest(${sql.param(at.map((a) => a.at.toISOString()))}::text[]::timestamptz[],
-                ${sql.param(at.map((a) => a.zone))}::text[]) WITH ORDINALITY AS u(t, z, i)`)) as unknown as {
-    i: string | number;
-    local_day: string;
-  }[];
-  const days: string[] = new Array(at.length);
-  for (const r of rows) days[Number(r.i) - 1] = r.local_day;
-  return days;
 }

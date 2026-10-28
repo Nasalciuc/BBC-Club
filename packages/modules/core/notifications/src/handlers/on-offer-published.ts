@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { OfferPublishedV1 } from "@bbc/shared/events/offer";
 import { campaigns } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
-import { afterQuietHoursIn, DEFAULT_TIME_ZONE, zonesForPostgres } from "../application/quiet-hours";
+import { DEFAULT_TIME_ZONE, sendTimeIn, zonesForPostgres } from "../application/quiet-hours";
 import { cappedOnSendDay } from "../application/daily-cap";
 import type { Executor } from "@bbc/db";
 
@@ -64,13 +64,14 @@ export async function onOfferPublished(
   // Not before the offer is published: a push for one published later would open a 404 until then.
   const now = deps.now?.() ?? new Date();
   const from = new Date(Math.max(now.getTime(), new Date(evt.publishedAt).getTime()));
-  const sendAt = await afterQuietHoursIn(deps.tx, from, tz);
+  // The send time, its local day and the day's bounds in one statement, as a campaign page reads them.
+  const send = await sendTimeIn(deps.tx, from, tz);
 
   // Cap: at most one offer push per member per day — the day this one is sent, in the member's zone, whenever the
   // other was created (daily-cap.ts). Enqueue-time check; the campaign job applies the same.
-  const capped = await cappedOnSendDay(deps.tx, [{ memberId, timeZone: tz, sendAt }]);
+  const capped = await cappedOnSendDay(deps.tx, [{ memberId, ...send }]);
   if (capped.has(memberId)) return;
-  const scheduledFor = sendAt.toISOString();
+  const scheduledFor = send.sendAt.toISOString();
 
   // Partial unique index: ON CONFLICT must name the same columns + WHERE offer_id IS NOT NULL.
   await deps.tx.execute(sql`

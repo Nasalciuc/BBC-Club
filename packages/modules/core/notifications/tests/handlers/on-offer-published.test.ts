@@ -6,7 +6,7 @@ import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import type { MembersFacade } from "@bbc/members";
 import { onOfferPublished } from "../../src/handlers/on-offer-published";
-import { afterQuietHours } from "../../src/application/quiet-hours";
+import { sendTimes } from "../../src/application/quiet-hours";
 
 let iso: IsolatedDb;
 beforeAll(async () => {
@@ -108,8 +108,8 @@ describe("onOfferPublished — published for later", () => {
     // A zone outside quiet hours right now (one of these always is), so only publishedAt can move the push later.
     const zones = ["Europe/London", "Asia/Tokyo", "America/Los_Angeles"];
     const at = new Date();
-    const sendAt = await afterQuietHours(iso.db, at, zones);
-    const awake = zones.find((tz) => sendAt.get(tz)!.getTime() === at.getTime());
+    const times = await sendTimes(iso.db, at, zones);
+    const awake = zones.find((tz) => times.get(tz)?.sendAt.getTime() === at.getTime());
     const facade = {
       getStatus: async () => "active",
       preferencesOf: async () => ({ offers_personal: true, offers_broadcast: true }),

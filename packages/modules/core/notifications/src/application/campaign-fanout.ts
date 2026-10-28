@@ -3,7 +3,7 @@ import { inConst } from "@bbc/db/helpers";
 import { withTx, type Executor, type Tx } from "@bbc/db";
 import { campaigns, notificationsTable } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
-import { afterQuietHours, DEFAULT_TIME_ZONE, zonesForPostgres } from "./quiet-hours";
+import { DEFAULT_TIME_ZONE, sendTimes, zonesForPostgres } from "./quiet-hours";
 import { cappedOnSendDay } from "./daily-cap";
 
 const PAGE = 1_000;
@@ -62,8 +62,8 @@ async function fanOutPage(
     .for("update");
   if (open?.status !== "running") return null;
   // A stored zone Postgres cannot read never fails the page (and so every later campaign): that member's row follows
-  // the club's default zone, and the member is named in the log with why. Once per zone, not per member, and one
-  // statement for them all: a page shares `now` (Postgres's clocks, #114).
+  // the club's default zone, and the member is named in the log with why. The send time, its day and the day's bounds
+  // once per zone, not per member, in one statement for the page: a page shares `now` (Postgres's clocks, #114).
   const read = await zonesForPostgres(
     tx,
     page.map((p) => p.timezone),
@@ -77,18 +77,19 @@ async function fanOutPage(
       );
     return { memberId: p.memberId, timeZone: r?.zone ?? DEFAULT_TIME_ZONE };
   });
-  const sendAt = await afterQuietHours(
+  const times = await sendTimes(
     tx,
     now,
     zones.map((z) => z.timeZone),
   );
   const sends = zones.map((z) => {
-    const at = sendAt.get(z.timeZone);
-    if (!at) throw new Error(`campaign fan-out: no send time for ${z.timeZone}`);
-    return { ...z, sendAt: at };
+    const t = times.get(z.timeZone);
+    if (!t) throw new Error(`campaign fan-out: no send time for ${z.timeZone}`);
+    return { ...z, ...t };
   });
   // Cap: at most one offer push per member per day — the day this one is sent, in the member's zone (quiet hours can
-  // move it to tomorrow). One query for the whole page; the same rule the personal path applies (daily-cap.ts).
+  // move it to tomorrow), its bounds read with the send time above. One query for the whole page; the same rule the
+  // personal path applies (daily-cap.ts).
   const capped = await cappedOnSendDay(tx, sends);
   const rows = sends
     .filter((s) => !capped.has(s.memberId))

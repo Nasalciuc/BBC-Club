@@ -1,14 +1,14 @@
 /** #114 (ADR-IMPL-077 §5): the catalogue's days and clocks, and the notifications' quiet hours and send days, are read
  *  by Postgres from its tzdata — no second copy of the zone rules (against tzdata 2026c, Bun 1.4.2's ICU reads four of
  *  the airports' zones otherwise and Bun 1.3.4's five: ADR-IMPL-077 §5). Here: every zone the airports use is one Postgres reads, and the day's bounds a dated search binds
- *  (fares.repo `dayStartIn`) are the instants where Postgres's own day `(t AT TIME ZONE zone)::date` begins, for every
+ *  (`dayStartIn`, @bbc/db/time-zones) are the instants where Postgres's own day `(t AT TIME ZONE zone)::date` begins, for every
  *  one of those zones and every day of the two years from the run. `bun run test:tz` runs it on its own after the
  *  database suites (validate, CI). */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { airports } from "../packages/db/src/schema/catalog";
 import { isolatedDb, type IsolatedDb } from "../packages/db/src/testing/isolated-db";
-import { dayStartIn } from "../packages/modules/domain/catalog/src/infrastructure/fares.repo";
+import { dayStartIn } from "../packages/db/src/time-zones";
 
 const DAYS = 731;
 

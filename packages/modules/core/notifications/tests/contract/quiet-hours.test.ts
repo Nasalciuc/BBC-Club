@@ -3,8 +3,18 @@
  *  still turn its clocks back would read an hour earlier there. */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
-import { afterQuietHours, DEFAULT_TIME_ZONE, zonesForPostgres } from "../../src/application/quiet-hours";
-import { localDays, offerSendsSelect } from "../../src/application/daily-cap";
+import { DEFAULT_TIME_ZONE, sendTimes, zonesForPostgres, type SendTime } from "../../src/application/quiet-hours";
+import { offerSendsSelect } from "../../src/application/daily-cap";
+
+/** The send times as ISO text, by zone. */
+const iso8601 = (out: Map<string, SendTime>) =>
+  Object.fromEntries(
+    [...out].map(([z, t]) => [
+      z,
+      { sendAt: t.sendAt.toISOString(), sendDay: t.sendDay, day: [t.dayStart.toISOString(), t.dayEnd.toISOString()] },
+    ]),
+  );
+const sendAt = async (at: Date, zone: string) => (await sendTimes(iso.db, at, [zone])).get(zone)?.sendAt.toISOString();
 
 let iso: IsolatedDb;
 beforeAll(async () => {
@@ -15,56 +25,78 @@ afterAll(() => iso.drop());
 describe("quiet hours, by Postgres's clocks", () => {
   it("08:30 in Vancouver on 15 December 2026 (15:30 UTC, −07) is awake: the push goes now", async () => {
     const at = new Date("2026-12-15T15:30:00Z");
-    expect((await afterQuietHours(iso.db, at, ["America/Vancouver"])).get("America/Vancouver")?.toISOString()).toBe(
-      at.toISOString(),
-    );
+    expect(await sendAt(at, "America/Vancouver")).toBe(at.toISOString());
   });
 
   it("inside quiet hours, the next local 08:00: tonight's and this morning's, across a clock change", async () => {
-    const out = await afterQuietHours(iso.db, new Date("2026-10-25T00:30:00Z"), [
+    const out = await sendTimes(iso.db, new Date("2026-10-25T00:30:00Z"), [
       "Europe/London", // 01:30 BST on the day the clock goes back: 08:00 GMT is 08:00 UTC
       "America/New_York", // 20:30 the evening before: awake
       "Asia/Tokyo", // 09:30: awake
       "Asia/Kolkata", // 06:00: 08:00 IST is 02:30 UTC
     ]);
-    expect(Object.fromEntries([...out].map(([z, d]) => [z, d.toISOString()]))).toEqual({
-      "Europe/London": "2026-10-25T08:00:00.000Z",
-      "America/New_York": "2026-10-25T00:30:00.000Z",
-      "Asia/Tokyo": "2026-10-25T00:30:00.000Z",
-      "Asia/Kolkata": "2026-10-25T02:30:00.000Z",
+    expect(iso8601(out)).toEqual({
+      // Its day is 25 hours: 00:00 BST (23:00 UTC the evening before) to 00:00 GMT.
+      "Europe/London": {
+        sendAt: "2026-10-25T08:00:00.000Z",
+        sendDay: "2026-10-25",
+        day: ["2026-10-24T23:00:00.000Z", "2026-10-26T00:00:00.000Z"],
+      },
+      "America/New_York": {
+        sendAt: "2026-10-25T00:30:00.000Z",
+        sendDay: "2026-10-24",
+        day: ["2026-10-24T04:00:00.000Z", "2026-10-25T04:00:00.000Z"],
+      },
+      "Asia/Tokyo": {
+        sendAt: "2026-10-25T00:30:00.000Z",
+        sendDay: "2026-10-25",
+        day: ["2026-10-24T15:00:00.000Z", "2026-10-25T15:00:00.000Z"],
+      },
+      "Asia/Kolkata": {
+        sendAt: "2026-10-25T02:30:00.000Z",
+        sendDay: "2026-10-25",
+        day: ["2026-10-24T18:30:00.000Z", "2026-10-25T18:30:00.000Z"],
+      },
     });
     // 23:00 in New York: 08:00 the next day there.
-    const late = await afterQuietHours(iso.db, new Date("2026-09-28T03:00:00Z"), ["America/New_York"]);
-    expect(late.get("America/New_York")?.toISOString()).toBe("2026-09-28T12:00:00.000Z");
+    expect(await sendAt(new Date("2026-09-28T03:00:00Z"), "America/New_York")).toBe("2026-09-28T12:00:00.000Z");
   });
 
-  it("the daily cap's day: 00:30 on 16 December in Vancouver is the 16th; each instant in its own zone", async () => {
+  it("the daily cap's day: 00:30 on 16 December in Vancouver is quiet, and the push goes at 08:00 on the 16th", async () => {
+    // 07:30 UTC: 00:30 in Vancouver (−07 all year from 1 Nov 2026), 07:30 in London; 00:30 in Casablanca (+00).
     expect(
-      await localDays(iso.db, [
-        { at: new Date("2026-12-16T07:30:00Z"), timeZone: "America/Vancouver" },
-        { at: new Date("2026-12-16T07:30:00Z"), timeZone: "Europe/London" },
-        { at: new Date("2027-01-15T00:30:00Z"), timeZone: "Africa/Casablanca" },
-      ]),
-    ).toEqual(["2026-12-16", "2026-12-16", "2027-01-15"]);
+      iso8601(await sendTimes(iso.db, new Date("2026-12-16T07:30:00Z"), ["America/Vancouver", "Europe/London"])),
+    ).toEqual({
+      "America/Vancouver": {
+        sendAt: "2026-12-16T15:00:00.000Z",
+        sendDay: "2026-12-16",
+        day: ["2026-12-16T07:00:00.000Z", "2026-12-17T07:00:00.000Z"],
+      },
+      "Europe/London": {
+        sendAt: "2026-12-16T08:00:00.000Z",
+        sendDay: "2026-12-16",
+        day: ["2026-12-16T00:00:00.000Z", "2026-12-17T00:00:00.000Z"],
+      },
+    });
+    expect(iso8601(await sendTimes(iso.db, new Date("2027-01-15T00:30:00Z"), ["Africa/Casablanca"]))).toEqual({
+      "Africa/Casablanca": {
+        sendAt: "2027-01-15T08:00:00.000Z",
+        sendDay: "2027-01-15",
+        day: ["2027-01-15T00:00:00.000Z", "2027-01-16T00:00:00.000Z"],
+      },
+    });
   });
 
   it("a zone in another case is that zone: 23:30 in London, written europe/london, is quiet until 08:00 there", async () => {
     // 28 October 2026, GMT: 23:30 UTC is 23:30 in London and 19:30 in New York, the club's default.
     const at = new Date("2026-10-28T23:30:00Z");
-    const out = await afterQuietHours(iso.db, at, ["Europe/London", "europe/london", "EUROPE/LONDON"]);
-    expect(Object.fromEntries([...out].map(([z, d]) => [z, d.toISOString()]))).toEqual({
-      "Europe/London": "2026-10-29T08:00:00.000Z",
-      "europe/london": "2026-10-29T08:00:00.000Z",
-      "EUROPE/LONDON": "2026-10-29T08:00:00.000Z",
-    });
-    // 03:30 UTC on the 29th is the 29th in London, still the 28th in New York.
-    const early = new Date("2026-10-29T03:30:00Z");
-    expect(
-      await localDays(iso.db, [
-        { at: early, timeZone: "Europe/London" },
-        { at: early, timeZone: "europe/london" },
-      ]),
-    ).toEqual(["2026-10-29", "2026-10-29"]);
+    const out = await sendTimes(iso.db, at, ["Europe/London", "europe/london", "EUROPE/LONDON"]);
+    const london = {
+      sendAt: "2026-10-29T08:00:00.000Z",
+      sendDay: "2026-10-29",
+      day: ["2026-10-29T00:00:00.000Z", "2026-10-30T00:00:00.000Z"],
+    };
+    expect(iso8601(out)).toEqual({ "Europe/London": london, "europe/london": london, "EUROPE/LONDON": london });
   });
 
   it("a zone Postgres does not read is the club's default, said why: no zone at all, or one Intl takes and tzdata lacks", async () => {
@@ -76,8 +108,7 @@ describe("quiet hours, by Postgres's clocks", () => {
       "Not/AZone": { zone: DEFAULT_TIME_ZONE, fallback: "invalid_time_zone" },
     });
     // The statement never fails on it: 23:00 in New York waits for 08:00 there.
-    const out = await afterQuietHours(iso.db, new Date("2026-09-28T03:00:00Z"), ["US/Pacific-New"]);
-    expect(out.get("US/Pacific-New")?.toISOString()).toBe("2026-09-28T12:00:00.000Z");
+    expect(await sendAt(new Date("2026-09-28T03:00:00Z"), "US/Pacific-New")).toBe("2026-09-28T12:00:00.000Z");
   });
 });
 

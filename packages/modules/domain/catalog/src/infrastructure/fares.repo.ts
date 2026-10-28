@@ -3,6 +3,7 @@ import { statement } from "@bbc/db/statements";
 import { and, asc, eq, getTableColumns, gt, gte, isNotNull, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { isIanaZone } from "@bbc/shared/time-zone";
+import { dayStartIn } from "@bbc/db/time-zones";
 import { eqConst } from "@bbc/db/helpers";
 import { alias } from "drizzle-orm/pg-core";
 import { airports, fares } from "@bbc/db/schema/catalog";
@@ -32,16 +33,6 @@ const dest = alias(airports, "dest");
  *  ADR-IMPL-077): `2026-12-15T00:30`, or null with no instant or no zone. */
 const wallAt = (instant: AnyPgColumn, tz: SQL | AnyPgColumn | string) =>
   sql<string | null>`to_char(${instant} AT TIME ZONE ${tz}, 'YYYY-MM-DD"T"HH24:MI')`;
-
-/**
- * The first instant whose wall clock in `tz` reads the date `day` — what `(t AT TIME ZONE tz)::date = day` holds from,
- * by the same tzdata, bound as constants so `depart_at` is compared bare. `day::timestamp AT TIME ZONE tz` alone is
- * that instant except on a day whose midnight happens twice (a clock turned back at 01:00 to 00:00, as in Havana and
- * the Azores), where Postgres takes the later one; the instant an hour before 00:00, plus the hour, is then the
- * earlier. Checked against Postgres's own day for every zone and day of two years (`scripts/tz-parity.test.ts`).
- */
-export const dayStartIn = (day: SQL, tz: string) =>
-  sql`least((${day})::timestamp AT TIME ZONE ${tz}, (((${day})::timestamp - interval '1 hour') AT TIME ZONE ${tz}) + interval '1 hour')`;
 
 /** A fare on sale on the route in the cabin at `now`: published, valid_from ≤ now < valid_until (ADR-IMPL-041). */
 const onSale = (q: Pick<SearchQuery, "from" | "to" | "cabin">, now: Date) =>

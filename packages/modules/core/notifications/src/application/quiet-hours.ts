@@ -1,7 +1,9 @@
 /** Quiet hours are 22:00–08:00 in the member's local timezone. Transactional bypasses this. */
 import type { Executor } from "@bbc/db";
 import { postgresZones } from "@bbc/db/time-zones";
-import { quietHoursEndIn } from "../infrastructure/local-clock";
+import { sendTimesIn, type SendTime } from "../infrastructure/local-clock";
+
+export type { SendTime } from "../infrastructure/local-clock";
 
 /** The zone a member has until they set one (members.profile.timezone's default). */
 export const DEFAULT_TIME_ZONE = "America/New_York";
@@ -35,35 +37,32 @@ export async function zonesForPostgres(
 }
 
 /**
- * When a push from `from` may go out in each zone: `from` itself outside 22:00–08:00 local, else the next local 08:00.
- * The local clock is Postgres's, from its tzdata — the one copy of the zones' rules the club reads (#114, ADR-IMPL-077
- * §5); one statement for every zone given. Each zone is read as `zonesForPostgres` reads it — the callers have logged
- * a fallback already.
+ * When a push from `from` may go out in each zone — `from` itself outside 22:00–08:00 local, else the next local 08:00 —
+ * and the local day it goes out on, with that day's bounds (the daily cap's day). The local clock is Postgres's, from
+ * its tzdata — the one copy of the zones' rules the club reads (#114, ADR-IMPL-077 §5); one statement for every zone
+ * given, the zones of a page and not its members. Each zone is read as `zonesForPostgres` reads it — the callers have
+ * logged a fallback already.
  */
-export async function afterQuietHours(
-  exec: Executor,
-  from: Date,
-  zones: readonly string[],
-): Promise<Map<string, Date>> {
-  const out = new Map<string, Date>();
+export async function sendTimes(exec: Executor, from: Date, zones: readonly string[]): Promise<Map<string, SendTime>> {
+  const out = new Map<string, SendTime>();
   const distinct = [...new Set(zones)];
   if (distinct.length === 0) return out;
   const read = await zonesForPostgres(exec, distinct);
-  const ends = await quietHoursEndIn(
+  const times = await sendTimesIn(
     exec,
     from,
     distinct.map((z) => read.get(z)?.zone ?? DEFAULT_TIME_ZONE),
   );
   distinct.forEach((z, i) => {
-    const at = ends[i];
-    if (at) out.set(z, at);
+    const t = times[i];
+    if (t) out.set(z, t);
   });
   return out;
 }
 
-/** `afterQuietHours` for one zone: when a push from `from` may go out there. */
-export async function afterQuietHoursIn(exec: Executor, from: Date, zone: string): Promise<Date> {
-  const at = (await afterQuietHours(exec, from, [zone])).get(zone);
-  if (!at) throw new Error(`quiet hours: no send time for ${zone}`);
-  return at;
+/** `sendTimes` for one zone. */
+export async function sendTimeIn(exec: Executor, from: Date, zone: string): Promise<SendTime> {
+  const t = (await sendTimes(exec, from, [zone])).get(zone);
+  if (!t) throw new Error(`quiet hours: no send time for ${zone}`);
+  return t;
 }
