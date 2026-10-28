@@ -386,8 +386,9 @@ services:
       - -promscrape.configCheckInterval=1m
       - -selfScrapeInterval=30s
       - -memory.allowedPercent=40
-      # Basic auth on the query and import API (VictoriaMetrics answers /health and its own /metrics before it), its
-      # password read from the environment (envflag), never on the command line: Grafana's datasource gives it.
+      # Basic auth on every path but /health (its own /metrics too, which falls back to it without -metricsAuthKey; the
+      # self-scrape reads its metrics in process), its password read from the environment (envflag), never on the
+      # command line: Grafana's datasource gives it.
       - -envflag.enable
     environment:
       httpAuth_username: bbc

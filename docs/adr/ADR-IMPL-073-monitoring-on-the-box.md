@@ -80,9 +80,10 @@ covers `infra/monitoring` too).
    alerts go to `GRAFANA_ALERTS_WEBHOOK`, usually `OPS_WEBHOOK`'s URL under a name of its own: production's compose
    substitutes both Grafana keys, so `guard_staging` refuses them in `staging.env`, which may keep its own
    `OPS_WEBHOOK`. `bootstrap.sh` and `deploy.sh` refuse `MONITORING=on` without the two, before anything changes.
-   VictoriaMetrics asks for basic auth on its query and import API (user `bbc`, `VM_PASSWORD`, read from its
-   environment with `-envflag.enable`, never from its command line); `/health` and its own `/metrics` answer before
-   that check, as v1.154.0 orders them. Grafana's datasource sends the password; the two checks refuse `MONITORING=on`
+   VictoriaMetrics asks for basic auth on every path but `/health` (user `bbc`, `VM_PASSWORD`, read from its
+   environment with `-envflag.enable`, never from its command line): v1.154.0 answers `/health` before the check, and
+   its own `/metrics`, without `-metricsAuthKey`, falls back to the same basic auth; its self-scrape reads its metrics
+   in process, so it is unaffected. Grafana's datasource sends the password; the two checks refuse `MONITORING=on`
    without it too. Grafana encrypts what it stores with `GRAFANA_SECRET_KEY` (`GF_SECURITY_SECRET_KEY`), not its
    built-in default. These keys live in `production.env`, which Compose also hands whole to production's `api`,
    `worker` and `postgres` (`env_file`), as every key there: accepted for now, since those three already hold the
