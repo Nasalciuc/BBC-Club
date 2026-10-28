@@ -11,13 +11,13 @@ beforeAll(async () => {
 });
 afterAll(() => iso.drop());
 
-/** Counts the statements the flags send (each is one `select`): the counters' read and the table's. */
+/** Counts the reads the flags send: the counters' (one short transaction) and the table's (a `select`). */
 function counted(db: IsolatedDb["db"]) {
   const seen: number[] = [];
   const spy = new Proxy(db, {
     get(t, k) {
       const v = Reflect.get(t, k);
-      if (k === "select")
+      if (k === "select" || k === "transaction")
         return (...a: unknown[]) => {
           seen.push(seen.length);
           return (v as (...x: unknown[]) => unknown).apply(t, a);
@@ -54,9 +54,13 @@ describe("flags snapshot", () => {
     );
     expect(await flags.isKilled("engagement")).toBe(false); // the same second: what the process held
     clock += 1_001;
+    await flags.isKilled("engagement"); // a second on: this call starts the counters' read and answers from memory
+    await Bun.sleep(20);
     expect(await flags.isKilled("engagement")).toBe(true);
     await iso.db.execute(sql`DELETE FROM platform.flags WHERE key = 'engagement.killed'`);
     clock += 1_001;
+    await flags.isKilled("engagement");
+    await Bun.sleep(20);
     expect(await flags.isKilled("engagement")).toBe(false);
   });
 
@@ -74,6 +78,7 @@ describe("flags snapshot", () => {
     const db = new Proxy(iso.db, {
       get(t, k) {
         if (k === "select" && down) return () => ({ from: () => Promise.reject(new Error("db down")) });
+        if (k === "transaction" && down) return () => Promise.reject(new Error("db down"));
         const v = Reflect.get(t, k);
         return typeof v === "function" ? v.bind(t) : v;
       },

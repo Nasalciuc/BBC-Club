@@ -1,5 +1,6 @@
 /** ADR-IMPL-075: reference-table counters, the snapshots and memos built on them, and the triggers that bump them. */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createGenerationMemo, createGenerations, createSnapshot } from "../src/generations";
@@ -49,10 +50,11 @@ describe("createGenerations", () => {
   it("asks Postgres at most once a second, whatever the number of callers", async () => {
     let clock = 10_000;
     let reads = 0;
+    // A read is one short transaction (SET LOCAL statement_timeout, then the counters).
     const db = new Proxy(iso.db, {
       get(t, k) {
         const v = Reflect.get(t, k);
-        if (k === "select")
+        if (k === "transaction")
           return (...a: unknown[]) => {
             reads += 1;
             return (v as (...x: unknown[]) => unknown).apply(t, a);
@@ -68,7 +70,7 @@ describe("createGenerations", () => {
     await g.current("platform.flags");
     expect(reads).toBe(1);
     clock += 2;
-    await g.current("platform.flags");
+    await g.current("platform.flags"); // starts the read; this caller answers from what is held
     expect(reads).toBe(2);
     g.invalidate();
     await g.current("platform.flags");
@@ -81,7 +83,7 @@ describe("createGenerations", () => {
     let down = false;
     const db = new Proxy(iso.db, {
       get(t, k) {
-        if (k === "select" && down) return () => ({ from: () => Promise.reject(new Error("db down")) });
+        if (k === "transaction" && down) return () => Promise.reject(new Error("db down"));
         const v = Reflect.get(t, k);
         return typeof v === "function" ? v.bind(t) : v;
       },
@@ -92,7 +94,113 @@ describe("createGenerations", () => {
     down = true;
     clock += 5_000;
     expect(await g.current("platform.flags")).toBe(first);
+    await Bun.sleep(10); // the failed read, started by the call above, ends
     expect(g.staleMs()).toBe(5_000);
+  });
+
+  it("a wall clock moved back an hour does not freeze the counters (a monotonic clock by default)", async () => {
+    let wall = Date.now();
+    const realNow = Date.now;
+    Date.now = () => wall;
+    try {
+      const g = createGenerations(iso.db, { refreshMs: 20 });
+      const before = await g.current("test.monotonic");
+      await g.bump("test.monotonic", iso.db);
+      wall -= 3_600_000;
+      await Bun.sleep(30);
+      await g.current("test.monotonic"); // past refreshMs on the monotonic clock: the read starts
+      await Bun.sleep(30);
+      expect(await g.current("test.monotonic")).toBe((before ?? 0) + 1);
+      expect(g.staleMs()).toBeLessThan(1_000);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it("a write by this process is seen by its next read, even with an older read still running", async () => {
+    let release!: () => void;
+    let held = true;
+    const db = new Proxy(iso.db, {
+      get(t, k) {
+        const v = Reflect.get(t, k);
+        if (k === "transaction")
+          return async (...a: unknown[]) => {
+            if (held) await new Promise<void>((r) => (release = r));
+            return (v as (...x: unknown[]) => Promise<unknown>).apply(t, a);
+          };
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    let clock = 0;
+    const g = createGenerations(db, { now: () => clock });
+    const first = g.current("test.own-write"); // the first read, held back
+    await Bun.sleep(5);
+    held = false;
+    release();
+    const was = (await first) ?? 0;
+    clock += 2_000;
+    held = true;
+    await g.current("test.own-write"); // a second read starts and is held back, before the write below
+    await g.bump("test.own-write", iso.db); // this process writes: the held read cannot see it
+    const after = g.current("test.own-write");
+    held = false;
+    release();
+    expect(await after).toBe(was + 1);
+  });
+
+  it("a lock on the counters holds one connection, and every caller answers from memory meanwhile", async () => {
+    const g = createGenerations(iso.db, { refreshMs: 50 });
+    const first = await g.current("platform.flags");
+    const locker = postgres(iso.url, { max: 1, onnotice: () => {} });
+    const locked = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const holding = locker.begin(async (tx) => {
+      await tx`LOCK TABLE platform.generations IN ACCESS EXCLUSIVE MODE`;
+      locked.resolve();
+      await release.promise;
+    });
+    try {
+      await locked.promise;
+      const watcher = postgres(iso.url, { max: 1, onnotice: () => {} });
+      let waiting = 0;
+      const deadline = performance.now() + 2_000;
+      while (performance.now() < deadline) {
+        const t0 = performance.now();
+        expect(await g.current("platform.flags")).toBe(first);
+        expect(performance.now() - t0).toBeLessThan(50);
+        const [row] = (await watcher.unsafe(
+          `SELECT count(*)::int AS n FROM pg_stat_activity
+           WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%generations%'`,
+        )) as unknown as { n: number }[];
+        waiting = Math.max(waiting, row?.n ?? 0);
+        await Bun.sleep(60);
+      }
+      await watcher.end();
+      expect(waiting).toBeLessThanOrEqual(1);
+      expect(g.staleMs()).toBeGreaterThan(1_000);
+    } finally {
+      release.resolve();
+      await holding;
+      await locker.end();
+    }
+  }, 20_000);
+
+  it("a restart under the counters, or a counter that went back, moves the epoch", async () => {
+    let boot = "boot-a";
+    const clock = 0;
+    const g = createGenerations(iso.db, { now: () => clock, bootTime: () => boot });
+    await g.current("test.epoch");
+    expect(g.epoch()).toBe(0);
+    boot = "boot-b";
+    g.invalidate();
+    await g.current("test.epoch");
+    expect(g.epoch()).toBe(1);
+    await g.bump("test.epoch", iso.db);
+    await g.current("test.epoch");
+    await iso.db.execute(sql`UPDATE platform.generations SET value = value - 1 WHERE key = 'test.epoch'`);
+    g.invalidate();
+    await g.current("test.epoch");
+    expect(g.epoch()).toBe(2);
   });
 
   it("a key with no row reads 0; a process that never read the counters reads null", async () => {
@@ -155,5 +263,31 @@ describe("createSnapshot and createGenerationMemo", () => {
     await expect(memo.get("bad", () => Promise.reject(new Error("no")))).rejects.toThrow("no");
     expect(await memo.get("bad", load("ok"))).toBe("ok");
     expect(loads).toBe(5);
+  });
+
+  it("a memo drops what outlived ttlMs with each insert, without waiting for maxEntries", async () => {
+    let clock = 0;
+    const g = createGenerations(iso.db);
+    const memo = createGenerationMemo<string>(g, "test.memo-ttl", { maxEntries: 100, ttlMs: 10, now: () => clock });
+    for (const k of ["a", "b", "c"]) await memo.get(k, async () => k);
+    expect(memo.size()).toBe(3);
+    clock += 20;
+    await memo.get("d", async () => "d");
+    expect(memo.size()).toBe(1);
+  });
+
+  it("a snapshot and a memo load again when the epoch moves, whatever the counter", async () => {
+    let boot = "boot-1";
+    const clock = 0;
+    const g = createGenerations(iso.db, { now: () => clock, bootTime: () => boot });
+    let loads = 0;
+    const snap = createSnapshot(g, "test.epoch-snap", async () => ++loads);
+    const memo = createGenerationMemo<number>(g, "test.epoch-snap", { maxEntries: 10 });
+    expect(await snap.get()).toBe(1);
+    expect(await memo.get("k", async () => ++loads)).toBe(2);
+    boot = "boot-2";
+    g.invalidate();
+    expect(await snap.get()).toBe(3);
+    expect(await memo.get("k", async () => ++loads)).toBe(4);
   });
 });

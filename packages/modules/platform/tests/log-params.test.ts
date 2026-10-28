@@ -97,14 +97,20 @@ describe("poller", () => {
 describe("flags", () => {
   it("a flag read that fails is logged without the query's parameters", async () => {
     const { lines, logger } = capture();
+    const failure = () =>
+      Object.assign(new Error(`Failed query: select\nparams: ${SECRET}`), {
+        name: "DrizzleQueryError",
+        query: "select",
+        params: [SECRET],
+        cause: { code: "57P01" },
+      });
+    // The counters are read in a short transaction, the flags' table by a select: both fail the same way.
     const failing = {
       select() {
-        throw Object.assign(new Error(`Failed query: select\nparams: ${SECRET}`), {
-          name: "DrizzleQueryError",
-          query: "select",
-          params: [SECRET],
-          cause: { code: "57P01" },
-        });
+        throw failure();
+      },
+      transaction() {
+        throw failure();
       },
     };
     const { createFlags } = await import("../src/flags");

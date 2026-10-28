@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { errorForLog, type Executor } from "@bbc/db";
+import { errorForLog, withTx, type Executor } from "@bbc/db";
 import { generations as generationsTable } from "../infrastructure/schema";
 
 type Logger = { warn: (o: object, m?: string) => void };
@@ -11,66 +11,110 @@ const count = (o: Counted, hit: boolean) => {
 
 /** How often a process asks Postgres whether a reference table changed. */
 export const GENERATIONS_REFRESH_MS = 1_000;
-/** A read of the counters that takes longer than this is left behind: the request goes on with what the process has. */
+/** A read of the counters that takes longer than this is stopped by the server (statement_timeout): the request goes on
+ *  with what the process has. */
 export const GENERATIONS_READ_TIMEOUT_MS = 500;
+/** Counters older than this are waited for: past it a fail-closed caller would refuse anyway, so the request waits for
+ *  the read (statement_timeout bounds it) rather than answer from what may be minutes old — half of KILL_STALE_MS. */
+export const GENERATIONS_WAIT_WHEN_STALE_MS = 5_000;
 
 /**
  * The counters of `platform.generations` as this process last read them (ADR-IMPL-075). A trigger on each reference
  * table bumps its counter in the transaction that writes it, so the counters say, for every replica, whether what it
  * holds in memory is still what Postgres holds — after a write from the app, a job or psql alike.
  *
- * Read lazily: the first caller after a second asks Postgres (one small query, shared by every caller of that moment);
- * everyone else answers from memory. A read that fails or is slow keeps the last counters, and `staleMs()` says how long
- * ago they were last read — what a fail-closed caller (the kill switch) looks at.
+ * Read lazily, one read at a time: the first caller after a second starts it and everyone answers from what is held
+ * while it runs (ADR-IMPL-080). Callers wait for it while nothing is held yet, after this process wrote a reference table
+ * itself (`invalidate`, `bump`: it must see its own write), and while what is held is older than
+ * GENERATIONS_WAIT_WHEN_STALE_MS (Postgres has not answered for a while). The server stops a
+ * read past GENERATIONS_READ_TIMEOUT_MS, so a lock on the table holds one connection, not one per second. A read that
+ * fails keeps the last counters, and `staleMs()` says how long ago they were last read — what a fail-closed caller (the
+ * kill switch) looks at. Time is the process's monotonic clock: a wall clock moved back does not freeze the counters.
  */
 export function createGenerations(
   db: Executor,
-  opts: { refreshMs?: number; readTimeoutMs?: number; now?: () => number; logger?: Logger } = {},
+  opts: {
+    refreshMs?: number;
+    readTimeoutMs?: number;
+    now?: () => number;
+    logger?: Logger;
+    waitWhenStaleMs?: number;
+    /** Tests: stands in for the server's start time (`pg_postmaster_start_time()`) as the read returns it. */
+    bootTime?: (fromServer: string | null) => string | null;
+  } = {},
 ) {
   const refreshMs = opts.refreshMs ?? GENERATIONS_REFRESH_MS;
-  const readTimeoutMs = opts.readTimeoutMs ?? GENERATIONS_READ_TIMEOUT_MS;
-  const now = opts.now ?? Date.now;
+  const readTimeoutMs = Math.max(1, Math.floor(opts.readTimeoutMs ?? GENERATIONS_READ_TIMEOUT_MS));
+  const now = opts.now ?? (() => performance.now());
+  const waitWhenStaleMs = opts.waitWhenStaleMs ?? GENERATIONS_WAIT_WHEN_STALE_MS;
   let values = new Map<string, number>();
   let readAt = Number.NEGATIVE_INFINITY;
   let askedAt = Number.NEGATIVE_INFINITY;
   let reading: Promise<void> | null = null;
+  /** Moves when this process wrote a reference table itself; a read that started before it cannot see that write. */
+  let writes = 0;
+  let readingSince = 0;
+  let readSince = -1;
+  let bootAt: string | null = null;
+  let epoch = 0;
+  const asked = new Set<string>();
 
-  async function read(): Promise<void> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const rows = await Promise.race([
-        db.select({ key: generationsTable.key, value: generationsTable.value }).from(generationsTable),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error(`generations unread after ${readTimeoutMs} ms`)), readTimeoutMs);
-        }),
-      ]);
-      values = new Map(rows.map((r) => [r.key, Number(r.value)]));
-      readAt = now();
-    } finally {
-      clearTimeout(timer);
-    }
+  async function read(since: number): Promise<void> {
+    const rows = await withTx(db, async (tx) => {
+      await tx.execute(sql.raw(`SET LOCAL statement_timeout = '${readTimeoutMs}ms'`));
+      return tx
+        .select({
+          key: generationsTable.key,
+          value: generationsTable.value,
+          boot: sql<string>`pg_postmaster_start_time()::text`,
+        })
+        .from(generationsTable);
+    });
+    const next = new Map(rows.map((r) => [r.key, Number(r.value)]));
+    const boot = opts.bootTime ? opts.bootTime(rows[0]?.boot ?? null) : (rows[0]?.boot ?? null);
+    // A restart, a restore or a failover can bring the counters back to values already seen, and a counter that went
+    // down is one: the epoch moves, and every snapshot and memo built on the counters loads again (G4).
+    const restarted = boot !== null && bootAt !== null && boot !== bootAt;
+    const wentBack = [...values].some(([key, value]) => (next.get(key) ?? 0) < value);
+    if (restarted || wentBack) epoch += 1;
+    if (boot !== null) bootAt = boot;
+    values = next;
+    readAt = now();
+    readSince = since;
   }
 
-  /** The counters, at most `refreshMs` old when Postgres answers; the last ones read when it does not. */
-  async function fresh(): Promise<void> {
-    if (now() - askedAt < refreshMs) {
-      if (reading) await reading;
-      return;
-    }
-    askedAt = now();
-    reading ??= read()
+  function startRead(): Promise<void> {
+    readingSince = writes;
+    // Held in `reading` and awaited by whoever must wait for it; its failure is logged and the last counters stay.
+    reading = read(writes)
       .catch((e: unknown) => {
         opts.logger?.warn({ err: errorForLog(e) }, "generations unread, keeping the last ones");
       })
       .finally(() => {
         reading = null;
       });
-    await reading;
+    return reading;
+  }
+
+  /** The counters, at most `refreshMs` old when Postgres answers; the last ones read when it does not. */
+  async function fresh(): Promise<void> {
+    const wait = readSince < writes || now() - readAt > waitWhenStaleMs; // readAt is -Infinity before the first read
+    if (now() - askedAt < refreshMs) {
+      if (wait && reading) await reading;
+      return;
+    }
+    askedAt = now();
+    // A read already running that began before this process's own write cannot see it: let it end, then read again.
+    if (wait && reading && readingSince < writes) await reading;
+    const current = reading ?? startRead();
+    if (wait) await current;
   }
 
   return {
-    /** This key's counter; `null` while the process has never read the counters (Postgres has not answered yet). */
+    /** This key's counter; `null` while the process has never read the counters (Postgres has not answered yet). A key
+     *  with no row reads 0: its table's trigger makes the row on the first write, which moves it to 1. */
     async current(key: string): Promise<number | null> {
+      asked.add(key);
       await fresh();
       if (readAt === Number.NEGATIVE_INFINITY) return null;
       return values.get(key) ?? 0;
@@ -79,8 +123,18 @@ export function createGenerations(
     staleMs(): number {
       return now() - readAt;
     },
-    /** The next `current()` asks Postgres again — after this process wrote a reference table itself. */
+    /** Moves when Postgres restarted under the counters, or one of them went back (G4): what was built on them loads
+     *  again. */
+    epoch(): number {
+      return epoch;
+    },
+    /** The keys asked for since the process started (tests: each must have its table's trigger). */
+    keysAsked(): string[] {
+      return [...asked];
+    },
+    /** The next `current()` asks Postgres again, and waits for it — after this process wrote a reference table itself. */
     invalidate(): void {
+      writes += 1;
       askedAt = Number.NEGATIVE_INFINITY;
     },
     /** Bumps a counter outside a trigger: for state a trigger cannot see (none today), and for tests. */
@@ -93,6 +147,7 @@ export function createGenerations(
           target: generationsTable.key,
           set: { value: sql`${generationsTable.value} + 1`, updatedAt: sql`now()` },
         });
+      writes += 1;
       askedAt = Number.NEGATIVE_INFINITY;
     },
   };
@@ -110,23 +165,24 @@ export function createSnapshot<T>(
   load: () => Promise<T>,
   opts: { maxAgeMs?: number; now?: () => number } & Counted = {},
 ) {
-  const now = opts.now ?? Date.now;
-  let held: { gen: number | null; value: T; at: number } | null = null;
+  const now = opts.now ?? (() => performance.now());
+  let held: { gen: number | null; epoch: number; value: T; at: number } | null = null;
   let loading: Promise<T> | null = null;
 
   return {
     async get(): Promise<T> {
       const gen = await generations.current(key);
+      const epoch = generations.epoch();
       const young = held !== null && (opts.maxAgeMs === undefined || now() - held.at < opts.maxAgeMs);
       // The counters unread (Postgres away): what is held stays, rather than a load that would fail too.
-      if (held && young && (gen === null || gen === held.gen)) {
+      if (held && young && (gen === null || (gen === held.gen && epoch === held.epoch))) {
         count(opts, true);
         return held.value;
       }
       count(opts, false);
       loading ??= load()
         .then((value) => {
-          held = { gen, value, at: now() };
+          held = { gen, epoch, value, at: now() };
           return value;
         })
         .finally(() => {
@@ -157,14 +213,15 @@ export function createGenerationMemo<T>(
   keys: string | readonly string[],
   opts: { maxEntries: number; ttlMs?: number; now?: () => number } & Counted,
 ) {
-  const now = opts.now ?? Date.now;
+  const now = opts.now ?? (() => performance.now());
   const names = typeof keys === "string" ? [keys] : [...keys];
   let gen: string | null = null;
   const entries = new Map<string, { value: Promise<T>; at: number }>();
 
   return {
     async get(k: string, load: () => Promise<T>): Promise<T> {
-      const current = (await Promise.all(names.map((n) => generations.current(n)))).join(":");
+      const gens = await Promise.all(names.map((n) => generations.current(n)));
+      const current = `${generations.epoch()}:${gens.join(":")}`;
       if (current !== gen) {
         entries.clear();
         gen = current;
@@ -176,6 +233,16 @@ export function createGenerationMemo<T>(
       }
       count(opts, false);
       entries.delete(k);
+      // The oldest first (a key is deleted before it is set again, so the map's order is its age): up to 8 entries that
+      // outlived ttlMs go with each insert, so expired keys do not wait for maxEntries to leave (C-R1).
+      if (opts.ttlMs !== undefined) {
+        let swept = 0;
+        for (const [old, e] of entries) {
+          if (swept >= 8 || now() - e.at < opts.ttlMs) break;
+          entries.delete(old);
+          swept += 1;
+        }
+      }
       if (entries.size >= opts.maxEntries) entries.delete(entries.keys().next().value as string);
       const value = load();
       entries.set(k, { value, at: now() });
