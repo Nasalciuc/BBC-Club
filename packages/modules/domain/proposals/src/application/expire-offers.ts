@@ -27,6 +27,14 @@ export type ExpireDeps = {
 export async function expireOffers(deps: ExpireDeps): Promise<{ expired: number }> {
   return withTx(deps.db, async (tx) => {
     const now = new Date();
+    // An UPDATE of no row still fires the table's statement trigger and moves proposals.offers' generation (X11): it
+    // runs only when an offer is past its time.
+    const [due] = await tx
+      .select({ one: sql<number>`1` })
+      .from(offers)
+      .where(and(eqConst(offers.status, "active"), lt(offers.validUntil, now)))
+      .limit(1);
+    if (!due) return { expired: 0 };
     const expired = await tx
       .update(offers)
       .set({ status: "expired", updatedAt: sql`now()` })
