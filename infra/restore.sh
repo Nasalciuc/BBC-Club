@@ -29,14 +29,31 @@ echo "▶ restoring (postgres server stopped, container kept alive for the binar
 $DC exec -T postgres bash -c "pg_ctl -D /var/lib/postgresql/data -m fast stop" || true
 $DC exec -T -u postgres postgres pgbackrest --stanza=bbc --delta ${TARGET:+--type=time --target="$TARGET" --target-action=promote} restore
 $DC restart postgres
-ok=false
-for i in {1..30}; do $DC exec -T postgres pg_isready -U bbc -d bbc >/dev/null 2>&1 && { ok=true; break; }; sleep 2; done
-[[ "$ok" == true ]] || { echo "❌ postgres did not come back after restore"; exit 1; }
+# pg_isready says "rejecting connections" while the restore replays WAL up to a consistent state (minutes for a
+# point-in-time restore) and "no response" while the server is down: only a server silent for a minute fails here.
+ok=false; silent=0; st=""
+for i in {1..720}; do
+  st="$($DC exec -T postgres pg_isready -U bbc -d bbc 2>&1 || true)"
+  case "$st" in
+    *"accepting connections"*) ok=true; break ;;
+    *"rejecting connections"*) silent=0 ;;
+    *) silent=$(( silent + 1 )); (( silent >= 12 )) && break ;;
+  esac
+  sleep 5
+done
+[[ "$ok" == true ]] || { echo "❌ postgres did not come back after restore: ${st:-no answer}"; exit 1; }
 # pg_isready answers as soon as Postgres takes connections, and a restore still replaying WAL takes them, read-only:
 # nothing is checked or started until it has reached its target and been promoted (an hour at most; RTO ≈ 45 min).
-promoted=false
+# A check that fails is not replay (a password the restored database does not take, a role it lacks): it is said at once.
+promoted=false; failed=0
 for i in {1..720}; do
-  [[ "$($DC exec -T postgres psql -U bbc -d bbc -tAc "SELECT pg_is_in_recovery()" 2>/dev/null | tr -d '[:space:]')" == "f" ]] && { promoted=true; break; }
+  if rec="$($DC exec -T postgres psql -U bbc -d bbc -tAc "SELECT pg_is_in_recovery()" 2>&1)"; then
+    failed=0
+    [[ "$(tr -d '[:space:]' <<<"$rec")" == "f" ]] && { promoted=true; break; }
+  else
+    failed=$(( failed + 1 ))
+    (( failed >= 3 )) && { echo "❌ Postgres answers but refuses the recovery check: $rec — the API, the worker and cron NOT started"; exit 1; }
+  fi
   (( i % 12 == 0 )) && echo "… Postgres still replaying WAL ($(( i / 12 )) min)"
   sleep 5
 done

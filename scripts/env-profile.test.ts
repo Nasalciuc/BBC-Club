@@ -631,7 +631,12 @@ describe("rotate-secret.sh", () => {
 describe("restore.sh (ADR-IMPL-077)", () => {
   /** A copy of restore.sh in a throwaway infra/, its two questions answered, with a `docker` that records each command
    *  (the compose files and env file left out) and answers the checks; `sleep` returns at once. */
-  async function restore(opts: { promoted: boolean; workerReady: boolean }) {
+  async function restore(opts: { promoted: boolean | "refused"; workerReady: boolean; rejecting?: number }) {
+    // "refused": the recovery check fails as a password the restored database does not take would make it fail.
+    const recovery =
+      opts.promoted === "refused"
+        ? `echo 'psql: error: FATAL:  password authentication failed for user "bbc"' >&2; return 2`
+        : `echo ${opts.promoted ? "f" : "t"}`;
     const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
     try {
       mkdirSync(join(dir, "infra", "env"), { recursive: true });
@@ -646,7 +651,12 @@ describe("restore.sh (ADR-IMPL-077)", () => {
         docker() {
           echo "$*" >> "$LOG"
           case "$*" in
-            *" exec -T postgres psql "*"pg_is_in_recovery"*) echo ${opts.promoted ? "f" : "t"} ;;
+            *" exec -T postgres pg_isready "*)
+              # The first opts.rejecting answers are a restore still short of a consistent state.
+              n=$(( $(cat "$LOG.ready" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$LOG.ready"
+              if (( n <= ${opts.rejecting ?? 0} )); then echo "/var/run/postgresql:5432 - rejecting connections"; return 1; fi
+              echo "/var/run/postgresql:5432 - accepting connections" ;;
+            *" exec -T postgres psql "*"pg_is_in_recovery"*) ${recovery} ;;
             *" exec -T postgres psql "*) echo 8 ;;
             *" ps -q worker") echo ct-worker ;;
             "exec ct-worker bun -e "*"http://localhost:8001/ready"*) return ${opts.workerReady ? 0 : 1} ;;
@@ -696,6 +706,22 @@ describe("restore.sh (ADR-IMPL-077)", () => {
     expect(out).toContain("still replaying WAL after an hour");
     expect(starts(commands)).toEqual(["compose restart postgres"]);
     expect(commands.some((c) => c.includes("information_schema.schemata"))).toBe(false);
+  });
+
+  it("a recovery check Postgres refuses stops the restore at once and says why, starting nothing", async () => {
+    const { code, out, commands } = await restore({ promoted: "refused", workerReady: true });
+    expect(code).toBe(1);
+    expect(out).toContain("refuses the recovery check");
+    expect(out).toContain("password authentication failed");
+    expect(out).not.toContain("still replaying WAL");
+    expect(commands.filter((c) => c.includes("pg_is_in_recovery"))).toHaveLength(3);
+    expect(starts(commands)).toEqual(["compose restart postgres"]);
+  });
+
+  it("a restore that rejects connections past the old minute, short of consistency, is waited on", async () => {
+    const { code, out } = await restore({ promoted: true, workerReady: true, rejecting: 40 });
+    expect(code).toBe(0);
+    expect(out).toContain("restore complete");
   });
 
   it("a worker whose /ready stays red leaves cron stopped and says how to start it", async () => {
