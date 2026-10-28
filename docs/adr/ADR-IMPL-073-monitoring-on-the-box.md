@@ -58,7 +58,9 @@ covers `infra/monitoring` too).
 6. **Planning is counted.** Postgres runs with `pg_stat_statements.track_planning=on`, so plans per statement show on
    Grafana whether statements are prepared once. Postgres takes it when it is recreated on purpose (ADR-IMPL-044);
    until then the worker publishes no plan series (no data, rather than a 0 read as "nothing planned"). The statement
-   totals read `pg_stat_statements(false)`, without the statements' text.
+   totals read `pg_stat_statements(false)`, without the statements' text, and carry pg_stat_statements' `dealloc` as
+   an `epoch` label: when it drops its least-run entries to make room, the sums fall, and new series start instead of
+   a fall a rate would read as a counter reset.
 7. **Two dashboards and five alerts, as files.** `the box` (CPU and memory by container against the limit, throttling,
    network, kills for memory, the host, Postgres connections, the oldest transaction, PgBouncer, targets) and `the app`
    (requests, p95 and p99 by route, errors, API CPU per request, event-loop delay, statements per request, plans per

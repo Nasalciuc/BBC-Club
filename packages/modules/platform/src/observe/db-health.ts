@@ -29,8 +29,15 @@ export type DbSnapshot = {
 };
 
 /** What every statement of this database has cost since pg_stat_statements was last reset (ADR-IMPL-073). Plans are
- *  null (no series) while `pg_stat_statements.track_planning` is off: a 0 there read as "nothing planned". */
-export type StatementTotals = { calls: number; plans: number | null; execSeconds: number; planSeconds: number | null };
+ *  null (no series) while `pg_stat_statements.track_planning` is off: a 0 there read as "nothing planned". `dealloc`
+ *  counts the times pg_stat_statements dropped its least-run entries to make room, which lowers the sums. */
+export type StatementTotals = {
+  calls: number;
+  plans: number | null;
+  execSeconds: number;
+  planSeconds: number | null;
+  dealloc: number;
+};
 
 export type DbReport = {
   generatedAt: string;
@@ -132,15 +139,17 @@ async function statementTotals(db: Db): Promise<StatementTotals | null> {
                   THEN coalesce(sum(plans), 0)::float8 END AS plans,
              coalesce(sum(total_exec_time), 0)::float8 AS exec_ms,
              CASE WHEN current_setting('pg_stat_statements.track_planning', true) = 'on'
-                  THEN coalesce(sum(total_plan_time), 0)::float8 END AS plan_ms
+                  THEN coalesce(sum(total_plan_time), 0)::float8 END AS plan_ms,
+             (SELECT dealloc FROM pg_stat_statements_info)::float8 AS dealloc
       FROM pg_stat_statements(false) WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())`),
-    )) as { calls: number; plans: number | null; exec_ms: number; plan_ms: number | null }[];
+    )) as { calls: number; plans: number | null; exec_ms: number; plan_ms: number | null; dealloc: number | null }[];
     if (!row) return null;
     return {
       calls: Number(row.calls),
       plans: row.plans == null ? null : Number(row.plans),
       execSeconds: Number(row.exec_ms) / 1000,
       planSeconds: row.plan_ms == null ? null : Number(row.plan_ms) / 1000,
+      dealloc: Number(row.dealloc ?? 0),
     };
   } catch {
     return null;
@@ -233,9 +242,11 @@ export function applyDbGauges(metrics: Metrics, snap: DbSnapshot) {
     ["db_statement_exec_seconds_total", st?.execSeconds],
     ["db_statement_plan_seconds_total", st?.planSeconds],
   ] as const;
+  // The sums drop when pg_stat_statements makes room (dealloc) — a drop a rate reads as a reset, and so a spike. The
+  // series carry dealloc as `epoch`: each eviction starts new ones, which sum(rate(…)) adds without a jump.
   for (const [name, value] of statementCounters) {
-    if (value == null) metrics.clearPrefix(name);
-    else metrics.setCounter(name, value);
+    metrics.clearPrefix(name);
+    if (value != null && st) metrics.setCounter(name, value, { epoch: String(st.dealloc) });
   }
 }
 
