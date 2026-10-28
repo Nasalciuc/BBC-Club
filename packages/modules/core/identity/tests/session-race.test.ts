@@ -105,7 +105,8 @@ describe("a session ended while a read waits", () => {
 
     expect(sessions.get(sessionKey(headers, COOKIE)!)).toBeNull();
     expect(await f.getSession(headers)).toBeNull();
-    expect(a.reads()).toBe(2);
+    // The read in flight, the sign-out's own (whose token it is: nothing was kept yet), and the read after it.
+    expect(a.reads()).toBe(3);
   });
 });
 
@@ -207,5 +208,64 @@ describe("the cookie an answer is kept under", () => {
 
     await f.deleteAccount(new Headers({ Authorization: "bearer attacker.sig" }), "password");
     expect(sessions.size()).toBe(0);
+  });
+});
+
+describe("a write to Better Auth forgets the sessions it ends", () => {
+  /** Two members' tokens; Better Auth answers each from the cookie and `handler` answers `status`. */
+  function twoMembers(status = 200) {
+    const members: Record<string, typeof user> = {
+      a: user,
+      c: user,
+      b: { ...user, id: "m2" },
+    };
+    const auth = {
+      $context: contextFor(COOKIE),
+      api: {
+        getSession: async ({ headers }: { headers: Headers }) => {
+          const token = tokenIn(headers, COOKIE);
+          return token && members[token] ? rowFor(token, members[token]) : null;
+        },
+      },
+      handler: async () => new Response("{}", { status }),
+    };
+    return auth;
+  }
+  const cookie = (token: string) => new Headers({ Cookie: `${COOKIE}=${token}.sig` });
+
+  it("a token this process never kept: its member is read fresh, and their other entries go", async () => {
+    const sessions = createSessionCache({ ttlMs: 60_000 });
+    const f = createIdentityFacade(twoMembers() as never, {} as never, { sessions });
+    await f.getSession(cookie("c")); // device C of m1, kept here
+    await f.getSession(cookie("b")); // m2, kept here
+    expect(sessions.size()).toBe(2);
+
+    // Device A of m1 revokes from a process that never read A.
+    await f.handler(new Request("http://localhost/api/auth/revoke-sessions", { method: "POST", headers: cookie("a") }));
+    expect(sessions.get(sessionKey(cookie("c"), COOKIE)!)).toBeNull();
+    expect(sessions.get(sessionKey(cookie("b"), COOKIE)!)?.member.id).toBe("m2");
+  });
+
+  it("a reset by code, which carries no session, forgets every session this process keeps once it succeeds", async () => {
+    const reset = (f: ReturnType<typeof createIdentityFacade>) =>
+      f.handler(new Request("http://localhost/api/auth/email-otp/reset-password", { method: "POST" }));
+
+    const refused = createSessionCache({ ttlMs: 60_000 });
+    const g = createIdentityFacade(twoMembers(400) as never, {} as never, { sessions: refused });
+    await g.getSession(cookie("c"));
+    await reset(g); // a wrong code ends nothing
+    expect(refused.size()).toBe(1);
+
+    const sessions = createSessionCache({ ttlMs: 60_000 });
+    const f = createIdentityFacade(twoMembers() as never, {} as never, { sessions });
+    await f.getSession(cookie("c"));
+    await f.getSession(cookie("b"));
+    const since = sessions.begin(); // a read already waiting when the reset lands
+    await reset(f);
+    expect(sessions.size()).toBe(0);
+    sessions.put(sessionKey(cookie("c"), COOKIE)!, { member: user, sessionId: "s" } as never, null, since);
+    expect(sessions.size()).toBe(0);
+    expect((await f.getSession(cookie("b")))?.member.id).toBe("m2"); // read again, and kept again
+    expect(sessions.size()).toBe(1);
   });
 });

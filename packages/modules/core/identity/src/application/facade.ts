@@ -12,6 +12,8 @@ export type { Member, AuthVars, SessionInfo, IdentityFacade };
 
 /** Methods that change nothing: they may answer from the cookie cache. Every other method reads the session fresh. */
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+/** Better Auth's reset by email code, the one reset the club serves (auth.ts). */
+const RESET_BY_CODE = /\/email-otp\/reset-password$/;
 
 export type IdentityFacadeOptions = {
   /** The floor under a reset or verification code's answer. Default: Postmark's timeout. Tests make it short. */
@@ -121,7 +123,9 @@ export function createIdentityFacade(
     if (carriesBearer(headers))
       return { key: null, member: (await readSession(headers, true))?.session.member.id ?? null };
     const key = sessionKey(headers, await sessionCookie());
-    return { key, member: key ? sessions.memberOf(key) : null };
+    if (!key) return { key, member: null };
+    // Not kept here (never read on this process, or gone): the member a fresh read finds, so their other entries go too.
+    return { key, member: sessions.memberOf(key) ?? (await readSession(headers, true))?.session.member.id ?? null };
   }
 
   /** ADR-IMPL-076: a write to /api/auth (a sign-out, a revoke, a change) forgets what this process keeps for the token's
@@ -130,7 +134,11 @@ export function createIdentityFacade(
     if (!sessions || SAFE_METHODS.has(req.method)) return run();
     const { key, member } = await sessionOf(req.headers);
     try {
-      return await run();
+      const res = await run();
+      // A reset by code carries no session yet ends every session of its account (revokeSessionsOnPasswordReset):
+      // whose they were is not known here, so this process forgets all it keeps.
+      if (res.ok && RESET_BY_CODE.test(new URL(req.url).pathname)) sessions.forgetAll();
+      return res;
     } finally {
       if (key) sessions.forget(key);
       if (member) sessions.forgetMember(member);
