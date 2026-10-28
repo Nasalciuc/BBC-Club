@@ -144,7 +144,7 @@ jobs:
         # The profile ADR-IMPL-073 adds, the way the box runs it: Compose reads it with every overlay; VictoriaMetrics
         # checks its scrape file (-dryRun), then runs with the compose file's flags; Grafana starts beside it with the
         # compose file's image, environment and memory limit and the repository's provisioning, reaches it, and holds its
-        # datasources, the three dashboards, the contact point and the six alert rules — no provisioning or plugin error in
+        # datasources, the three dashboards, the contact point and the seven alert rules — no provisioning or plugin error in
         # its log, no kill for memory. Nothing here reaches the box.
         run: |
           set -euo pipefail
@@ -201,7 +201,7 @@ jobs:
           wait_for /api/datasources/uid/victoriametrics/health .status OK
           wait_for /api/datasources/uid/postgres .uid postgres
           wait_for '/api/search?type=dash-db&tag=bbc' length 3
-          wait_for /api/v1/provisioning/alert-rules length 6
+          wait_for /api/v1/provisioning/alert-rules length 7
           wait_for /api/v1/provisioning/contact-points '[.[] | select(.name == "ops")] | length' 1
           test "$(docker inspect -f '{{.State.Running}} {{.State.OOMKilled}}' grafana-check)" = "true false"
           if docker logs grafana-check 2>&1 | grep -iE 'level=error.*(provision|plugin)'; then exit 1; fi

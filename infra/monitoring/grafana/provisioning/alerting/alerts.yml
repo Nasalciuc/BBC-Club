@@ -1,4 +1,4 @@
-# Six alerts, to GRAFANA_ALERTS_WEBHOOK (production.env), a Slack-compatible incoming webhook — usually where deploy.sh
+# Seven alerts, to GRAFANA_ALERTS_WEBHOOK (production.env), a Slack-compatible incoming webhook — usually where deploy.sh
 # posts its notes, OPS_WEBHOOK (ADR-IMPL-073). The worker already posts two of its own there — PgBouncer clients waiting
 # for 2 min and a transaction open past 30 s (db-observe) — so they are not repeated here. Grafana expands environment
 # variables in this file: a literal dollar sign is written twice, and the templates below read `.Labels` rather than
@@ -55,7 +55,7 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "{{ .Labels.container_label_com_docker_compose_service }} is above 90 % of its memory limit: the kernel kills it next (staging first, Postgres last)."
-          runbook: "infra/RUNBOOK.md § Monitoring, the six alerts"
+          runbook: "infra/RUNBOOK.md § Monitoring, the seven alerts"
 
       - uid: bbc-cpu-steal
         title: The VPS steals more than 20 % of the CPU
@@ -82,7 +82,7 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: "The hypervisor takes more than 20 % of the CPU: the box is slower than its two cores (a noisy neighbour, or an undersized plan)."
-          runbook: "infra/RUNBOOK.md § Monitoring, the six alerts"
+          runbook: "infra/RUNBOOK.md § Monitoring, the seven alerts"
 
       # While the worker answers: none finished, or none since it started (the counter then has no series yet).
       - uid: bbc-dispatch-stalled
@@ -195,4 +195,33 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: "{{ .Labels.container_label_com_docker_compose_service }} was killed for memory in the last 10 minutes."
-          runbook: "infra/RUNBOOK.md § Monitoring, the six alerts"
+          runbook: "infra/RUNBOOK.md § Monitoring, the seven alerts"
+
+      # Deliveries a consumer's pause flag parked (ADR-IMPL-080): queue-health puts them back once the flag says
+      # otherwise; still paused after 10 minutes means the flag is on, or the flags cannot be read.
+      - uid: bbc-queue-paused
+        title: Event deliveries have been paused for 10 minutes
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: max(bbc_queue_paused{env="production"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: "Event deliveries have been paused for 10 minutes: a consumer's pause flag is on, or the flags cannot be read."
+          runbook: "infra/RUNBOOK.md § Pause one event consumer"

@@ -178,7 +178,7 @@ INSERT INTO platform.flags(key,value) VALUES ('consumer.crm.onOfferResponded.pau
 ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;
 ```
 
-Deliveries queue up as `paused`; resume with the same flag `false`, then `poller.resume(consumer)` via `POST /v1/internal/run/queue-health`.
+Deliveries queue up as `paused`. Set the flag `false`, or delete its row: `queue-health` (every 10 minutes, or `POST /v1/internal/run/queue-health`) puts them back to pending. A delivery is parked only when its flag says paused; while the flags cannot be read it waits, pending. An alert fires after 10 minutes of paused deliveries (§ Monitoring).
 
 ## Price rules for estimates (ADR-IMPL-037)
 
@@ -954,7 +954,7 @@ docker compose ... --profile glitchtip rm -f redis glitchtip glitchtip-worker gl
 
 ## Monitoring (ADR-IMPL-073)
 
-Metrics only: VictoriaMetrics scrapes each API replica and each worker, production's and staging's, the host (node-exporter) and every container (cAdvisor) each 30 s and keeps 90 days (`vm_data`, about 1–2 GB); Grafana shows three dashboards — the third read from production's Postgres itself, as `bbc_monitor` (ADR-IMPL-077) — and sends six alerts to `GRAFANA_ALERTS_WEBHOOK`. Logs and traces wait for staging's own machine. Four containers, 736 MB of limits (VictoriaMetrics 192, Grafana 384, cAdvisor 128, node-exporter 32), all on the internal network; only Grafana is published, on the box's loopback. Production reads `infra/monitoring` from this checkout, as it reads `infra/caddy`: a staging dispatch whose copy is not `origin/main`'s stops (§ Staging on the same box). The commands below use `$DC` from § Daily shape.
+Metrics only: VictoriaMetrics scrapes each API replica and each worker, production's and staging's, the host (node-exporter) and every container (cAdvisor) each 30 s and keeps 90 days (`vm_data`, about 1–2 GB); Grafana shows three dashboards — the third read from production's Postgres itself, as `bbc_monitor` (ADR-IMPL-077) — and sends seven alerts to `GRAFANA_ALERTS_WEBHOOK`. Logs and traces wait for staging's own machine. Four containers, 736 MB of limits (VictoriaMetrics 192, Grafana 384, cAdvisor 128, node-exporter 32), all on the internal network; only Grafana is published, on the box's loopback. Production reads `infra/monitoring` from this checkout, as it reads `infra/caddy`: a staging dispatch whose copy is not `origin/main`'s stops (§ Staging on the same box). The commands below use `$DC` from § Daily shape.
 
 **Turn it on (once).**
 
@@ -968,7 +968,7 @@ Metrics only: VictoriaMetrics scrapes each API replica and each worker, producti
 
 **Look.** `ssh -L 3000:127.0.0.1:3000 root@<host>`, then http://localhost:3000, user `admin`. Folder `BBC Club`: `the box` (CPU and memory by container against its limit, throttling, the host, Postgres connections, PgBouncer, network, kills for memory) and `the app` (the club's requests and p95/p99 by route — the probes and the cron's job runs left out — errors, API CPU per request, event-loop delay, statements per request, plans per statement, PgBouncer parses and binds, cache hit ratio, the queue, failed jobs). The `env` variable switches production and staging. `the database` (production only, ADR-IMPL-077): the slowest statements by total time, the indexes never read (a candidate to drop only after two weeks of real members, and through a PR: `db:verify`'s `NO_INDEX_NEEDED` lists the known ones), dead rows and when autovacuum last ran, the share of updates that stayed HOT, the largest tables, the statements that spill to disk. The dashboards and alerts are files in `infra/monitoring/grafana`: a change is a PR, never an edit in the UI (the UI refuses).
 
-**The six alerts** (to `GRAFANA_ALERTS_WEBHOOK`; the worker sends its own two to `OPS_WEBHOOK`, § Database health):
+**The seven alerts** (to `GRAFANA_ALERTS_WEBHOOK`; the worker sends its own two to `OPS_WEBHOOK`, § Database health):
 
 | Alert                                                                                                | When    | First move                                                                                                                                                                                                                        |
 | ---------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -978,6 +978,7 @@ Metrics only: VictoriaMetrics scrapes each API replica and each worker, producti
 | An API replica or the worker that answered in the last day does not answer /metrics                  | 5 min   | `$DC ps`; § Roll back right now. It sees a replica that hangs and a worker that is gone; a replica that crashed restarts by itself and leaves no target (`Killed for memory` and `$DC ps` show it). Uptime Kuma watches the whole |
 | More than 2 % of production's requests fail with a 5xx (the probes and the cron's job runs left out) | 10 min  | `$DC logs api --tail 200`; § Roll back right now                                                                                                                                                                                  |
 | A production container was killed for memory                                                         | at once | `$DC logs <service> --since 30m`, then `Memory against the limit` on `the box`: a leak, or a limit too small for its load (§ Memory and replicas)                                                                                 |
+| Event deliveries have been paused for 10 minutes                                                     | 10 min  | § Pause one event consumer: a flag left on, or flags the worker cannot read (`$DC logs worker --since 30m`)                                                                                                                       |
 
 The three on production look only at what production has run: on a box that runs staging alone, before production's first deploy, they stay quiet.
 

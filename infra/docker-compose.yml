@@ -371,7 +371,7 @@ services:
 
   # ── monitoring: only with MONITORING=on in production.env (bootstrap.sh and deploy.sh add the profile) ─────
   # Metrics only (ADR-IMPL-073): VictoriaMetrics scrapes every replica, the worker, the host and the containers each 30 s
-  # and keeps 90 days; Grafana shows them and sends six alerts to GRAFANA_ALERTS_WEBHOOK. Logs and traces wait for
+  # and keeps 90 days; Grafana shows them and sends seven alerts to GRAFANA_ALERTS_WEBHOOK. Logs and traces wait for
   # staging's own machine. Nothing here is published but Grafana, on the box's loopback only: an SSH tunnel reaches it.
   victoriametrics:
     image: victoriametrics/victoria-metrics:v1.154.0
