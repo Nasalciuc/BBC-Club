@@ -103,6 +103,18 @@ describe("api-deploy: the preview update", () => {
     }
   });
 
+  it("a run by hand with `force` publishes though the repository did not change (an EAS variable did)", () => {
+    const inputs = (deploy.on.workflow_dispatch as { inputs?: Record<string, { type?: string }> } | null)?.inputs;
+    expect(inputs?.force?.type).toBe("boolean");
+    // Only by hand: a merge never skips the unchanged-app check.
+    expect(ota.env?.FORCE).toBe("${{ github.event_name == 'workflow_dispatch' && inputs.force }}");
+    const changes = ota.steps.find((step) => step.name === "Anything to publish")?.run ?? "";
+    const forced = changes.indexOf('if [ "$FORCE" = "true" ]; then');
+    expect(forced).toBeGreaterThan(-1);
+    expect(forced).toBeLessThan(changes.indexOf("git -C"));
+    expect(changes.slice(forced, changes.indexOf("fi", forced))).toContain('echo "publish=true"');
+  });
+
   // eas-cli reads app.config.ts with the shell's env before it loads an EAS environment, and the config refuses a
   // staging one without the preview API's address: both commands run inside the environment (`eas env:exec`).
   it("publishes only to the preview channel, with the preview environment, from inside it", () => {

@@ -2,7 +2,8 @@
 # tag only, GHCR), deploys it to staging over SSH (infra/deploy.sh), then publishes the preview app's update — or starts
 # the preview build a native change needs — and deploys production once Scaler approves it (GitHub → Environments →
 # production). Every job uses the commit `gate` names: the one validate checked, never main's tip at the time.
-# workflow_dispatch runs one target by hand, with the preview step (`ota`) or only its report (`dry_run`).
+# workflow_dispatch runs one target by hand, with the preview step (`ota`), only its report (`dry_run`), or a publish
+# the unchanged app would skip (`force`: after an EAS preview variable changed).
 name: api-deploy
 on:
   workflow_run:
@@ -21,6 +22,10 @@ on:
         default: false
       dry_run:
         description: "Preview step only says what it would publish or build (needs ota)"
+        type: boolean
+        default: false
+      force:
+        description: "Preview step publishes even if the app is unchanged: after an EAS preview variable changed (needs ota)"
         type: boolean
         default: false
 
@@ -149,6 +154,7 @@ jobs:
       EAS_CLI_VERSION: "26.0.0"
       SHA: ${{ needs.gate.outputs.sha }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -168,6 +174,13 @@ jobs:
         run: |
           set -euo pipefail
           eas() { bunx "eas-cli@$EAS_CLI_VERSION" "$@"; }
+          # A run by hand with `force`: a variable of the EAS preview environment changed (the API's address, the
+          # phone), which no diff of the repository shows, and the bundle that carries it is published again.
+          if [ "$FORCE" = "true" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "last=n/a" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Against the commit of the last update published on the preview branch, not this commit's parent: a run
           # superseded at the gate published nothing, and its changes must still reach the phones.
           group=$(eas update:list --branch preview --limit 1 --json --non-interactive | jq -r '.currentPage[0].group // empty' || true)
@@ -217,6 +230,7 @@ jobs:
             echo "- commit: \`${SHA::7}\` $title (last published: \`${LAST::7}\`)"
             echo "- runtime: \`$RUNTIME\`"
             echo "- iOS: no Apple Developer account yet"
+            [ "$FORCE" != "true" ] || echo "- forced by hand: the unchanged-app check was skipped"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$finished" -gt 0 ]; then
             if [ "$DRY_RUN" = "true" ]; then

@@ -43,13 +43,13 @@ The `preview` profile reads the EAS **preview** environment; `eas.json` sets onl
 
 - `EXPO_PUBLIC_API_URL` — the staging API over https: the tunnel today, `https://api-staging.buybusinessclass.com`
   once the company DNS points there. `assertStagingEnv` refuses a build or an update without it. Changing it needs an
-  OTA update only, never a new build.
+  OTA update only, never a new build: run api-deploy by hand with `ota` and `force` on (section 1c).
 - `EXPO_PUBLIC_MAPBOX_TOKEN` — the same `pk.` token. Without it the app draws the fallback globe.
 - `EXPO_PUBLIC_SUPPORT_PHONE` — the same **general line**, E.164, as production. Without it no call button is drawn (a
   quoted request has no `Call your agent`, a request that could not be passed on no `Call us`, Profile no
   `Call us`; ADR-IMPL-041, A2c), and the messages that would ask the member to call say what else to do instead —
   all but Join's, which is the entry's (section 1).
-  Changing it needs an OTA update only, never a new build.
+  Changing it needs an OTA update only, never a new build: api-deploy by hand with `ota` and `force` (section 1c).
 - `GOOGLE_SERVICES_JSON` — the same Firebase file, for push on a staging APK (a new build).
 
 **Checking the call buttons** (a development build, as in the README; `--clear` because an `EXPO_PUBLIC_*` value is
@@ -99,7 +99,9 @@ app, then production once approved. A commit main has already moved past stops a
 and says whether it would publish or build. After the first merge, `eas build:view <id>` of the new preview build must
 show that same runtime; if it differs, CI would build on every merge — stop the preview step and say so.
 
-A run by hand without the dry run deploys one `target`; `ota` adds the preview step after staging.
+A run by hand without the dry run deploys one `target`; `ota` adds the preview step after staging, and `force`
+publishes even though nothing in the repository changed — after a value in the EAS preview environment changed, which
+no diff shows (`target` `staging`, `ota` and `force` on).
 
 ## 2. Review account
 
