@@ -99,6 +99,16 @@ export function createFlags(
         return true;
       }
     },
+    /** "killed" when the row says so; "unknown" when the flags cannot be trusted (unread, or older than KILL_STALE_MS):
+     *  a route answers OVERLOADED then — the module is not off, this process is behind (ADR-IMPL-080). */
+    async killedState(module: string): Promise<"killed" | "live" | "unknown"> {
+      try {
+        return (await readGuard(`${module}.killed`))?.enabled === true ? "killed" : "live";
+      } catch (e) {
+        opts.logger?.warn({ module, err: errorForLog(e) }, "kill flag unreadable");
+        return "unknown";
+      }
+    },
     /** "paused" only when the row says so. A flag that cannot be trusted (unread, or counters older than
      *  KILL_STALE_MS) is "unknown": the poller leaves the delivery pending for later and does not park it — a park
      *  outlived its cause, and only an operator undid it (ADR-IMPL-080). */

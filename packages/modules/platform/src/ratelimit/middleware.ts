@@ -29,7 +29,9 @@ export const rateLimit =
     try {
       r = await limiter.check(rule, subject(c));
     } catch {
-      return c.json(apiError("SERVICE_DISABLED"), 503);
+      // The limiter cannot answer: the process is behind, the route is not off (ADR-IMPL-080).
+      c.header("Retry-After", "5");
+      return c.json(apiError("OVERLOADED"), 503);
     }
     c.header("RateLimit-Limit", String(r.limit));
     c.header("RateLimit-Remaining", String(r.remaining));

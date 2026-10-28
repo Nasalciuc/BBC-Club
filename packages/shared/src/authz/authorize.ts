@@ -16,7 +16,11 @@ export function registerRoute(method: string, path: string, permission: Permissi
   if (rate) rateRuleRegistry.set(key, rate);
 }
 
-type Flags = { isKilled(module: string): Promise<boolean> };
+type Flags = {
+  isKilled(module: string): Promise<boolean>;
+  /** "unknown" (flags that cannot be trusted) answers OVERLOADED, not SERVICE_DISABLED (ADR-IMPL-080). */
+  killedState?(module: string): Promise<"killed" | "live" | "unknown">;
+};
 
 export const err = (code: string, message = MESSAGES[code]) => ({ error: { code, message } });
 const MESSAGES: Record<string, string> = {
@@ -24,11 +28,13 @@ const MESSAGES: Record<string, string> = {
   FORBIDDEN: "Not allowed.",
   NOT_FOUND: "Not found.",
   SERVICE_DISABLED: "This feature is temporarily unavailable.",
+  OVERLOADED: "The club is busy for a moment. Please try again shortly.",
 };
 
 /** Route-level authorization. Resource-level ownership lives in the repositories (WHERE member_id = actor).
- *  `module`/`modules`: the route answers 503 while any of them is killed (the route gate passes the owner and the
- *  modules the route reads, ADR-IMPL-075). */
+ *  `module`/`modules`: the route answers 503 SERVICE_DISABLED while any of them is killed (the route gate passes the
+ *  owner and the modules the route reads, ADR-IMPL-075), and 503 OVERLOADED with Retry-After while this process cannot
+ *  trust its flags (ADR-IMPL-080). */
 export function authorize(
   permission: Permission,
   opts: { module?: string; modules?: readonly string[]; flags?: Flags; log?: (o: object, m: string) => void } = {},
@@ -45,8 +51,18 @@ export function authorize(
     if (p.kind === "system" && p.source === "internal-secret" && !c.req.path.startsWith("/v1/internal/"))
       return c.json(err("FORBIDDEN"), 403);
     const flags = opts.flags;
-    if (flags && modules.length > 0 && (await Promise.all(modules.map((m) => flags.isKilled(m)))).some(Boolean))
-      return c.json(err("SERVICE_DISABLED"), 503);
+    if (flags && modules.length > 0) {
+      const states = await Promise.all(
+        modules.map((m) =>
+          flags.killedState ? flags.killedState(m) : flags.isKilled(m).then((k) => (k ? "killed" : "live")),
+        ),
+      );
+      if (states.includes("killed")) return c.json(err("SERVICE_DISABLED"), 503);
+      if (states.includes("unknown")) {
+        c.header("Retry-After", "5");
+        return c.json(err("OVERLOADED"), 503);
+      }
+    }
     await next();
   };
 }

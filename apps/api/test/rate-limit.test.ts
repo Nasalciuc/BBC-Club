@@ -43,7 +43,9 @@ describe("rate limit middleware", () => {
     app.post("/v1/requests", rateLimit(limiter, "requests.submit"), (c) => c.json({ ok: true }));
     const res = await app.request("/v1/requests", { method: "POST" });
     expect(res.status).toBe(503);
+    // The limiter cannot answer: the process is behind, the route is not off (ADR-IMPL-080).
+    expect(res.headers.get("Retry-After")).toBe("5");
     const body = (await res.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("SERVICE_DISABLED");
+    expect(body.error.code).toBe("OVERLOADED");
   });
 });
