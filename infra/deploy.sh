@@ -299,11 +299,12 @@ fi
 MONITORING_FAILED=""
 if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
   # Grafana's database dashboard reads Postgres as bbc_monitor (0052, ADR-IMPL-077): the role takes its password from
-  # production.env here, through psql's stdin — never on a command line, never in a migration, nor in the log: the
-  # session first stops Postgres logging a failed or slow statement (an ALTER that fails, the role not there yet, would
-  # be logged whole, password and all). bbc is the superuser, so it may set both.
+  # production.env here, through psql's stdin — never on a command line, never in a migration, nor in the log, nor in
+  # pg_stat_statements: the session first stops Postgres logging a failed or slow statement (an ALTER that fails, the
+  # role not there yet, would be logged whole, password and all) and recording utility statements (a successful one
+  # would be kept word for word, where the dashboard's own role reads). bbc is the superuser, so it may set all three.
   pg_pw="$(env_value "$PROD_ENV" GRAFANA_PG_PASSWORD)"
-  if ! printf "SET log_min_error_statement = panic;\nSET log_min_duration_statement = -1;\nALTER ROLE bbc_monitor LOGIN PASSWORD '%s';\n" "${pg_pw//\'/\'\'}" \
+  if ! printf "SET log_min_error_statement = panic;\nSET log_min_duration_statement = -1;\nSET pg_stat_statements.track_utility = off;\nALTER ROLE bbc_monitor LOGIN PASSWORD '%s';\n" "${pg_pw//\'/\'\'}" \
     | $DC exec -T postgres psql -q -v ON_ERROR_STOP=1 -U bbc -d bbc >/dev/null; then
     notify "⚠ deploy production: $IMAGE is live, but Grafana's database role took no password — the database dashboard stays empty (RUNBOOK § Monitoring)" "${OPS_WEBHOOK:-}"
   fi
