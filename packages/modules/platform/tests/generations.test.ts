@@ -180,6 +180,41 @@ describe("createGenerations", () => {
     expect(await after).toBe(was + 1);
   });
 
+  it("every caller after this process's write sees it, while a read that began before the write runs", async () => {
+    let value = 1; // what platform.generations holds
+    const held: Array<() => void> = [];
+    let hold = false;
+    // A fake executor: the SELECT's snapshot is taken when it runs; its answer can be held back after that.
+    const fake = {
+      transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({
+          execute: async () => [],
+          select: () => ({
+            from: () => {
+              const rows = [{ key: "k", value, boot: "1" }];
+              return hold ? new Promise((r) => held.push(() => r(rows))) : Promise.resolve(rows);
+            },
+          }),
+        }),
+    };
+    let clock = 0;
+    const g = createGenerations(fake as never, { now: () => clock });
+    expect(await g.current("k")).toBe(1);
+    clock += 1_100;
+    hold = true;
+    expect(await g.current("k")).toBe(1); // starts a read whose SELECT sees 1, and answers from memory
+    await Bun.sleep(1);
+    value = 2; // this process writes (its trigger moves the counter) and says so
+    g.invalidate();
+    const other = g.current("k"); // the first caller after the write
+    await Bun.sleep(1);
+    const writer = g.current("k"); // a second one, in the same second
+    await Bun.sleep(1);
+    hold = false;
+    held.shift()!(); // the read from before the write ends, with 1
+    expect([await other, await writer]).toEqual([2, 2]);
+  });
+
   it("a lock on the counters holds one connection, and every caller answers from memory meanwhile", async () => {
     const g = createGenerations(iso.db, { refreshMs: 50 });
     const first = await g.current("platform.flags");

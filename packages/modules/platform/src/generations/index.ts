@@ -65,9 +65,11 @@ export function createGenerations(
   let reading: { done: Promise<void>; since: number; at: number; until: number } | null = null;
   let started = 0;
   let landed = 0;
-  /** Moves when this process wrote a reference table itself; a read that started before it cannot see that write. */
+  /** Moves when this process wrote a reference table itself; a read that started before it cannot see that write.
+   *  `readSince` is `writes` when the counters held were asked for, `startedSince` when the last read began. */
   let writes = 0;
   let readSince = -1;
+  let startedSince = -1;
   let bootAt: string | null = null;
   let epoch = 0;
   const asked = new Set<string>();
@@ -101,6 +103,8 @@ export function createGenerations(
   function startRead(): NonNullable<typeof reading> {
     const seq = ++started;
     const since = writes;
+    askedAt = now();
+    startedSince = since;
     // Held in `reading` and awaited by whoever must wait for it; its failure is logged and the last counters stay.
     const done: Promise<void> = read(seq, since)
       .catch((e: unknown) => {
@@ -133,16 +137,14 @@ export function createGenerations(
   async function fresh(): Promise<void> {
     // A read lost (a connection that stopped answering) must not keep every later read from starting.
     if (reading && now() - reading.at > abandonMs) reading = null;
-    const wait = readSince < writes || now() - readAt > waitWhenStaleMs; // readAt is -Infinity before the first read
-    if (now() - askedAt < refreshMs) {
-      if (wait && reading) await within(reading);
-      return;
-    }
-    askedAt = now();
-    // A read already running that began before this process's own write cannot see it: let it end, then read again.
-    if (wait && reading && reading.since < writes && !(await within(reading))) return;
-    const current = reading ?? startRead();
-    if (wait) await within(current);
+    // This caller must see every write this process made before it asked, whichever caller started the read.
+    const target = writes;
+    const wait = readSince < target || now() - readAt > waitWhenStaleMs; // readAt is -Infinity before the first read
+    // A read running that began before such a write cannot see it: let it end, then another reads.
+    if (wait && reading && reading.since < target && !(await within(reading))) return;
+    // Postgres is asked at most once a second, and once more after each write of this process's own.
+    if (!reading && (now() - askedAt >= refreshMs || startedSince < target)) startRead();
+    if (wait && reading) await within(reading);
   }
 
   return {
@@ -170,7 +172,6 @@ export function createGenerations(
     /** The next `current()` asks Postgres again, and waits for it — after this process wrote a reference table itself. */
     invalidate(): void {
       writes += 1;
-      askedAt = Number.NEGATIVE_INFINITY;
     },
     /** Bumps a counter outside a trigger: for state a trigger cannot see (none today), and for tests. */
     async bump(key: string, exec: Executor = db): Promise<void> {
@@ -183,7 +184,6 @@ export function createGenerations(
           set: { value: sql`${generationsTable.value} + 1`, updatedAt: sql`now()` },
         });
       writes += 1;
-      askedAt = Number.NEGATIVE_INFINITY;
     },
   };
 }
