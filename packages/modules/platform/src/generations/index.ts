@@ -81,7 +81,9 @@ export function createGenerations(
         .select({
           key: generationsTable.key,
           value: generationsTable.value,
-          boot: sql<string>`pg_postmaster_start_time()::text`,
+          // A number, not text: the text of a timestamptz follows the session's TimeZone, and two pooled connections whose
+          // sessions differ would move the epoch at every read that changes connection.
+          boot: sql<string>`extract(epoch FROM pg_postmaster_start_time())::text`,
         })
         .from(generationsTable);
     });

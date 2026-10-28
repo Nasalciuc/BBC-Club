@@ -272,6 +272,36 @@ describe("createGenerations", () => {
     expect(g.epoch()).toBe(2);
   });
 
+  it("the epoch stays when pooled connections differ in TimeZone (the boot read as a number)", async () => {
+    // Each read on a session of its own time zone, as two pooled connections whose sessions differ would give it.
+    const zones = ["UTC", "America/New_York", "Asia/Tokyo"];
+    let n = 0;
+    const db = new Proxy(iso.db, {
+      get(t, k) {
+        const v = Reflect.get(t, k);
+        if (k === "transaction")
+          return (fn: (tx: unknown) => Promise<unknown>) =>
+            t.transaction(async (tx) => {
+              await tx.execute(sql.raw(`SET LOCAL TimeZone = '${zones[n++ % zones.length]}'`));
+              return fn(tx);
+            });
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    const clock = 0;
+    const g = createGenerations(db as never, { now: () => clock });
+    let loads = 0;
+    const snap = createSnapshot(g, "test.epoch-tz", async () => ++loads, { now: () => clock });
+    await snap.get();
+    for (let i = 0; i < 6; i++) {
+      g.invalidate();
+      await snap.get();
+    }
+    expect(n).toBe(7);
+    expect(g.epoch()).toBe(0);
+    expect(loads).toBe(1);
+  });
+
   it("a key with no row reads 0; a process that never read the counters reads null", async () => {
     const g = createGenerations(iso.db);
     expect(await g.current("no.such.key")).toBe(0);

@@ -48,7 +48,8 @@ experiments on the 100 000-member volume found three ways that verdict outlives 
 5. **A monotonic clock.** Generations, snapshots, memos and the session cache count on `performance.now()`; a wall clock
    moved back no longer freezes the counters. Home's revalidation keeps the wall clock: every replica must agree on the
    minute a version is read in.
-6. **An epoch.** The read also returns `pg_postmaster_start_time()`. A restart, or a counter that went back (a restore,
+6. **An epoch.** The read also returns `pg_postmaster_start_time()`, as seconds (`extract(epoch …)`: its text follows
+   each session's TimeZone, and two pooled connections that differ would move the epoch at every read). A restart, or a counter that went back (a restore,
    a failover), moves an epoch that snapshots and memos compare with their counters, so they load again.
 7. **The flags' minute.** The flags snapshot loads again at least once a minute whatever the counters say
    (ADR-IMPL-075, for a write no trigger saw). When only that age has passed — the counters still at what is held — the
