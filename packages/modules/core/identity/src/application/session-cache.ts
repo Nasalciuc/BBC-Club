@@ -44,6 +44,12 @@ function cookieValue(headers: Headers, name: string): string | null {
   return null;
 }
 
+/** Better Auth's `bearer()` reads a session from `Authorization: bearer …` (the scheme in any case) before the cookie:
+ *  such a request is neither answered from nor kept in the cache, which follows the cookie alone. */
+export function carriesBearer(headers: Headers): boolean {
+  return headers.get("authorization")?.slice(0, 7).toLowerCase() === "bearer ";
+}
+
 /** The key a request's session is kept under: a hash of the signed token in the cookie `name` (the one Better Auth
  *  reads the session from), never the token itself. */
 export function sessionKey(headers: Headers, name: string): string | null {

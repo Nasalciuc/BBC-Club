@@ -110,21 +110,27 @@ describe("a session ended while a read waits", () => {
 });
 
 describe("the cookie an answer is kept under", () => {
-  /** Better Auth as production runs it: secure cookies, so it reads `__Secure-bbc.session_token` and nothing else. */
+  /** Better Auth as production runs it: secure cookies, so it reads `__Secure-bbc.session_token` and nothing else —
+   *  unless `bearer()` finds `Authorization: bearer …` (any case), which it reads instead. */
   function productionAuth() {
     const members: Record<string, typeof user> = {
       attacker: { ...user, id: "m-attacker" },
       victim: { ...user, id: "m-victim" },
     };
     let reads = 0;
+    const tokenOf = (headers: Headers) => {
+      const bearer = headers.get("authorization")?.match(/^bearer (.+)$/i)?.[1];
+      return bearer ? bearer.split(".")[0] : tokenIn(headers, SECURE);
+    };
     const auth = {
       $context: contextFor(SECURE),
       api: {
         getSession: async ({ headers }: { headers: Headers }) => {
           reads++;
-          const token = tokenIn(headers, SECURE);
+          const token = tokenOf(headers);
           return token && members[token] ? rowFor(token, members[token]) : null;
         },
+        deleteUser: async () => ({ success: true }),
       },
       handler: async () => new Response("{}", { status: 200 }),
     };
@@ -152,5 +158,50 @@ describe("the cookie an answer is kept under", () => {
     expect(a.reads()).toBe(3);
     expect((await f.getSession(both))?.member.id).toBe("m-victim"); // now from the victim's own entry
     expect(a.reads()).toBe(3);
+  });
+
+  it("an answer for another token than the cookie's is given, never kept", async () => {
+    // However Better Auth came to read another token than the cookie the key is taken from, its answer is not kept.
+    const auth = {
+      $context: contextFor(COOKIE),
+      api: { getSession: async () => rowFor("other") },
+      handler: async () => new Response("{}", { status: 200 }),
+    };
+    const sessions = createSessionCache({ ttlMs: 60_000 });
+    const f = createIdentityFacade(auth as never, {} as never, { sessions });
+    expect((await f.getSession(new Headers({ Cookie: `${COOKIE}=tok.sig` })))?.member.id).toBe("m1");
+    expect(sessions.size()).toBe(0);
+  });
+
+  it("a request with a bearer token, which Better Auth reads before the cookie, is neither answered nor kept", async () => {
+    const a = productionAuth();
+    const sessions = createSessionCache({ ttlMs: 60_000 });
+    const f = createIdentityFacade(a.auth as never, {} as never, { sessions });
+    expect((await f.getSession(new Headers({ Cookie: `${SECURE}=attacker.sig` })))?.member.id).toBe("m-attacker");
+
+    const withBearer = new Headers({ Cookie: `${SECURE}=attacker.sig`, Authorization: "bearer victim.sig" });
+    expect((await f.getSession(withBearer))?.member.id).toBe("m-victim");
+    expect((await f.getSession(withBearer))?.member.id).toBe("m-victim");
+    expect(a.reads()).toBe(3);
+    expect(sessions.size()).toBe(1);
+  });
+
+  it("a sign-out or a deletion sent with a bearer token forgets the member Better Auth acts on", async () => {
+    const a = productionAuth();
+    const sessions = createSessionCache({ ttlMs: 60_000 });
+    const f = createIdentityFacade(a.auth as never, {} as never, { sessions });
+    const victim = new Headers({ Cookie: `${SECURE}=victim.sig` });
+    const attacker = new Headers({ Cookie: `${SECURE}=attacker.sig` });
+    await f.getSession(victim);
+    await f.getSession(attacker);
+    expect(sessions.size()).toBe(2);
+
+    const signOut = new Headers({ Cookie: `${SECURE}=attacker.sig`, Authorization: "BEARER victim.sig" });
+    await f.handler(new Request("http://localhost/api/auth/sign-out", { method: "POST", headers: signOut }));
+    expect(sessions.get(sessionKey(victim, SECURE)!)).toBeNull();
+    expect(sessions.get(sessionKey(attacker, SECURE)!)?.member.id).toBe("m-attacker");
+
+    await f.deleteAccount(new Headers({ Authorization: "bearer attacker.sig" }), "password");
+    expect(sessions.size()).toBe(0);
   });
 });

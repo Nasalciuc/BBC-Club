@@ -6,7 +6,7 @@ import { user } from "../infrastructure/schema";
 import { isOtpSendRequest, otpSendLock, otpSendTarget } from "../infrastructure/otp-send-lock";
 import { POSTMARK_TIMEOUT_MS } from "@bbc/email";
 import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
-import { keyedToken, sessionKey, type SessionCache } from "./session-cache";
+import { carriesBearer, keyedToken, sessionKey, type SessionCache } from "./session-cache";
 
 export type { Member, AuthVars, SessionInfo, IdentityFacade };
 
@@ -43,7 +43,7 @@ export function createIdentityFacade(
     // A sign-out, a password change or a deletion that forgets this token or its member from here on, while the read
     // waits on the database: what the read found is not put back (ADR-IMPL-076). Taken before anything is awaited.
     const since = sessions?.begin();
-    const cookie = sessions ? await sessionCookie() : null;
+    const cookie = sessions && !carriesBearer(headers) ? await sessionCookie() : null;
     const key = cookie ? sessionKey(headers, cookie) : null;
     if (key && sessions && !opts.fresh) {
       const kept = sessions.get(key);
@@ -106,19 +106,27 @@ export function createIdentityFacade(
 
   /** The same rule as the app's route: the password is asked for every time (club-guards runs for in-process calls). */
   async function deleteAccount(headers: Headers, password: string): Promise<void> {
-    const key = sessions ? sessionKey(headers, await sessionCookie()) : null;
-    const member = key ? sessions?.memberOf(key) : null;
+    const { key, member } = await sessionOf(headers);
     await auth.api.deleteUser({ headers, body: { password } });
     if (key) sessions?.forget(key);
     if (member) sessions?.forgetMember(member);
+  }
+
+  /** The key of the token a write to Better Auth acts on and the member this process knows behind it. A bearer token
+   *  stands for the cookie when there is one (`bearer()`), so then no key: the member a fresh read finds. */
+  async function sessionOf(headers: Headers): Promise<{ key: string | null; member: string | null }> {
+    if (!sessions) return { key: null, member: null };
+    if (carriesBearer(headers))
+      return { key: null, member: (await readSession(headers, true))?.session.member.id ?? null };
+    const key = sessionKey(headers, await sessionCookie());
+    return { key, member: key ? sessions.memberOf(key) : null };
   }
 
   /** ADR-IMPL-076: a write to /api/auth (a sign-out, a revoke, a change) forgets what this process keeps for the token's
    *  member, whatever it answered: the next read asks the database. */
   async function forgettingSessions(req: Request, run: () => Promise<Response>): Promise<Response> {
     if (!sessions || SAFE_METHODS.has(req.method)) return run();
-    const key = sessionKey(req.headers, await sessionCookie());
-    const member = key ? sessions.memberOf(key) : null;
+    const { key, member } = await sessionOf(req.headers);
     try {
       return await run();
     } finally {

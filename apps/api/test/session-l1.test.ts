@@ -64,6 +64,35 @@ describe("session kept per process", () => {
     expect((await profile(`__Secure-bbc.session_token=${a}`)).status).toBe(401);
   });
 
+  it("a bearer token, which Better Auth reads before the cookie, is never answered from the cookie's entry", async () => {
+    const t = await testApp({ suite: "session-l1-bearer" });
+    const value = (cookie: string) => decodeURIComponent(tokenOnly(cookie).split("=").slice(1).join("="));
+    const a = tokenOnly(t.memberA.cookie);
+    const b = tokenOnly(t.memberB.cookie);
+    const profile = async (headers: Record<string, string>) => {
+      const res = await t.app.request("/v1/profile", { headers });
+      return { status: res.status, body: await res.json() };
+    };
+    const own = await profile({ Cookie: b });
+    expect((await profile({ Cookie: a })).status).toBe(200); // A is kept
+
+    // Better Auth reads the bearer token: B's session, not the entry kept for A's cookie.
+    expect(await profile({ Cookie: a, Authorization: `bearer ${value(t.memberB.cookie)}` })).toEqual(own);
+
+    // A sign-out by bearer ends A's session; what this process kept for A's cookie goes with it.
+    const out = await t.app.request("/api/auth/sign-out", {
+      method: "POST",
+      headers: {
+        Authorization: `bearer ${value(t.memberA.cookie)}`,
+        Origin: t.appOrigin,
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
+    expect(out.status).toBe(200);
+    expect((await profile({ Cookie: a })).status).toBe(401);
+  });
+
   it("a session ended elsewhere: reads keep the minute, a write is refused at once", async () => {
     const t = await testApp({ suite: "session-l1-write" });
     const cookie = tokenOnly(t.memberA.cookie);
