@@ -268,4 +268,50 @@ describe("a write to Better Auth forgets the sessions it ends", () => {
     expect((await f.getSession(cookie("b")))?.member.id).toBe("m2"); // read again, and kept again
     expect(sessions.size()).toBe(1);
   });
+
+  /** A db that answers the reset's account lookup: the member found, none, or a failed read. */
+  const dbFinding = (found: string | null | Error) => ({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => {
+            if (found instanceof Error) throw found;
+            return found ? [{ id: found }] : [];
+          },
+        }),
+      }),
+    }),
+  });
+  const resetFor = (f: ReturnType<typeof createIdentityFacade>, email: string) =>
+    f.handler(
+      new Request("http://localhost/api/auth/email-otp/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp: "123456", password: "a new password" }),
+      }),
+    );
+
+  it("a reset by code forgets the sessions of the account its email names, and only those", async () => {
+    const sessions = createSessionCache({ ttlMs: 60_000 });
+    const f = createIdentityFacade(twoMembers() as never, dbFinding("m1") as never, { sessions });
+    await f.getSession(cookie("c")); // m1
+    await f.getSession(cookie("b")); // m2
+    const since = sessions.begin(); // a read of m1 already waiting when the reset lands
+    expect((await resetFor(f, "M1@Test.dev")).status).toBe(200);
+    expect(sessions.get(sessionKey(cookie("c"), COOKIE)!)).toBeNull();
+    expect(sessions.get(sessionKey(cookie("b"), COOKIE)!)?.member.id).toBe("m2");
+    sessions.put(sessionKey(cookie("c"), COOKIE)!, { member: user, sessionId: "s" } as never, null, since);
+    expect(sessions.get(sessionKey(cookie("c"), COOKIE)!)).toBeNull(); // the waiting read puts nothing back
+  });
+
+  it("a reset whose account is not found, or whose lookup fails, forgets every session and keeps its answer", async () => {
+    for (const found of [null, new Error("connection lost")]) {
+      const sessions = createSessionCache({ ttlMs: 60_000 });
+      const f = createIdentityFacade(twoMembers() as never, dbFinding(found) as never, { sessions });
+      await f.getSession(cookie("c"));
+      await f.getSession(cookie("b"));
+      expect((await resetFor(f, "nobody@test.dev")).status).toBe(200);
+      expect(sessions.size()).toBe(0);
+    }
+  });
 });
