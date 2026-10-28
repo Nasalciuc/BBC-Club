@@ -237,7 +237,7 @@ fi
 $DC up -d
 
 say "9/9 waiting for api /ready"
-ready() { $DC exec -T "$1" bun -e "fetch('http://localhost:8000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; }
+ready() { $DC exec -T "$1" bun -e "fetch('http://localhost:8000/ready',{signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; }
 for i in {1..60}; do
   if ready api && { [[ "$WITH_STAGING" != "--with-staging" ]] || ready api-staging; }; then
     echo "✅ stack up ($MODE${WITH_STAGING:+ + staging})"; echo

@@ -145,7 +145,8 @@ wait_ready() {
   local container="$1" port="$2"
   local i
   for i in {1..12}; do
-    docker exec "$container" bun -e "fetch('http://localhost:${port}/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null && return 0
+    # Five seconds a probe: a stalled answer would otherwise wait for the server's idle timeout (120 s).
+    docker exec "$container" bun -e "fetch('http://localhost:${port}/ready',{signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null && return 0
     sleep 5
   done
   return 1
@@ -229,7 +230,7 @@ else
   chmod 0700 "$METRICS_DIR"
   cleanup_metrics() { rm -rf "$METRICS_DIR"; }
   metrics_of() {
-    docker exec "$1" bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
+    docker exec "$1" bun -e "fetch('http://localhost:8000/metrics',{signal:AbortSignal.timeout(10000)}).then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
   }
   metrics_of "$CANARY" > "$METRICS_DIR/canary.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "canary /metrics unreadable"; }
   metrics_of "$OLD_ONE" > "$METRICS_DIR/old.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "old replica /metrics unreadable"; }

@@ -69,7 +69,8 @@ W="$($DC ps -q worker | head -n1 || true)"
 ready=false
 if [[ -n "$W" ]]; then
   for i in {1..12}; do
-    docker exec "$W" bun -e "fetch('http://localhost:8001/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null && { ready=true; break; }
+    # Five seconds a probe: a stalled answer would otherwise wait for the server's idle timeout (120 s).
+    docker exec "$W" bun -e "fetch('http://localhost:8001/ready',{signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null && { ready=true; break; }
     sleep 5
   done
 fi

@@ -724,6 +724,11 @@ describe("restore.sh (ADR-IMPL-077)", () => {
     expect(out).toContain("restore complete");
   });
 
+  it("a worker's /ready probe gives up after five seconds", async () => {
+    const { commands } = await restore({ promoted: true, workerReady: true });
+    expect(probes(commands)[0]).toContain("AbortSignal.timeout(5000)");
+  });
+
   it("a worker whose /ready stays red leaves cron stopped and says how to start it", async () => {
     const { code, out, commands } = await restore({ promoted: true, workerReady: false });
     expect(code).toBe(1);
