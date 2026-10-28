@@ -15,9 +15,9 @@ Set these on the EAS **production** environment (dashboard or `eas env:create`),
 - `EXPO_PUBLIC_TERMS_URL` — https URL (required)
 - `EXPO_PUBLIC_SUPPORT_PHONE` — the company's **general line**, in E.164 (`+` and the digits, no spaces). Every call
   button of the app dials it and nothing else (`apps/mobile/src/lib/support-phone.ts`; `support-phone.test.ts` holds the
-  seven buttons to it): Profile's `Call us`, a request's `Call your specialist` and `Call us`, the rate-limit page's
-  `Call your specialist`, and the update and maintenance pages' `Call a specialist`. The company's phone system routes
-  the call to a free specialist; the app has no telephony of its own. A set number must be one the app can dial: a
+  seven buttons to it): Profile's `Call us`, a request's `Call your agent` and `Call us`, the rate-limit page's
+  `Call your agent`, and the update and maintenance pages' `Call an agent`. The company's phone system routes
+  the call to a free agent; the app has no telephony of its own. A set number must be one the app can dial: a
   production or staging build or update refuses one with an extension, a national `(0)`, a missing `+` or the wrong
   number of digits (`assertProductionEnv`, `assertStagingEnv`). Set it for production: the build still passes
   without it, but then no call button is drawn anywhere, and one message only still asks the member to call: Join's
@@ -46,7 +46,7 @@ The `preview` profile reads the EAS **preview** environment; `eas.json` sets onl
   OTA update only, never a new build.
 - `EXPO_PUBLIC_MAPBOX_TOKEN` — the same `pk.` token. Without it the app draws the fallback globe.
 - `EXPO_PUBLIC_SUPPORT_PHONE` — the same **general line**, E.164, as production. Without it no call button is drawn (a
-  quoted request has no `Call your specialist`, a request that could not be passed on no `Call us`, Profile no
+  quoted request has no `Call your agent`, a request that could not be passed on no `Call us`, Profile no
   `Call us`; ADR-IMPL-041, A2c), and the messages that would ask the member to call say what else to do instead —
   all but Join's, which is the entry's (section 1).
   Changing it needs an OTA update only, never a new build.
@@ -63,10 +63,10 @@ cd apps/mobile && EXPO_PUBLIC_SUPPORT_PHONE=+12125550148 bun run start --clear
 cd apps/mobile && EXPO_PUBLIC_SUPPORT_PHONE= bun run start --clear
 ```
 
-Look at Profile (`Call us` beside `Edit profile`), a request's detail (`Call your specialist` on a request the club
+Look at Profile (`Call us` beside `Edit profile`), a request's detail (`Call your agent` on a request the club
 holds; `Call us` on one not passed on, whose notice then has a phone glyph — an info glyph and no `call` without the
-number), the Requests banner over a request not passed on, the rate-limit page (`Call your specialist`, else `Done`),
-and the update and maintenance pages (`Call a specialist`). Without the number, a request the server holds but could not
+number), the Requests banner over a request not passed on, the rate-limit page (`Call your agent`, else `Done`),
+and the update and maintenance pages (`Call an agent`). Without the number, a request the server holds but could not
 pass on says the club will try again; the member is not asked to send it again (infra/RUNBOOK.md).
 
 **Native modules change the runtime.** Adding or upgrading one (Mapbox, for instance) needs a new build _and_ a new
