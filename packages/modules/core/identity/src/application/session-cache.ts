@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { SessionInfo } from "../api";
 
-/** Sessions each process keeps; past it the oldest goes first. ~200 bytes each: 10 000 members are ~2 MB. */
+/** Sessions each process keeps; past it the oldest goes first. About 390 bytes each, plus the forget notes (about 160
+ *  bytes each, up to this many per kind; measured on Bun, 100 000 entries): 10 000 members take about 9 MB at most. */
 export const SESSION_CACHE_ENTRIES = 10_000;
 
 /** How long a forgotten token or member stays noted past the cache's time. A read still waiting when its note goes
@@ -81,10 +82,13 @@ export function keyedToken(headers: Headers, name: string): string | null {
 export function createSessionCache(opts: {
   ttlMs: number;
   maxEntries?: number;
+  /** Tests: one clock for both the cache's time and the wall clock a session's expiry is written in. */
   now?: () => number;
   metrics?: Metrics;
 }) {
-  const now = opts.now ?? Date.now;
+  // The cache's time is the process's monotonic clock: a wall clock moved back does not keep an entry past its time.
+  const now = opts.now ?? (() => performance.now());
+  const wall = opts.now ?? Date.now;
   const maxEntries = opts.maxEntries ?? SESSION_CACHE_ENTRIES;
   const entries = new Map<string, Entry>();
   /** One sequence for the reads begun and the forgets: a forget noted after a read began has the larger number. */
@@ -141,7 +145,11 @@ export function createSessionCache(opts: {
         skippedMember.set(key, { member: info.member.id, at: now() });
         return;
       }
-      const until = Math.min(now() + opts.ttlMs, expiresAt ? expiresAt.getTime() : Number.POSITIVE_INFINITY);
+      // expiresAt is wall-clock: what is left of it, on the cache's own clock.
+      const until = Math.min(
+        now() + opts.ttlMs,
+        expiresAt ? now() + (expiresAt.getTime() - wall()) : Number.POSITIVE_INFINITY,
+      );
       if (until <= now()) return;
       entries.delete(key);
       if (entries.size >= maxEntries) entries.delete(entries.keys().next().value as string);

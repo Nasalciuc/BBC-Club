@@ -166,4 +166,24 @@ describe("createSessionCache", () => {
     c.get("k");
     expect(seen).toEqual(["cache_miss:identity.session", "cache_hit:identity.session"]);
   });
+
+  it("a wall clock moved back keeps nothing past its time: the cache runs on the monotonic clock (G3)", async () => {
+    const realNow = Date.now;
+    let wall = realNow();
+    Date.now = () => wall;
+    try {
+      const c = createSessionCache({ ttlMs: 50 });
+      c.put("ttl", info("a"), null);
+      c.put("expiry", info("b"), new Date(wall + 30)); // expires before the cache's time
+      expect(c.get("ttl")).not.toBeNull();
+      wall -= 3_600_000; // the wall clock goes back an hour
+      await Bun.sleep(40);
+      expect(c.get("expiry")).toBeNull(); // 30 ms of the session's life were left: gone after 40
+      expect(c.get("ttl")).not.toBeNull();
+      await Bun.sleep(20);
+      expect(c.get("ttl")).toBeNull();
+    } finally {
+      Date.now = realNow;
+    }
+  });
 });
