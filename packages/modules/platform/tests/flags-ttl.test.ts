@@ -78,7 +78,9 @@ describe("flags snapshot", () => {
     await Bun.sleep(20);
     expect(await flags.isEnabled("g4.untriggered", false)).toBe(false); // the counter did not move
     clock += 31_000;
-    expect(await flags.isEnabled("g4.untriggered", false)).toBe(true); // past the minute: loaded again
+    await flags.isEnabled("g4.untriggered", false); // past the minute: loads again, behind this call (ADR-IMPL-080)
+    await Bun.sleep(20);
+    expect(await flags.isEnabled("g4.untriggered", false)).toBe(true);
   });
 
   it("set() is read back at once by the process that wrote it", async () => {

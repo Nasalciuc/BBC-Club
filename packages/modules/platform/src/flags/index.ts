@@ -50,8 +50,9 @@ export function createFlags(
       const rows = await db.select({ key: flagsTable.key, value: flagsTable.value }).from(flagsTable);
       return new Map(rows.map((r) => [r.key, parseValue(r.value)] as const));
     },
-    // A minute at most, whatever the counters say (G4): a flag written by a path no trigger sees still arrives.
-    { now: opts.now, maxAgeMs: 60_000 },
+    // A minute at most, whatever the counters say (G4): a flag written by a path no trigger sees still arrives. That
+    // reload runs behind the callers, who answer from what is held meanwhile (ADR-IMPL-080).
+    { now: opts.now, maxAgeMs: 60_000, logger: opts.logger },
   );
 
   /** The flag row as the snapshot holds it, or the error that kept the table from being read: no fallback. */
@@ -68,12 +69,15 @@ export function createFlags(
     }
   }
 
-  /** A kill or pause flag: throws when it cannot be read or when the counters are older than KILL_STALE_MS. */
+  /** A kill or pause flag: throws when it cannot be read or when the counters are older than KILL_STALE_MS. The counters
+   *  are asked first (a bounded wait): flags that cannot be trusted are said so before any load of the table is waited
+   *  for — a new replica whose Postgres stopped answering has nothing held, and its load would wait as long as the
+   *  connection (ADR-IMPL-080). */
   async function readGuard(key: string): Promise<FlagValue | null> {
-    const value = await readStrict(key);
+    await generations.current("platform.flags");
     const stale = generations.staleMs();
     if (stale > KILL_STALE_MS) throw new Error(`flags unread for ${Math.round(stale / 1000)} s`);
-    return value;
+    return readStrict(key);
   }
 
   async function killState(module: string): Promise<boolean> {

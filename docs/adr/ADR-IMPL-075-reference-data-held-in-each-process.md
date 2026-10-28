@@ -38,7 +38,8 @@ existed. Per request, measured on `main` faf33dd:
    short transaction, stopped by the server after 500 ms with `SET LOCAL statement_timeout`; ADR-IMPL-080). One read
    runs at a time and callers answer from what is held while it runs; they wait for it while nothing is held, after
    this process wrote a reference table itself (`invalidate()`, `bump()`: a read that began before that write is let end
-   and followed by another), and while what is held is older than 5 s. A failed or slow read keeps the last counters
+   and followed by another), and while what is held is older than 5 s — never more than 600 ms from when the read
+   began; a read lost for 5 s is given up (ADR-IMPL-080). A failed or slow read keeps the last counters
    until a read succeeds (Postgres is asked again a second later); `staleMs()` says how old they are. The clock is the
    process's monotonic one (`performance.now()`). The read also returns `pg_postmaster_start_time()`: a restart, or a
    counter that went back (a restore, a failover), moves `epoch()`, which snapshots and memos compare as well, so they
@@ -53,7 +54,8 @@ existed. Per request, measured on `main` faf33dd:
    within a second. An ordinary flag that cannot be read falls back to its default; **a kill or pause flag fails closed**
    (killed, paused) when it cannot be read or the counters are older than `KILL_STALE_MS` (10 s); per request that
    reads as `OVERLOADED`, not `SERVICE_DISABLED`, and a delivery is left pending, not parked (ADR-IMPL-080). The
-   snapshot also reloads after a minute whatever the counters say, so a flag written where no trigger sees it arrives.
+   snapshot also reloads after a minute whatever the counters say, so a flag written where no trigger sees it arrives;
+   that reload runs behind the callers, who answer from what is held meanwhile.
    `killState` keeps boot's rule: it throws rather than call an unreadable flag killed.
 5. **Airports in memory** (`createAirportsReference`): by code, many in the order asked, the hubs, a zone's busiest; the
    typeahead keeps ADR-IMPL-036's query and answers each typed text (trimmed, lower case) once per generation, at most

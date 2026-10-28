@@ -98,6 +98,38 @@ describe("createGenerations", () => {
     expect(g.staleMs()).toBe(5_000);
   });
 
+  it("a read that never answers is given up after GENERATIONS_ABANDON_MS: a later caller reads again", async () => {
+    let clock = 50_000;
+    let hang = false;
+    let reads = 0;
+    const db = new Proxy(iso.db, {
+      get(t, k) {
+        const v = Reflect.get(t, k);
+        if (k === "transaction")
+          return (...a: unknown[]) => {
+            reads += 1;
+            // A connection that stopped answering: the statement never comes back, and nothing rejects it.
+            if (hang) return new Promise(() => {});
+            return (v as (...x: unknown[]) => unknown).apply(t, a);
+          };
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    const g = createGenerations(db, { now: () => clock });
+    await g.current("platform.flags");
+    hang = true;
+    clock += 1_100;
+    await g.current("platform.flags"); // starts the read that never answers; answers from what is held
+    hang = false;
+    clock += 3_000; // 3 s into the lost read: one read at a time, so none starts beside it
+    await g.current("platform.flags");
+    expect(reads).toBe(2);
+    clock += 2_100; // 5.1 s: given up. The counters are 6.2 s old, so this caller reads again and waits for it
+    await g.current("platform.flags");
+    expect(reads).toBe(3);
+    expect(g.staleMs()).toBe(0);
+  });
+
   it("a wall clock moved back an hour does not freeze the counters (a monotonic clock by default)", async () => {
     let wall = Date.now();
     const realNow = Date.now;
@@ -241,6 +273,8 @@ describe("createSnapshot and createGenerationMemo", () => {
     clock += 59_000;
     expect(await snap.get()).toBe(1);
     clock += 2_000;
+    expect(await snap.get()).toBe(1); // past maxAgeMs: served once more while it loads again, never waited for
+    await Bun.sleep(20);
     expect(await snap.get()).toBe(2);
   });
 

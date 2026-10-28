@@ -103,7 +103,7 @@ export function createPlatform(
     reference: {
       generations,
       snapshot: <T>(key: string, load: () => Promise<T>, o?: { maxAgeMs?: number; ns?: string }) =>
-        createSnapshot(generations, key, load, { ...o, metrics }),
+        createSnapshot(generations, key, load, { ...o, metrics, logger }),
       memo: <T>(keys: string | readonly string[], o: { maxEntries: number; ttlMs?: number; ns?: string }) =>
         createGenerationMemo<T>(generations, keys, { ...o, metrics }),
     },

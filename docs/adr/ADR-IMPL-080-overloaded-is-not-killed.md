@@ -32,24 +32,37 @@ experiments on the 100 000-member volume found three ways that verdict outlives 
    tries it again in 5 s. `queue-health` (every 10 minutes) puts back to pending every paused delivery whose flag no
    longer says paused, and counts them (`resumed`); `queue_paused` is a gauge beside the queue's others, and an alert
    fires after 10 minutes of paused deliveries.
-4. **The counters' read.** It runs in a short transaction under `SET LOCAL statement_timeout` (the read's timeout), so
-   the server stops it and the connection goes back. One read runs at a time, and callers answer from what is held while
-   it runs. They wait for it while nothing is held yet, after this process wrote a reference table itself (a read that
-   began before the write is let end and followed by another), and while what is held is older than 5 s (half of
-   `KILL_STALE_MS`): past that a fail-closed caller would refuse anyway. The read is asked at most once a second,
-   Postgres answering or not, so the first second after Postgres comes back may still answer `OVERLOADED`.
+4. **The counters' read.** It runs in a short transaction under `SET LOCAL statement_timeout` (the read's timeout,
+   500 ms), so the server stops a read stuck behind a lock and the connection goes back. One read runs at a time, and
+   callers answer from what is held while it runs. They wait for it while nothing is held yet, after this process wrote
+   a reference table itself (a read that began before the write is let end and followed by another), and while what is
+   held is older than 5 s (half of `KILL_STALE_MS`): past that a fail-closed caller would refuse anyway. **No caller
+   waits longer than the read's timeout and 100 ms from when the read began**: statement_timeout covers only the
+   server's execution, and a read can also wait for a pooled connection, for a connect (`connect_timeout`, 10 s) or on a
+   connection that stopped answering. Past that bound the caller answers from what is held — `"unknown"`, and so
+   `OVERLOADED`, once it is older than `KILL_STALE_MS` — and the read goes on, still the only one: the pile-up of X4
+   does not come back. A read that has not answered in 5 s is given up, so a lost connection does not keep every later
+   read from starting; an answer that comes after a newer read's is dropped. A kill or pause check asks the counters
+   before it waits for any load of the flags table. The read is asked at most once a second, Postgres answering or not,
+   so the first second after Postgres comes back may still answer `OVERLOADED`.
 5. **A monotonic clock.** Generations, snapshots, memos and the session cache count on `performance.now()`; a wall clock
    moved back no longer freezes the counters. Home's revalidation keeps the wall clock: every replica must agree on the
    minute a version is read in.
 6. **An epoch.** The read also returns `pg_postmaster_start_time()`. A restart, or a counter that went back (a restore,
    a failover), moves an epoch that snapshots and memos compare with their counters, so they load again.
+7. **The flags' minute.** The flags snapshot loads again at least once a minute whatever the counters say
+   (ADR-IMPL-075, for a write no trigger saw). When only that age has passed — the counters still at what is held — the
+   held value is served and the load runs behind the callers; no flag check waits for it. A generation that moved is
+   still loaded before it is served: this process must see its own `set()`.
 
-**A new replica.** Before its first read nothing is held, so its first callers wait for that read, bounded by the
-statement timeout; only a read that fails leaves `"unknown"`, and so `OVERLOADED`, while Caddy can send the request to
-another replica.
+**A new replica.** Before its first read nothing is held, so its first callers wait for that read — 600 ms at most; a
+read that fails, or has not answered by then, leaves `"unknown"`, and so `OVERLOADED`, while Caddy can send the request
+to another replica. Nothing held, a kill check does not wait for the flags table either: the counters unread say
+`"unknown"` first.
 
 **Consequences.** A real kill stays fail-closed and says `SERVICE_DISABLED`. A slow or locked counters table costs one
 connection and, after 10 s, `OVERLOADED` with a retry hint instead of a disabled feature; a parked delivery comes back
-by itself. Tests: `packages/shared/src/authz/authorize.test.ts`, `apps/api/test/overloaded.test.ts`,
-`apps/api/test/rate-limit.test.ts`, `packages/modules/platform/tests/poller-pause.test.ts`,
+by itself. A kill or pause check answers within a second whatever Postgres does. Tests:
+`packages/shared/src/authz/authorize.test.ts`, `apps/api/test/overloaded.test.ts`,
+`packages/modules/platform/tests/flags-bounded.test.ts`, `apps/api/test/rate-limit.test.ts`, `packages/modules/platform/tests/poller-pause.test.ts`,
 `packages/modules/platform/tests/generations.test.ts`, `packages/modules/core/identity/tests/session-cache.test.ts`.
