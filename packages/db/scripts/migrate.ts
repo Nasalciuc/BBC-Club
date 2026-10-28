@@ -781,6 +781,27 @@ try {
     "notifications offer send day index applied",
   );
 
+  // After platform.flags (0001) and the catalogue's tables: one counter per reference table, bumped by a trigger in the
+  // statement that writes it (ADR-IMPL-075). Platform's table and function first, then the catalogue's triggers and the
+  // airports' popularity index (3 900 rows: built under the lock in milliseconds), then the offers' triggers. One
+  // transaction each.
+  for (const [file, done] of [
+    ["0045_platform_generations.sql", "platform generations applied"],
+    ["0046_catalog_generations.sql", "catalog generations applied"],
+    ["0047_proposals_generations.sql", "proposals generations applied"],
+  ] as const) {
+    const path = join(migrationsDir, file);
+    if (!existsSync(path)) continue;
+    const applied = (await db.execute(sql`SELECT 1 FROM platform.extras_applied WHERE name = ${file}`)) as unknown[];
+    if (applied.length) continue;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+      await tx.execute(sql.raw(readFileSync(path, "utf8")));
+      await tx.execute(sql`INSERT INTO platform.extras_applied (name) VALUES (${file})`);
+    });
+    console.log(done);
+  }
+
   // Corrected cities first, only on rows still exactly as the reference inserted them (ADR-IMPL-038); then insert-only:
   // airports that exist (curated seed, catalogue import) keep their values (ADR-IMPL-036).
   const corrected = await applyReferenceFixes(db);

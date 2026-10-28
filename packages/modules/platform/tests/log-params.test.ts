@@ -112,8 +112,15 @@ describe("flags", () => {
     expect(await flags.isEnabled("x", true)).toBe(true);
     expect(await flags.isKilled("engagement")).toBe(true);
     expect(await flags.isConsumerPaused("x.onY")).toBe(true);
-    expect(lines).toHaveLength(3);
+    // The counters' read first (once a second), then each flag's own fallback (ADR-IMPL-075).
+    expect(lines.map((l) => l.m)).toEqual([
+      "generations unread, keeping the last ones",
+      "flag read failed, using fallback",
+      "kill flag unreadable, failing closed",
+      "pause flag unreadable, failing closed",
+    ]);
     expect(JSON.stringify(lines)).not.toContain(SECRET);
     expect(lines[0]?.o).toMatchObject({ err: { sqlstate: "57P01" } });
+    expect(lines[1]?.o).toMatchObject({ err: { sqlstate: "57P01" } });
   });
 });

@@ -116,3 +116,4 @@ export type RateLimiter = ReturnType<typeof createRateLimiter>;
 
 export { RULES, type RuleName, type RateRule } from "./rules";
 export { rateLimit, subjectOf } from "./middleware";
+export { routeGate, type RoutePolicy } from "./gate";

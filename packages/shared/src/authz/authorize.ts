@@ -26,11 +26,14 @@ const MESSAGES: Record<string, string> = {
   SERVICE_DISABLED: "This feature is temporarily unavailable.",
 };
 
-/** Route-level authorization. Resource-level ownership lives in the repositories (WHERE member_id = actor). */
+/** Route-level authorization. Resource-level ownership lives in the repositories (WHERE member_id = actor).
+ *  `module`/`modules`: the route answers 503 while any of them is killed (the route gate passes the owner and the
+ *  modules the route reads, ADR-IMPL-075). */
 export function authorize(
   permission: Permission,
-  opts: { module?: string; flags?: Flags; log?: (o: object, m: string) => void } = {},
+  opts: { module?: string; modules?: readonly string[]; flags?: Flags; log?: (o: object, m: string) => void } = {},
 ): MiddlewareHandler<PrincipalVars> {
+  const modules = [...(opts.module ? [opts.module] : []), ...(opts.modules ?? [])];
   return async (c, next) => {
     const p = c.get("principal");
     const role = roleOf(p);
@@ -41,7 +44,8 @@ export function authorize(
     }
     if (p.kind === "system" && p.source === "internal-secret" && !c.req.path.startsWith("/v1/internal/"))
       return c.json(err("FORBIDDEN"), 403);
-    if (opts.module && opts.flags && (await opts.flags.isKilled(opts.module)))
+    const flags = opts.flags;
+    if (flags && modules.length > 0 && (await Promise.all(modules.map((m) => flags.isKilled(m)))).some(Boolean))
       return c.json(err("SERVICE_DISABLED"), 503);
     await next();
   };
