@@ -1,6 +1,7 @@
 /** The only import surface of @bbc/members. Other modules and the host see nothing else. */
-import { and, eq, gt, inArray, ne, notExists, sql, type Placeholder } from "drizzle-orm";
+import { and, eq, gt, ne, notExists, sql, type Placeholder } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
+import { anyText } from "@bbc/db/helpers";
 import { statement } from "@bbc/db/statements";
 import { profile, profilePhoto, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
@@ -128,7 +129,7 @@ export function createMembersFacade(db: Executor): MembersFacade {
       e
         .select({ memberId: profile.memberId, status: profile.status })
         .from(profile)
-        .where(inArray(profile.memberId, ids)),
+        .where(anyText(profile.memberId, ids)),
       e
         .select({
           memberId: notificationPreferences.memberId,
@@ -136,7 +137,7 @@ export function createMembersFacade(db: Executor): MembersFacade {
           enabled: notificationPreferences.enabled,
         })
         .from(notificationPreferences)
-        .where(inArray(notificationPreferences.memberId, ids)),
+        .where(anyText(notificationPreferences.memberId, ids)),
     ]);
     const statusOf = new Map(
       statuses.map((r: { memberId: string; status: ProfileRow["status"] }) => [r.memberId, r.status]),

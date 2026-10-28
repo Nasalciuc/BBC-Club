@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { query, withTx, type Executor } from "@bbc/db";
-import { col, eqConst } from "@bbc/db/helpers";
+import { anyText, col, eqConst } from "@bbc/db/helpers";
 import { event } from "@bbc/shared/events";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
@@ -144,15 +144,15 @@ async function commitOutcome(
   return true;
 }
 
-/** Each member's active devices, for a batch of rows: one read (ADR-IMPL-077). */
-async function activeTokensOf(exec: Executor, memberIds: readonly string[]): Promise<Map<string, TokenRow[]>> {
+/** Each member's active devices, for a batch of rows: one read, one statement for any number (ADR-IMPL-077). */
+export async function activeTokensOf(exec: Executor, memberIds: readonly string[]): Promise<Map<string, TokenRow[]>> {
   const out = new Map<string, TokenRow[]>();
   const ids = [...new Set(memberIds)];
   if (ids.length === 0) return out;
   const rows = await exec
     .select()
     .from(deviceTokens)
-    .where(and(inArray(deviceTokens.memberId, ids), eqConst(deviceTokens.active, true)));
+    .where(and(anyText(deviceTokens.memberId, ids), eqConst(deviceTokens.active, true)));
   for (const t of rows) {
     const list = out.get(t.memberId);
     if (list) list.push(t);

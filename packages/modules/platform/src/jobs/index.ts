@@ -16,11 +16,8 @@ export type JobContext = {
 export type JobHandler = (ctx: JobContext) => Promise<Record<string, number> | void>;
 export type { JobSpec };
 
-const jobList = (names: readonly string[]) =>
-  sql`unnest(ARRAY[${sql.join(
-    names.map((n) => sql`${n}`),
-    sql`, `,
-  )}]::text[]) AS j(job_name)`;
+/** The jobs asked about, bound as one array: one statement whatever the number of jobs a process registers. */
+const jobList = (names: readonly string[]) => sql`unnest(${sql.param(names)}::text[]) AS j(job_name)`;
 
 /** Each job's last run: one probe per job on `job_runs_job_started`, read backwards — never a sort of the table, which
  *  grows by every run (ADR-IMPL-077: a year of runs sorted 134 MB on disk, 5 s; this reads 0.2 ms). The hot-query

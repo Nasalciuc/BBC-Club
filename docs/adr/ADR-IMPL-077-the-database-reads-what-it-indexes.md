@@ -82,7 +82,10 @@ Postgres 16), the data layer had reads that grow worse with time:
 CONCURRENTLY`) in a small PR of their own once production's `idx_scan` has stayed at 0 for two weeks of real members
    (⚑E). An entry naming no column fails.
 9. **The dispatch** reads a claim's members (`members.deliverabilityOf`: status and offer preferences, two statements
-   for any number) and their devices in one read each — 3 statements a claim before its writes, for up to 300.
+   for any number) and their devices in one read each — 3 statements a claim before its writes, for up to 300. Each
+   list is one bound array (`anyText` in `@bbc/db/helpers`: `= ANY($1::text[])`), so a statement's text, and the plan
+   Postgres keeps for it, does not change with the list's length (`IN ($1, …, $n)` was a statement per length); the
+   jobs `/status` asks about likewise (`unnest($1::text[])`).
 10. **Postgres's settings**, production and staging alike for planning: `jit=off`, `track_io_timing=on`,
     `log_min_duration_statement=250`, `auto_explain` loaded (never `log_analyze`), and no bound value in the log
     (`log_parameter_max_length=0`, `auto_explain.log_parameter_max_length=0`, and `log_error_verbosity=terse`, which

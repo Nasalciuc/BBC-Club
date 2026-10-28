@@ -2,6 +2,7 @@
  *  Runs against an isolated clone of the test template. */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
+import { createDb } from "@bbc/db";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createMembersFacade } from "../../src/application/facade";
 import { onMemberRegistered } from "../../src/handlers/on-member-registered";
@@ -261,6 +262,27 @@ describe("@bbc/members facade", () => {
       expect((await facade.deliverabilityOf(db, [])).size).toBe(0);
     } finally {
       await cleanup([a, b]);
+    }
+  });
+
+  it("deliverabilityOf for 1, 7 or 100 members is the same two statements, each list one parameter (ADR-IMPL-077)", async () => {
+    const statements: { text: string; params: number }[] = [];
+    const logged = createDb(iso.url, {
+      max: 1,
+      logger: { logQuery: (text, params) => statements.push({ text, params: params.length }) },
+    });
+    try {
+      const facade = createMembersFacade(logged);
+      for (const n of [1, 7, 100])
+        await facade.deliverabilityOf(
+          logged,
+          Array.from({ length: n }, () => randomId()),
+        );
+      expect(statements.length).toBe(6);
+      expect(new Set(statements.map((s) => s.text)).size).toBe(2);
+      expect(statements.every((s) => s.params === 1)).toBe(true);
+    } finally {
+      await logged.close();
     }
   });
 
