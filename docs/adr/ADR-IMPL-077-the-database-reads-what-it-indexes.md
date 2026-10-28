@@ -79,9 +79,13 @@ CONCURRENTLY`) in a small PR of their own once production's `idx_scan` has staye
 9. **The dispatch** reads a claim's members (`members.deliverabilityOf`: status and offer preferences, two statements
    for any number) and their devices in one read each — 3 statements a claim before its writes, for up to 300.
 10. **Postgres's settings**, production and staging alike for planning: `jit=off`, `track_io_timing=on`,
-    `log_min_duration_statement=250`, `auto_explain` (the estimated plan of a statement over 500 ms, never
-    `log_analyze`); staging takes production's `effective_cache_size`, `work_mem` and `track_planning`, none of its
-    memory. `random_page_cost` stays 4 until the box's disk is confirmed an SSD (⚑F: `lsblk -d -o name,rota`, `0`).
+    `log_min_duration_statement=250`, `auto_explain` loaded (never `log_analyze`), and no bound value in the log
+    (`log_parameter_max_length=0`, `auto_explain.log_parameter_max_length=0`); staging takes production's
+    `effective_cache_size`, `work_mem` and `track_planning`, none of its memory. One difference: staging logs the
+    estimated plan of a statement over 500 ms, production keeps `auto_explain` off — a custom plan can carry a
+    statement's bound values as text — and switches it on for a tuning only, for the app's role (RUNBOOK § Tuning:
+    auto_explain on production). `random_page_cost` stays 4 until the box's disk is confirmed an SSD (⚑F:
+    `lsblk -d -o name,rota`, `0`).
     `scripts/env-profile.test.ts` checks that both say the same.
 11. **Grafana reads Postgres** (⚑A): the role `bbc_monitor`, a member of `pg_monitor` (statistics, no table's rows), a
     login only once a production deploy with `MONITORING=on` gives it `GRAFANA_PG_PASSWORD`; Grafana's

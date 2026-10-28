@@ -875,7 +875,6 @@ describe("Postgres's planning settings (ADR-IMPL-077)", () => {
     "jit",
     "random_page_cost",
     "shared_preload_libraries",
-    "auto_explain.log_min_duration",
     "auto_explain.log_parameter_max_length",
     "pg_stat_statements.track_planning",
     "log_min_duration_statement",
@@ -883,13 +882,18 @@ describe("Postgres's planning settings (ADR-IMPL-077)", () => {
     "track_io_timing",
   ];
 
-  it("staging plans as production does, and both log the slow statements with their plans", async () => {
+  it("staging plans as production does; both log the slow statements, staging their plans too", async () => {
     const prod = await settingsOf("infra/docker-compose.yml", "postgres");
     const staging = await settingsOf("infra/compose.staging.yml", "postgres-staging");
     for (const key of PLANNING) expect(staging[key], key).toBe(prod[key]);
     expect(prod.jit).toBe("off");
     expect(prod.shared_preload_libraries).toBe("pg_stat_statements,auto_explain");
-    expect(prod["auto_explain.log_min_duration"]).toBe("500ms");
+    // auto_explain.log_min_duration is the one planning setting the two do not share: production keeps auto_explain
+    // loaded but off, since a custom plan can carry a statement's bound values as text (an email, a token), and
+    // switches it on only for a tuning (RUNBOOK § Tuning: auto_explain on production); staging, with test data, logs
+    // the plans over 500 ms.
+    expect(prod["auto_explain.log_min_duration"]).toBeUndefined();
+    expect(staging["auto_explain.log_min_duration"]).toBe("500ms");
     expect(prod["auto_explain.log_parameter_max_length"]).toBe("0");
     expect(prod.log_min_duration_statement).toBe("250");
     expect(prod.log_parameter_max_length).toBe("0");
