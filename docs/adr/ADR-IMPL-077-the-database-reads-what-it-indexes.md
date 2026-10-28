@@ -66,6 +66,10 @@ Postgres 16), the data layer had reads that grow worse with time:
    | `notifications.campaigns` (done)                                    | 180 days                                                 | `retention-notifications` |
    | `catalog.demand_daily`                                              | 400 days                                                 | `retention-demand`        |
 
+   The journal's partitions are made three months ahead (`partitions`) and dropped after 24 months (`retention`), each
+   in a transaction that waits 3 s at most for the journal's lock, else the next day (X8), and runs in UTC: the SQL
+   functions cut months in the session's time zone, and a session elsewhere left hours between two months (X7).
+
 7. **Autovacuum on the tables that change most** — `event_deliveries`, `job_runs`, `rate_limit_state`,
    `notifications.notifications`: after a fiftieth of the rows (vacuum, vacuum after inserts, analyze), checked by
    `db:verify`'s rule 13. No `fillfactor`: their updates change an indexed column (`status`), which no free space makes

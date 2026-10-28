@@ -27,9 +27,24 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
     cron: "0 2 * * *",
     singleton: true,
     timeoutMs: 60_000,
-    handler: async ({ db }) => {
-      await db.execute(sql`SELECT platform.ensure_event_partitions(3)`);
-      return { ok: 1 };
+    handler: async ({ db, logger }) => {
+      // Creating a partition takes the journal's lock as dropping one does (X8): it waits 3 s at most, else the next
+      // day's run tries again (three months are made ahead). In UTC (X7): the function cuts its months with now() and
+      // ::date, in the session's time zone, and a session in New York left five hours between two months' partitions
+      // that no event could be written into. SET LOCAL: PgBouncer pools by transaction.
+      let partitionsDeferred = 0;
+      try {
+        await withTx(db, async (tx) => {
+          await tx.execute(sql`SET LOCAL lock_timeout = '3s'`);
+          await tx.execute(sql`SET LOCAL TimeZone = 'UTC'`);
+          await tx.execute(sql`SELECT platform.ensure_event_partitions(3)`);
+        });
+      } catch (err) {
+        if (errorForLog(err).sqlstate !== "55P03") throw err; // lock_not_available
+        partitionsDeferred = 1;
+        logger.warn({ job: "partitions" }, "journal partitions left for tomorrow: the journal stayed locked past 3 s");
+      }
+      return { ok: 1, partitionsDeferred };
     },
   });
 
@@ -43,12 +58,13 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
       // X8: dropping a partition takes ACCESS EXCLUSIVE on the journal, and while it waits behind a long read every event
       // insert (every write that publishes) queues behind it — locally a 12 s SELECT held each one 10 s. The drop waits
       // 3 s at most (SET LOCAL: PgBouncer pools by transaction) and is otherwise left for tomorrow's run; the rest of the
-      // retention runs either way. Any other failure fails the job as before.
+      // retention runs either way. Any other failure fails the job as before. In UTC, as the partitions job (X7).
       let partitionsDropped = 0;
       let partitionsDeferred = 0;
       try {
         partitionsDropped = await withTx(db, async (tx) => {
           await tx.execute(sql`SET LOCAL lock_timeout = '3s'`);
+          await tx.execute(sql`SET LOCAL TimeZone = 'UTC'`);
           const [{ dropped }]: any = await tx.execute(sql`SELECT platform.drop_old_event_partitions(24) AS dropped`);
           return dropped;
         });
