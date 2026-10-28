@@ -1,5 +1,4 @@
-import { and, gte, lt, sql } from "drizzle-orm";
-import { anyOf } from "@bbc/db/helpers";
+import { and, gte, inArray, lt, sql } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
 import { notificationsTable } from "@bbc/db/schema/notifications";
 import { zoneClock } from "@bbc/shared/time-zone";
@@ -25,7 +24,7 @@ export function offerSendsSelect(exec: Executor, memberIds: readonly string[], f
     .from(notificationsTable)
     .where(
       and(
-        anyOf(notificationsTable.memberId, [...memberIds], "text"),
+        inArray(notificationsTable.memberId, [...memberIds]),
         sql`${notificationsTable.category} IN ('offers_personal', 'offers_broadcast')`,
         gte(notificationsTable.scheduledFor, from),
         lt(notificationsTable.scheduledFor, to),
