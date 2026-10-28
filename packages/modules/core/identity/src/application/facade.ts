@@ -39,9 +39,12 @@ export function createIdentityFacade(
       if (kept) return kept;
     }
     const fresh = opts.fresh === true || key !== null;
+    // A sign-out, a password change or a deletion that forgets this token or its member while the read waits on the
+    // database: what the read found is not put back (ADR-IMPL-076).
+    const since = sessions?.begin();
     const info = await readSession(headers, fresh);
     if (key && sessions) {
-      if (info) sessions.put(key, info.session, info.expiresAt);
+      if (info) sessions.put(key, info.session, info.expiresAt, since);
       else sessions.forget(key);
     }
     return info?.session ?? null;
