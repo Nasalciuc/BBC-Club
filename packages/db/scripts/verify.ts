@@ -25,6 +25,8 @@ const schemasIn = () =>
 
 const db = createDb(process.env.DATABASE_URL!, { max: 1, applicationName: "bbc-verify" });
 const problems: string[] = [];
+/** Said, not failed. */
+const warnings: string[] = [];
 const q = async (s: any) => (await db.execute(s)) as any[];
 
 try {
@@ -180,12 +182,26 @@ try {
     for (const option of ["autovacuum_vacuum_scale_factor=0.02", "autovacuum_vacuum_insert_scale_factor=0.02"])
       if (!row || !String(row.options).includes(option)) problems.push(`${name} lacks ${option}`);
   }
+
+  // 14. A plan or a statement logged for the app's role carries what it reads as text (ADR-IMPL-077): nothing turns
+  // auto_explain or the slow-statement log on for it behind the server's command line. A warning: a tuning may be on.
+  const logged = await q(sql`
+    SELECT coalesce(r.rolname, '(every role)') AS role, split_part(s.cfg, '=', 1) AS setting
+    FROM pg_db_role_setting d
+    LEFT JOIN pg_roles r ON r.oid = d.setrole
+    CROSS JOIN LATERAL unnest(d.setconfig) AS s(cfg)
+    WHERE d.setrole IN (0, (SELECT oid FROM pg_roles WHERE rolname = current_user))
+      AND d.setdatabase IN (0, (SELECT oid FROM pg_database WHERE datname = current_database()))
+      AND (s.cfg LIKE 'auto\_explain.%' OR s.cfg LIKE 'log\_min\_duration\_statement=%')`);
+  for (const r of logged)
+    warnings.push(`${r.setting} is set for ${r.role} in pg_db_role_setting: RESET it (RUNBOOK § Tuning a statement)`);
 } catch (e) {
   problems.push(`verify crashed: ${String(e)}`);
 } finally {
   await db.close();
 }
 
+if (warnings.length) console.warn("db:verify warning\n  - " + warnings.join("\n  - "));
 if (problems.length) {
   console.error("db:verify FAILED\n  - " + problems.join("\n  - "));
   process.exit(1);

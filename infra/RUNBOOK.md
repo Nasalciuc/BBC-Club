@@ -107,30 +107,35 @@ Trigger now: `POST /v1/internal/run/db-report` with `X-Internal-Secret` against 
 
 **Retention (ADR-IMPL-077).** Four daily jobs delete, 5 000 rows a statement, what is kept only for a while — `retention` (04:00: done deliveries after 30 days, dead letters after 90, `kafka_processed` after 14, job runs after 30 days but each job's last, the journal's partitions after 24 months), `retention-auth` (04:10: sessions 7 days after they expired, verifications a day after, Better Auth's rate-limit rows idle for 2 hours, OTP cooldowns after a day), `retention-notifications` (04:20: notifications that reached their end after 90 days — never a pending or sending one — and done campaigns after 180) and `retention-demand` (04:30: search counts after 400 days). Requests, their events, offers and fares are records and are never deleted here. Each run's counts are in its `job_runs.metrics`; a run that hit its bound (200 batches) carries on the next night. Run one now: `POST /v1/internal/run/<name>` against the worker.
 
-## Tuning: auto_explain on production
+## Tuning a statement
 
-Production loads `auto_explain` but keeps it off: no `auto_explain.log_min_duration`, so -1 (ADR-IMPL-077). Staging,
-with test data, logs the estimated plan of a statement over 500 ms. To read plans on production during a tuning, switch
-it on for the app's role, then off again:
+Production never logs a plan (ADR-IMPL-077): `auto_explain` is loaded there but off (no `auto_explain.log_min_duration`,
+so -1), and nothing switches it on — a custom plan writes a statement's bound values into its conditions as text (an
+email, a session token). `db:verify` warns when a role or database setting turns `auto_explain.*` or
+`log_min_duration_statement` on for the app's role. A statement is tuned in two places:
 
-```bash
-# on: the role's setting outranks the server's own (its command line and config file), no restart
-docker compose ... exec -T postgres psql -U bbc -d bbc -c "ALTER ROLE bbc SET auto_explain.log_min_duration = '500ms';"
-# PgBouncer keeps its server connections open: RECONNECT (its admin console) closes each one once it is released,
-# and the next ones read the role's setting
-docker compose ... exec -T postgres psql -h pgbouncer -U bbc -d pgbouncer -c "RECONNECT"
-# the plans
-docker compose ... logs postgres --since 1h | grep -A20 'plan:'
-# off, at the end of the tuning, and RECONNECT once more
-docker compose ... exec -T postgres psql -U bbc -d bbc -c "ALTER ROLE bbc RESET auto_explain.log_min_duration;"
-docker compose ... exec -T postgres psql -h pgbouncer -U bbc -d pgbouncer -c "RECONNECT"
-```
+1. **On production, its generic plan.** Take the statement's text from `pg_stat_statements` (the db report's slowest,
+   or the first query below): Postgres has already put `$1`, `$2`, … in place of every value. `EXPLAIN (GENERIC_PLAN)`
+   (Postgres 16) plans that text without any value and runs nothing:
 
-While it is on, a plan can contain bound values (a custom plan writes them into its conditions as text: an email, a
-session token): switch it on only for as long as the tuning lasts, then off. The bound values themselves stay out of
-the log either way (`auto_explain.log_parameter_max_length=0`, `log_parameter_max_length=0`). Checked on Postgres 16
-with PgBouncer 1.22 (the pooled connection keeps -1 until `RECONNECT`, then reads 500ms; `RESET` and `RECONNECT` bring
-back -1); `RECONNECT [db]` is the same admin command in PgBouncer 1.24.
+   ```bash
+   docker compose ... exec -T postgres psql -U bbc -d bbc -Atc \
+     "SELECT queryid, calls, round(mean_exec_time::numeric, 1) AS ms, query FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 20"
+   docker compose ... exec -T postgres psql -U bbc -d bbc -c 'EXPLAIN (GENERIC_PLAN) <the text, $n and all>'
+   ```
+
+   `pg_stat_statements` replaces the constants the code writes into the SQL too (`eqConst`, `inConst`): a status list
+   reads `status IN ($1, $2)`. Put those back as the code writes them, since a partial index matches only on them. A
+   `$n` whose type Postgres cannot tell (`could not determine data type of parameter $1`) takes a cast (`$1::text`).
+   Postgres refuses `GENERIC_PLAN` with `ANALYZE`: on production a statement is never run to be timed.
+
+2. **Its run, `EXPLAIN (ANALYZE, BUFFERS)`, on staging only**, with values written by hand; staging also logs the
+   estimated plan of any statement over 500 ms by itself. At volume, on a local database seeded by
+   `bun run --filter @bbc/db db:seed:volume` (it refuses `NODE_ENV=production`, which staging runs with).
+
+The bound values stay out of every log: `log_parameter_max_length=0`, `auto_explain.log_parameter_max_length=0`, and
+`log_error_verbosity=terse`, which leaves out an error's DETAIL (`Key (email)=(…) already exists`). Checked on
+Postgres 16.
 
 ## Stop a runaway feature without deploying
 
@@ -926,7 +931,7 @@ Metrics only: VictoriaMetrics scrapes each API replica and each worker, producti
    ```
 2. In `production.env`: `MONITORING=on`, `GRAFANA_ADMIN_PASSWORD=` (`openssl rand -base64 24`, into the password manager), `GRAFANA_ALERTS_WEBHOOK=` (where the alerts go; usually `OPS_WEBHOOK`'s URL) and `GRAFANA_PG_PASSWORD=` (`openssl rand -base64 24`: the database dashboard's read-only role; each production deploy gives it to `bbc_monitor`, step 8) — bootstrap.sh and deploy.sh refuse `MONITORING=on` without all three. Until the first production deploy after it is set, `the database` answers `password authentication failed`. `staging.env` sets neither: the deploy refuses there every name production's compose file substitutes (§ Staging on the same box), and its own `OPS_WEBHOOK` stays its own.
 3. The next production deploy starts it (step 8). Or now: `$DC --profile monitoring up -d --no-deps victoriametrics grafana node-exporter cadvisor`.
-4. Plans per statement need `pg_stat_statements.track_planning`, which Postgres takes when it is recreated: `$DC up -d --no-deps postgres`, in a quiet minute (§ Memory and replicas). Until then that panel reads 0. The same recreate brings ADR-IMPL-077's settings: `auto_explain` loaded but off (§ Tuning: auto_explain on production), `jit=off`, `track_io_timing`, and statements over 250 ms in the log without their bound values (`$DC logs postgres --since 1h | grep duration`).
+4. Plans per statement need `pg_stat_statements.track_planning`, which Postgres takes when it is recreated: `$DC up -d --no-deps postgres`, in a quiet minute (§ Memory and replicas). Until then that panel reads 0. The same recreate brings ADR-IMPL-077's settings: `auto_explain` loaded but off (§ Tuning a statement), errors without their DETAIL (`log_error_verbosity=terse`), `jit=off`, `track_io_timing`, and statements over 250 ms in the log without their bound values (`$DC logs postgres --since 1h | grep duration`).
 
 **Look.** `ssh -L 3000:127.0.0.1:3000 root@<host>`, then http://localhost:3000, user `admin`. Folder `BBC Club`: `the box` (CPU and memory by container against its limit, throttling, the host, Postgres connections, PgBouncer, network, kills for memory) and `the app` (the club's requests and p95/p99 by route — the probes and the cron's job runs left out — errors, API CPU per request, event-loop delay, statements per request, plans per statement, PgBouncer parses and binds, cache hit ratio, the queue, failed jobs). The `env` variable switches production and staging. `the database` (production only, ADR-IMPL-077): the slowest statements by total time, the indexes never read (a candidate to drop only after two weeks of real members, and through a PR: `db:verify`'s `NO_INDEX_NEEDED` lists the known ones), dead rows and when autovacuum last ran, the share of updates that stayed HOT, the largest tables, the statements that spill to disk. The dashboards and alerts are files in `infra/monitoring/grafana`: a change is a PR, never an edit in the UI (the UI refuses).
 

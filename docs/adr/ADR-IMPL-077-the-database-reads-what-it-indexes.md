@@ -2,9 +2,10 @@
 
 Status: proposed · Date: 2026-10-26 · Scope: `packages/modules/platform` (`jobs/index.ts`: `lastRuns`,
 `lastFinishedRuns`; `jobs/builtin.ts`: `retention`; `events/publish.ts`), `packages/shared` (`time-zone.ts`:
-`zoneDayBounds`), `packages/db` (`helpers.ts`: `deleteInBatches`; `scripts/verify.ts`: rules 3 and 13; `scripts/migrate.ts`;
-the hot-query test), migrations `0048_identity_auth_lookups.sql`, `0049_catalog_demand_from_route.sql`,
-`0050_platform_autovacuum.sql`, `0051_notifications_autovacuum.sql`, `0052_platform_monitor_role.sql`, the catalog
+`zoneDayBounds`), `packages/db` (`helpers.ts`: `deleteInBatches`; `scripts/verify.ts`: rules 3, 13 and 14;
+`scripts/migrate.ts`; the hot-query test), migrations `0048_identity_auth_lookups.sql`,
+`0049_catalog_demand_from_route.sql`, `0050_platform_autovacuum.sql`, `0051_notifications_autovacuum.sql`,
+`0052_platform_monitor_role.sql`, `0053_platform_monitor_role_limits.sql`, the catalog
 (`fares.repo.ts`: a dated search; `discovery.repo.ts`; `retention-demand`), identity (`retention-auth`), notifications
 (`dispatch.ts`; `retention-notifications`), members (`deliverabilityOf`), `infra` (Postgres's settings in
 `docker-compose.yml` and `compose.staging.yml`; Grafana's Postgres datasource and the database dashboard; `deploy.sh`,
@@ -84,17 +85,21 @@ CONCURRENTLY`) in a small PR of their own once production's `idx_scan` has staye
    for any number) and their devices in one read each — 3 statements a claim before its writes, for up to 300.
 10. **Postgres's settings**, production and staging alike for planning: `jit=off`, `track_io_timing=on`,
     `log_min_duration_statement=250`, `auto_explain` loaded (never `log_analyze`), and no bound value in the log
-    (`log_parameter_max_length=0`, `auto_explain.log_parameter_max_length=0`); staging takes production's
-    `effective_cache_size`, `work_mem` and `track_planning`, none of its memory. One difference: staging logs the
-    estimated plan of a statement over 500 ms, production keeps `auto_explain` off — a custom plan can carry a
-    statement's bound values as text — and switches it on for a tuning only, for the app's role (RUNBOOK § Tuning:
-    auto_explain on production). `random_page_cost` stays 4 until the box's disk is confirmed an SSD (⚑F:
-    `lsblk -d -o name,rota`, `0`).
+    (`log_parameter_max_length=0`, `auto_explain.log_parameter_max_length=0`, and `log_error_verbosity=terse`, which
+    leaves out an error's DETAIL — `Key (email)=(…)`); staging takes production's `effective_cache_size`, `work_mem`
+    and `track_planning`, none of its memory. One difference: staging logs the estimated plan of a statement over
+    500 ms, production keeps `auto_explain` off and never switches it on — a custom plan can carry a statement's bound
+    values as text. A tuning on production reads `EXPLAIN (GENERIC_PLAN)` of `pg_stat_statements`' text (its `$n`, no
+    value, nothing run); `EXPLAIN ANALYZE` only on staging, or at volume on a local database (`db:seed:volume`)
+    (RUNBOOK § Tuning a statement). `db:verify` warns when a role or database setting turns `auto_explain.*` or
+    `log_min_duration_statement` on for the app's role. `random_page_cost` stays 4 until the box's disk is confirmed
+    an SSD (⚑F: `lsblk -d -o name,rota`, `0`).
     `scripts/env-profile.test.ts` checks that both say the same.
 11. **Grafana reads Postgres** (⚑A): the role `bbc_monitor`, a member of `pg_monitor` (statistics, no table's rows), a
-    login only once a production deploy with `MONITORING=on` gives it `GRAFANA_PG_PASSWORD`; Grafana's
-    PostgreSQL datasource (its plugin loaded again) and a third dashboard, `the database`: the slowest statements, the
-    indexes never read, dead rows, HOT updates, sizes, temporary files.
+    login only once a production deploy with `MONITORING=on` gives it `GRAFANA_PG_PASSWORD`; three connections at
+    most, no statement past 10 s and every transaction read-only (0053; Grafana opens two); Grafana's PostgreSQL
+    datasource (its plugin loaded again) and a third dashboard, `the database`: the slowest statements, the indexes
+    never read, dead rows, HOT updates, sizes, temporary files.
 
 **Not done, and why.** The feed's keyset with row values: the cursor stays `null` (⚑C), so no query reads past the
 first page. The catalogue import and the account deletion's events, row by row: rare, measured for later.

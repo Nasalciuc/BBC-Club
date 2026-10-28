@@ -135,6 +135,8 @@ services:
         "-c",
         "log_parameter_max_length=0",
         "-c",
+        "log_error_verbosity=terse",
+        "-c",
         "track_io_timing=on",
         "-c",
         "jit=off",
