@@ -23,8 +23,8 @@ Postgres 16), the data layer had reads that grow worse with time:
   every day in the window. Better Auth reads `auth.rate_limit` by key at every `/api/auth/*` request, and nothing
   indexed the key; a code's check reads `auth.verification` by address; members' reconcile sorts `auth.user` by
   creation every 15 minutes.
-- A dated search compared `(depart_at AT TIME ZONE <the origin's zone, a subquery per row>)::date` with the day: a
-  function on the column, so no index could bound it.
+- A dated search compared `(depart_at AT TIME ZONE <the origin's zone, a subquery per row>)::date` with the day: the
+  origin's airport read again for every fare of the route (3 005 fares: 9 079 buffers, 5–9 ms).
 - Ten tables grew without end; the one retention delete was a single statement.
 - The dispatch read each claimed row's member status and preferences, then its devices — up to 300 statements a claim.
 - Postgres ran with JIT, a 1 s slow-statement log and nothing that logged a plan; staging planned with other settings.
@@ -53,13 +53,21 @@ Postgres 16), the data layer had reads that grow worse with time:
    ADR-IMPL-075.
 5. **A dated search** with the origin's zone at hand (the route reads the airports from memory) compares `depart_at`
    with the day's two instants, `zoneDayBounds` — the day Postgres reads, across a clock change and a midnight that
-   does not exist, by Bun's copy of the zone rules (its ICU). Each zone's day is found once per process (at most 1 000
-   kept, the oldest going first; about 190 µs found, under 1 µs kept). Bun's copy and Postgres's (tzdata) are compared
-   for every zone the catalogue's airports use, every day of the two years from the run (`scripts/tz-parity.test.ts`,
-   about 50 s of one core: `bun run test:tz`, on its own after the database suites, in `validate` and CI): today they differ in seven, where Bun is behind tzdata 2026e — Vancouver, Edmonton, Winnipeg and Inuvik
-   (summer offset kept as standard time from 1 Nov 2026), Casablanca and El_Aaiun (+00 from 20 Sep 2026), Asuncion
-   on Bun 1.3 (−03 all year): there a search's day is an hour off Postgres's. The test lists them and fails on any
-   other. The API image pins Bun by digest (`apps/api/Dockerfile`), so its zones change only with a deliberate bump.
+   does not exist, by Bun's copy of the zone rules (its ICU). No index on `catalog.fares` holds `depart_at`: the
+   bounds spare the origin's airport read per fare (3 005 fares of a route: 64 buffers and 0.75 ms against 9 079 and
+   5–9 ms). Each zone's day is found once per process (at most 1 000 kept, the oldest going first; about 190 µs
+   found, under 1 µs kept). Bun's copy and Postgres's (tzdata) are compared for every zone the catalogue's airports
+   use, every day of the two years from the run (`scripts/tz-parity.test.ts`, about 50 s of one core:
+   `bun run test:tz`, on its own after the database suites, in `validate` and CI). Today they differ in seven, where
+   Bun is behind tzdata 2026e — Vancouver, Edmonton, Winnipeg and Inuvik (summer offset kept as standard time from
+   1 Nov 2026), Casablanca and El_Aaiun (+00 from 20 Sep 2026), Asuncion on Bun 1.3 (−03 all year): there a search's
+   day is an hour off Postgres's, and so are the fare times shown (`zoneClock`) and quiet hours, which read the same
+   ICU — the list and its cards agree with each other. No fare departs from those zones with a time today (the
+   import writes none: an undated fare matches any day it is on sale). The test lists the seven and fails on any
+   other, measured against CI's tzdata (`postgres:16-alpine`); production's Postgres is Debian's `postgres:16`, its
+   tag not pinned. The API image pins Bun by digest (`apps/api/Dockerfile`), so its zones change only with a
+   deliberate bump. Reading those zones' day from Postgres instead is the owner's call (⚑1): alone it would set the
+   search against the times on its cards.
 6. **Retention, in batches of 5 000** (`deleteInBatches`: each batch its own statement, picked by `(tableoid, ctid)` —
    a ctid is unique within one table only, and a partitioned table's partitions share them), each module for its own
    tables, daily, idempotent; business records (requests and their events, offers, fares) are never deleted here.

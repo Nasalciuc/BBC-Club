@@ -34,10 +34,12 @@ export function isIanaZone(tz: string): boolean {
 /**
  * The instants a calendar day `ymd` (`2026-10-26`) of `timeZone` spans: [start, end), where start is the first instant
  * whose wall clock in the zone shows that date and end the first that shows the next one — what Postgres reads as
- * `(t AT TIME ZONE zone)::date = ymd`, so a column compared to the two bounds keeps its index (ADR-IMPL-077). A day
- * whose midnight does not exist (a clock that springs forward at 00:00) starts when the clock reaches it; a day of 23
- * or 25 hours spans 23 or 25. Found by bisection on the zone's clock, to the millisecond, once per zone and day for the
- * life of the process (`dayBounds`: about 190 µs a day's bounds, under 1 µs remembered); each call gets its own Dates.
+ * `(t AT TIME ZONE zone)::date = ymd`, by this runtime's zone rules (ICU; in the zones `scripts/tz-parity.test.ts`
+ * lists, an hour off Postgres's tzdata), so a column compared to the two bounds needs no zone per row (ADR-IMPL-077).
+ * A day whose midnight does not exist (a clock that springs forward at 00:00) starts when the clock reaches it; a day
+ * of 23 or 25 hours spans 23 or 25. Found by bisection on the zone's clock, to the millisecond, once per zone and day
+ * for the life of the process (`dayBounds`: about 190 µs a day's bounds, under 1 µs remembered); each call gets its
+ * own Dates.
  */
 export function zoneDayBounds(ymd: string, timeZone: string): { start: Date; end: Date } {
   const key = `${timeZone}|${ymd}`;
