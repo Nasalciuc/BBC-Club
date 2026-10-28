@@ -51,20 +51,20 @@ Postgres 16), the data layer had reads that grow worse with time:
    for its own tables, daily, idempotent; business records (requests and their events, offers, fares) are never
    deleted here:
 
-   | table                                                               | kept                                                     | job                       |
-   | ------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------- |
-   | `platform.job_runs`                                                 | 30 days, and each job's last run                         | `retention`               |
-   | `platform.event_deliveries` (done)                                  | 30 days                                                  | `retention`               |
-   | `platform.event_dlq`                                                | 90 days                                                  | `retention`               |
-   | `platform.kafka_processed`                                          | 14 days (twice Kafka's default retention)                | `retention`               |
-   | `platform.rate_limits`, `rate_limit_state`                          | as before                                                | `retention`               |
-   | `auth.session`                                                      | 7 days after it expired                                  | `retention-auth`          |
-   | `auth.verification`                                                 | 1 day after it expired                                   | `retention-auth`          |
-   | `auth.rate_limit`                                                   | 2 hours without a request (the longest window is 1 hour) | `retention-auth`          |
-   | `auth.otp_cooldown`                                                 | 1 day (moved from platform's job to identity's)          | `retention-auth`          |
-   | `notifications.notifications` (sent, delivered, failed, suppressed) | 90 days; pending and sending never                       | `retention-notifications` |
-   | `notifications.campaigns` (done)                                    | 180 days                                                 | `retention-notifications` |
-   | `catalog.demand_daily`                                              | 400 days                                                 | `retention-demand`        |
+   | table                                                               | kept                                                                                           | job                       |
+   | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------- |
+   | `platform.job_runs`                                                 | 30 days; each job's last run and its last finished (succeeded or failed) run stay, however old | `retention`               |
+   | `platform.event_deliveries` (done)                                  | 30 days                                                                                        | `retention`               |
+   | `platform.event_dlq`                                                | 90 days                                                                                        | `retention`               |
+   | `platform.kafka_processed`                                          | 14 days (twice Kafka's default retention)                                                      | `retention`               |
+   | `platform.rate_limits`, `rate_limit_state`                          | as before                                                                                      | `retention`               |
+   | `auth.session`                                                      | 7 days after it expired                                                                        | `retention-auth`          |
+   | `auth.verification`                                                 | 1 day after it expired                                                                         | `retention-auth`          |
+   | `auth.rate_limit`                                                   | 2 hours without a request (the longest window is 1 hour)                                       | `retention-auth`          |
+   | `auth.otp_cooldown`                                                 | 1 day (moved from platform's job to identity's)                                                | `retention-auth`          |
+   | `notifications.notifications` (sent, delivered, failed, suppressed) | 90 days; pending and sending never                                                             | `retention-notifications` |
+   | `notifications.campaigns` (done)                                    | 180 days                                                                                       | `retention-notifications` |
+   | `catalog.demand_daily`                                              | 400 days                                                                                       | `retention-demand`        |
 
    The journal's partitions are made three months ahead (`partitions`) and dropped after 24 months (`retention`), each
    in a transaction that waits 3 s at most for the journal's lock, else the next day (X8), and runs in UTC: the SQL
