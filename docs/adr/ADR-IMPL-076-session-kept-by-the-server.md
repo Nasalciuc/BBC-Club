@@ -21,8 +21,10 @@ cookie back. After the first minute every request carries the token alone and Be
 3. **Forgetting.** A write to `/api/auth/*` (sign-out, revoke, change), a password change through
    `/v1/account/password` and an account deletion forget what this process keeps for the member. A read that began
    before its token or its member was forgotten puts nothing back: the cache notes each forget per token and per
-   member (for the cache's time and 30 s more), never one counter for all, since a read that finds no session forgets
-   its token too and a shared counter would drop every other member's answer under load.
+   member (for the cache's time and 30 s more; a note dropped earlier or later raises a floor no older read puts
+   under), never one counter for all, since a read that finds no session forgets its token too and a shared counter
+   would drop every other member's answer under load. An answer not put back still names its member, so a sign-out or
+   a deletion with that token forgets the member's other entries.
 4. At most 10 000 sessions per process (~2 MB), the oldest first past it; hits and misses counted as `cache_hit` /
    `cache_miss` with `ns="identity.session"`.
 

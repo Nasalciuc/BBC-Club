@@ -91,6 +91,36 @@ describe("createSessionCache", () => {
     expect(c.notes()).toBe(4);
   });
 
+  it("a note dropped while a read waits, by the cap or by age, still stops that read's answer", () => {
+    let clock = 1_000_000;
+    const c = createSessionCache({ ttlMs: 60_000, maxEntries: 3, now: () => clock });
+    const byCap = c.begin();
+    c.forget("T");
+    for (const junk of ["j1", "j2", "j3"]) c.forget(junk); // T's note is pushed out
+    c.put("T", info("a"), null, byCap);
+    expect(c.get("T")).toBeNull();
+
+    const byAge = c.begin();
+    c.forgetMember("b");
+    clock += 60_000 + FORGOTTEN_MARGIN_MS + 1;
+    c.forgetMember("c"); // b's note has aged out
+    c.put("U", info("b"), null, byAge);
+    expect(c.get("U")).toBeNull();
+
+    // A read begun after both: kept.
+    c.put("T", info("a"), null, c.begin());
+    expect(c.get("T")?.member.id).toBe("a");
+  });
+
+  it("an answer not put back still tells whose token it was", () => {
+    const c = createSessionCache({ ttlMs: 60_000 });
+    const since = c.begin();
+    c.forgetMember("m");
+    c.put("A", info("m"), null, since);
+    expect(c.get("A")).toBeNull();
+    expect(c.memberOf("A")).toBe("m");
+  });
+
   it("counts hits and misses under identity.session", () => {
     const seen: string[] = [];
     const c = createSessionCache({ ttlMs: 60_000, metrics: { inc: (n, l) => seen.push(`${n}:${l?.ns}`) } });

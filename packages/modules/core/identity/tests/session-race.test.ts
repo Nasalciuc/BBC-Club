@@ -36,6 +36,23 @@ describe("a session ended while a read waits", () => {
     expect(sessions.get(sessionKey(other)!)).toBeNull();
   });
 
+  it("a revoke whose own read was not put back still forgets the member's other tokens", async () => {
+    const a = slowAuth();
+    const sessions = createSessionCache({ ttlMs: 60_000 });
+    const f = createIdentityFacade(a.auth as never, {} as never, { sessions });
+    const deviceA = new Headers({ Cookie: "bbc.session_token=a.sig" });
+    const deviceC = new Headers({ Cookie: "bbc.session_token=c.sig" });
+
+    const principal = f.getSession(deviceA, { fresh: true }); // A's POST /api/auth/revoke-sessions, read first
+    sessions.forgetMember("m1"); // meanwhile device B changes the password
+    sessions.put(sessionKey(deviceC)!, { member: row.user, sessionId: "s3" } as never, null, sessions.begin()); // C reads after
+    a.release();
+    await principal; // A's answer is not put back
+    await f.handler(new Request("http://localhost/api/auth/revoke-sessions", { method: "POST", headers: deviceA }));
+
+    expect(sessions.get(sessionKey(deviceC)!)).toBeNull();
+  });
+
   it("a sign-out on this process is anonymous at once, even with a read in flight", async () => {
     const a = slowAuth();
     const sessions = createSessionCache({ ttlMs: 60_000 });

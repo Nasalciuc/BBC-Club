@@ -4,7 +4,8 @@ import type { SessionInfo } from "../api";
 /** Sessions each process keeps; past it the oldest goes first. ~200 bytes each: 10 000 members are ~2 MB. */
 export const SESSION_CACHE_ENTRIES = 10_000;
 
-/** How long a forgotten token or member stays noted past the cache's time: longer than any read waits on Postgres. */
+/** How long a forgotten token or member stays noted past the cache's time. A read still waiting when its note goes
+ *  (PgBouncer may hold a query longer) puts nothing back either: every note dropped raises the floor under `put`. */
 export const FORGOTTEN_MARGIN_MS = 30_000;
 
 type Metrics = { inc: (name: string, labels?: Record<string, string>) => void };
@@ -49,15 +50,25 @@ export function createSessionCache(opts: {
   const keyForgot = new Map<string, Note>();
   const memberForgot = new Map<string, Note>();
   const keepNoteMs = opts.ttlMs + FORGOTTEN_MARGIN_MS;
+  /** The highest note dropped: a read begun before it may have been due to be stopped by it, so it puts nothing back. */
+  let floor = 0;
+  /** The member behind a token whose answer was not put back, so a sign-out or a deletion with that token still
+   *  forgets the member's other entries (`memberOf`). Kept and bounded as the notes are. */
+  const skippedMember = new Map<string, { member: string; at: number }>();
 
-  /** Notes in the order they were made: past the keep time, or past the cap, the oldest go first. */
+  /** Oldest first, past the keep time or past the cap; `onDrop` sees each one dropped. */
+  function trim<T extends { at: number }>(map: Map<string, T>, onDrop?: (v: T) => void): void {
+    const oldest = now() - keepNoteMs;
+    for (const [k, v] of map) {
+      if (v.at > oldest && map.size < maxEntries) break;
+      onDrop?.(v);
+      map.delete(k);
+    }
+  }
+  /** Notes in the order they were made, so the oldest go first. */
   function note(notes: Map<string, Note>, id: string): void {
     notes.delete(id);
-    const oldest = now() - keepNoteMs;
-    for (const [k, n] of notes) {
-      if (n.at > oldest && notes.size < maxEntries) break;
-      notes.delete(k);
-    }
+    trim(notes, (n) => (floor = Math.max(floor, n.seq)));
     notes.set(id, { seq: ++seq, at: now() });
   }
   const forgotSince = (notes: Map<string, Note>, id: string, since: number) => (notes.get(id)?.seq ?? 0) > since;
@@ -76,22 +87,28 @@ export function createSessionCache(opts: {
       return null;
     },
     /** Kept until the cache's time has passed or the session expires, whichever is first — not at all when the token
-     *  or its member was forgotten after the read began (`since`, from `begin`). */
+     *  or its member was forgotten after the read began (`since`, from `begin`), or a note that could have said so is
+     *  gone. The member is still remembered for `memberOf`. */
     put(key: string, info: SessionInfo, expiresAt: Date | null, since?: number): void {
       if (
         since !== undefined &&
-        (forgotSince(keyForgot, key, since) || forgotSince(memberForgot, info.member.id, since))
-      )
+        (since < floor || forgotSince(keyForgot, key, since) || forgotSince(memberForgot, info.member.id, since))
+      ) {
+        skippedMember.delete(key);
+        trim(skippedMember);
+        skippedMember.set(key, { member: info.member.id, at: now() });
         return;
+      }
       const until = Math.min(now() + opts.ttlMs, expiresAt ? expiresAt.getTime() : Number.POSITIVE_INFINITY);
       if (until <= now()) return;
       entries.delete(key);
       if (entries.size >= maxEntries) entries.delete(entries.keys().next().value as string);
       entries.set(key, { info, until });
     },
-    /** The member a token's entry belongs to, without counting a hit or a miss. */
+    /** The member a token's entry belongs to — or, when its answer was not put back, the member that answer named —
+     *  without counting a hit or a miss. */
     memberOf(key: string): string | null {
-      return entries.get(key)?.info.member.id ?? null;
+      return entries.get(key)?.info.member.id ?? skippedMember.get(key)?.member ?? null;
     },
     forget(key: string): void {
       note(keyForgot, key);
@@ -103,8 +120,8 @@ export function createSessionCache(opts: {
       for (const [k, e] of entries) if (e.info.member.id === memberId) entries.delete(k);
     },
     size: () => entries.size,
-    /** Tokens and members noted as forgotten (for tests: they are bounded). */
-    notes: () => keyForgot.size + memberForgot.size,
+    /** Tokens and members noted as forgotten, and members of answers not put back (for tests: they are bounded). */
+    notes: () => keyForgot.size + memberForgot.size + skippedMember.size,
   };
 }
 export type SessionCache = ReturnType<typeof createSessionCache>;
