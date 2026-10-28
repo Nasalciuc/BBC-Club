@@ -53,7 +53,7 @@ export function createPlatform(
     {
       logger,
       metrics,
-      isPaused: (consumer) => flags.isConsumerPaused(consumer),
+      pauseState: (consumer) => flags.consumerPauseState(consumer),
     },
     {
       handlerTimeoutMs: opts.handlerTimeoutMs,
@@ -79,6 +79,7 @@ export function createPlatform(
     metrics.gauge("queue_pending", async () => (await stats()).pending);
     metrics.gauge("queue_dead", async () => (await stats()).dead);
     metrics.gauge("queue_oldest_pending_seconds", async () => (await stats()).oldestPendingSeconds);
+    metrics.gauge("queue_paused", async () => (await stats()).paused);
   }
 
   const ac = new AbortController();

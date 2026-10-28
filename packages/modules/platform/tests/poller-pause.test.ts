@@ -1,0 +1,101 @@
+/** ADR-IMPL-080 (H1): a pause flag that cannot be read leaves a delivery pending, never parked; a delivery parked while
+ *  its flag said paused goes back to pending once the flag no longer does; `queue_paused` counts the parked ones. */
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import postgres from "postgres";
+import { z } from "zod";
+import { sql } from "drizzle-orm";
+import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
+import { createPlatform, registerPlatformJobs } from "../src/api";
+
+let iso: IsolatedDb;
+let db: IsolatedDb["db"];
+beforeAll(async () => {
+  iso = await isolatedDb("platform-poller-pause", { max: 4 });
+  db = iso.db;
+});
+afterAll(() => iso.drop());
+
+const CONSUMER = "testing.onPaused";
+const Payload = z.object({ type: z.literal("test.paused"), version: z.literal(1), value: z.string() });
+const platform = () => {
+  const p = createPlatform(db, { level: "silent" });
+  p.events.defineEvent("test.paused", { version: 1, schema: Payload });
+  p.events.registerConsumer("test.paused", CONSUMER, async () => {});
+  registerPlatformJobs(p.jobs, p.metrics);
+  return p;
+};
+const emit = (p: ReturnType<typeof platform>, value: string) =>
+  db.transaction((tx: any) =>
+    p.events.publish(tx, {
+      type: "test.paused",
+      aggregateType: "test",
+      aggregateId: `agg-${value}`,
+      payload: { type: "test.paused", version: 1, value },
+      publishedBy: "tests",
+    }),
+  );
+const deliveries = async () =>
+  (await db.execute(sql`
+    SELECT status, (run_after > now() + interval '3 seconds') AS later
+    FROM platform.event_deliveries WHERE consumer = ${CONSUMER}`)) as unknown as { status: string; later: boolean }[];
+
+beforeEach(async () => {
+  await db.execute(sql`TRUNCATE platform.event_deliveries, platform.event_dlq RESTART IDENTITY`);
+  await db.execute(sql`DELETE FROM platform.domain_events WHERE type = 'test.paused'`);
+  await db.execute(sql`DELETE FROM platform.flags WHERE key = ${`consumer.${CONSUMER}.paused`}`);
+});
+
+describe("a consumer's pause (ADR-IMPL-080)", () => {
+  it("(a) flags that cannot be read leave the delivery pending, tried again later — never parked", async () => {
+    const p = platform();
+    await emit(p, "a");
+    // Another connection holds platform.generations: this process has never read its counters, so no flag is trusted.
+    const locker = postgres(iso.url, { max: 1, onnotice: () => {} });
+    const locked = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const held = locker.begin(async (tx) => {
+      await tx`LOCK TABLE platform.generations IN ACCESS EXCLUSIVE MODE`;
+      locked.resolve();
+      await release.promise;
+    });
+    try {
+      await locked.promise;
+      await p.poller.drainOnce(10);
+      expect(await deliveries()).toEqual([{ status: "pending", later: true }]);
+    } finally {
+      release.resolve();
+      await held;
+      await locker.end();
+    }
+  }, 20_000);
+
+  it("(b) a flag that says paused parks the delivery; (c) once the flag is gone, queue-health puts it back", async () => {
+    const p = platform();
+    await p.flags.set(`consumer.${CONSUMER}.paused`, { enabled: true });
+    await emit(p, "b");
+    await p.poller.drainOnce(10);
+    expect((await deliveries()).map((d) => d.status)).toEqual(["paused"]);
+    expect(await p.metrics.render()).toMatch(/queue_paused\{[^}]*\} 1\b|queue_paused 1\b/);
+
+    await db.execute(sql`DELETE FROM platform.flags WHERE key = ${`consumer.${CONSUMER}.paused`}`);
+    const run = await p.jobs.run("queue-health");
+    expect(run.error ?? run.status).toBe("succeeded");
+    expect(run.metrics?.resumed).toBe(1);
+    expect((await deliveries()).map((d) => d.status)).toEqual(["pending"]);
+  });
+
+  it("queue-health leaves alone a delivery whose flag still says paused", async () => {
+    const p = platform();
+    await p.flags.set(`consumer.${CONSUMER}.paused`, { enabled: true });
+    await emit(p, "c");
+    await p.poller.drainOnce(10);
+    const run = await p.jobs.run("queue-health");
+    expect(run.metrics?.resumed).toBe(0);
+    expect((await deliveries()).map((d) => d.status)).toEqual(["paused"]);
+  });
+
+  it("(d) /metrics carries queue_paused", async () => {
+    const p = platform();
+    expect(await p.metrics.render()).toContain("queue_paused");
+  });
+});

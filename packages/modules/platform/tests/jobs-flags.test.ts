@@ -74,7 +74,7 @@ describe("flags", () => {
     expect(await p.flags.isKilled("engagement")).toBe(true);
     // Boot reads killState: an unreadable flag is an error there, never a killed module.
     await expect(p.flags.killState("engagement")).rejects.toThrow("db down");
-    expect(await p.flags.isConsumerPaused("x.onY")).toBe(true);
+    expect(await p.flags.consumerPauseState("x.onY")).toBe("unknown");
     expect(await p.flags.isEnabled("x", false)).toBe(false);
     // app-config reads readStrict and keeps its own last good answer: no default stands in for the row.
     await expect(p.flags.readStrict("x")).rejects.toThrow("db down");

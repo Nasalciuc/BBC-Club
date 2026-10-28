@@ -99,12 +99,15 @@ export function createFlags(
         return true;
       }
     },
-    async isConsumerPaused(consumer: string): Promise<boolean> {
+    /** "paused" only when the row says so. A flag that cannot be trusted (unread, or counters older than
+     *  KILL_STALE_MS) is "unknown": the poller leaves the delivery pending for later and does not park it — a park
+     *  outlived its cause, and only an operator undid it (ADR-IMPL-080). */
+    async consumerPauseState(consumer: string): Promise<"paused" | "running" | "unknown"> {
       try {
-        return (await readGuard(`consumer.${consumer}.paused`))?.enabled === true;
+        return (await readGuard(`consumer.${consumer}.paused`))?.enabled === true ? "paused" : "running";
       } catch (e) {
-        opts.logger?.warn({ consumer, err: errorForLog(e) }, "pause flag unreadable, failing closed");
-        return true;
+        opts.logger?.warn({ consumer, err: errorForLog(e) }, "pause flag unreadable, delivery left pending");
+        return "unknown";
       }
     },
     async inSegment(key: string, memberId: string): Promise<boolean> {

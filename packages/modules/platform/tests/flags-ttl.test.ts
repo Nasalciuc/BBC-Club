@@ -91,7 +91,7 @@ describe("flags snapshot", () => {
     expect(await flags.isKilled("requests")).toBe(false); // nine seconds: still trusted
     clock += 2_000;
     expect(await flags.isKilled("requests")).toBe(true);
-    expect(await flags.isConsumerPaused("x.onY")).toBe(true);
+    expect(await flags.consumerPauseState("x.onY")).toBe("unknown");
     expect(await flags.variant("app.recommended_version", "0.1.0")).toBe("1.2.0");
     expect(await flags.killState("requests")).toBe(false); // boot's read: what the snapshot holds, no stale verdict
     down = false;
