@@ -1234,6 +1234,19 @@ describe("Grafana's provisioning after a deploy (A-D1)", () => {
   });
 });
 
+describe("PgBouncer's RECONNECT after the migration (H2)", () => {
+  it("a worker without PGBOUNCER_ADMIN_URL fails the step, so the deploy prints that RECONNECT was not sent", async () => {
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    const program = deploy.match(/"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| echo "⚠ PgBouncer RECONNECT failed/)?.[1];
+    expect(program).toBeDefined();
+    const env = { ...process.env };
+    delete env.PGBOUNCER_ADMIN_URL;
+    const run = spawnSync(process.execPath, ["-e", program as string], { cwd: join(root, "packages/db"), env });
+    expect(run.status).not.toBe(0);
+    expect(run.stderr.toString()).toContain("PGBOUNCER_ADMIN_URL is not set");
+  });
+});
+
 describe("VictoriaMetrics' basic auth (A-S1)", () => {
   it("takes its password from the environment, never the command line, and Grafana's datasource sends it", async () => {
     const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {

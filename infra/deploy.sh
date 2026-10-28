@@ -204,9 +204,10 @@ fi
 # A migration can change what a prepared statement returns ("cached plan must not change result type"), and PgBouncer
 # keeps its server connections, and the statements prepared on them, until server_lifetime. RECONNECT closes each one
 # once it is released, so the next transaction prepares again (ADR-IMPL-074). Sent through the running worker's
-# PGBOUNCER_ADMIN_URL, as db-observe reads PgBouncer: no password on a command line. No worker running: nothing sent.
+# PGBOUNCER_ADMIN_URL, as db-observe reads PgBouncer: no password on a command line. No worker running: nothing sent;
+# a worker without the URL fails the step, so the warning says RECONNECT was not sent.
 if [[ -n "$($DC ps -q "$WORKER" 2>/dev/null || true)" ]]; then
-  $DC exec -T -w /repo/packages/db "$WORKER" bun -e 'const u = process.env.PGBOUNCER_ADMIN_URL; if (!u) process.exit(0); const p = (await import("postgres")).default(u, { max: 1, prepare: false, fetch_types: false, connect_timeout: 3, onnotice: () => {} }); try { await p.unsafe("RECONNECT"); } finally { await p.end({ timeout: 1 }); }' \
+  $DC exec -T -w /repo/packages/db "$WORKER" bun -e 'const u = process.env.PGBOUNCER_ADMIN_URL; if (!u) { console.error("PGBOUNCER_ADMIN_URL is not set in the worker"); process.exit(3); } const p = (await import("postgres")).default(u, { max: 1, prepare: false, fetch_types: false, connect_timeout: 3, onnotice: () => {} }); try { await p.unsafe("RECONNECT"); } finally { await p.end({ timeout: 1 }); }' \
     || echo "⚠ PgBouncer RECONNECT failed: prepared statements are dropped within server_lifetime instead"
 fi
 
