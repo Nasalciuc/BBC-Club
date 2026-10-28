@@ -75,6 +75,10 @@ covers `infra/monitoring` too).
    alerts go to `GRAFANA_ALERTS_WEBHOOK`, usually `OPS_WEBHOOK`'s URL under a name of its own: production's compose
    substitutes both Grafana keys, so `guard_staging` refuses them in `staging.env`, which may keep its own
    `OPS_WEBHOOK`. `bootstrap.sh` and `deploy.sh` refuse `MONITORING=on` without the two, before anything changes.
+   VictoriaMetrics asks for basic auth on its query and import API (user `bbc`, `VM_PASSWORD`, read from its
+   environment with `-envflag.enable`, never from its command line); `/health` and its own `/metrics` answer before
+   that check, as v1.154.0 orders them. Grafana's datasource sends the password; the two checks refuse `MONITORING=on`
+   without it too.
 9. **The room.** MinIO is a profile of its own, `media`: `MEDIA=on` puts it back in bootstrap's start (R1b). Staging's
    API replicas and worker get 384 MB each and its Postgres 768 MB: 2 048 in all, and `API_MEMORY_STAGING`,
    `WORKER_MEMORY_STAGING` and `POSTGRES_MEMORY_STAGING` in `staging.env` give one back. The limits add up to 6 752 MB

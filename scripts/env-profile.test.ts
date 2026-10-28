@@ -825,7 +825,7 @@ describe("monitoring and media profiles (ADR-IMPL-073)", () => {
     }
   });
 
-  it("staging.env keeps its own OPS_WEBHOOK; Grafana's two keys are production's alone", async () => {
+  it("staging.env keeps its own OPS_WEBHOOK; the monitoring's keys are production's alone", async () => {
     const composeFiles = "infra/docker-compose.yml infra/compose.prod.yml";
     const own = await withFiles(
       "OTHER=1\n",
@@ -835,11 +835,13 @@ describe("monitoring and media profiles (ADR-IMPL-073)", () => {
     expect(own.code, own.err).toBe(0);
     const grafana = await withFiles(
       "OTHER=1\n",
-      "GRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\n",
+      "GRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\nVM_PASSWORD=x\n",
       `guard_staging "$S" ${composeFiles}`,
     );
     expect(grafana.code).not.toBe(0);
-    expect(grafana.err).toContain("sets GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK: production's services read");
+    expect(grafana.err).toContain(
+      "sets GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK VM_PASSWORD: production's services read",
+    );
   });
 
   it("the example this repository ships keeps both off: MinIO waits for R1b, the monitoring for its owner", async () => {
@@ -926,7 +928,8 @@ describe("Grafana's database role and Postgres's settings (ADR-IMPL-077)", () =>
     rmSync(dir, { recursive: true, force: true });
     return result;
   }
-  const monitored = "MONITORING=on\nGRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\n";
+  const monitored =
+    "MONITORING=on\nGRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\nVM_PASSWORD=x\n";
   const noDaemon = `docker() { return 1; }`;
 
   it("only a production deploy asks for the database role's password, the one that gives it", async () => {
@@ -1184,6 +1187,34 @@ describe("Grafana's provisioning after a deploy (A-D1)", () => {
       expect(await changed("")).toBe("no");
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("VictoriaMetrics' basic auth (A-S1)", () => {
+  it("takes its password from the environment, never the command line, and Grafana's datasource sends it", async () => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { command?: string[]; environment?: Record<string, string> }>;
+    };
+    const vm = doc.services.victoriametrics!;
+    expect(vm.command).toContain("-envflag.enable");
+    expect(vm.command!.some((a) => a.includes("httpAuth") || a.includes("VM_PASSWORD"))).toBe(false);
+    expect(vm.environment).toEqual({ httpAuth_username: "bbc", httpAuth_password: "${VM_PASSWORD:-}" });
+    expect(doc.services.grafana!.environment!.VM_PASSWORD).toBe("${VM_PASSWORD:-}");
+    const ds = Bun.YAML.parse(
+      await Bun.file(join(root, "infra/monitoring/grafana/provisioning/datasources/victoriametrics.yml")).text(),
+    ) as { datasources: { basicAuth?: boolean; basicAuthUser?: string; secureJsonData?: Record<string, string> }[] };
+    expect(ds.datasources[0]).toMatchObject({
+      basicAuth: true,
+      basicAuthUser: "bbc",
+      secureJsonData: { basicAuthPassword: "${VM_PASSWORD}" },
+    });
+  });
+
+  it("a deploy and a bootstrap with MONITORING=on ask for it", async () => {
+    for (const file of ["infra/deploy.sh", "infra/bootstrap.sh"]) {
+      const text = await Bun.file(join(root, file)).text();
+      expect(/for k in GRAFANA_ADMIN_PASSWORD [^;]*VM_PASSWORD/.test(text), file).toBe(true);
     }
   });
 });

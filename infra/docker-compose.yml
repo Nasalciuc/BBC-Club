@@ -386,6 +386,12 @@ services:
       - -promscrape.configCheckInterval=1m
       - -selfScrapeInterval=30s
       - -memory.allowedPercent=40
+      # Basic auth on the query and import API (VictoriaMetrics answers /health and its own /metrics before it), its
+      # password read from the environment (envflag), never on the command line: Grafana's datasource gives it.
+      - -envflag.enable
+    environment:
+      httpAuth_username: bbc
+      httpAuth_password: ${VM_PASSWORD:-}
     volumes:
       - vm_data:/storage
       - ./monitoring/victoriametrics:/etc/victoriametrics:ro
@@ -422,6 +428,8 @@ services:
       GRAFANA_ALERTS_WEBHOOK: ${GRAFANA_ALERTS_WEBHOOK:-}
       # The database dashboard reads Postgres as bbc_monitor (pg_monitor, ADR-IMPL-077); deploy.sh gives the role this.
       GRAFANA_PG_PASSWORD: ${GRAFANA_PG_PASSWORD:-}
+      # VictoriaMetrics' basic auth, which the datasource sends (provisioning/datasources/victoriametrics.yml).
+      VM_PASSWORD: ${VM_PASSWORD:-}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro

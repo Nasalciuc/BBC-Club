@@ -149,6 +149,8 @@ jobs:
         run: |
           set -euo pipefail
           export API_IMAGE=ci/api:0000000 API_IMAGE_STAGING=ci/api:0000000
+          # The box's comes from production.env; Compose substitutes this one into both containers' environments.
+          export VM_PASSWORD=ci-vm-password
           compose="docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml -f infra/compose.staging.yml"
           $compose --profile monitoring --profile media config -q
           $compose --profile monitoring config --format json > "$RUNNER_TEMP/compose.json"
@@ -159,11 +161,17 @@ jobs:
           # rules then read no data, as on a quiet box, instead of failing to reach it.
           docker network create monitoring-check >/dev/null
           mapfile -t vm_flags < <(svc victoriametrics '.command[]')
+          mapfile -t vm_env < <(svc victoriametrics '.environment | to_entries[] | "--env=\(.key)=\(.value)"')
           docker run -d --name vm-check --network monitoring-check --network-alias victoriametrics \
-            -v "$PWD/infra/monitoring/victoriametrics:/etc/victoriametrics:ro" \
+            "${vm_env[@]}" -v "$PWD/infra/monitoring/victoriametrics:/etc/victoriametrics:ro" \
             "$(svc victoriametrics .image)" "${vm_flags[@]}" >/dev/null
           for _ in $(seq 1 30); do docker exec vm-check wget -qO- http://127.0.0.1:8428/health >/dev/null 2>&1 && break; sleep 1; done
           docker exec vm-check wget -qO- http://127.0.0.1:8428/health >/dev/null
+          # Basic auth (A-S1): the query API refuses a request without the password and answers one with it.
+          if docker exec vm-check wget -qO- 'http://127.0.0.1:8428/api/v1/query?query=1' >/dev/null 2>&1; then
+            echo "::error::VictoriaMetrics answered a query without its password"; exit 1
+          fi
+          docker exec vm-check wget -qO- "http://bbc:${VM_PASSWORD}@127.0.0.1:8428/api/v1/query?query=1" >/dev/null
           # Grafana's own environment, but for an anonymous admin who reads it here (no password on a command line, none
           # set: the box's comes from production.env) and a webhook that goes nowhere.
           jq -r '.services.grafana.environment | to_entries[]

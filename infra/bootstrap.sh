@@ -148,7 +148,7 @@ missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET AP
 if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 if glitchtip_wanted "$ENV_FILE"; then for k in GLITCHTIP_DB_PASSWORD GLITCHTIP_SECRET ERRORS_DOMAIN; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 # Grafana will not start its alerting without a webhook to send to, nor without its admin's password (ADR-IMPL-073).
-if monitoring_wanted "$ENV_FILE"; then for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
+if monitoring_wanted "$ENV_FILE"; then for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD VM_PASSWORD; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 [[ ${#missing[@]} -eq 0 ]] || { echo "❌ not filled in, or unreadable, in $ENV_FILE: ${missing[*]}"; exit 2; }
 url_safe POSTGRES_PASSWORD "$POSTGRES_PASSWORD" "$ENV_FILE"
 if glitchtip_wanted "$ENV_FILE"; then url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"; fi

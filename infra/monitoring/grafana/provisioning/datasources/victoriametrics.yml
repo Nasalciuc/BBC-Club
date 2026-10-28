@@ -8,6 +8,10 @@ datasources:
     url: http://victoriametrics:8428
     isDefault: true
     editable: false
+    basicAuth: true
+    basicAuthUser: bbc
     jsonData:
       timeInterval: 30s
       httpMethod: POST
+    secureJsonData:
+      basicAuthPassword: ${VM_PASSWORD}

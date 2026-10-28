@@ -50,7 +50,7 @@ MONITORING_ON=""
 if monitoring_wanted "$PROD_ENV"; then
   DC="$DC --profile monitoring"
   MONITORING_ON=1
-  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD; do
+  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD VM_PASSWORD; do
     [[ "$k" == GRAFANA_PG_PASSWORD && "$MODE" != "production" ]] && continue
     env_known "$PROD_ENV" "$k" || { echo "❌ MONITORING=on needs $k in $PROD_ENV (RUNBOOK § Monitoring)"; exit 1; }
   done
