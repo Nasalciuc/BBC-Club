@@ -1,4 +1,6 @@
-/** A non-unique, non-partial, non-expression index whose columns are a prefix of another index on the same table. */
+/** A non-unique, non-partial, non-expression index whose columns are a prefix of another full index on the same table.
+ *  A partial index covers only the rows its predicate keeps, so it never makes a full one redundant: job_runs_job_started
+ *  serves every run, job_runs_last_finished (0054) the finished ones (ADR-IMPL-077). */
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
@@ -24,6 +26,7 @@ const REDUNDANT = sql`
     AND NOT i1.indisprimary
     AND i1.indpred IS NULL
     AND i1.indexprs IS NULL
+    AND i2.indpred IS NULL
     AND i1.indnkeyatts > 0
     AND i1.indnkeyatts <= i2.indnkeyatts
     AND (string_to_array(i1.indkey::text, ' '))[1:i1.indnkeyatts]
@@ -42,6 +45,11 @@ describe("no redundant prefix indexes", () => {
     await iso.db.execute(sql`CREATE INDEX scratch_idx_a ON platform.scratch_idx (a)`);
     const rows = (await iso.db.execute(REDUNDANT)) as { extra: string; covering: string }[];
     expect(rows.some((r) => r.extra.endsWith("scratch_idx_a") && r.covering.endsWith("scratch_idx_ab"))).toBe(true);
+    // A partial index whose columns start with a full one's covers only some rows: the full one stays.
+    await iso.db.execute(sql`CREATE INDEX scratch_idx_b ON platform.scratch_idx (b)`);
+    await iso.db.execute(sql`CREATE INDEX scratch_idx_ba_some ON platform.scratch_idx (b, a) WHERE a > 0`);
+    const partial = (await iso.db.execute(REDUNDANT)) as { extra: string; covering: string }[];
+    expect(partial.some((r) => r.extra.endsWith("scratch_idx_b"))).toBe(false);
     await iso.db.execute(sql`DROP TABLE platform.scratch_idx`);
     const after = (await iso.db.execute(REDUNDANT)) as unknown[];
     expect(after).toEqual([]);
