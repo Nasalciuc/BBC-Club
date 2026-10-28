@@ -50,7 +50,7 @@ MONITORING_ON=""
 if monitoring_wanted "$PROD_ENV"; then
   DC="$DC --profile monitoring"
   MONITORING_ON=1
-  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD; do
+  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD VM_PASSWORD GRAFANA_SECRET_KEY; do
     [[ "$k" == GRAFANA_PG_PASSWORD && "$MODE" != "production" ]] && continue
     env_known "$PROD_ENV" "$k" || { echo "❌ MONITORING=on needs $k in $PROD_ENV (RUNBOOK § Monitoring)"; exit 1; }
   done
@@ -201,6 +201,14 @@ if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$S
   restore_tag
   notify "🚨 deploy $MODE aborted at migration. Old API still serving." "${SEC_WEBHOOK:-}"; exit 1
 fi
+# A migration can change what a prepared statement returns ("cached plan must not change result type"), and PgBouncer
+# keeps its server connections, and the statements prepared on them, until server_lifetime. RECONNECT closes each one
+# once it is released, so the next transaction prepares again (ADR-IMPL-074). Sent through the running worker's
+# PGBOUNCER_ADMIN_URL, as db-observe reads PgBouncer: no password on a command line. No worker running: nothing sent.
+if [[ -n "$($DC ps -q "$WORKER" 2>/dev/null || true)" ]]; then
+  $DC exec -T -w /repo/packages/db "$WORKER" bun -e 'const u = process.env.PGBOUNCER_ADMIN_URL; if (!u) process.exit(0); const p = (await import("postgres")).default(u, { max: 1, prepare: false, fetch_types: false, connect_timeout: 3, onnotice: () => {} }); try { await p.unsafe("RECONNECT"); } finally { await p.end({ timeout: 1 }); }' \
+    || echo "⚠ PgBouncer RECONNECT failed: prepared statements are dropped within server_lifetime instead"
+fi
 
 echo "▶ 4/8 canary one new $SVC replica for ${CANARY_SECONDS}s"
 # The pooler alone. Without --no-deps Compose would also recreate Postgres whenever one of its settings changed, in the
@@ -300,8 +308,9 @@ elif ! { $DC up -d --no-deps caddy && $DC exec -T caddy caddy reload --config /e
 fi
 # The monitoring takes this commit's images and settings, production only: one stack serves both environments, as
 # Caddy does. Its files (scrape targets, dashboards) are read from the checkout; only a changed setting or image
-# recreates a container. --wait holds until each container's healthcheck answers: VictoriaMetrics' and Grafana's (six
-# probes 10 s apart, so a start has about a minute) and cAdvisor's, which its image brings (every 30 s); node-exporter
+# recreates a container. --wait holds until each container's healthcheck answers: VictoriaMetrics' (six probes 10 s
+# apart, so a start has about a minute), Grafana's (the same after a two-minute start period: its first start runs its
+# own migrations, so up to 3 minutes) and cAdvisor's, which its image brings (every 30 s); node-exporter
 # has none and counts once it runs. A container that starts and then fails therefore counts as not started. A failure
 # here leaves the API as it is: it is live already; the deploy still ends with an error, after the prune, whether or
 # not the webhook answered, so a monitoring that asked to run and did not is never reported as a deploy that went well.
@@ -312,8 +321,18 @@ if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
   if ! set_monitor_password "$PROD_ENV" $DC; then
     notify "⚠ deploy production: $IMAGE is live, but Grafana's database role took no password — the database dashboard stays empty (RUNBOOK § Monitoring)" "${OPS_WEBHOOK:-}"
   fi
-  if ! $DC up -d --no-deps --wait --wait-timeout 120 victoriametrics grafana node-exporter cadvisor; then
+  # Grafana reads its provisioning (alerts, contact point, datasources) only when it starts, and the files are bind-mounted
+  # from this checkout, so a change to them leaves compose's settings as they were: a provisioning file newer than the
+  # running container's start restarts it.
+  gcid="$($DC ps -q grafana 2>/dev/null || true)"
+  gstarted=""
+  [[ -n "$gcid" ]] && gstarted="$(docker inspect -f '{{.State.StartedAt}}' "$gcid" 2>/dev/null || true)"
+  if ! $DC up -d --no-deps --wait --wait-timeout 240 victoriametrics grafana node-exporter cadvisor; then
     notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
+    MONITORING_FAILED=1
+  elif [[ -n "$gstarted" && "$($DC ps -q grafana 2>/dev/null || true)" == "$gcid" ]] &&
+    ! refresh_grafana "$INFRA_DIR/monitoring/grafana/provisioning" "$gstarted" $DC; then
+    notify "⚠ deploy production: $IMAGE is live, but Grafana did not come back healthy with the new alerts — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
     MONITORING_FAILED=1
   fi
 fi
