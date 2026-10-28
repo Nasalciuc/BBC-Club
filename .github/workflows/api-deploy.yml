@@ -258,7 +258,8 @@ jobs:
     environment: production # protected: requires manual approval in GitHub → Environments
     # Concurrency per job, never per workflow: a production deploy waiting for its approval keeps the run open, and a
     # workflow-level group would hold every later merge's staging deploy behind it. An older run still waiting when a
-    # newer one arrives is rejected in Environments, and only the newest is approved (ADR-IMPL-079).
+    # newer one arrives is rejected in Environments, and only the newest is approved (ADR-IMPL-079); one approved
+    # anyway stops on the box, before its checkout, once main has moved past it.
     concurrency:
       group: deploy-production
       cancel-in-progress: false
@@ -279,5 +280,10 @@ jobs:
             exec 9>/var/lock/bbc-deploy.lock
             flock -w 1500 9 || { echo "❌ another deploy has held the box for 25 minutes"; exit 1; }
             git fetch -q --all
+            # Production deploys main's tip and nothing older: an approval that waited past a newer merge would put
+            # back the older API and, from this checkout, the older infra/caddy and infra/monitoring production reads.
+            main=$(git rev-parse origin/main)
+            [ "$main" = "${{ needs.gate.outputs.sha }}" ] ||
+              { echo "❌ main is at ${main::7}, past this commit: approve the newest production deploy instead"; exit 1; }
             git checkout -q ${{ needs.gate.outputs.sha }}
             bash "$(find "$APP_DIR" -maxdepth 5 -type f -path '*/infra/deploy.sh' | head -1)" production ${{ needs.build.outputs.image }}

@@ -68,6 +68,16 @@ describe("api-deploy: production waits for approval, after staging", () => {
     expect(needsOf(production)).toEqual(expect.arrayContaining(["gate", "build", "staging"]));
   });
 
+  it("an older approval stops before its checkout once main has moved past its commit", () => {
+    const script = String(deploy.jobs.production!.steps.find((step) => step.with?.script)?.with?.script ?? "");
+    const guard = script.indexOf('[ "$main" = "${{ needs.gate.outputs.sha }}" ] ||');
+    const checkout = script.indexOf("git checkout -q ${{ needs.gate.outputs.sha }}");
+    expect(script).toContain("main=$(git rev-parse origin/main)");
+    expect(guard).toBeGreaterThan(script.indexOf("git fetch -q --all"));
+    expect(checkout).toBeGreaterThan(guard);
+    expect(script.slice(guard, checkout)).toContain("exit 1");
+  });
+
   it("has no workflow-level concurrency; each deploy holds its own group, never cancelling one in progress", () => {
     expect(deploy.concurrency).toBeUndefined();
     expect(deploy.jobs.staging!.concurrency).toEqual({ group: "deploy-staging", "cancel-in-progress": false });

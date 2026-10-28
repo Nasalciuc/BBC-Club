@@ -88,8 +88,10 @@ app, then production once approved. A commit main has already moved past stops a
   preview build starts and testers install that APK once. The run's summary says which, with the build's link. iOS
   waits for an Apple Developer account.
 - **Production**: waits for approval in the run (Review deployments) or in GitHub → Environments → `production`.
-  When several wait, approve **only the newest** and reject the older ones: an older one approved last would put
-  production back on its commit.
+  When several wait, approve **only the newest** and reject the older ones. One approved anyway stops on the box
+  before its checkout (`main is at …, past this commit`): production deploys main's tip only, so an older approval
+  never puts back the older API, nor the `infra/caddy` and `infra/monitoring` production reads from that checkout. A
+  run by hand for production is held to the same rule.
 - **Not automatic**: the production app (sections 4–5, `release`), any iOS build, an OTA to channel `production`.
 
 **Dry run** (no update published, no build started): Actions → api-deploy → Run workflow on `main`, `target`
