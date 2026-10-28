@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createDb } from "../src/client";
 import { applyReferenceFixes, loadAirportsReference } from "./airports-reference";
-import { applyConcurrentIndexFile } from "./concurrent-indexes";
+import { ConcurrentIndexStopped, applyConcurrentIndexFile } from "./concurrent-indexes";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -854,7 +854,16 @@ try {
 } catch (e) {
   // Drizzle wraps the driver error: the SQLSTATE is on e.cause.code.
   const code = (e as { cause?: { code?: string }; code?: string }).cause?.code ?? (e as { code?: string }).code;
-  if (code === "55P03") {
+  if (code === "55P03" && e instanceof ConcurrentIndexStopped) {
+    // CONCURRENTLY runs outside a transaction: nothing rolls back, and the build waits for every transaction older
+    // than it in the database, not only those on its table.
+    console.error(
+      `migration stopped: ${e.index} (${e.file}) waited past lock_timeout (5 s) for a transaction older than its build — ` +
+        "any long transaction in this database. The index stays INVALID (no read uses it) and the file is not recorded; " +
+        "the next run drops it and builds it again. The previous release keeps serving. Run the same deploy again when " +
+        "the database is quiet (RUNBOOK: Database recovery).",
+    );
+  } else if (code === "55P03") {
     console.error(
       "migration stopped: a lock was not granted within lock_timeout (5 s) — a long-running transaction holds the table. " +
         "The failed block was rolled back; the previous release keeps serving. Retry when the table is quiet (RUNBOOK: Database recovery).",

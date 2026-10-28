@@ -696,10 +696,10 @@ The script aborts before starting the API if Postgres does not come back or the 
 
 Migrations are expand-only and there are no down migrations. "Back" is never a reverse script. It is one of three things: the previous image, which runs against the new schema; a **new forward migration**; or, when data is lost, a restore.
 
-**1. The deploy stopped at step 3/7: a lock timeout.** Every lock the runner takes waits at most 5 s (`lock_timeout`), so a migration can never queue live traffic behind it. The deploy log looks like this:
+**1. The deploy stopped at step 3/8: a lock timeout.** Every lock the runner takes waits at most 5 s (`lock_timeout`), so a migration can never queue live traffic behind it. The deploy log looks like this:
 
 ```text
-▶ 3/7 migrations (expand-only, separate job)
+▶ 3/8 migrations (expand-only, direct Postgres — never the pooler)
 migration stopped: a lock was not granted within lock_timeout (5 s) — a long-running transaction holds the table. The failed block was rolled back; the previous release keeps serving. Retry when the table is quiet (RUNBOOK: Database recovery).
 migration failed: DrizzleQueryError: Failed query: ALTER TABLE …
 PostgresError: canceling statement due to lock timeout
@@ -717,6 +717,14 @@ FROM pg_stat_activity WHERE datname = current_database() AND xact_start IS NOT N
 - **A long report or an export:** wait for it to finish.
 - **A session `idle in transaction` for minutes:** end it with `SELECT pg_terminate_backend(<pid>);`.
 - Then run the **same** `deploy.sh` command again. The block runs from the start.
+
+**A `CONCURRENTLY` index is the exception** (0012, 0013, 0017, 0044, 0048, 0049, 0054): it is built outside a transaction, and it waits for every transaction older than its build in the database, not only those on its table. Its log names the index:
+
+```text
+migration stopped: catalog.demand_daily_from_day (0049_catalog_demand_from_route.sql) waited past lock_timeout (5 s) for a transaction older than its build — any long transaction in this database. The index stays INVALID (no read uses it) and the file is not recorded; the next run drops it and builds it again. …
+```
+
+Nothing to clean up by hand: find the long transaction as above (any table), let it end, and run the deploy again — the runner drops the INVALID index and builds it again, and records the file only once the index is valid (`packages/db/test/migrate-lock.test.ts`).
 
 **2. A migration applied, but it is wrong (shape or data).** Leave the previous image serving (§ Roll back right now) and write a forward fix:
 
@@ -756,9 +764,9 @@ key and republishes each fare it carries.
   - The restore is drilled monthly by `infra/restore-test.sh` (cron `restore-test`, "restore drill ok" in `#bbc-ops`).
   - RPO ≈ 5 min: anything written after the chosen time is gone. Prefer the two options above when only one table is affected.
 
-**4. An INVALID index after a failed `CREATE INDEX CONCURRENTLY`.** The CONCURRENTLY files (0012, 0013, 0017) run outside a transaction, so a failed build is not rolled back. It leaves an index that exists but is INVALID: never used by queries, but still maintained on every write.
+**4. An INVALID index after a failed `CREATE INDEX CONCURRENTLY`.** The CONCURRENTLY files (0012, 0013, 0017, 0044, 0048, 0049, 0054) run outside a transaction, so a failed build is not rolled back. It leaves an index that exists but is INVALID: never used by queries, and maintained on every write once its build got that far. The runner repairs its own files: the next run drops an INVALID index of the file and builds it again, and records the file only when every index in it is valid (ADR-IMPL-071, `migrate-concurrent-index.test.ts`) — re-run the deploy. The steps below are for an index built by hand.
 
-The trap: those files say `IF NOT EXISTS`, so a plain re-run skips the invalid index and records the file as applied. Always drop the invalid index first:
+The trap, for SQL run by hand: `IF NOT EXISTS` skips the invalid index (`relation … already exists, skipping`) and the statement succeeds. Drop the invalid index first:
 
 ```sql
 SELECT n.nspname || '.' || c.relname AS index

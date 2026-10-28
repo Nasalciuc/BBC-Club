@@ -98,6 +98,12 @@ export function anyText(column: PgColumn, values: readonly string[]): SQL {
 /** Rows one retention statement deletes; the next batch is its own statement, so no delete holds a year's locks. */
 export const RETENTION_BATCH = 5_000;
 
+/** One batch of deleteInBatches: the rows `where` names, `batch` of them, picked by `(tableoid, ctid)`. Exported for the
+ *  hot-query test, which plans exactly what runs. */
+export function deleteBatchSql(table: PgTable, where: SQL, batch = RETENTION_BATCH): SQL {
+  return sql`DELETE FROM ${table} WHERE (tableoid, ctid) IN (SELECT tableoid, ctid FROM ${table} WHERE ${where} LIMIT ${sql.raw(String(batch))})`;
+}
+
 /** What deleteInBatches deleted, and whether it stopped at its bound (`maxBatches` batches, the last one full): the
  *  next run carries on, and a table that reaches it night after night gains more than a night deletes. */
 export type Deleted = { deleted: number; capped: boolean };
@@ -134,9 +140,10 @@ export async function deleteInBatches(
   try {
     for (let i = 0; i < maxBatches; i++) {
       opts.signal?.throwIfAborted();
-      const r = (await (exec as any).execute(
-        sql`DELETE FROM ${table} WHERE (tableoid, ctid) IN (SELECT tableoid, ctid FROM ${table} WHERE ${where} LIMIT ${sql.raw(String(batch))})`,
-      )) as { count?: number; rowCount?: number };
+      const r = (await (exec as any).execute(deleteBatchSql(table, where, batch))) as {
+        count?: number;
+        rowCount?: number;
+      };
       const n = r.count ?? r.rowCount ?? 0;
       total += n;
       if (n < batch) return { deleted: total, capped: false };

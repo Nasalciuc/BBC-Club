@@ -28,6 +28,11 @@ import type { PushFacade } from "@bbc/push";
 
 const NotificationId = z.string().uuid();
 
+/** What retention-notifications deletes: a notification that reached its end 90 days ago, never a pending or sending
+ *  one — its statuses as the partial index `notifications_retention` (0054) says them, so the planner proves it (the
+ *  hot-query test plans it). */
+export const notificationsRetention = sql`${inConst(notificationsTable.status, ["sent", "delivered", "failed", "suppressed"])} AND ${notificationsTable.createdAt} < now() - interval '90 days'`;
+
 type Ports = {
   members: MembersFacade;
   push: PushFacade;
@@ -262,12 +267,7 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
             handler: (ctx: JobContext) =>
               retainEach(ctx.signal, {
                 notifications: () =>
-                  deleteInBatches(
-                    conn,
-                    notificationsTable,
-                    sql`${inConst(notificationsTable.status, ["sent", "delivered", "failed", "suppressed"])} AND ${notificationsTable.createdAt} < now() - interval '90 days'`,
-                    { signal: ctx.signal },
-                  ),
+                  deleteInBatches(conn, notificationsTable, notificationsRetention, { signal: ctx.signal }),
                 campaigns: () =>
                   deleteInBatches(
                     conn,

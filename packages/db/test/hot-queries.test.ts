@@ -3,7 +3,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
 import { nodes, planOf, seqScans, sqlOf, usesIndex } from "../src/testing/plan";
-import { lastRunsSql, pollerClaimSql, pollerStatsSql } from "@bbc/platform";
+import { lastFinishedRunsSql, lastRunsSql, pollerClaimSql, pollerStatsSql } from "@bbc/platform";
+import { deleteBatchSql } from "../src/helpers";
+import { jobRunsRetention } from "../../modules/platform/src/jobs/builtin";
+import { jobRuns } from "../../modules/platform/src/infrastructure/schema";
+import { notificationsRetention } from "../../modules/core/notifications/src/module";
+import { notificationsTable } from "../src/schema/notifications";
 import { discoveryRepo } from "../../modules/domain/catalog/src/infrastructure/discovery.repo";
 import { dispatchClaimSql, dispatchReaperSql } from "../../modules/core/notifications/src/application/dispatch";
 import { faresRepo } from "../../modules/domain/catalog/src/infrastructure/fares.repo";
@@ -12,6 +17,8 @@ import { notificationsRepo } from "../../modules/core/notifications/src/infrastr
 import { offerSendsSelect } from "../../modules/core/notifications/src/application/daily-cap";
 
 const MEMBER = "hot-member";
+/** The jobs the seed's runs belong to. */
+const JOBS = ["dispatch", "campaign-fanout", "send-requests", "resolve-place-photos", "db-observe", "retention"];
 const ROWS = 200_000;
 
 let iso: IsolatedDb;
@@ -93,6 +100,19 @@ async function seedVolume() {
     sql.raw(`
     INSERT INTO auth.rate_limit (id, key, count, last_request)
     SELECT 'rl-' || g, '10.0.' || (g / 256) || '.' || (g % 256) || '/sign-in/email', 1, 0
+    FROM generate_series(1, 50000) g`),
+  );
+  // Better Auth's codes, by address, and the accounts, by when they were made (0048): 50 000 of each.
+  await iso.db.execute(
+    sql.raw(`
+    INSERT INTO auth.verification (id, identifier, value, expires_at)
+    SELECT 'v-' || g, 'sign-in-otp-' || g || '@hot.test', 'h', now() + interval '10 minutes'
+    FROM generate_series(1, 50000) g`),
+  );
+  await iso.db.execute(
+    sql.raw(`
+    INSERT INTO auth."user" (id, name, email, email_verified, created_at)
+    SELECT 'u-' || g, 'Hot ' || g, 'hot-' || g || '@hot.test', true, now() - (g || ' minutes')::interval
     FROM generate_series(1, 50000) g`),
   );
   await iso.db.execute(sql`ANALYZE`);
@@ -182,17 +202,60 @@ describe("hot queries choose their index", () => {
     {
       // ADR-IMPL-077: /status's last run per job — one probe per job, newest first, never a sort of the table.
       name: "last run per job",
-      statement: () =>
-        lastRunsSql([
-          "dispatch",
-          "campaign-fanout",
-          "send-requests",
-          "resolve-place-photos",
-          "db-observe",
-          "retention",
-        ]),
+      statement: () => lastRunsSql(JOBS),
       index: "job_runs_job_started",
       noSeqScanOn: ["job_runs"],
+      noSort: true,
+    },
+    {
+      // ADR-IMPL-077: /status's last finished run per job — on its own index, read from the top, no sort (0054).
+      name: "last finished run per job",
+      statement: () => lastFinishedRunsSql(JOBS),
+      index: "job_runs_last_finished",
+      noSeqScanOn: ["job_runs"],
+      noSort: true,
+    },
+    {
+      // ADR-IMPL-077: the retention's finished runs — each job's last finished one probed on job_runs_last_finished,
+      // with no sort. Which rows it looks at is the planner's: a Seq Scan of job_runs is allowed (the table is old).
+      name: "retention: finished job runs",
+      statement: () => deleteBatchSql(jobRuns, jobRunsRetention.finished),
+      index: "job_runs_last_finished",
+      noSeqScanOn: [],
+      noSort: true,
+    },
+    {
+      // ADR-IMPL-077: the retention's other runs — a newer run of the job probed on job_runs_job_started.
+      name: "retention: other job runs",
+      statement: () => deleteBatchSql(jobRuns, jobRunsRetention.others),
+      index: "job_runs_job_started",
+      noSeqScanOn: [],
+      noSort: true,
+    },
+    {
+      // ADR-IMPL-077: retention-notifications — what reached its end 90 days ago, on its partial index (0054).
+      name: "retention: notifications",
+      statement: () => deleteBatchSql(notificationsTable, notificationsRetention),
+      index: "notifications_retention",
+      noSeqScanOn: ["notifications"],
+      noSort: true,
+    },
+    {
+      // ADR-IMPL-077: Better Auth checks a code by the address it went to (0048).
+      name: "auth verification by identifier",
+      statement: () => sql`SELECT * FROM auth.verification WHERE identifier = ${"sign-in-otp-7001@hot.test"}`,
+      index: "verification_identifier",
+      noSeqScanOn: ["verification"],
+    },
+    {
+      // ADR-IMPL-077: members' reconcile — the accounts made before a moment, newest first
+      // (identity's listUsersCreatedBefore, the same SQL), every 15 minutes (0048).
+      name: "auth users created before",
+      statement: () =>
+        sql`SELECT id, email, created_at FROM auth."user" WHERE created_at < ${new Date(Date.now() - 86_400_000).toISOString()}::timestamptz
+            ORDER BY created_at DESC LIMIT 5000`,
+      index: "user_created_at",
+      noSeqScanOn: ["user"],
       noSort: true,
     },
     {

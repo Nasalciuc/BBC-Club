@@ -32,12 +32,16 @@ Postgres 16), the data layer had reads that grow worse with time:
 
 **Decision.**
 
-1. **Plans checked on volume.** The hot-query test seeds a year of job runs, a month of demand for 8 000 routes a day
-   and 50 000 rate-limit rows, and checks the shape of each new read's plan — the index named, no sequential scan, no
-   sort where the index holds the order — and the fares' reads on the generic plan (ADR-IMPL-074). It runs with every
-   database suite (no separate CI job: the seed takes seconds).
+1. **Plans checked on volume.** The hot-query test seeds a year of job runs, a month of demand for 8 000 routes a day,
+   50 000 rate-limit rows, codes and accounts, and checks the shape of each new read's plan — the index named, no
+   sequential scan, no sort where the index holds the order — and the fares' reads on the generic plan (ADR-IMPL-074):
+   every index this ADR adds is named by a read (`rate_limit_key`, `verification_identifier`, `user_created_at`,
+   `demand_daily_from_day`, `job_runs_last_finished`, `notifications_retention`), and each one dropped fails its read's
+   case. The retention's batches are planned as they run (`deleteBatchSql`). It runs with every database suite (no
+   separate CI job: the seed takes seconds).
 2. **`lastRuns` / `lastFinishedRuns`**: one probe per registered job, `LATERAL … ORDER BY started_at DESC LIMIT 1` on
-   `job_runs_job_started` (`lastRunsSql`).
+   `job_runs_job_started` (`lastRunsSql`), the last finished one on `job_runs_last_finished` without a sort
+   (`lastFinishedRunsSql`, 0054).
 3. **`publish`** writes the event and its deliveries in one statement, a data-modifying `WITH` whose insert returns
    `id, occurred_at` to the deliveries' `INSERT … SELECT`: the deliveries take the event's key inside Postgres and
    nothing is read back. Not through text: in `SQL, DMY` and Asia/Kolkata a time reads `… IST`, which Postgres takes

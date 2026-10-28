@@ -21,6 +21,23 @@ const last = alias(jobRuns, "last");
 const later = alias(jobRuns, "later");
 
 /** Jobs platform owns. Modules register their own (expire-offers, sync-mirror, receipts…). */
+/**
+ * What the retention deletes of `job_runs`: 30 days of runs, and each job's last run and last finished run whenever they
+ * were (/status reads both: a failure followed only by skipped or running runs still fails). A finished run goes unless
+ * it is its job's last finished one, in lastFinishedRunsSql's order (started_at, then id); any other run once a newer
+ * run exists. Two statements: one OR of the two kept the planner off the indexes (3.7 s a batch, not 30 ms). Each
+ * probes its job's runs by index — the last finished one on `job_runs_last_finished`, a newer one on
+ * `job_runs_job_started` — and the hot-query test plans both; which rows to look at is the planner's (the whole table
+ * is old enough on the first night).
+ */
+export const jobRunsRetention = {
+  finished: sql`${jobRuns.startedAt} < now() - interval '30 days' AND ${inConst(jobRuns.status, FINISHED)} AND ${jobRuns.id} <> (
+    SELECT ${last.id} FROM ${jobRuns} AS ${last} WHERE ${last.job} = ${jobRuns.job} AND ${inConst(last.status, FINISHED)}
+    ORDER BY ${last.startedAt} DESC, ${last.id} DESC LIMIT 1)`,
+  others: sql`${jobRuns.startedAt} < now() - interval '30 days' AND NOT ${inConst(jobRuns.status, FINISHED)} AND EXISTS (
+    SELECT 1 FROM ${jobRuns} AS ${later} WHERE ${later.job} = ${jobRuns.job} AND ${later.startedAt} > ${jobRuns.startedAt})`,
+};
+
 export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
   jobs.register("partitions", {
     description: "create journal partitions for the coming months",
@@ -93,28 +110,11 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
         rateLimits: () => deleteInBatches(db, rateLimits, sql`${rateLimits.expiresAt} < now()`, { signal }),
         rateLimitState: () =>
           deleteInBatches(db, rateLimitState, sql`${rateLimitState.tat} < now() - interval '1 day'`, { signal }),
-        // 30 days of runs, and each job's last run and last finished run whenever they were (/status reads both: a
-        // failure followed only by skipped or running runs still fails). A finished run goes unless it is its job's last
-        // finished one, in lastFinishedRunsSql's order (started_at, then id; job_runs_last_finished); any other run once
-        // a newer run exists (job_runs_job_started). Two statements: one OR of the two kept the planner off the index
-        // (3.7 s a batch, not 30 ms).
+        // 30 days of runs, and each job's last run and last finished run whenever they were (jobRunsRetention).
         jobRuns: async () => {
-          const finished = await deleteInBatches(
-            db,
-            jobRuns,
-            sql`${jobRuns.startedAt} < now() - interval '30 days' AND ${inConst(jobRuns.status, FINISHED)} AND ${jobRuns.id} <> (
-              SELECT ${last.id} FROM ${jobRuns} AS ${last} WHERE ${last.job} = ${jobRuns.job} AND ${inConst(last.status, FINISHED)}
-              ORDER BY ${last.startedAt} DESC, ${last.id} DESC LIMIT 1)`,
-            { signal },
-          );
+          const finished = await deleteInBatches(db, jobRuns, jobRunsRetention.finished, { signal });
           try {
-            const others = await deleteInBatches(
-              db,
-              jobRuns,
-              sql`${jobRuns.startedAt} < now() - interval '30 days' AND NOT ${inConst(jobRuns.status, FINISHED)} AND EXISTS (
-                SELECT 1 FROM ${jobRuns} AS ${later} WHERE ${later.job} = ${jobRuns.job} AND ${later.startedAt} > ${jobRuns.startedAt})`,
-              { signal },
-            );
+            const others = await deleteInBatches(db, jobRuns, jobRunsRetention.others, { signal });
             return { deleted: finished.deleted + others.deleted, capped: finished.capped || others.capped };
           } catch (err) {
             throw err instanceof DeleteStopped ? new DeleteStopped(finished.deleted + err.deleted, err.cause) : err;
