@@ -14,8 +14,9 @@ cookie back. After the first minute every request carries the token alone and Be
 **Decision.**
 
 1. **Each process keeps the session behind a token** for at most `SESSION_COOKIE_CACHE_SECONDS`, never past the
-   session's own expiry, keyed by a hash of the signed token (never the token). Only a verified member's session is
-   kept; an anonymous or unverified answer is asked again.
+   session's own expiry, keyed by a hash of the signed token (never the token), and only when the token Better Auth
+   verified is the one the key was taken from (it reads one cookie name; a request may carry another of the same
+   name). Only a verified member's session is kept; an anonymous or unverified answer is asked again.
 2. **A miss reads fresh** (`disableCookieCache`), so nothing is kept that the database did not say within the minute.
    A write (`POST`, `PUT`, `PATCH`, `DELETE`) reads fresh as before and puts its answer back, or forgets the token.
 3. **Forgetting.** A write to `/api/auth/*` (sign-out, revoke, change), a password change through

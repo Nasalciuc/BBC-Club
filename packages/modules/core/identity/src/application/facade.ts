@@ -6,7 +6,7 @@ import { user } from "../infrastructure/schema";
 import { isOtpSendRequest, otpSendLock, otpSendTarget } from "../infrastructure/otp-send-lock";
 import { POSTMARK_TIMEOUT_MS } from "@bbc/email";
 import type { AuthVars, IdentityFacade, Member, SessionInfo } from "../api";
-import { sessionKey, type SessionCache } from "./session-cache";
+import { keyedToken, sessionKey, type SessionCache } from "./session-cache";
 
 export type { Member, AuthVars, SessionInfo, IdentityFacade };
 
@@ -44,8 +44,10 @@ export function createIdentityFacade(
     const since = sessions?.begin();
     const info = await readSession(headers, fresh);
     if (key && sessions) {
-      if (info) sessions.put(key, info.session, info.expiresAt, since);
-      else sessions.forget(key);
+      // Kept only when Better Auth verified the very token the key was taken from (it reads one cookie name; a request
+      // may carry another of the same name): otherwise answered, never kept.
+      if (info && info.token === keyedToken(headers)) sessions.put(key, info.session, info.expiresAt, since);
+      else if (!info) sessions.forget(key);
     }
     return info?.session ?? null;
   }
@@ -53,7 +55,7 @@ export function createIdentityFacade(
   async function readSession(
     headers: Headers,
     fresh: boolean,
-  ): Promise<{ session: SessionInfo; expiresAt: Date | null } | null> {
+  ): Promise<{ session: SessionInfo; expiresAt: Date | null; token: string } | null> {
     let s = await auth.api.getSession({ headers, query: fresh ? { disableCookieCache: true } : undefined });
     if (s?.user && !s.user.emailVerified && !fresh) {
       // A code sign-in verifies an account registered unverified earlier, but Better Auth writes the user as it was
@@ -74,6 +76,7 @@ export function createIdentityFacade(
         sessionId: s.session.id,
       },
       expiresAt,
+      token: s.session.token,
     };
   }
 

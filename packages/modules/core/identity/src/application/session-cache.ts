@@ -22,6 +22,19 @@ export function sessionKey(headers: Headers): string | null {
   return token ? createHash("sha256").update(token).digest("base64url") : null;
 }
 
+/** The session token inside the cookie `sessionKey` hashes (before its signature), to check it against the token
+ *  Better Auth verified: Better Auth reads one cookie name only, so another cookie of the same name must never key
+ *  its answer. Anything unreadable gives null, and nothing is kept. */
+export function keyedToken(headers: Headers): string | null {
+  const value = headers.get("cookie")?.match(TOKEN_COOKIE)?.[1];
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value).split(".")[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * ADR-IMPL-076: the session behind each token, kept by the process that read it for at most the cookie cache's time
  * (SESSION_COOKIE_CACHE_SECONDS) and never past the session's own expiry. ADR-IMPL-027 promised one read of the
