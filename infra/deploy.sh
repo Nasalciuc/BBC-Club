@@ -201,6 +201,14 @@ if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$S
   restore_tag
   notify "🚨 deploy $MODE aborted at migration. Old API still serving." "${SEC_WEBHOOK:-}"; exit 1
 fi
+# A migration can change what a prepared statement returns ("cached plan must not change result type"), and PgBouncer
+# keeps its server connections, and the statements prepared on them, until server_lifetime. RECONNECT closes each one
+# once it is released, so the next transaction prepares again (ADR-IMPL-074). Sent through the running worker's
+# PGBOUNCER_ADMIN_URL, as db-observe reads PgBouncer: no password on a command line. No worker running: nothing sent.
+if [[ -n "$($DC ps -q "$WORKER" 2>/dev/null || true)" ]]; then
+  $DC exec -T -w /repo/packages/db "$WORKER" bun -e 'const u = process.env.PGBOUNCER_ADMIN_URL; if (!u) process.exit(0); const p = (await import("postgres")).default(u, { max: 1, prepare: false, fetch_types: false, connect_timeout: 3, onnotice: () => {} }); try { await p.unsafe("RECONNECT"); } finally { await p.end({ timeout: 1 }); }' \
+    || echo "⚠ PgBouncer RECONNECT failed: prepared statements are dropped within server_lifetime instead"
+fi
 
 echo "▶ 4/8 canary one new $SVC replica for ${CANARY_SECONDS}s"
 # The pooler alone. Without --no-deps Compose would also recreate Postgres whenever one of its settings changed, in the

@@ -50,6 +50,10 @@ for (const file of [...new Set(changed)]) {
 if (problems.length) {
   console.error("destructive statements need `-- destructive: <reason>` on the line above:");
   for (const p of problems) console.error(`  ${p}`);
+  if (problems.some((p) => /ALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE/i.test(p)))
+    console.error(
+      "A column's new type also breaks what live replicas have prepared on it (ADR-IMPL-074): add a column, backfill, switch the reads, drop later.",
+    );
   process.exit(1);
 }
 console.log(`destructive-migrations: ${changed.length} new or changed migration file(s), nothing unannounced`);
