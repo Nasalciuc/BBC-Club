@@ -15,6 +15,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sql } from "drizzle-orm";
+import { loadEnv } from "@bbc/shared/env";
 import { buildApp } from "../../apps/api/src/index";
 import type { IdentityFacade } from "@bbc/identity";
 
@@ -59,7 +60,17 @@ type RouteReport = {
 };
 
 const LIFTED = ["ratelimit.read", "ratelimit.search", "ratelimit.anon"];
-const built = await buildApp({ startPoller: false });
+// The run empties pg_stat_statements for the whole server and lifts the read limits: a test database only, by the
+// rule every database test keeps (its name says `test`, as preload.ts and isolatedDb ask), before anything connects.
+const env = loadEnv();
+if (!/test/i.test(new URL(env.DATABASE_URL).pathname)) {
+  console.error(
+    `perf.ts refuses to run: DATABASE_URL names "${new URL(env.DATABASE_URL).pathname.slice(1)}", not a test database. ` +
+      "It resets pg_stat_statements for the whole server; point it at compose.test.yml's bbc_test (header).",
+  );
+  process.exit(1);
+}
+const built = await buildApp({ startPoller: false, env });
 const { app, db } = built;
 await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_stat_statements`);
 const kept = (await db.execute(sql`SELECT key, value FROM platform.flags WHERE key IN ${LIFTED}`)) as unknown as {
