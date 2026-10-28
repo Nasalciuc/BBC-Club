@@ -66,4 +66,43 @@ describe("retention", () => {
     expect(statements.length).toBe(3); // 3 + 3 + 1
     expect(await deleteInBatches(iso.db, jobRuns, sql`false`)).toBe(0);
   });
+
+  it("deleteInBatches stops before the next batch once the job's signal is aborted; what it deleted stays deleted", async () => {
+    await iso.db.execute(sql`
+      INSERT INTO platform.kafka_processed (consumer, event_id, processed_at)
+      SELECT 's.c', 'e' || g, now() - interval '30 days' FROM generate_series(1, 7) g`);
+    const ac = new AbortController();
+    let statements = 0;
+    // Each statement counted; the job's timeout comes as the first batch returns.
+    const spy = new Proxy(iso.db, {
+      get(t, k) {
+        const v = Reflect.get(t, k);
+        if (k === "execute")
+          return async (q: unknown) => {
+            statements++;
+            const r = await (v as (x: unknown) => Promise<unknown>).call(t, q);
+            ac.abort();
+            return r;
+          };
+        return typeof v === "function" ? v.bind(t) : v;
+      },
+    });
+    const where = sql`${kafkaProcessed.consumer} = 's.c'`;
+    const left = async () =>
+      (
+        (await iso.db.execute(
+          sql`SELECT count(*)::int AS n FROM platform.kafka_processed WHERE consumer = 's.c'`,
+        )) as unknown as { n: number }[]
+      )[0]!.n;
+
+    await expect(
+      deleteInBatches(spy, kafkaProcessed, where, { batch: 3, signal: AbortSignal.abort() }),
+    ).rejects.toThrow();
+    expect(statements).toBe(0);
+    expect(await left()).toBe(7);
+
+    await expect(deleteInBatches(spy, kafkaProcessed, where, { batch: 3, signal: ac.signal })).rejects.toThrow();
+    expect(statements).toBe(1);
+    expect(await left()).toBe(4);
+  });
 });

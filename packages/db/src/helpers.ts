@@ -93,17 +93,19 @@ export const RETENTION_BATCH = 5_000;
  * on the pool — until a batch comes back short (ADR-IMPL-077). One statement over a year of rows held its locks and
  * its WAL to the end; batches let vacuum and the writers in between. Idempotent: run twice, the second deletes what
  * aged meanwhile. `maxBatches` bounds one run; the next run carries on. Rows are picked by `ctid`, so any table works.
+ * `signal` (the job's) is checked before each batch: a run past its timeout stops there, and what it deleted stays deleted.
  */
 export async function deleteInBatches(
   exec: Executor,
   table: PgTable,
   where: SQL,
-  opts: { batch?: number; maxBatches?: number } = {},
+  opts: { batch?: number; maxBatches?: number; signal?: AbortSignal } = {},
 ): Promise<number> {
   const batch = opts.batch ?? RETENTION_BATCH;
   const maxBatches = opts.maxBatches ?? 200;
   let total = 0;
   for (let i = 0; i < maxBatches; i++) {
+    opts.signal?.throwIfAborted();
     const r = (await (exec as any).execute(
       sql`DELETE FROM ${table} WHERE ctid IN (SELECT ctid FROM ${table} WHERE ${where} LIMIT ${sql.raw(String(batch))})`,
     )) as { count?: number; rowCount?: number };

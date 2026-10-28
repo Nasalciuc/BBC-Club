@@ -258,16 +258,18 @@ export const notificationsModule = (): ModuleDescriptor<Ports, NotificationsFaca
             cron: "20 4 * * *",
             singleton: true,
             timeoutMs: 120_000,
-            handler: async () => ({
+            handler: async (ctx: JobContext) => ({
               notificationsDeleted: await deleteInBatches(
                 conn,
                 notificationsTable,
                 sql`${inConst(notificationsTable.status, ["sent", "delivered", "failed", "suppressed"])} AND ${notificationsTable.createdAt} < now() - interval '90 days'`,
+                { signal: ctx.signal },
               ),
               campaignsDeleted: await deleteInBatches(
                 conn,
                 campaigns,
                 sql`${eqConst(campaigns.status, "done")} AND ${campaigns.finishedAt} < now() - interval '180 days'`,
+                { signal: ctx.signal },
               ),
             }),
           },

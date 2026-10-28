@@ -8,6 +8,7 @@ import { deleteInBatches } from "@bbc/db/helpers";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { routeGate } from "@bbc/platform/ratelimit";
 import { SearchEvent } from "@bbc/platform";
+import type { JobContext } from "@bbc/platform";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
@@ -780,11 +781,12 @@ export const catalogModule = (
             cron: "30 4 * * *",
             singleton: true,
             timeoutMs: 120_000,
-            handler: async () => ({
+            handler: async (ctx: JobContext) => ({
               demandDaysDeleted: await deleteInBatches(
                 conn,
                 demandDaily,
                 sql`${demandDaily.day} < now() - interval '400 days'`,
+                { signal: ctx.signal },
               ),
             }),
           },

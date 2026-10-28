@@ -31,7 +31,7 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
     cron: "0 4 * * *",
     singleton: true,
     timeoutMs: 300_000,
-    handler: async ({ db }) => {
+    handler: async ({ db, signal }) => {
       const [{ dropped }]: any = await db.execute(sql`SELECT platform.drop_old_event_partitions(24) AS dropped`);
       return {
         partitionsDropped: dropped,
@@ -40,12 +40,14 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
           db,
           eventDeliveries,
           sql`${eqConst(eventDeliveries.status, "done")} AND ${eventDeliveries.processedAt} < now() - interval '30 days'`,
+          { signal },
         ),
-        rateLimitsDeleted: await deleteInBatches(db, rateLimits, sql`${rateLimits.expiresAt} < now()`),
+        rateLimitsDeleted: await deleteInBatches(db, rateLimits, sql`${rateLimits.expiresAt} < now()`, { signal }),
         rateLimitStateDeleted: await deleteInBatches(
           db,
           rateLimitState,
           sql`${rateLimitState.tat} < now() - interval '1 day'`,
+          { signal },
         ),
         // 30 days of runs, and each job's last run whenever it was (/status reads it).
         jobRunsDeleted: await deleteInBatches(
@@ -53,14 +55,21 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
           jobRuns,
           sql`${jobRuns.startedAt} < now() - interval '30 days' AND EXISTS (
             SELECT 1 FROM platform.job_runs later WHERE later.job = ${jobRuns.job} AND later.started_at > ${jobRuns.startedAt})`,
+          { signal },
         ),
         // Twice Kafka's default retention (7 days): a message a topic still holds is still recognised as processed.
         kafkaProcessedDeleted: await deleteInBatches(
           db,
           kafkaProcessed,
           sql`${kafkaProcessed.processedAt} < now() - interval '14 days'`,
+          { signal },
         ),
-        deadLettersDeleted: await deleteInBatches(db, eventDlq, sql`${eventDlq.failedAt} < now() - interval '90 days'`),
+        deadLettersDeleted: await deleteInBatches(
+          db,
+          eventDlq,
+          sql`${eventDlq.failedAt} < now() - interval '90 days'`,
+          { signal },
+        ),
       };
     },
   });
