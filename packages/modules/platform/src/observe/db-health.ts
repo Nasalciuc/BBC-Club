@@ -28,9 +28,9 @@ export type DbSnapshot = {
   statements?: StatementTotals | null;
 };
 
-/** What every statement of this database has cost since pg_stat_statements was last reset (ADR-IMPL-073). Plans stay
- *  at 0 while `pg_stat_statements.track_planning` is off. */
-export type StatementTotals = { calls: number; plans: number; execSeconds: number; planSeconds: number };
+/** What every statement of this database has cost since pg_stat_statements was last reset (ADR-IMPL-073). Plans are
+ *  null (no series) while `pg_stat_statements.track_planning` is off: a 0 there read as "nothing planned". */
+export type StatementTotals = { calls: number; plans: number | null; execSeconds: number; planSeconds: number | null };
 
 export type DbReport = {
   generatedAt: string;
@@ -127,16 +127,20 @@ async function statementTotals(db: Db): Promise<StatementTotals | null> {
   try {
     const [row] = (await db.execute(
       sql.raw(`
-      SELECT coalesce(sum(calls), 0)::float8 AS calls, coalesce(sum(plans), 0)::float8 AS plans,
-             coalesce(sum(total_exec_time), 0)::float8 AS exec_ms, coalesce(sum(total_plan_time), 0)::float8 AS plan_ms
-      FROM pg_stat_statements WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())`),
-    )) as { calls: number; plans: number; exec_ms: number; plan_ms: number }[];
+      SELECT coalesce(sum(calls), 0)::float8 AS calls,
+             CASE WHEN current_setting('pg_stat_statements.track_planning', true) = 'on'
+                  THEN coalesce(sum(plans), 0)::float8 END AS plans,
+             coalesce(sum(total_exec_time), 0)::float8 AS exec_ms,
+             CASE WHEN current_setting('pg_stat_statements.track_planning', true) = 'on'
+                  THEN coalesce(sum(total_plan_time), 0)::float8 END AS plan_ms
+      FROM pg_stat_statements(false) WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())`),
+    )) as { calls: number; plans: number | null; exec_ms: number; plan_ms: number | null }[];
     if (!row) return null;
     return {
       calls: Number(row.calls),
-      plans: Number(row.plans),
+      plans: row.plans == null ? null : Number(row.plans),
       execSeconds: Number(row.exec_ms) / 1000,
-      planSeconds: Number(row.plan_ms) / 1000,
+      planSeconds: row.plan_ms == null ? null : Number(row.plan_ms) / 1000,
     };
   } catch {
     return null;

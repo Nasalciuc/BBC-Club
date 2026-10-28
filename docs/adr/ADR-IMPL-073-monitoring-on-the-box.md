@@ -56,7 +56,9 @@ covers `infra/monitoring` too).
 5. **The queue's gauges are the worker's.** `createPlatform({ queueGauges })`, true where the poller runs (the worker,
    or `all`): a scrape of an API replica serving members reads no table.
 6. **Planning is counted.** Postgres runs with `pg_stat_statements.track_planning=on`, so plans per statement show on
-   Grafana whether statements are prepared once. Postgres takes it when it is recreated on purpose (ADR-IMPL-044).
+   Grafana whether statements are prepared once. Postgres takes it when it is recreated on purpose (ADR-IMPL-044);
+   until then the worker publishes no plan series (no data, rather than a 0 read as "nothing planned"). The statement
+   totals read `pg_stat_statements(false)`, without the statements' text.
 7. **Two dashboards and five alerts, as files.** `the box` (CPU and memory by container against the limit, throttling,
    network, kills for memory, the host, Postgres connections, the oldest transaction, PgBouncer, targets) and `the app`
    (requests, p95 and p99 by route, errors, API CPU per request, event-loop delay, statements per request, plans per
