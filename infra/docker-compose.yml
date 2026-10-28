@@ -165,11 +165,14 @@ services:
       - -c
       - max_connections=100
       # auto_explain (ADR-IMPL-077): the plan of a statement slower than 500 ms in the log, estimated only
-      # (no log_analyze: it would time every statement).
+      # (no log_analyze: it would time every statement), and without its bound values (auto_explain has a setting of
+      # its own for them; log_parameter_max_length below does not reach it).
       - -c
       - shared_preload_libraries=pg_stat_statements,auto_explain
       - -c
       - auto_explain.log_min_duration=500ms
+      - -c
+      - auto_explain.log_parameter_max_length=0
       - -c
       - pg_stat_statements.max=10000
       - -c

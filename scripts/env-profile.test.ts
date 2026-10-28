@@ -876,6 +876,7 @@ describe("Postgres's planning settings (ADR-IMPL-077)", () => {
     "random_page_cost",
     "shared_preload_libraries",
     "auto_explain.log_min_duration",
+    "auto_explain.log_parameter_max_length",
     "pg_stat_statements.track_planning",
     "log_min_duration_statement",
     "log_parameter_max_length",
@@ -889,6 +890,7 @@ describe("Postgres's planning settings (ADR-IMPL-077)", () => {
     expect(prod.jit).toBe("off");
     expect(prod.shared_preload_libraries).toBe("pg_stat_statements,auto_explain");
     expect(prod["auto_explain.log_min_duration"]).toBe("500ms");
+    expect(prod["auto_explain.log_parameter_max_length"]).toBe("0");
     expect(prod.log_min_duration_statement).toBe("250");
     expect(prod.log_parameter_max_length).toBe("0");
   });

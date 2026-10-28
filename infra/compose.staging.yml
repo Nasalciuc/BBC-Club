@@ -119,6 +119,8 @@ services:
         "-c",
         "auto_explain.log_min_duration=500ms",
         "-c",
+        "auto_explain.log_parameter_max_length=0",
+        "-c",
         "pg_stat_statements.max=10000",
         "-c",
         "pg_stat_statements.track=all",
