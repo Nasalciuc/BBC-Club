@@ -19,7 +19,8 @@ function parseValue(raw: unknown): FlagValue | null {
   return r.success ? (r.data as FlagValue) : null;
 }
 
-/** A kill or pause flag read longer ago than this is not trusted: the module counts as killed (ADR-IMPL-075). */
+/** Counters read longer ago than this make a kill or pause flag untrusted: `isKilled` says killed, `killedState` and
+ *  `consumerPauseState` say "unknown" — OVERLOADED for a route, a delivery left pending (ADR-IMPL-075, ADR-IMPL-080). */
 export const KILL_STALE_MS = 10_000;
 
 /**
@@ -28,10 +29,13 @@ export const KILL_STALE_MS = 10_000;
  * replica in about a second; reading a flag costs no query in between.
  *
  * Failure: an ordinary flag that cannot be read falls back to the caller's default (the last value read, when there is
- * one). A kill or pause flag fails closed — killed, paused — when it cannot be read, or when this process has not been
- * able to ask Postgres for more than KILL_STALE_MS. `killState` is the kill flag without that fallback: it throws when
- * the flag cannot be read, for boot, which must not take an unreadable flag for a killed module (that would unmount it
- * for the life of the process). `readStrict` throws the same way, for app-config, which keeps its own last good answer.
+ * one). A kill or pause flag that cannot be read, or whose counters this process has not been able to ask Postgres for
+ * in more than KILL_STALE_MS, is not trusted (ADR-IMPL-080): `killedState` and `consumerPauseState` answer "unknown" —
+ * a route answers OVERLOADED, the poller leaves the delivery pending — and only a row that says so is "killed" or
+ * "paused"; `isKilled` keeps failing closed (killed) for a yes or no. `killState` is the kill flag without that
+ * fallback: it throws when the flag cannot be read, for boot, which must not take an unreadable flag for a killed module
+ * (that would unmount it for the life of the process). `readStrict` throws the same way, for app-config, which keeps its
+ * own last good answer.
  */
 export function createFlags(
   db: Executor,

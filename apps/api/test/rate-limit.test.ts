@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { createRateLimiter } from "@bbc/platform/ratelimit";
 import { rateLimit } from "../src/middleware/rate-limit";
+import { errorContract } from "../src/middleware/error-contract";
 
 const db = {
   execute: async () => {
@@ -47,5 +48,26 @@ describe("rate limit middleware", () => {
     expect(res.headers.get("Retry-After")).toBe("5");
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("OVERLOADED");
+  });
+
+  it("a closed rule counted inside a route, its store down, answers OVERLOADED through the error contract", async () => {
+    // requests.submit counts inside its own transaction (ADR-IMPL-071): the limiter's error leaves the route, and the
+    // error contract answers it — the process is behind, the route is not off (ADR-IMPL-080).
+    const limiter = createRateLimiter({ db, flags: { read: async () => null }, metrics: { inc() {} } });
+    const codes: string[] = [];
+    const app = new Hono<AppEnv>();
+    app.onError(errorContract({ error() {}, warn() {} }, { inc: (_n, l) => void codes.push(l?.code ?? "") }));
+    withPrincipal(app);
+    app.post("/v1/requests", async (c) => {
+      await limiter.check("requests.submit", "m1");
+      return c.json({ ok: true });
+    });
+    const res = await app.request("/v1/requests", { method: "POST" });
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("5");
+    const body = (await res.json()) as { error: { code: string; requestId?: string } };
+    expect(body.error.code).toBe("OVERLOADED");
+    expect(body.error.requestId).toBe("req");
+    expect(codes).toEqual(["OVERLOADED"]);
   });
 });

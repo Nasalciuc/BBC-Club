@@ -65,5 +65,6 @@ to another replica. Nothing held, a kill check does not wait for the flags table
 connection and, after 10 s, `OVERLOADED` with a retry hint instead of a disabled feature; a parked delivery comes back
 by itself. A kill or pause check answers within a second whatever Postgres does. Tests:
 `packages/shared/src/authz/authorize.test.ts`, `apps/api/test/overloaded.test.ts`,
-`packages/modules/platform/tests/flags-bounded.test.ts`, `apps/api/test/rate-limit.test.ts`, `packages/modules/platform/tests/poller-pause.test.ts`,
+`packages/modules/platform/tests/flags-bounded.test.ts`, `apps/api/test/rate-limit.test.ts` (the gate's middleware, and a
+limiter's error thrown from a route through `error-contract.ts`), `packages/modules/platform/tests/poller-pause.test.ts`,
 `packages/modules/platform/tests/generations.test.ts`, `packages/modules/core/identity/tests/session-cache.test.ts`.
