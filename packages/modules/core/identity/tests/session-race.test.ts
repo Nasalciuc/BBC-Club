@@ -118,6 +118,7 @@ describe("the cookie an answer is kept under", () => {
       victim: { ...user, id: "m-victim" },
     };
     let reads = 0;
+    const fresh: boolean[] = [];
     const tokenOf = (headers: Headers) => {
       const bearer = headers.get("authorization")?.match(/^bearer (.+)$/i)?.[1];
       return bearer ? bearer.split(".")[0] : tokenIn(headers, SECURE);
@@ -125,8 +126,9 @@ describe("the cookie an answer is kept under", () => {
     const auth = {
       $context: contextFor(SECURE),
       api: {
-        getSession: async ({ headers }: { headers: Headers }) => {
+        getSession: async ({ headers, query }: { headers: Headers; query?: { disableCookieCache?: boolean } }) => {
           reads++;
+          fresh.push(query?.disableCookieCache === true);
           const token = tokenOf(headers);
           return token && members[token] ? rowFor(token, members[token]) : null;
         },
@@ -134,7 +136,7 @@ describe("the cookie an answer is kept under", () => {
       },
       handler: async () => new Response("{}", { status: 200 }),
     };
-    return { auth, reads: () => reads };
+    return { auth, reads: () => reads, fresh: () => fresh };
   }
 
   it("never a cookie of the other name, read or kept", async () => {
@@ -184,6 +186,8 @@ describe("the cookie an answer is kept under", () => {
     expect((await f.getSession(withBearer))?.member.id).toBe("m-victim");
     expect(a.reads()).toBe(3);
     expect(sessions.size()).toBe(1);
+    // Read from the database each time, past Better Auth's own cookie cache too: never a stale `session_data`.
+    expect(a.fresh()).toEqual([true, true, true]);
   });
 
   it("a sign-out or a deletion sent with a bearer token forgets the member Better Auth acts on", async () => {

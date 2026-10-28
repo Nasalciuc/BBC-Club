@@ -43,13 +43,15 @@ export function createIdentityFacade(
     // A sign-out, a password change or a deletion that forgets this token or its member from here on, while the read
     // waits on the database: what the read found is not put back (ADR-IMPL-076). Taken before anything is awaited.
     const since = sessions?.begin();
-    const cookie = sessions && !carriesBearer(headers) ? await sessionCookie() : null;
+    const bearer = sessions !== undefined && carriesBearer(headers);
+    const cookie = sessions && !bearer ? await sessionCookie() : null;
     const key = cookie ? sessionKey(headers, cookie) : null;
     if (key && sessions && !opts.fresh) {
       const kept = sessions.get(key);
       if (kept) return kept;
     }
-    const fresh = opts.fresh === true || key !== null;
+    // A miss reads fresh, and so does a request with a bearer token, which the cache never answers.
+    const fresh = opts.fresh === true || key !== null || bearer;
     const info = await readSession(headers, fresh);
     if (key && cookie && sessions) {
       // Kept only when Better Auth verified the very token the key was taken from: otherwise answered, never kept.

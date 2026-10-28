@@ -18,7 +18,7 @@ cookie back. After the first minute every request carries the token alone and Be
    session from (`authCookies.sessionToken`: `__Secure-` only with secure cookies; the first of that name, read as
    Better Auth reads it), never another cookie of the same name, and kept only when the token Better Auth verified is
    that cookie's. A request with a bearer token (`Authorization: bearer …`, any case), which Better Auth's `bearer()`
-   reads instead of the cookie, is neither answered from nor kept in the cache. Only a verified member's session is
+   reads instead of the cookie, is neither answered from nor kept in the cache; it reads fresh. Only a verified member's session is
    kept; an anonymous or unverified answer is asked again.
 2. **A miss reads fresh** (`disableCookieCache`), so nothing is kept that the database did not say within the minute.
    A write (`POST`, `PUT`, `PATCH`, `DELETE`) reads fresh as before and puts its answer back, or forgets the token.
