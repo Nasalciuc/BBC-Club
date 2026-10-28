@@ -162,7 +162,7 @@ describe("quote-ready push", () => {
     expect(inbox.length).toBe(1);
     expect(inbox[0].title).toBe("Your quote is ready");
     // The route, then what happens next; never "call": the server cannot know whether the app has a line to dial.
-    expect(inbox[0].body).toMatch(/^[A-Z]{3} → [A-Z]{3} — a specialist will call you shortly$/);
+    expect(inbox[0].body).toMatch(/^[A-Z]{3} → [A-Z]{3} — an agent will call you shortly$/);
 
     await t.db.execute(sql`
       UPDATE notifications.notifications SET scheduled_for = now() - interval '1 second' WHERE id = ${inbox[0].id}`);

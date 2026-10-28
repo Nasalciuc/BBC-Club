@@ -172,14 +172,14 @@ describe("CRM_ADAPTER=http — the request reaches the CRM signed; the CRM's quo
     const back = await t.app.request(`/v1/internal/requests/${body._request_id}/status`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Internal-Secret": t.internalSecret },
-      body: JSON.stringify({ status: "quoted", note: "Your specialist will call you today.", agentId: "crm-agent" }),
+      body: JSON.stringify({ status: "quoted", note: "Your agent will call you today.", agentId: "crm-agent" }),
     });
     expect(back.status).toBe(200);
     expect(await back.json()).toEqual({ ok: true, unchanged: false });
     const quoted = await memberView(t, id);
     expect(quoted.status).toBe("quoted");
     const step = quoted.timeline.find((e) => e.status === "quoted");
-    expect(step?.note).toBe("Your specialist will call you today.");
+    expect(step?.note).toBe("Your agent will call you today.");
     // Without the system's secret, the CRM's call is refused.
     const anonymous = await t.app.request(`/v1/internal/requests/${id}/status`, {
       method: "POST",

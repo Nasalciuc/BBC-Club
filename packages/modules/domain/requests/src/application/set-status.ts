@@ -57,7 +57,7 @@ export async function setStatus(exec: Executor, raw: unknown, deps: { repo: Requ
     const row = await deps.repo.setStatus(tx, evt.requestId, from, evt.status, evt.note ?? null, evt.agentId ?? "crm");
     if (!row) return { ok: false as const, code: "NOT_FOUND" as const };
 
-    // The quote-ready push reads this: `JFK → LHR — a specialist will call you shortly`, never the way home.
+    // The quote-ready push reads this: `JFK → LHR — an agent will call you shortly`, never the way home.
     const route = requestRoute(current.legs, current.tripType) || undefined;
 
     await deps.publish(tx, {
