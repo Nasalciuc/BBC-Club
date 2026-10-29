@@ -247,12 +247,30 @@ describe("campaign-fanout job", () => {
     await seedMembers(20_000);
     await deliver(broadcast(), "450");
     const night = new Date("2026-09-28T22:30:00.000Z"); // 23:30 in London
+    // What the database spent, beside the wall clock: a run over budget says whether its statements or the machine
+    // took the time (CI shows only the assertion's message).
+    const dbTime = async () =>
+      (
+        (await db.execute(sql`
+        SELECT coalesce(sum(total_exec_time), 0)::float8 AS ms, coalesce(sum(calls), 0)::int AS calls
+        FROM pg_stat_statements WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())`)) as unknown as {
+          ms: number;
+          calls: number;
+        }[]
+      )[0] ?? { ms: 0, calls: 0 };
+    const before = await dbTime();
     const t = performance.now();
     const m = await run({ now: () => night });
     const ms = performance.now() - t;
-    console.log(`[campaigns] 20 000 members at 23:30 local: ${ms.toFixed(0)} ms`);
+    const after = await dbTime();
+    // Another suite may reset the statistics meanwhile: then the database's share is not known.
+    const spent =
+      after.calls >= before.calls
+        ? `database ${(after.ms - before.ms).toFixed(0)} ms over ${after.calls - before.calls} statements`
+        : "database time unknown (statistics reset meanwhile)";
+    console.log(`[campaigns] 20 000 members at 23:30 local: ${ms.toFixed(0)} ms (${spent})`);
     expect(m).toMatchObject({ campaigns: 1, pages: 20, inserted: 20_000 });
-    expect(ms).toBeLessThan(10_000);
+    expect(ms, `20 000 members took ${ms.toFixed(0)} ms: ${spent}`).toBeLessThan(10_000);
     const [{ n }] = (await db.execute(sql`
       SELECT count(DISTINCT scheduled_for)::int AS n FROM notifications.notifications`)) as unknown as { n: number }[];
     expect(n).toBe(1); // everyone in London gets 08:00 local
