@@ -9,6 +9,7 @@ on:
       - "apps/api/src/**"
       - "packages/modules/**"
       - "packages/db/**"
+      - "packages/shared/**"
       - "load/bench/**"
       - ".github/workflows/bench.yml"
 permissions:
