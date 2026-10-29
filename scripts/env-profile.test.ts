@@ -1264,6 +1264,39 @@ describe("PgBouncer's RECONNECT after the migration (H2)", () => {
     expect(run.status).not.toBe(0);
     expect(run.stderr.toString()).toContain("PGBOUNCER_ADMIN_URL is not set");
   });
+
+  it("a PgBouncer that lets the worker in and never answers RECONNECT fails the step within 10 s", async () => {
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    const program = deploy.match(/"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| echo "⚠ PgBouncer RECONNECT failed/)?.[1];
+    expect(program).toBeDefined();
+    // Answers the startup (AuthenticationOk, ReadyForQuery), then never answers the query: connect_timeout is past.
+    let greeted = false;
+    const ready = new Uint8Array([0x52, 0, 0, 0, 8, 0, 0, 0, 0, 0x5a, 0, 0, 0, 5, 0x49]);
+    const silent = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: {
+        data(socket) {
+          if (!greeted) socket.write(ready);
+          greeted = true;
+        },
+      },
+    });
+    try {
+      const started = performance.now();
+      const run = Bun.spawn([process.execPath, "-e", program as string], {
+        cwd: join(root, "packages/db"),
+        env: { ...process.env, PGBOUNCER_ADMIN_URL: `postgres://pgbouncer:x@127.0.0.1:${silent.port}/pgbouncer` },
+        stderr: "pipe",
+      });
+      const code = await run.exited;
+      expect(code).not.toBe(0);
+      expect(await new Response(run.stderr).text()).toContain("did not answer RECONNECT");
+      expect(performance.now() - started).toBeLessThan(12_000);
+    } finally {
+      silent.stop(true);
+    }
+  }, 20_000);
 });
 
 describe("VictoriaMetrics' basic auth (A-S1)", () => {
