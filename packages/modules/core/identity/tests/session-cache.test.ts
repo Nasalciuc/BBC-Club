@@ -1,5 +1,5 @@
 /** ADR-IMPL-076: what the process keeps per session token — never past the minute, never past the session's expiry. */
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, spyOn } from "bun:test";
 import { createSessionCache, FORGOTTEN_MARGIN_MS, keyedToken, sessionKey } from "../src/application/session-cache";
 
 const info = (id: string) => ({
@@ -165,6 +165,28 @@ describe("createSessionCache", () => {
     c.put("k", info("a"), null);
     c.get("k");
     expect(seen).toEqual(["cache_miss:identity.session", "cache_hit:identity.session"]);
+  });
+
+  it("a wall clock moved forward past a session's expiry ends its entry, though the cache's time has not passed", () => {
+    let mono = 1_000;
+    let wall = Date.UTC(2026, 9, 28, 20);
+    const clocks = [
+      spyOn(performance, "now").mockImplementation(() => mono),
+      spyOn(Date, "now").mockImplementation(() => wall),
+    ];
+    try {
+      const c = createSessionCache({ ttlMs: 60_000 });
+      c.put("k", info("a"), new Date(wall + 30_000));
+      c.put("open", info("b"), null);
+      mono += 1_000;
+      wall += 1_000;
+      expect(c.get("k")).not.toBeNull();
+      wall += 3_600_000; // the wall clock steps forward an hour: the session has expired, the cache's minute has not
+      expect(c.get("k")).toBeNull();
+      expect(c.get("open")).not.toBeNull(); // no expiry: the cache's time alone
+    } finally {
+      for (const clock of clocks) clock.mockRestore();
+    }
   });
 
   it("a wall clock moved back keeps nothing past its time: the cache runs on the monotonic clock (G3)", async () => {
