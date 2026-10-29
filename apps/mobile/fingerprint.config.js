@@ -1,3 +1,4 @@
+/* global __dirname */ // Expo loads this file with require; apps/mobile's own lint (expo lint) declares no __dirname.
 // The runtime version is this project's fingerprint (ADR-IMPL-079). One input depends on the machine, not the code:
 // the Firebase file EAS Build hands the build through the GOOGLE_SERVICES_JSON file variable (app.config.ts
 // withFirebase), which a GitHub runner does not have. Left in, a runner and EAS would compute two runtimes for one
