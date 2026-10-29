@@ -788,7 +788,8 @@ release or a tzdata package changes them at once.
 
 1. Before the deploy, against the new server: `DATABASE_URL=<the new server's test database> bun run test:tz` —
    every airport's zone still one it reads, a dated search's bounds still where its own day begins and ends.
-2. On production, before and after, the zones it no longer reads (each query should answer nothing):
+2. On production, before and after, the zones it no longer reads (the airports' query should answer nothing; the
+   profiles' only names that are neither Postgres's nor in the link table):
 
    ```bash
    $DC exec -T postgres psql -U bbc -d bbc -c "SELECT timezone, count(*) FROM members.profile p
@@ -799,8 +800,8 @@ release or a tzdata package changes them at once.
 
    An airport listed fails every dated search from it. A member's old name (`Asia/Calcutta`, `US/Eastern`, stored
    before zones were stored as Postgres spells them) shows in the first list on a Postgres without `tzdata-legacy`
-   and is still read, as the zone tzdata links it to (`packages/db/src/tz-links.ts`); any other name there is one
-   nothing resolves, and that member is pushed by New York's clock.
+   and is still read, as the zone tzdata links it to (`packages/db/src/tz-links.ts`): no action. Any other name there
+   is one nothing resolves, and that member is pushed by New York's clock.
 
 3. After a tzdata release, generate the link table again in a PR from the new image's tzdata, not this machine's:
 
