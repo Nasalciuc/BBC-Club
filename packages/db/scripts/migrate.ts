@@ -821,6 +821,7 @@ try {
     ["0051_notifications_autovacuum.sql", "notifications autovacuum applied"],
     ["0052_platform_monitor_role.sql", "platform monitor role applied"],
     ["0053_platform_monitor_role_limits.sql", "platform monitor role limits applied"],
+    ["0055_catalog_airport_zone_links.sql", "catalog airport zones read by Postgres applied"],
   ] as const) {
     const path = join(migrationsDir, file);
     if (!existsSync(path)) continue;

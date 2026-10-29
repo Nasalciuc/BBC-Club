@@ -5,7 +5,8 @@ Status: proposed · Date: 2026-10-26 · Scope: `packages/modules/platform` (`job
 `isIanaZone`), `packages/db` (`helpers.ts`: `deleteInBatches`, `retainEach`, `anyText`; `scripts/verify.ts`:
 rules 3, 13 and 14; `scripts/migrate.ts`; the hot-query test), migrations `0048_identity_auth_lookups.sql`,
 `0049_catalog_demand_from_route.sql`, `0050_platform_autovacuum.sql`, `0051_notifications_autovacuum.sql`,
-`0052_platform_monitor_role.sql`, `0053_platform_monitor_role_limits.sql`, `0054_retention_indexes.sql`, the catalog
+`0052_platform_monitor_role.sql`, `0053_platform_monitor_role_limits.sql`, `0054_retention_indexes.sql`,
+`0055_catalog_airport_zone_links.sql`, the catalog
 (`fares.repo.ts`: a dated search; `discovery.repo.ts`; `retention-demand`), identity (`retention-auth`), notifications
 (`dispatch.ts`; `retention-notifications`), members (`deliverabilityOf`), `infra` (Postgres's settings in
 `docker-compose.yml` and `compose.staging.yml`; Grafana's Postgres datasource and the database dashboard; `deploy.sh`,
@@ -90,7 +91,10 @@ Postgres 16), the data layer had reads that grow worse with time:
    name Postgres lists is kept as it lists it (`Europe/Bratislava` stays, though tzdata links it to Prague). The
    profile and the import store that name; only a name nothing resolves is refused (`US/Pacific-New`), and a member
    holding one is pushed by New York's clock, logged `time_zone_unknown_to_postgres`. Installing `tzdata-legacy` in
-   `infra/postgres/Dockerfile` is the other way to read those names, not taken.
+   `infra/postgres/Dockerfile` is the other way to read those names, not taken. The same holds for an airport: tzdata
+   2025b made `Asia/Choibalsan` a link to `Asia/Ulaanbaatar` (one clock since 2008), and CI's first `test:tz` on
+   `postgres:16` found Choibalsan (COQ) unread, so every dated search from it would have failed. The reference writes
+   `Asia/Ulaanbaatar`, and `0055_catalog_airport_zone_links.sql` moves the row it inserted before.
 
    **After a Postgres or tzdata update** (a new `postgres:16` image, a minor release, a tzdata package): run `bun run
 test:tz` against the new server before the deploy (every airport's zone still read, the day's bounds still

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
@@ -160,6 +161,7 @@ describe("extras ledger", () => {
       "0052_platform_monitor_role.sql",
       "0053_platform_monitor_role_limits.sql",
       "0054_retention_indexes.sql",
+      "0055_catalog_airport_zone_links.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -588,6 +590,21 @@ describe("extras ledger", () => {
       { conname: "airports_coordinates", convalidated: true },
       { conname: "fares_duration_pos", convalidated: true },
     ]);
+  });
+
+  // ADR-IMPL-077 §5 (#114): an airport zone a Postgres without tzdata-legacy cannot read fails every dated search from it.
+  it("0055 moves an airport the reference inserted under Asia/Choibalsan to the zone tzdata links it to", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    const tzOf = async () =>
+      ((await db.execute(sql`SELECT tz FROM catalog.airports WHERE code = 'COQ'`)) as unknown as { tz: string }[])[0]
+        ?.tz;
+    // The reference writes the linked zone now.
+    expect(await tzOf()).toBe("Asia/Ulaanbaatar");
+    // The row as an earlier reference inserted it, which the reference never touches again (ADR-IMPL-036): the step's
+    // own statement moves it (migrate.ts applies it once, as the ledger above lists).
+    await db.execute(sql`UPDATE catalog.airports SET tz = 'Asia/Choibalsan' WHERE code = 'COQ'`);
+    await db.execute(sql.raw(readFileSync(join(pkgRoot, "migrations/0055_catalog_airport_zone_links.sql"), "utf8")));
+    expect(await tzOf()).toBe("Asia/Ulaanbaatar");
   });
 
   // ADR-IMPL-056: the member's photo is only ever an https address — on a table drizzle's own first migration creates.
