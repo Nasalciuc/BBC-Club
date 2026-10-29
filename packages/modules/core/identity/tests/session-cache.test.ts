@@ -189,23 +189,29 @@ describe("createSessionCache", () => {
     }
   });
 
-  it("a wall clock moved back keeps nothing past its time: the cache runs on the monotonic clock (G3)", async () => {
-    const realNow = Date.now;
-    let wall = realNow();
-    Date.now = () => wall;
+  it("a wall clock moved back keeps nothing past its time: the cache runs on the monotonic clock (G3)", () => {
+    // Both clocks held still and moved by hand: the defaults are what is tested, and no sleep decides the outcome.
+    let mono = 1_000;
+    let wall = Date.UTC(2026, 9, 28, 20);
+    const clocks = [
+      spyOn(performance, "now").mockImplementation(() => mono),
+      spyOn(Date, "now").mockImplementation(() => wall),
+    ];
     try {
       const c = createSessionCache({ ttlMs: 50 });
       c.put("ttl", info("a"), null);
       c.put("expiry", info("b"), new Date(wall + 30)); // expires before the cache's time
       expect(c.get("ttl")).not.toBeNull();
       wall -= 3_600_000; // the wall clock goes back an hour
-      await Bun.sleep(40);
+      mono += 29;
+      expect(c.get("expiry")).not.toBeNull(); // 1 ms of the session's life is left
+      mono += 11;
       expect(c.get("expiry")).toBeNull(); // 30 ms of the session's life were left: gone after 40
       expect(c.get("ttl")).not.toBeNull();
-      await Bun.sleep(20);
-      expect(c.get("ttl")).toBeNull();
+      mono += 10;
+      expect(c.get("ttl")).toBeNull(); // the cache's 50 ms
     } finally {
-      Date.now = realNow;
+      for (const clock of clocks) clock.mockRestore();
     }
   });
 });
