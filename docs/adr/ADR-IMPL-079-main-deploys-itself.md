@@ -25,7 +25,8 @@ update could reach a binary without the modules it called.
    progress), not per workflow: a production deploy waiting for approval keeps its run open and must not hold the next
    merges' staging deploys.
 3. **The preview app.** After staging, so an update never calls an endpoint staging lacks: nothing is done when the
-   app and what it bundles are unchanged since the last preview update's commit; otherwise the commit's Android
+   app and what it bundles are unchanged since the last preview update's commit (a lookup that fails is a warning
+   and reads as no update known, so the commit is published); otherwise the commit's Android
    runtime is looked up among the preview builds. A finished build gets an EAS update on channel `preview` with the
    `preview` environment; a queued or running one is left to finish, and the next merge (or a run by hand with `ota`)
    publishes onto it, since the comparison runs from the last update, not the parent; with none, a new

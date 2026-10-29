@@ -183,7 +183,13 @@ jobs:
           fi
           # Against the commit of the last update published on the preview branch, not this commit's parent: a run
           # superseded at the gate published nothing, and its changes must still reach the phones.
-          group=$(eas update:list --branch preview --limit 1 --json --non-interactive | jq -r '.currentPage[0].group // empty' || true)
+          # A failed lookup is said, then read as "no update known": the commit is published, as for the first one.
+          if list=$(eas update:list --branch preview --limit 1 --json --non-interactive); then
+            group=$(jq -r '.currentPage[0].group // empty' <<<"$list")
+          else
+            echo "::warning::eas update:list failed: the last preview update is unknown, so this commit is published"
+            group=""
+          fi
           last=""
           if [ -n "$group" ]; then
             last=$(eas update:view "$group" --json | jq -r '[.[].gitCommitHash // empty][0] // empty')

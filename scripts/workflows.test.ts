@@ -1,8 +1,12 @@
 /** Main deploys itself (ADR-IMPL-079): what .github/workflows/api-deploy.yml and release.yml must keep, read from their
  *  YAML — the chain starts only from a green validate on main, every job deploys the commit the gate names, production
  *  waits for its environment's approval, concurrency is per job, the preview update goes to the preview channel with
- *  the preview environment, and both workflows run one pinned eas-cli. No network: the files alone. */
+ *  the preview environment, and both workflows run one pinned eas-cli. No network: the files alone, and one step run
+ *  with eas-cli stood in for. */
 import { describe, expect, it } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..");
@@ -113,6 +117,33 @@ describe("api-deploy: the preview update", () => {
     expect(forced).toBeGreaterThan(-1);
     expect(forced).toBeLessThan(changes.indexOf("git -C"));
     expect(changes.slice(forced, changes.indexOf("fi", forced))).toContain('echo "publish=true"');
+  });
+
+  it("a failed update:list is a warning, and the commit is published as when no update is known", () => {
+    const changes = ota.steps.find((step) => step.name === "Anything to publish")?.run ?? "";
+    // EAS answering with an error, in place of eas-cli.
+    const script = changes.replace(/^( *)eas\(\) \{[^\n]*\}$/m, '$1eas() { echo "EAS is unreachable" >&2; return 1; }');
+    expect(script).not.toBe(changes);
+    const dir = mkdtempSync(join(tmpdir(), "bbc-workflows-"));
+    try {
+      const output = join(dir, "output");
+      const run = spawnSync("bash", ["-c", script], {
+        cwd: join(root, "apps/mobile"),
+        env: {
+          ...process.env,
+          FORCE: "false",
+          SHA: "HEAD",
+          GITHUB_WORKSPACE: root,
+          GITHUB_OUTPUT: output,
+          GITHUB_STEP_SUMMARY: join(dir, "summary"),
+        },
+      });
+      expect(run.status, run.stderr.toString()).toBe(0);
+      expect(run.stdout.toString()).toContain("::warning::eas update:list failed");
+      expect(readFileSync(output, "utf8")).toContain("publish=true");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // eas-cli reads app.config.ts with the shell's env before it loads an EAS environment, and the config refuses a
