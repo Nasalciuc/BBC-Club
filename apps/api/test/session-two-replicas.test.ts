@@ -21,7 +21,12 @@ const tokenOnly = (cookie: string) =>
 
 describe("a session ended on one replica, on the other", () => {
   it("replica B refuses it within the cookie cache's time and half a second, whatever ended it on replica A", async () => {
-    const t = await testApp({ suite: SUITE, env: { SESSION_COOKIE_CACHE_SECONDS: String(TTL_S) } });
+    // The reset code's answer floor (about 8 s by default) would take most of the 10 s window the cases must run in.
+    const t = await testApp({
+      suite: SUITE,
+      env: { SESSION_COOKIE_CACHE_SECONDS: String(TTL_S) },
+      identity: { otpAnswerFloorMs: 50 },
+    });
     // Replica B: the same host built again on the same database, with a session cache of its own (ADR-IMPL-076). The pool
     // is A's: B's DATABASE_URL is not read when a database is given.
     const b = await buildApp({
