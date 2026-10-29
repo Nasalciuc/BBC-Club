@@ -95,6 +95,9 @@ jobs:
       # search's bounds are where its own day begins and ends, every catalogue zone, every day of two years — a few
       # seconds, after the suites.
       - run: bun run test:tz
+      # Wall-clock budgets (the 20 000-member fan-out under 10 s), each on its own after the suites: inside them every
+      # package shares the runner and the same fan-out took 3 to 16 s (ADR-IMPL-077).
+      - run: bun run test:budgets
       - run: bun run db:verify
       - name: Graph shape (G9-G11)
         run: python3 scripts/graph-shape.py
