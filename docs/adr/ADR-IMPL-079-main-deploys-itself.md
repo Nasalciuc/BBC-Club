@@ -49,6 +49,8 @@ update could reach a binary without the modules it called.
 - Production deploys still waiting when a newer one arrives are rejected in Environments; only the newest is approved.
   One approved anyway stops on the box before its checkout when `origin/main` is past its commit, so production never
   goes back to an older API or to the older `infra/caddy` and `infra/monitoring` it reads from that checkout; a run
-  by hand for production deploys main's tip only, too. A rollback stays the RUNBOOK's, by hand.
+  by hand for production deploys main's tip only, too. A merge's staging deploy checks the same on the box, so a
+  build that finished after a newer merge's never puts the older API back on staging. A rollback stays the RUNBOOK's,
+  by hand.
 - Each native change costs an EAS build from the Expo account's quota.
 - What the chain did is in each run's summary; `dry_run` says it without publishing or building.

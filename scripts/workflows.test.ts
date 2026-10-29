@@ -82,6 +82,18 @@ describe("api-deploy: production waits for approval, after staging", () => {
     expect(script.slice(guard, checkout)).toContain("exit 1");
   });
 
+  it("a merge's staging stops before its checkout once main has moved past its commit; a run by hand does not", () => {
+    const script = String(deploy.jobs.staging!.steps.find((step) => step.with?.script)?.with?.script ?? "");
+    const only = script.indexOf('if [ "${{ github.event_name }}" = "workflow_run" ]; then');
+    const guard = script.indexOf('[ "$main" = "${{ needs.gate.outputs.sha }}" ] ||');
+    const checkout = script.indexOf("git checkout -q ${{ needs.gate.outputs.sha }}");
+    expect(only).toBeGreaterThan(script.indexOf("git fetch -q --all"));
+    expect(guard).toBeGreaterThan(only);
+    expect(script.slice(only, guard)).toContain("main=$(git rev-parse origin/main)");
+    expect(checkout).toBeGreaterThan(guard);
+    expect(script.slice(guard, checkout)).toContain("exit 1");
+  });
+
   it("has no workflow-level concurrency; each deploy holds its own group, never cancelling one in progress", () => {
     expect(deploy.concurrency).toBeUndefined();
     expect(deploy.jobs.staging!.concurrency).toEqual({ group: "deploy-staging", "cancel-in-progress": false });

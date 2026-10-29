@@ -129,6 +129,13 @@ jobs:
             exec 9>/var/lock/bbc-deploy.lock
             flock -w 1500 9 || { echo "❌ another deploy has held the box for 25 minutes"; exit 1; }
             git fetch -q --all
+            # A merge's staging deploys main's tip and nothing older: a build that finished after a newer merge's would
+            # otherwise put the older API back on staging last. A run by hand deploys the ref it names.
+            if [ "${{ github.event_name }}" = "workflow_run" ]; then
+              main=$(git rev-parse origin/main)
+              [ "$main" = "${{ needs.gate.outputs.sha }}" ] ||
+                { echo "❌ main is at ${main::7}, past this commit, while it built: the newer commit's run deploys staging"; exit 1; }
+            fi
             # Production's Caddy reads infra/caddy from this checkout (its well-known files at once), and the monitoring
             # infra/monitoring (its scrape targets and dashboards within a minute): staging takes main's (ADR-IMPL-073).
             git diff --quiet origin/main ${{ needs.gate.outputs.sha }} -- infra/caddy infra/monitoring ||
