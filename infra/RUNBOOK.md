@@ -802,8 +802,16 @@ release or a tzdata package changes them at once.
    and is still read, as the zone tzdata links it to (`packages/db/src/tz-links.ts`); any other name there is one
    nothing resolves, and that member is pushed by New York's clock.
 
-3. After a tzdata release, generate the link table again in a PR: `bun run --filter @bbc/db tz:links` (its header
-   names the release; `-- --check` tells whether it is current).
+3. After a tzdata release, generate the link table again in a PR from the new image's tzdata, not this machine's:
+
+   ```bash
+   docker run --rm --entrypoint cat postgres:16 /usr/share/zoneinfo/tzdata.zi > /tmp/tzdata.zi
+   bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi           # prints the release it read, e.g. tzdata 2026c
+   bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi --check   # whether the committed table is that release's
+   ```
+
+   The release printed is the one in `packages/db/src/tz-links.ts`'s header (`TZ_LINKS_TZDATA`).
+
 4. After the deploy, the logs: `$DC logs api worker --since 1h | grep time_zone_unknown_to_postgres` — a
    member whose zone this Postgres cannot read (`member time zone not read; default used`).
 

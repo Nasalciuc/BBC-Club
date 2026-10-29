@@ -3,9 +3,9 @@
  * names, so a name a Postgres without Debian's tzdata-legacy cannot read (`Asia/Calcutta`) is read as its zone
  * (`Asia/Kolkata`) — ADR-IMPL-077 §5, #114.
  *
- *   bun run --filter @bbc/db tz:links                      # from /usr/share/zoneinfo/tzdata.zi
- *   bun run --filter @bbc/db tz:links -- path/to/tzdata.zi
- *   bun run --filter @bbc/db tz:links -- --check           # fails when the committed file differs
+ *   bun run --filter @bbc/db tz:links -- path/to/tzdata.zi          # the new Postgres image's (RUNBOOK)
+ *   bun run --filter @bbc/db tz:links -- path/to/tzdata.zi --check  # fails when the committed file differs
+ *   bun run --filter @bbc/db tz:links                               # this machine's /usr/share/zoneinfo/tzdata.zi
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
