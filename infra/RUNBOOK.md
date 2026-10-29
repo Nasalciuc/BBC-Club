@@ -791,9 +791,9 @@ release or a tzdata package changes them at once.
 2. On production, before and after, the zones it no longer reads (each query should answer nothing):
 
    ```bash
-   docker compose ... exec -T postgres psql -U bbc -d bbc -c "SELECT timezone, count(*) FROM members.profile p
+   $DC exec -T postgres psql -U bbc -d bbc -c "SELECT timezone, count(*) FROM members.profile p
      WHERE NOT EXISTS (SELECT 1 FROM pg_timezone_names n WHERE lower(n.name) = lower(p.timezone)) GROUP BY 1"
-   docker compose ... exec -T postgres psql -U bbc -d bbc -c "SELECT code, tz FROM catalog.airports a
+   $DC exec -T postgres psql -U bbc -d bbc -c "SELECT code, tz FROM catalog.airports a
      WHERE NOT EXISTS (SELECT 1 FROM pg_timezone_names n WHERE lower(n.name) = lower(a.tz))"
    ```
 
@@ -804,7 +804,7 @@ release or a tzdata package changes them at once.
 
 3. After a tzdata release, generate the link table again in a PR: `bun run --filter @bbc/db tz:links` (its header
    names the release; `-- --check` tells whether it is current).
-4. After the deploy, the logs: `docker compose ... logs api worker --since 1h | grep time_zone_unknown_to_postgres` — a
+4. After the deploy, the logs: `$DC logs api worker --since 1h | grep time_zone_unknown_to_postgres` — a
    member whose zone this Postgres cannot read (`member time zone not read; default used`).
 
 Zones are now stored as Postgres spells them: the profile and the catalogue import keep the name in the spelling
