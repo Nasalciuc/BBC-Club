@@ -92,7 +92,7 @@ Postgres 16), the data layer had reads that grow worse with time:
    profile and the import store that name; only a name nothing resolves is refused (`US/Pacific-New`), and a member
    holding one is pushed by New York's clock, logged `time_zone_unknown_to_postgres`. Installing `tzdata-legacy` in
    `infra/postgres/Dockerfile` is the other way to read those names, not taken. The same holds for an airport: tzdata
-   2025b made `Asia/Choibalsan` a link to `Asia/Ulaanbaatar` (one clock since 2008), and CI's first `test:tz` on
+   2024b made `Asia/Choibalsan` a link to `Asia/Ulaanbaatar` (one clock since 2008), and CI's first `test:tz` on
    `postgres:16` found Choibalsan (COQ) unread, so every dated search from it would have failed. The reference writes
    `Asia/Ulaanbaatar`, and `0055_catalog_airport_zone_links.sql` moves the row it inserted before.
 
