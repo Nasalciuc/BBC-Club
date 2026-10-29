@@ -94,6 +94,23 @@ describe("a consumer's pause (ADR-IMPL-080)", () => {
     expect((await deliveries()).map((d) => d.status)).toEqual(["paused"]);
   });
 
+  it("queue-health reads paused as JSON true, as the flags reader does: another value written by hand resumes", async () => {
+    const p = platform();
+    const key = `consumer.${CONSUMER}.paused`;
+    await p.flags.set(key, { enabled: true });
+    await emit(p, "e");
+    await p.poller.drainOnce(10);
+    expect((await deliveries()).map((d) => d.status)).toEqual(["paused"]);
+    // Neither is a pause to consumerPauseState; a cast to boolean failed on the first and took the second as true.
+    for (const value of ['{"enabled":"later"}', '{"enabled":"true"}']) {
+      await db.execute(sql`UPDATE platform.event_deliveries SET status = 'paused'`);
+      await db.execute(sql`UPDATE platform.flags SET value = ${value}::jsonb WHERE key = ${key}`);
+      const run = await p.jobs.run("queue-health");
+      expect(run.metrics?.resumed).toBe(1);
+      expect((await deliveries()).map((d) => d.status)).toEqual(["pending"]);
+    }
+  });
+
   it("(d) /metrics carries queue_paused", async () => {
     const p = platform();
     expect(await p.metrics.render()).toContain("queue_paused");

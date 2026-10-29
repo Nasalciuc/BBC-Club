@@ -136,13 +136,14 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
     timeoutMs: 15_000,
     handler: async ({ db, logger }) => {
       // A delivery parked while its flag said paused goes back to pending once the flag no longer does (ADR-IMPL-080,
-      // RUNBOOK § Pause a consumer).
+      // RUNBOOK § Pause a consumer). Paused is JSON true, as the flags reader takes it: no cast a hand-written value
+      // could fail, which would stop every delivery from coming back.
       const resumed = (await db.execute(sql`
         UPDATE platform.event_deliveries d SET status = 'pending', run_after = now()
         WHERE d.status = 'paused'
           AND NOT EXISTS (SELECT 1 FROM platform.flags f
                           WHERE f.key = 'consumer.' || d.consumer || '.paused'
-                            AND (f.value->>'enabled')::boolean IS TRUE)`)) as unknown as { count?: number };
+                            AND f.value->'enabled' = 'true'::jsonb)`)) as unknown as { count?: number };
       const rows: any[] = await db.execute(sql`
         SELECT consumer, count(*) FILTER (WHERE status='pending')::int AS pending,
                COALESCE(EXTRACT(EPOCH FROM (now() - min(created_at) FILTER (WHERE status='pending')))::int, 0) AS oldest_s
