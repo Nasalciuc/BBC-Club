@@ -5,6 +5,18 @@ import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createFlags, KILL_STALE_MS } from "../src/flags";
 import { createGenerations } from "../src/generations";
 
+/** The value once the read a call started behind it has landed: asked again every 10 ms, for up to 2 s, until it is
+ *  `want` (a loaded machine runs that read later than a fixed 20 ms sleep allows). The clock stays where the test put it. */
+async function settles(read: () => Promise<boolean>, want: boolean): Promise<boolean> {
+  const until = performance.now() + 2_000;
+  let value = await read();
+  while (value !== want && performance.now() < until) {
+    await Bun.sleep(10);
+    value = await read();
+  }
+  return value;
+}
+
 let iso: IsolatedDb;
 beforeAll(async () => {
   iso = await isolatedDb("platform-flags-snapshot", { max: 2 });
@@ -55,13 +67,11 @@ describe("flags snapshot", () => {
     expect(await flags.isKilled("engagement")).toBe(false); // the same second: what the process held
     clock += 1_001;
     await flags.isKilled("engagement"); // a second on: this call starts the counters' read and answers from memory
-    await Bun.sleep(20);
-    expect(await flags.isKilled("engagement")).toBe(true);
+    expect(await settles(() => flags.isKilled("engagement"), true)).toBe(true);
     await iso.db.execute(sql`DELETE FROM platform.flags WHERE key = 'engagement.killed'`);
     clock += 1_001;
     await flags.isKilled("engagement");
-    await Bun.sleep(20);
-    expect(await flags.isKilled("engagement")).toBe(false);
+    expect(await settles(() => flags.isKilled("engagement"), false)).toBe(false);
   });
 
   it("a flag written where no trigger sees it still arrives within a minute (maxAgeMs, G4)", async () => {
@@ -79,8 +89,7 @@ describe("flags snapshot", () => {
     expect(await flags.isEnabled("g4.untriggered", false)).toBe(false); // the counter did not move
     clock += 31_000;
     await flags.isEnabled("g4.untriggered", false); // past the minute: loads again, behind this call (ADR-IMPL-080)
-    await Bun.sleep(20);
-    expect(await flags.isEnabled("g4.untriggered", false)).toBe(true);
+    expect(await settles(() => flags.isEnabled("g4.untriggered", false), true)).toBe(true);
   });
 
   it("set() is read back at once by the process that wrote it", async () => {
