@@ -70,6 +70,8 @@ describe("api-deploy: production waits for approval, after staging", () => {
     const production = deploy.jobs.production!;
     expect(production.environment).toBe("production");
     expect(needsOf(production)).toEqual(expect.arrayContaining(["gate", "build", "staging"]));
+    // The preview app calls staging: an EAS failure never holds an API release.
+    expect(needsOf(production)).not.toContain("ota-preview");
   });
 
   it("an older approval stops before its checkout once main has moved past its commit", () => {

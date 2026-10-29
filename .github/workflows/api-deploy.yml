@@ -288,6 +288,8 @@ jobs:
           fi
 
   production:
+    # Not after ota-preview: the preview app calls staging, never production, and an EAS outage or a 45-minute
+    # preview build must not hold an API release (ADR-IMPL-079).
     needs: [gate, build, staging]
     # !cancelled(): a run by hand for production skips staging, which would otherwise skip this job with it.
     if: >-

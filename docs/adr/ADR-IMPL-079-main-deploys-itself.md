@@ -18,9 +18,10 @@ update could reach a binary without the modules it called.
 1. **The chain.** A successful `validate` of a push to `main` starts `api-deploy` (`workflow_run`): a `gate` job names
    the commit validate checked (`head_sha`; `github.sha` is main's tip by then) and stops a commit main has moved past;
    every later job uses that commit. Then the API image is built, staging is deployed, the preview app is brought up
-   to date, and production is deployed once approved in GitHub → Environments → `production`. A run by hand takes one
-   target and, for the preview step, `ota`, `dry_run` and `force` (publish though the repository did not change: a
-   value in the EAS preview environment did).
+   to date, and production is deployed once approved in GitHub → Environments → `production`. Production waits for
+   staging, not for the preview step: the preview app calls staging only, and an EAS failure or a long preview build
+   must not hold an API release. A run by hand takes one target and, for the preview step, `ota`, `dry_run` and
+   `force` (publish though the repository did not change: a value in the EAS preview environment did).
 2. **Concurrency per deploy job** (`deploy-staging`, `deploy-production`, `ota-preview`, never cancelling one in
    progress), not per workflow: a production deploy waiting for approval keeps its run open and must not hold the next
    merges' staging deploys.
