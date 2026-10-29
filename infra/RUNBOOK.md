@@ -803,10 +803,13 @@ release or a tzdata package changes them at once.
    and is still read, as the zone tzdata links it to (`packages/db/src/tz-links.ts`): no action. Any other name there
    is one nothing resolves, and that member is pushed by New York's clock.
 
-3. After a tzdata release, generate the link table again in a PR from the new image's tzdata, not this machine's:
+3. After a tzdata release, generate the link table again in a PR from the new server image's tzdata, not this
+   machine's — the image production runs (`bbc-postgres:16`, `infra/postgres/Dockerfile`), built on a freshly pulled
+   `postgres:16` as `$DC build --pull postgres` builds it on the box:
 
    ```bash
-   docker run --rm --entrypoint cat postgres:16 /usr/share/zoneinfo/tzdata.zi > /tmp/tzdata.zi
+   docker build --pull -q -t bbc-postgres:16 infra/postgres
+   docker run --rm --entrypoint cat bbc-postgres:16 /usr/share/zoneinfo/tzdata.zi > /tmp/tzdata.zi
    bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi           # prints the release it read, e.g. tzdata 2026c
    bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi --check   # whether the committed table is that release's
    ```
