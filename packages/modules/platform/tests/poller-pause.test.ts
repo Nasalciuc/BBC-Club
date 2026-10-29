@@ -101,8 +101,9 @@ describe("a consumer's pause (ADR-IMPL-080)", () => {
     await emit(p, "e");
     await p.poller.drainOnce(10);
     expect((await deliveries()).map((d) => d.status)).toEqual(["paused"]);
-    // Neither is a pause to consumerPauseState; a cast to boolean failed on the first and took the second as true.
-    for (const value of ['{"enabled":"later"}', '{"enabled":"true"}']) {
+    // None is a pause to consumerPauseState: the reader's parser rejects the third, and a cast to boolean failed on
+    // the first and took the second as true.
+    for (const value of ['{"enabled":"later"}', '{"enabled":"true"}', '{"enabled":true,"variant":null}']) {
       await db.execute(sql`UPDATE platform.event_deliveries SET status = 'paused'`);
       await db.execute(sql`UPDATE platform.flags SET value = ${value}::jsonb WHERE key = ${key}`);
       const run = await p.jobs.run("queue-health");

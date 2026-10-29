@@ -14,7 +14,9 @@ const FlagValueSchema = z
   })
   .passthrough();
 
-function parseValue(raw: unknown): FlagValue | null {
+/** A flag's stored value as the reader takes it, or null when it is not one (then it says nothing: not paused, not
+ *  killed). Exported for queue-health, which must read a pause the way `consumerPauseState` does. */
+export function parseValue(raw: unknown): FlagValue | null {
   const r = FlagValueSchema.safeParse(raw);
   return r.success ? (r.data as FlagValue) : null;
 }
