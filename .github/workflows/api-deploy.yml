@@ -229,11 +229,22 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           RUNTIME: ${{ steps.runtime.outputs.version }}
           LAST: ${{ steps.changes.outputs.last }}
         run: |
           set -euo pipefail
           eas() { bunx "eas-cli@$EAS_CLI_VERSION" "$@"; }
+          # Right before each EAS side effect: the gate saw this commit at main's tip, but the job may start after a
+          # newer merge's preview step has published, and would then publish the older app over it. A run by hand
+          # publishes the ref it names.
+          still_main() {
+            [ "$GITHUB_EVENT_NAME" = "workflow_run" ] || return 0
+            main=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+            [ "$main" = "$SHA" ] && return 0
+            echo "- superseded: main is at \`${main::7}\`, past \`${SHA::7}\`; the newer commit's run brings the preview app up to date" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          }
           title=$(git log -1 --format=%s "$SHA")
           builds=$(eas build:list --platform android --build-profile preview --runtime-version "$RUNTIME" --limit 10 --json --non-interactive)
           finished=$(jq '[.[] | select(.status == "FINISHED")] | length' <<<"$builds")
@@ -250,6 +261,7 @@ jobs:
               echo "- dry run: a preview build has this runtime; it would publish \`${SHA::7} $title\` to channel preview" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
+            still_main
             # The bundle is the preview build's: EXPO_PUBLIC_APP_ENV as eas.json's preview profile sets it, and the rest
             # from the EAS preview environment. eas-cli reads app.config.ts with this shell's env before it loads that
             # environment, and assertStagingEnv refuses a staging config without its API: so the update runs inside
@@ -266,6 +278,7 @@ jobs:
               echo "- dry run: no preview build has this runtime; it would start one (eas build --profile preview)" >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
+            still_main
             # Inside the preview environment too, for the same first config read; its JSON goes to a file, so nothing
             # env:exec prints can reach jq.
             export BUILD_JSON="$RUNNER_TEMP/preview-build.json"

@@ -158,6 +158,62 @@ describe("api-deploy: the preview update", () => {
     }
   });
 
+  /** The publish step, with eas-cli answering `builds` to build:list and noting every other call, and GitHub
+   *  answering `main` for main's tip. */
+  const publishWith = (builds: string, main: string, event = "workflow_run") => {
+    const step = ota.steps.find((s) => s.name === "Publish the update, or start the build a native change needs");
+    const run = step?.run ?? "";
+    const stub = `$1eas() { if [ "$$1" = build:list ]; then echo '${builds}'; else echo "$*" >> "$CALLS"; echo '[]' > "\${BUILD_JSON:-/dev/null}"; fi; }\n$1gh() { echo ${main}; }`;
+    const script = run.replace(/^( *)eas\(\) \{[^\n]*\}$/m, stub);
+    expect(script).not.toBe(run);
+    const dir = mkdtempSync(join(tmpdir(), "bbc-workflows-"));
+    try {
+      const calls = join(dir, "calls");
+      const summary = join(dir, "summary");
+      const res = spawnSync("bash", ["-c", script], {
+        cwd: join(root, "apps/mobile"),
+        env: {
+          ...process.env,
+          SHA: "HEAD",
+          RUNTIME: "rt",
+          LAST: "none",
+          FORCE: "false",
+          DRY_RUN: "false",
+          CALLS: calls,
+          RUNNER_TEMP: dir,
+          GITHUB_EVENT_NAME: event,
+          GITHUB_REPOSITORY: "o/r",
+          GITHUB_STEP_SUMMARY: summary,
+        },
+      });
+      const read = (f: string) => {
+        try {
+          return readFileSync(f, "utf8");
+        } catch {
+          return "";
+        }
+      };
+      return { status: res.status, stderr: res.stderr.toString(), calls: read(calls), summary: read(summary) };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it("an older merge's job publishes nothing and starts no build once main has moved past its commit", () => {
+    for (const builds of ['[{"status":"FINISHED"}]', "[]"]) {
+      const run = publishWith(builds, "newer");
+      expect(run.status, run.stderr).toBe(0);
+      expect(run.calls, builds).toBe("");
+      expect(run.summary).toContain("superseded: main is at");
+    }
+  });
+
+  it("the commit at main's tip publishes or builds; a run by hand does not ask GitHub", () => {
+    expect(publishWith('[{"status":"FINISHED"}]', "HEAD").calls).toContain("env:exec preview");
+    expect(publishWith("[]", "HEAD").calls).toContain("env:exec preview");
+    expect(publishWith('[{"status":"FINISHED"}]', "newer", "workflow_dispatch").calls).toContain("env:exec preview");
+  });
+
   // eas-cli reads app.config.ts with the shell's env before it loads an EAS environment, and the config refuses a
   // staging one without the preview API's address: both commands run inside the environment (`eas env:exec`).
   it("publishes only to the preview channel, with the preview environment, from inside it", () => {

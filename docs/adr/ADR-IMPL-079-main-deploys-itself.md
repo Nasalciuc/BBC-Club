@@ -33,7 +33,9 @@ update could reach a binary without the modules it called.
    preview build is started and no update is published, since the build carries the JavaScript. Both commands run
    inside the EAS `preview` environment (`eas env:exec preview`): eas-cli reads `app.config.ts` with the runner's own
    env before it loads an environment, and `assertStagingEnv` refuses a staging config without the preview API's
-   address. iOS waits for an Apple Developer account.
+   address. Right before each of them a merge's run asks GitHub for main's tip again and, once main has moved past
+   its commit, does nothing: the job may start after a newer merge's has published. iOS waits for an Apple Developer
+   account.
 4. **The runtime is the native fingerprint** (`runtimeVersion: { policy: "fingerprint" }`), and the version is 0.3.0.
    `fingerprint.config.js` leaves out of the hash the one input that depends on the machine — the Firebase file EAS
    Build hands the build through `GOOGLE_SERVICES_JSON` — so a runner and EAS compute the same runtime for one commit.
