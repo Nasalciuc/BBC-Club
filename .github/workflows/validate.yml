@@ -94,6 +94,9 @@ jobs:
       # Bun's zones against Postgres's, two years of every catalogue zone (ADR-IMPL-077): ~50 s of one core, so on its
       # own, after the suites whose tests time the clock.
       - run: bun run test:tz
+      # Wall-clock budgets (the 20 000-member fan-out under 10 s), each on its own after the suites: inside them every
+      # package shares the runner and the same fan-out took 3 to 16 s (ADR-IMPL-077).
+      - run: bun run test:budgets
       - run: bun run db:verify
       - name: Graph shape (G9-G11)
         run: python3 scripts/graph-shape.py
