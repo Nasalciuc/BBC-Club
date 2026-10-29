@@ -183,11 +183,11 @@ jobs:
           fi
           # Against the commit of the last update published on the preview branch, not this commit's parent: a run
           # superseded at the gate published nothing, and its changes must still reach the phones.
-          # A failed lookup is said, then read as "no update known": the commit is published, as for the first one.
+          # A failed lookup is said, then read as "no update known", as before the first one: the step below decides.
           if list=$(eas update:list --branch preview --limit 1 --json --non-interactive); then
             group=$(jq -r '.currentPage[0].group // empty' <<<"$list")
           else
-            echo "::warning::eas update:list failed: the last preview update is unknown, so this commit is published"
+            echo "::warning::eas update:list failed: the last preview update is unknown, so the app counts as changed and the publish check continues"
             group=""
           fi
           last=""

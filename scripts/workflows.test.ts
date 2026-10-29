@@ -119,7 +119,7 @@ describe("api-deploy: the preview update", () => {
     expect(changes.slice(forced, changes.indexOf("fi", forced))).toContain('echo "publish=true"');
   });
 
-  it("a failed update:list is a warning, and the commit is published as when no update is known", () => {
+  it("a failed update:list is a warning, and the app counts as changed, as when no update is known", () => {
     const changes = ota.steps.find((step) => step.name === "Anything to publish")?.run ?? "";
     // EAS answering with an error, in place of eas-cli.
     const script = changes.replace(/^( *)eas\(\) \{[^\n]*\}$/m, '$1eas() { echo "EAS is unreachable" >&2; return 1; }');
