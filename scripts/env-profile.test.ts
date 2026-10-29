@@ -1191,6 +1191,25 @@ describe("Grafana's provisioning after a deploy (A-D1)", () => {
     }
   });
 
+  it("a provisioning directory that cannot be read is a failure the deploy reports, not 'nothing changed'", async () => {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    try {
+      const missing = join(dir, "provisioning");
+      const scan = await bash(`source ${lib}\nchanged_since ${shPath(missing)} 2026-10-28T20:00:00Z; echo "rc=$?"`);
+      expect(scan.out.trim()).toBe("rc=2");
+      expect(scan.err).toContain("provisioning");
+      const log = join(dir, "calls.log");
+      const refreshed = await bash(
+        `source ${lib}\ndc() { echo "$*" >> ${shPath(log)}; }\n` +
+          `refresh_grafana ${shPath(missing)} 2026-10-28T20:00:00Z dc; echo "rc=$?"`,
+      );
+      expect(refreshed.out.trim()).toBe("rc=1");
+      expect(spawnSync("test", ["-e", log]).status).not.toBe(0); // nothing restarted
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   /** refresh_grafana with a compose command that records its calls and fails the ones named in `fail`. */
   async function refresh(changedAfterStart: boolean, fail: string) {
     const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
