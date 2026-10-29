@@ -1,10 +1,11 @@
-import { sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { errorForLog, withTx } from "@bbc/db";
-import { DeleteStopped, deleteInBatches, eqConst, inConst, retainEach } from "@bbc/db/helpers";
+import { DeleteStopped, anyOf, deleteInBatches, eqConst, inConst, retainEach } from "@bbc/db/helpers";
 import {
   eventDeliveries,
   eventDlq,
+  flags as flagsTable,
   jobRuns,
   kafkaProcessed,
   rateLimitState,
@@ -139,21 +140,23 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
       // A delivery parked while its flag said paused goes back to pending once the flag no longer does (ADR-IMPL-080,
       // RUNBOOK § Pause a consumer). "Paused" is decided as consumerPauseState decides it: the value through the flags
       // reader's own parser, so a hand-written value it rejects (`{"enabled":true,"variant":null}`) resumes here too.
-      const parked = (await db.execute(sql`
-        SELECT d.consumer, f.value
-        FROM (SELECT DISTINCT consumer FROM platform.event_deliveries WHERE status = 'paused') d
-        LEFT JOIN platform.flags f ON f.key = 'consumer.' || d.consumer || '.paused'`)) as unknown as {
-        consumer: string;
-        value: unknown;
-      }[];
-      const running = parked.filter((r) => parseValue(r.value)?.enabled !== true).map((r) => r.consumer);
+      const parked = await db
+        .selectDistinct({ consumer: eventDeliveries.consumer, value: flagsTable.value })
+        .from(eventDeliveries)
+        .leftJoin(flagsTable, sql`${flagsTable.key} = 'consumer.' || ${eventDeliveries.consumer} || '.paused'`)
+        .where(eqConst(eventDeliveries.status, "paused"));
+      const running = (parked as { consumer: string; value: unknown }[])
+        .filter((r) => parseValue(r.value)?.enabled !== true)
+        .map((r) => r.consumer);
       const resumed = running.length
-        ? ((await db.execute(sql`
-            UPDATE platform.event_deliveries SET status = 'pending', run_after = now()
-            WHERE status = 'paused' AND consumer = ANY(${sql.param(running)}::text[])`)) as unknown as {
-            count?: number;
-          })
-        : { count: 0 };
+        ? (
+            await db
+              .update(eventDeliveries)
+              .set({ status: "pending", runAfter: sql`now()` })
+              .where(and(eqConst(eventDeliveries.status, "paused"), anyOf(eventDeliveries.consumer, running, "text")))
+              .returning({ id: eventDeliveries.id })
+          ).length
+        : 0;
       const rows: any[] = await db.execute(sql`
         SELECT consumer, count(*) FILTER (WHERE status='pending')::int AS pending,
                COALESCE(EXTRACT(EPOCH FROM (now() - min(created_at) FILTER (WHERE status='pending')))::int, 0) AS oldest_s
@@ -161,7 +164,7 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
       for (const r of rows)
         if (r.oldest_s > 300)
           logger.warn({ consumer: r.consumer, pending: r.pending, oldestSeconds: r.oldest_s }, "queue lagging");
-      return { consumersWithBacklog: rows.length, resumed: resumed.count ?? 0 };
+      return { consumersWithBacklog: rows.length, resumed };
     },
   });
 
