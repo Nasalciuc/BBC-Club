@@ -810,11 +810,13 @@ release or a tzdata package changes them at once.
    ```bash
    docker build --pull -q -t bbc-postgres:16 infra/postgres
    docker run --rm --entrypoint cat bbc-postgres:16 /usr/share/zoneinfo/tzdata.zi > /tmp/tzdata.zi
-   bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi           # prints the release it read, e.g. tzdata 2026c
    bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi --check   # whether the committed table is that release's
+   bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi           # writes the table; prints the release, e.g. 2026c
+   git diff -- packages/db/src/tz-links.ts                       # what the release changed: read it before the PR
    ```
 
-   The release printed is the one in `packages/db/src/tz-links.ts`'s header (`TZ_LINKS_TZDATA`).
+   The check runs first, against the committed table; generating overwrites it, so a check after would only compare
+   the file with itself. The release printed is the one in the new header (`TZ_LINKS_TZDATA`).
 
 4. After the deploy, the logs: `$DC logs api worker --since 1h | grep time_zone_unknown_to_postgres` — a
    member whose zone this Postgres cannot read (`member time zone not read; default used`).
