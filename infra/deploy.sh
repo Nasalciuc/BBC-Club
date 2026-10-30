@@ -184,10 +184,19 @@ for svc in "$SVC" "$WORKER"; do
     echo "⚠ $IMAGE has no scripts/check-env.ts: its env is not checked before the canary"
     break
   fi
-  if ! $DC run --rm --no-deps "$svc" bun scripts/check-env.ts; then
+  if ! CHECKED="$($DC run --rm --no-deps "$svc" bun scripts/check-env.ts)"; then
+    echo "$CHECKED"
     restore_tag
     notify "🚨 deploy $MODE stopped: $ENVF does not pass $IMAGE's checks as $svc (scripts/check-env.ts, in the deploy log). Old API still serving." "${SEC_WEBHOOK:-}"
     exit 1
+  fi
+  echo "$CHECKED"
+  # Production that boots with the mock CRM or the recording push serves members as if all were well: a request reads
+  # "Received" and reaches no agent, a push reads "delivered" and never leaves. Allowed — the box may be waiting for
+  # its Firebase project — but said at every deploy, to the webhook, never only in this log.
+  if [[ "$MODE" == "production" && "$svc" == "$SVC" ]]; then
+    case "$CHECKED" in *"CRM mock"*) notify "⚠ production runs CRM_ADAPTER=mock: members' quote requests read Received and reach no agent (RUNBOOK, CRM)" "${SEC_WEBHOOK:-}" ;; esac
+    case "$CHECKED" in *"push recording"*) notify "⚠ production runs PUSH_ADAPTER=recording: pushes read delivered and none is sent (RUNBOOK, Push)" "${SEC_WEBHOOK:-}" ;; esac
   fi
 done
 

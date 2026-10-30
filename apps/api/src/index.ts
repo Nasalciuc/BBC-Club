@@ -56,10 +56,18 @@ export async function buildApp(opts: BuildOptions = {}) {
   // A reconnecting client must not hold route registration. connect() already catches a rejection.
   void platform.connect();
   platform.metrics.gauge("push_live", () => (env.PUSH_ADAPTER === "live" ? 1 : 0));
+  // 0: the mock CRM — requests read "sent" and reach no agent. Production alerts on it (alerts.yml, bbc-adapters-not-live).
+  platform.metrics.gauge("crm_live", () => (env.CRM_ADAPTER === "mock" ? 0 : 1));
   if (env.NODE_ENV === "production" && env.PUSH_ADAPTER !== "live") {
     platform.logger.warn(
       { pushAdapter: env.PUSH_ADAPTER },
       "production is running with recording push; nothing is delivered until PUSH_ADAPTER=live",
+    );
+  }
+  if (env.NODE_ENV === "production" && env.CRM_ADAPTER === "mock") {
+    platform.logger.warn(
+      { crmAdapter: env.CRM_ADAPTER },
+      "production is running with the mock CRM; quote requests reach no agent until CRM_ADAPTER=email or http",
     );
   }
   // loadEnv lets APNs be all or nothing, so one key tells which: without it, push is live on Android only.

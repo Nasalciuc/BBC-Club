@@ -1420,3 +1420,13 @@ describe("migrations:destructive (ADR-IMPL-074)", () => {
     expect(lines("DELETE FROM t\n  WHERE id = 1;")).toEqual([]);
   });
 });
+
+describe("production on the mock CRM or the recording push (audit, 30 Oct 2026)", () => {
+  it("is announced at every production deploy, to the webhook, not only in the log", async () => {
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    const step2 = deploy.slice(deploy.indexOf("bun scripts/check-env.ts"), deploy.indexOf("▶ 3/8"));
+    expect(step2).toContain('[[ "$MODE" == "production" && "$svc" == "$SVC" ]]');
+    expect(step2).toMatch(/\*"CRM mock"\*\) notify "⚠ production runs CRM_ADAPTER=mock/);
+    expect(step2).toMatch(/\*"push recording"\*\) notify "⚠ production runs PUSH_ADAPTER=recording/);
+  });
+});
