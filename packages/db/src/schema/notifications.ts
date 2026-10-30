@@ -75,6 +75,10 @@ export const notificationsTable = notifications.table(
     index("notif_request")
       .on(t.requestId)
       .where(sql`${t.requestId} IS NOT NULL`),
+    // retention-notifications: what reached its end, oldest first, in the job's own predicate (0054, ADR-IMPL-077)
+    index("notifications_retention")
+      .on(t.createdAt)
+      .where(sql`${t.status} IN ('sent', 'delivered', 'failed', 'suppressed')`),
     check("notif_attempts_nonneg", sql`${t.attempts} >= 0`),
     check("notif_sent_has_ticket_or_error", sql`${t.status} <> 'failed' OR ${t.lastError} IS NOT NULL`),
   ],

@@ -44,12 +44,14 @@ if media_wanted "$PROD_ENV"; then
   DC="$DC --profile media"
 fi
 # The monitoring is the box's, like Caddy: a production deploy keeps it current (step 8). Grafana's admin password and
-# the alerts' webhook are checked here, while nothing has changed yet (ADR-IMPL-073).
+# the alerts' webhook are checked here, while nothing has changed yet (ADR-IMPL-073); the database role's password only
+# by a production deploy, the one that gives it (ADR-IMPL-077).
 MONITORING_ON=""
 if monitoring_wanted "$PROD_ENV"; then
   DC="$DC --profile monitoring"
   MONITORING_ON=1
-  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK; do
+  for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD; do
+    [[ "$k" == GRAFANA_PG_PASSWORD && "$MODE" != "production" ]] && continue
     env_known "$PROD_ENV" "$k" || { echo "❌ MONITORING=on needs $k in $PROD_ENV (RUNBOOK § Monitoring)"; exit 1; }
   done
 fi
@@ -94,6 +96,12 @@ notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X
 if [[ "$MODE" == "production" ]] && [[ "${LOADTEST:-}" == "1" ]]; then
   echo "❌ LOADTEST=1 is refused in production"; exit 1
 fi
+# Postgres reads its -c settings only when its container is made, and no step here makes it again (every `up` is
+# --no-deps): a server still on an older command line than the compose files is said here and the deploy goes on — a
+# recreate stops the database for its restart, a minute the operator picks (ADR-IMPL-077).
+for pg_svc in $(stale_postgres $DC); do
+  notify "⚠ deploy $MODE: Postgres ($pg_svc) runs older settings than compose: recreate it in a quiet minute: $DC up -d --no-deps $pg_svc"
+done
 
 PREVIOUS="$(env_value "$ENVF" "$VAR")"
 [[ -z "$PREVIOUS" || "$PREVIOUS" =~ ^[^:]+:[0-9a-f]{7,40}$ ]] || { echo "❌ $VAR must be empty or an image tagged with a commit SHA (got: $PREVIOUS)"; exit 1; }
@@ -137,7 +145,8 @@ wait_ready() {
   local container="$1" port="$2"
   local i
   for i in {1..12}; do
-    docker exec "$container" bun -e "fetch('http://localhost:${port}/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null && return 0
+    # Five seconds a probe: a stalled answer would otherwise wait for the server's idle timeout (120 s).
+    docker exec "$container" bun -e "fetch('http://localhost:${port}/ready',{signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null && return 0
     sleep 5
   done
   return 1
@@ -221,7 +230,7 @@ else
   chmod 0700 "$METRICS_DIR"
   cleanup_metrics() { rm -rf "$METRICS_DIR"; }
   metrics_of() {
-    docker exec "$1" bun -e "fetch('http://localhost:8000/metrics').then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
+    docker exec "$1" bun -e "fetch('http://localhost:8000/metrics',{signal:AbortSignal.timeout(10000)}).then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
   }
   metrics_of "$CANARY" > "$METRICS_DIR/canary.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "canary /metrics unreadable"; }
   metrics_of "$OLD_ONE" > "$METRICS_DIR/old.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "old replica /metrics unreadable"; }
@@ -298,6 +307,11 @@ fi
 # not the webhook answered, so a monitoring that asked to run and did not is never reported as a deploy that went well.
 MONITORING_FAILED=""
 if [[ -n "$MONITORING_ON" && "$MODE" == "production" ]]; then
+  # Grafana's database dashboard reads Postgres as bbc_monitor (0052, ADR-IMPL-077): the role takes its password from
+  # production.env, through psql's stdin and with Postgres's statement logging off for that session (env-value.sh).
+  if ! set_monitor_password "$PROD_ENV" $DC; then
+    notify "⚠ deploy production: $IMAGE is live, but Grafana's database role took no password — the database dashboard stays empty (RUNBOOK § Monitoring)" "${OPS_WEBHOOK:-}"
+  fi
   if ! $DC up -d --no-deps --wait --wait-timeout 120 victoriametrics grafana node-exporter cadvisor; then
     notify "⚠ deploy production: $IMAGE is live, but the monitoring did not start — $DC logs grafana --tail 50" "${OPS_WEBHOOK:-}"
     MONITORING_FAILED=1

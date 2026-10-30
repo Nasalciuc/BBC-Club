@@ -186,6 +186,7 @@ export { type Generations, type Snapshot, type GenerationMemo } from "../generat
 export { type Jobs, type JobContext } from "../jobs";
 export { type Logger, type Metrics, DURATION_BUCKETS_MS } from "../telemetry";
 export { pollerClaimSql, pollerStatsSql } from "../events/poller";
+export { lastRunsSql, lastFinishedRunsSql } from "../jobs";
 export { collectDbReport, maybeAlertOps, pgbouncerWaitingClients, resetDbAlertState } from "../observe/db-health";
 
 /** The host imports this from "@bbc/platform"; it is defined in jobs/builtin.ts. */

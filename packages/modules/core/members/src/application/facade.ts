@@ -1,6 +1,7 @@
 /** The only import surface of @bbc/members. Other modules and the host see nothing else. */
 import { and, eq, gt, ne, notExists, sql, type Placeholder } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
+import { anyText } from "@bbc/db/helpers";
 import { statement } from "@bbc/db/statements";
 import { profile, profilePhoto, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
@@ -116,6 +117,41 @@ export function createMembersFacade(db: Executor): MembersFacade {
     };
   }
 
+  async function deliverabilityOf(
+    exec: Executor | undefined,
+    memberIds: readonly string[],
+  ): Promise<Map<string, { status: ProfileRow["status"] | "pending"; prefs: NotificationPrefView }>> {
+    const ids = [...new Set(memberIds)];
+    const out = new Map<string, { status: ProfileRow["status"] | "pending"; prefs: NotificationPrefView }>();
+    if (ids.length === 0) return out;
+    const e = exec ?? db;
+    const [statuses, prefs] = await Promise.all([
+      e
+        .select({ memberId: profile.memberId, status: profile.status })
+        .from(profile)
+        .where(anyText(profile.memberId, ids)),
+      e
+        .select({
+          memberId: notificationPreferences.memberId,
+          category: notificationPreferences.category,
+          enabled: notificationPreferences.enabled,
+        })
+        .from(notificationPreferences)
+        .where(anyText(notificationPreferences.memberId, ids)),
+    ]);
+    const statusOf = new Map(
+      statuses.map((r: { memberId: string; status: ProfileRow["status"] }) => [r.memberId, r.status]),
+    );
+    for (const id of ids)
+      out.set(id, { status: statusOf.get(id) ?? "pending", prefs: { offers_personal: true, offers_broadcast: true } });
+    for (const p of prefs as { memberId: string; category: string; enabled: boolean }[]) {
+      const entry = out.get(p.memberId);
+      if (entry && (p.category === "offers_personal" || p.category === "offers_broadcast"))
+        entry.prefs[p.category] = p.enabled;
+    }
+    return out;
+  }
+
   async function updateProfile(
     exec: Executor | undefined,
     actorMemberId: string,
@@ -193,6 +229,7 @@ export function createMembersFacade(db: Executor): MembersFacade {
     activeMemberIds,
     audiencePage,
     preferencesOf,
+    deliverabilityOf,
     updateProfile,
     setTravelPreferences,
     setNotificationPreferences,

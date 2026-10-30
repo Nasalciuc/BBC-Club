@@ -145,7 +145,13 @@ export const jobRuns = platform.table(
     metrics: jsonb("metrics").$type<Record<string, number>>(),
     error: text("error"),
   },
-  (t) => [index("job_runs_job_started").on(t.job, t.startedAt)],
+  (t) => [
+    index("job_runs_job_started").on(t.job, t.startedAt),
+    // each job's last finished run, in lastFinishedRunsSql's order (0054, ADR-IMPL-077)
+    index("job_runs_last_finished")
+      .on(t.job, t.startedAt.desc().nullsFirst(), t.id.desc().nullsFirst())
+      .where(sql`${t.status} IN ('succeeded', 'failed')`),
+  ],
 );
 
 /** GCRA state. One theoretical arrival time per key. The old rate_limits table stays unused after A3. */

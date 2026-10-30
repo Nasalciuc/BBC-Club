@@ -22,6 +22,19 @@ export async function isValid(db: Db, i: { schema: string; name: string }): Prom
   return rows.length ? rows[0]!.valid : null;
 }
 
+/** A CONCURRENTLY build that stopped — a lock it waited past lock_timeout (55P03, its `cause`) or a failure: the index
+ *  stays INVALID (no read uses it) and the file unrecorded, until the next run drops it and builds it again. */
+export class ConcurrentIndexStopped extends Error {
+  constructor(
+    readonly file: string,
+    readonly index: string,
+    cause: unknown,
+  ) {
+    super(`${file}: the CONCURRENTLY build of ${index} stopped`, { cause });
+    this.name = "ConcurrentIndexStopped";
+  }
+}
+
 /**
  * Apply one CONCURRENTLY migration file outside a transaction. Records `name` in `platform.extras_applied`
  * only when every index in the file is valid after its build.
@@ -51,7 +64,11 @@ export async function applyConcurrentIndexFile(db: Db, name: string, file: strin
       if (index && (await isValid(db, index)) === false) {
         await raw.unsafe(`DROP INDEX CONCURRENTLY IF EXISTS ${index.schema}.${index.name}`);
       }
-      await raw.unsafe(stmt);
+      try {
+        await raw.unsafe(stmt);
+      } catch (err) {
+        throw index ? new ConcurrentIndexStopped(name, `${index.schema}.${index.name}`, err) : err;
+      }
       if (index && (await isValid(db, index)) !== true) {
         throw new Error(`${name}: index ${index.schema}.${index.name} is not valid after its build`);
       }

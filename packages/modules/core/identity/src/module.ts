@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { deleteInBatches, retainEach } from "@bbc/db/helpers";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
 import { apiError, type ApiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
@@ -13,7 +14,8 @@ import type { EmailFacade } from "@bbc/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
 import { rateLimit, subjectOf, routeGate } from "@bbc/platform/ratelimit";
-import { account } from "./infrastructure/schema";
+import type { JobContext } from "@bbc/platform";
+import { account, otpCooldown, rateLimit as authRateLimit, session, verification } from "./infrastructure/schema";
 import {
   BREACH_CHECK_UNAVAILABLE_MESSAGE,
   BREACHED_PASSWORD_MESSAGE,
@@ -244,7 +246,41 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
       exposes: { ...createIdentityFacade(auth, conn, { otpAnswerFloorMs: opts.otpAnswerFloorMs, sessions }), auth },
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [],
-      jobs: [],
+      jobs: [
+        {
+          // ADR-IMPL-077: what Better Auth and the club keep in `auth` only for a while, deleted in batches.
+          name: "retention-auth",
+          spec: {
+            cron: "10 4 * * *",
+            singleton: true,
+            timeoutMs: 120_000,
+            // Each table on its own: one that fails leaves the others to run (retainEach).
+            handler: (ctx: JobContext) =>
+              retainEach(ctx.signal, {
+                sessions: () =>
+                  deleteInBatches(conn, session, sql`${session.expiresAt} < now() - interval '7 days'`, {
+                    signal: ctx.signal,
+                  }),
+                verifications: () =>
+                  deleteInBatches(conn, verification, sql`${verification.expiresAt} < now() - interval '1 day'`, {
+                    signal: ctx.signal,
+                  }),
+                // Better Auth's longest window is an hour; it stores the last request in milliseconds since the epoch.
+                rateLimits: () =>
+                  deleteInBatches(
+                    conn,
+                    authRateLimit,
+                    sql`${authRateLimit.lastRequest} < (extract(epoch FROM now()) * 1000 - 2 * 3600 * 1000)::bigint`,
+                    { signal: ctx.signal },
+                  ),
+                otpCooldowns: () =>
+                  deleteInBatches(conn, otpCooldown, sql`${otpCooldown.lastSentAt} < now() - interval '1 day'`, {
+                    signal: ctx.signal,
+                  }),
+              }),
+          },
+        },
+      ],
     };
   },
 });

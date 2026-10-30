@@ -1,4 +1,5 @@
-import { desc, inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { inConst } from "@bbc/db/helpers";
 import { CRON_FIELDS_RE, type JobSpec } from "@bbc/shared/platform-specs";
 import { jobRuns } from "../infrastructure/schema";
 import { errorForLog, errorLine, type Db } from "@bbc/db";
@@ -14,6 +15,40 @@ export type JobContext = {
 };
 export type JobHandler = (ctx: JobContext) => Promise<Record<string, number> | void>;
 export type { JobSpec };
+
+/** The jobs asked about, bound as one array: one statement whatever the number of jobs a process registers. */
+const jobList = (names: readonly string[]) => sql`unnest(${sql.param(names)}::text[]) AS j(job_name)`;
+
+/** A job's counts, kept in job_runs.metrics: an object of finite numbers, or nothing. */
+function numbersOnly(raw: unknown): Record<string, number> | undefined {
+  return raw !== null &&
+    typeof raw === "object" &&
+    !Array.isArray(raw) &&
+    Object.values(raw).every((v) => typeof v === "number" && Number.isFinite(v))
+    ? (raw as Record<string, number>)
+    : undefined;
+}
+
+/** Each job's last run: one probe per job on `job_runs_job_started`, read backwards — never a sort of the table, which
+ *  grows by every run (ADR-IMPL-077: a year of runs sorted 134 MB on disk, 5 s; this reads 0.2 ms). The hot-query
+ *  test checks its plan. */
+export const lastRunsSql = (names: readonly string[]) => sql`
+  SELECT j.job_name, r.*
+  FROM ${jobList(names)}
+  CROSS JOIN LATERAL (
+    SELECT ${jobRuns.status}, ${jobRuns.startedAt}, ${jobRuns.durationMs} FROM ${jobRuns}
+    WHERE ${jobRuns.job} = j.job_name ORDER BY ${jobRuns.startedAt} DESC LIMIT 1
+  ) r`;
+
+/** Each job's last finished run (succeeded or failed), by the same probe. */
+export const lastFinishedRunsSql = (names: readonly string[]) => sql`
+  SELECT j.job_name, r.*
+  FROM ${jobList(names)}
+  CROSS JOIN LATERAL (
+    SELECT ${jobRuns.status}, ${jobRuns.startedAt} FROM ${jobRuns}
+    WHERE ${jobRuns.job} = j.job_name AND ${inConst(jobRuns.status, ["succeeded", "failed"])}
+    ORDER BY ${jobRuns.startedAt} DESC, ${jobRuns.id} DESC LIMIT 1
+  ) r`;
 
 /** Jobs are plain functions registered in code and triggered over HTTP by the cron container
  *  (`POST /v1/internal/run/:name`, authorized `jobs:run`). Every run is recorded in platform.job_runs —
@@ -70,13 +105,7 @@ export function createJobs(
       if (!runRow) throw new Error(`job ${name}: the job_runs insert returned no row`);
       runId = runRow.id;
       const raw = await spec.handler({ db, logger: deps.logger, signal: ac.signal });
-      const metrics =
-        raw !== null &&
-        typeof raw === "object" &&
-        !Array.isArray(raw) &&
-        Object.values(raw).every((v) => typeof v === "number" && Number.isFinite(v))
-          ? (raw as Record<string, number>)
-          : undefined;
+      const metrics = numbersOnly(raw);
       const durationMs = Date.now() - started;
       await db
         .update(jobRuns)
@@ -90,15 +119,17 @@ export function createJobs(
       const durationMs = Date.now() - started;
       // Never the error's own text: a failed query's message holds its parameters (AGENTS.md rule 6).
       const error = errorLine(e).slice(0, 2000);
+      // A job that stopped part way may say what it did before (retainEach's RetentionIncomplete: its `metrics`).
+      const metrics = numbersOnly((e as { metrics?: unknown } | null)?.metrics);
       // No row when the insert itself failed; the result and the log still say so.
       if (runId !== null)
         await db
           .update(jobRuns)
-          .set({ status: "failed", finishedAt: sql`now()`, durationMs, error })
+          .set({ status: "failed", finishedAt: sql`now()`, durationMs, error, metrics })
           .where(sql`${jobRuns.id} = ${runId}`);
       deps.metrics?.inc("job_failed", { job: name });
-      deps.logger.error({ job: name, durationMs, err: errorForLog(e) }, "job failed");
-      return { status: "failed", durationMs, error };
+      deps.logger.error({ job: name, durationMs, err: errorForLog(e), ...(metrics ?? {}) }, "job failed");
+      return { status: "failed", durationMs, error, metrics };
     } finally {
       clearTimeout(timeout);
       if (reserved) {
@@ -129,24 +160,31 @@ export function createJobs(
         .map(([name, s]) => ({ name, cron: s.cron.trim().replace(/\s+/g, " ") }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     run,
-    /** Last run per job — for /ready, dashboards and the "is anything stale?" alert. */
+    /** Last run per registered job — for /status, dashboards and the "is anything stale?" alert (`lastRunsSql`). */
     async lastRuns(): Promise<Record<string, { status: string; at: Date | null; durationMs: number | null }>> {
-      const rows: any[] = await db.execute(sql`
-        SELECT DISTINCT ON (job) job, status, started_at, duration_ms
-        FROM platform.job_runs ORDER BY job, started_at DESC`);
+      const names = [...registry.keys()];
+      if (names.length === 0) return {};
+      const rows = (await db.execute(lastRunsSql(names))) as unknown as {
+        job_name: string;
+        status: string;
+        started_at: Date;
+        duration_ms: number | null;
+      }[];
       return Object.fromEntries(
-        rows.map((r) => [r.job, { status: r.status, at: r.started_at, durationMs: r.duration_ms }]),
+        rows.map((r) => [r.job_name, { status: r.status, at: r.started_at, durationMs: r.duration_ms }]),
       );
     },
-    /** Last finished run per job, succeeded or failed — a run still going or skipped behind the lock says nothing about
-     *  whether the job works. For /status: a scheduled job whose last finished run failed is failing. */
+    /** Last finished run per registered job, succeeded or failed — a run still going or skipped behind the lock says
+     *  nothing about whether the job works. For /status: a scheduled job whose last finished run failed is failing. */
     async lastFinishedRuns(): Promise<Record<string, { status: string; at: Date }>> {
-      const rows = await db
-        .selectDistinctOn([jobRuns.job], { job: jobRuns.job, status: jobRuns.status, at: jobRuns.startedAt })
-        .from(jobRuns)
-        .where(inArray(jobRuns.status, ["succeeded", "failed"]))
-        .orderBy(jobRuns.job, desc(jobRuns.startedAt), desc(jobRuns.id));
-      return Object.fromEntries(rows.map((r) => [r.job, { status: r.status, at: r.at }]));
+      const names = [...registry.keys()];
+      if (names.length === 0) return {};
+      const rows = (await db.execute(lastFinishedRunsSql(names))) as unknown as {
+        job_name: string;
+        status: string;
+        started_at: Date;
+      }[];
+      return Object.fromEntries(rows.map((r) => [r.job_name, { status: r.status, at: r.started_at }]));
     },
   };
 }

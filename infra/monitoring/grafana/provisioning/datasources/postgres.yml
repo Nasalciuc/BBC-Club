@@ -1,0 +1,20 @@
+# The database dashboard's datasource (ADR-IMPL-077, ⚑A): production's Postgres, straight (not through PgBouncer), as
+# bbc_monitor — a member of pg_monitor, which reads the statistics views and no table. Its password is set on the role
+# by a production deploy (deploy.sh, step 8) from the same GRAFANA_PG_PASSWORD Grafana reads here.
+apiVersion: 1
+datasources:
+  - name: Postgres
+    uid: postgres
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: postgres:5432
+    user: bbc_monitor
+    editable: false
+    jsonData:
+      database: bbc
+      sslmode: disable
+      postgresVersion: 1600
+      maxOpenConns: 2
+      maxIdleConns: 1
+    secureJsonData:
+      password: ${GRAFANA_PG_PASSWORD}

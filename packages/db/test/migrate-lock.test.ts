@@ -93,4 +93,62 @@ describe("lock_timeout in the migration runner", () => {
       await fresh.drop();
     }
   }, 60_000);
+
+  test("M1: a CONCURRENTLY build held past lock_timeout says its index stays INVALID; the next run builds it", async () => {
+    // A migrated clone with 0049 pending again: its index gone and its ledger row deleted.
+    const db = await isolatedDb("db-migrate-cic-lock", { max: 1 });
+    const run = () =>
+      Bun.spawn(["bun", "run", "scripts/migrate.ts"], {
+        cwd: `${import.meta.dir}/..`,
+        env: { ...process.env, DATABASE_URL: db.url },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+    const state = async () => {
+      const [row] = (await db.db.execute(sql`
+        SELECT (SELECT x.indisvalid FROM pg_index x WHERE x.indexrelid = to_regclass('catalog.demand_daily_from_day')) AS valid,
+               (SELECT count(*)::int FROM platform.extras_applied WHERE name = '0049_catalog_demand_from_route.sql') AS recorded`)) as unknown as {
+        valid: boolean | null;
+        recorded: number;
+      }[];
+      return row!;
+    };
+    try {
+      await db.db.execute(sql`DELETE FROM platform.extras_applied WHERE name = '0049_catalog_demand_from_route.sql'`);
+      await db.db.execute(sql`DROP INDEX catalog.demand_daily_from_day`);
+      // A report that keeps its snapshot, on another table: the build waits for it as for any older transaction.
+      const holder = postgres(db.url, { max: 1, onnotice: () => {} });
+      const reading = Promise.withResolvers<void>();
+      const done = Promise.withResolvers<void>();
+      const held = holder.begin("isolation level repeatable read", async (tx) => {
+        await tx`SELECT count(*) FROM platform.flags`;
+        reading.resolve();
+        await done.promise;
+      });
+      try {
+        await reading.promise;
+        const t = performance.now();
+        const stopped = run();
+        expect(await stopped.exited).toBe(1);
+        const stderr = await new Response(stopped.stderr).text();
+        expect((performance.now() - t) / 1000).toBeLessThan(15);
+        expect(stderr).toContain(
+          "catalog.demand_daily_from_day (0049_catalog_demand_from_route.sql) waited past lock_timeout",
+        );
+        expect(stderr).toContain("The index stays INVALID");
+        expect(stderr).not.toContain("rolled back");
+        expect(await state()).toEqual({ valid: false, recorded: 0 });
+      } finally {
+        done.resolve();
+        await held.catch(() => {});
+        await holder.end();
+      }
+      const again = run();
+      expect(await again.exited).toBe(0);
+      expect(await new Response(again.stdout).text()).toContain("catalog demand by origin index applied");
+      expect(await state()).toEqual({ valid: true, recorded: 1 });
+    } finally {
+      await db.drop();
+    }
+  }, 60_000);
 });

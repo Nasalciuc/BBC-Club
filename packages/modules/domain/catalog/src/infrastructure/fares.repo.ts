@@ -1,6 +1,7 @@
 import type { Executor } from "@bbc/db";
 import { statement } from "@bbc/db/statements";
-import { and, asc, eq, gt, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { isIanaZone, zoneDayBounds } from "@bbc/shared/time-zone";
 import { eqConst } from "@bbc/db/helpers";
 import { alias } from "drizzle-orm/pg-core";
 import { airports, fares } from "@bbc/db/schema/catalog";
@@ -13,6 +14,9 @@ export type SearchQuery = {
   when?: Date;
   /** For tests: the instant the sale window is read at. */
   now?: Date;
+  /** The origin airport's zone, when the caller has it (the route reads the airports from memory): the travel day's
+   *  bounds are then computed here and compared with `depart_at` as they are (ADR-IMPL-077). Absent: read in SQL. */
+  originTz?: string;
 };
 
 /** The fare's origin airport, for the zone its departure day is read in. */
@@ -38,14 +42,15 @@ export const faresRepo = {
   searchSelect(exec: Executor, q: SearchQuery) {
     const now = q.now ?? new Date();
     const originTz = exec.select({ tz: origin.tz }).from(origin).where(eq(origin.code, fares.routeFrom));
+    const day = q.when?.toISOString().slice(0, 10);
+    // With the origin's zone at hand, the day is two instants and `depart_at` stays bare on its side of the comparison;
+    // without it, the zone is read per row as before.
+    const bounds = day && q.originTz && isIanaZone(q.originTz) ? zoneDayBounds(day, q.originTz) : null;
+    const timedOnDay = bounds
+      ? and(gte(fares.departAt, bounds.start), lt(fares.departAt, bounds.end))
+      : sql`(${fares.departAt} AT TIME ZONE coalesce((${originTz}), 'UTC'))::date = ${day}::date`;
     const onDay = q.when
-      ? or(
-          and(
-            isNotNull(fares.departAt),
-            sql`(${fares.departAt} AT TIME ZONE coalesce((${originTz}), 'UTC'))::date = ${q.when.toISOString().slice(0, 10)}::date`,
-          ),
-          and(isNull(fares.departAt), gt(fares.validUntil, q.when)),
-        )
+      ? or(and(isNotNull(fares.departAt), timedOnDay), and(isNull(fares.departAt), gt(fares.validUntil, q.when)))
       : undefined;
     return exec
       .select()

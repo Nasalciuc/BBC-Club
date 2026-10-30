@@ -152,6 +152,42 @@ monitoring_wanted() {
   [[ "$(env_optional "$1" MONITORING)" == "on" ]]
 }
 
+# Grafana's database dashboard reads Postgres as bbc_monitor (0052, ADR-IMPL-077): the role takes its password from the
+# env file's GRAFANA_PG_PASSWORD through psql's stdin — never on a command line, never in a migration, nor in the log,
+# nor in pg_stat_statements: the session first stops Postgres logging every statement it runs (log_statement, should
+# anyone set it to ddl or all for a while), a failed or slow one (an ALTER that fails, the role not there yet, would be
+# logged whole, password and all) and recording utility statements (a successful one would be kept word for word, where
+# the dashboard's own role reads). bbc is the superuser, so it may set all four. deploy.sh (step 8) and bootstrap.sh
+# (after the migrations) call it, production only.
+#   set_monitor_password <env file> <compose command…>
+set_monitor_password() {
+  local env="$1" pw
+  shift
+  env_known "$env" GRAFANA_PG_PASSWORD || return 1
+  pw="$(env_value "$env" GRAFANA_PG_PASSWORD)"
+  printf "SET log_statement = 'none';\nSET log_min_error_statement = panic;\nSET log_min_duration_statement = -1;\nSET pg_stat_statements.track_utility = off;\nALTER ROLE bbc_monitor LOGIN PASSWORD '%s';\n" "${pw//\'/\'\'}" \
+    | "$@" exec -T postgres psql -q -v ON_ERROR_STOP=1 -U bbc -d bbc >/dev/null
+}
+
+# Each Postgres service (postgres, postgres-staging) whose running container's command line is not the one the compose
+# files give it now, one a line (ADR-IMPL-077): Postgres reads its -c settings only when its container is made, and a
+# deploy never makes it again. A service these files do not have, or not running, is left out; without jq, nothing is
+# compared, and stderr says so.
+#   stale_postgres <compose command…>
+stale_postgres() {
+  local config svc ct wanted running
+  command -v jq >/dev/null || { echo "⚠ jq not found: Postgres's settings were not compared with compose" >&2; return 0; }
+  config="$("$@" config --format json 2>/dev/null)" || return 0
+  for svc in postgres postgres-staging; do
+    wanted="$(jq -c --arg s "$svc" '.services[$s].command // empty' <<<"$config")" || continue
+    [[ -n "$wanted" ]] || continue
+    ct="$("$@" ps -q "$svc" 2>/dev/null)" || continue
+    [[ -n "$ct" ]] || continue
+    running="$(docker inspect -f '{{json .Args}}' "$ct" 2>/dev/null | jq -c .)" || continue
+    [[ "$running" == "$wanted" ]] || echo "$svc"
+  done
+}
+
 # MinIO runs again when production asks for it, for R1b's offer photography: MEDIA=on (ADR-IMPL-073). Off, nothing
 # reads it (ADR-IMPL-047) and its 256 MB go to the monitoring.
 media_wanted() {

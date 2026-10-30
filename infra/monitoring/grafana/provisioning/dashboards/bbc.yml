@@ -1,4 +1,4 @@
-# The two dashboards are files in the repo (infra/monitoring/grafana/dashboards): a change is a PR, never an edit in
+# The three dashboards are files in the repo (infra/monitoring/grafana/dashboards): a change is a PR, never an edit in
 # the UI (ADR-IMPL-073). Grafana reads the folder again each minute.
 apiVersion: 1
 providers:

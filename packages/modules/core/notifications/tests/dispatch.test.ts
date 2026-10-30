@@ -2,10 +2,17 @@ import { expect, test, beforeAll, afterAll } from "bun:test";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
+import { createDb } from "@bbc/db";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import type { MembersFacade } from "@bbc/members";
 import type { PushSender } from "../src/ports/push";
-import { deliverSending, dispatch, dispatchReaperSql, type DispatchDeps } from "../src/application/dispatch";
+import {
+  activeTokensOf,
+  deliverSending,
+  dispatch,
+  dispatchReaperSql,
+  type DispatchDeps,
+} from "../src/application/dispatch";
 import { onRequestStatusChanged } from "../src/handlers/on-request-status-changed";
 
 let iso: IsolatedDb;
@@ -14,10 +21,11 @@ beforeAll(async () => {
 });
 afterAll(() => iso.drop());
 
+/** Every member active with both offer categories off — the batched read dispatch makes (ADR-IMPL-077). */
 const members = {
-  getStatus: async () => "active",
-  preferencesOf: async () => ({ offers_personal: false, offers_broadcast: false }),
-} as MembersFacade;
+  deliverabilityOf: async (_e: unknown, ids: readonly string[]) =>
+    new Map(ids.map((id) => [id, { status: "active", prefs: { offers_personal: false, offers_broadcast: false } }])),
+} as unknown as MembersFacade;
 
 function deps(push: PushSender, extra: Partial<DispatchDeps> = {}): DispatchDeps {
   return {
@@ -317,9 +325,8 @@ function membersOf(
   },
 ): MembersFacade {
   return {
-    getStatus: async () => status,
-    preferencesOf: async () => prefs,
-  } as MembersFacade;
+    deliverabilityOf: async (_e: unknown, ids: readonly string[]) => new Map(ids.map((id) => [id, { status, prefs }])),
+  } as unknown as MembersFacade;
 }
 
 test("a suspended member is suppressed before the stream send", async () => {
@@ -477,4 +484,25 @@ test("a quote push already being sent is left to finish", async () => {
     await iso.db.execute(sql`SELECT status FROM notifications.notifications WHERE request_id = ${requestId}::uuid`),
   ) as { status: string }[];
   expect(row?.status).toBe("sending");
+});
+
+// ADR-IMPL-077: a claim's devices in one read, and one statement text whatever the claim's size.
+test("activeTokensOf for 1, 7 or 100 members is one statement, its list one parameter", async () => {
+  const statements: { text: string; params: number }[] = [];
+  const logged = createDb(iso.url, {
+    max: 1,
+    logger: { logQuery: (text, params) => statements.push({ text, params: params.length }) },
+  });
+  try {
+    for (const n of [1, 7, 100])
+      await activeTokensOf(
+        logged,
+        Array.from({ length: n }, (_, i) => `any-${n}-${i}`),
+      );
+    expect(statements.length).toBe(3);
+    expect(new Set(statements.map((s) => s.text)).size).toBe(1);
+    expect(statements.every((s) => s.params === 1)).toBe(true);
+  } finally {
+    await logged.close();
+  }
 });

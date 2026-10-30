@@ -628,6 +628,117 @@ describe("rotate-secret.sh", () => {
   });
 });
 
+describe("restore.sh (ADR-IMPL-077)", () => {
+  /** A copy of restore.sh in a throwaway infra/, its two questions answered, with a `docker` that records each command
+   *  (the compose files and env file left out) and answers the checks; `sleep` returns at once. */
+  async function restore(opts: { promoted: boolean | "refused"; workerReady: boolean; rejecting?: number }) {
+    // "refused": the recovery check fails as a password the restored database does not take would make it fail.
+    const recovery =
+      opts.promoted === "refused"
+        ? `echo 'psql: error: FATAL:  password authentication failed for user "bbc"' >&2; return 2`
+        : `echo ${opts.promoted ? "f" : "t"}`;
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    try {
+      mkdirSync(join(dir, "infra", "env"), { recursive: true });
+      for (const name of ["restore.sh", "docker-compose.yml", "compose.prod.yml"]) {
+        copyFileSync(join(root, "infra", name), join(dir, "infra", name));
+      }
+      writeFileSync(join(dir, "infra", "env", "production.env"), "OTHER=1\n");
+      const log = join(dir, "docker.log");
+      writeFileSync(log, "");
+      const result = await bash(`
+        export LOG=${JSON.stringify(log.replace(/\\/g, "/"))} # absolute: restore.sh changes directory
+        docker() {
+          echo "$*" >> "$LOG"
+          case "$*" in
+            *" exec -T postgres pg_isready "*)
+              # The first opts.rejecting answers are a restore still short of a consistent state.
+              n=$(( $(cat "$LOG.ready" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$LOG.ready"
+              if (( n <= ${opts.rejecting ?? 0} )); then echo "/var/run/postgresql:5432 - rejecting connections"; return 1; fi
+              echo "/var/run/postgresql:5432 - accepting connections" ;;
+            *" exec -T postgres psql "*"pg_is_in_recovery"*) ${recovery} ;;
+            *" exec -T postgres psql "*) echo 8 ;;
+            *" ps -q worker") echo ct-worker ;;
+            "exec ct-worker bun -e "*"http://localhost:8001/ready"*) return ${opts.workerReady ? 0 : 1} ;;
+          esac
+        }
+        sleep() { :; }
+        export -f docker sleep
+        printf 'production\nyes\n' | bash ${shPath(join(dir, "infra", "restore.sh"))}`);
+      const commands = readFileSync(log, "utf8")
+        .trim()
+        .split("\n")
+        .map((l) => l.replace(/(-f|--env-file) \S+ /g, ""));
+      return { ...result, commands };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  const at = (commands: string[], prefix: string) => commands.findIndex((c) => c.startsWith(prefix));
+  const starts = (commands: string[]) => commands.filter((c) => /^compose (up|start|restart) /.test(c));
+  const probes = (commands: string[]) => commands.filter((c) => c.startsWith("exec ct-worker bun -e"));
+
+  it("stops the worker with the API and cron; once promoted, starts the API and the worker, and cron after /ready", async () => {
+    const { code, out, commands } = await restore({ promoted: true, workerReady: true });
+    expect(code).toBe(0);
+    expect(out).toContain("restore complete");
+    expect(commands[0]).toBe("compose stop api worker cron");
+    const restored = at(commands, "compose exec -T -u postgres postgres pgbackrest");
+    const promoted = commands.findIndex((c) => c.includes("pg_is_in_recovery"));
+    const checked = commands.findIndex((c) => c.includes("information_schema.schemata"));
+    const ready = at(commands, "exec ct-worker bun -e");
+    expect([0 < restored, restored < promoted, promoted < checked, checked < ready]).toEqual([true, true, true, true]);
+    // Postgres restarted once; then the API and the worker, then cron after the one /ready probe it took.
+    expect(starts(commands)).toEqual([
+      "compose restart postgres",
+      "compose up -d --no-deps api worker",
+      "compose up -d --no-deps cron",
+    ]);
+    expect(commands.indexOf("compose up -d --no-deps api worker")).toBeLessThan(ready);
+    expect(commands.indexOf("compose up -d --no-deps cron")).toBeGreaterThan(ready);
+    expect(probes(commands)).toHaveLength(1);
+    expect(probes(commands)[0]).toContain("http://localhost:8001/ready");
+  });
+
+  it("a Postgres still replaying WAL starts nothing", async () => {
+    const { code, out, commands } = await restore({ promoted: false, workerReady: true });
+    expect(code).toBe(1);
+    expect(out).toContain("still replaying WAL after an hour");
+    expect(starts(commands)).toEqual(["compose restart postgres"]);
+    expect(commands.some((c) => c.includes("information_schema.schemata"))).toBe(false);
+  });
+
+  it("a recovery check Postgres refuses stops the restore at once and says why, starting nothing", async () => {
+    const { code, out, commands } = await restore({ promoted: "refused", workerReady: true });
+    expect(code).toBe(1);
+    expect(out).toContain("refuses the recovery check");
+    expect(out).toContain("password authentication failed");
+    expect(out).not.toContain("still replaying WAL");
+    expect(commands.filter((c) => c.includes("pg_is_in_recovery"))).toHaveLength(3);
+    expect(starts(commands)).toEqual(["compose restart postgres"]);
+  });
+
+  it("a restore that rejects connections past the old minute, short of consistency, is waited on", async () => {
+    const { code, out } = await restore({ promoted: true, workerReady: true, rejecting: 40 });
+    expect(code).toBe(0);
+    expect(out).toContain("restore complete");
+  });
+
+  it("a worker's /ready probe gives up after five seconds", async () => {
+    const { commands } = await restore({ promoted: true, workerReady: true });
+    expect(probes(commands)[0]).toContain("AbortSignal.timeout(5000)");
+  });
+
+  it("a worker whose /ready stays red leaves cron stopped and says how to start it", async () => {
+    const { code, out, commands } = await restore({ promoted: true, workerReady: false });
+    expect(code).toBe(1);
+    expect(out).toContain("cron NOT started");
+    expect(out).toContain("up -d --no-deps cron");
+    expect(starts(commands)).toEqual(["compose restart postgres", "compose up -d --no-deps api worker"]);
+    expect(probes(commands)).toHaveLength(12);
+  });
+});
+
 describe("each environment's internal secret, as Compose hands it out", () => {
   if (dockerReason) {
     it("needs docker compose", () => {
@@ -735,6 +846,112 @@ describe("monitoring and media profiles (ADR-IMPL-073)", () => {
     const example = readFileSync(join(root, "infra/env/production.env.example"), "utf8");
     expect(await wanted("monitoring_wanted", example)).toBe("off");
     expect(await wanted("media_wanted", example)).toBe("off");
+  });
+});
+
+describe("Grafana's database role and Postgres's settings (ADR-IMPL-077)", () => {
+  /** A compose command that says what it was asked and what it read on stdin, on stderr. */
+  const recordingCompose = `dc() { echo "ARGV $*" >&2; cat >&2; }`;
+
+  it("set_monitor_password: the password through stdin only, after the session stops logging and recording", async () => {
+    const result = await withEnv(
+      `GRAFANA_PG_PASSWORD="it's-a-pw"\n`,
+      `${recordingCompose}\nset_monitor_password "$F" dc compose -f x.yml; echo "rc=$?"`,
+    );
+    expect(result.out.trim()).toBe("rc=0");
+    const [argv, ...stdin] = result.err.trim().split("\n");
+    expect(argv).toBe("ARGV compose -f x.yml exec -T postgres psql -q -v ON_ERROR_STOP=1 -U bbc -d bbc");
+    expect(stdin).toEqual([
+      "SET log_statement = 'none';",
+      "SET log_min_error_statement = panic;",
+      "SET log_min_duration_statement = -1;",
+      "SET pg_stat_statements.track_utility = off;",
+      "ALTER ROLE bbc_monitor LOGIN PASSWORD 'it''s-a-pw';",
+    ]);
+  });
+
+  it("set_monitor_password sends nothing without a real password", async () => {
+    for (const content of ["OTHER=1\n", "GRAFANA_PG_PASSWORD=\n", "GRAFANA_PG_PASSWORD=   # openssl rand\n"]) {
+      const result = await withEnv(content, `${recordingCompose}\nset_monitor_password "$F" dc; echo "rc=$?"`);
+      expect(result.out.trim()).toBe("rc=1");
+      expect(result.err).toBe("");
+    }
+  });
+
+  /** A compose command and a docker whose Postgres services run `running`, keyed by service; compose asks for jit=off. */
+  const composeRunning = (running: Record<string, string>) => `
+    dc() {
+      case "$*" in
+        "config --format json") echo '{"services":{"postgres":{"command":["postgres","-c","jit=off"]},"postgres-staging":{"command":["postgres","-c","jit=off"]},"api":{"command":null}}}' ;;
+        ${Object.keys(running)
+          .map((svc) => `"ps -q ${svc}") echo ct-${svc} ;;`)
+          .join("\n        ")}
+        *) return 0 ;;
+      esac
+    }
+    docker() {
+      case "$*" in
+        ${Object.entries(running)
+          .map(([svc, args]) => `"inspect -f {{json .Args}} ct-${svc}") echo '${args}' ;;`)
+          .join("\n        ")}
+        *) return 1 ;;
+      esac
+    }`;
+
+  it("stale_postgres names each running Postgres whose command line is not compose's, and only those", async () => {
+    const stale = async (running: Record<string, string>) =>
+      (await withEnv("", `${composeRunning(running)}\nstale_postgres dc`)).out.trim();
+    expect(
+      await stale({ postgres: '["postgres","-c","jit=on"]', "postgres-staging": '["postgres", "-c", "jit=off"]' }),
+    ).toBe("postgres");
+    expect(await stale({ "postgres-staging": '["postgres","-c","jit=off","-c","x=1"]' })).toBe("postgres-staging");
+    expect(await stale({ postgres: '["postgres","-c","jit=off"]' })).toBe(""); // staging not running: left out
+  });
+
+  /** A copy of deploy.sh in a throwaway infra/ with these env files and the docker given, as far as it gets. */
+  async function deploy(mode: string, prod: string, docker: string) {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    mkdirSync(join(dir, "infra", "env"), { recursive: true });
+    for (const name of ["deploy.sh", "env-value.sh", "docker-compose.yml", "compose.prod.yml", "compose.staging.yml"]) {
+      copyFileSync(join(root, "infra", name), join(dir, "infra", name));
+    }
+    writeFileSync(
+      join(dir, "infra", "env", "production.env"),
+      `POSTGRES_PASSWORD=a1\nPOSTGRES_PASSWORD_STAGING=b2\n${prod}`,
+    );
+    writeFileSync(join(dir, "infra", "env", "staging.env"), "OTHER=1\n");
+    const result = await bash(
+      `${docker}\nexport -f docker\nbash ${shPath(join(dir, "infra", "deploy.sh"))} ${mode} ghcr.io/x/bbc-api:abcdef1`,
+    );
+    rmSync(dir, { recursive: true, force: true });
+    return result;
+  }
+  const monitored = "MONITORING=on\nGRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\n";
+  const noDaemon = `docker() { return 1; }`;
+
+  it("only a production deploy asks for the database role's password, the one that gives it", async () => {
+    const production = await deploy("production", monitored, noDaemon);
+    expect(production.out).toContain("❌ MONITORING=on needs GRAFANA_PG_PASSWORD");
+    const staging = await deploy("staging", monitored, noDaemon);
+    expect(staging.out).not.toContain("GRAFANA_PG_PASSWORD");
+    expect(staging.out).toContain("1/8 pre-deploy dump (staging)");
+  });
+
+  it("a deploy says when Postgres runs older settings than compose, and goes on", async () => {
+    const docker = `docker() {
+      case "$*" in
+        *" config --format json") echo '{"services":{"postgres":{"command":["postgres","-c","jit=off"]}}}' ;;
+        *" ps -q postgres") echo ct-pg ;;
+        "inspect -f {{json .Args}} ct-pg") echo '["postgres","-c","jit=on"]' ;;
+        *) return 1 ;;
+      esac
+    }`;
+    const result = await deploy("staging", "OTHER=1\n", docker);
+    expect(result.out).toContain(
+      "⚠ deploy staging: Postgres (postgres) runs older settings than compose: recreate it in a quiet minute: docker compose",
+    );
+    expect(result.out).toContain("up -d --no-deps postgres");
+    expect(result.out).toContain("1/8 pre-deploy dump (staging)");
   });
 });
 
@@ -851,5 +1068,54 @@ describe("origin certificate", () => {
         "does not cover api-staging.example.com",
       );
     });
+  });
+});
+
+describe("Postgres's planning settings (ADR-IMPL-077)", () => {
+  /** The `-c key=value` pairs of a compose service's command. */
+  const settingsOf = async (file: string, service: string) => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, file)).text()) as {
+      services: Record<string, { command: string[] }>;
+    };
+    const command = doc.services[service]!.command;
+    const out: Record<string, string> = {};
+    command.forEach((arg, i) => {
+      if (command[i - 1] !== "-c") return;
+      const [k, ...v] = arg.split("=");
+      out[k!] = v.join("=");
+    });
+    return out;
+  };
+  const PLANNING = [
+    "effective_cache_size",
+    "work_mem",
+    "jit",
+    "random_page_cost",
+    "shared_preload_libraries",
+    "auto_explain.log_parameter_max_length",
+    "pg_stat_statements.track_planning",
+    "log_min_duration_statement",
+    "log_parameter_max_length",
+    "log_error_verbosity",
+    "track_io_timing",
+  ];
+
+  it("staging plans as production does; both log the slow statements, staging their plans too", async () => {
+    const prod = await settingsOf("infra/docker-compose.yml", "postgres");
+    const staging = await settingsOf("infra/compose.staging.yml", "postgres-staging");
+    for (const key of PLANNING) expect(staging[key], key).toBe(prod[key]);
+    expect(prod.jit).toBe("off");
+    expect(prod.shared_preload_libraries).toBe("pg_stat_statements,auto_explain");
+    // auto_explain.log_min_duration is the one planning setting the two do not share: production keeps auto_explain
+    // loaded but off, since a custom plan can carry a statement's bound values as text (an email, a token), and a
+    // tuning reads generic plans instead (RUNBOOK § Tuning a statement); staging, with test data, logs the plans over
+    // 500 ms.
+    expect(prod["auto_explain.log_min_duration"]).toBeUndefined();
+    expect(staging["auto_explain.log_min_duration"]).toBe("500ms");
+    expect(prod["auto_explain.log_parameter_max_length"]).toBe("0");
+    expect(prod.log_min_duration_statement).toBe("250");
+    expect(prod.log_parameter_max_length).toBe("0");
+    // An error's DETAIL names the row it met (`Key (email)=(…) already exists`): left out.
+    expect(prod.log_error_verbosity).toBe("terse");
   });
 });

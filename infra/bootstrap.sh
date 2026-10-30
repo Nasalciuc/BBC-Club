@@ -148,7 +148,7 @@ missing=(); for k in POSTGRES_PASSWORD BETTER_AUTH_SECRET INTERNAL_API_SECRET AP
 if [[ "$MODE" == "production" ]]; then for k in PGBACKREST_REPO1_S3_ENDPOINT PGBACKREST_REPO1_S3_BUCKET PGBACKREST_REPO1_S3_KEY PGBACKREST_REPO1_S3_KEY_SECRET PGBACKREST_REPO1_CIPHER_PASS; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 if glitchtip_wanted "$ENV_FILE"; then for k in GLITCHTIP_DB_PASSWORD GLITCHTIP_SECRET ERRORS_DOMAIN; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 # Grafana will not start its alerting without a webhook to send to, nor without its admin's password (ADR-IMPL-073).
-if monitoring_wanted "$ENV_FILE"; then for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
+if monitoring_wanted "$ENV_FILE"; then for k in GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK GRAFANA_PG_PASSWORD; do env_known "$ENV_FILE" "$k" || missing+=("$k"); done; fi
 [[ ${#missing[@]} -eq 0 ]] || { echo "❌ not filled in, or unreadable, in $ENV_FILE: ${missing[*]}"; exit 2; }
 url_safe POSTGRES_PASSWORD "$POSTGRES_PASSWORD" "$ENV_FILE"
 if glitchtip_wanted "$ENV_FILE"; then url_safe GLITCHTIP_DB_PASSWORD "$(env_value "$ENV_FILE" GLITCHTIP_DB_PASSWORD)" "$ENV_FILE"; fi
@@ -219,6 +219,12 @@ $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTG
 # Seeding runs before PgBouncer exists (--no-deps): connect straight to postgres, as the migration above does.
 $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD}@postgres:5432/bbc" api bun run scripts/seed-flags.ts \
   || { echo "❌ flag seeding failed"; exit 1; }
+# Grafana's database role (0052, made by the migrations above) takes its password now, as each production deploy gives
+# it again (deploy.sh, step 8): the database dashboard answers from the first start (ADR-IMPL-077).
+if [[ "$MODE" == "production" ]] && monitoring_wanted "$ENV_FILE"; then
+  set_monitor_password "$ENV_FILE" $DC ||
+    echo "⚠ Grafana's database role took no password — the database dashboard stays empty until the next production deploy (RUNBOOK § Monitoring)"
+fi
 if [[ "$WITH_STAGING" == "--with-staging" ]]; then
   $DC up -d postgres-staging
   for i in {1..30}; do $DC exec -T postgres-staging pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
@@ -231,7 +237,7 @@ fi
 $DC up -d
 
 say "9/9 waiting for api /ready"
-ready() { $DC exec -T "$1" bun -e "fetch('http://localhost:8000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; }
+ready() { $DC exec -T "$1" bun -e "fetch('http://localhost:8000/ready',{signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; }
 for i in {1..60}; do
   if ready api && { [[ "$WITH_STAGING" != "--with-staging" ]] || ready api-staging; }; then
     echo "✅ stack up ($MODE${WITH_STAGING:+ + staging})"; echo
