@@ -288,8 +288,11 @@ webhook_post() {
   else
     payload="{\"text\":\"$(printf '%s' "$text" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr '\n\r\t' '   ')\"}"
   fi
-  if ! curl -fsS -m 15 -X POST "$url" -H 'Content-Type: application/json' -d "$payload" >/dev/null; then
-    echo "⚠ webhook post failed: the alert above is in this log only — check OPS_WEBHOOK / SEC_WEBHOOK" >&2
+  # Only a 2xx is a delivery: curl -f passes a 3xx it did not follow, and the alert would reach no one.
+  local code
+  code="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' -X POST "$url" -H 'Content-Type: application/json' -d "$payload")" || code="${code:-000}"
+  if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
+    echo "⚠ webhook post failed (HTTP $code): the alert above is in this log only — check OPS_WEBHOOK / SEC_WEBHOOK" >&2
     return 1
   fi
 }

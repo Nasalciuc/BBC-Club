@@ -1436,11 +1436,16 @@ describe("production on the mock CRM or the recording push (audit, 30 Oct 2026)"
 });
 
 describe("webhook_post: every alert's way out (audit, 30 Oct 2026)", () => {
-  /** webhook_post with `curl` standing in: it records its arguments, one per line, and exits as told. */
-  async function post(text: string, url: string, curlExit: number) {
+  /** webhook_post with `curl` standing in: it records its arguments, one per line, prints the status it is given (what
+   *  `-w '%{http_code}'` prints) and exits as told. */
+  async function post(text: string, url: string, curlExit: number, status = curlExit === 0 ? "200" : "000") {
     const dir = mkdtempSync(join(tmpdir(), "bbc-hook-"));
     const args = join(dir, "args");
-    writeFileSync(join(dir, "curl"), `#!/bin/sh\nprintf '%s\\n' "$@" > "${args}"\nexit ${curlExit}\n`, { mode: 0o755 });
+    writeFileSync(
+      join(dir, "curl"),
+      `#!/bin/sh\nprintf '%s\\n' "$@" > "${args}"\nprintf '${status}'\nexit ${curlExit}\n`,
+      { mode: 0o755 },
+    );
     const proc = Bun.spawn(
       ["bash", "-c", `PATH="${dir}:$PATH"; source ${lib}; webhook_post "$1" "$2"; echo "rc=$?"`, "_", text, url],
       { cwd: root, stdout: "pipe", stderr: "pipe" },
@@ -1470,6 +1475,13 @@ describe("webhook_post: every alert's way out (audit, 30 Oct 2026)", () => {
     const failed = await post("🚨 backup FAILED", "https://hooks.example.test/x", 22);
     expect(failed.out).toContain("rc=1");
     expect(failed.err).toContain("⚠ webhook post failed");
+    // curl -f passes a 3xx it did not follow: only a 2xx is a delivery (CodeRabbit on #118).
+    for (const status of ["302", "404", "500"]) {
+      const r = await post("🚨 backup FAILED", "https://hooks.example.test/x", 0, status);
+      expect(r.out, status).toContain("rc=1");
+      expect(r.err, status).toContain(`⚠ webhook post failed (HTTP ${status})`);
+    }
+    expect((await post("ok", "https://hooks.example.test/x", 0, "204")).out).toContain("rc=0");
     const none = await post("🚨 backup FAILED", "", 0);
     expect(none.out).toContain("rc=2");
     expect(none.err).toBe("");
@@ -1499,7 +1511,9 @@ describe("infra/host/disk-check.sh: the full disk is never silent (audit, 30 Oct
     writeFileSync(join(dir, "docker-compose.yml"), "services: {}\n");
     writeFileSync(join(dir, "env/production.env"), webhook ? `OPS_WEBHOOK=${webhook}\n` : "");
     writeFileSync(join(bin, "df"), "#!/bin/sh\nprintf 'Use%%\\n 85%%\\n'\n", { mode: 0o755 });
-    writeFileSync(join(bin, "curl"), `#!/bin/sh\nexit ${curlExit}\n`, { mode: 0o755 });
+    writeFileSync(join(bin, "curl"), `#!/bin/sh\nprintf '${curlExit === 0 ? "200" : "000"}'\nexit ${curlExit}\n`, {
+      mode: 0o755,
+    });
     const stamp = join(dir, "stamp");
     const proc = Bun.spawn(["bash", join(dir, "host/disk-check.sh")], {
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, BBC_DISK_STAMP: stamp },
