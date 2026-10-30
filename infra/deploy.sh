@@ -285,6 +285,20 @@ if [[ "$MODE" == "staging" ]]; then
   if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$SVC" bun run scripts/seed-staging-demo.ts; then
     notify "⚠ deploy staging: the demo data did not refresh — run infra/deploy.sh's step 7 by hand (RUNBOOK, Staging demo data)" "${OPS_WEBHOOK:-}"
   fi
+  # Staging shows the club's real data (ADR-IMPL-040, 30 Oct 2026): the company site's deals, pins and the price a
+  # search shows from home. STAGING_REAL_DATA=off in staging.env leaves the flags as an operator set them.
+  if [[ "$(env_value "$STG_ENV" STAGING_REAL_DATA)" == "off" ]]; then
+    echo "  real data: STAGING_REAL_DATA=off in staging.env — the catalogue's flags left as they are"
+  elif REAL="$($DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$SVC" bun run scripts/staging-real-data.ts)"; then
+    echo "$REAL"
+    # Flags just turned on: the site's snapshot now, not at the next 07:40/19:40 run. The worker runs it for a few
+    # minutes; this call stops waiting after 5 s and the run goes on (platform.job_runs has its outcome).
+    if grep -q '^changed: [1-9]' <<<"$REAL"; then
+      docker exec "$W" bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET},signal:AbortSignal.timeout(5000)}).then(r=>console.log('  site sync: answered',r.status)).catch(()=>console.log('  site sync: started, it runs for a few minutes'))" || true
+    fi
+  else
+    notify "⚠ deploy staging: the real data's flags were not set — run scripts/staging-real-data.ts by hand (RUNBOOK, Staging demo data)" "${OPS_WEBHOOK:-}"
+  fi
 else
   echo "▶ 7/8 staging demo — production: skipped (the review account is created by hand, docs/release.md)"
 fi

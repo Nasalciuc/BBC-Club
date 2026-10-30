@@ -1173,6 +1173,20 @@ the first run after that date retires, in its transaction: the offers withdrawn 
 fare off sale (the rows stay: the demo's requests name them). Nothing to do by hand; the next run retires nothing
 (`0 offers, 0 fares`). The review account's own London offer stays; if an operator withdraws it, it stays withdrawn.
 
+**The real data, at every staging deploy.** After the demo, step 7 runs `scripts/staging-real-data.ts`: it turns on
+`catalog.estimates`, `catalog.site_prices`, `catalog.site_pins` and `catalog.site_offers` (an operator's `skip` list
+stays) and says whether the price rules are loaded — `price rules: not loaded` means a search shows the site's price
+where it has one and no number elsewhere: load them ("Price rules for estimates", above). When it turned a flag on
+(`changed: 1` or more), the deploy starts `sync-site-destinations` in the worker at once instead of waiting for 07:40 or
+19:40; it runs a few minutes, its outcome in `platform.job_runs`. `catalog.site_photos` is left alone: the site's photos
+wait for the company to confirm the rights. A flag turned off by hand is on again after the next deploy: to keep the
+flags as you set them, write `STAGING_REAL_DATA=off` in `staging.env`. Production never runs it. By hand:
+
+```bash
+cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f compose.staging.yml --env-file env/production.env --env-file env/staging.env \
+  run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run scripts/staging-real-data.ts
+```
+
 ## Redis, Kafka, Streams, and demand
 
 Unset `REDIS_URL` and `KAFKA_BROKERS` and the API stays on Postgres: flags, the airports and the catalogue's pins are held in each process and read again when their table's generation moves (within a second of any write, psql's included; ADR-IMPL-075), read and search rate limits use the in-process GCRA store, push dispatch sends inline, and search does not emit events. Kill switches and consumer pause come from the same snapshot; when a process has not been able to read the flags for 10 s, its gated routes answer `OVERLOADED` and its deliveries wait, pending (ADR-IMPL-080).

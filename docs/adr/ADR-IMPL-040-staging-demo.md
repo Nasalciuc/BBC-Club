@@ -97,3 +97,11 @@ follows BA 178's departure, 21 days on at 18:55 New York, now computed without a
 site's data once its flags are on (ADR-IMPL-045, 063, 067; RUNBOOK). This supersedes the Follow-up above and the
 operator's step of the 25 Oct amendment: there is nothing left to withdraw by hand. Tested in
 `scripts/seed-staging-demo.test.ts` and `apps/api/test/staging-demo.test.ts`.
+
+The same day, staging turns its real data on by itself. Step 7 of `deploy.sh staging` runs `scripts/staging-real-data.ts`
+after the demo: `catalog.estimates`, `catalog.site_prices`, `catalog.site_pins` and `catalog.site_offers` on, each
+flag's other settings kept, under the demo's own guard (staging's database or a local one). It never prints a price
+rule — only whether they are loaded. When it turned a flag on, the deploy starts `sync-site-destinations` in the worker
+at once (5 s of waiting; the run goes on). `catalog.site_photos` stays as it is: the site's photos wait for the
+company's word on the rights. `STAGING_REAL_DATA=off` in `staging.env` skips the step, so an operator's own setting
+holds; production never runs it. Tested in `scripts/staging-real-data.test.ts` and `apps/api/test/staging-real-data.test.ts`.
