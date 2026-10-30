@@ -44,6 +44,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     createDb(env.DATABASE_URL, {
       applicationName: role === "worker" ? "bbc-worker" : "bbc-api",
       pooler: env.DB_POOLER,
+      prepare: env.DB_PREPARE === "on",
     });
   const platform = createPlatform(db, {
     level: env.NODE_ENV === "test" ? "silent" : env.NODE_ENV === "production" ? "info" : "debug",
@@ -83,7 +84,10 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   // 2. modules, in layer order, with typed ports; identity's facade is needed by the principal middleware
   const registry = new ModuleRegistry();
-  for (const m of modules(opts.overrides ?? {})) registry.add(m);
+  const descriptors = modules(opts.overrides ?? {});
+  for (const m of descriptors) registry.add(m);
+  /** Every module's kill flag goes into app-config: one list, the modules this process runs (ADR-IMPL-075). */
+  const moduleNames = descriptors.map((m) => m.name);
   const mounted: { basePath: string; app: Hono<any> }[] = [];
   try {
     await registry.boot({ db, platform, env, mount: (basePath, sub) => mounted.push({ basePath, app: sub }) });
@@ -182,7 +186,9 @@ export async function buildApp(opts: BuildOptions = {}) {
   if (serveMembers) {
     // Inventory tests read routeRegistry — do not maintain a parallel allow-list in authz/guard.
     registerRoute("GET", "/v1/app-config", "public", "anon");
-    app.get("/v1/app-config", rateLimit(platform.rateLimit, "anon"), async (c) => c.json(await appConfig(platform)));
+    app.get("/v1/app-config", rateLimit(platform.rateLimit, "anon"), async (c) =>
+      c.json(await appConfig(platform, moduleNames)),
+    );
   }
 
   // Test/dev only: Maestro reads the last OTP without logging it. Never mounted in production.

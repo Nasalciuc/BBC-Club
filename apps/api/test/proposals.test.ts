@@ -48,14 +48,15 @@ describe("GET /v1/proposals", () => {
     await t.close();
   });
 
-  it("feed items include state field", async () => {
+  it("feed items include state field — unseen while no response is read (ADR-IMPL-075, ⚑7a)", async () => {
     const t = await testApp({ suite: "proposals-state" });
     const offerId = await t.seedBroadcastOffer();
+    // A response written directly (nothing in production writes one yet) is not read by the feed until it does.
     await t.upsertResponse(t.memberA.id, offerId, "interested");
     const r = await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } });
     const body = (await r.json()) as any;
     const item = body.items.find((i: any) => i.id === offerId);
-    expect(item?.state).toBe("interested");
+    expect(item?.state).toBe("unseen");
     await t.close();
   });
 });

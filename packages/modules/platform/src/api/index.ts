@@ -1,5 +1,6 @@
 import { EventRegistry, createPublisher, createPoller, tombstoneMember, type PollerOptions } from "../events";
 import { createFlags } from "../flags";
+import { createGenerationMemo, createGenerations, createSnapshot } from "../generations";
 import { createJobs } from "../jobs";
 import { enqueue, PUSH_GROUP, runWorker } from "../jobs/streams";
 import { createLogger, createMetrics, registerProcessMetrics } from "../telemetry";
@@ -37,7 +38,10 @@ export function createPlatform(
   const guarded = createBreaker(metrics);
   const cache = createCache({ redis, guarded, metrics });
   const registry = new EventRegistry();
-  const flags = createFlags(db, { logger, cache: redis ? cache : undefined });
+  // One set of reference-table counters per process: the flags, the airports and the catalogue's caches all ask it
+  // whether Postgres changed under them, one query a second at most (ADR-IMPL-075).
+  const generations = createGenerations(db, { logger });
+  const flags = createFlags(db, { logger, generations });
   const jobs = createJobs(db, { logger, metrics });
   const rateLimit = createRateLimiter({ db, flags, metrics, logger, redis });
   const kafkaBrokers = opts.kafkaBrokers?.trim() || "";
@@ -94,6 +98,14 @@ export function createPlatform(
     cache,
     search,
     producer,
+    /** Reference data held in this process and kept current by `platform.generations` (ADR-IMPL-075). */
+    reference: {
+      generations,
+      snapshot: <T>(key: string, load: () => Promise<T>, o?: { maxAgeMs?: number; ns?: string }) =>
+        createSnapshot(generations, key, load, { ...o, metrics }),
+      memo: <T>(keys: string | readonly string[], o: { maxEntries: number; ttlMs?: number; ns?: string }) =>
+        createGenerationMemo<T>(generations, keys, { ...o, metrics }),
+    },
     kafka: kafkaBrokers
       ? {
           consume: (consumeOpts: {
@@ -169,7 +181,8 @@ export function createPlatform(
 }
 
 export { type Handler, type HandlerContext, type EventDefinition } from "../events/registry";
-export { type Flags } from "../flags";
+export { type Flags, KILL_STALE_MS } from "../flags";
+export { type Generations, type Snapshot, type GenerationMemo } from "../generations";
 export { type Jobs, type JobContext } from "../jobs";
 export { type Logger, type Metrics, DURATION_BUCKETS_MS } from "../telemetry";
 export { pollerClaimSql, pollerStatsSql } from "../events/poller";

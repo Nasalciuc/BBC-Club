@@ -29,8 +29,12 @@ jobs:
       - run: bun run --filter @bbc/db db:migrate
       - run: bun run --filter @bbc/db db:seed -- --bench
       - run: bun run load/bench/run.ts
+      # ADR-IMPL-074/075: statements and plans per request, and CPU as a multiple of /health's (perf-thresholds.json).
+      - run: bun run load/bench/perf.ts
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: bench-report
-          path: load/bench/report.json
+          path: |
+            load/bench/report.json
+            load/bench/perf-report.json

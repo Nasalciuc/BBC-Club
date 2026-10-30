@@ -1,18 +1,18 @@
 import { Hono } from "hono";
 import { and, eq, isNotNull } from "drizzle-orm";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
-import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
 import { apiError, type ApiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import type { Executor } from "@bbc/db";
 import { createAuth } from "./api";
 import { createIdentityFacade } from "./application/facade";
+import { createSessionCache } from "./application/session-cache";
 import type { IdentityFacade } from "./api";
 import type { EmailFacade } from "@bbc/email";
 import { PasswordBody } from "@bbc/shared/api/v1/proposals";
 import { event } from "@bbc/shared/events";
-import { rateLimit, subjectOf } from "@bbc/platform/ratelimit";
+import { rateLimit, subjectOf, routeGate } from "@bbc/platform/ratelimit";
 import { account } from "./infrastructure/schema";
 import {
   BREACH_CHECK_UNAVAILABLE_MESSAGE,
@@ -82,6 +82,8 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
   init: ({ env, db, platform, ports }) => {
     const conn = db as unknown as Executor;
     const isBreached = breachCheck({ env, breachedPassword: opts.breachedPassword });
+    // ADR-IMPL-076: each process keeps the session behind a token for the cookie cache's time.
+    const sessions = createSessionCache({ ttlMs: env.SESSION_COOKIE_CACHE_SECONDS * 1000, metrics: platform.metrics });
     const auth = createAuth({
       env,
       db: conn,
@@ -97,35 +99,22 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
     });
 
     const routes = new Hono<AppEnv>();
+    // ADR-IMPL-075: each route's permission, rate rule and kill flags, declared once beside its path.
+    const gate = routeGate(platform, "identity").on(routes, "/v1");
 
-    registerRoute("GET", "/v1/account/password", "profile:read-self", "read");
-    routes.get(
-      "/account/password",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("profile:read-self", {
-        module: "identity",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const actor = actorMemberId(c.get("principal"));
-        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        // The app asks after a join code: a member who already has a password goes straight in.
-        return c.json({ hasPassword: await hasStoredPassword(conn, actor) });
-      },
-    );
+    gate.get("/account/password", { permission: "profile:read-self", rate: "read" }, async (c) => {
+      const actor = actorMemberId(c.get("principal"));
+      if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+      // The app asks after a join code: a member who already has a password goes straight in.
+      return c.json({ hasPassword: await hasStoredPassword(conn, actor) });
+    });
 
     // Limited as the profile's other writes are, per member: the current password cannot be guessed here without end
     // (ADR-IMPL-047). Better Auth's own limits never see this call — it reaches auth.api from inside the server. The
     // member is known first, so an anonymous call is refused before it counts against anyone.
-    registerRoute("POST", "/v1/account/password", "profile:update-self", "profile.write");
-    routes.post(
+    gate.post(
       "/account/password",
-      authorize("profile:update-self", {
-        module: "identity",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
+      { permission: "profile:update-self", rate: "profile.write", rateBy: "route" },
       // profile.write's numbers in a bucket of its own: wrong guesses of the current password do not use up the member's
       // profile edits, nor do the edits the guesses (ADR-IMPL-047).
       rateLimit(platform.rateLimit, "profile.write", (c) => `pw:${subjectOf(c)}`),
@@ -223,6 +212,8 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
             return c.json(apiError("UNAUTHORIZED"), 401);
           throw err;
         }
+        // The other sessions ended (or this one changed): what this process keeps for the member is read again.
+        sessions.forgetMember(actor);
         await db.transaction((tx: unknown) =>
           platform.events.publish(tx, {
             type: "member.password_changed",
@@ -250,7 +241,7 @@ export const identityModule = (opts: IdentityModuleOptions = {}): ModuleDescript
     );
 
     return {
-      exposes: { ...createIdentityFacade(auth, conn, { otpAnswerFloorMs: opts.otpAnswerFloorMs }), auth },
+      exposes: { ...createIdentityFacade(auth, conn, { otpAnswerFloorMs: opts.otpAnswerFloorMs, sessions }), auth },
       routes: [{ basePath: "/v1", app: routes }],
       consumers: [],
       jobs: [],

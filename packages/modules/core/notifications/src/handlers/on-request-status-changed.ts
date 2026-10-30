@@ -1,4 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
+import { eqConst } from "@bbc/db/helpers";
 import { RequestStatusChangedV1 } from "@bbc/shared/events/request";
 import { notificationsTable } from "@bbc/db/schema/notifications";
 import type { Executor } from "@bbc/db";
@@ -21,7 +22,7 @@ export async function onRequestStatusChanged(
         and(
           eq(notificationsTable.requestId, evt.requestId),
           eq(notificationsTable.category, "transactional"),
-          eq(notificationsTable.status, "pending"),
+          eqConst(notificationsTable.status, "pending"),
         ),
       );
     return;

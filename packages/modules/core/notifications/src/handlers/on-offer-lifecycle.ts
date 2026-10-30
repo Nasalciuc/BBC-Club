@@ -1,4 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { eqConst, inConst } from "@bbc/db/helpers";
 import { OfferExpiredV1, OfferWithdrawnV1 } from "@bbc/shared/events/offer";
 import { campaigns, notificationsTable } from "@bbc/db/schema/notifications";
 import type { Executor } from "@bbc/db";
@@ -20,9 +21,9 @@ async function stopOffer(tx: Executor, offerId: string, reason: string): Promise
   await tx
     .update(campaigns)
     .set({ status: "done", finishedAt: sql`now()`, lastMemberId: null })
-    .where(and(eq(campaigns.offerId, offerId), inArray(campaigns.status, ["pending", "running"])));
+    .where(and(eq(campaigns.offerId, offerId), inConst(campaigns.status, ["pending", "running"])));
   await tx
     .update(notificationsTable)
     .set({ status: "suppressed", lastError: reason })
-    .where(and(eq(notificationsTable.offerId, offerId), inArray(notificationsTable.status, ["pending"])));
+    .where(and(eq(notificationsTable.offerId, offerId), eqConst(notificationsTable.status, "pending")));
 }

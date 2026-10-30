@@ -5,7 +5,6 @@
  */
 import type { Executor } from "@bbc/db";
 
-import { airportsRepo } from "../infrastructure/airports.repo";
 import { discoveryRepo } from "../infrastructure/discovery.repo";
 import { SAME_METRO_KM, distanceKm } from "../pricing/estimate";
 import type { AirportRow } from "./to-fare-vm";
@@ -36,14 +35,22 @@ export function pickPopular(
   return { destinations, fromSearches };
 }
 
-/** Three queries: the searched routes, their airports, the hubs. Twelve candidates each leave room for exclusions. */
-export async function popularFrom(exec: Executor, origin: AirportRow, now = new Date()) {
+/** Where discovery finds airports: the airports each process holds (ADR-IMPL-075). */
+export type AirportLookup = {
+  getMany(codes: readonly string[]): Promise<AirportRow[]>;
+  hubs(limit: number): Promise<AirportRow[]>;
+  busiestIn(zones: readonly string[]): Promise<(AirportRow & { cityNorm: string | null })[]>;
+};
+
+/** One query, the searched routes; their airports and the hubs come from memory. Twelve candidates each leave room
+ *  for exclusions. */
+export async function popularFrom(exec: Executor, airports: AirportLookup, origin: AirportRow, now = new Date()) {
   const since = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - POPULAR.days));
   const codes = await discoveryRepo.searchedFrom(exec, origin.code, since, POPULAR.minSearches, 12);
-  const known = codes.length > 0 ? await airportsRepo.getMany(exec, codes) : [];
+  const known = codes.length > 0 ? await airports.getMany(codes) : [];
   const byCode = new Map(known.map((a) => [a.code, a]));
   const searched = codes.flatMap((code) => byCode.get(code) ?? []);
-  return pickPopular(origin, searched, await discoveryRepo.hubs(exec, 12));
+  return pickPopular(origin, searched, await airports.hubs(12));
 }
 
 /** The city a zone is named after, as `city_norm` spells a city: `America/Bogota` → `bogota`, `Asia/Ho_Chi_Minh` →
@@ -58,9 +65,9 @@ export function zoneCity(zone: string): string {
  * airport there. A tie on popularity goes to the airports of the zone's own city (Lima, not Arequipa), then by code;
  * a tie between other cities, none the zone's own, suggests nothing — the member is asked without a guess.
  */
-export async function homeSuggestion(exec: Executor, zones: string[]): Promise<AirportRow | null> {
+export async function homeSuggestion(airports: AirportLookup, zones: string[]): Promise<AirportRow | null> {
   if (zones.length === 0) return null;
-  const top = await discoveryRepo.busiestIn(exec, zones);
+  const top = await airports.busiestIn(zones);
   if (top.length <= 1) return top[0] ?? null;
   const cities = new Set(zones.map(zoneCity));
   const own = top.find((a) => cities.has(a.cityNorm ?? zoneCity(a.city)));

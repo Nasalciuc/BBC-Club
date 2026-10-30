@@ -113,7 +113,9 @@ docker compose ... exec -T postgres psql -U bbc -d bbc \
       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now();"
 ```
 
-Modules: `proposals`, `engagement`, `notifications`, `personalization`, `members`. The app reads them from `/v1/app-config`; the API stops mounting the routes on next boot and pauses the consumers.
+Modules: every module the API runs — `identity`, `members`, `catalog`, `requests`, `proposals`, `engagement`, `notifications`, `personalization` and the others in `apps/api/src/modules.ts` (one list: `/v1/app-config` names them all, ADR-IMPL-075). Within a second every process answers the module's routes 503 — and the routes that read it too (Home reads `members` and `proposals`) — and pauses its consumers; the next boot stops mounting them. A process that cannot read the flags for 10 s counts every module killed until it can again.
+
+**Prepared statements off** (ADR-IMPL-074), if PgBouncer or Postgres misbehaves with them: `DB_PREPARE=off` in the environment's env file, then `up -d --no-deps` the api replicas and the worker. Every statement is then sent unnamed and planned at each call, as before 074 — slower, nothing else changes.
 
 Boot unmounts a module only for a flag the database answered with. An api or worker that starts before
 postgres/pgbouncer (a host reboot: restart policies ignore `depends_on`) waits for the database for about 16 s (retries
@@ -465,8 +467,8 @@ prints a summary and writes one HTML page in the temporary folder — every city
 photo answers and how heavy it is (the app shows the site's file as is), and the site's prices.
 
 Turn one on (or off) in that environment's database (staging:
-`docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`), wait a minute (a flag is read through a cache of about
-35 s), then, on the server, run the job instead of waiting for the night — through the worker, so the secret is read
+`docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc`), wait a second (every process reads the flags again
+within one, ADR-IMPL-075), then, on the server, run the job instead of waiting for the night — through the worker, so the secret is read
 from its environment and never typed:
 
 ```sql
@@ -517,7 +519,7 @@ the site; a deal is shown for a day after the run that read it and is gone with 
 A run that fails changes nothing: the deals it leaves end within the day (two runs a day: one failure leaves twelve
 more hours). Home keeps them a minute; the run's end shows at once.
 
-Turn it on as the others (above): the flag row, a minute for the flag's cache, then run `sync-site-destinations` through
+Turn it on as the others (above): the flag row, a second for the flags to reach every process, then run `sync-site-destinations` through
 the worker if the snapshot is older than a day (the query above: `served` 0). What a member at an airport sees:
 
 ```sql
@@ -529,7 +531,7 @@ JOIN catalog.airports a ON a.code = p.airport
 WHERE r.route_from = 'JFK' AND r.valid_until > now() ORDER BY p.promoted DESC, a.popularity DESC LIMIT 24;
 ```
 
-Off: the next Home has none (the flag's cache aside), with no question to the database. On staging, once it is on,
+Off: the next Home has none (within a second), with no question to the database. On staging, once it is on,
 withdraw the demo's broadcast offers ("Staging demo data", below), or Tokyo stands twice on Explore.
 
 ## The site's prices (ADR-IMPL-063)
@@ -548,7 +550,7 @@ answer, kept 24 hours like a price. An error (a timeout, a 5xx, a 429, a body th
 
 **Turn it on** (staging first: members' numbers change — first class appears on routes the club hid, Cyprus, Russia and
 Kazakhstan get the site's prices, airports the site does not know lose theirs), in that environment's database; off is
-the same with `false`. A flag is read through a cache of about 35 s:
+the same with `false`. A flag reaches every process within a second:
 
 ```sql
 INSERT INTO platform.flags(key,value) VALUES ('catalog.site_prices','{"enabled":true}')
@@ -560,7 +562,7 @@ from each airport `catalog.site_routes` lists, its first 36 cities in the pins' 
 answer first, then answers 18 hours old or more; at most 150 questions a run, one every 500 ms. It asks only while
 `catalog.estimates`, `catalog.site_prices` and `catalog.site_pins` are all on — without the pins no member sees those
 routes, and a search asks for its own — and reads them again before each question, so turning one off stops a run
-already going (`stopped: 1`, within the flags' cache of about 35 s). With one off it asks nothing (`skipped: 1`) and
+already going (`stopped: 1`, within a second). With one off it asks nothing (`skipped: 1`) and
 still deletes the expired answers (`purged`). It stops at the site's first 429 (`rateLimited: 1` in its run) and when
 the breaker opens (`breakerOpen: 1`); the next run, ten minutes later, goes on. A route the site could not answer is not
 asked again for an hour (`backingOff` counts them), then after every other route due: one the site keeps failing costs
@@ -619,8 +621,8 @@ SELECT count(*) AS cities FROM catalog.site_places;
 SELECT count(DISTINCT route_from) AS origins FROM catalog.site_routes;
 ```
 
-It costs Home one read of the set (cached a minute, and dropped when the night's sync or an import changes it) and
-about 21 KB of JSON (today's 169 airports) inside Home's ETag. Off is the same with `false`, seen within the flags' cache of about 35 s; the
+It costs Home one read of the set (kept a minute, and dropped on every process when the night's sync or an import changes it) and
+about 21 KB of JSON (today's 169 airports) inside Home's ETag. Off is the same with `false`, seen within a second; the
 app keeps the last Home it parsed until its next load.
 
 ## The queue is stuck (oldest pending > 5 min)
@@ -1068,9 +1070,9 @@ Each answers `200 {"ok":true}`. To bring them back (the deals off again), set th
 
 ## Redis, Kafka, Streams, and demand
 
-Unset `REDIS_URL` and `KAFKA_BROKERS` and the API stays on Postgres: flags cache in the process for 30 seconds, read and search rate limits use the in-process GCRA store, push dispatch sends inline, and search does not emit events. Kill switches and consumer pause always read Postgres and are never cached.
+Unset `REDIS_URL` and `KAFKA_BROKERS` and the API stays on Postgres: flags, the airports and the catalogue's pins are held in each process and read again when their table's generation moves (within a second of any write, psql's included; ADR-IMPL-075), read and search rate limits use the in-process GCRA store, push dispatch sends inline, and search does not emit events. Kill switches and consumer pause come from the same snapshot and fail closed — killed, paused — when a process has not been able to read the flags for 10 s.
 
-**Turn Redis on.** Set `REDIS_APP_PASSWORD` (Compose only) and `REDIS_URL=redis://:PASSWORD@redis-app:6379` on the api and worker. A password inside `REDIS_URL` must be URL-safe or percent-encoded. Read and search limits move to Redis and fall back to memory if Redis errors, so a down Redis does not 503 those routes. Postgres rules (writes, auth) do not move. Destinations and airports cache under a generation key; import and `expire-fares` bump it.
+**Turn Redis on.** Set `REDIS_APP_PASSWORD` (Compose only) and `REDIS_URL=redis://:PASSWORD@redis-app:6379` on the api and worker. A password inside `REDIS_URL` must be URL-safe or percent-encoded. Read and search limits move to Redis and fall back to memory if Redis errors, so a down Redis does not 503 those routes. Postgres rules (writes, auth) do not move. Reference data stays in each process on Postgres's generations (ADR-IMPL-075): Redis adds nothing there.
 
 **Turn Kafka on.** Set `KAFKA_BROKERS=kafka:9092`. The process registers consumer `platform.kafkaRelay` and publishes each committed journal event to `bbc.domain-events.v1`. Delivery is at-least-once. There is no per-aggregate order: a failed relay waits in backoff while a later event for the same aggregate can be published. Consumers must be idempotent and order-independent. A duplicate `topic:partition:offset` inserts nothing in `platform.kafka_processed` and has no second effect. The offset commits after that transaction.
 

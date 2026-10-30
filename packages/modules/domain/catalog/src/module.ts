@@ -5,8 +5,7 @@ import { desc, gte, sql } from "drizzle-orm";
 import { errorForLog, type Db, type Executor } from "@bbc/db";
 import { demandDaily } from "@bbc/db/schema/catalog";
 import type { ModuleDescriptor } from "@bbc/shared/module-contract";
-import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
-import { rateLimit } from "@bbc/platform/ratelimit";
+import { routeGate } from "@bbc/platform/ratelimit";
 import { SearchEvent } from "@bbc/platform";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
@@ -17,7 +16,7 @@ import { placeLandmarksRepo } from "./infrastructure/place-landmarks.repo";
 import { placePhotosRepo } from "./infrastructure/place-photos.repo";
 import { siteRepo } from "./infrastructure/site.repo";
 import { sitePricesRepo } from "./infrastructure/site-prices.repo";
-import { createDestinationsCache } from "./application/destinations-cache";
+import { createAirportsReference } from "./application/airports-reference";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
 import { formatInZone } from "./application/flight-local";
@@ -80,14 +79,20 @@ function searchWhenInRange(when: Date, now = new Date()): boolean {
 
 /** ADR-IMPL-045: at most this many of the site's cities get a pin from one home airport. */
 export const SITE_PINS = 12;
-/** How long Home's site pins are kept, in seconds (createDestinationsCache's minute, or Redis's). */
+/** How long Home's site pins are kept, in seconds: a site price stored meanwhile is seen within it (ADR-IMPL-075). */
 const SITE_PINS_CACHE_S = 60;
+/** How long a home's fares' pins are kept, in seconds: a fare whose day passes leaves within it. */
+const DESTINATIONS_CACHE_S = 60;
+/** How long "Popular from" is kept, in seconds: the searches it counts change through the day. */
+const POPULAR_CACHE_S = 300;
+/** Distinct keys each process keeps per memo (homes × cabins × rule sets); the oldest goes first past it. */
+const MEMO_ENTRIES = 2_000;
 /** ADR-IMPL-067: how long one home's site deals are kept, in seconds. */
 const SITE_DEALS_CACHE_S = 60;
 /**
  * ADR-IMPL-067: what a read kept `ttlS` seconds asks of a route's day (and of a stored answer's), so nothing kept is
- * served past it: the cache's time, 10 % more since Redis keeps a key up to 1.1 × its TTL (the platform's cache spreads
- * its expiries), and a few seconds for the read itself — 75 s for a minute.
+ * served past it: the memo's time, 10 % more as a margin (the margin Redis's spread expiries needed before
+ * ADR-IMPL-075, kept so the figures do not move), and a few seconds for the read itself — 75 s for a minute.
  */
 const keptMargin = (ttlS: number) => Math.ceil(ttlS * 1.1) + 9;
 
@@ -116,18 +121,42 @@ export const catalogModule = (
     const conn = db as unknown as Executor;
     /** ADR-IMPL-043: place photos. On unless an operator turns the flag row off; then no photo is served or looked up. */
     const placePhotosOn = () => platform.flags.isEnabled("catalog.place_photos", true);
-    const destinationsCache = createDestinationsCache();
-    const sitePinsCache = createDestinationsCache<DestinationPin & { airports: string[] }>();
-    const siteDealsCache = createDestinationsCache<SiteDeal>();
-    const bookableCache = createDestinationsCache<BookablePlace>();
-    const invalidateMaps = async () => {
-      destinationsCache.clear();
-      sitePinsCache.clear();
-      siteDealsCache.clear();
-      bookableCache.clear();
-      await platform.cache.bump("catalog:dest:gen");
-      await platform.cache.bump("catalog:airports:gen");
-    };
+    /**
+     * ADR-IMPL-075: the airports held whole in each process, and what is computed from the reference tables kept per
+     * key until a table's generation moves — the triggers bump it in the statement that writes (an import, the
+     * expire-fares job, the site's sync, psql), and every replica sees it within a second. The TTLs bound only what
+     * changes with the clock or with tables that have no counter (searches, the site's stored prices).
+     */
+    const airportsRef = createAirportsReference(platform.reference, conn);
+    /** An airport by code: from memory, or from `exec` when a caller's transaction must see its own writes. */
+    const airportAt = (exec: Executor | undefined, code: string) =>
+      exec && exec !== conn ? airportsRepo.get(exec, code) : airportsRef.get(code);
+    const destinationsMemo = platform.reference.memo<DestinationPin[]>(["catalog.fares", "catalog.airports"], {
+      maxEntries: MEMO_ENTRIES,
+      ns: "catalog.destinations",
+      ttlMs: DESTINATIONS_CACHE_S * 1000,
+    });
+    const sitePinsMemo = platform.reference.memo<(DestinationPin & { airports: string[] })[]>(
+      ["catalog.site", "catalog.airports"],
+      { maxEntries: MEMO_ENTRIES, ttlMs: SITE_PINS_CACHE_S * 1000, ns: "catalog.site_pins" },
+    );
+    const siteDealsMemo = platform.reference.memo<SiteDeal[]>(["catalog.site", "catalog.airports"], {
+      maxEntries: MEMO_ENTRIES,
+      ns: "catalog.site_deals",
+      ttlMs: SITE_DEALS_CACHE_S * 1000,
+    });
+    const bookableMemo = platform.reference.memo<BookablePlace[]>(["catalog.site", "catalog.airports"], {
+      maxEntries: 1,
+      ns: "catalog.bookable",
+      ttlMs: SITE_PINS_CACHE_S * 1000,
+    });
+    const popularMemo = platform.reference.memo<Awaited<ReturnType<typeof popularFrom>>>("catalog.airports", {
+      maxEntries: MEMO_ENTRIES,
+      ns: "catalog.popular",
+      ttlMs: POPULAR_CACHE_S * 1000,
+    });
+    /** After this process wrote a reference table: its next read asks for the counters at once, not within the second. */
+    const invalidateMaps = () => platform.reference.generations.invalidate();
     const estimateSources = (metric: "search" | "request" | "home") => readEstimateSources(platform, metric);
     const siteClock = opts.siteClock ?? systemClock;
     /** ADR-IMPL-063: the company's site's price search — one client, and one breaker, per process. */
@@ -239,8 +268,8 @@ export const catalogModule = (
      * the member's cabin (ADR-IMPL-037), so a pin, its estimate row and the quote it leads to show one number. With
      * `catalog.site_prices` on (ADR-IMPL-063): the site's stored answers, read in one batch, else the formula — never a
      * call to the site; a city the company has no price for gets no pin. Nothing unless `catalog.site_pins` is on and
-     * estimates are (no price, no pin). Cached like the fares' pins: 60 s, and dropped when the sync or an import bumps
-     * the generation; the site's answers the job stores are seen within the minute.
+     * estimates are (no price, no pin). Kept like the fares' pins: 60 s, and dropped when the sync or an import moves
+     * the site's or the airports' generation; the site's answers stored meanwhile are seen within the minute.
      */
     async function sitePins(
       home: string,
@@ -255,7 +284,7 @@ export const catalogModule = (
         : `${home.toUpperCase()}:${cabin}:${rules?.fingerprint}`;
       const load = async () => {
         const [homeRow, rows] = await Promise.all([
-          airportsRepo.get(conn, home),
+          airportsRef.get(home),
           siteRepo.pinsFrom(conn, home, SITE_PINS * 3, keptMargin(SITE_PINS_CACHE_S)),
         ]);
         if (!homeRow) return [];
@@ -302,9 +331,7 @@ export const catalogModule = (
           ];
         });
       };
-      const gen = await platform.cache.generation("catalog:dest:gen");
-      if (gen == null) return sitePinsCache.get(key, load);
-      return platform.cache.getOrLoad(`catalog:site:${gen}:${key}`, SITE_PINS_CACHE_S, load);
+      return sitePinsMemo.get(key, load);
     }
 
     /**
@@ -321,7 +348,7 @@ export const catalogModule = (
       photos: boolean,
       marginS: number,
     ): Promise<SiteDeal[]> {
-      const [homeRow, origins] = await Promise.all([airportsRepo.get(e, home), siteRepo.dealOrigins(e, marginS)]);
+      const [homeRow, origins] = await Promise.all([airportAt(e, home), siteRepo.dealOrigins(e, marginS)]);
       if (!homeRow || origins.length === 0 || limit <= 0) return [];
       const at = { code: homeRow.code.trim(), lat: Number(homeRow.lat), lng: Number(homeRow.lng) };
       const metros = originMetros(at, origins);
@@ -358,31 +385,27 @@ export const catalogModule = (
       });
     }
 
-    /** ADR-IMPL-067: Home's site deals, behind `catalog.site_offers` (seeded off); cached like the site's pins — a minute,
-     *  dropped when the sync or an import bumps the generation. With an executor, read now, uncached. */
+    /** ADR-IMPL-067: Home's site deals, behind `catalog.site_offers` (seeded off); kept like the site's pins — a minute,
+     *  dropped when the sync or an import moves a generation (ADR-IMPL-075). With an executor, read now, unkept. */
     async function siteDeals(exec: Executor | undefined, home: string, limit: number): Promise<SiteDeal[]> {
       if (!(await platform.flags.isEnabled("catalog.site_offers", false))) return [];
       const photos = await placePhotosOn();
       if (exec) return loadSiteDeals(exec, home, limit, photos, 0);
       const key = `${home.toUpperCase()}:${limit}:${photos ? "photos" : "-"}`;
       const load = () => loadSiteDeals(conn, home, limit, photos, keptMargin(SITE_DEALS_CACHE_S));
-      const gen = await platform.cache.generation("catalog:dest:gen");
-      if (gen == null) return siteDealsCache.get(key, load);
-      return platform.cache.getOrLoad(`catalog:deals:${gen}:${key}`, SITE_DEALS_CACHE_S, load);
+      return siteDealsMemo.get(key, load);
     }
 
     /**
      * ADR-IMPL-068: the site's part of what a tap on the globe may open — the same for every member (home is taken out
-     * per call), so one entry, cached like the site's pins: a minute, dropped when the sync or an import bumps the
-     * generation, so its routes are asked to be served the time it is kept. `exec` (a caller's transaction) reads it
-     * uncached.
+     * per call), so one entry, kept like the site's pins: a minute, dropped when the sync or an import moves a
+     * generation (ADR-IMPL-075), so its routes are asked to be served the time it is kept. `exec` (a caller's
+     * transaction) reads it unkept.
      */
     async function siteBookable(exec: Executor | undefined): Promise<BookablePlace[]> {
       if (exec) return siteRepo.bookable(exec);
       const load = () => siteRepo.bookable(conn, keptMargin(SITE_PINS_CACHE_S));
-      const gen = await platform.cache.generation("catalog:dest:gen");
-      if (gen == null) return bookableCache.get("ALL", load);
-      return platform.cache.getOrLoad(`catalog:bookable:${gen}`, SITE_PINS_CACHE_S, load);
+      return bookableMemo.get("ALL", load);
     }
 
     /** ADR-IMPL-064: landmarks, off until an operator turns the flag row on; `skip`: landmarks kept out (QIDs). */
@@ -402,10 +425,7 @@ export const catalogModule = (
       destinations: async (exec, home, opts) => {
         const fares = await (async () => {
           if (exec) return faresRepo.destinations(exec, home);
-          const gen = await platform.cache.generation("catalog:dest:gen");
-          if (gen == null) return destinationsCache.get(home, () => faresRepo.destinations(conn, home));
-          const code = home.toUpperCase();
-          return platform.cache.getOrLoad(`catalog:dest:${gen}:${code}`, 60, () => faresRepo.destinations(conn, home));
+          return destinationsMemo.get(home.toUpperCase(), () => faresRepo.destinations(conn, home));
         })();
         // ADR-IMPL-045: after the fares' pins, the site's cities none of whose airports is pinned already — by a fare,
         // or by a site city before it (two cities naming one airport give one pin).
@@ -426,9 +446,10 @@ export const catalogModule = (
         if (!(await platform.flags.isEnabled("catalog.globe_tap", false))) return null;
         return bookableFrom(await siteBookable(exec), q.home, q.also);
       },
-      searchAirports: (exec, q) => airportsRepo.search(exec ?? conn, q),
-      getAirport: (exec, code) => airportsRepo.get(exec ?? conn, code),
-      getAirports: (exec, codes) => airportsRepo.getMany(exec ?? conn, [...codes]),
+      searchAirports: (exec, q) => (exec ? airportsRepo.search(exec, q) : airportsRef.search(q)),
+      getAirport: (exec, code) => airportAt(exec, code),
+      getAirports: (exec, codes) =>
+        exec && exec !== conn ? airportsRepo.getMany(exec, [...codes]) : airportsRef.getMany(codes),
       indicativeFor: async (exec, q) => {
         // The cached flag rows first: with estimates off (production today) or no valid rules, the question costs no
         // query. The request module counts what it stores (`request_estimates_stored`), after its insert.
@@ -438,7 +459,7 @@ export const catalogModule = (
         const to = q.to.toUpperCase();
         const e = exec ?? conn;
         const [airports, rows] = await Promise.all([
-          airportsRepo.getMany(e, [from, to]),
+          exec && exec !== conn ? airportsRepo.getMany(exec, [from, to]) : airportsRef.getMany([from, to]),
           faresRepo.search(e, { from, to, cabin: q.cabin }),
         ]);
         const fromApt = airports.find((a) => a.code === from);
@@ -466,376 +487,259 @@ export const catalogModule = (
     };
 
     const routes = new Hono<AppEnv>();
+    // ADR-IMPL-075: each route's permission, rate rule and kill flags, declared once beside its path.
+    const gate = routeGate(platform, "catalog").on(routes, "/v1");
 
-    registerRoute("GET", "/v1/search", "fares:read", "search");
-    routes.get(
-      "/search",
-      rateLimit(platform.rateLimit, "search"),
-      authorize("fares:read", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const from = (c.req.query("from") ?? "").toUpperCase();
-        const to = (c.req.query("to") ?? "").toUpperCase();
-        const cabin = c.req.query("cabin") as "business" | "first" | undefined;
-        const whenRaw = c.req.query("when");
-        if (!IATA.test(from) || !IATA.test(to) || (cabin !== "business" && cabin !== "first")) {
-          return c.json(apiError("VALIDATION", { message: "from, to (IATA), cabin required" }), 400);
-        }
-        const when = whenRaw ? new Date(whenRaw) : undefined;
-        if (when && Number.isNaN(when.getTime())) {
-          return c.json(apiError("VALIDATION", { message: "when must be ISO datetime" }), 400);
-        }
-        // A day gone by (a recent search's remembered date) or further out than anything is sold: no fare flies then.
-        // An empty list, as for any day without one — an error would come back on every Try again.
-        const sold = !when || searchWhenInRange(when);
+    gate.get("/search", { permission: "fares:read", rate: "search" }, async (c) => {
+      const from = (c.req.query("from") ?? "").toUpperCase();
+      const to = (c.req.query("to") ?? "").toUpperCase();
+      const cabin = c.req.query("cabin") as "business" | "first" | undefined;
+      const whenRaw = c.req.query("when");
+      if (!IATA.test(from) || !IATA.test(to) || (cabin !== "business" && cabin !== "first")) {
+        return c.json(apiError("VALIDATION", { message: "from, to (IATA), cabin required" }), 400);
+      }
+      const when = whenRaw ? new Date(whenRaw) : undefined;
+      if (when && Number.isNaN(when.getTime())) {
+        return c.json(apiError("VALIDATION", { message: "when must be ISO datetime" }), 400);
+      }
+      // A day gone by (a recent search's remembered date) or further out than anything is sold: no fare flies then.
+      // An empty list, as for any day without one — an error would come back on every Try again.
+      const sold = !when || searchWhenInRange(when);
 
-        const [fromApt, toApt, rows] = await Promise.all([
-          airportsRepo.get(conn, from),
-          airportsRepo.get(conn, to),
-          sold ? faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }) : Promise.resolve([]),
-        ]);
-        if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+      const [fromApt, toApt, rows] = await Promise.all([
+        airportsRef.get(from),
+        airportsRef.get(to),
+        sold ? faresRepo.search(conn, { from, to, cabin, ...(when ? { when } : {}) }) : Promise.resolve([]),
+      ]);
+      if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
 
-        const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
-        // Demand counts the days fares are sold for; a day outside them is no route's demand.
-        if (sold) {
-          platform.search.note({
-            from,
-            to,
-            cabin,
-            month: (when ?? new Date()).toISOString().slice(0, 7),
-            hadFares: items.length > 0,
-            results: items.length,
-          });
-        }
-        // No fare in this cabin: the company's formula, as an indicative price (ADR-IMPL-037). Undated searches only —
-        // with a date, the route may have fares on other days, and published fares always win. The flag rows are read
-        // only then, so searches with fares cost nothing extra. The rules are not in the repository: each environment
-        // holds them in `catalog.pricing_rules` (scripts/load-pricing-rules.ts).
-        const estimate = items.length === 0 && !when ? await indicativeEstimate(fromApt, toApt, cabin) : null;
-        return c.json({
-          from: toAirportVM(fromApt),
-          to: toAirportVM(toApt),
-          items,
-          offer: null,
-          estimate,
+      const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
+      // Demand counts the days fares are sold for; a day outside them is no route's demand.
+      if (sold) {
+        platform.search.note({
+          from,
+          to,
+          cabin,
+          month: (when ?? new Date()).toISOString().slice(0, 7),
+          hadFares: items.length > 0,
+          results: items.length,
         });
-      },
-    );
+      }
+      // No fare in this cabin: the company's formula, as an indicative price (ADR-IMPL-037). Undated searches only —
+      // with a date, the route may have fares on other days, and published fares always win. The flag rows are read
+      // only then, so searches with fares cost nothing extra. The rules are not in the repository: each environment
+      // holds them in `catalog.pricing_rules` (scripts/load-pricing-rules.ts).
+      const estimate = items.length === 0 && !when ? await indicativeEstimate(fromApt, toApt, cabin) : null;
+      return c.json({
+        from: toAirportVM(fromApt),
+        to: toAirportVM(toApt),
+        items,
+        offer: null,
+        estimate,
+      });
+    });
 
-    registerRoute("GET", "/v1/fares/:id", "fares:read", "read");
-    routes.get(
-      "/fares/:id",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("fares:read", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const id = c.req.param("id");
-        if (!isUuid(id)) return c.json(apiError("NOT_FOUND"), 404);
-        const row = await faresRepo.getAny(conn, id);
-        if (!row) return c.json(apiError("NOT_FOUND"), 404);
+    gate.get("/fares/:id", { permission: "fares:read", rate: "read" }, async (c) => {
+      const id = c.req.param("id");
+      if (!isUuid(id)) return c.json(apiError("NOT_FOUND"), 404);
+      const row = await faresRepo.getAny(conn, id);
+      if (!row) return c.json(apiError("NOT_FOUND"), 404);
 
-        const [fromApt, toApt] = await Promise.all([
-          airportsRepo.get(conn, row.routeFrom),
-          airportsRepo.get(conn, row.routeTo),
-        ]);
-        if (!isVisible(row)) {
-          return c.json(
-            apiError("GONE", {
-              message: "This fare has closed.",
-              context: {
-                price: parseFloat(row.price),
-                currency: row.currency,
-                validUntil: row.validUntil.toISOString(),
-                from: row.routeFrom,
-                to: row.routeTo,
-                // Figma 135:848 names what closed: the route by its cities, the airline and cabin, the day it left
-                // the origin — that airport's day, never the server's (ADR-IMPL-019).
-                fromCity: fromApt?.city ?? null,
-                toCity: toApt?.city ?? null,
-                carrier: row.carrierName,
-                cabin: row.cabin,
-                departDate: row.departAt && fromApt ? formatInZone(row.departAt.toISOString(), fromApt.tz).ymd : null,
-              },
-            }),
-            410,
-          );
-        }
-        if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND"), 404);
-        return c.json(toFareVM(row, { from: fromApt, to: toApt }, false));
-      },
-    );
-
-    registerRoute("GET", "/v1/airports", "fares:read", "read");
-    routes.get(
-      "/airports",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("fares:read", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const raw = c.req.query("q") ?? "";
-        // Postgres text cannot hold a NUL: no airport has one, and the query would fail.
-        if (raw.includes("\u0000")) return c.json(apiError("VALIDATION", { message: "q has a NUL character" }), 400);
-        const q = raw.slice(0, 64);
-        const gen = await platform.cache.generation("catalog:airports:gen");
-        const rows =
-          gen == null
-            ? await airportsRepo.search(conn, q)
-            : await platform.cache.getOrLoad(`catalog:airports:${gen}:${q.toLowerCase()}`, 60, () =>
-                airportsRepo.search(conn, q),
-              );
-        return c.json(rows.map((r) => toAirportVM(r)));
-      },
-    );
-
-    // ADR-IMPL-039: "Popular from <city>" — searched routes first, then the hubs; names only. Cached 5 minutes with the
-    // airports' generation (an import refreshes it); without Redis, three small queries.
-    registerRoute("GET", "/v1/airports/popular", "fares:read", "read");
-    routes.get(
-      "/airports/popular",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("fares:read", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const from = (c.req.query("from") ?? "").toUpperCase();
-        if (!/^[A-Z]{3}$/.test(from)) return c.json(apiError("VALIDATION", { message: "from (IATA) required" }), 400);
-        const origin = await airportsRepo.get(conn, from);
-        if (!origin) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
-        const gen = await platform.cache.generation("catalog:airports:gen");
-        const picked =
-          gen == null
-            ? await popularFrom(conn, origin)
-            : await platform.cache.getOrLoad(`catalog:popular:${gen}:${from}`, 300, () => popularFrom(conn, origin));
-        platform.metrics.inc("popular_destinations_shown", { source: "searches" }, picked.fromSearches);
-        platform.metrics.inc(
-          "popular_destinations_shown",
-          { source: "hubs" },
-          picked.destinations.length - picked.fromSearches,
+      const [fromApt, toApt] = await Promise.all([airportsRef.get(row.routeFrom), airportsRef.get(row.routeTo)]);
+      if (!isVisible(row)) {
+        return c.json(
+          apiError("GONE", {
+            message: "This fare has closed.",
+            context: {
+              price: parseFloat(row.price),
+              currency: row.currency,
+              validUntil: row.validUntil.toISOString(),
+              from: row.routeFrom,
+              to: row.routeTo,
+              // Figma 135:848 names what closed: the route by its cities, the airline and cabin, the day it left
+              // the origin — that airport's day, never the server's (ADR-IMPL-019).
+              fromCity: fromApt?.city ?? null,
+              toCity: toApt?.city ?? null,
+              carrier: row.carrierName,
+              cabin: row.cabin,
+              departDate: row.departAt && fromApt ? formatInZone(row.departAt.toISOString(), fromApt.tz).ymd : null,
+            },
+          }),
+          410,
         );
-        return c.json({ from: toAirportVM(origin), destinations: picked.destinations.map((a) => toAirportVM(a)) });
-      },
-    );
+      }
+      if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND"), 404);
+      return c.json(toFareVM(row, { from: fromApt, to: toApt }, false));
+    });
+
+    gate.get("/airports", { permission: "fares:read", rate: "read" }, async (c) => {
+      const raw = c.req.query("q") ?? "";
+      // Postgres text cannot hold a NUL: no airport has one, and the query would fail.
+      if (raw.includes("\u0000")) return c.json(apiError("VALIDATION", { message: "q has a NUL character" }), 400);
+      const q = raw.slice(0, 64);
+      const rows = await airportsRef.search(q);
+      return c.json(rows.map((r) => toAirportVM(r)));
+    });
+
+    // ADR-IMPL-039: "Popular from <city>" — searched routes first, then the hubs; names only. Kept 5 minutes per home for
+    // the airports' generation (ADR-IMPL-075): one query (the searches) on a miss, the airports from memory.
+    gate.get("/airports/popular", { permission: "fares:read", rate: "read" }, async (c) => {
+      const from = (c.req.query("from") ?? "").toUpperCase();
+      if (!/^[A-Z]{3}$/.test(from)) return c.json(apiError("VALIDATION", { message: "from (IATA) required" }), 400);
+      const origin = await airportsRef.get(from);
+      if (!origin) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+      const picked = await popularMemo.get(from, () => popularFrom(conn, airportsRef, origin));
+      platform.metrics.inc("popular_destinations_shown", { source: "searches" }, picked.fromSearches);
+      platform.metrics.inc(
+        "popular_destinations_shown",
+        { source: "hubs" },
+        picked.destinations.length - picked.fromSearches,
+      );
+      return c.json({ from: toAirportVM(origin), destinations: picked.destinations.map((a) => toAirportVM(a)) });
+    });
 
     // ADR-IMPL-039: the home airport suggested at onboarding, from the phone's time zone.
-    registerRoute("GET", "/v1/airports/home-suggestion", "fares:read", "read");
-    routes.get(
-      "/airports/home-suggestion",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("fares:read", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const zones = homeZones(c.req.query("tz") ?? "");
-        if (!zones) return c.json(apiError("VALIDATION", { message: "tz must be an IANA time zone" }), 400);
-        const airport = await homeSuggestion(conn, zones);
-        return c.json({ airport: airport ? toAirportVM(airport) : null });
-      },
-    );
+    gate.get("/airports/home-suggestion", { permission: "fares:read", rate: "read" }, async (c) => {
+      const zones = homeZones(c.req.query("tz") ?? "");
+      if (!zones) return c.json(apiError("VALIDATION", { message: "tz must be an IANA time zone" }), 400);
+      const airport = await homeSuggestion(airportsRef, zones);
+      return c.json({ airport: airport ? toAirportVM(airport) : null });
+    });
 
     // ADR-IMPL-043: the photo for each city asked about — a photograph's addresses and credit, a satellite view's
     // centre, or nothing yet. Airports never asked about before get a row the resolve-place-photos job fills.
-    registerRoute("GET", "/v1/places/photos", "fares:read", "read");
-    routes.get(
-      "/places/photos",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("fares:read", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const codes = parseCodes(c.req.query("codes"));
-        if (!codes) {
-          return c.json(
-            apiError("VALIDATION", { message: `codes: 1 to ${PLACE_PHOTOS_MAX_CODES} IATA codes, comma-separated` }),
-            400,
-          );
-        }
-        if (!(await placePhotosOn())) return c.json({ items: [] satisfies PlacePhotoVM[] });
-        const rows = await placePhotosRepo.getMany(conn, codes);
-        const known = new Map(rows.map((r) => [r.code.trim(), toPlacePhotoVM(r)]));
-        const added = new Set(
-          await placePhotosRepo.addPending(
-            conn,
-            codes.filter((code) => !known.has(code)),
-          ),
+    gate.get("/places/photos", { permission: "fares:read", rate: "read" }, async (c) => {
+      const codes = parseCodes(c.req.query("codes"));
+      if (!codes) {
+        return c.json(
+          apiError("VALIDATION", { message: `codes: 1 to ${PLACE_PHOTOS_MAX_CODES} IATA codes, comma-separated` }),
+          400,
         );
-        if (added.size > 0) platform.metrics.inc("place_photos_requested", {}, added.size);
-        const items = codes.flatMap((code): PlacePhotoVM[] => {
-          const vm = known.get(code);
-          if (vm) return [vm];
-          return added.has(code) ? [{ code, kind: "none" }] : [];
-        });
-        // ADR-IMPL-064, amendment 1: where the photo job found a city no photograph of its own (its satellite view), its
-        // first landmark's stands in — composed here, at read time, so the next answer follows the flag and its `skip`,
-        // and a photo of the city's own (the operator's included) stays first. A city not looked up yet stays `none`:
-        // phones ask again within a minute, but keep a photo for twelve hours. With `catalog.landmarks` off nothing is
-        // read and nothing changes.
-        const onSatellite = items.filter((i) => i.kind === "satellite").map((i) => i.code);
-        const flag = onSatellite.length > 0 ? await landmarksFlag() : null;
-        if (!flag?.enabled) return c.json({ items });
-        const standIns = await placeLandmarksRepo.standIns(conn, onSatellite, flag.skip);
-        return c.json({ items: withLandmarkPhotos(items, standIns) });
-      },
-    );
+      }
+      if (!(await placePhotosOn())) return c.json({ items: [] satisfies PlacePhotoVM[] });
+      const rows = await placePhotosRepo.getMany(conn, codes);
+      const known = new Map(rows.map((r) => [r.code.trim(), toPlacePhotoVM(r)]));
+      const added = new Set(
+        await placePhotosRepo.addPending(
+          conn,
+          codes.filter((code) => !known.has(code)),
+        ),
+      );
+      if (added.size > 0) platform.metrics.inc("place_photos_requested", {}, added.size);
+      const items = codes.flatMap((code): PlacePhotoVM[] => {
+        const vm = known.get(code);
+        if (vm) return [vm];
+        return added.has(code) ? [{ code, kind: "none" }] : [];
+      });
+      // ADR-IMPL-064, amendment 1: where the photo job found a city no photograph of its own (its satellite view), its
+      // first landmark's stands in — composed here, at read time, so the next answer follows the flag and its `skip`,
+      // and a photo of the city's own (the operator's included) stays first. A city not looked up yet stays `none`:
+      // phones ask again within a minute, but keep a photo for twelve hours. With `catalog.landmarks` off nothing is
+      // read and nothing changes.
+      const onSatellite = items.filter((i) => i.kind === "satellite").map((i) => i.code);
+      const flag = onSatellite.length > 0 ? await landmarksFlag() : null;
+      if (!flag?.enabled) return c.json({ items });
+      const standIns = await placeLandmarksRepo.standIns(conn, onSatellite, flag.skip);
+      return c.json({ items: withLandmarkPhotos(items, standIns) });
+    });
 
     // ADR-IMPL-064: up to three landmarks of the city an airport serves, from the table at once (the job looks them
     // up); an operator's `skip` takes effect here before the job looks again. An ETag over the body: a 304 when unchanged.
-    registerRoute("GET", "/v1/places/:code/landmarks", "fares:read", "read");
-    routes.get(
-      "/places/:code/landmarks",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("fares:read", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const code = c.req.param("code").toUpperCase();
-        if (!IATA.test(code) || !(await airportsRepo.get(conn, code))) {
-          return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
-        }
-        const flag = await landmarksFlag();
-        const rows = flag.enabled ? await placeLandmarksRepo.forPlace(conn, code) : [];
-        const body = toPlaceLandmarksVM(code, rows, flag.skip);
-        const etag = etagOf(body);
-        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
-          return c.body(null, 304, { ETag: etag, ...REVALIDATE });
-        }
-        return c.json(body, 200, { ETag: etag, ...REVALIDATE });
-      },
-    );
+    gate.get("/places/:code/landmarks", { permission: "fares:read", rate: "read" }, async (c) => {
+      const code = c.req.param("code").toUpperCase();
+      if (!IATA.test(code) || !(await airportsRef.get(code))) {
+        return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+      }
+      const flag = await landmarksFlag();
+      const rows = flag.enabled ? await placeLandmarksRepo.forPlace(conn, code) : [];
+      const body = toPlaceLandmarksVM(code, rows, flag.skip);
+      const etag = etagOf(body);
+      if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+        return c.body(null, 304, { ETag: etag, ...REVALIDATE });
+      }
+      return c.json(body, 200, { ETag: etag, ...REVALIDATE });
+    });
 
     // ADR-IMPL-043: an operator's own photo for a city (a wrong or poor one found automatically): it replaces what the
     // job found, never expires, and DELETE hands the city back to the job.
-    registerRoute("PUT", "/v1/internal/places/:code/photo", "catalog:import");
-    routes.put(
-      "/internal/places/:code/photo",
-      authorize("catalog:import", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const code = c.req.param("code").toUpperCase();
-        if (!/^[A-Z]{3}$/.test(code)) return c.json(apiError("VALIDATION", { message: "code (IATA) required" }), 400);
-        const parsed = PlacePhotoOverride.safeParse(await c.req.json().catch(() => ({})));
-        if (!parsed.success) {
-          return c.json(
-            apiError("VALIDATION", {
-              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-            }),
-            400,
-          );
-        }
-        if (!(await airportsRepo.get(conn, code))) {
-          return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
-        }
-        const { card, hero, credit } = parsed.data;
-        const row = await placePhotosRepo.setOverride(conn, code, {
-          cardUrl: card,
-          heroUrl: hero,
-          author: credit?.author ?? null,
-          license: credit?.license ?? null,
-          link: credit?.link ?? null,
-        });
-        return c.json(toPlacePhotoVM(row));
-      },
-    );
+    gate.put("/internal/places/:code/photo", { permission: "catalog:import" }, async (c) => {
+      const code = c.req.param("code").toUpperCase();
+      if (!/^[A-Z]{3}$/.test(code)) return c.json(apiError("VALIDATION", { message: "code (IATA) required" }), 400);
+      const parsed = PlacePhotoOverride.safeParse(await c.req.json().catch(() => ({})));
+      if (!parsed.success) {
+        return c.json(
+          apiError("VALIDATION", {
+            details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+          }),
+          400,
+        );
+      }
+      if (!(await airportsRef.get(code))) {
+        return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
+      }
+      const { card, hero, credit } = parsed.data;
+      const row = await placePhotosRepo.setOverride(conn, code, {
+        cardUrl: card,
+        heroUrl: hero,
+        author: credit?.author ?? null,
+        license: credit?.license ?? null,
+        link: credit?.link ?? null,
+      });
+      return c.json(toPlacePhotoVM(row));
+    });
 
-    registerRoute("DELETE", "/v1/internal/places/:code/photo", "catalog:import");
-    routes.delete(
-      "/internal/places/:code/photo",
-      authorize("catalog:import", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const code = c.req.param("code").toUpperCase();
-        if (!/^[A-Z]{3}$/.test(code)) return c.json(apiError("VALIDATION", { message: "code (IATA) required" }), 400);
-        if (!(await placePhotosRepo.clearOverride(conn, code))) {
-          return c.json(apiError("NOT_FOUND", { message: "no operator photo for this airport" }), 404);
-        }
-        return c.body(null, 204);
-      },
-    );
+    gate.delete("/internal/places/:code/photo", { permission: "catalog:import" }, async (c) => {
+      const code = c.req.param("code").toUpperCase();
+      if (!/^[A-Z]{3}$/.test(code)) return c.json(apiError("VALIDATION", { message: "code (IATA) required" }), 400);
+      if (!(await placePhotosRepo.clearOverride(conn, code))) {
+        return c.json(apiError("NOT_FOUND", { message: "no operator photo for this airport" }), 404);
+      }
+      return c.body(null, 204);
+    });
 
-    registerRoute("POST", "/v1/internal/catalog/import", "catalog:import");
-    routes.post(
-      "/internal/catalog/import",
-      authorize("catalog:import", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const parsed = ImportBody.safeParse(await c.req.json().catch(() => ({})));
-        if (!parsed.success) {
-          return c.json(
-            apiError("VALIDATION", {
-              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-            }),
-            400,
-          );
+    gate.post("/internal/catalog/import", { permission: "catalog:import" }, async (c) => {
+      const parsed = ImportBody.safeParse(await c.req.json().catch(() => ({})));
+      if (!parsed.success) {
+        return c.json(
+          apiError("VALIDATION", {
+            details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+          }),
+          400,
+        );
+      }
+      try {
+        const r = await expose.importCsv(parsed.data);
+        invalidateMaps();
+        return c.json(r);
+      } catch (e: unknown) {
+        // The file's fault, row by row; anything else is ours (the error contract logs it without the query's values).
+        if (e instanceof ImportError) {
+          return c.json(apiError("VALIDATION", { message: "The file was not imported.", details: e.details }), 400);
         }
-        try {
-          const r = await expose.importCsv(parsed.data);
-          await invalidateMaps();
-          return c.json(r);
-        } catch (e: unknown) {
-          // The file's fault, row by row; anything else is ours (the error contract logs it without the query's values).
-          if (e instanceof ImportError) {
-            return c.json(apiError("VALIDATION", { message: "The file was not imported.", details: e.details }), 400);
-          }
-          throw e;
-        }
-      },
-    );
+        throw e;
+      }
+    });
 
-    registerRoute("GET", "/v1/internal/demand", "ops:read");
-    routes.get(
-      "/internal/demand",
-      authorize("ops:read", {
-        module: "catalog",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const days = Number(c.req.query("days") ?? "7");
-        if (!Number.isInteger(days) || days < 1 || days > 90) {
-          return c.json(apiError("VALIDATION", { message: "days must be an integer from 1 to 90" }), 400);
-        }
-        const since = new Date(Date.now() - days * 86_400_000);
-        const rows = await conn
-          .select({
-            from: demandDaily.routeFrom,
-            to: demandDaily.routeTo,
-            cabin: demandDaily.cabin,
-            searches: sql<number>`sum(${demandDaily.searches})::int`.mapWith(Number),
-            searchesWithoutFare: sql<number>`sum(${demandDaily.searchesWithoutFare})::int`.mapWith(Number),
-          })
-          .from(demandDaily)
-          .where(gte(demandDaily.day, since))
-          .groupBy(demandDaily.routeFrom, demandDaily.routeTo, demandDaily.cabin)
-          .orderBy(desc(sql`sum(${demandDaily.searchesWithoutFare})`), desc(sql`sum(${demandDaily.searches})`));
-        return c.json({ days, routes: rows });
-      },
-    );
+    gate.get("/internal/demand", { permission: "ops:read" }, async (c) => {
+      const days = Number(c.req.query("days") ?? "7");
+      if (!Number.isInteger(days) || days < 1 || days > 90) {
+        return c.json(apiError("VALIDATION", { message: "days must be an integer from 1 to 90" }), 400);
+      }
+      const since = new Date(Date.now() - days * 86_400_000);
+      const rows = await conn
+        .select({
+          from: demandDaily.routeFrom,
+          to: demandDaily.routeTo,
+          cabin: demandDaily.cabin,
+          searches: sql<number>`sum(${demandDaily.searches})::int`.mapWith(Number),
+          searchesWithoutFare: sql<number>`sum(${demandDaily.searchesWithoutFare})::int`.mapWith(Number),
+        })
+        .from(demandDaily)
+        .where(gte(demandDaily.day, since))
+        .groupBy(demandDaily.routeFrom, demandDaily.routeTo, demandDaily.cabin)
+        .orderBy(desc(sql`sum(${demandDaily.searchesWithoutFare})`), desc(sql`sum(${demandDaily.searches})`));
+      return c.json({ days, routes: rows });
+    });
 
     if (platform.kafka && platform.redis && env.APP_ROLE !== "api" && env.KAFKA_BROKERS) {
       const redis = platform.redis;
@@ -876,7 +780,7 @@ export const catalogModule = (
             timeoutMs: 30_000,
             handler: async () => {
               const out = await expireFares({ db: conn });
-              await invalidateMaps();
+              invalidateMaps();
               return out;
             },
           },
@@ -931,7 +835,7 @@ export const catalogModule = (
                 },
                 { read: photos !== null || snapshot, photos },
               );
-              if (report.read) await invalidateMaps();
+              if (report.read) invalidateMaps();
               return report;
             },
           },

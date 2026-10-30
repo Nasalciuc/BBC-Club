@@ -1,17 +1,12 @@
 /** Quiet hours are 22:00–08:00 in the member's local timezone. Transactional bypasses this. */
+import { isIanaZone, zoneClock } from "@bbc/shared/time-zone";
 
 /** The zone a member has until they set one (members.profile.timezone's default). */
 export const DEFAULT_TIME_ZONE = "America/New_York";
 
-/** An IANA zone this runtime knows (`Europe/London`); anything else makes Intl throw a RangeError. */
-export function isTimeZone(tz: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** An IANA zone this runtime knows (`Europe/London`); anything else makes Intl throw a RangeError. The shared rule
+ *  (ADR-IMPL-075): the profile accepts no other. */
+export const isTimeZone = isIanaZone;
 
 /**
  * The member's zone when it is one, else the club's default. A value stored before zones were checked, or any bad row,
@@ -24,15 +19,8 @@ export function safeTimeZone(tz: string | null | undefined, onInvalid?: () => vo
 }
 
 function localHourMinute(now: Date, timeZone: string): { hour: number; minute: number } {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour: "numeric",
-    minute: "numeric",
-    hourCycle: "h23",
-  }).formatToParts(now);
-  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
-  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
-  return { hour, minute };
+  const t = zoneClock(now, timeZone);
+  return { hour: Number(t.hour || "0"), minute: Number(t.minute || "0") };
 }
 
 export function isInQuietHours(now: Date, timeZone: string): boolean {

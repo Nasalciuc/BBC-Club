@@ -1,4 +1,5 @@
 import { and, eq, lt, sql } from "drizzle-orm";
+import { eqConst } from "@bbc/db/helpers";
 import type { Executor } from "@bbc/db";
 import { withTx } from "@bbc/db";
 import { offers } from "@bbc/db/schema/proposals";
@@ -29,7 +30,7 @@ export async function expireOffers(deps: ExpireDeps): Promise<{ expired: number 
     const expired = await tx
       .update(offers)
       .set({ status: "expired", updatedAt: sql`now()` })
-      .where(and(eq(offers.status, "active"), lt(offers.validUntil, now)))
+      .where(and(eqConst(offers.status, "active"), lt(offers.validUntil, now)))
       .returning({ id: offers.id });
 
     for (const row of expired) {

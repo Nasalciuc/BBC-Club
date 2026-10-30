@@ -161,6 +161,39 @@ describe("hot queries choose their index", () => {
     },
   ];
 
+  // ADR-IMPL-074: named statements are planned once and may be run on the generic plan. A partial index is matched on
+  // that plan only when its predicate is written as a literal in the SQL (`eqConst`): `published = $1` would scan.
+  // Every index named is partial on `published = true`; which one the generic plan picks depends on the statistics.
+  const GENERIC: { name: string; query: () => { toSQL(): { sql: string } }; index: string[]; table: string }[] = [
+    {
+      name: "destinations(JFK)",
+      query: () => faresRepo.destinationsSelect(iso.db, "JFK"),
+      index: ["fares_home_destinations", "fares_expiry"],
+      table: "fares",
+    },
+    {
+      name: "search JFK→LHR business",
+      query: () => faresRepo.searchSelect(iso.db, { from: "JFK", to: "LHR", cabin: "business" }),
+      index: ["fares_home_destinations", "fares_search"],
+      table: "fares",
+    },
+  ];
+  for (const q of GENERIC) {
+    test(`${q.name} on the generic plan`, async () => {
+      const text = q.query().toSQL().sql;
+      expect(text).not.toMatch(/"published" = \$\d/);
+      const rows = (await iso.db.execute(sql.raw(`EXPLAIN (FORMAT JSON, GENERIC_PLAN) ${text}`))) as {
+        "QUERY PLAN": { Plan: Parameters<typeof usesIndex>[0] }[];
+      }[];
+      const p = rows[0]!["QUERY PLAN"][0]!.Plan;
+      expect(
+        q.index.some((i) => usesIndex(p, i)),
+        `${q.name}: generic plan without ${q.index.join(" or ")}`,
+      ).toBe(true);
+      expect(seqScans(p)).not.toContain(q.table);
+    });
+  }
+
   for (const q of HOT) {
     test(
       q.name,

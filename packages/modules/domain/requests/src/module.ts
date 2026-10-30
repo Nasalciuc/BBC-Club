@@ -1,8 +1,8 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
-import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
-import { rateLimit } from "@bbc/platform/ratelimit";
+import { registerRoute } from "@bbc/shared/authz/authorize";
+import { rateLimit, routeGate } from "@bbc/platform/ratelimit";
 import { apiError, zodFieldErrors } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
@@ -98,25 +98,19 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
           );
         },
       });
-    // Whether the member could have seen the offer a request names: two reads by key from proposals, never fatal — a
-    // failed or slow read checks nothing (counted and logged), and the request goes through.
+    // Whether the member could have seen the offer a request names: proposals' verdict, one read by key, never fatal —
+    // a failed or slow read checks nothing (counted and logged), and the request goes through. No member (a system
+    // caller without an actor): only an offer meant for everyone counts as theirs.
     const offer = (offerId: string, memberId: string | null) =>
-      askOffer(
-        {
-          visible: () => (memberId ? ports.proposals.getVisible(undefined, memberId, offerId) : Promise.resolve(null)),
-          stored: () => ports.proposals.getAny(undefined, offerId),
-          memberId,
+      askOffer(() => ports.proposals.verdict(undefined, memberId ?? "", offerId), {
+        unavailable: (reason, err) => {
+          platform.metrics.inc("request_offer_unavailable", { reason });
+          platform.logger.warn(
+            { reason, err: err === undefined ? undefined : errorForLog(err) },
+            "request offer unavailable",
+          );
         },
-        {
-          unavailable: (reason, err) => {
-            platform.metrics.inc("request_offer_unavailable", { reason });
-            platform.logger.warn(
-              { reason, err: err === undefined ? undefined : errorForLog(err) },
-              "request offer unavailable",
-            );
-          },
-        },
-      );
+      });
     // The offer an offer request names, as the specialist reads it when the request is sent (system scope): one read,
     // never fatal — an error or a slow answer sends the request without it.
     const offerForCrm = async (offerId: string): Promise<OfferForCrm | null> => {
@@ -157,171 +151,132 @@ export const requestsModule = (): ModuleDescriptor<Ports, RequestsFacade> => ({
     };
 
     const routes = new Hono<AppEnv>();
+    // ADR-IMPL-075: each route's permission, rate rule and kill flags, declared once beside its path.
+    const gate = routeGate(platform, "requests").on(routes, "/v1");
 
-    registerRoute("POST", "/v1/requests", "requests:create");
-    routes.post(
-      "/requests",
-      authorize("requests:create", {
-        module: "requests",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const key = c.req.header("Idempotency-Key");
-        if (!key) return c.json(apiError("VALIDATION", { message: "Idempotency-Key is required" }), 400);
-        // The app sends a UUID. A key past ~2 700 bytes cannot enter the requests_idempotency index (a 500).
-        if (!IDEMPOTENCY_KEY.test(key)) {
+    gate.post("/requests", { permission: "requests:create" }, async (c) => {
+      const key = c.req.header("Idempotency-Key");
+      if (!key) return c.json(apiError("VALIDATION", { message: "Idempotency-Key is required" }), 400);
+      // The app sends a UUID. A key past ~2 700 bytes cannot enter the requests_idempotency index (a 500).
+      if (!IDEMPOTENCY_KEY.test(key)) {
+        return c.json(
+          apiError("VALIDATION", { message: "Idempotency-Key must be 8-200 letters, digits, - or _." }),
+          400,
+        );
+      }
+
+      const principal = c.get("principal");
+      const platformHdr = (c.req.header("X-App-Platform") ?? "ios").toLowerCase();
+      const actor = {
+        memberId: actorMemberId(principal),
+        source: (platformHdr === "android" ? "android" : "ios") as "ios" | "android",
+        appVersion: c.req.header("X-App-Version") ?? null,
+        ip: c.get("clientIp"),
+      };
+
+      const body = await c.req.json().catch(() => ({}));
+      let result;
+      try {
+        result = await submit(conn, body, actor, key, {
+          publish,
+          rateLimit: platform.rateLimit,
+          indicative,
+          fare,
+          offer,
+        });
+      } catch (err: unknown) {
+        const details = zodFieldErrors(err);
+        if (details) {
+          // A refusal an app on phones can meet (a remembered day now past, a leg that goes nowhere, more infants than
+          // adults) says why: its own message, which an older app shows as it is, and its reason, which a newer one
+          // maps (REQUEST_REFUSAL_REASONS, ADR-IMPL-071). Validation is unchanged.
+          const why = details.find((d) => d.reason);
           return c.json(
-            apiError("VALIDATION", { message: "Idempotency-Key must be 8-200 letters, digits, - or _." }),
+            apiError("VALIDATION", {
+              details,
+              ...(why ? { message: why.message, context: { reason: why.reason } } : {}),
+            }),
             400,
           );
         }
-
-        const principal = c.get("principal");
-        const platformHdr = (c.req.header("X-App-Platform") ?? "ios").toLowerCase();
-        const actor = {
-          memberId: actorMemberId(principal),
-          source: (platformHdr === "android" ? "android" : "ios") as "ios" | "android",
-          appVersion: c.req.header("X-App-Version") ?? null,
-          ip: c.get("clientIp"),
-        };
-
-        const body = await c.req.json().catch(() => ({}));
-        let result;
-        try {
-          result = await submit(conn, body, actor, key, {
-            publish,
-            rateLimit: platform.rateLimit,
-            indicative,
-            fare,
-            offer,
-          });
-        } catch (err: unknown) {
-          const details = zodFieldErrors(err);
-          if (details) {
-            // A refusal an app on phones can meet (a remembered day now past, a leg that goes nowhere, more infants than
-            // adults) says why: its own message, which an older app shows as it is, and its reason, which a newer one
-            // maps (REQUEST_REFUSAL_REASONS, ADR-IMPL-071). Validation is unchanged.
-            const why = details.find((d) => d.reason);
-            return c.json(
-              apiError("VALIDATION", {
-                details,
-                ...(why ? { message: why.message, context: { reason: why.reason } } : {}),
-              }),
-              400,
-            );
-          }
-          throw err;
+        throw err;
+      }
+      if (!result.ok) {
+        if (result.code === "RATE_LIMITED") {
+          c.header("Retry-After", String(Math.max(1, Math.ceil((result.retryAfterMs ?? 1000) / 1000))));
+          // Which limit: the address's, shared with others behind it, or the member's own.
+          return c.json(apiError("RATE_LIMITED", { context: { scope: result.scope } }), 429);
         }
-        if (!result.ok) {
-          if (result.code === "RATE_LIMITED") {
-            c.header("Retry-After", String(Math.max(1, Math.ceil((result.retryAfterMs ?? 1000) / 1000))));
-            // Which limit: the address's, shared with others behind it, or the member's own.
-            return c.json(apiError("RATE_LIMITED", { context: { scope: result.scope } }), 429);
-          }
-          if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
-          // The fare or offer it names, with the field: `fareId`, `legs.0`, `cabin`, `offerId`.
-          if ("details" in result) {
-            return c.json(apiError("VALIDATION", { message: result.message, details: result.details }), 400);
-          }
-          return c.json(apiError("VALIDATION"), 400);
+        if (result.code === "CONFLICT") return c.json(apiError("CONFLICT"), 409);
+        // The fare or offer it names, with the field: `fareId`, `legs.0`, `cabin`, `offerId`.
+        if ("details" in result) {
+          return c.json(apiError("VALIDATION", { message: result.message, details: result.details }), 400);
         }
-        const created = result.request;
-        // Counted once the row exists (a replay or a lost race stores nothing new): estimates that reached a request.
-        if (result.created && created.shownEstimateAmount !== null) {
-          platform.metrics.inc("request_estimates_stored", { cabin: created.cabin });
-        }
-        // Taken for its trip without the fare it named, which no longer exists (a request queued before 0034 removed it).
-        if (result.created && "fareLeftOut" in result && result.fareLeftOut) {
-          platform.metrics.inc("request_fare_gone");
-          platform.logger.info(
-            { requestId: created.id, fareId: result.fareLeftOut },
-            "request taken without its fare: the fare no longer exists",
-          );
-        }
-        return c.json(
-          toRequestVM(created, [], cityOf(await citiesFor([created]), created)),
-          result.created ? 201 : 200,
+        return c.json(apiError("VALIDATION"), 400);
+      }
+      const created = result.request;
+      // Counted once the row exists (a replay or a lost race stores nothing new): estimates that reached a request.
+      if (result.created && created.shownEstimateAmount !== null) {
+        platform.metrics.inc("request_estimates_stored", { cabin: created.cabin });
+      }
+      // Taken for its trip without the fare it named, which no longer exists (a request queued before 0034 removed it).
+      if (result.created && "fareLeftOut" in result && result.fareLeftOut) {
+        platform.metrics.inc("request_fare_gone");
+        platform.logger.info(
+          { requestId: created.id, fareId: result.fareLeftOut },
+          "request taken without its fare: the fare no longer exists",
         );
-      },
-    );
+      }
+      return c.json(toRequestVM(created, [], cityOf(await citiesFor([created]), created)), result.created ? 201 : 200);
+    });
 
-    registerRoute("GET", "/v1/requests", "requests:read-self", "read");
-    routes.get(
-      "/requests",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("requests:read-self", {
-        module: "requests",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const memberId = actorMemberId(c.get("principal"));
-        if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
-        const rows = await repo.listForMember(undefined, memberId);
-        const page = rows.slice(0, 50);
-        const [timelines, cities] = await Promise.all([
-          repo.timelinesFor(
-            undefined,
-            page.map((r) => r.id),
-          ),
-          citiesFor(page),
-        ]);
-        return c.json({
-          items: page.map((r) => toRequestVM(r, timelines.get(r.id) ?? [], cityOf(cities, r))),
-          hasMore: rows.length > 50,
-        });
-      },
-    );
+    gate.get("/requests", { permission: "requests:read-self", rate: "read" }, async (c) => {
+      const memberId = actorMemberId(c.get("principal"));
+      if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
+      const rows = await repo.listForMember(undefined, memberId);
+      const page = rows.slice(0, 50);
+      const [timelines, cities] = await Promise.all([
+        repo.timelinesFor(
+          undefined,
+          page.map((r) => r.id),
+        ),
+        citiesFor(page),
+      ]);
+      return c.json({
+        items: page.map((r) => toRequestVM(r, timelines.get(r.id) ?? [], cityOf(cities, r))),
+        hasMore: rows.length > 50,
+      });
+    });
 
-    registerRoute("GET", "/v1/requests/:id", "requests:read-self", "read");
-    routes.get(
-      "/requests/:id",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("requests:read-self", {
-        module: "requests",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const memberId = actorMemberId(c.get("principal"));
-        if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
-        // An id that is not a UUID names no request (bbcclub://requests/abc): 404, never a cast error from Postgres.
-        const id = RequestId.safeParse(c.req.param("id"));
-        if (!id.success) return c.json(apiError("NOT_FOUND"), 404);
-        const row = await repo.getForMember(undefined, memberId, id.data);
-        if (!row) return c.json(apiError("NOT_FOUND"), 404);
-        const [timeline, cities] = await Promise.all([repo.timeline(undefined, row.id), citiesFor([row])]);
-        return c.json(toRequestVM(row, timeline, cityOf(cities, row)));
-      },
-    );
+    gate.get("/requests/:id", { permission: "requests:read-self", rate: "read" }, async (c) => {
+      const memberId = actorMemberId(c.get("principal"));
+      if (!memberId) return c.json(apiError("FORBIDDEN"), 403);
+      // An id that is not a UUID names no request (bbcclub://requests/abc): 404, never a cast error from Postgres.
+      const id = RequestId.safeParse(c.req.param("id"));
+      if (!id.success) return c.json(apiError("NOT_FOUND"), 404);
+      const row = await repo.getForMember(undefined, memberId, id.data);
+      if (!row) return c.json(apiError("NOT_FOUND"), 404);
+      const [timeline, cities] = await Promise.all([repo.timeline(undefined, row.id), citiesFor([row])]);
+      return c.json(toRequestVM(row, timeline, cityOf(cities, row)));
+    });
 
-    registerRoute("POST", "/v1/internal/requests/:id/status", "requests:update-any");
-    routes.post(
-      "/internal/requests/:id/status",
-      authorize("requests:update-any", {
-        module: "requests",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const body = await c.req.json().catch(() => ({}));
-        let r;
-        try {
-          r = await setStatus(conn, { ...body, requestId: c.req.param("id") }, { repo, publish });
-        } catch (err: unknown) {
-          const details = zodFieldErrors(err);
-          if (details) return c.json(apiError("VALIDATION", { details }), 400);
-          throw err;
-        }
-        if (!r.ok) {
-          // A step back (booked → quoted) or out of closed: refused, nothing written (set-status.ts).
-          if (r.code === "CONFLICT") return c.json(apiError("CONFLICT", { context: { from: r.from, to: r.to } }), 409);
-          return c.json(apiError("NOT_FOUND"), 404);
-        }
-        return c.json({ ok: true, unchanged: r.unchanged });
-      },
-    );
+    gate.post("/internal/requests/:id/status", { permission: "requests:update-any" }, async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      let r;
+      try {
+        r = await setStatus(conn, { ...body, requestId: c.req.param("id") }, { repo, publish });
+      } catch (err: unknown) {
+        const details = zodFieldErrors(err);
+        if (details) return c.json(apiError("VALIDATION", { details }), 400);
+        throw err;
+      }
+      if (!r.ok) {
+        // A step back (booked → quoted) or out of closed: refused, nothing written (set-status.ts).
+        if (r.code === "CONFLICT") return c.json(apiError("CONFLICT", { context: { from: r.from, to: r.to } }), 409);
+        return c.json(apiError("NOT_FOUND"), 404);
+      }
+      return c.json({ ok: true, unchanged: r.unchanged });
+    });
 
     return {
       exposes: expose,

@@ -60,3 +60,27 @@ export const cursor = {
 export function assertNotProduction(what: string) {
   if (process.env.NODE_ENV === "production") throw new Error(`${what} refused: NODE_ENV=production`);
 }
+
+/** What a constant may be when it is written into the SQL: a boolean, or a state's name (lower case, digits, `_`). */
+const CONSTANT = /^[a-z][a-z0-9_]*$/;
+function literal(value: string | boolean): SQL {
+  if (typeof value === "boolean") return sql.raw(value ? "true" : "false");
+  if (!CONSTANT.test(value)) throw new Error(`not a constant: ${JSON.stringify(value)}`);
+  return sql.raw(`'${value}'`);
+}
+
+/**
+ * `column = <constant>`, the constant written in the SQL rather than bound (ADR-IMPL-074). A partial index's predicate
+ * (`WHERE published = true`, `WHERE status = 'active'`) is matched only by a literal: bound as `$1`, the generic plan
+ * cannot prove it and Postgres either scans or plans the statement again at every execution (measured: E1, PR-DB).
+ * Only for a constant of the code — a state or a flag — never for a value from a request.
+ */
+export function eqConst(column: PgColumn, value: string | boolean): SQL {
+  return sql`${column} = ${literal(value)}`;
+}
+
+/** `column IN (<constants>)`, written in the SQL for the same reason as `eqConst`. */
+export function inConst(column: PgColumn, values: readonly string[]): SQL {
+  if (values.length === 0) throw new Error("inConst needs at least one constant");
+  return sql`${column} IN (${sql.join(values.map(literal), sql`, `)})`;
+}

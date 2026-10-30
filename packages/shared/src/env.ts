@@ -45,6 +45,8 @@ export const ServerEnv = z.object({
   WORKER_PORT: z.coerce.number().int().positive().default(8001),
   /** "transaction" when DATABASE_URL is PgBouncer in transaction pooling. Worker/migrate/seeds stay "none". */
   DB_POOLER: z.enum(["none", "transaction"]).default("none"),
+  /** Named prepared statements, through PgBouncer too (ADR-IMPL-074). "off" is the switch back without a deploy of code. */
+  DB_PREPARE: z.enum(["on", "off"]).default("on"),
   SESSION_COOKIE_CACHE_SECONDS: z.coerce.number().int().min(10).max(300).default(60),
   /** Only with LOADTEST=1. Comma-separated CIDRs/IPs treated as trusted proxies for X-Forwarded-For. */
   LOADTEST: z.enum(["0", "1"]).optional(),

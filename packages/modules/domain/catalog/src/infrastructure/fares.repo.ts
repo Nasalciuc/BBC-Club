@@ -1,5 +1,7 @@
 import type { Executor } from "@bbc/db";
+import { statement } from "@bbc/db/statements";
 import { and, asc, eq, gt, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { eqConst } from "@bbc/db/helpers";
 import { alias } from "drizzle-orm/pg-core";
 import { airports, fares } from "@bbc/db/schema/catalog";
 
@@ -17,6 +19,15 @@ export type SearchQuery = {
 const origin = alias(airports, "origin");
 
 export const SEARCH_LIMIT = 30; // the same page the future FT.SEARCH … LIMIT 0 30 returns — one contract for both paths
+
+/** A fare by id (its page, a quote), built once per executor (ADR-IMPL-074). */
+const fareRead = statement("catalog_fare", (e) =>
+  e
+    .select()
+    .from(fares)
+    .where(eq(fares.id, sql.placeholder("id")))
+    .limit(1),
+);
 
 export const faresRepo = {
   /**
@@ -41,7 +52,7 @@ export const faresRepo = {
       .from(fares)
       .where(
         and(
-          eq(fares.published, true),
+          eqConst(fares.published, true),
           eq(fares.routeFrom, q.from.toUpperCase()),
           eq(fares.routeTo, q.to.toUpperCase()),
           eq(fares.cabin, q.cabin),
@@ -61,7 +72,7 @@ export const faresRepo = {
 
   /** Any row by id (ignore published/window) — caller maps expired → 410. */
   async getAny(exec: Executor, id: string) {
-    const [row] = await exec.select().from(fares).where(eq(fares.id, id)).limit(1);
+    const [row] = await fareRead(exec, { id });
     return row ?? null;
   },
 
@@ -84,7 +95,7 @@ export const faresRepo = {
       .innerJoin(airports, eq(airports.code, fares.routeTo))
       .where(
         and(
-          eq(fares.published, true),
+          eqConst(fares.published, true),
           eq(fares.routeFrom, homeCode),
           lte(fares.validFrom, now),
           gt(fares.validUntil, now),
@@ -109,7 +120,7 @@ export const faresRepo = {
     const expired = await exec
       .update(fares)
       .set({ published: false, updatedAt: sql`now()` })
-      .where(and(eq(fares.published, true), lt(fares.validUntil, now)))
+      .where(and(eqConst(fares.published, true), lt(fares.validUntil, now)))
       .returning({ id: fares.id });
     return expired.length;
   },

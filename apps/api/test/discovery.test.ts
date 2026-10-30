@@ -32,6 +32,9 @@ describe("discovery", () => {
         (${daysAgo(1)}, 'JFK', 'ZRH', 'business', 4, 4),
         (${daysAgo(3)}, 'JFK', 'EWR', 'business', 9, 0),
         (${daysAgo(8)}, 'JFK', 'BOS', 'business', 7, 0)`);
+    // "Popular from" is kept five minutes per home (ADR-IMPL-075); a new airports generation (an import) empties it
+    // sooner — the test's stand-in for the five minutes.
+    await t.platform.reference.generations.bump("catalog.airports");
     const res = await get("from=jfk");
     expect(res.status).toBe(200);
     const raw = await res.text();

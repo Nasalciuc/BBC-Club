@@ -1,8 +1,7 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { ModuleDescriptor, HandlerContext } from "@bbc/shared/module-contract";
-import { authorize, registerRoute } from "@bbc/shared/authz/authorize";
-import { rateLimit, subjectOf } from "@bbc/platform/ratelimit";
+import { rateLimit, subjectOf, routeGate } from "@bbc/platform/ratelimit";
 import { apiError } from "@bbc/shared/errors";
 import { actorMemberId } from "@bbc/shared/authz/principal";
 import type { AppEnv } from "@bbc/shared/http/app-env";
@@ -96,124 +95,96 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
     }
 
     const routes = new Hono<AppEnv>();
+    // ADR-IMPL-075: each route's permission, rate rule and kill flags, declared once beside its path.
+    const gate = routeGate(platform, "members").on(routes, "/v1");
 
-    registerRoute("PATCH", "/v1/profile", "profile:update-self", "profile.write");
-    routes.patch(
-      "/profile",
-      rateLimit(platform.rateLimit, "profile.write"),
-      authorize("profile:update-self", {
-        module: "members",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const principal = c.get("principal");
-        const actor = actorMemberId(principal);
-        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const parsed = ProfilePatchBody.safeParse(await c.req.json().catch(() => ({})));
-        if (!parsed.success) {
-          return c.json(
-            apiError("VALIDATION", {
-              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-            }),
-            400,
-          );
-        }
-        const updated = await withTx(conn, async (tx) => {
-          const p = await writeOrCreate(tx, actor, () => facade.updateProfile(tx, actor, parsed.data));
-          if (!p) return null;
-          const fields = Object.keys(parsed.data);
-          await publish(tx, {
-            type: "member.profile_updated",
-            version: 1,
-            aggregateType: "member",
-            aggregateId: actor,
+    gate.patch("/profile", { permission: "profile:update-self", rate: "profile.write" }, async (c) => {
+      const principal = c.get("principal");
+      const actor = actorMemberId(principal);
+      if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+      const parsed = ProfilePatchBody.safeParse(await c.req.json().catch(() => ({})));
+      if (!parsed.success) {
+        return c.json(
+          apiError("VALIDATION", {
+            details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+          }),
+          400,
+        );
+      }
+      const updated = await withTx(conn, async (tx) => {
+        const p = await writeOrCreate(tx, actor, () => facade.updateProfile(tx, actor, parsed.data));
+        if (!p) return null;
+        const fields = Object.keys(parsed.data);
+        await publish(tx, {
+          type: "member.profile_updated",
+          version: 1,
+          aggregateType: "member",
+          aggregateId: actor,
+          memberId: actor,
+          payload: event("member.profile_updated", {
             memberId: actor,
-            payload: event("member.profile_updated", {
-              memberId: actor,
-              fields,
-              updatedAt: new Date().toISOString(),
-            }),
-          });
-          return p;
+            fields,
+            updatedAt: new Date().toISOString(),
+          }),
         });
-        if (!updated) return c.json(apiError("NOT_FOUND"), 404);
-        // The ProfileVM GET answers, as the travel save does: email and notifications included (ADR-IMPL-025).
-        const prefs = await facade.preferencesOf(undefined, actor);
-        return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
-      },
-    );
+        return p;
+      });
+      if (!updated) return c.json(apiError("NOT_FOUND"), 404);
+      // The ProfileVM GET answers, as the travel save does: email and notifications included (ADR-IMPL-025).
+      const prefs = await facade.preferencesOf(undefined, actor);
+      return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
+    });
 
-    registerRoute("PUT", "/v1/profile/travel", "profile:update-self", "profile.write");
-    routes.put(
-      "/profile/travel",
-      rateLimit(platform.rateLimit, "profile.write"),
-      authorize("profile:update-self", {
-        module: "members",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const principal = c.get("principal");
-        const actor = actorMemberId(principal);
-        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const parsed = TravelPreferencesBody.safeParse(await c.req.json().catch(() => ({})));
-        if (!parsed.success) {
-          return c.json(
-            apiError("VALIDATION", {
-              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-            }),
-            400,
-          );
-        }
-        const updated = await withTx(conn, async (tx) => {
-          const p = await writeOrCreate(tx, actor, () => facade.setTravelPreferences(tx, actor, parsed.data));
-          if (!p) return null;
-          await publish(tx, {
-            type: "member.profile_updated",
-            version: 1,
-            aggregateType: "member",
-            aggregateId: actor,
+    gate.put("/profile/travel", { permission: "profile:update-self", rate: "profile.write" }, async (c) => {
+      const principal = c.get("principal");
+      const actor = actorMemberId(principal);
+      if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+      const parsed = TravelPreferencesBody.safeParse(await c.req.json().catch(() => ({})));
+      if (!parsed.success) {
+        return c.json(
+          apiError("VALIDATION", {
+            details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+          }),
+          400,
+        );
+      }
+      const updated = await withTx(conn, async (tx) => {
+        const p = await writeOrCreate(tx, actor, () => facade.setTravelPreferences(tx, actor, parsed.data));
+        if (!p) return null;
+        await publish(tx, {
+          type: "member.profile_updated",
+          version: 1,
+          aggregateType: "member",
+          aggregateId: actor,
+          memberId: actor,
+          payload: event("member.profile_updated", {
             memberId: actor,
-            payload: event("member.profile_updated", {
-              memberId: actor,
-              fields: Object.keys(parsed.data),
-              updatedAt: new Date().toISOString(),
-            }),
-          });
-          return p;
+            fields: Object.keys(parsed.data),
+            updatedAt: new Date().toISOString(),
+          }),
         });
-        if (!updated) return c.json(apiError("NOT_FOUND"), 404);
-        const prefs = await facade.preferencesOf(undefined, actor);
-        return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
-      },
-    );
+        return p;
+      });
+      if (!updated) return c.json(apiError("NOT_FOUND"), 404);
+      const prefs = await facade.preferencesOf(undefined, actor);
+      return c.json(toProfileVM(updated, memberEmail(principal), actor, prefs));
+    });
 
-    registerRoute("PUT", "/v1/profile/preferences", "inbox:manage-preferences", "profile.write");
-    routes.put(
-      "/profile/preferences",
-      rateLimit(platform.rateLimit, "profile.write"),
-      authorize("inbox:manage-preferences", {
-        module: "members",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
-      async (c) => {
-        const actor = actorMemberId(c.get("principal"));
-        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const parsed = NotificationPreferencesBody.safeParse(await c.req.json().catch(() => ({})));
-        if (!parsed.success) {
-          return c.json(
-            apiError("VALIDATION", {
-              details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-            }),
-            400,
-          );
-        }
-        await facade.setNotificationPreferences(undefined, actor, parsed.data.preferences);
-        return c.json({ ok: true });
-      },
-    );
+    gate.put("/profile/preferences", { permission: "inbox:manage-preferences", rate: "profile.write" }, async (c) => {
+      const actor = actorMemberId(c.get("principal"));
+      if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+      const parsed = NotificationPreferencesBody.safeParse(await c.req.json().catch(() => ({})));
+      if (!parsed.success) {
+        return c.json(
+          apiError("VALIDATION", {
+            details: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+          }),
+          400,
+        );
+      }
+      await facade.setNotificationPreferences(undefined, actor, parsed.data.preferences);
+      return c.json({ ok: true });
+    });
 
     // ── The member's own photo (ADR-IMPL-070, D9): the bytes in Postgres, only ever the caller's. ────────────────────
     const photos = createPhotoStore(conn);
@@ -235,29 +206,23 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
 
     // Only the caller's, with its strong ETag (the bytes' sha256): If-None-Match → 304 without reading the bytes. None
     // — 404, the same answer as a member who never had one.
-    registerRoute("GET", "/v1/profile/photo", "profile:read-self", "read");
-    routes.get(
-      "/profile/photo",
-      rateLimit(platform.rateLimit, "read"),
-      authorize("profile:read-self", { module: "members", flags: platform.flags }),
-      async (c) => {
-        const actor = actorMemberId(c.get("principal"));
-        if (!actor) return c.json(apiError("FORBIDDEN"), 403);
-        const current = await photos.etagOf(undefined, actor);
-        if (!current) return c.json(apiError("NOT_FOUND"), 404);
-        const etag = `"${current}"`;
-        if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
-          return c.body(null, 304, { ETag: etag, ...PHOTO_CACHE });
-        }
-        const photo = await photos.read(undefined, actor);
-        if (!photo) return c.json(apiError("NOT_FOUND"), 404);
-        return c.body(photo.image, 200, {
-          "Content-Type": PHOTO_CONTENT_TYPE,
-          ETag: `"${photo.etag}"`,
-          ...PHOTO_CACHE,
-        });
-      },
-    );
+    gate.get("/profile/photo", { permission: "profile:read-self", rate: "read" }, async (c) => {
+      const actor = actorMemberId(c.get("principal"));
+      if (!actor) return c.json(apiError("FORBIDDEN"), 403);
+      const current = await photos.etagOf(undefined, actor);
+      if (!current) return c.json(apiError("NOT_FOUND"), 404);
+      const etag = `"${current}"`;
+      if (ifNoneMatchHits(c.req.header("If-None-Match"), etag)) {
+        return c.body(null, 304, { ETag: etag, ...PHOTO_CACHE });
+      }
+      const photo = await photos.read(undefined, actor);
+      if (!photo) return c.json(apiError("NOT_FOUND"), 404);
+      return c.body(photo.image, 200, {
+        "Content-Type": PHOTO_CONTENT_TYPE,
+        ETag: `"${photo.etag}"`,
+        ...PHOTO_CACHE,
+      });
+    });
 
     // The photo itself as the body (image/webp, at most 100 KB): checked whole before anything is written — a WebP,
     // 512 × 512, still, without EXIF, XMP or an ICC profile. Anything else is the member's to fix: 400 (415 for another
@@ -266,14 +231,9 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
     // the password has): choosing a photo again does not use up the member's other profile saves.
     const photoLimit = rateLimit(platform.rateLimit, "profile.write", (c) => `photo:${subjectOf(c)}`);
     const photoBodyLimit = bodyLimit({ maxSize: PHOTO_MAX_BYTES, onError: (c) => c.json(photoRefused("size"), 413) });
-    registerRoute("PUT", "/v1/profile/photo", "profile:update-self", "profile.write");
-    routes.put(
+    gate.put(
       "/profile/photo",
-      authorize("profile:update-self", {
-        module: "members",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
+      { permission: "profile:update-self", rate: "profile.write", rateBy: "route" },
       photoLimit,
       async (c, next) => {
         const type = (c.req.header("Content-Type") ?? "").split(";")[0]?.trim().toLowerCase();
@@ -303,14 +263,9 @@ export const membersModule = (): ModuleDescriptor<Ports, MembersFacade> => ({
 
     // Takes the photo away: the initials again. Asked twice, the second finds none and says the same. Answers the whole
     // profile.
-    registerRoute("DELETE", "/v1/profile/photo", "profile:update-self", "profile.write");
-    routes.delete(
+    gate.delete(
       "/profile/photo",
-      authorize("profile:update-self", {
-        module: "members",
-        flags: platform.flags,
-        log: platform.logger.warn.bind(platform.logger),
-      }),
+      { permission: "profile:update-self", rate: "profile.write", rateBy: "route" },
       photoLimit,
       async (c) => {
         const principal = c.get("principal");

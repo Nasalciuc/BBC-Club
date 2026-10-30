@@ -4,6 +4,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { offersRepo } from "../../src/infrastructure/offers.repo";
+import { toVerdict } from "../../src/application/verdict";
 
 let iso: IsolatedDb;
 let db: IsolatedDb["db"];
@@ -113,6 +114,41 @@ describe("@bbc/proposals facade", () => {
       expect(row).not.toBeNull();
     } finally {
       await cleanup([id]);
+    }
+  });
+
+  it("the verdict (ADR-IMPL-075): visible, gone and theirs, someone else's, not yet out, missing — in one read", async () => {
+    const verdict = async (actor: string, id: string) => toVerdict(await offersRepo.withVerdict(db, actor, id)).kind;
+    const open = await insertOffer();
+    const mine = await insertOffer({ targeting: "user", targetMemberId: ACTOR });
+    const theirs = await insertOffer({ targeting: "user", targetMemberId: OTHER });
+    const segment = await insertOffer({ targeting: "segment" });
+    const ids = [open, mine, theirs, segment];
+    try {
+      await db.execute(
+        sql`INSERT INTO proposals.offer_targets (offer_id, member_id) VALUES (${segment}::uuid, ${ACTOR})`,
+      );
+      expect(await verdict(ACTOR, open)).toBe("visible");
+      expect(await verdict(ACTOR, mine)).toBe("visible");
+      expect(await verdict(ACTOR, theirs)).toBe("not_yours");
+      expect(await verdict(ACTOR, segment)).toBe("visible");
+      expect(await verdict(OTHER, segment)).toBe("not_yours");
+
+      await db.execute(
+        sql`UPDATE proposals.offers SET status = 'withdrawn' WHERE id IN (${open}::uuid, ${theirs}::uuid)`,
+      );
+      await db.execute(
+        sql`UPDATE proposals.offers SET publish_at = now() - interval '2 days', valid_until = now() - interval '1 minute' WHERE id IN (${mine}::uuid, ${segment}::uuid)`,
+      );
+      expect(await verdict(ACTOR, open)).toBe("gone");
+      expect(await verdict(ACTOR, mine)).toBe("gone"); // past its validity, still active: gone
+      expect(await verdict(ACTOR, theirs)).toBe("not_yours");
+      expect(await verdict(ACTOR, segment)).toBe("gone"); // their segment's
+      expect(await verdict(OTHER, segment)).toBe("not_yours");
+      expect(await verdict(ACTOR, crypto.randomUUID())).toBe("missing");
+    } finally {
+      await db.execute(sql`DELETE FROM proposals.offer_targets WHERE offer_id = ${segment}::uuid`);
+      await cleanup(ids);
     }
   });
 });

@@ -58,7 +58,7 @@ describe("fixture parity (london offer)", () => {
     await t.close();
   });
 
-  it("after upserting interested the state in feed updates", async () => {
+  it("a response written directly leaves the feed's state unseen: none is read until something writes them (ADR-IMPL-075, ⚑7a)", async () => {
     const t = await testApp({ suite: "parity-state" });
     const offerId = await t.seedBroadcastOffer({
       routing: "broadcast",
@@ -69,7 +69,7 @@ describe("fixture parity (london offer)", () => {
     const feedRes = await t.app.request("/v1/proposals", { headers: { Cookie: t.memberA.cookie } });
     const feed = (await feedRes.json()) as any;
     const card = feed.items.find((i: any) => i.id === offerId);
-    expect(card?.state).toBe("interested");
+    expect(card?.state).toBe("unseen");
     await t.close();
   });
 });

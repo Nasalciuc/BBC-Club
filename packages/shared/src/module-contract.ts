@@ -101,6 +101,31 @@ export type ModulePlatform = {
      *  connection while the transaction holds one. */
     check(rule: ResolvedRateRule, subject: string, exec?: unknown): Promise<RateCheckResult>;
   };
+  /**
+   * Reference data held in each process, kept current by `platform.generations` (ADR-IMPL-075): a trigger on each
+   * reference table bumps its counter in the writing statement, and every replica asks for the counters at most once
+   * a second. `snapshot` holds a whole table (or what is built from it), `memo` results keyed by request.
+   */
+  reference: {
+    generations: {
+      /** The key's counter; null while the process has never read the counters. */
+      current(key: string): Promise<number | null>;
+      /** Milliseconds since the counters were last read. */
+      staleMs(): number;
+      /** The next read asks Postgres at once — after this process wrote a reference table. */
+      invalidate(): void;
+    };
+    snapshot<T>(
+      key: string,
+      load: () => Promise<T>,
+      /** `ns`: the name its hits and misses are counted under (`cache_hit`, `cache_miss`). */
+      opts?: { maxAgeMs?: number; ns?: string },
+    ): { get(): Promise<T>; heldGeneration(): number | null };
+    memo<T>(
+      keys: string | readonly string[],
+      opts: { maxEntries: number; ttlMs?: number; ns?: string },
+    ): { get(k: string, load: () => Promise<T>): Promise<T>; size(): number; generation(): string | null };
+  };
   cache: {
     getOrLoad<T>(key: string, ttlS: number, load: () => Promise<T>): Promise<T>;
     invalidate(...keys: string[]): Promise<void>;

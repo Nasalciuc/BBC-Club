@@ -1,6 +1,7 @@
 /** The only import surface of @bbc/members. Other modules and the host see nothing else. */
-import { and, eq, gt, ne, notExists, sql } from "drizzle-orm";
+import { and, eq, gt, ne, notExists, sql, type Placeholder } from "drizzle-orm";
 import type { Executor } from "@bbc/db";
+import { statement } from "@bbc/db/statements";
 import { profile, profilePhoto, notificationPreferences, type TravelPreferences } from "@bbc/db/schema/members";
 import type { TravelPreferencesBody } from "@bbc/shared/api/v1/proposals";
 import type { AudienceMember, MembersFacade, ProfileRow, NotificationPrefView, ProfileCreationDeps } from "../api";
@@ -14,7 +15,24 @@ export function createMembersFacade(db: Executor): MembersFacade {
   /** A `deleted` profile is invisible to every read and write that serves the member; only getStatus sees it (so
    *  dispatch can suppress with member_deleted). Nothing sets the status today — deletion is a hard delete through
    *  member.deleted — so this is the guard for the day something does. */
-  const live = (memberId: string) => and(eq(profile.memberId, memberId), ne(profile.status, "deleted"));
+  const live = (memberId: string | Placeholder) => and(eq(profile.memberId, memberId), ne(profile.status, "deleted"));
+
+  /** The two reads every member screen makes, built once per executor (ADR-IMPL-074). The photo's tag in the same
+   *  query (ADR-IMPL-070): never its bytes, which only GET /v1/profile/photo reads. */
+  const profileRead = statement("members_profile", (e) =>
+    e
+      .select({ row: profile, photoEtag: profilePhoto.sha256 })
+      .from(profile)
+      .leftJoin(profilePhoto, eq(profilePhoto.memberId, profile.memberId))
+      .where(live(sql.placeholder("member")))
+      .limit(1),
+  );
+  const preferencesRead = statement("members_preferences", (e) =>
+    e
+      .select({ category: notificationPreferences.category, enabled: notificationPreferences.enabled })
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.memberId, sql.placeholder("member"))),
+  );
 
   async function readProfile(exec: Executor | undefined, memberId: string, deleted: "hide" | "show") {
     const [row] = await (exec ?? db)
@@ -26,13 +44,7 @@ export function createMembersFacade(db: Executor): MembersFacade {
   }
 
   async function getProfile(exec: Executor | undefined, actorMemberId: string): Promise<ProfileRow | null> {
-    // The photo's tag in the same query (ADR-IMPL-070): never its bytes, which only GET /v1/profile/photo reads.
-    const [found] = await (exec ?? db)
-      .select({ row: profile, photoEtag: profilePhoto.sha256 })
-      .from(profile)
-      .leftJoin(profilePhoto, eq(profilePhoto.memberId, profile.memberId))
-      .where(live(actorMemberId))
-      .limit(1);
+    const [found] = await profileRead(exec ?? db, { member: actorMemberId });
     if (!found) return null;
     const row = found.row;
     return {
@@ -96,11 +108,8 @@ export function createMembersFacade(db: Executor): MembersFacade {
   }
 
   async function preferencesOf(exec: Executor | undefined, memberId: string): Promise<NotificationPrefView> {
-    const rows = await (exec ?? db)
-      .select()
-      .from(notificationPreferences)
-      .where(eq(notificationPreferences.memberId, memberId));
-    const map = Object.fromEntries(rows.map((r: { category: string; enabled: boolean }) => [r.category, r.enabled]));
+    const rows = await preferencesRead(exec ?? db, { member: memberId });
+    const map = Object.fromEntries(rows.map((r) => [r.category, r.enabled]));
     return {
       offers_personal: map.offers_personal !== false,
       offers_broadcast: map.offers_broadcast !== false,

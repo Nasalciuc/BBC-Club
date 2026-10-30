@@ -1,7 +1,6 @@
 import type { Platform } from "@bbc/platform";
 import { errorForLog } from "@bbc/db";
 
-const KILLABLE = ["proposals", "engagement", "requests", "notifications", "personalization", "members"];
 /** The whole answer's budget: the app waits on it before its first screen. */
 const READ_TIMEOUT_MS = 1_500;
 
@@ -38,16 +37,14 @@ const BUILT_IN: AppConfig = {
 const lastGoodOf = new WeakMap<Platform, AppConfig>();
 
 /** Every flag of the answer, through the strict reads: a flag that cannot be read is an error, never its default. */
-async function readAll(platform: Platform): Promise<AppConfig> {
+async function readAll(platform: Platform, modules: readonly string[]): Promise<AppConfig> {
   const variant = async (key: string, fallback: string) => {
     const v = await platform.flags.readStrict(key);
     return typeof v?.variant === "string" ? v.variant : fallback;
   };
-  const killStates = async () => {
-    const out: Record<string, boolean> = {};
-    for (const m of KILLABLE) out[m] = await platform.flags.killState(m);
-    return out;
-  };
+  // From the flags snapshot (ADR-IMPL-075): no query, whatever the number of modules.
+  const killStates = async () =>
+    Object.fromEntries(await Promise.all(modules.map(async (m) => [m, await platform.flags.killState(m)] as const)));
   const [min, rec, maint, ios, android, kills] = await Promise.all([
     variant("app.min_supported_version", "0.1.0"),
     variant("app.recommended_version", "0.1.0"),
@@ -66,14 +63,15 @@ async function readAll(platform: Platform): Promise<AppConfig> {
   };
 }
 
-/** First request of every cold start, before login. Must answer even if the DB is down: any read that fails or does not
+/** First request of every cold start, before login. `modules`: the modules the process runs — each one's kill flag
+ *  is in the answer. Must answer even if the DB is down: any read that fails or does not
  *  answer within 1.5 s serves the last answer read in full (the built-in values on a cold process), never a mix of
  *  defaults — a minimum version back at 0.1.0, every module killed. */
-export async function appConfig(platform: Platform): Promise<AppConfig> {
+export async function appConfig(platform: Platform, modules: readonly string[]): Promise<AppConfig> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const fresh = await Promise.race([
-      readAll(platform),
+      readAll(platform, modules),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
           () => reject(new Error(`app-config flags unread after ${READ_TIMEOUT_MS} ms`)),
