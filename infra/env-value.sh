@@ -275,3 +275,24 @@ guard_staging() {
     exit 1
   fi
 }
+
+# Posts TEXT to a Slack-compatible webhook: webhook_post TEXT URL. The JSON is built by jq (bootstrap.sh installs it), so
+# a quote, a backslash or a newline in TEXT cannot break the payload. An empty URL means no webhook: returns 2, quietly.
+# A post that fails says so on stderr and returns 1 — the alert then exists only in this script's log, and the log says
+# that (audit, 30 Oct 2026: every notify ended in `|| true` and a dead webhook went silent).
+webhook_post() {
+  local text="$1" url="${2:-}" payload
+  [[ -n "$url" ]] || return 2
+  if command -v jq >/dev/null 2>&1; then
+    payload="$(jq -cn --arg t "$text" '{text: $t}')"
+  else
+    payload="{\"text\":\"$(printf '%s' "$text" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr '\n\r\t' '   ')\"}"
+  fi
+  # Only a 2xx is a delivery: curl -f passes a 3xx it did not follow, and the alert would reach no one.
+  local code
+  code="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' -X POST "$url" -H 'Content-Type: application/json' -d "$payload")" || code="${code:-000}"
+  if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
+    echo "⚠ webhook post failed (HTTP $code): the alert above is in this log only — check OPS_WEBHOOK / SEC_WEBHOOK" >&2
+    return 1
+  fi
+}

@@ -4,7 +4,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
 
 import { fixture } from "@bbc/shared/fixture";
-import { DEMO, assertStagingTarget, atLocal, demoPlan } from "./seed-staging-demo";
+import {
+  DEMO,
+  RETIRED_DEMO_OFFER_KEYS,
+  RETIRED_FARE_IDS,
+  assertStagingTarget,
+  atLocal,
+  demoPlan,
+} from "./seed-staging-demo";
 
 const member = { id: "member-1", email: "review@example.test" };
 const PRODUCTION_ORIGIN = "https://api.buybusinessclass.com";
@@ -55,19 +62,11 @@ describe("atLocal — the same wall clock across daylight saving", () => {
   });
 });
 
-describe("demoPlan — Figma's situations, dated from today", () => {
+describe("demoPlan — the account's own situations, dated from today", () => {
   const now = new Date("2026-12-15T10:30:00Z");
   const plan = demoPlan(member, now);
 
-  it("every departure, validity and trip lies ahead of today; every publication and request behind it", () => {
-    for (const f of plan.fares) {
-      expect(f.validUntil.getTime()).toBeGreaterThan(now.getTime());
-      if (f.departAt) {
-        expect(f.departAt.getTime()).toBeGreaterThan(now.getTime());
-        expect(f.validUntil.getTime()).toBeLessThan(f.departAt.getTime());
-        expect(f.arriveAt?.getTime()).toBe(f.departAt.getTime() + f.durationMinutes * 60_000);
-      }
-    }
+  it("every validity and trip lies ahead of today; every publication and request behind it", () => {
     for (const { row } of plan.offers) {
       expect(row.publishAt.getTime()).toBeLessThan(now.getTime());
       expect(row.validUntil.getTime()).toBeGreaterThan(now.getTime());
@@ -80,12 +79,10 @@ describe("demoPlan — Figma's situations, dated from today", () => {
     }
   });
 
-  it("the fixture's six fares on five pins, the three offers, three requests — one in each state the server keeps", () => {
-    expect(plan.fares.length).toBe(6);
-    expect([...new Set(plan.fares.map((f) => f.routeTo))].sort()).toEqual(["CDG", "DXB", "HND", "LHR", "SIN"]);
-    expect(plan.fares.map((f) => f.routeTo)).not.toContain("ZRH"); // the poster route stays without a fare: the estimate
-    expect(plan.fares.map((f) => f.id)).not.toContain("00000000-0000-4000-8000-00000000fa07"); // the closed fare
-    expect(plan.offers.map((o) => o.key).sort()).toEqual(["london", "paris", "tokyo"]);
+  it("nothing every member sees: no fare, no broadcast offer — the account's offer and three requests", () => {
+    expect(Object.keys(plan).sort()).toEqual(["offers", "requests"]);
+    expect(plan.offers.map((o) => o.key)).toEqual(["london"]);
+    expect(plan.offers.every((o) => o.row.targeting === "user" && o.row.targetMemberId === member.id)).toBe(true);
     expect(plan.requests.map((r) => r.row.status).sort()).toEqual(["booked", "quoted", "received"]);
     expect(plan.requests.every((r) => r.row.sentToCrm && r.row.crmRequestId?.startsWith("staging-demo-"))).toBe(true);
   });
@@ -95,15 +92,11 @@ describe("demoPlan — Figma's situations, dated from today", () => {
     expect(london.row.title).toBe("Your January in London");
     expect(london.row.targetMemberId).toBe(member.id);
     expect(london.row.idempotencyKey).toBe(DEMO.offerKey("london"));
-    const ba = plan.fares.find((f) => f.id === "00000000-0000-4000-8000-00000000fa01")!;
-    expect(ba.departAt?.toISOString()).toBe("2027-01-05T23:55:00.000Z"); // 18:55 New York, 21 days on
+    // BA 178 leaves at 18:55 New York 21 days on — 5 Jan 2027 — and the London request flies that day.
+    expect(plan.requests.find((r) => r.row.reference === "R-B001")!.row.legs[0]!.date).toBe("2027-01-05");
   });
 
   it("the fixture's own prices and routes — nothing invented", () => {
-    for (const f of plan.fares) {
-      const src = fixture.fares.find((x) => x.id === f.id)!;
-      expect([f.routeFrom, f.routeTo, f.price]).toEqual([src.from.code, src.to.code, String(src.price.offer)]);
-    }
     for (const { key, row } of plan.offers) {
       const src = fixture.offers.find((o) => o.key === key)!;
       expect([row.routeTo, row.price, row.publishedPrice]).toEqual([src.to, String(src.price), String(src.published)]);
@@ -112,6 +105,14 @@ describe("demoPlan — Figma's situations, dated from today", () => {
       expect(row.contactEmail).toBe(member.email);
       expect(row.passengers).toEqual(fixture.requests.find((r) => r.id === row.id)!.passengers);
     }
+  });
+
+  it("retires what earlier runs wrote for every member: the broadcast offers' keys and every fixture fare", () => {
+    expect(RETIRED_DEMO_OFFER_KEYS.sort()).toEqual([DEMO.offerKey("paris"), DEMO.offerKey("tokyo")]);
+    expect(RETIRED_DEMO_OFFER_KEYS).not.toContain(DEMO.offerKey("london"));
+    expect(RETIRED_FARE_IDS).toEqual(fixture.fares.map((f) => f.id));
+    // A request keeps the fare it named: both fare requests point at fixture fares, whose rows stay (unpublished).
+    for (const r of plan.requests) if (r.row.fareId) expect(RETIRED_FARE_IDS).toContain(r.row.fareId);
   });
 
   it("is a pure function of the clock", () => {

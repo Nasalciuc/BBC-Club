@@ -19,7 +19,7 @@ ENV_FILE="$INFRA_DIR/env/production.env"
 source "$INFRA_DIR/env-value.sh"
 OPS_WEBHOOK="$(env_optional "$ENV_FILE" OPS_WEBHOOK)"
 SEC_WEBHOOK="$(env_optional "$ENV_FILE" SEC_WEBHOOK)"
-notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
+notify() { local hook="${2:-$OPS_WEBHOOK}"; echo "$1"; webhook_post "$1" "${hook:-}" || true; }
 # Install the cleanup before anything exists, so a failure while building the secrets file still reports and still removes
 # only what this run created.
 CLEAN_ENV="" CT="" VOL="" reported=0
@@ -55,11 +55,11 @@ docker run -d --name "$CT" --env-file "$CLEAN_ENV" -e POSTGRES_PASSWORD=unused -
 for i in {1..40}; do docker exec "$CT" pg_isready -U bbc -d bbc >/dev/null 2>&1 && break; sleep 2; done
 
 fail=0; q() { docker exec "$CT" psql -U bbc -d bbc -tAc "$1" 2>/dev/null || echo ERR; }
-schemas=$(q "SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('platform','auth','members','notifications','proposals','engagement','crm','personalization')")
-[[ "$schemas" == "8" ]] || { echo "❌ schemas=$schemas (want 8)"; fail=1; }
+schemas=$(q "SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('platform','auth','catalog','crm','engagement','members','notifications','personalization','proposals','requests')")
+[[ "$schemas" == "10" ]] || { echo "❌ schemas=$schemas (want 10)"; fail=1; }
 part=$(q "SELECT count(*) FROM pg_partitioned_table p JOIN pg_class c ON c.oid=p.partrelid WHERE c.relname='domain_events'")
 [[ "$part" == "1" ]] || { echo "❌ domain_events not partitioned"; fail=1; }
 users=$(q 'SELECT count(*) FROM auth."user"'); [[ "$users" =~ ^[0-9]+$ ]] || { echo "❌ auth.user unreadable"; fail=1; }
 age=$(q "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - max(occurred_at)))::int, -1) FROM platform.domain_events"); [[ "$age" != "ERR" ]] || { echo "❌ journal unreadable"; fail=1; }
-if (( fail == 0 )); then notify "✅ restore drill ok — 8 schemas, journal partitioned, ${users} users, newest event ${age}s old"
+if (( fail == 0 )); then notify "✅ restore drill ok — 10 schemas, journal partitioned, ${users} users, newest event ${age}s old"
 else reported=1; notify "🚨 RESTORE DRILL FAILED — backups are not trustworthy. Investigate today." "${SEC_WEBHOOK:-}"; exit 1; fi

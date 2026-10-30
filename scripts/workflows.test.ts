@@ -5,7 +5,7 @@
  *  with eas-cli stood in for. */
 import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -62,6 +62,45 @@ describe("api-deploy: the chain starts from a green validate on main", () => {
       expect(textOf(job), name).not.toContain("GITHUB_SHA");
       expect(needsOf(job), name).toContain("gate");
     }
+  });
+});
+
+describe("api-deploy: production by hand only from main (audit, 30 Oct 2026)", () => {
+  const step = deploy.jobs.gate!.steps.find((s) => s.run?.includes("DISPATCHED_REF"))!;
+  /** The gate's step with `gh` answering main's tip: its exit code and what it printed. */
+  function gate(target: string, ref: string) {
+    const dir = mkdtempSync(join(tmpdir(), "bbc-gate-"));
+    try {
+      writeFileSync(join(dir, "gh"), "#!/bin/sh\necho abc1234def\n", { mode: 0o755 });
+      spawnSync("chmod", ["+x", join(dir, "gh")]);
+      const r = spawnSync("bash", ["-c", step.run!], {
+        env: {
+          PATH: `${dir}:${process.env.PATH}`,
+          EVENT: "workflow_dispatch",
+          DISPATCHED_SHA: "abc1234def",
+          DISPATCHED_REF: ref,
+          TARGET: target,
+          GITHUB_REPOSITORY: "o/r",
+          GITHUB_OUTPUT: join(dir, "out"),
+          GITHUB_STEP_SUMMARY: join(dir, "summary"),
+        },
+        encoding: "utf8",
+      });
+      return { code: r.status, out: `${r.stdout}${r.stderr}` };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("refuses production dispatched on a branch, before anything is built", () => {
+    const r = gate("production", "refs/heads/some-branch");
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("production is deployed from main only (dispatched on refs/heads/some-branch)");
+  });
+
+  it("lets production from main through, and staging from a branch (RUNBOOK, Staging on the same box)", () => {
+    expect(gate("production", "refs/heads/main").code).toBe(0);
+    expect(gate("staging", "refs/heads/some-branch").code).toBe(0);
   });
 });
 

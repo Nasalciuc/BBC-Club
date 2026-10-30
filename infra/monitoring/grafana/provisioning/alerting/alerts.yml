@@ -1,4 +1,4 @@
-# Seven alerts, to GRAFANA_ALERTS_WEBHOOK (production.env), a Slack-compatible incoming webhook — usually where deploy.sh
+# Twelve alerts, to GRAFANA_ALERTS_WEBHOOK (production.env), a Slack-compatible incoming webhook — usually where deploy.sh
 # posts its notes, OPS_WEBHOOK (ADR-IMPL-073). The worker already posts two of its own there — PgBouncer clients waiting
 # for 2 min and a transaction open past 30 s (db-observe) — so they are not repeated here. Grafana expands environment
 # variables in this file: a literal dollar sign is written twice, and the templates below read `.Labels` rather than
@@ -225,3 +225,144 @@ groups:
         annotations:
           summary: "Event deliveries have been paused for 10 minutes: a consumer's pause flag is on, or the flags cannot be read."
           runbook: "infra/RUNBOOK.md § Pause one event consumer"
+
+      # Audit, 30 Oct 2026: production ran both with nothing but a word in the deploy log. Repeats every 4 h until both are live.
+      # min, not max: one replica or the worker on mock is enough, since it handles work too.
+      - uid: bbc-adapters-not-live
+        title: Production serves members on the mock CRM or the recording push
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: min(bbc_crm_live{env="production"}) * min(bbc_push_live{env="production"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: "Production runs CRM_ADAPTER=mock or PUSH_ADAPTER=recording: quote requests read Received and reach no agent, or pushes read delivered and none is sent."
+          runbook: "infra/RUNBOOK.md § Monitoring, the alerts"
+
+      # A failed run was only a row in job_runs and a counter: send-requests or dispatch failing every minute paged nobody.
+      - uid: bbc-job-failed
+        title: A production job failed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: sum by (exported_job) (increase(bbc_job_failed{env="production"}[30m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ .Labels.exported_job }} failed in the last 30 minutes: platform.job_runs has the error."
+          runbook: "infra/RUNBOOK.md § Monitoring, the alerts"
+
+      # A dead letter was logged once and shown on /status only.
+      - uid: bbc-queue-dead
+        title: An event delivery is dead and waits for a manual replay
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: max(bbc_queue_dead{env="production"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: "A delivery used all its attempts: a consumer never handled that event."
+          runbook: "infra/RUNBOOK.md § The queue is stuck"
+
+      # queue-health logged queue lagging; no rule read it.
+      - uid: bbc-queue-lagging
+        title: Event deliveries have waited more than 5 minutes
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: max(bbc_queue_oldest_pending_seconds{env="production"})
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [300] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: "The oldest pending delivery is over 5 minutes old: the worker's poller is stuck or slow."
+          runbook: "infra/RUNBOOK.md § The queue is stuck"
+
+      # The giving up posted once to OPS_WEBHOOK, best effort; with the webhook unset, nobody knew.
+      - uid: bbc-request-given-up
+        title: A member's quote request was given up after its retries
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: victoriametrics
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(bbc_request_sends_given_up{env="production"}[15m]))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels: { severity: warning }
+        annotations:
+          summary: "A quote request could not be passed to the CRM after six tries: the member reads Not sent."
+          runbook: "infra/RUNBOOK.md § A request that was never sent"
