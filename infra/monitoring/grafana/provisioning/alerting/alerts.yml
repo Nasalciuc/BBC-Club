@@ -227,6 +227,7 @@ groups:
           runbook: "infra/RUNBOOK.md § Pause one event consumer"
 
       # Audit, 30 Oct 2026: production ran both with nothing but a word in the deploy log. Repeats every 4 h until both are live.
+      # min, not max: one replica or the worker on mock is enough, since it handles work too.
       - uid: bbc-adapters-not-live
         title: Production serves members on the mock CRM or the recording push
         condition: C
@@ -237,7 +238,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: max(bbc_crm_live{env="production"}) * max(bbc_push_live{env="production"})
+              expr: min(bbc_crm_live{env="production"}) * min(bbc_push_live{env="production"})
           - refId: C
             datasourceUid: __expr__
             model:
