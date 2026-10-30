@@ -222,7 +222,10 @@ export async function buildApp(opts: BuildOptions = {}) {
       const name = c.req.param("job");
       if (!platform.jobs.has(name))
         return c.json({ error: { code: "NOT_FOUND", message: `unknown job ${name}` } }, 404);
-      return c.json(await platform.jobs.run(name));
+      // A failed run answers 500 (audit, 30 Oct 2026): the cron's job.sh printed "ok" for every 200, a failed run
+      // included. The body is the same; job_runs and bbc_job_failed record it as before.
+      const result = await platform.jobs.run(name);
+      return c.json(result, result.status === "failed" ? 500 : 200);
     });
   }
 
