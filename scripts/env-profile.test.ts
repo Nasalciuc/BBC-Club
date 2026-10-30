@@ -1566,11 +1566,27 @@ describe("migrations:destructive when git cannot answer (audit, 30 Oct 2026)", (
     // the repository being pushed, not at `dir` (it once committed "a" onto the branch). Only `dir` is touched.
     const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
     const g = (...a: string[]) => {
-      const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], {
-        cwd: dir,
-        encoding: "utf8",
-        env,
-      });
+      // No signing and no hooks: a developer's global commit.gpgSign or core.hooksPath must not reach the fixture
+      // (CodeRabbit on #118). The hooks path is `dir` itself, which holds no hook files.
+      const r = spawnSync(
+        "git",
+        [
+          "-c",
+          "user.email=t@t",
+          "-c",
+          "user.name=t",
+          "-c",
+          "commit.gpgSign=false",
+          "-c",
+          `core.hooksPath=${dir}`,
+          ...a,
+        ],
+        {
+          cwd: dir,
+          encoding: "utf8",
+          env,
+        },
+      );
       if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr}`);
       return r;
     };
