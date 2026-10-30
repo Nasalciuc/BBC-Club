@@ -19,7 +19,7 @@ ENV_FILE="$INFRA_DIR/env/production.env"
 source "$INFRA_DIR/env-value.sh"
 OPS_WEBHOOK="$(env_optional "$ENV_FILE" OPS_WEBHOOK)"
 SEC_WEBHOOK="$(env_optional "$ENV_FILE" SEC_WEBHOOK)"
-notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
+notify() { local hook="${2:-$OPS_WEBHOOK}"; echo "$1"; webhook_post "$1" "${hook:-}" || true; }
 # Install the cleanup before anything exists, so a failure while building the secrets file still reports and still removes
 # only what this run created.
 CLEAN_ENV="" CT="" VOL="" reported=0

@@ -1430,3 +1430,54 @@ describe("production on the mock CRM or the recording push (audit, 30 Oct 2026)"
     expect(step2).toMatch(/\*"push recording"\*\) notify "⚠ production runs PUSH_ADAPTER=recording/);
   });
 });
+
+describe("webhook_post: every alert's way out (audit, 30 Oct 2026)", () => {
+  /** webhook_post with `curl` standing in: it records its arguments, one per line, and exits as told. */
+  async function post(text: string, url: string, curlExit: number) {
+    const dir = mkdtempSync(join(tmpdir(), "bbc-hook-"));
+    const args = join(dir, "args");
+    writeFileSync(join(dir, "curl"), `#!/bin/sh\nprintf '%s\\n' "$@" > "${args}"\nexit ${curlExit}\n`, { mode: 0o755 });
+    const proc = Bun.spawn(
+      ["bash", "-c", `PATH="${dir}:$PATH"; source ${lib}; webhook_post "$1" "$2"; echo "rc=$?"`, "_", text, url],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    await proc.exited;
+    const out = await new Response(proc.stdout).text();
+    const err = await new Response(proc.stderr).text();
+    let payload: string | undefined;
+    try {
+      const lines = readFileSync(args, "utf8").split("\n");
+      payload = lines[lines.indexOf("-d") + 1];
+    } catch {
+      payload = undefined;
+    }
+    rmSync(dir, { recursive: true, force: true });
+    return { out, err, payload };
+  }
+
+  it("sends the text as JSON whatever it holds: quotes, a backslash, a newline", async () => {
+    const text = 'deploy "production" stopped at C:\\path\nsecond line';
+    const r = await post(text, "https://hooks.example.test/x", 0);
+    expect(r.out).toContain("rc=0");
+    expect(JSON.parse(r.payload!)).toEqual({ text });
+  });
+
+  it("a failed post says so on stderr and returns 1; no webhook is a quiet 2", async () => {
+    const failed = await post("🚨 backup FAILED", "https://hooks.example.test/x", 22);
+    expect(failed.out).toContain("rc=1");
+    expect(failed.err).toContain("⚠ webhook post failed");
+    const none = await post("🚨 backup FAILED", "", 0);
+    expect(none.out).toContain("rc=2");
+    expect(none.err).toBe("");
+    expect(none.payload).toBeUndefined();
+  });
+
+  it("is what deploy.sh, backup.sh and restore-test.sh notify through — no curl of their own", async () => {
+    for (const file of ["infra/deploy.sh", "infra/host/backup.sh", "infra/restore-test.sh"]) {
+      const text = await Bun.file(join(root, file)).text();
+      const line = text.split("\n").find((l) => l.startsWith("notify()"))!;
+      expect(line, file).toContain("webhook_post");
+      expect(line, file).not.toContain("curl");
+    }
+  });
+});

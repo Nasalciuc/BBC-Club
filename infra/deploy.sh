@@ -91,7 +91,8 @@ for k in OPS_WEBHOOK SEC_WEBHOOK POSTGRES_PASSWORD POSTGRES_PASSWORD_STAGING LOA
 done
 need=POSTGRES_PASSWORD; [[ "$MODE" == "staging" ]] && need=POSTGRES_PASSWORD_STAGING
 [[ "${!need}" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo "❌ $need must use only A-Z a-z 0-9 . _ ~ - (it goes into connection URLs). Regenerate: openssl rand -hex 32"; exit 1; }
-notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
+# Echo first, then post (env-value.sh): a failed post is said in this log; it never stops the deploy's own exit path.
+notify() { local hook="${2:-$OPS_WEBHOOK}"; echo "$1"; webhook_post "$1" "${hook:-}" || true; }
 
 if [[ "$MODE" == "production" ]] && [[ "${LOADTEST:-}" == "1" ]]; then
   echo "❌ LOADTEST=1 is refused in production"; exit 1
