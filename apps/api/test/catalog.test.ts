@@ -519,6 +519,8 @@ describe("catalogue import — what it refuses, and where", () => {
       ["a region Home has no carousel key for", { region: "atlantis" }, "row 2.region"],
       ["a country code of three letters", { country_code: "GBR" }, "row 2.country_code"],
       ["a time zone that is none", { tz: "Europe/Lndon" }, "row 2.tz"],
+      // ICU takes it, Postgres's tzdata has not had it since 2020b: every dated search from the airport would fail.
+      ["a time zone Postgres does not read", { tz: "US/Pacific-New" }, "row 2.tz"],
       ["no city", { city: "" }, "row 2.city"],
     ];
     for (const [name, over, path] of airports) {
@@ -554,6 +556,12 @@ describe("catalogue import — what it refuses, and where", () => {
     });
     expect(search.items.find((i) => i.carrier.code === "DL")?.price.currency).toBe("USD");
     expect((await importCsv("airports", [AIRPORTS, airport({ popularity: "" })].join("\n"))).status).toBe(200);
+    // A zone in another case is the zone, stored as Postgres spells it.
+    expect((await importCsv("airports", [AIRPORTS, airport({ tz: "europe/london" })].join("\n"))).status).toBe(200);
+    const stored = (await t.db.execute(sql`SELECT tz FROM catalog.airports WHERE code = 'LHR'`)) as unknown as {
+      tz: string;
+    }[];
+    expect(stored[0]?.tz).toBe("Europe/London");
     await t.close();
   }, 60_000);
 
@@ -1029,6 +1037,9 @@ describe("fare parity", () => {
         durationMinutes: f.durationMinutes,
         departAt: f.departAt ? new Date(f.departAt) : null,
         arriveAt: f.arriveAt ? new Date(f.arriveAt) : null,
+        // Its clocks as Postgres reads them in JFK's and LHR's zones (catalog fares.repo `wallAt`, #114).
+        departWall: f.departAt ? "2026-10-12T18:55" : null,
+        arriveWall: f.arriveAt ? "2026-10-13T07:00" : null,
         price: String(f.price.offer),
         publishedPrice: f.price.published != null ? String(f.price.published) : null,
         publishedSource: f.price.publishedSource ?? null,

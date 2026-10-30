@@ -15,6 +15,10 @@ City names were corrected on 8 Oct 2026 (ADR-IMPL-038): from OurAirports' spelli
 letter case, and by hand for the city served, island names, English names, renamed cities and misspellings. Every
 correction is listed in `airports-reference-fixes.tsv`.
 
+Zones were corrected on 29 Oct 2026 (ADR-IMPL-077 §5): Choibalsan (COQ) had `Asia/Choibalsan`, a link to
+`Asia/Ulaanbaatar` since tzdata 2024b that a Postgres without `tzdata-legacy` does not read; it has the zone the link
+names. `migrations/0055_catalog_airport_zone_links.sql` moves the row loaded before.
+
 ## MIT License — mwgg/Airports
 
 The MIT License (MIT)

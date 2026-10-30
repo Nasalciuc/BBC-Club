@@ -11,6 +11,7 @@ export const ERROR_CODES = [
   "GONE",
   "RATE_LIMITED",
   "SERVICE_DISABLED",
+  "OVERLOADED",
   "INTERNAL",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -38,6 +39,7 @@ export const HTTP_STATUS: Record<ErrorCode, number> = {
   GONE: 410,
   RATE_LIMITED: 429,
   SERVICE_DISABLED: 503,
+  OVERLOADED: 503,
   INTERNAL: 500,
 };
 
@@ -50,6 +52,7 @@ const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   GONE: "This fare has closed.",
   RATE_LIMITED: "Let's slow down for a moment. Please try again shortly.",
   SERVICE_DISABLED: "This part of the club is briefly unavailable.",
+  OVERLOADED: "The club is busy for a moment. Please try again shortly.",
   INTERNAL: "Something didn't go as planned. Please try again.",
 };
 

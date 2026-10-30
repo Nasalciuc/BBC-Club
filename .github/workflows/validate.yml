@@ -91,9 +91,13 @@ jobs:
           PRICING_PARITY_REQUIRED: "1"
         run: bun test tests/parity
       - run: bunx turbo run test:db
-      # Bun's zones against Postgres's, two years of every catalogue zone (ADR-IMPL-077): ~50 s of one core, so on its
-      # own, after the suites whose tests time the clock.
+      # Postgres's tzdata against itself (#114, ADR-IMPL-077 §5): every airport's zone is one it reads, and a dated
+      # search's bounds are where its own day begins and ends, every catalogue zone, every day of two years — a few
+      # seconds, after the suites.
       - run: bun run test:tz
+      # Wall-clock budgets (the 20 000-member fan-out under 10 s), each on its own after the suites: inside them every
+      # package shares the runner and the same fan-out took 3 to 16 s (ADR-IMPL-077).
+      - run: bun run test:budgets
       - run: bun run db:verify
       - name: Graph shape (G9-G11)
         run: python3 scripts/graph-shape.py
@@ -144,26 +148,45 @@ jobs:
         # The profile ADR-IMPL-073 adds, the way the box runs it: Compose reads it with every overlay; VictoriaMetrics
         # checks its scrape file (-dryRun), then runs with the compose file's flags; Grafana starts beside it with the
         # compose file's image, environment and memory limit and the repository's provisioning, reaches it, and holds its
-        # datasources, the three dashboards, the contact point and the five alert rules — no provisioning or plugin error in
-        # its log, no kill for memory. Nothing here reaches the box.
+        # datasources, the three dashboards, the contact point and the seven alert rules — no provisioning or plugin error in
+        # its log, no kill for memory; every alert rule's query returns a result on hand-written sample points. Nothing
+        # here reaches the box.
         run: |
           set -euo pipefail
           export API_IMAGE=ci/api:0000000 API_IMAGE_STAGING=ci/api:0000000
+          # The box's comes from production.env; Compose substitutes this one into both containers' environments.
+          export VM_PASSWORD=ci-vm-password GRAFANA_SECRET_KEY=ci-grafana-secret-key-0000000000000000
           compose="docker compose -f infra/docker-compose.yml -f infra/compose.prod.yml -f infra/compose.staging.yml"
           $compose --profile monitoring --profile media config -q
           $compose --profile monitoring config --format json > "$RUNNER_TEMP/compose.json"
+          # The images the box would pull: a tag that does not exist fails here, not on the box.
+          $compose --profile monitoring pull -q victoriametrics grafana node-exporter cadvisor
           svc() { jq -r ".services[\"$1\"]$2" "$RUNNER_TEMP/compose.json"; }
           docker run --rm -v "$PWD/infra/monitoring/victoriametrics:/etc/victoriametrics:ro" \
             "$(svc victoriametrics .image)" -promscrape.config=/etc/victoriametrics/scrape.yml -dryRun
           # The two on a network of their own, VictoriaMetrics under the name Grafana's datasource asks for: the alert
-          # rules then read no data, as on a quiet box, instead of failing to reach it.
+          # rules read the sample points imported below, under every threshold, instead of failing to reach it.
           docker network create monitoring-check >/dev/null
           mapfile -t vm_flags < <(svc victoriametrics '.command[]')
-          docker run -d --name vm-check --network monitoring-check --network-alias victoriametrics \
-            -v "$PWD/infra/monitoring/victoriametrics:/etc/victoriametrics:ro" \
+          mapfile -t vm_env < <(svc victoriametrics '.environment | to_entries[] | "--env=\(.key)=\(.value)"')
+          docker run -d --name vm-check --network monitoring-check --network-alias victoriametrics -p 127.0.0.1:8428:8428 \
+            "${vm_env[@]}" -v "$PWD/infra/monitoring/victoriametrics:/etc/victoriametrics:ro" \
             "$(svc victoriametrics .image)" "${vm_flags[@]}" >/dev/null
           for _ in $(seq 1 30); do docker exec vm-check wget -qO- http://127.0.0.1:8428/health >/dev/null 2>&1 && break; sleep 1; done
           docker exec vm-check wget -qO- http://127.0.0.1:8428/health >/dev/null
+          # Basic auth (A-S1): the query API refuses a request without the password and answers one with it.
+          if docker exec vm-check wget -qO- 'http://127.0.0.1:8428/api/v1/query?query=1' >/dev/null 2>&1; then
+            echo "::error::VictoriaMetrics answered a query without its password"; exit 1
+          fi
+          docker exec vm-check wget -qO- "http://bbc:${VM_PASSWORD}@127.0.0.1:8428/api/v1/query?query=1" >/dev/null
+          # Points typed in by hand (infra/monitoring/ci/sample-metrics.txt) for every name the alert rules read, a minute
+          # and two minutes ago (A-Q1): each rule's expression is run against them below, so a query Grafana or
+          # VictoriaMetrics refuses, or one that no longer matches the sample's names and labels, fails here. Whether the
+          # app and cAdvisor still publish those names is their own tests' (e.g. platform's jobs-flags.test.ts).
+          t2=$(( ($(date +%s) - 60) * 1000 )); t1=$(( t2 - 60000 ))
+          sed -e "s/__T1__/$t1/" -e "s/__T2__/$t2/" infra/monitoring/ci/sample-metrics.txt > "$RUNNER_TEMP/sample.txt"
+          curl -fsS -u "bbc:${VM_PASSWORD}" --data-binary @"$RUNNER_TEMP/sample.txt" http://127.0.0.1:8428/api/v1/import/prometheus
+          curl -fsS -u "bbc:${VM_PASSWORD}" http://127.0.0.1:8428/internal/force_flush
           # Grafana's own environment, but for an anonymous admin who reads it here (no password on a command line, none
           # set: the box's comes from production.env) and a webhook that goes nowhere.
           jq -r '.services.grafana.environment | to_entries[]
@@ -171,7 +194,8 @@ jobs:
             | "\(.key)=\(.value)"' \
             "$RUNNER_TEMP/compose.json" > "$RUNNER_TEMP/grafana.env"
           docker run -d --name grafana-check --network monitoring-check -p 127.0.0.1:3300:3000 \
-            --memory "$(svc grafana .deploy.resources.limits.memory)" --env-file "$RUNNER_TEMP/grafana.env" \
+            --memory "$(svc grafana .deploy.resources.limits.memory)" --cpus "$(svc grafana .deploy.resources.limits.cpus)" \
+            --env-file "$RUNNER_TEMP/grafana.env" \
             -e GF_AUTH_ANONYMOUS_ENABLED=true -e GF_AUTH_ANONYMOUS_ORG_ROLE=Admin \
             -e GRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/ci \
             -v "$PWD/infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro" \
@@ -193,8 +217,20 @@ jobs:
           wait_for /api/datasources/uid/victoriametrics/health .status OK
           wait_for /api/datasources/uid/postgres .uid postgres
           wait_for '/api/search?type=dash-db&tag=bbc' length 3
-          wait_for /api/v1/provisioning/alert-rules length 5
+          wait_for /api/v1/provisioning/alert-rules length 7
           wait_for /api/v1/provisioning/contact-points '[.[] | select(.name == "ops")] | length' 1
+          # Each rule as Grafana loaded it, its query run against the sample points: a result, or the rule is named.
+          api /api/v1/provisioning/alert-rules |
+            jq -r '.[] | [.uid, (.data[] | select(.datasourceUid == "victoriametrics") | .model.expr)] | @tsv' |
+            while IFS=$'\t' read -r uid expr; do
+              # At the second point's time: Grafana's start in between can take minutes, past an instant query's lookback.
+              out="$(curl -fsS -u "bbc:${VM_PASSWORD}" --data-urlencode "query=${expr}" --data-urlencode "time=$(( t2 / 1000 ))" \
+                http://127.0.0.1:8428/api/v1/query)"
+              if ! jq -e '.status == "success" and (.data.result | length) > 0' <<<"$out" >/dev/null; then
+                echo "::error::alert ${uid} returns nothing on the sample points (infra/monitoring/ci/sample-metrics.txt): ${out}"
+                exit 1
+              fi
+            done
           test "$(docker inspect -f '{{.State.Running}} {{.State.OOMKilled}}' grafana-check)" = "true false"
           if docker logs grafana-check 2>&1 | grep -iE 'level=error.*(provision|plugin)'; then exit 1; fi
           docker rm -f grafana-check vm-check >/dev/null

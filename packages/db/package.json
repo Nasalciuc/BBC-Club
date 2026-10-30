@@ -9,6 +9,7 @@
     "./schema/*": "./src/schema/*.ts",
     "./helpers": "./src/helpers.ts",
     "./statements": "./src/statements.ts",
+    "./time-zones": "./src/time-zones.ts",
     "./testing/isolated-db": "./src/testing/isolated-db.ts",
     "./testing/plan": "./src/testing/plan.ts"
   },
@@ -21,6 +22,7 @@
     "db:reset:test": "bun run scripts/reset-test.ts",
     "db:test:clean": "bun run scripts/test-clean.ts",
     "db:studio": "drizzle-kit studio",
+    "tz:links": "bun run scripts/tz-links.ts",
     "test": "bun test",
     "test:db": "bun test --preload ./src/testing/preload.ts",
     "typecheck": "tsc --noEmit"

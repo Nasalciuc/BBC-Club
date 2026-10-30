@@ -23,7 +23,7 @@ cookie back. After the first minute every request carries the token alone and Be
 2. **A miss reads fresh** (`disableCookieCache`), so nothing is kept that the database did not say within the minute.
    A write (`POST`, `PUT`, `PATCH`, `DELETE`) reads fresh as before and puts its answer back, or forgets the token.
 3. **Forgetting.** A write to `/api/auth/*` (sign-out, revoke, change), a password change through
-   `/v1/account/password` and an account deletion forget what this process keeps for the member (the member kept for the token, else the one a fresh read finds); a reset by email code, which carries no session, forgets every session the process keeps. A read that began
+   `/v1/account/password` and an account deletion forget what this process keeps for the member (the member kept for the token, else the one a fresh read finds); a reset by email code, which carries no session, forgets the sessions of the account its email names (lowercased as Better Auth's reset lowercases it), and every session the process keeps when that account cannot be read. A read that began
    before its token or its member was forgotten puts nothing back: the cache notes each forget per token and per
    member (for the cache's time and 30 s more; a note dropped earlier or later raises a floor no older read puts
    under), never one counter for all, since a read that finds no session forgets its token too and a shared counter
@@ -39,5 +39,11 @@ cookie back. After the first minute every request carries the token alone and Be
   unchanged.
 - The window ADR-IMPL-027 accepted stays the window: a session ended on one replica (or in psql) may still read on
   another for the rest of its minute, exactly as the phone's cookie cache would; a write is refused at once there.
+  `apps/api/test/session-two-replicas.test.ts` holds the bound: two hosts on one database, a session ended on one by a
+  password change, a deletion, a reset by code or in psql is refused by the other within the cache's time and half a
+  second (the time set to its floor, 10 s).
+- Measured where the work goes: `load/bench/perf.ts` runs on every change to the API, the modules or the database, with
+  the full cookie and with the token alone (`PERF_COOKIE=stale`), and asks Home again with its ETag (`home-304`, a 304
+  at one statement a request, 1.25 at most).
 - A member deleted on another device: `member.deleted` erases the rows, a write reads fresh, and a read elsewhere may
   pass for the rest of the minute, as before. Deletion never depended on reads.

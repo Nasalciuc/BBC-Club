@@ -28,8 +28,10 @@ export function errorContract(logger: Logger, metrics?: Metrics): ErrorHandler<a
       return c.json(apiError(err.code, { message: err.message, requestId, details: err.details }), status as any);
     }
     if (err instanceof RateLimitUnavailable) {
-      metrics?.inc("http_errors", { code: "SERVICE_DISABLED" });
-      return c.json(apiError("SERVICE_DISABLED", { requestId }), 503);
+      // The limiter cannot answer: the process is behind, the route is not off (ADR-IMPL-080).
+      metrics?.inc("http_errors", { code: "OVERLOADED" });
+      c.header("Retry-After", "5");
+      return c.json(apiError("OVERLOADED", { requestId }), 503);
     }
     if (err instanceof ZodError) {
       metrics?.inc("http_errors", { code: "VALIDATION" });

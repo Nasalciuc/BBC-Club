@@ -1,5 +1,6 @@
 import type { Executor } from "@bbc/db";
-import { and, asc, count, eq, gt, inArray, min, notInArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, min, notInArray, sql } from "drizzle-orm";
+import { anyOf } from "@bbc/db/helpers";
 import { placeLandmarks, placePhotos, sitePlaces } from "@bbc/db/schema/catalog";
 
 /** A landmark as the route reads it. */
@@ -125,7 +126,7 @@ export const placeLandmarksRepo = {
       .from(placeLandmarks)
       .where(
         and(
-          inArray(placeLandmarks.code, [...codes]),
+          anyOf(placeLandmarks.code, [...codes], "bpchar"),
           eq(placeLandmarks.kind, "landmark"),
           skip.size > 0 ? notInArray(placeLandmarks.landmarkQid, [...skip]) : undefined,
         ),
@@ -196,7 +197,10 @@ export const placeLandmarksRepo = {
    */
   async writeFailed(exec: Executor, codes: string[]): Promise<void> {
     if (codes.length === 0) return;
-    await exec.update(placeLandmarks).set({ expiresAt: afterFailure }).where(inArray(placeLandmarks.code, codes));
+    await exec
+      .update(placeLandmarks)
+      .set({ expiresAt: afterFailure })
+      .where(anyOf(placeLandmarks.code, codes, "bpchar"));
     await exec
       .insert(placeLandmarks)
       .values(codes.map((code) => ({ code, rank: 1, kind: "failed" as const, expiresAt: afterFailure })))

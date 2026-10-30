@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { errorForLog, withTx, type Db, type Executor } from "@bbc/db";
+import { postgresZones } from "@bbc/db/time-zones";
 import { airportsRepo } from "../infrastructure/airports.repo";
 import { faresRepo } from "../infrastructure/fares.repo";
 import { isIanaZone } from "./flight-local";
@@ -312,9 +313,20 @@ export async function importCatalog(deps: { db: Db }, input: ImportBody): Promis
     if (input.kind === "airports") {
       const rows = parseRows(AirportCsvRow, input.csv);
       const regions = new Set([...REGIONS, ...(await airportsRepo.regions(tx))]);
-      const details = rows
-        .filter(({ row }) => !regions.has(row.region))
-        .map(({ line }) => ({ path: `row ${line}.region`, message: `one of ${[...regions].sort().join(", ")}` }));
+      // A search and a fare's page read the airport's zone in Postgres (#114): one this Postgres's tzdata does not read
+      // (`US/Pacific-New`, which ICU still takes) failed every dated search from the airport. Stored as Postgres spells it.
+      const zones = await postgresZones(
+        tx,
+        rows.map(({ row }) => row.tz),
+      );
+      const details = rows.flatMap(({ line, row }) => [
+        ...(regions.has(row.region)
+          ? []
+          : [{ path: `row ${line}.region`, message: `one of ${[...regions].sort().join(", ")}` }]),
+        ...(zones.get(row.tz)?.zone
+          ? []
+          : [{ path: `row ${line}.tz`, message: "a time zone Postgres reads (Europe/London)" }]),
+      ]);
       if (details.length > 0) throw new ImportError(details.slice(0, MAX_DETAILS));
       for (const { line, row: r } of rows) {
         await writeRow(line, () =>
@@ -329,7 +341,7 @@ export async function importCatalog(deps: { db: Db }, input: ImportBody): Promis
               lat: r.lat,
               lng: r.lng,
               popularity: r.popularity,
-              tz: r.tz,
+              tz: zones.get(r.tz)?.zone ?? r.tz,
               description: r.description,
             },
           ]),

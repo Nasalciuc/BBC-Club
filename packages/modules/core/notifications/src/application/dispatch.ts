@@ -1,7 +1,7 @@
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { query, withTx, type Executor } from "@bbc/db";
-import { anyText, col, eqConst } from "@bbc/db/helpers";
+import { anyOf, anyText, col, eqConst } from "@bbc/db/helpers";
 import { event } from "@bbc/shared/events";
 import { notificationsTable, deviceTokens } from "@bbc/db/schema/notifications";
 import type { MembersFacade } from "@bbc/members";
@@ -241,7 +241,7 @@ export async function dispatch(deps: DispatchDeps): Promise<Record<string, numbe
       await deps.db
         .update(notificationsTable)
         .set({ status: "pending", claimedAt: null })
-        .where(inArray(notificationsTable.id, ids));
+        .where(anyOf(notificationsTable.id, ids, "uuid"));
     }
     return metrics;
   }
@@ -285,7 +285,7 @@ export async function deliverSending(deps: DispatchDeps, ids: string[]): Promise
       claimedAtText: sql<string | null>`${notificationsTable.claimedAt}::text`,
     })
     .from(notificationsTable)
-    .where(and(inArray(notificationsTable.id, ids), eqConst(notificationsTable.status, "sending")));
+    .where(and(anyOf(notificationsTable.id, ids, "uuid"), eqConst(notificationsTable.status, "sending")));
   await deps.beforeTokens?.();
   // The same two reads as the inline claim's, for every row of the batch (ADR-IMPL-077).
   const memberIds = rows.map((r) => r.memberId);

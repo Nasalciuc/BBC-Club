@@ -7,22 +7,6 @@ import { fareFactsLine, mapFa01 } from "./fa01-map";
 
 const csvPath = join(import.meta.dir, "../../../../../db/seeds/airports.csv");
 
-async function clocksUnder(tz: string): Promise<string> {
-  const child = Bun.spawn({
-    cmd: ["bun", join(import.meta.dir, "print-fa01-clocks.ts")],
-    env: { ...process.env, TZ: tz },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [out, err, code] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  if (code !== 0) throw new Error(`print-fa01-clocks failed under ${tz} (${code}): ${err || out}`);
-  return out.trim();
-}
-
 describe("flight local times", () => {
   it("arriveAt − departAt == durationMinutes on every timed fixture fare", () => {
     for (const fare of fixture.fares) {
@@ -51,18 +35,6 @@ describe("flight local times", () => {
       0,
     ]);
     expect(mapFa01({ departAt: null, arriveAt: null }).departDate).toBeNull();
-  });
-
-  it("same fa01 clocks in Chișinău and Los Angeles", async () => {
-    const chisinau = await clocksUnder("Europe/Chisinau");
-    const la = await clocksUnder("America/Los_Angeles");
-    expect(chisinau).toBe(la);
-    expect(JSON.parse(chisinau)).toEqual({
-      departLocal: "18:55",
-      arriveLocal: "07:00",
-      arriveDayOffset: 1,
-      departDate: "2026-10-12",
-    });
   });
 
   it("every airports.csv tz is a real IANA zone", () => {

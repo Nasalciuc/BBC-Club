@@ -21,7 +21,6 @@ import { sitePricesRepo } from "./infrastructure/site-prices.repo";
 import { createAirportsReference } from "./application/airports-reference";
 import { recordSearch, rollupDemand } from "./application/demand";
 import { expireFares } from "./application/expire-fares";
-import { formatInZone } from "./application/flight-local";
 import { homeSuggestion, homeZones, popularFrom } from "./application/discovery";
 import { importCatalog, ImportBody, ImportError } from "./application/import";
 import { readLandmarksFlag, resolvePlaceLandmarks, toPlaceLandmarksVM } from "./application/place-landmarks";
@@ -89,14 +88,20 @@ const DESTINATIONS_CACHE_S = 60;
 const POPULAR_CACHE_S = 300;
 /** Distinct keys each process keeps per memo (homes × cabins × rule sets); the oldest goes first past it. */
 const MEMO_ENTRIES = 2_000;
+/** Homes whose site deals each process keeps: one home's 74 deals take about 56 KB (measured on the recorded site,
+ *  photos on), so 300 homes about 17 MB per replica where MEMO_ENTRIES would let them reach about 110 MB. */
+const SITE_DEALS_ENTRIES = 300;
 /** ADR-IMPL-067: how long one home's site deals are kept, in seconds. */
 const SITE_DEALS_CACHE_S = 60;
+/** The minute a per-member answer's versions keep (`VERSION_MINUTE_MS`, apps/api http-cache.ts — catalog does not
+ *  import the host): Home's 304 can serve a body that long after it was computed from what a memo held. */
+const VERSION_MINUTE_S = 60;
 /**
  * ADR-IMPL-067: what a read kept `ttlS` seconds asks of a route's day (and of a stored answer's), so nothing kept is
- * served past it: the memo's time, 10 % more as a margin (the margin Redis's spread expiries needed before
- * ADR-IMPL-075, kept so the figures do not move), and a few seconds for the read itself — 75 s for a minute.
+ * served past it: the memo's time and Home's minute, 10 % more as a margin (the margin Redis's spread expiries needed
+ * before ADR-IMPL-075, kept so the figures do not move), and a few seconds for the read itself — 141 s for a minute.
  */
-const keptMargin = (ttlS: number) => Math.ceil(ttlS * 1.1) + 9;
+const keptMargin = (ttlS: number) => Math.ceil((ttlS + VERSION_MINUTE_S) * 1.1) + 9;
 
 /** A strong ETag over the body as JSON: whatever the answer shows changes it. */
 const etagOf = (value: unknown) => `"${createHash("sha1").update(JSON.stringify(value)).digest("hex").slice(0, 16)}"`;
@@ -143,7 +148,7 @@ export const catalogModule = (
       { maxEntries: MEMO_ENTRIES, ttlMs: SITE_PINS_CACHE_S * 1000, ns: "catalog.site_pins" },
     );
     const siteDealsMemo = platform.reference.memo<SiteDeal[]>(["catalog.site", "catalog.airports"], {
-      maxEntries: MEMO_ENTRIES,
+      maxEntries: SITE_DEALS_ENTRIES,
       ns: "catalog.site_deals",
       ttlMs: SITE_DEALS_CACHE_S * 1000,
     });
@@ -460,14 +465,15 @@ export const catalogModule = (
         const from = q.from.toUpperCase();
         const to = q.to.toUpperCase();
         const e = exec ?? conn;
-        const [airports, rows] = await Promise.all([
+        const [airports, onSale] = await Promise.all([
           exec && exec !== conn ? airportsRepo.getMany(exec, [from, to]) : airportsRef.getMany([from, to]),
-          faresRepo.search(e, { from, to, cabin: q.cabin }),
+          // Whether the search shows fares, not its rows: no clocks, so no airport read per fare.
+          faresRepo.anyOnSale(e, { from, to, cabin: q.cabin }),
         ]);
         const fromApt = airports.find((a) => a.code === from);
         const toApt = airports.find((a) => a.code === to);
         // Published fares always win: the search showed them, not an estimate.
-        if (!fromApt || !toApt || rows.length > 0) return null;
+        if (!fromApt || !toApt || onSale) return null;
         const { site, rules } = sources;
         if (!site) {
           // The site off: the formula alone, exactly as before ADR-IMPL-063.
@@ -512,7 +518,14 @@ export const catalogModule = (
       const [fromApt, toApt] = await Promise.all([airportsRef.get(from), airportsRef.get(to)]);
       if (!fromApt || !toApt) return c.json(apiError("NOT_FOUND", { message: "unknown airport" }), 404);
       const rows = sold
-        ? await faresRepo.search(conn, { from, to, cabin, ...(when ? { when, originTz: fromApt.tz } : {}) })
+        ? await faresRepo.search(conn, {
+            from,
+            to,
+            cabin,
+            originTz: fromApt.tz,
+            destTz: toApt.tz,
+            ...(when ? { when } : {}),
+          })
         : [];
 
       const items = rows.map((r) => toFareVM(r, { from: fromApt, to: toApt }, false));
@@ -564,7 +577,7 @@ export const catalogModule = (
               toCity: toApt?.city ?? null,
               carrier: row.carrierName,
               cabin: row.cabin,
-              departDate: row.departAt && fromApt ? formatInZone(row.departAt.toISOString(), fromApt.tz).ymd : null,
+              departDate: row.departWall ? row.departWall.slice(0, 10) : null,
             },
           }),
           410,

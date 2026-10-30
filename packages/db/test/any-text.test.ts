@@ -3,9 +3,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { char, integer, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { createDb } from "../src/client";
-import { anyText } from "../src/helpers";
+import { anyOf, anyText } from "../src/helpers";
 import { isolatedDb, type IsolatedDb } from "../src/testing/isolated-db";
 
 const probe = pgTable("any_text_probe", { id: text("id").primaryKey() });
@@ -20,6 +20,70 @@ beforeAll(async () => {
   await iso.db.insert(probe).values([...AWKWARD, "other"].map((id) => ({ id })));
 });
 afterAll(() => iso.drop());
+
+const typed = pgTable("any_of_probe", { code: char("code", { length: 3 }), ref: uuid("ref"), n: integer("n") });
+
+describe("anyOf", () => {
+  it("a char(3), uuid or int4 column: one statement text whatever the list's length, cast to the column's own type", () => {
+    const codes = (n: number) => Array.from({ length: n }, (_, i) => `C${String(i).padStart(2, "0")}`);
+    for (const [where, type] of [
+      [(n: number) => anyOf(typed.code, codes(n), "bpchar"), "bpchar"],
+      [
+        (n: number) =>
+          anyOf(
+            typed.ref,
+            Array.from({ length: n }, () => crypto.randomUUID()),
+            "uuid",
+          ),
+        "uuid",
+      ],
+      [
+        (n: number) =>
+          anyOf(
+            typed.n,
+            Array.from({ length: n }, (_, i) => i),
+            "int4",
+          ),
+        "int4",
+      ],
+    ] as const) {
+      const queries = [1, 7, 100].map((n) => iso.db.select().from(typed).where(where(n)).toSQL());
+      expect(new Set(queries.map((q) => q.sql)).size).toBe(1);
+      expect(queries[0]!.sql).toContain(`= ANY($1::${type}[])`);
+      expect(queries.map((q) => q.params.length)).toEqual([1, 1, 1]);
+    }
+  });
+
+  it("finds the rows named, uses the column's index, and an empty list matches nothing", async () => {
+    await iso.db.execute(
+      sql`CREATE TABLE IF NOT EXISTS public.any_of_probe (code char(3) PRIMARY KEY, ref uuid, n int4)`,
+    );
+    await iso.db.execute(sql`INSERT INTO public.any_of_probe (code, ref, n) SELECT 'A' || lpad(g::text, 2, '0'),
+      gen_random_uuid(), g FROM generate_series(0, 99) g ON CONFLICT DO NOTHING`);
+    const rows = await iso.db
+      .select()
+      .from(typed)
+      .where(anyOf(typed.code, ["A01", "A02", "ZZZ"], "bpchar"));
+    expect(rows.map((r) => r.code).sort()).toEqual(["A01", "A02"]);
+    expect(
+      await iso.db
+        .select()
+        .from(typed)
+        .where(anyOf(typed.n, [], "int4")),
+    ).toEqual([]);
+    // The column's own type keeps its index usable; text[] on a char(3) column casts the column and leaves it.
+    const planOf = (pgType: "bpchar" | "text") =>
+      iso.db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+        const rows = (await tx.execute(
+          sql`EXPLAIN (FORMAT JSON) SELECT * FROM public.any_of_probe WHERE ${anyOf(typed.code, ["A01", "A02"], pgType)}`,
+        )) as unknown as { "QUERY PLAN": unknown }[];
+        return JSON.stringify(rows[0]!["QUERY PLAN"]);
+      });
+    expect(await planOf("bpchar")).toContain("any_of_probe_pkey");
+    expect(await planOf("text")).not.toContain("any_of_probe_pkey");
+  });
+});
 
 describe("anyText", () => {
   it("1, 7 and 100 values: one statement text, one parameter", () => {

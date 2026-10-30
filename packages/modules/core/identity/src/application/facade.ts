@@ -133,11 +133,40 @@ export function createIdentityFacade(
   async function forgettingSessions(req: Request, run: () => Promise<Response>): Promise<Response> {
     if (!sessions || SAFE_METHODS.has(req.method)) return run();
     const { key, member } = await sessionOf(req.headers);
+    // A reset by code carries no session: its account is the one its email names, read before run() consumes the
+    // body and lowercased as Better Auth's reset lowercases it before its own lookup (email-otp/reset-password).
+    const resetEmail = RESET_BY_CODE.test(new URL(req.url).pathname)
+      ? await req
+          .clone()
+          .json()
+          .then(
+            (body: unknown) => {
+              const email = (body as { email?: unknown } | null)?.email;
+              return typeof email === "string" ? email.toLowerCase() : null;
+            },
+            () => null,
+          )
+      : undefined;
     try {
       const res = await run();
-      // A reset by code carries no session yet ends every session of its account (revokeSessionsOnPasswordReset):
-      // whose they were is not known here, so this process forgets all it keeps.
-      if (res.ok && RESET_BY_CODE.test(new URL(req.url).pathname)) sessions.forgetAll();
+      // The reset ends every session of its account (revokeSessionsOnPasswordReset): this process forgets that
+      // member's; when the account cannot be found here (no email read, or the read failed after the reset had
+      // succeeded), all it keeps — the reset's answer stays the one Better Auth gave.
+      if (res.ok && resetEmail !== undefined) {
+        const owner = resetEmail
+          ? await db
+              .select({ id: user.id })
+              .from(user)
+              .where(eq(user.email, resetEmail))
+              .limit(1)
+              .then(
+                ([row]: { id: string }[]) => row?.id ?? null,
+                () => null,
+              )
+          : null;
+        if (owner) sessions.forgetMember(owner);
+        else sessions.forgetAll();
+      }
       return res;
     } finally {
       if (key) sessions.forget(key);

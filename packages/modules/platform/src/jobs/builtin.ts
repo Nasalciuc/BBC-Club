@@ -1,10 +1,11 @@
-import { sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { errorForLog, withTx } from "@bbc/db";
-import { DeleteStopped, deleteInBatches, eqConst, inConst, retainEach } from "@bbc/db/helpers";
+import { DeleteStopped, anyOf, deleteInBatches, eqConst, inConst, retainEach } from "@bbc/db/helpers";
 import {
   eventDeliveries,
   eventDlq,
+  flags as flagsTable,
   jobRuns,
   kafkaProcessed,
   rateLimitState,
@@ -12,6 +13,7 @@ import {
 } from "../infrastructure/schema";
 import type { Jobs } from "./index";
 import type { Metrics } from "../telemetry/metrics";
+import { parseValue } from "../flags";
 import { applyDbGauges, collectDbReport, collectDbSnapshot, maybeAlertOps } from "../observe/db-health";
 
 /** A run that finished: what lastFinishedRunsSql reads. */
@@ -37,6 +39,38 @@ export const jobRunsRetention = {
   others: sql`${jobRuns.startedAt} < now() - interval '30 days' AND NOT ${inConst(jobRuns.status, FINISHED)} AND EXISTS (
     SELECT 1 FROM ${jobRuns} AS ${later} WHERE ${later.job} = ${jobRuns.job} AND ${later.startedAt} > ${jobRuns.startedAt})`,
 };
+
+/**
+ * Puts back to pending the `paused` deliveries of these consumers, `batch` at a time, each batch its own statement and
+ * so its own commit: one UPDATE of a large backlog could outrun the role's 15 s statement timeout, fail, and leave every
+ * delivery parked, run after run. It stops before the next batch once `budgetMs` has passed or `signal` has fired, and
+ * says so (`capped`): the next run resumes the rest.
+ */
+export async function resumeParked(
+  db: any,
+  consumers: string[],
+  opts: { batch?: number; budgetMs?: number; signal?: AbortSignal } = {},
+): Promise<{ resumed: number; capped: boolean }> {
+  const batch = opts.batch ?? 1_000;
+  const deadline = performance.now() + (opts.budgetMs ?? 10_000);
+  let resumed = 0;
+  if (consumers.length === 0) return { resumed, capped: false };
+  for (;;) {
+    const picked = db
+      .select({ id: eventDeliveries.id })
+      .from(eventDeliveries)
+      .where(and(eqConst(eventDeliveries.status, "paused"), anyOf(eventDeliveries.consumer, consumers, "text")))
+      .limit(batch);
+    const rows = await db
+      .update(eventDeliveries)
+      .set({ status: "pending", runAfter: sql`now()` })
+      .where(and(eqConst(eventDeliveries.status, "paused"), inArray(eventDeliveries.id, picked)))
+      .returning({ id: eventDeliveries.id });
+    resumed += rows.length;
+    if (rows.length < batch) return { resumed, capped: false };
+    if (opts.signal?.aborted || performance.now() >= deadline) return { resumed, capped: true };
+  }
+}
 
 export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
   jobs.register("partitions", {
@@ -134,7 +168,21 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
     description: "log queue depth and age; the alert rule reads these metrics",
     cron: "*/10 * * * *",
     timeoutMs: 15_000,
-    handler: async ({ db, logger }) => {
+    handler: async ({ db, logger, signal }) => {
+      // A delivery parked while its flag said paused goes back to pending once the flag no longer does (ADR-IMPL-080,
+      // RUNBOOK § Pause a consumer). "Paused" is decided as consumerPauseState decides it: the value through the flags
+      // reader's own parser, so a hand-written value it rejects (`{"enabled":true,"variant":null}`) resumes here too.
+      const parked = await db
+        .selectDistinct({ consumer: eventDeliveries.consumer, value: flagsTable.value })
+        .from(eventDeliveries)
+        .leftJoin(flagsTable, sql`${flagsTable.key} = 'consumer.' || ${eventDeliveries.consumer} || '.paused'`)
+        .where(eqConst(eventDeliveries.status, "paused"));
+      const running = (parked as { consumer: string; value: unknown }[])
+        .filter((r) => parseValue(r.value)?.enabled !== true)
+        .map((r) => r.consumer);
+      // In batches, within 10 of the job's 15 s: a backlog larger than that resumes over the next runs.
+      const { resumed, capped } = await resumeParked(db, running, { signal });
+      if (capped) logger.warn({ resumed }, "paused deliveries resumed in part: the next run resumes the rest");
       const rows: any[] = await db.execute(sql`
         SELECT consumer, count(*) FILTER (WHERE status='pending')::int AS pending,
                COALESCE(EXTRACT(EPOCH FROM (now() - min(created_at) FILTER (WHERE status='pending')))::int, 0) AS oldest_s
@@ -142,7 +190,7 @@ export function registerPlatformJobs(jobs: Jobs, metrics: Metrics) {
       for (const r of rows)
         if (r.oldest_s > 300)
           logger.warn({ consumer: r.consumer, pending: r.pending, oldestSeconds: r.oldest_s }, "queue lagging");
-      return { consumersWithBacklog: rows.length };
+      return { consumersWithBacklog: rows.length, resumed, resumeCapped: capped ? 1 : 0 };
     },
   });
 

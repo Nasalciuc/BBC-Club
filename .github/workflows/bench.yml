@@ -3,6 +3,15 @@ on:
   schedule:
     - cron: "30 2 * * *"
   workflow_dispatch:
+  # A change to the hot path or to the bench itself is measured before it merges, not the night after (ADR-IMPL-076).
+  pull_request:
+    paths:
+      - "apps/api/src/**"
+      - "packages/modules/**"
+      - "packages/db/**"
+      - "packages/shared/**"
+      - "load/bench/**"
+      - ".github/workflows/bench.yml"
 permissions:
   contents: read
 jobs:
@@ -31,6 +40,11 @@ jobs:
       - run: bun run load/bench/run.ts
       # ADR-IMPL-074/075: statements and plans per request, and CPU as a multiple of /health's (perf-thresholds.json).
       - run: bun run load/bench/perf.ts
+      # The same with the session token alone, what the app sends after its first minute: the server keeps the session
+      # (ADR-IMPL-076). Its report is perf-report-stale.json.
+      - run: bun run load/bench/perf.ts
+        env:
+          PERF_COOKIE: stale
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -38,3 +52,4 @@ jobs:
           path: |
             load/bench/report.json
             load/bench/perf-report.json
+            load/bench/perf-report-stale.json

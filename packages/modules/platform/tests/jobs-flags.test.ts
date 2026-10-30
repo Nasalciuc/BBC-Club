@@ -74,7 +74,7 @@ describe("flags", () => {
     expect(await p.flags.isKilled("engagement")).toBe(true);
     // Boot reads killState: an unreadable flag is an error there, never a killed module.
     await expect(p.flags.killState("engagement")).rejects.toThrow("db down");
-    expect(await p.flags.isConsumerPaused("x.onY")).toBe(true);
+    expect(await p.flags.consumerPauseState("x.onY")).toBe("unknown");
     expect(await p.flags.isEnabled("x", false)).toBe(false);
     // app-config reads readStrict and keeps its own last good answer: no default stands in for the row.
     await expect(p.flags.readStrict("x")).rejects.toThrow("db down");
@@ -98,6 +98,8 @@ describe("metrics", () => {
     expect(out).toContain('bbc_deliveries_done{consumer="x.onY"} 1');
     expect(out).toContain("bbc_delivery_duration_ms_count");
     expect(out).toContain("bbc_queue_pending");
+    // The gauge the `bbc-queue-paused` alert reads (alerts.yml): published, not only typed into CI's samples.
+    expect(out).toContain("bbc_queue_paused");
     await p.close();
   });
 

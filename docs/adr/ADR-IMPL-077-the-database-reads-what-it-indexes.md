@@ -2,10 +2,11 @@
 
 Status: proposed · Date: 2026-10-26 · Scope: `packages/modules/platform` (`jobs/index.ts`: `lastRuns`,
 `lastFinishedRuns`; `jobs/builtin.ts`: `retention`; `events/publish.ts`), `packages/shared` (`time-zone.ts`:
-`zoneDayBounds`), `packages/db` (`helpers.ts`: `deleteInBatches`, `retainEach`, `anyText`; `scripts/verify.ts`:
+`isIanaZone`), `packages/db` (`helpers.ts`: `deleteInBatches`, `retainEach`, `anyText`; `scripts/verify.ts`:
 rules 3, 13 and 14; `scripts/migrate.ts`; the hot-query test), migrations `0048_identity_auth_lookups.sql`,
 `0049_catalog_demand_from_route.sql`, `0050_platform_autovacuum.sql`, `0051_notifications_autovacuum.sql`,
-`0052_platform_monitor_role.sql`, `0053_platform_monitor_role_limits.sql`, `0054_retention_indexes.sql`, the catalog
+`0052_platform_monitor_role.sql`, `0053_platform_monitor_role_limits.sql`, `0054_retention_indexes.sql`,
+`0055_catalog_airport_zone_links.sql`, the catalog
 (`fares.repo.ts`: a dated search; `discovery.repo.ts`; `retention-demand`), identity (`retention-auth`), notifications
 (`dispatch.ts`; `retention-notifications`), members (`deliverabilityOf`), `infra` (Postgres's settings in
 `docker-compose.yml` and `compose.staging.yml`; Grafana's Postgres datasource and the database dashboard; `deploy.sh`,
@@ -52,22 +53,59 @@ Postgres 16), the data layer had reads that grow worse with time:
    8 000 routes a day, chosen by the planner from there up (measured). The airports' `(popularity DESC, code)` came with
    ADR-IMPL-075.
 5. **A dated search** with the origin's zone at hand (the route reads the airports from memory) compares `depart_at`
-   with the day's two instants, `zoneDayBounds` — the day Postgres reads, across a clock change and a midnight that
-   does not exist, by Bun's copy of the zone rules (its ICU). No index on `catalog.fares` holds `depart_at`: the
-   bounds spare the origin's airport read per fare (3 005 fares of a route: 64 buffers and 0.75 ms against 9 079 and
-   5–9 ms). Each zone's day is found once per process (at most 1 000 kept, the oldest going first; about 190 µs
-   found, under 1 µs kept). Bun's copy and Postgres's (tzdata) are compared for every zone the catalogue's airports
-   use, every day of the two years from the run (`scripts/tz-parity.test.ts`, about 50 s of one core:
-   `bun run test:tz`, on its own after the database suites, in `validate` and CI). Today they differ in seven, where
-   Bun is behind tzdata 2026e — Vancouver, Edmonton, Winnipeg and Inuvik (summer offset kept as standard time from
-   1 Nov 2026), Casablanca and El_Aaiun (+00 from 20 Sep 2026), Asuncion on Bun 1.3 (−03 all year): there a search's
-   day is an hour off Postgres's, and so are the fare times shown (`zoneClock`) and quiet hours, which read the same
-   ICU — the list and its cards agree with each other. No fare departs from those zones with a time today (the
-   import writes none: an undated fare matches any day it is on sale). The test lists the seven and fails on any
-   other, measured against CI's tzdata (`postgres:16-alpine`); production's Postgres is Debian's `postgres:16`, its
-   tag not pinned. The API image pins Bun by digest (`apps/api/Dockerfile`), so its zones change only with a
-   deliberate bump. Reading those zones' day from Postgres instead is the owner's call (⚑1): alone it would set the
-   search against the times on its cards.
+   with the day's two instants, computed by Postgres in the same statement from the zone bound once (`dayStartIn`,
+   `@bbc/db/time-zones`: `day::timestamp AT TIME ZONE zone`, or an hour before it plus the hour where midnight comes
+   twice) —
+   the day `(t AT TIME ZONE zone)::date` reads, across a clock change and a midnight that does not exist or comes
+   twice. No index on `catalog.fares` holds `depart_at`: the bounds spare the origin's airport read per fare (3 005
+   fares of a route: 64 buffers and 0.75 ms against 9 079 and 5–9 ms). A fare's clocks on its card and its day
+   (`departLocal`, `arriveLocal`, `departDate`, which the request draft takes) are read in the same select
+   (`wallAt`: `to_char(t AT TIME ZONE zone, …)`, the search's zones bound, a fare's page joining its airports), and
+   so are quiet hours and the daily cap's day (notifications `sendTimes`: a page's zones' send times, their days and
+   the days' bounds, one statement a page; the cap compares with the bounds):
+   the club reads the zones' rules from one copy, Postgres's tzdata (#114). Bun's ICU now only checks that a name is a
+   zone (`isIanaZone`, the app's rule too). Where the two disagree, measured on 28 Oct 2026 for the 369 airport zones
+   at noon UTC on every day of two years, against tzdata 2026c (the local Postgres 16.15, Ubuntu 24.04): Bun 1.4.2
+   (ICU 78.3) in four — Vancouver and Edmonton keep −07/−06 from 1 Nov 2026, Casablanca and El_Aaiun are +00 now;
+   Bun 1.3.4 (ICU 75.1, CI's) in five, Asuncion's −03 from 28 Mar 2027 too. Winnipeg and Inuvik, named here before,
+   agree under 2026c: that list held for no tzdata measured here. Postgres's names (`@bbc/db/time-zones`, listed
+   once per process, matched in any case, else through Intl's spelling, else through tzdata's links) decide what is
+   stored and read: the profile
+   and the catalogue import store a zone as Postgres spells it and refuse one its tzdata lacks; notifications read a
+   member's zone the same way, and one Postgres does not read counts as the club's default, logged with why
+   (`zonesForPostgres`). `scripts/tz-parity.test.ts` (`bun run test:tz`, a few seconds, after the database suites,
+   in `validate` and CI) checks that every airport's zone is one Postgres reads and that the bounds are where
+   Postgres's day begins and ends, for every one of those zones and every day of the two years from the run; it
+   fails on the plain `day::timestamp AT TIME ZONE zone` in Havana and the Azores.
+
+   **Which tzdata.** Production's Postgres is Debian's `postgres:16` (`infra/postgres/Dockerfile`, the tag not
+   pinned): its tzdata is the club's, and it moves with an image bump. CI's database suites and `test:tz` run on the
+   same base image (`infra/compose.test.yml`, initialised `C.UTF-8`: text sorted by code point, as on the local test
+   cluster), so they read the tzdata production would read from an image pulled that day; production reads the one
+   of the image it was built from — the gap is the time between the two pulls, closed only by pinning both to one
+   digest. Debian from trixie, and Ubuntu from 23.10, keep the old link names (`Asia/Calcutta`, `US/Eastern`,
+   `Europe/Kiev`, `Asia/Saigon`) in `tzdata-legacy`, not installed on the local cluster and likely not in the image:
+   Android phones still report them (the club has members in India). A name Postgres cannot read is therefore read
+   as the zone tzdata links it to (`packages/db/src/tz-links.ts`, generated from tzdata.zi's `L <target> <alias>`
+   lines by `bun run --filter @bbc/db tz:links`, its tzdata release in its header), when Postgres reads that zone; a
+   name Postgres lists is kept as it lists it (`Europe/Bratislava` stays, though tzdata links it to Prague). The
+   profile and the import store that name; only a name nothing resolves is refused (`US/Pacific-New`), and a member
+   holding one is pushed by New York's clock, logged `time_zone_unknown_to_postgres`. Installing `tzdata-legacy` in
+   `infra/postgres/Dockerfile` is the other way to read those names, not taken. The same holds for an airport: tzdata
+   2024b made `Asia/Choibalsan` a link to `Asia/Ulaanbaatar` (one clock since 2008), and CI's first `test:tz` on
+   `postgres:16` found Choibalsan (COQ) unread, so every dated search from it would have failed. The reference writes
+   `Asia/Ulaanbaatar`, and `0055_catalog_airport_zone_links.sql` moves the row it inserted before.
+
+   **After a Postgres or tzdata update** (a new `postgres:16` image, a minor release, a tzdata package): run `bun run
+test:tz` against the new server before the deploy (every airport's zone still read, the day's bounds still
+   Postgres's day); on the production database, before and after, list the members' zones it no longer reads —
+   `SELECT timezone, count(*) FROM members.profile p WHERE NOT EXISTS (SELECT 1 FROM pg_timezone_names n WHERE
+lower(n.name) = lower(p.timezone)) GROUP BY 1` — and the airports' (`catalog.airports.tz`, the same test); read
+   the tzdata release's NEWS for the airports' zones and the members' (a rule change moves the fares' clocks and days
+   and the quiet hours at once, with no second copy to disagree; pushes already scheduled keep the time the old
+   rules gave them); after a tzdata release, generate `tz-links.ts` again (`bun run --filter @bbc/db tz:links`); and
+   watch `member time zone not read` in the logs for a new `time_zone_unknown_to_postgres`.
+
 6. **Retention, in batches of 5 000** (`deleteInBatches`: each batch its own statement, picked by `(tableoid, ctid)` —
    a ctid is unique within one table only, and a partitioned table's partitions share them), each module for its own
    tables, daily, idempotent; business records (requests and their events, offers, fares) are never deleted here.
@@ -131,7 +169,10 @@ CONCURRENTLY`) in a small PR of their own once production's `idx_scan` has staye
     an SSD (⚑F: `lsblk -d -o name,rota`, `0`).
     `scripts/env-profile.test.ts` checks that both say the same. Postgres takes these only when its container is made,
     which no deploy does: a deploy compares each running Postgres's command line with compose's (`stale_postgres`)
-    and warns, to `OPS_WEBHOOK` too, then goes on (RUNBOOK § The first deploy after ADR-IMPL-077).
+    and warns, to `OPS_WEBHOOK` too, then goes on (RUNBOOK § The first deploy after ADR-IMPL-077). PgBouncer, in front
+    of both, tries a restarted Postgres again after 1 s (`server_login_retry`; its default, 15 s, held every request
+    that long after a shorter restart) and keeps a client waiting 10 s at most for a server connection
+    (`query_wait_timeout`), then answers it with an error.
 11. **Grafana reads Postgres** (⚑A): the role `bbc_monitor`, a member of `pg_monitor` (statistics, no table's rows), a
     login only once a production deploy or bootstrap with `MONITORING=on` gives it `GRAFANA_PG_PASSWORD`
     (`set_monitor_password`, `infra/env-value.sh`: through psql's stdin, the session's logging off); three connections at

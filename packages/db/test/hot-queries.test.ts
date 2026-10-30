@@ -17,6 +17,16 @@ import { notificationsRepo } from "../../modules/core/notifications/src/infrastr
 import { offerSendsSelect } from "../../modules/core/notifications/src/application/daily-cap";
 
 const MEMBER = "hot-member";
+/** The search as /v1/search sends it: the airports' zones from memory, bound once (ADR-IMPL-077, #114). */
+const SEARCH = {
+  from: "JFK",
+  to: "LHR",
+  cabin: "business" as const,
+  originTz: "America/New_York",
+  destTz: "Europe/London",
+};
+/** A travel day as the app sends it (noon UTC of the chosen day), within the volume's fares. */
+const SEARCH_DAY = new Date(Date.now() + 7 * 86_400_000);
 /** The jobs the seed's runs belong to. */
 const JOBS = ["dispatch", "campaign-fanout", "send-requests", "resolve-place-photos", "db-observe", "retention"];
 const ROWS = 200_000;
@@ -160,8 +170,22 @@ describe("hot queries choose their index", () => {
     },
     {
       name: "search JFK→LHR business",
-      // After ANALYZE the planner prefers fares_home_destinations (from,to,price) over fares_search.
-      statement: () => sqlOf(faresRepo.searchSelect(iso.db, { from: "JFK", to: "LHR", cabin: "business" })),
+      // What /v1/search sends: the airports' zones bound (from memory), so no airport is read per fare. After ANALYZE
+      // the planner prefers fares_home_destinations (from,to,price) over fares_search.
+      statement: () => sqlOf(faresRepo.searchSelect(iso.db, SEARCH)),
+      index: "fares_home_destinations",
+      noSeqScanOn: ["fares"],
+    },
+    {
+      name: "search JFK→LHR business on a day",
+      // The travel day's two instants computed once from the origin's zone; depart_at compared bare (ADR-IMPL-077).
+      statement: () => sqlOf(faresRepo.searchSelect(iso.db, { ...SEARCH, when: SEARCH_DAY })),
+      index: "fares_home_destinations",
+      noSeqScanOn: ["fares"],
+    },
+    {
+      name: "a quote's estimate: any fare on sale JFK→LHR business",
+      statement: () => sqlOf(faresRepo.anyOnSaleSelect(iso.db, SEARCH)),
       index: "fares_home_destinations",
       noSeqScanOn: ["fares"],
     },
@@ -293,7 +317,19 @@ describe("hot queries choose their index", () => {
     },
     {
       name: "search JFK→LHR business",
-      query: () => faresRepo.searchSelect(iso.db, { from: "JFK", to: "LHR", cabin: "business" }),
+      query: () => faresRepo.searchSelect(iso.db, SEARCH),
+      index: ["fares_home_destinations", "fares_search"],
+      table: "fares",
+    },
+    {
+      name: "search JFK→LHR business on a day",
+      query: () => faresRepo.searchSelect(iso.db, { ...SEARCH, when: SEARCH_DAY }),
+      index: ["fares_home_destinations", "fares_search"],
+      table: "fares",
+    },
+    {
+      name: "a quote's estimate: any fare on sale JFK→LHR business",
+      query: () => faresRepo.anyOnSaleSelect(iso.db, SEARCH),
       index: ["fares_home_destinations", "fares_search"],
       table: "fares",
     },
