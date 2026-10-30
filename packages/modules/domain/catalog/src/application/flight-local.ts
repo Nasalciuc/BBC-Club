@@ -1,13 +1,7 @@
-import { isIanaZone, zoneClock } from "@bbc/shared/time-zone";
+import { isIanaZone } from "@bbc/shared/time-zone";
 
-export type LocalClock = { hhmm: string; ymd: string };
-
-/** Instant → wall clock in an IANA zone. Never uses the host TZ; one formatter per zone (shared/time-zone). */
-export function formatInZone(iso: string, timeZone: string): LocalClock {
-  const t = zoneClock(new Date(iso), timeZone);
-  return { hhmm: `${t.hour}:${t.minute}`, ymd: `${t.year}-${t.month}-${t.day}` };
-}
-
+/** Days from a departure's local date to an arrival's (`2026-10-12` → `2026-10-13`: 1); the dates are Postgres's wall
+ *  clocks (fares.repo `wallAt`), so no zone is read here. */
 export function calendarDayOffset(departYmd: string, arriveYmd: string): number {
   const a = Date.parse(`${departYmd}T00:00:00Z`);
   const b = Date.parse(`${arriveYmd}T00:00:00Z`);

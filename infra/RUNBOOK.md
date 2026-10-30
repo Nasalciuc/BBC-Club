@@ -780,6 +780,51 @@ DELETE FROM platform.extras_applied WHERE name = '<NNNN_file.sql>';
 
 Then run `db:migrate` again (or the deploy): the build starts over.
 
+## Postgres image or tzdata update (ADR-IMPL-077 §5)
+
+Postgres's tzdata is the club's one copy of the zones' rules (#114): a fare's clocks and its day, a dated search's
+day, quiet hours and the daily cap's day are all read there. A new `postgres:16` image (its tag is not pinned), a minor
+release or a tzdata package changes them at once.
+
+1. Before the deploy, against the new server: `DATABASE_URL=<the new server's test database> bun run test:tz` —
+   every airport's zone still one it reads, a dated search's bounds still where its own day begins and ends.
+2. On production, before and after, the zones it no longer reads (the airports' query should answer nothing; the
+   profiles' only names that are neither Postgres's nor in the link table):
+
+   ```bash
+   $DC exec -T postgres psql -U bbc -d bbc -c "SELECT timezone, count(*) FROM members.profile p
+     WHERE NOT EXISTS (SELECT 1 FROM pg_timezone_names n WHERE lower(n.name) = lower(p.timezone)) GROUP BY 1"
+   $DC exec -T postgres psql -U bbc -d bbc -c "SELECT code, tz FROM catalog.airports a
+     WHERE NOT EXISTS (SELECT 1 FROM pg_timezone_names n WHERE lower(n.name) = lower(a.tz))"
+   ```
+
+   An airport listed fails every dated search from it. A member's old name (`Asia/Calcutta`, `US/Eastern`, stored
+   before zones were stored as Postgres spells them) shows in the first list on a Postgres without `tzdata-legacy`
+   and is still read, as the zone tzdata links it to (`packages/db/src/tz-links.ts`): no action. Any other name there
+   is one nothing resolves, and that member is pushed by New York's clock.
+
+3. After a tzdata release, generate the link table again in a PR from the new server image's tzdata, not this
+   machine's — the image production runs (`bbc-postgres:16`, `infra/postgres/Dockerfile`), built on a freshly pulled
+   `postgres:16` as `$DC build --pull postgres` builds it on the box:
+
+   ```bash
+   docker build --pull -q -t bbc-postgres:16 infra/postgres
+   docker run --rm --entrypoint cat bbc-postgres:16 /usr/share/zoneinfo/tzdata.zi > /tmp/tzdata.zi
+   bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi --check   # whether the committed table is that release's
+   bun run --filter @bbc/db tz:links -- /tmp/tzdata.zi           # writes the table; prints the release, e.g. 2026c
+   git diff -- packages/db/src/tz-links.ts                       # what the release changed: read it before the PR
+   ```
+
+   The check runs first, against the committed table; generating overwrites it, so a check after would only compare
+   the file with itself. The release printed is the one in the new header (`TZ_LINKS_TZDATA`).
+
+4. After the deploy, the logs: `$DC logs api worker --since 1h | grep time_zone_unknown_to_postgres` — a
+   member whose zone this Postgres cannot read (`member time zone not read; default used`).
+
+Zones are now stored as Postgres spells them: the profile and the catalogue import keep the name in the spelling
+`pg_timezone_names` lists (`europe/london` is `Europe/London`; an old name Postgres lacks, its linked zone), and refuse
+only a name nothing resolves. A push already scheduled keeps the time the old rules gave it.
+
 ## Rotate a secret
 
 ```bash

@@ -106,6 +106,37 @@ describe("PATCH /v1/profile", () => {
     expect(await stored()).toBe("Asia/Tokyo");
     expect((await patch("UTC")).status).toBe(200);
     expect(await stored()).toBe("UTC");
+
+    // Stored as Postgres spells it, which quiet hours read by (#114): a case variant is the zone itself.
+    expect((await patch("europe/london")).status).toBe(200);
+    expect(await stored()).toBe("Europe/London");
+    // An old name an Android phone reports, which a Postgres without tzdata-legacy cannot read, is stored as the zone
+    // tzdata links it to (a Postgres that lists it keeps it as listed): never refused, never New York.
+    for (const [old, zone] of [
+      ["Asia/Calcutta", "Asia/Kolkata"],
+      ["US/Eastern", "America/New_York"],
+      ["Europe/Kiev", "Europe/Kyiv"],
+      ["Asia/Saigon", "Asia/Ho_Chi_Minh"],
+    ] as const) {
+      const listed =
+        ((await t.db.execute(sql`SELECT 1 FROM pg_timezone_names AS z(zone) WHERE z.zone = ${old}`)) as unknown[])
+          .length > 0;
+      expect({ old, status: (await patch(old)).status, stored: await stored() }).toEqual({
+        old,
+        status: 200,
+        stored: listed ? old : zone,
+      });
+    }
+    // A name Intl takes and nothing resolves (gone from tzdata in 2020b, no link left) is refused, not kept to count as
+    // New York at every push.
+    const before = await stored();
+    const unread = await patch("US/Pacific-New");
+    expect(unread.status).toBe(400);
+    expect(((await unread.json()) as { error: { details: unknown[] } }).error.details).toContainEqual({
+      path: "timezone",
+      message: "Choose a time zone from the list.",
+    });
+    expect(await stored()).toBe(before);
     await t.close();
   });
 

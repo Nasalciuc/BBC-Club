@@ -1,9 +1,10 @@
-/** ADR-IMPL-077: a dated search's day as two instants — the same day Postgres reads with `(t AT TIME ZONE zone)::date`,
- *  across a clock change, a midnight that does not exist and a zone of half and quarter hours. */
+/** ADR-IMPL-077 §5, #114: a dated search's day is the day Postgres reads, `(t AT TIME ZONE zone)::date`, by its own
+ *  tzdata — across a clock change, a midnight that does not exist or comes twice, a zone of half and quarter hours, and
+ *  the zones whose rules changed in 2026 — and a timed fare's clocks are read by the same tzdata. */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
-import { zoneDayBounds } from "@bbc/shared/time-zone";
+import { faresRepo } from "../../src/infrastructure/fares.repo";
 
 let iso: IsolatedDb;
 beforeAll(async () => {
@@ -17,54 +18,154 @@ const CASES: [string, string][] = [
   ["Europe/London", "2026-10-25"], // 25 hours
   ["America/New_York", "2026-11-01"],
   ["America/Santiago", "2026-09-06"], // the clock springs forward at midnight: the day starts at 01:00
+  ["America/Havana", "2026-11-01"], // the clock goes back at 01:00 to 00:00: midnight comes twice
+  ["Atlantic/Azores", "2027-10-31"], // the same, an ocean away
   ["Asia/Kolkata", "2026-10-26"],
   ["Pacific/Chatham", "2026-09-27"],
   ["Australia/Lord_Howe", "2026-10-04"], // a half-hour change
   ["Pacific/Kiritimati", "2026-01-01"], // UTC+14
   ["Pacific/Pago_Pago", "2026-01-01"], // UTC-11
+  ["America/Vancouver", "2026-12-15"], // B.C. on −07 all year from 1 Nov 2026
+  ["Africa/Casablanca", "2027-01-15"], // Morocco on +00 from 20 Sep 2026
 ];
 
-describe("zoneDayBounds", () => {
-  it("matches Postgres's day on both sides of each bound", async () => {
-    for (const [tz, day] of CASES) {
-      const { start, end } = zoneDayBounds(day, tz);
-      const [row] = (await iso.db.execute(sql`
-        SELECT ((${start.toISOString()}::timestamptz - interval '1 millisecond') AT TIME ZONE ${tz})::date::text AS before,
-               (${start.toISOString()}::timestamptz AT TIME ZONE ${tz})::date::text AS first,
-               ((${end.toISOString()}::timestamptz - interval '1 millisecond') AT TIME ZONE ${tz})::date::text AS last,
-               (${end.toISOString()}::timestamptz AT TIME ZONE ${tz})::date::text AS after`)) as unknown as {
-        before: string;
-        first: string;
-        last: string;
-        after: string;
-      }[];
-      expect(row, `${tz} ${day}`).toBeDefined();
-      expect([row!.first, row!.last], `${tz} ${day}`).toEqual([day, day]);
-      expect(row!.before < day && row!.after > day, `${tz} ${day}: ${row!.before} / ${row!.after}`).toBe(true);
+/** The day's first instant and the next day's, found by Postgres minute by minute: nothing of the search's own. */
+async function scanned(tz: string, day: string): Promise<{ start: Date; end: Date }> {
+  const [row] = (await iso.db.execute(sql`
+    SELECT min(t) FILTER (WHERE (t AT TIME ZONE ${tz})::date = ${day}::date) AS start,
+           min(t) FILTER (WHERE (t AT TIME ZONE ${tz})::date > ${day}::date) AS end
+    FROM generate_series((${day}::date - 2)::timestamp AT TIME ZONE 'UTC', (${day}::date + 3)::timestamp AT TIME ZONE 'UTC',
+                         interval '1 minute') AS t`)) as unknown as { start: string; end: string }[];
+  return { start: new Date(row!.start), end: new Date(row!.end) };
+}
+
+/** Four timed fares on a route of their own: a minute before the day, its first minute, its last, the next day's
+ *  first. */
+async function faresAround(route: [string, string], b: { start: Date; end: Date }): Promise<Date[]> {
+  const at = [new Date(b.start.getTime() - 60_000), b.start, new Date(b.end.getTime() - 60_000), b.end];
+  for (const [i, t] of at.entries()) {
+    await iso.db.execute(sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, nonstop, price, currency, source,
+                                 depart_at, valid_from, valid_until, published)
+      VALUES (${route[0]}, ${route[1]}, 'business', 'BA', true, ${String(100 + i)}, 'USD', 'manual',
+              ${t.toISOString()}::timestamptz, now() - interval '1 day' + ${i} * interval '1 second',
+              greatest(now(), ${t.toISOString()}::timestamptz) + interval '30 days', true)`);
+  }
+  return at;
+}
+
+describe("a dated search's day", () => {
+  it("holds exactly the fares Postgres puts on that day, in every case", async () => {
+    for (const [n, [tz, day]] of CASES.entries()) {
+      const route: [string, string] = [`D${String.fromCharCode(65 + n)}A`, `D${String.fromCharCode(65 + n)}B`];
+      const b = await scanned(tz, day);
+      const at = await faresAround(route, b);
+      const rows = await faresRepo.search(iso.db, {
+        from: route[0],
+        to: route[1],
+        cabin: "business",
+        when: new Date(`${day}T12:00:00Z`),
+        originTz: tz,
+        destTz: "UTC",
+      });
+      expect(rows.map((r) => r.departAt?.toISOString()).sort(), `${tz} ${day}`).toEqual(
+        [at[1]!.toISOString(), at[2]!.toISOString()].sort(),
+      );
+      // Its clocks by the same tzdata: the first minute and the last are the day's.
+      for (const r of rows) expect(r.departWall?.slice(0, 10), `${tz} ${day}`).toBe(day);
     }
   });
 
-  it("YVR on a winter day: Bun's day (−08); tzdata 2026e keeps B.C. at −07 from 1 Nov 2026 (tz-parity, KNOWN)", async () => {
-    const { start, end } = zoneDayBounds("2026-12-15", "America/Vancouver");
-    // The image's day: Bun's ICU (75.1, 78.3) still turns Vancouver's clocks back on 1 Nov 2026. A Bun that no longer
-    // does moves it: then this case and tz-parity's list change together.
-    expect([start.toISOString(), end.toISOString()]).toEqual(["2026-12-15T08:00:00.000Z", "2026-12-16T08:00:00.000Z"]);
+  it("YVR on 15 December 2026: 00:30 local is that day, at 07:30 UTC (−07, tzdata 2026b on)", async () => {
     const [row] = (await iso.db.execute(sql`
-      SELECT extract(epoch FROM ('2026-12-15'::timestamp AT TIME ZONE 'America/Vancouver'))::bigint * 1000 AS ms`)) as unknown as {
-      ms: string;
-    }[];
-    // Postgres reads the same midnight on a tzdata before 2026e, the one an hour earlier on 2026e and after.
-    expect([start.getTime(), start.getTime() - 3_600_000]).toContain(Number(row!.ms));
+      SELECT ('2026-12-15 00:30'::timestamp AT TIME ZONE 'America/Vancouver') AS t`)) as unknown as { t: string }[];
+    const t = new Date(row!.t);
+    expect(t.toISOString()).toBe("2026-12-15T07:30:00.000Z");
+    await iso.db.execute(sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, nonstop, price, currency, source,
+                                 depart_at, valid_from, valid_until, published)
+      VALUES ('YVR', 'LHR', 'business', 'BA', true, '100', 'USD', 'manual', ${t.toISOString()}::timestamptz,
+              now() - interval '1 day', '2027-01-30'::timestamptz, true)`);
+    const on = (day: string) =>
+      faresRepo.search(iso.db, {
+        from: "YVR",
+        to: "LHR",
+        cabin: "business",
+        when: new Date(`${day}T12:00:00Z`),
+        originTz: "America/Vancouver",
+        destTz: "Europe/London",
+      });
+    const fifteenth = await on("2026-12-15");
+    expect(fifteenth.map((r) => r.departWall)).toEqual(["2026-12-15T00:30"]);
+    expect(await on("2026-12-14")).toEqual([]);
   });
 
-  it("a day lasts as long as the zone's clock makes it", () => {
-    const hours = (tz: string, day: string) => {
-      const { start, end } = zoneDayBounds(day, tz);
-      return (end.getTime() - start.getTime()) / 3_600_000;
-    };
-    expect(hours("UTC", "2026-10-26")).toBe(24);
-    expect(hours("Europe/London", "2026-03-29")).toBe(23);
-    expect(hours("Europe/London", "2026-10-25")).toBe(25);
-    expect(hours("Australia/Lord_Howe", "2026-10-04")).toBe(23.5);
+  it("CMN on 15 January 2027: 00:30 local is 00:30 UTC (+00, tzdata 2026b on), that day", async () => {
+    await iso.db.execute(sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, nonstop, price, currency, source,
+                                 depart_at, valid_from, valid_until, published)
+      VALUES ('CMN', 'JFK', 'business', 'AT', true, '100', 'USD', 'manual', '2027-01-15T00:30:00Z'::timestamptz,
+              now() - interval '1 day', '2027-02-28'::timestamptz, true)`);
+    const on = (day: string) =>
+      faresRepo.search(iso.db, {
+        from: "CMN",
+        to: "JFK",
+        cabin: "business",
+        when: new Date(`${day}T12:00:00Z`),
+        originTz: "Africa/Casablanca",
+        destTz: "America/New_York",
+      });
+    expect((await on("2027-01-15")).map((r) => r.departWall)).toEqual(["2027-01-15T00:30"]);
+    expect(await on("2027-01-14")).toEqual([]);
+  });
+
+  it("without the zones at hand, the day and the clocks are read per row, by the same tzdata", async () => {
+    await iso.db.execute(sql`
+      INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng, popularity, tz) VALUES
+        ('YVR', 'Vancouver International', 'Vancouver', 'Canada', 'CA', 'americas', 49.19, -123.18, 50, 'America/Vancouver'),
+        ('LHR', 'Heathrow', 'London', 'United Kingdom', 'GB', 'europe', 51.47, -0.4543, 98, 'Europe/London')
+      ON CONFLICT (code) DO UPDATE SET tz = EXCLUDED.tz`);
+    const rows = await faresRepo.search(iso.db, {
+      from: "YVR",
+      to: "LHR",
+      cabin: "business",
+      when: new Date("2026-12-15T12:00:00Z"),
+    });
+    expect(rows.map((r) => r.departWall)).toEqual(["2026-12-15T00:30"]);
+  });
+
+  it("the clocks and the day are Postgres's tzdata whatever the session's time zone: Chișinău and Los Angeles agree", async () => {
+    // fa01 as the fixture has it: JFK 22:55 UTC on 12 October 2026, LHR 06:00 UTC the next morning.
+    await iso.db.execute(sql`
+      INSERT INTO catalog.airports (code, name, city, country, country_code, region, lat, lng, popularity, tz) VALUES
+        ('JFK', 'John F. Kennedy International', 'New York', 'United States', 'US', 'americas', 40.6413, -73.7781, 100, 'America/New_York'),
+        ('LHR', 'Heathrow', 'London', 'United Kingdom', 'GB', 'europe', 51.47, -0.4543, 98, 'Europe/London')
+      ON CONFLICT (code) DO UPDATE SET tz = EXCLUDED.tz`);
+    const [inserted] = (await iso.db.execute(sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, nonstop, price, currency, source, depart_at,
+                                 arrive_at, valid_from, valid_until, published)
+      VALUES ('JFK', 'LHR', 'first', 'BA', true, '9100.00', 'USD', 'manual', '2026-10-12T22:55:00Z',
+              '2026-10-13T06:00:00Z', now() - interval '1 day', now() + interval '30 days', true)
+      RETURNING id`)) as unknown as { id: string }[];
+    const id = inserted?.id ?? "";
+    const when = new Date("2026-10-12T12:00:00Z");
+    const read = (session: "Europe/Chisinau" | "America/Los_Angeles") =>
+      iso.db.transaction(async (tx) => {
+        await tx.execute(sql.raw(`SET LOCAL TIME ZONE '${session}'`));
+        const q = { from: "JFK", to: "LHR", cabin: "first" as const, when };
+        const walls = (rows: { id: string; departWall?: string | null; arriveWall?: string | null }[]) =>
+          rows.map((r) => [r.id, r.departWall, r.arriveWall]);
+        return {
+          zonesAtHand: walls(
+            await faresRepo.search(tx, { ...q, originTz: "America/New_York", destTz: "Europe/London" }),
+          ),
+          perRow: walls(await faresRepo.search(tx, q)),
+          page: walls([(await faresRepo.getAny(tx, id)) ?? { id: "none" }]),
+        };
+      });
+    const fa01 = [[id, "2026-10-12T18:55", "2026-10-13T07:00"]];
+    const chisinau = await read("Europe/Chisinau");
+    expect(chisinau).toEqual({ zonesAtHand: fa01, perRow: fa01, page: fa01 });
+    expect(await read("America/Los_Angeles")).toEqual(chisinau);
   });
 });

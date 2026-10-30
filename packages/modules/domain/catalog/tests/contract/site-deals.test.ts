@@ -221,6 +221,20 @@ describe("site deals — a day at most (D6)", () => {
       WHERE route_from = 'JFK' AND cms_id = 23`);
     expect(london(await t.deals("JFK", 500))?.origin.code).toBe("JFK");
     expect(london(await t.cached("JFK", 400))?.origin.code).toBe("EWR");
+    // In its last 100 seconds: none either — Home's 304 can serve a body for the minute after the memo's minute, so a
+    // read kept a minute asks for 141 s.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes
+      SET synced_at = now() - interval '1438 minutes 20 seconds', valid_until = now() + interval '100 seconds'
+      WHERE route_from = 'JFK' AND cms_id = 23`);
+    expect(london(await t.deals("JFK", 500))?.origin.code).toBe("JFK");
+    expect(london(await t.cached("JFK", 300))?.origin.code).toBe("EWR");
+    // Past that margin, Home's read serves it again.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.site_routes
+      SET synced_at = now() - interval '1436 minutes 40 seconds', valid_until = now() + interval '200 seconds'
+      WHERE route_from = 'JFK' AND cms_id = 23`);
+    expect(london(await t.cached("JFK", 200))?.origin.code).toBe("JFK");
 
     // The site drops London's New York deal: the next sync takes it away, from all three New York airports.
     for (const region of t.site.regions)

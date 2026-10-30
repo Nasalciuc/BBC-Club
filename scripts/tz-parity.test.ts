@@ -1,30 +1,15 @@
-/** T1 (ADR-IMPL-077): the day `zoneDayBounds` bounds — Bun's clocks, from the ICU Bun carries — against the day
- *  Postgres reads, `(t AT TIME ZONE zone)::date`, from its own copy of the zone rules: every zone the catalogue's airports
- *  use, every day of the two years from the run. Where the two copies disagree, a dated search shows the wrong day's
- *  fares. The zones known to disagree are listed with why; any other fails. About 50 s of one core: `bun run test:tz`
- *  runs it on its own after the database suites (validate, CI), never beside their clock-bound tests. */
+/** #114 (ADR-IMPL-077 §5): the catalogue's days and clocks, and the notifications' quiet hours and send days, are read
+ *  by Postgres from its tzdata — no second copy of the zone rules (against tzdata 2026c, Bun 1.4.2's ICU reads four of
+ *  the airports' zones otherwise and Bun 1.3.4's five: ADR-IMPL-077 §5). Here: every zone the airports use is one Postgres reads, and the day's bounds a dated search binds
+ *  (`dayStartIn`, @bbc/db/time-zones) are the instants where Postgres's own day `(t AT TIME ZONE zone)::date` begins, for every
+ *  one of those zones and every day of the two years from the run. `bun run test:tz` runs it on its own after the
+ *  database suites (validate, CI). */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { sql } from "drizzle-orm";
 import { airports } from "../packages/db/src/schema/catalog";
 import { isolatedDb, type IsolatedDb } from "../packages/db/src/testing/isolated-db";
-import { zoneDayBounds } from "../packages/shared/src/time-zone";
+import { dayStartIn } from "../packages/db/src/time-zones";
 
-/** Zones whose next two years Bun's ICU (75.1 in Bun 1.3.4, CI's, and 1.3.14, the image's; 78.3 in 1.4.4) and Postgres's
- *  tzdata (2026e, CI's postgres:16-alpine and Postgres 16 here) read differently, measured on 28 Oct 2026. Bun is behind:
- *  a dated search in these zones bounds a day an hour off what Postgres calls that day. */
-const KNOWN = new Set([
-  // From 1 Nov 2026 tzdata keeps B.C., Alberta, Manitoba and the NWT on their summer offset as standard time
-  // (Vancouver −07, Edmonton and Inuvik −06, Winnipeg −05); ICU still turns the clocks back.
-  "America/Vancouver",
-  "America/Edmonton",
-  "America/Winnipeg",
-  "America/Inuvik",
-  // tzdata: Morocco on +00 from 20 Sep 2026; ICU keeps +01 outside Ramadan.
-  "Africa/Casablanca",
-  "Africa/El_Aaiun",
-  // tzdata: Paraguay on −03 all year; ICU 75.1 (Bun 1.3) still has its summer time end in March (ICU 78.3 agrees).
-  "America/Asuncion",
-]);
 const DAYS = 731;
 
 let iso: IsolatedDb;
@@ -33,40 +18,44 @@ beforeAll(async () => {
 });
 afterAll(() => iso.drop());
 
-describe("zoneDayBounds against Postgres", () => {
-  it("every catalogue zone, every day for two years: Bun's day is Postgres's, but in the zones known to differ", async () => {
-    const zones = (
-      (await iso.db.selectDistinct({ tz: airports.tz }).from(airports).orderBy(airports.tz)) as { tz: string }[]
-    ).map((r) => r.tz);
+async function airportZones(): Promise<string[]> {
+  const rows = (await iso.db.selectDistinct({ tz: airports.tz }).from(airports).orderBy(airports.tz)) as {
+    tz: string;
+  }[];
+  return rows.map((r) => r.tz);
+}
+
+describe("the zones' rules are Postgres's", () => {
+  it("every zone the airports use is one Postgres reads (an AT TIME ZONE with it never fails a search)", async () => {
+    const zones = await airportZones();
     expect(zones.length).toBeGreaterThan(100);
-    const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
-    const days = Array.from({ length: DAYS }, (_, i) => new Date(today + i * 86_400_000).toISOString().slice(0, 10));
+    const unread = (await iso.db.execute(sql`
+      SELECT z FROM unnest(${sql.param(zones)}::text[]) AS z
+      WHERE z NOT IN (SELECT name FROM pg_timezone_names) ORDER BY z`)) as unknown as { z: string }[];
+    expect(unread.map((r) => r.z)).toEqual([]);
+  });
 
-    const disagree = new Map<string, string>();
+  it("every airport zone, every day for two years: the search's bounds are where Postgres's day begins and ends", async () => {
+    const zones = await airportZones();
+    const today = new Date().toISOString().slice(0, 10);
+    const day = sql`(${today}::date + d.i)`;
+    const wrong: string[] = [];
     for (const tz of zones) {
-      const starts: string[] = [];
-      const ends: string[] = [];
-      for (const day of days) {
-        const { start, end } = zoneDayBounds(day, tz);
-        starts.push(String(start.getTime()));
-        ends.push(String(end.getTime()));
-      }
-      // Postgres's date on both sides of each bound: the last millisecond before the start is the day before, the
-      // start and the last millisecond before the end are the day, the end is the day after.
+      const start = dayStartIn(day, tz);
+      const end = dayStartIn(sql`(${today}::date + d.i + 1)`, tz);
+      // Postgres's date on both sides of each bound: the microsecond before the start is the day before, the start and
+      // the microsecond before the end are the day, the end is the day after.
       const [first] = (await iso.db.execute(sql`
-        SELECT d.day
-        FROM unnest(${sql.param(days)}::text[], ${sql.param(starts)}::bigint[], ${sql.param(ends)}::bigint[]) AS d(day, s, e),
-             LATERAL (SELECT timestamptz 'epoch' + d.s * interval '1 millisecond' AS s,
-                             timestamptz 'epoch' + d.e * interval '1 millisecond' AS e) b
-        WHERE NOT (((b.s - interval '1 millisecond') AT TIME ZONE ${tz})::date < d.day::date
-               AND (b.s AT TIME ZONE ${tz})::date = d.day::date
-               AND ((b.e - interval '1 millisecond') AT TIME ZONE ${tz})::date = d.day::date
-               AND (b.e AT TIME ZONE ${tz})::date > d.day::date)
-        ORDER BY d.day LIMIT 1`)) as unknown as { day: string }[];
-      if (first) disagree.set(tz, first.day);
+        SELECT (${today}::date + d.i)::text AS day
+        FROM generate_series(0, ${DAYS - 1}) AS d(i),
+             LATERAL (SELECT ${start} AS s, ${end} AS e) b
+        WHERE NOT (((b.s - interval '1 microsecond') AT TIME ZONE ${tz})::date < ${day}
+               AND (b.s AT TIME ZONE ${tz})::date = ${day}
+               AND ((b.e - interval '1 microsecond') AT TIME ZONE ${tz})::date = ${day}
+               AND (b.e AT TIME ZONE ${tz})::date > ${day})
+        ORDER BY d.i LIMIT 1`)) as unknown as { day: string }[];
+      if (first) wrong.push(`${tz} on ${first.day}`);
     }
-
-    const unknown = [...disagree].filter(([tz]) => !KNOWN.has(tz)).map(([tz, day]) => `${tz} from ${day}`);
-    expect(unknown, "zones newly disagreeing with Postgres").toEqual([]);
+    expect(wrong, "days whose bounds are not Postgres's").toEqual([]);
   }, 300_000);
 });

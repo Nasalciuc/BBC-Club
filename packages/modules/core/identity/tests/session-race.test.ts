@@ -1,6 +1,8 @@
 /** ADR-IMPL-076: a read already waiting on the database when this process forgets a session never puts it back; an
  *  answer is kept only under the cookie Better Auth reads, and only that cookie finds it again. */
 import { describe, expect, it } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { createIdentityFacade } from "../src/application/facade";
 import { createSessionCache, sessionKey } from "../src/application/session-cache";
 
@@ -267,5 +269,56 @@ describe("a write to Better Auth forgets the sessions it ends", () => {
     expect(sessions.size()).toBe(0);
     expect((await f.getSession(cookie("b")))?.member.id).toBe("m2"); // read again, and kept again
     expect(sessions.size()).toBe(1);
+  });
+
+  /** A db that answers the reset's account lookup as Postgres would: the account whose stored (lower-case) email is the
+   *  one the lookup binds, none, or a failed read. */
+  const dialect = new PgDialect();
+  const dbFinding = (accounts: Record<string, string> | Error) => ({
+    select: () => ({
+      from: () => ({
+        where: (cond: SQL) => ({
+          limit: async () => {
+            if (accounts instanceof Error) throw accounts;
+            const [email] = dialect.sqlToQuery(cond).params;
+            const id = typeof email === "string" ? accounts[email] : undefined;
+            return id ? [{ id }] : [];
+          },
+        }),
+      }),
+    }),
+  });
+  const resetFor = (f: ReturnType<typeof createIdentityFacade>, email: string) =>
+    f.handler(
+      new Request("http://localhost/api/auth/email-otp/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp: "123456", password: "a new password" }),
+      }),
+    );
+
+  it("a reset by code forgets the sessions of the account its email names, and only those", async () => {
+    const sessions = createSessionCache({ ttlMs: 60_000 });
+    // The account is stored lower-case; the reset names it as the member typed it.
+    const f = createIdentityFacade(twoMembers() as never, dbFinding({ "m1@test.dev": "m1" }) as never, { sessions });
+    await f.getSession(cookie("c")); // m1
+    await f.getSession(cookie("b")); // m2
+    const since = sessions.begin(); // a read of m1 already waiting when the reset lands
+    expect((await resetFor(f, "M1@Test.dev")).status).toBe(200);
+    expect(sessions.get(sessionKey(cookie("c"), COOKIE)!)).toBeNull();
+    expect(sessions.get(sessionKey(cookie("b"), COOKIE)!)?.member.id).toBe("m2");
+    sessions.put(sessionKey(cookie("c"), COOKIE)!, { member: user, sessionId: "s" } as never, null, since);
+    expect(sessions.get(sessionKey(cookie("c"), COOKIE)!)).toBeNull(); // the waiting read puts nothing back
+  });
+
+  it("a reset whose account is not found, or whose lookup fails, forgets every session and keeps its answer", async () => {
+    for (const found of [{ "m1@test.dev": "m1" }, new Error("connection lost")]) {
+      const sessions = createSessionCache({ ttlMs: 60_000 });
+      const f = createIdentityFacade(twoMembers() as never, dbFinding(found) as never, { sessions });
+      await f.getSession(cookie("c"));
+      await f.getSession(cookie("b"));
+      expect((await resetFor(f, "nobody@test.dev")).status).toBe(200);
+      expect(sessions.size()).toBe(0);
+    }
   });
 });

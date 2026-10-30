@@ -1,48 +1,68 @@
 /** Quiet hours are 22:00–08:00 in the member's local timezone. Transactional bypasses this. */
-import { isIanaZone, zoneClock } from "@bbc/shared/time-zone";
+import type { Executor } from "@bbc/db";
+import { postgresZones } from "@bbc/db/time-zones";
+import { sendTimesIn, type SendTime } from "../infrastructure/local-clock";
+
+export type { SendTime } from "../infrastructure/local-clock";
 
 /** The zone a member has until they set one (members.profile.timezone's default). */
 export const DEFAULT_TIME_ZONE = "America/New_York";
 
-/** An IANA zone this runtime knows (`Europe/London`); anything else makes Intl throw a RangeError. The shared rule
- *  (ADR-IMPL-075): the profile accepts no other. */
-export const isTimeZone = isIanaZone;
+/** Why a member's zone was not read and the club's default stood in: the warn's `reason`. */
+export type ZoneFallback = "invalid_time_zone" | "time_zone_unknown_to_postgres";
 
 /**
- * The member's zone when it is one, else the club's default. A value stored before zones were checked, or any bad row,
- * must never fail a delivery or a page of a campaign: `onInvalid` says so (the caller logs it, with the member).
+ * The zones as Postgres will read them (#114): each name in the spelling Postgres lists, matched in any case (a profile
+ * may hold `europe/london`), else through Intl's spelling of it (`postgresZones`); the club's default where this
+ * Postgres reads no such zone — a name that is none, or one its tzdata lacks (`US/Pacific-New`; `Asia/Calcutta` without
+ * tzdata-legacy) — with why, so an `AT TIME ZONE` never fails a page or a delivery and the caller logs the fallback.
  */
-export function safeTimeZone(tz: string | null | undefined, onInvalid?: () => void): string {
-  if (tz && isTimeZone(tz)) return tz;
-  onInvalid?.();
-  return DEFAULT_TIME_ZONE;
+export async function zonesForPostgres(
+  exec: Executor,
+  zones: readonly string[],
+): Promise<Map<string, { zone: string; fallback?: ZoneFallback }>> {
+  const read = await postgresZones(exec, zones);
+  const out = new Map<string, { zone: string; fallback?: ZoneFallback }>();
+  for (const [tz, r] of read)
+    out.set(
+      tz,
+      r.zone !== null
+        ? { zone: r.zone }
+        : {
+            zone: DEFAULT_TIME_ZONE,
+            fallback: r.miss === "not_a_zone" ? "invalid_time_zone" : "time_zone_unknown_to_postgres",
+          },
+    );
+  return out;
 }
 
-function localHourMinute(now: Date, timeZone: string): { hour: number; minute: number } {
-  const t = zoneClock(now, timeZone);
-  return { hour: Number(t.hour || "0"), minute: Number(t.minute || "0") };
+/**
+ * When a push from `from` may go out in each zone — `from` itself outside 22:00–08:00 local, else the next local 08:00 —
+ * and the local day it goes out on, with that day's bounds (the daily cap's day). The local clock is Postgres's, from
+ * its tzdata — the one copy of the zones' rules the club reads (#114, ADR-IMPL-077 §5); one statement for every zone
+ * given, the zones of a page and not its members. Each zone is read as `zonesForPostgres` reads it — the callers have
+ * logged a fallback already.
+ */
+export async function sendTimes(exec: Executor, from: Date, zones: readonly string[]): Promise<Map<string, SendTime>> {
+  const out = new Map<string, SendTime>();
+  const distinct = [...new Set(zones)];
+  if (distinct.length === 0) return out;
+  const read = await zonesForPostgres(exec, distinct);
+  const times = await sendTimesIn(
+    exec,
+    from,
+    distinct.map((z) => read.get(z)?.zone ?? DEFAULT_TIME_ZONE),
+  );
+  distinct.forEach((z, i) => {
+    const t = times[i];
+    if (t) out.set(z, t);
+  });
+  return out;
 }
 
-export function isInQuietHours(now: Date, timeZone: string): boolean {
-  const { hour } = localHourMinute(now, safeTimeZone(timeZone));
-  return hour >= 22 || hour < 8;
-}
-
-/** If `now` is inside quiet hours, return the next local 08:00 as a Date; otherwise `now`. Never throws: a zone that
- *  is not one counts as the club's default (callers pass `safeTimeZone`'s answer, which logs it). */
-export function scheduleAfterQuietHours(now: Date, zone: string): Date {
-  const timeZone = safeTimeZone(zone);
-  if (!isInQuietHours(now, timeZone)) return now;
-
-  // Walk forward hour-by-hour until local time is 08:00 — DST-safe without an extra tz library.
-  let cursor = new Date(now.getTime());
-  for (let i = 0; i < 48; i++) {
-    cursor = new Date(cursor.getTime() + 30 * 60_000);
-    const { hour, minute } = localHourMinute(cursor, timeZone);
-    if (hour === 8 && minute < 30) {
-      // Snap to the start of the 08:00 half-hour window we landed in.
-      return new Date(cursor.getTime() - minute * 60_000);
-    }
-  }
-  return new Date(now.getTime() + 10 * 60 * 60_000); // fallback ~10h
+/** `sendTimes` for one zone. */
+export async function sendTimeIn(exec: Executor, from: Date, zone: string): Promise<SendTime> {
+  const t = (await sendTimes(exec, from, [zone])).get(zone);
+  if (!t) throw new Error(`quiet hours: no send time for ${zone}`);
+  return t;
 }

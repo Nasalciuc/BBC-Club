@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { isIanaZone, zoneDayBounds } from "./time-zone";
+import { isIanaZone, zoneNamesKept } from "./time-zone";
 
 describe("isIanaZone", () => {
   it("takes the zones the club's clocks can read", () => {
@@ -27,26 +27,25 @@ describe("isIanaZone", () => {
   });
 });
 
-describe("zoneDayBounds, remembered (ADR-IMPL-077, T2)", () => {
-  const ymd = (i: number) => new Date(Date.UTC(2027, 0, 1 + i)).toISOString().slice(0, 10);
-
-  it("a day asked again: the same bounds, in Dates of its own", () => {
-    const first = zoneDayBounds("2026-11-01", "America/New_York");
-    const kept = { start: first.start.getTime(), end: first.end.getTime() };
-    first.start.setTime(0); // a caller's Date is its own: changing it changes nothing remembered
-    const again = zoneDayBounds("2026-11-01", "America/New_York");
-    expect([again.start.getTime(), again.end.getTime()]).toEqual([kept.start, kept.end]);
-    expect(again.end.getTime() - again.start.getTime()).toBe(25 * 3_600_000); // the day the clocks go back
+describe("the names remembered", () => {
+  it("made-up names fill a hundred places at most: a real zone asked after them is still remembered", () => {
+    for (let i = 0; i < 200; i++) expect(isIanaZone(`Made/Up_${i}`)).toBe(false);
+    expect(zoneNamesKept().odd).toBe(100);
+    const before = zoneNamesKept().all;
+    expect(isIanaZone("America/Halifax")).toBe(true);
+    expect(zoneNamesKept().all).toBe(before + 1);
+    // Asked again, a made-up name past the hundred is still refused.
+    expect(isIanaZone("Made/Up_150")).toBe(false);
   });
 
-  it("past a thousand days the oldest is forgotten, and asked again it is the same day", () => {
-    const before = zoneDayBounds("2026-03-29", "Europe/London");
-    for (let i = 0; i < 1_100; i++) zoneDayBounds(ymd(i), "UTC");
-    const after = zoneDayBounds("2026-03-29", "Europe/London");
-    expect([after.start.toISOString(), after.end.toISOString()]).toEqual([
-      before.start.toISOString(),
-      before.end.toISOString(),
-    ]);
-    expect(zoneDayBounds(ymd(1_099), "UTC").start.toISOString()).toBe(`${ymd(1_099)}T00:00:00.000Z`);
+  it("a zone spelled otherwise than Intl spells it is odd too: its case variants never take the real zones' places", () => {
+    // Every case variant of one zone is a valid name of its own: 2 048 of Europe/London, 4 096 of America/New_York.
+    for (const base of ["europe/london", "america/new_york"])
+      for (let mask = 0; mask < 4096; mask++)
+        expect(isIanaZone([...base].map((ch, i) => ((mask >> i) & 1 ? ch.toUpperCase() : ch)).join(""))).toBe(true);
+    expect(zoneNamesKept().all).toBeLessThan(1_000);
+    const before = zoneNamesKept().all;
+    expect(isIanaZone("America/Winnipeg")).toBe(true);
+    expect(zoneNamesKept().all).toBe(before + 1);
   });
 });
