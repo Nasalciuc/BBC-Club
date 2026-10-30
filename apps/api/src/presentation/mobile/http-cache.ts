@@ -20,7 +20,8 @@ export function ifNoneMatchHits(header: string | undefined, etag: string): boole
   return header.split(",").some((tag) => tag.trim() === "*" || opaque(tag) === current);
 }
 
-/** Members whose last answer each process remembers; past it the oldest goes first. ~120 bytes each. */
+/** Members whose last answer each process remembers; past it the oldest goes first. About 320 bytes each (measured on
+ *  Bun, 100 000 entries): 20 000 members take about 6 MB. */
 export const REVALIDATION_ENTRIES = 20_000;
 /** The versions' clock: what moves with time alone (an offer's publish or expiry, a fare's day, a stored site price)
  *  is reread at least this often. */
@@ -35,6 +36,7 @@ export const VERSION_MINUTE_MS = 60_000;
  * trusted for longer than that past a change its versions do not see.
  */
 export function createRevalidation(opts: { maxEntries?: number; now?: () => number } = {}) {
+  // The wall clock on purpose: every replica must agree on the minute a version is read in.
   const now = opts.now ?? Date.now;
   const maxEntries = opts.maxEntries ?? REVALIDATION_ENTRIES;
   const last = new Map<string, { versions: string; etag: string }>();

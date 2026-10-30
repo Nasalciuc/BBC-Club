@@ -6,7 +6,10 @@ import type { RuleName } from "./rules";
 import { rateLimit } from "./middleware";
 
 type Limiter = Parameters<typeof rateLimit>[0];
-type Flags = { isKilled(module: string): Promise<boolean> };
+type Flags = {
+  isKilled(module: string): Promise<boolean>;
+  killedState?(module: string): Promise<"killed" | "live" | "unknown">;
+};
 type Logger = { warn: (o: object, m?: string) => void };
 
 /**

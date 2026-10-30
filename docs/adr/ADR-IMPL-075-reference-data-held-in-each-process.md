@@ -34,18 +34,29 @@ existed. Per request, measured on `main` faf33dd:
    in the statement that writes — the app, a job and psql alike: `platform.flags`; `catalog.airports`; `catalog.fares`;
    the site's places and routes (`catalog.site`); the offers and their targets (`proposals.offers`). The site's stored
    prices have no trigger: a member's search stores one, and a bump per search would empty every replica's pins all day.
-2. **Each process reads the counters at most once a second on its own** (`createGenerations`: one small query, shared
-   by every caller of that moment, given up after 500 ms). `invalidate()` makes the next read immediate, for the process
-   that just wrote, so a process that writes reference tables may read them more often. A failed or slow read keeps the
-   last counters until a read succeeds (Postgres is asked again a second later); `staleMs()` says how old they are.
+2. **Each process reads the counters at most once a second on its own** (`createGenerations`: one small query in a
+   short transaction, stopped by the server after 500 ms with `SET LOCAL statement_timeout`; ADR-IMPL-080). One read
+   runs at a time and callers answer from what is held while it runs; they wait for it while nothing is held, after
+   this process wrote a reference table itself (`invalidate()`, `bump()`: a read that began before that write is let end
+   and followed by another), and while what is held is older than 5 s — never more than 600 ms from when the read
+   began; a read lost for 5 s is given up (ADR-IMPL-080). A failed or slow read keeps the last counters
+   until a read succeeds (Postgres is asked again a second later); `staleMs()` says how old they are. The clock is the
+   process's monotonic one (`performance.now()`). The read also returns `pg_postmaster_start_time()`: a restart, or a
+   counter that went back (a restore, a failover), moves `epoch()`, which snapshots and memos compare as well, so they
+   load again. A key with no row reads 0, and its trigger makes the row on the first write; a test checks that every
+   key a request reads is some trigger's (`apps/api/test/generation-triggers.test.ts`).
 3. **Snapshots and memos** (`platform.reference.snapshot`, `.memo`): a whole table, or results keyed by request, kept
-   until a named generation moves, with an optional age bound for what changes with the clock and a cap on entries.
+   until a named generation (or the epoch) moves, with an optional age bound for what changes with the clock and a cap
+   on entries; a memo with an age bound drops up to eight expired entries with each insert.
    While Postgres is away a snapshot serves what it holds. Hits and misses are counted (`cache_hit`/`cache_miss` by
    `ns`, the dashboard's hit ratio).
 4. **Flags from one snapshot** of `platform.flags`: no query between counter reads; a psql write reaches every replica
    within a second. An ordinary flag that cannot be read falls back to its default; **a kill or pause flag fails closed**
-   (killed, paused) when it cannot be read or the counters are older than `KILL_STALE_MS` (10 s). `killState` keeps
-   boot's rule: it throws rather than call an unreadable flag killed.
+   (killed, paused) when it cannot be read or the counters are older than `KILL_STALE_MS` (10 s); per request that
+   reads as `OVERLOADED`, not `SERVICE_DISABLED`, and a delivery is left pending, not parked (ADR-IMPL-080). The
+   snapshot also reloads after a minute whatever the counters say, so a flag written where no trigger sees it arrives;
+   that reload runs behind the callers, who answer from what is held meanwhile.
+   `killState` keeps boot's rule: it throws rather than call an unreadable flag killed.
 5. **Airports in memory** (`createAirportsReference`): by code, many in the order asked, the hubs, a zone's busiest; the
    typeahead keeps ADR-IMPL-036's query and answers each typed text (trimmed, lower case) once per generation, at most
    5 000 texts per process. The pins, the site's pins and deals, the bookable set and "Popular from" are memos on their
@@ -83,8 +94,10 @@ existed. Per request, measured on `main` faf33dd:
   not run yet, is to give the absolute numbers.
 - A write is seen everywhere within about a second instead of up to 30 s (flags) or 60 s (pins on the API replicas),
   by every process whose counters read; one whose reads fail keeps what it holds until they succeed again. A kill takes
-  effect within a second, not at the next request; a process cut off from Postgres for 10 s counts every module
-  killed, as a failed read did before.
+  effect within a second, not at the next request; a process cut off from Postgres for 10 s answers `OVERLOADED` on
+  every gated route (ADR-IMPL-080) and leaves deliveries pending.
+- An expiry that finds nothing past its time writes nothing (`expire-fares`, `expire-offers`): an UPDATE of no row
+  still fires the statement trigger and moved the generation on every run (X11).
 - Memory per replica: the airports ~4 MB, typeahead ≤ 5 000 answers, ≤ 2 000 entries per memo, ≤ 20 000 members'
   versions per BFF route — bounded, against a 512 MB limit.
 - A body may be up to a minute behind what its versions do not see: a site price stored meanwhile, as the pins'

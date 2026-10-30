@@ -21,9 +21,11 @@ notifications and catalog, `infra` (`MAX_PREPARED_STATEMENTS` in the three Compo
 
 **Decision.**
 
-1. **Every statement is a named statement**, behind the pooler too: `createDb` wraps the postgres.js client
-   (`namedStatements`) so Drizzle's unnamed request becomes a named one, in transactions and savepoints as well. A
-   statement without parameters keeps the simple protocol, so a migration file still runs as one batch. PgBouncer keeps
+1. **Every statement with up to `MAX_NAMED_PARAMS` (128) parameters is a named statement**, behind the pooler too:
+   `createDb` wraps the postgres.js client (`namedStatements`) so Drizzle's unnamed request becomes a named one, in
+   transactions and savepoints as well. A statement without parameters keeps the simple protocol, so a migration file
+   still runs as one batch. One with more parameters stays unnamed (amendment, 2026-10-28): its text usually grows
+   with its input (a multi-row insert), and every variant stayed prepared on its server connection. PgBouncer keeps
    each one per server connection; `MAX_PREPARED_STATEMENTS=200` is written in production's, staging's and the test
    Compose files so a changed image cannot turn it off silently.
 2. **`DB_PREPARE=on|off`** (default `on`) is the switch: `off` is ADR-IMPL-026's behaviour, back with an env change and a
@@ -51,9 +53,20 @@ notifications and catalog, `infra` (`MAX_PREPARED_STATEMENTS` in the three Compo
   result type" through PgBouncer, because the retry lands on the server's stale statement; Drizzle lists its columns, so
   an expand-only migration is safe (`pooler.test.ts`). Inside an open transaction the retry cannot happen and the
   request fails — on the old replicas, in the deploy window, as an `ALTER` already made it.
-- Each server connection holds at most 200 statements (PgBouncer's LRU). With the pool at ~8 that is ≤ 1 600 plans;
-  the hot set is ~50 texts. `pg_backend_memory_contexts` on staging is the check.
-- `= ANY($1::bpchar[])` in place of `IN ($1, $2…)` was the plan for the airports' lists; they are answered from memory
-  now (ADR-IMPL-075), so no hot `IN` list is left. A new one takes the array as one parameter, typed as the column.
+- **No `ALTER COLUMN … TYPE` while replicas are live** (amendment, 2026-10-28): a column's new type changes what every
+  statement prepared on it returns, and through the pooler the reads that follow hang until those server connections
+  close (`pooler.test.ts`: eight reads of a widened varchar time out). Add a column, backfill, switch the reads, drop
+  later; `check-destructive-migrations` asks such a statement for its reason. `deploy.sh` sends `RECONNECT` to the
+  pooler's admin console after each migration, so the next transaction plans again.
+- Each server connection holds at most 200 statements (PgBouncer's LRU). With production's pool at 20 + 5 server
+  connections that is ≤ 5 000 plans, and no statement past 128 parameters is among them; the hot set is ~50 texts.
+  `pg_backend_memory_contexts` on staging is the check.
+- **A list is one bound array** (amendment, 2026-10-28): `anyOf(column, values, pgType)` from `@bbc/db/helpers` writes
+  `column = ANY($1::<type>[])` with the column's own type (`bpchar` for the char(3) codes, `uuid`, `text`, `int4`;
+  another would cast the column and leave its index), so one value or three hundred send one text; `anyText` is the
+  text form. `IN ($1, …, $n)` was a statement per length, on the airports, place photos and landmarks, site prices and
+  routes, offer responses, request events, the daily cap and dispatch. The typeahead's spellings are one array too.
+  Measured on one named connection: 20 typeahead texts left 6 prepared statements, now 1; fanout inserts of 10, 100 and
+  1 000 rows left 3, now 1 (`named-statements.test.ts`, `any-text.test.ts`, `airport-search-text.test.ts`).
 - Tests run direct, named like production; `pooler.test.ts` runs through `pgbouncer-test`: 1 000 executions, an
   `ALTER TABLE ADD COLUMN` between them, and plans that stop growing.

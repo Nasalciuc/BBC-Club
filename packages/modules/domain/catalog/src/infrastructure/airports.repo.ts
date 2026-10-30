@@ -1,5 +1,6 @@
 import type { Executor } from "@bbc/db";
 import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { anyOf } from "@bbc/db/helpers";
 import { alias } from "drizzle-orm/pg-core";
 import { airports } from "@bbc/db/schema/catalog";
 
@@ -65,9 +66,10 @@ export const airportsRepo = {
       .select()
       .from(airports)
       .where(
-        inArray(
+        anyOf(
           airports.code,
           codes.map((c) => c.toUpperCase()),
+          "bpchar",
         ),
       );
   },
@@ -119,10 +121,8 @@ export const airportsRepo = {
     const swaps = adjacentSwaps(raw);
     const swapped =
       swaps.length > 0
-        ? sql`${city} LIKE ANY (ARRAY(SELECT unaccent(v.s) || '%' FROM unnest(ARRAY[${sql.join(
-            swaps.map((s) => sql`${s}`),
-            sql`, `,
-          )}]::text[]) AS v(s)))`
+        ? // One bound array, so the statement's text is the same whatever the length of what was typed (H3).
+          sql`${city} LIKE ANY (ARRAY(SELECT unaccent(v.s) || '%' FROM unnest(${sql.param(swaps)}::text[]) AS v(s)))`
         : sql`false`;
     // A known country nickname (UK, USA, UAE) means the country — before any code that happens to spell it (USA).
     const tier = sql`CASE

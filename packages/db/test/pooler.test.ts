@@ -111,6 +111,42 @@ describe("PgBouncer transaction pooling", () => {
     }
   });
 
+  // ADR-IMPL-074 (H2): a column whose type changes under live replicas changes what their prepared statements return;
+  // PgBouncer keeps its server connections, and their statements, until server_lifetime. deploy.sh sends RECONNECT to
+  // the pooler's admin console after a migration: each server connection closes once released, and the next
+  // transaction plans again.
+  test("after ALTER COLUMN … TYPE and the pooler's RECONNECT, every named statement answers again", async () => {
+    if (!(await poolerUp())) return;
+    const admin = postgres(process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
+    const console_ = new URL(url!);
+    console_.pathname = "/pgbouncer";
+    const pooler = postgres(console_.toString(), { max: 1, prepare: false, fetch_types: false, onnotice: () => {} });
+    const table = `pooler_type_${Date.now().toString(36)}`;
+    await admin.unsafe(`CREATE TABLE ${table} (id int PRIMARY KEY, a varchar(20))`);
+    await admin.unsafe(`INSERT INTO ${table} SELECT g, 'x' || g FROM generate_series(1, 8) g`);
+    const db = createDb(url!, { pooler: "transaction", max: 4, applicationName: "pooler-type" });
+    const reads = () =>
+      Promise.allSettled(
+        Array.from({ length: 8 }, (_, i) =>
+          db.execute(sql`SELECT id, a FROM ${sql.identifier(table)} WHERE id = ${i + 1}`),
+        ),
+      );
+    try {
+      expect((await reads()).every((r) => r.status === "fulfilled")).toBe(true);
+      await admin.unsafe(`ALTER TABLE ${table} ALTER COLUMN a TYPE varchar(40)`);
+      await pooler.unsafe("RECONNECT");
+      const after = await reads();
+      expect(
+        after.filter((r) => r.status === "rejected").map((r) => String((r as PromiseRejectedResult).reason)),
+      ).toEqual([]);
+    } finally {
+      await db.close();
+      await pooler.end();
+      await admin.unsafe(`DROP TABLE ${table}`);
+      await admin.end();
+    }
+  }, 30_000);
+
   test("named statements are planned once per server connection, not at every execution", async () => {
     if (!(await poolerUp())) return;
     const admin = postgres(process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });

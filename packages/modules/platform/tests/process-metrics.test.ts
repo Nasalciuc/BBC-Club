@@ -3,6 +3,10 @@ import { describe, expect, it } from "bun:test";
 import { createMetrics } from "../src/telemetry/metrics";
 import { registerProcessMetrics } from "../src/telemetry/process";
 
+/** The delay figures are kept a second once read (process.ts, WINDOW_MS) by the process's one sampler, whichever test
+ *  read them last: waiting past it makes the next render start a window, so renders right after it read that one. */
+const freshWindow = () => new Promise((r) => setTimeout(r, 1_050));
+
 function value(text: string, name: string): number {
   const line = text.split("\n").find((l) => l.startsWith(`${name} `));
   return Number(line?.split(" ").at(-1));
@@ -39,7 +43,7 @@ describe("process metrics", () => {
   it("the families of one scrape read one window of the delay, then it starts again", async () => {
     const m = createMetrics();
     registerProcessMetrics(m);
-    await new Promise((r) => setTimeout(r, 60));
+    await freshWindow();
     const text = await m.render();
     const again = await m.render();
     const p50 = value(text, "bbc_event_loop_delay_p50_seconds");
@@ -55,6 +59,7 @@ describe("process metrics", () => {
     const b = createMetrics();
     registerProcessMetrics(a);
     registerProcessMetrics(b);
+    await freshWindow();
     const fromA = await a.render();
     const fromB = await b.render();
     for (const g of ["event_loop_delay_p99_seconds", "process_start_time_seconds"]) {

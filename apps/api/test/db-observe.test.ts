@@ -2,6 +2,7 @@
 import { connect } from "node:net";
 import { describe, expect, it } from "bun:test";
 import postgres from "postgres";
+import { sql } from "drizzle-orm";
 import { maybeAlertOps, pgbouncerWaitingClients, resetDbAlertState } from "@bbc/platform";
 import { testApp } from "./helpers/test-app";
 
@@ -55,19 +56,15 @@ describe("database observability", () => {
     expect(run.status).toBe(200);
     const text = await (await t.app.request("/metrics")).text();
     expect(text).toContain("# TYPE bbc_db_statements_total counter");
-    const calls = Number(
-      text
-        .split("\n")
-        .find((l) => l.startsWith("bbc_db_statements_total "))
-        ?.split(" ")[1],
-    );
-    expect(calls).toBeGreaterThan(0);
-    for (const name of [
-      "db_statement_plans_total",
-      "db_statement_exec_seconds_total",
-      "db_statement_plan_seconds_total",
-    ])
-      expect(text).toContain(`# TYPE bbc_${name} counter`);
+    const line = text.split("\n").find((l) => l.startsWith("bbc_db_statements_total "));
+    expect(Number(line?.split(" ").at(-1))).toBeGreaterThan(0);
+    expect(text).toContain("# TYPE bbc_db_statement_exec_seconds_total counter");
+    // Plans only where Postgres counts them (A-D2): without track_planning no series, rather than a 0 read as "none".
+    const [planning] = (await t.db.execute(
+      sql`SELECT current_setting('pg_stat_statements.track_planning') AS on`,
+    )) as unknown as { on: string }[];
+    for (const name of ["db_statement_plans_total", "db_statement_plan_seconds_total"])
+      expect(text.includes(`# TYPE bbc_${name} counter`), name).toBe(planning!.on === "on");
     // No PGBOUNCER_ADMIN_URL here: no pooler series at all, rather than zeros that read as an idle pooler.
     expect(text).not.toContain("bbc_pgbouncer_");
     await t.close();

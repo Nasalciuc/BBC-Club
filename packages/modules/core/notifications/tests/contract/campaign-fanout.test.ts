@@ -233,20 +233,26 @@ describe("campaign-fanout job", () => {
     ).toBe(2);
   });
 
-  it("20 000 members during quiet hours still fan out in under 10 s", async () => {
-    await seedMembers(20_000);
-    await deliver(broadcast(), "450");
-    const night = new Date("2026-09-28T22:30:00.000Z"); // 23:30 in London
-    const t = performance.now();
-    const m = await run({ now: () => night });
-    const ms = performance.now() - t;
-    console.log(`[campaigns] 20 000 members at 23:30 local: ${ms.toFixed(0)} ms`);
-    expect(m).toMatchObject({ campaigns: 1, pages: 20, inserted: 20_000 });
-    expect(ms).toBeLessThan(10_000);
-    const [{ n }] = (await db.execute(sql`
+  // A wall-clock budget: measured on its own after the database suites (`bun run test:budgets`, TIMING_BUDGETS=1), not
+  // inside them, where every package's suite shares the machine and the same fan-out took 3 to 16 s (ADR-IMPL-077).
+  it.skipIf(process.env.TIMING_BUDGETS !== "1")(
+    "20 000 members during quiet hours still fan out in under 10 s",
+    async () => {
+      await seedMembers(20_000);
+      await deliver(broadcast(), "450");
+      const night = new Date("2026-09-28T22:30:00.000Z"); // 23:30 in London
+      const t = performance.now();
+      const m = await run({ now: () => night });
+      const ms = performance.now() - t;
+      console.log(`[campaigns] 20 000 members at 23:30 local: ${ms.toFixed(0)} ms`);
+      expect(m).toMatchObject({ campaigns: 1, pages: 20, inserted: 20_000 });
+      expect(ms).toBeLessThan(10_000);
+      const [{ n }] = (await db.execute(sql`
       SELECT count(DISTINCT scheduled_for)::int AS n FROM notifications.notifications`)) as unknown as { n: number }[];
-    expect(n).toBe(1); // everyone in London gets 08:00 local
-  }, 60_000);
+      expect(n).toBe(1); // everyone in London gets 08:00 local
+    },
+    60_000,
+  );
 
   it("a crash after page 7 resumes at page 8, without duplicates", async () => {
     await seedMembers(1_000);

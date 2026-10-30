@@ -1,5 +1,6 @@
 import type { Executor } from "@bbc/db";
-import { and, asc, desc, eq, gt, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, notInArray, sql } from "drizzle-orm";
+import { anyOf } from "@bbc/db/helpers";
 import { airports, placePhotos, sitePlaces, siteRoutes } from "@bbc/db/schema/catalog";
 
 import type { BookablePlace } from "../api";
@@ -95,7 +96,7 @@ export const siteRepo = {
     const rows = await exec
       .select({ cmsId: sitePlaces.cmsId, image: sitePlaces.image, airports: sitePlaces.airports })
       .from(sitePlaces)
-      .where(inArray(sitePlaces.cmsId, [...cmsIds]));
+      .where(anyOf(sitePlaces.cmsId, [...cmsIds], "int4"));
     return new Map(rows.map((r) => [r.cmsId, { image: r.image, airports: r.airports.map((c) => c.trim()) }]));
   },
 
@@ -183,7 +184,7 @@ export const siteRepo = {
       .innerJoin(sitePlaces, eq(sitePlaces.cmsId, siteRoutes.cmsId))
       .innerJoin(airports, eq(airports.code, sitePlaces.airport))
       .leftJoin(placePhotos, photos ? eq(placePhotos.code, sitePlaces.airport) : sql`false`)
-      .where(and(inArray(siteRoutes.routeFrom, [...from]), served(marginS)))
+      .where(and(anyOf(siteRoutes.routeFrom, [...from], "bpchar"), served(marginS)))
       .orderBy(desc(sitePlaces.promoted), desc(airports.popularity), asc(airports.code), asc(siteRoutes.routeFrom));
     return rows.map((r) => ({
       routeFrom: r.routeFrom.trim(),

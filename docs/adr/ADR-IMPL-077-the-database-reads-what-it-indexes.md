@@ -131,7 +131,10 @@ CONCURRENTLY`) in a small PR of their own once production's `idx_scan` has staye
     an SSD (⚑F: `lsblk -d -o name,rota`, `0`).
     `scripts/env-profile.test.ts` checks that both say the same. Postgres takes these only when its container is made,
     which no deploy does: a deploy compares each running Postgres's command line with compose's (`stale_postgres`)
-    and warns, to `OPS_WEBHOOK` too, then goes on (RUNBOOK § The first deploy after ADR-IMPL-077).
+    and warns, to `OPS_WEBHOOK` too, then goes on (RUNBOOK § The first deploy after ADR-IMPL-077). PgBouncer, in front
+    of both, tries a restarted Postgres again after 1 s (`server_login_retry`; its default, 15 s, held every request
+    that long after a shorter restart) and keeps a client waiting 10 s at most for a server connection
+    (`query_wait_timeout`), then answers it with an error.
 11. **Grafana reads Postgres** (⚑A): the role `bbc_monitor`, a member of `pg_monitor` (statistics, no table's rows), a
     login only once a production deploy or bootstrap with `MONITORING=on` gives it `GRAFANA_PG_PASSWORD`
     (`set_monitor_password`, `infra/env-value.sh`: through psql's stdin, the session's logging off); three connections at

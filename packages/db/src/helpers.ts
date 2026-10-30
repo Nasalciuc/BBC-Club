@@ -87,12 +87,23 @@ export function inConst(column: PgColumn, values: readonly string[]): SQL {
 }
 
 /**
- * `column = ANY($1::text[])`: a list of any length bound as one array, so the statement's text — and the plan Postgres
- * keeps for it — is the same for one member or three hundred (ADR-IMPL-077); `IN ($1, …, $n)` was a statement per
- * length. The array goes whole through `sql.param`: a bare array in a template is expanded into a row. A text column.
+ * `column = ANY($1::<type>[])`: a list of any length bound as one array, so the statement's text — and the plan Postgres
+ * keeps for it — is the same for one value or three hundred (ADR-IMPL-074, ADR-IMPL-077); `IN ($1, …, $n)` was a
+ * statement per length. The array goes whole through `sql.param`: a bare array in a template is expanded into a row.
+ * The type is the column's own (`bpchar` for the char(3) codes, `uuid`, `text`, `int4`): another one makes Postgres cast
+ * the column and leave its index. An empty list matches nothing.
  */
+export function anyOf(
+  column: PgColumn,
+  values: readonly (string | number)[],
+  pgType: "text" | "uuid" | "bpchar" | "int4",
+): SQL {
+  return sql`${column} = ANY(${sql.param(values)}::${sql.raw(pgType)}[])`;
+}
+
+/** `anyOf` for a text column. */
 export function anyText(column: PgColumn, values: readonly string[]): SQL {
-  return sql`${column} = ANY(${sql.param(values)}::text[])`;
+  return anyOf(column, values, "text");
 }
 
 /** Rows one retention statement deletes; the next batch is its own statement, so no delete holds a year's locks. */

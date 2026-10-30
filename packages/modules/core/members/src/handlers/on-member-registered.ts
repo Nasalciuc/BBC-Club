@@ -1,7 +1,8 @@
 import { MemberRegisteredV1 } from "@bbc/shared/events/member";
 import { event } from "@bbc/shared/events";
 import { profile } from "@bbc/db/schema/members";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { anyOf } from "@bbc/db/helpers";
 import type { Executor } from "@bbc/db";
 import { insertProfile } from "../application/create-profile";
 import type { ProfileCreationDeps } from "../api";
@@ -66,9 +67,10 @@ export async function reconcileMissingProfiles(deps: {
     .select({ id: profile.memberId })
     .from(profile)
     .where(
-      inArray(
+      anyOf(
         profile.memberId,
         users.map((u) => u.id),
+        "text",
       ),
     );
   const existing = new Set(rows.map((r) => r.id));

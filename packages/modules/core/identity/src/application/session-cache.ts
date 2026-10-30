@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { SessionInfo } from "../api";
 
-/** Sessions each process keeps; past it the oldest goes first. ~200 bytes each: 10 000 members are ~2 MB. */
+/** Sessions each process keeps; past it the oldest goes first. About 390 bytes each, plus the forget notes (about 160
+ *  bytes each, up to this many per kind; measured on Bun, 100 000 entries): 10 000 members take about 9 MB at most. */
 export const SESSION_CACHE_ENTRIES = 10_000;
 
 /** How long a forgotten token or member stays noted past the cache's time. A read still waiting when its note goes
@@ -9,7 +10,8 @@ export const SESSION_CACHE_ENTRIES = 10_000;
 export const FORGOTTEN_MARGIN_MS = 30_000;
 
 type Metrics = { inc: (name: string, labels?: Record<string, string>) => void };
-type Entry = { info: SessionInfo; until: number };
+/** `until` on the cache's own clock; `expires`, the session's expiry on the wall clock it is written in. */
+type Entry = { info: SessionInfo; until: number; expires: number };
 /** When a token or a member was forgotten: its place in the sequence reads begin in, and the clock. */
 type Note = { seq: number; at: number };
 
@@ -81,10 +83,14 @@ export function keyedToken(headers: Headers, name: string): string | null {
 export function createSessionCache(opts: {
   ttlMs: number;
   maxEntries?: number;
+  /** Tests: one clock for both the cache's time and the wall clock a session's expiry is written in. */
   now?: () => number;
   metrics?: Metrics;
 }) {
-  const now = opts.now ?? Date.now;
+  // The cache's time is the process's monotonic clock: a wall clock moved back does not keep an entry past its time.
+  // A session's expiry is checked on the wall clock as well, so one moved forward past it ends the entry too.
+  const now = opts.now ?? (() => performance.now());
+  const wall = opts.now ?? (() => Date.now());
   const maxEntries = opts.maxEntries ?? SESSION_CACHE_ENTRIES;
   const entries = new Map<string, Entry>();
   /** One sequence for the reads begun and the forgets: a forget noted after a read began has the larger number. */
@@ -120,7 +126,7 @@ export function createSessionCache(opts: {
     begin: () => ++seq,
     get(key: string): SessionInfo | null {
       const hit = entries.get(key);
-      if (hit && hit.until > now()) {
+      if (hit && hit.until > now() && hit.expires > wall()) {
         opts.metrics?.inc("cache_hit", { ns: "identity.session" });
         return hit.info;
       }
@@ -128,9 +134,9 @@ export function createSessionCache(opts: {
       opts.metrics?.inc("cache_miss", { ns: "identity.session" });
       return null;
     },
-    /** Kept until the cache's time has passed or the session expires, whichever is first — not at all when the token
-     *  or its member was forgotten after the read began (`since`, from `begin`), or a note that could have said so is
-     *  gone. The member is still remembered for `memberOf`. */
+    /** Kept until the cache's time has passed or the session expires (on either clock), whichever is first — not at all
+     *  when the token or its member was forgotten after the read began (`since`, from `begin`), or a note that could
+     *  have said so is gone. The member is still remembered for `memberOf`. */
     put(key: string, info: SessionInfo, expiresAt: Date | null, since?: number): void {
       if (
         since !== undefined &&
@@ -141,11 +147,15 @@ export function createSessionCache(opts: {
         skippedMember.set(key, { member: info.member.id, at: now() });
         return;
       }
-      const until = Math.min(now() + opts.ttlMs, expiresAt ? expiresAt.getTime() : Number.POSITIVE_INFINITY);
+      // expiresAt is wall-clock: what is left of it, on the cache's own clock.
+      const until = Math.min(
+        now() + opts.ttlMs,
+        expiresAt ? now() + (expiresAt.getTime() - wall()) : Number.POSITIVE_INFINITY,
+      );
       if (until <= now()) return;
       entries.delete(key);
       if (entries.size >= maxEntries) entries.delete(entries.keys().next().value as string);
-      entries.set(key, { info, until });
+      entries.set(key, { info, until, expires: expiresAt ? expiresAt.getTime() : Number.POSITIVE_INFINITY });
     },
     /** The member a token's entry belongs to — or, when its answer was not put back, the member that answer named —
      *  without counting a hit or a miss. */

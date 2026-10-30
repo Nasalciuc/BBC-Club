@@ -1,5 +1,6 @@
 import type { Executor } from "@bbc/db";
 import { and, asc, desc, eq, inArray, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { anyOf } from "@bbc/db/helpers";
 import { airports, placePhotos } from "@bbc/db/schema/catalog";
 
 export type PlacePhotoRow = Pick<
@@ -55,7 +56,10 @@ const coord = (n: number) => n.toFixed(6);
 export const placePhotosRepo = {
   async getMany(exec: Executor, codes: string[]): Promise<PlacePhotoRow[]> {
     if (codes.length === 0) return [];
-    return exec.select(columns).from(placePhotos).where(inArray(placePhotos.code, codes));
+    return exec
+      .select(columns)
+      .from(placePhotos)
+      .where(anyOf(placePhotos.code, codes, "bpchar"));
   },
 
   /**
@@ -67,7 +71,12 @@ export const placePhotosRepo = {
     if (codes.length === 0) return [];
     const rows = await exec
       .insert(placePhotos)
-      .select((qb) => qb.select({ code: airports.code }).from(airports).where(inArray(airports.code, codes)))
+      .select((qb) =>
+        qb
+          .select({ code: airports.code })
+          .from(airports)
+          .where(anyOf(airports.code, codes, "bpchar")),
+      )
       .onConflictDoUpdate({ target: placePhotos.code, set: { attempts: sql`${placePhotos.attempts}` } })
       .returning({ code: placePhotos.code });
     return rows.map((r) => r.code.trim());
@@ -91,7 +100,7 @@ export const placePhotosRepo = {
     return exec
       .update(placePhotos)
       .set({ expiresAt: sql`now() + interval '10 minutes'`, attempts: sql`${placePhotos.attempts} + 1` })
-      .where(inArray(placePhotos.code, due))
+      .where(inArray(placePhotos.code, due)) // a subquery: one statement text already
       .returning({ code: placePhotos.code, attempts: placePhotos.attempts, status: placePhotos.status });
   },
 
@@ -138,7 +147,7 @@ export const placePhotosRepo = {
     await exec
       .update(placePhotos)
       .set({ expiresAt: sql`now() + least(${placePhotos.attempts}, 24) * interval '1 hour'` })
-      .where(and(inArray(placePhotos.code, codes), notOverride));
+      .where(and(anyOf(placePhotos.code, codes, "bpchar"), notOverride));
   },
 
   /** Not looked at this run, and not for the city's fault — Pexels' share of the run was spent, or a source asked the
@@ -151,7 +160,7 @@ export const placePhotosRepo = {
         expiresAt: sql`now() + make_interval(secs => ${Math.max(0, Math.ceil(afterSeconds))})`,
         attempts: sql`greatest(${placePhotos.attempts} - 1, 0)`,
       })
-      .where(and(inArray(placePhotos.code, codes), notOverride));
+      .where(and(anyOf(placePhotos.code, codes, "bpchar"), notOverride));
   },
 
   /** An operator's own photo for a city: it replaces what the job found, and the job never looks at it again. */

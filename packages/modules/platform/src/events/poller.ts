@@ -20,8 +20,8 @@ export type PollerDeps = {
     inc(n: string, l?: Record<string, string>): void;
     observe(n: string, v: number, l?: Record<string, string>): void;
   };
-  /** Consumer-level pause (killswitch without deploy). */
-  isPaused?: (consumer: string) => Promise<boolean>;
+  /** Consumer-level pause (killswitch without deploy). "unknown" leaves the delivery pending (ADR-IMPL-080). */
+  pauseState?: (consumer: string) => Promise<"paused" | "running" | "unknown">;
 };
 export type PollerOptions = {
   batchSize?: number;
@@ -63,10 +63,20 @@ export function createPoller(db: Db, registry: EventRegistry, deps: PollerDeps, 
   const CLAIM_BATCH = opts.claimBatch ?? 50;
   const BATCH_BUDGET_MS = opts.batchBudgetMs ?? 2_000;
 
-  /** Everything a delivery does after it is claimed: paused → park; no handler → dead; handler → done.
-   *  Throws the handler's error (the caller decides how to roll back). A timeout throws HandlerTimeout. */
+  /** Everything a delivery does after it is claimed: paused → park; flags unreadable → pending, tried again in 5 s;
+   *  no handler → dead; handler → done. Throws the handler's error (the caller decides how to roll back). A timeout
+   *  throws HandlerTimeout. */
   async function deliver(exec: Executor, row: Delivery): Promise<void> {
-    if (deps.isPaused && (await deps.isPaused(row.consumer))) {
+    const pause = deps.pauseState ? await deps.pauseState(row.consumer) : "running";
+    if (pause === "unknown") {
+      // The flags cannot be trusted right now: this delivery is tried again shortly, as it is (not parked).
+      await exec
+        .update(eventDeliveries)
+        .set({ runAfter: sql`now() + interval '5 seconds'` })
+        .where(eq(eventDeliveries.id, BigInt(row.id)));
+      return;
+    }
+    if (pause === "paused") {
       await exec
         .update(eventDeliveries)
         .set({ status: "paused" })
