@@ -1481,3 +1481,45 @@ describe("webhook_post: every alert's way out (audit, 30 Oct 2026)", () => {
     }
   });
 });
+
+describe("infra/host/disk-check.sh: the full disk is never silent (audit, 30 Oct 2026)", () => {
+  /** The script in a throwaway infra/, with `df` at 85 % and `curl` exiting as told; its output and the stamp. */
+  async function check(curlExit: number, webhook: string) {
+    const dir = mkdtempSync(join(tmpdir(), "bbc-disk-"));
+    const bin = join(dir, "bin");
+    mkdirSync(join(dir, "host"), { recursive: true });
+    mkdirSync(join(dir, "env"));
+    mkdirSync(bin);
+    copyFileSync(join(root, "infra/host/disk-check.sh"), join(dir, "host/disk-check.sh"));
+    copyFileSync(join(root, "infra/env-value.sh"), join(dir, "env-value.sh"));
+    writeFileSync(join(dir, "docker-compose.yml"), "services: {}\n");
+    writeFileSync(join(dir, "env/production.env"), webhook ? `OPS_WEBHOOK=${webhook}\n` : "");
+    writeFileSync(join(bin, "df"), "#!/bin/sh\nprintf 'Use%%\\n 85%%\\n'\n", { mode: 0o755 });
+    writeFileSync(join(bin, "curl"), `#!/bin/sh\nexit ${curlExit}\n`, { mode: 0o755 });
+    const stamp = join(dir, "stamp");
+    const proc = Bun.spawn(["bash", join(dir, "host/disk-check.sh")], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, BBC_DISK_STAMP: stamp },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const code = await proc.exited;
+    const text = (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text());
+    const stamped = Bun.file(stamp).size > 0 || (await Bun.file(stamp).exists());
+    rmSync(dir, { recursive: true, force: true });
+    return { code, text, stamped };
+  }
+
+  it("logs the alert, and starts the hour's quiet only once the webhook took it", async () => {
+    const sent = await check(0, "https://hooks.example.test/x");
+    expect([sent.code, sent.stamped]).toEqual([0, true]);
+    expect(sent.text).toContain("disk at 85%");
+  });
+
+  it("a dead webhook or none: the alert and why it went nowhere are in the log, and the next run tries again", async () => {
+    for (const r of [await check(22, "https://hooks.example.test/x"), await check(0, "")]) {
+      expect([r.code, r.stamped]).toEqual([0, false]);
+      expect(r.text).toContain("disk at 85%");
+      expect(r.text).toContain("the alert reached no webhook");
+    }
+  });
+});
