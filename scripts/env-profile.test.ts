@@ -1595,7 +1595,9 @@ describe("migrations:destructive when git cannot answer (audit, 30 Oct 2026)", (
     g("checkout", "-q", "--orphan", "other");
     g("commit", "-q", "--allow-empty", "-m", "b");
     g("update-ref", "refs/remotes/origin/main", "main");
-    expect(g("rev-parse", "--absolute-git-dir").stdout.trim()).toBe(realpathSync(join(dir, ".git")));
+    // Git prints forward slashes, Bun's realpath backslashes on Windows: the same directory, written two ways.
+    const same = (x: string) => x.replace(/\\/g, "/").toLowerCase();
+    expect(same(g("rev-parse", "--absolute-git-dir").stdout.trim())).toBe(same(realpathSync(join(dir, ".git"))));
     const r = spawnSync("bun", ["run", join(root, "scripts/check-destructive-migrations.ts")], {
       cwd: dir,
       encoding: "utf8",
