@@ -231,21 +231,31 @@ CANARY="$(comm -13 <(printf '%s\n' $OLD | sort) <(svc_ids "$SVC" | sort) | head 
 [[ -n "$CANARY" ]] || rollback_and_exit "no canary container after scale-up"
 drop_canary() { docker stop "$CANARY" >/dev/null 2>&1 || true; docker rm "$CANARY" >/dev/null 2>&1 || true; }
 wait_ready "$CANARY" 8000 || { drop_canary; rollback_and_exit "/ready red on canary $CANARY"; }
+metrics_of() {
+  docker exec "$1" bun -e "fetch('http://localhost:8000/metrics',{signal:AbortSignal.timeout(10000)}).then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
+}
+if [[ -n "$OLD_ONE" ]]; then
+  METRICS_DIR="$(mktemp -d)"
+  chmod 0700 "$METRICS_DIR"
+  cleanup_metrics() { rm -rf "$METRICS_DIR"; }
+  # The old replica's counters run from its start: read now, they are subtracted, so both sides cover the canary's
+  # window (scripts/canary-compare.ts). Unreadable now: compared over its whole life, as before, and said.
+  OLD_AT_START=()
+  if metrics_of "$OLD_ONE" > "$METRICS_DIR/old-start.txt"; then
+    OLD_AT_START=("$METRICS_DIR/old-start.txt")
+  else
+    echo "⚠ old replica /metrics unreadable at the canary's start: compared over its whole life"
+  fi
+fi
 sleep "$CANARY_SECONDS"
 if [[ -z "$OLD_ONE" ]]; then
   echo "no old replica; canary judged on /ready only"
 else
-  METRICS_DIR="$(mktemp -d)"
-  chmod 0700 "$METRICS_DIR"
-  cleanup_metrics() { rm -rf "$METRICS_DIR"; }
-  metrics_of() {
-    docker exec "$1" bun -e "fetch('http://localhost:8000/metrics',{signal:AbortSignal.timeout(10000)}).then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
-  }
   metrics_of "$CANARY" > "$METRICS_DIR/canary.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "canary /metrics unreadable"; }
   metrics_of "$OLD_ONE" > "$METRICS_DIR/old.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "old replica /metrics unreadable"; }
   chmod 0600 "$METRICS_DIR"/*.txt
   # Image USER is bbc; run the one-shot compare as root so 0600 host files stay private.
-  if ! REASON="$(docker run --rm --user 0:0 -v "$METRICS_DIR:$METRICS_DIR:ro" "$IMAGE" bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt")"; then
+  if ! REASON="$(docker run --rm --user 0:0 -v "$METRICS_DIR:$METRICS_DIR:ro" "$IMAGE" bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt" "${OLD_AT_START[@]}")"; then
     echo "$REASON"
     cleanup_metrics
     drop_canary
