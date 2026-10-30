@@ -59,12 +59,27 @@ function traffic(text: string): Traffic {
   return { total, fivexx, byLe };
 }
 
-/** What the old replica served between two reads of its counters. A count that went down means it restarted in
- *  between: its counters started again, so the later read alone is the window. */
-function since(end: Traffic, start: Traffic): Traffic {
+/** When the process started (`bbc_process_start_time_seconds`), or null where a read does not carry it. */
+function startedAt(text: string): number | null {
+  const v = samples(text, "process_start_time_seconds")[0]?.value;
+  return v === undefined || !Number.isFinite(v) ? null : v;
+}
+
+/** What the old replica served between two reads of its counters. A restart in between — its start time changed, or,
+ *  where a read has no start time, a count went down — means its counters started again, so the later read alone is
+ *  the window: subtracting would mix two lives (a restart that served more than before reads as a window otherwise). */
+function since(endText: string, startText: string): Traffic {
+  const end = traffic(endText);
+  const start = traffic(startText);
   const byLe = new Map<number, number>();
   for (const [le, n] of end.byLe) byLe.set(le, n - (start.byLe.get(le) ?? 0));
-  const restarted = end.total < start.total || end.fivexx < start.fivexx || [...byLe.values()].some((n) => n < 0);
+  const endStart = startedAt(endText);
+  const startStart = startedAt(startText);
+  const restarted =
+    (endStart !== null && startStart !== null && endStart !== startStart) ||
+    end.total < start.total ||
+    end.fivexx < start.fivexx ||
+    [...byLe.values()].some((n) => n < 0);
   if (restarted) return end;
   return { total: end.total - start.total, fivexx: end.fivexx - start.fivexx, byLe };
 }
@@ -84,7 +99,7 @@ export function p99Index(byLe: Map<number, number>): number | null {
 
 export function compareMetrics(canaryText: string, oldText: string, oldAtStartText?: string): CanaryVerdict {
   const canary = traffic(canaryText);
-  const old = oldAtStartText === undefined ? traffic(oldText) : since(traffic(oldText), traffic(oldAtStartText));
+  const old = oldAtStartText === undefined ? traffic(oldText) : since(oldText, oldAtStartText);
   if (canary.total < MIN_REQUESTS) {
     if (canary.fivexx > 0) {
       return {

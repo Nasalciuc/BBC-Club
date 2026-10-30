@@ -2,8 +2,12 @@ import { describe, expect, it } from "bun:test";
 import { createMetrics } from "../packages/modules/platform/src/telemetry/metrics";
 import { compareMetrics } from "./canary-compare";
 
-async function scrape(rows: { status: number; ms: number; n: number; route?: string }[]): Promise<string> {
+async function scrape(
+  rows: { status: number; ms: number; n: number; route?: string }[],
+  startedAt?: number,
+): Promise<string> {
   const m = createMetrics();
+  if (startedAt !== undefined) m.gauge("process_start_time_seconds", () => startedAt);
   for (const row of rows) {
     const route = row.route ?? "/v1/home";
     for (let i = 0; i < row.n; i++) {
@@ -133,5 +137,25 @@ describe("canary compare", () => {
     const after = await scrape([{ status: 200, ms: 300, n: 100 }]);
     const canary = await scrape([{ status: 200, ms: 300, n: 100 }]);
     expect(compareMetrics(canary, after, before).reason).toContain("vs old le=300");
+  });
+
+  it("a restart that served more than before is caught by its start time, not subtracted (CodeRabbit on #118)", async () => {
+    // Before: 10 at 4 ms. Restarted, then 100 at 4 ms and one at 500 ms: its p99 is le=5. Subtracting the two lives
+    // would leave 90 fast and the slow one, a p99 of le=500, and pass a canary at 750 ms.
+    const before = await scrape([{ status: 200, ms: 4, n: 10 }], 1_000);
+    const after = await scrape(
+      [
+        { status: 200, ms: 4, n: 100 },
+        { status: 200, ms: 500, n: 1 },
+      ],
+      2_000,
+    );
+    const canary = await scrape([{ status: 200, ms: 750, n: 100 }], 3_000);
+    const verdict = compareMetrics(canary, after, before);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toContain("above old 5 ");
+    // The same process at both reads (same start time) is still a window.
+    const same = await scrape([{ status: 200, ms: 4, n: 10 }], 2_000);
+    expect(compareMetrics(canary, after, same).reason).toContain("vs old le=500");
   });
 });
