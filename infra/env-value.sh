@@ -188,6 +188,30 @@ stale_postgres() {
   done
 }
 
+# Whether a file under <dir> was changed after <time> (a container's .State.StartedAt, RFC 3339): Grafana reads its
+# provisioning only when it starts, so a deploy restarts it when one of those files is newer (ADR-IMPL-073). Returns 0
+# when one is, 1 when none is (or <time> is empty), 2 when <dir> could not be read: find's reason goes to stderr.
+#   changed_since <dir> <time>
+changed_since() {
+  [[ -n "${2:-}" ]] || return 1
+  local found
+  found="$(find "$1" -type f -newermt "$2" -print -quit)" || return 2
+  [[ -n "$found" ]]
+}
+
+# Grafana again, once it has read <dir> anew: a restart, then `up --wait` holds until its healthcheck answers, as for a
+# start (two minutes' start period, then six probes). Nothing is done when no file under <dir> changed after <time>.
+# Returns 1 when <dir> could not be read, or the restart or the wait fails (ADR-IMPL-073).
+#   refresh_grafana <dir> <time> <compose command…>
+refresh_grafana() {
+  local dir="$1" started="$2" rc=0
+  shift 2
+  changed_since "$dir" "$started" || rc=$?
+  ((rc == 1)) && return 0
+  ((rc == 0)) || return 1
+  "$@" restart grafana >/dev/null && "$@" up -d --no-deps --wait --wait-timeout 240 grafana >/dev/null
+}
+
 # MinIO runs again when production asks for it, for R1b's offer photography: MEDIA=on (ADR-IMPL-073). Off, nothing
 # reads it (ADR-IMPL-047) and its 256 MB go to the monitoring.
 media_wanted() {

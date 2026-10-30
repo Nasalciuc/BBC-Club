@@ -1,5 +1,6 @@
 import type { Executor } from "@bbc/db";
-import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lte, sql } from "drizzle-orm";
+import { anyOf } from "@bbc/db/helpers";
 import { alias } from "drizzle-orm/pg-core";
 import { airports, sitePlaces, sitePrices, siteRoutes } from "@bbc/db/schema/catalog";
 
@@ -60,7 +61,7 @@ export const sitePricesRepo = {
       .where(
         and(
           eq(sitePrices.routeFrom, from.toUpperCase()),
-          inArray(sitePrices.routeTo, [...new Set(tos.map((c) => c.toUpperCase()))]),
+          anyOf(sitePrices.routeTo, [...new Set(tos.map((c) => c.toUpperCase()))], "bpchar"),
           eq(sitePrices.trip, trip),
           gt(sitePrices.expiresAt, sql`now() + make_interval(secs => ${keepS})`),
         ),

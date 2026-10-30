@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { findUnannounced } from "./check-destructive-migrations";
 
 const root = join(import.meta.dir, "..");
 const lib = "infra/env-value.sh";
@@ -825,7 +826,7 @@ describe("monitoring and media profiles (ADR-IMPL-073)", () => {
     }
   });
 
-  it("staging.env keeps its own OPS_WEBHOOK; Grafana's two keys are production's alone", async () => {
+  it("staging.env keeps its own OPS_WEBHOOK; the monitoring's keys are production's alone", async () => {
     const composeFiles = "infra/docker-compose.yml infra/compose.prod.yml";
     const own = await withFiles(
       "OTHER=1\n",
@@ -835,11 +836,13 @@ describe("monitoring and media profiles (ADR-IMPL-073)", () => {
     expect(own.code, own.err).toBe(0);
     const grafana = await withFiles(
       "OTHER=1\n",
-      "GRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\n",
+      "GRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\nVM_PASSWORD=x\n",
       `guard_staging "$S" ${composeFiles}`,
     );
     expect(grafana.code).not.toBe(0);
-    expect(grafana.err).toContain("sets GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK: production's services read");
+    expect(grafana.err).toContain(
+      "sets GRAFANA_ADMIN_PASSWORD GRAFANA_ALERTS_WEBHOOK VM_PASSWORD: production's services read",
+    );
   });
 
   it("the example this repository ships keeps both off: MinIO waits for R1b, the monitoring for its owner", async () => {
@@ -926,7 +929,8 @@ describe("Grafana's database role and Postgres's settings (ADR-IMPL-077)", () =>
     rmSync(dir, { recursive: true, force: true });
     return result;
   }
-  const monitored = "MONITORING=on\nGRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\n";
+  const monitored =
+    "MONITORING=on\nGRAFANA_ADMIN_PASSWORD=x\nGRAFANA_ALERTS_WEBHOOK=https://hooks.example.com/x\nVM_PASSWORD=x\nGRAFANA_SECRET_KEY=x\n";
   const noDaemon = `docker() { return 1; }`;
 
   it("only a production deploy asks for the database role's password, the one that gives it", async () => {
@@ -1117,5 +1121,302 @@ describe("Postgres's planning settings (ADR-IMPL-077)", () => {
     expect(prod.log_parameter_max_length).toBe("0");
     // An error's DETAIL names the row it met (`Key (email)=(…) already exists`): left out.
     expect(prod.log_error_verbosity).toBe("terse");
+  });
+});
+
+describe("PgBouncer after a Postgres restart (X6)", () => {
+  it("both poolers try the server again after a second and keep a client waiting ten seconds at most", async () => {
+    for (const [file, service] of [
+      ["infra/docker-compose.yml", "pgbouncer"],
+      ["infra/compose.staging.yml", "pgbouncer-staging"],
+    ] as const) {
+      const doc = Bun.YAML.parse(await Bun.file(join(root, file)).text()) as {
+        services: Record<string, { environment: Record<string, string> }>;
+      };
+      const env = doc.services[service]!.environment;
+      // edoburu/pgbouncer's entrypoint writes each into pgbouncer.ini as server_login_retry / query_wait_timeout.
+      expect([env.SERVER_LOGIN_RETRY, env.QUERY_WAIT_TIMEOUT], service).toEqual(["1", "10"]);
+    }
+  });
+});
+
+describe("who the kernel kills first (A-R1)", () => {
+  it("the monitoring goes after staging and before production", async () => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { oom_score_adj?: number }>;
+    };
+    for (const svc of ["victoriametrics", "grafana", "node-exporter", "cadvisor"])
+      expect(doc.services[svc]!.oom_score_adj, svc).toBe(300);
+    expect(doc.services.postgres!.oom_score_adj).toBe(-500);
+  });
+});
+
+describe("Grafana's first start (A-R4)", () => {
+  it("has two minutes before a failed probe counts, and the deploy waits past them", async () => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { healthcheck: { start_period?: string; interval: string; retries: number } }>;
+    };
+    const hc = doc.services.grafana!.healthcheck;
+    expect(hc.start_period).toBe("120s");
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    const wait = Number(/--wait-timeout (\d+) victoriametrics grafana/.exec(deploy)?.[1]);
+    // start period, then every retry 10 s apart, must fit in the deploy's wait.
+    expect(wait).toBeGreaterThanOrEqual(120 + hc.retries * Number.parseInt(hc.interval));
+  });
+});
+
+describe("Grafana's provisioning after a deploy (A-D1)", () => {
+  it("a file changed after the container started counts; one from before, an empty start time, nothing", async () => {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    try {
+      mkdirSync(join(dir, "alerting"));
+      const file = join(dir, "alerting", "alerts.yml");
+      writeFileSync(file, "x\n");
+      const at = (iso: string) => {
+        const d = new Date(iso);
+        spawnSync("touch", ["-d", d.toISOString(), file]);
+      };
+      const changed = async (started: string) =>
+        (
+          await bash(`source ${lib}\nchanged_since ${shPath(dir)} ${JSON.stringify(started)} && echo yes || echo no`)
+        ).out.trim();
+      at("2026-10-28T20:00:05Z");
+      // docker inspect's .State.StartedAt, nanoseconds and all.
+      expect(await changed("2026-10-28T20:00:00.123456789Z")).toBe("yes");
+      at("2026-10-28T19:59:55Z");
+      expect(await changed("2026-10-28T20:00:00.123456789Z")).toBe("no");
+      expect(await changed("")).toBe("no");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a provisioning directory that cannot be read is a failure the deploy reports, not 'nothing changed'", async () => {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    try {
+      const missing = join(dir, "provisioning");
+      const scan = await bash(`source ${lib}\nchanged_since ${shPath(missing)} 2026-10-28T20:00:00Z; echo "rc=$?"`);
+      expect(scan.out.trim()).toBe("rc=2");
+      expect(scan.err).toContain("provisioning");
+      const log = join(dir, "calls.log");
+      const refreshed = await bash(
+        `source ${lib}\ndc() { echo "$*" >> ${shPath(log)}; }\n` +
+          `refresh_grafana ${shPath(missing)} 2026-10-28T20:00:00Z dc; echo "rc=$?"`,
+      );
+      expect(refreshed.out.trim()).toBe("rc=1");
+      expect(spawnSync("test", ["-e", log]).status).not.toBe(0); // nothing restarted
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /** refresh_grafana with a compose command that records its calls and fails the ones named in `fail`. */
+  async function refresh(changedAfterStart: boolean, fail: string) {
+    const dir = mkdtempSync(join(root, ".tmp-env-profile-"));
+    try {
+      const file = join(dir, "alerts.yml");
+      writeFileSync(file, "x\n");
+      spawnSync("touch", ["-d", changedAfterStart ? "2026-10-28T20:00:05Z" : "2026-10-28T19:59:55Z", file]);
+      const log = join(dir, "calls.log");
+      const result = await bash(
+        `source ${lib}\n` +
+          `dc() { echo "$*" >> ${shPath(log)}; case "$*" in ${fail ? `*"${fail}"*) return 1 ;;` : ""} *) return 0 ;; esac; }\n` +
+          `refresh_grafana ${shPath(dir)} 2026-10-28T20:00:00.123456789Z dc; echo "rc=$?"`,
+      );
+      let calls: string[] = [];
+      try {
+        calls = readFileSync(log, "utf8").trim().split("\n").filter(Boolean);
+      } catch {
+        calls = [];
+      }
+      return { rc: result.out.trim(), calls };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("a changed provisioning restarts Grafana and waits for its healthcheck; unchanged, nothing is done", async () => {
+    expect(await refresh(true, "")).toEqual({
+      rc: "rc=0",
+      calls: ["restart grafana", "up -d --no-deps --wait --wait-timeout 240 grafana"],
+    });
+    expect(await refresh(false, "")).toEqual({ rc: "rc=0", calls: [] });
+  });
+
+  it("a Grafana that does not come back healthy, or does not restart, is a failure the deploy reports", async () => {
+    expect((await refresh(true, "--wait")).rc).toBe("rc=1");
+    const noRestart = await refresh(true, "restart");
+    expect(noRestart).toEqual({ rc: "rc=1", calls: ["restart grafana"] });
+    // deploy.sh sets MONITORING_FAILED when refresh_grafana fails, as for a monitoring that did not start.
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    expect(deploy).toMatch(/! refresh_grafana [^\n]*\n[^\n]*notify[^\n]*\n\s*MONITORING_FAILED=1/);
+  });
+});
+
+describe("PgBouncer's RECONNECT after the migration (H2)", () => {
+  it("a worker without PGBOUNCER_ADMIN_URL fails the step, so the deploy prints that RECONNECT was not sent", async () => {
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    const program = deploy.match(/"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| echo "⚠ PgBouncer RECONNECT failed/)?.[1];
+    expect(program).toBeDefined();
+    const env = { ...process.env };
+    delete env.PGBOUNCER_ADMIN_URL;
+    const run = spawnSync(process.execPath, ["-e", program as string], { cwd: join(root, "packages/db"), env });
+    expect(run.status).not.toBe(0);
+    expect(run.stderr.toString()).toContain("PGBOUNCER_ADMIN_URL is not set");
+  });
+
+  it("a PgBouncer that lets the worker in and never answers RECONNECT fails the step within 10 s", async () => {
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    const program = deploy.match(/"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| echo "⚠ PgBouncer RECONNECT failed/)?.[1];
+    expect(program).toBeDefined();
+    // Answers the startup (AuthenticationOk, ReadyForQuery), then never answers the query: connect_timeout is past.
+    let greeted = false;
+    const ready = new Uint8Array([0x52, 0, 0, 0, 8, 0, 0, 0, 0, 0x5a, 0, 0, 0, 5, 0x49]);
+    const silent = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: {
+        data(socket) {
+          if (!greeted) socket.write(ready);
+          greeted = true;
+        },
+      },
+    });
+    try {
+      const started = performance.now();
+      const run = Bun.spawn([process.execPath, "-e", program as string], {
+        cwd: join(root, "packages/db"),
+        env: { ...process.env, PGBOUNCER_ADMIN_URL: `postgres://pgbouncer:x@127.0.0.1:${silent.port}/pgbouncer` },
+        stderr: "pipe",
+      });
+      const code = await run.exited;
+      expect(code).not.toBe(0);
+      expect(await new Response(run.stderr).text()).toContain("did not answer RECONNECT");
+      expect(performance.now() - started).toBeLessThan(12_000);
+    } finally {
+      silent.stop(true);
+    }
+  }, 20_000);
+});
+
+describe("VictoriaMetrics' basic auth (A-S1)", () => {
+  it("takes its password from the environment, never the command line, and Grafana's datasource sends it", async () => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { command?: string[]; environment?: Record<string, string> }>;
+    };
+    const vm = doc.services.victoriametrics!;
+    expect(vm.command).toContain("-envflag.enable");
+    expect(vm.command!.some((a) => a.includes("httpAuth") || a.includes("VM_PASSWORD"))).toBe(false);
+    expect(vm.environment).toEqual({ httpAuth_username: "bbc", httpAuth_password: "${VM_PASSWORD:-}" });
+    expect(doc.services.grafana!.environment!.VM_PASSWORD).toBe("${VM_PASSWORD:-}");
+    const ds = Bun.YAML.parse(
+      await Bun.file(join(root, "infra/monitoring/grafana/provisioning/datasources/victoriametrics.yml")).text(),
+    ) as { datasources: { basicAuth?: boolean; basicAuthUser?: string; secureJsonData?: Record<string, string> }[] };
+    expect(ds.datasources[0]).toMatchObject({
+      basicAuth: true,
+      basicAuthUser: "bbc",
+      secureJsonData: { basicAuthPassword: "${VM_PASSWORD}" },
+    });
+  });
+
+  it("a deploy and a bootstrap with MONITORING=on ask for it", async () => {
+    for (const file of ["infra/deploy.sh", "infra/bootstrap.sh"]) {
+      const text = await Bun.file(join(root, file)).text();
+      expect(/for k in GRAFANA_ADMIN_PASSWORD [^;]*VM_PASSWORD/.test(text), file).toBe(true);
+    }
+  });
+});
+
+describe("Grafana's secret key (A-S2)", () => {
+  it("comes from production.env, and a deploy and a bootstrap with MONITORING=on ask for it", async () => {
+    const doc = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { environment?: Record<string, string> }>;
+    };
+    expect(doc.services.grafana!.environment!.GF_SECURITY_SECRET_KEY).toBe("${GRAFANA_SECRET_KEY:-}");
+    for (const file of ["infra/deploy.sh", "infra/bootstrap.sh"]) {
+      const text = await Bun.file(join(root, file)).text();
+      expect(/for k in GRAFANA_ADMIN_PASSWORD [^;]*GRAFANA_SECRET_KEY/.test(text), file).toBe(true);
+    }
+  });
+});
+
+describe("Grafana's alerts (A-R2, H1)", () => {
+  it("seven rules, the CI check counts seven, and the kill and pause rules read what cAdvisor and the worker publish", async () => {
+    const doc = Bun.YAML.parse(
+      await Bun.file(join(root, "infra/monitoring/grafana/provisioning/alerting/alerts.yml")).text(),
+    ) as { groups: { rules: { uid: string; data: { model: { expr?: string } }[] }[] }[] };
+    const rules = doc.groups[0]!.rules;
+    expect(rules).toHaveLength(7);
+    const expr = (uid: string) => rules.find((r) => r.uid === uid)!.data[0]!.model.expr!;
+    expect(expr("bbc-container-oom")).toContain("container_oom_events_total");
+    expect(expr("bbc-queue-paused")).toContain('bbc_queue_paused{env="production"}');
+    const validate = await Bun.file(join(root, ".github/workflows/validate.yml")).text();
+    expect(validate).toContain(`wait_for /api/v1/provisioning/alert-rules length ${rules.length}`);
+    // cAdvisor publishes the kills only with its oom_event metrics on.
+    const compose = Bun.YAML.parse(await Bun.file(join(root, "infra/docker-compose.yml")).text()) as {
+      services: Record<string, { command?: string[] }>;
+    };
+    expect(compose.services.cadvisor!.command!.some((a) => /--enable_metrics=.*oom_event/.test(a))).toBe(true);
+  });
+});
+
+describe("the sample points CI runs the alerts on (A-Q1)", () => {
+  it("hold every name an alert rule reads, each with the label keys the rule selects on", async () => {
+    const doc = Bun.YAML.parse(
+      await Bun.file(join(root, "infra/monitoring/grafana/provisioning/alerting/alerts.yml")).text(),
+    ) as { groups: { rules: { uid: string; data: { model: { expr?: string } }[] }[] }[] };
+    const sample = (await Bun.file(join(root, "infra/monitoring/ci/sample-metrics.txt")).text())
+      .split("\n")
+      .filter((l) => l && !l.startsWith("#"));
+    for (const rule of doc.groups[0]!.rules) {
+      const expr = rule.data.find((d) => d.model.expr)!.model.expr!;
+      for (const [, name, selector] of expr.matchAll(/([a-z_][a-z0-9_]*)\{([^}]*)\}/g)) {
+        const keys = [...selector!.matchAll(/([a-z_]+)\s*(?:=~|!~|!=|=)/g)].map((m) => m[1]!);
+        const points = sample.filter((l) => l.startsWith(`${name}{`));
+        expect(points.length, `${rule.uid}: ${name}`).toBeGreaterThanOrEqual(2);
+        for (const key of keys) expect(points[0], `${rule.uid}: ${name} ${key}`).toContain(`${key}="`);
+      }
+    }
+  });
+});
+
+describe("migrations:destructive (ADR-IMPL-074)", () => {
+  const lines = (sql: string) => findUnannounced(sql).map((p) => p.line);
+
+  it("catches a column's type change with or without COLUMN, and with SET DATA TYPE", () => {
+    expect(lines("ALTER TABLE t ALTER COLUMN c TYPE bigint;")).toEqual([1]);
+    expect(lines("ALTER TABLE t ALTER c TYPE bigint;")).toEqual([1]);
+    expect(lines("ALTER TABLE t ALTER COLUMN c SET DATA TYPE bigint;")).toEqual([1]);
+    expect(lines("ALTER TABLE t ALTER c SET DATA TYPE bigint;")).toEqual([1]);
+    expect(lines("ALTER TABLE t ALTER COLUMN type TYPE text;")).toEqual([1]);
+    expect(findUnannounced("ALTER TABLE t ALTER c TYPE bigint;")[0]!.typeChange).toBe(true);
+  });
+
+  it("catches a statement split across lines, on the line its operation starts", () => {
+    expect(lines("ALTER TABLE t\n  ALTER COLUMN c\n  TYPE bigint;")).toEqual([2]);
+    expect(lines("ALTER TABLE t ADD COLUMN a int,\n  ALTER c SET DATA\n  TYPE bigint;")).toEqual([2]);
+    expect(lines("DROP\n  TABLE t;")).toEqual([1]);
+  });
+
+  it("passes with the reason above the operation's line or above its statement", () => {
+    expect(lines("-- destructive: widen to bigint\nALTER TABLE t ALTER c TYPE bigint;")).toEqual([]);
+    expect(lines("-- destructive: widen to bigint\nALTER TABLE t\n  ALTER c TYPE bigint;")).toEqual([]);
+    expect(lines("ALTER TABLE t\n  -- destructive: widen to bigint\n  ALTER c TYPE bigint;")).toEqual([]);
+    expect(lines("-- destructive: one\nDROP TABLE a;\nDROP TABLE b;")).toEqual([3]);
+  });
+
+  it("leaves alone what changes no column's type", () => {
+    expect(lines("ALTER TYPE status ADD VALUE 'closed';")).toEqual([]);
+    expect(lines("ALTER TABLE t ALTER COLUMN c SET DEFAULT 0;")).toEqual([]);
+    expect(lines("ALTER TABLE t ADD COLUMN type text;")).toEqual([]);
+    expect(lines("ALTER TABLE t ALTER COLUMN type SET NOT NULL;")).toEqual([]);
+    expect(lines("ALTER TABLE type ADD COLUMN a int;")).toEqual([]);
+    expect(lines("DROP INDEX CONCURRENTLY i;")).toEqual([]);
+    expect(lines("-- ALTER TABLE t ALTER c TYPE bigint;\nSELECT 1;")).toEqual([]);
+  });
+
+  it("still catches a DELETE without WHERE across lines", () => {
+    expect(lines("SELECT 1;\nDELETE\n  FROM t;")).toEqual([2]);
+    expect(lines("DELETE FROM t\n  WHERE id = 1;")).toEqual([]);
   });
 });

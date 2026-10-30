@@ -109,6 +109,8 @@ async function fanOutPage(
     // Any unique conflict — notif_member_offer_cat above all — means the member already has this offer.
     const done = await tx
       .insert(notificationsTable)
+      // Multi-row: past MAX_NAMED_PARAMS (named-statements.ts) it is sent unnamed, so no statement per page size stays
+      // prepared on its connection (ADR-IMPL-074).
       .values(rows)
       .onConflictDoNothing()
       .returning({ id: notificationsTable.id });

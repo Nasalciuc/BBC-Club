@@ -14,12 +14,15 @@ const FlagValueSchema = z
   })
   .passthrough();
 
-function parseValue(raw: unknown): FlagValue | null {
+/** A flag's stored value as the reader takes it, or null when it is not one (then it says nothing: not paused, not
+ *  killed). Exported for queue-health, which must read a pause the way `consumerPauseState` does. */
+export function parseValue(raw: unknown): FlagValue | null {
   const r = FlagValueSchema.safeParse(raw);
   return r.success ? (r.data as FlagValue) : null;
 }
 
-/** A kill or pause flag read longer ago than this is not trusted: the module counts as killed (ADR-IMPL-075). */
+/** Counters read longer ago than this make a kill or pause flag untrusted: `isKilled` says killed, `killedState` and
+ *  `consumerPauseState` say "unknown" — OVERLOADED for a route, a delivery left pending (ADR-IMPL-075, ADR-IMPL-080). */
 export const KILL_STALE_MS = 10_000;
 
 /**
@@ -28,10 +31,13 @@ export const KILL_STALE_MS = 10_000;
  * replica in about a second; reading a flag costs no query in between.
  *
  * Failure: an ordinary flag that cannot be read falls back to the caller's default (the last value read, when there is
- * one). A kill or pause flag fails closed — killed, paused — when it cannot be read, or when this process has not been
- * able to ask Postgres for more than KILL_STALE_MS. `killState` is the kill flag without that fallback: it throws when
- * the flag cannot be read, for boot, which must not take an unreadable flag for a killed module (that would unmount it
- * for the life of the process). `readStrict` throws the same way, for app-config, which keeps its own last good answer.
+ * one). A kill or pause flag that cannot be read, or whose counters this process has not been able to ask Postgres for
+ * in more than KILL_STALE_MS, is not trusted (ADR-IMPL-080): `killedState` and `consumerPauseState` answer "unknown" —
+ * a route answers OVERLOADED, the poller leaves the delivery pending — and only a row that says so is "killed" or
+ * "paused"; `isKilled` keeps failing closed (killed) for a yes or no. `killState` is the kill flag without that
+ * fallback: it throws when the flag cannot be read, for boot, which must not take an unreadable flag for a killed module
+ * (that would unmount it for the life of the process). `readStrict` throws the same way, for app-config, which keeps its
+ * own last good answer.
  */
 export function createFlags(
   db: Executor,
@@ -50,7 +56,9 @@ export function createFlags(
       const rows = await db.select({ key: flagsTable.key, value: flagsTable.value }).from(flagsTable);
       return new Map(rows.map((r) => [r.key, parseValue(r.value)] as const));
     },
-    { now: opts.now },
+    // A minute at most, whatever the counters say (G4): a flag written by a path no trigger sees still arrives. That
+    // reload runs behind the callers, who answer from what is held meanwhile (ADR-IMPL-080).
+    { now: opts.now, maxAgeMs: 60_000, logger: opts.logger },
   );
 
   /** The flag row as the snapshot holds it, or the error that kept the table from being read: no fallback. */
@@ -67,12 +75,15 @@ export function createFlags(
     }
   }
 
-  /** A kill or pause flag: throws when it cannot be read or when the counters are older than KILL_STALE_MS. */
+  /** A kill or pause flag: throws when it cannot be read or when the counters are older than KILL_STALE_MS. The counters
+   *  are asked first (a bounded wait): flags that cannot be trusted are said so before any load of the table is waited
+   *  for — a new replica whose Postgres stopped answering has nothing held, and its load would wait as long as the
+   *  connection (ADR-IMPL-080). */
   async function readGuard(key: string): Promise<FlagValue | null> {
-    const value = await readStrict(key);
+    await generations.current("platform.flags");
     const stale = generations.staleMs();
     if (stale > KILL_STALE_MS) throw new Error(`flags unread for ${Math.round(stale / 1000)} s`);
-    return value;
+    return readStrict(key);
   }
 
   async function killState(module: string): Promise<boolean> {
@@ -99,12 +110,25 @@ export function createFlags(
         return true;
       }
     },
-    async isConsumerPaused(consumer: string): Promise<boolean> {
+    /** "killed" when the row says so; "unknown" when the flags cannot be trusted (unread, or older than KILL_STALE_MS):
+     *  a route answers OVERLOADED then — the module is not off, this process is behind (ADR-IMPL-080). */
+    async killedState(module: string): Promise<"killed" | "live" | "unknown"> {
       try {
-        return (await readGuard(`consumer.${consumer}.paused`))?.enabled === true;
+        return (await readGuard(`${module}.killed`))?.enabled === true ? "killed" : "live";
       } catch (e) {
-        opts.logger?.warn({ consumer, err: errorForLog(e) }, "pause flag unreadable, failing closed");
-        return true;
+        opts.logger?.warn({ module, err: errorForLog(e) }, "kill flag unreadable");
+        return "unknown";
+      }
+    },
+    /** "paused" only when the row says so. A flag that cannot be trusted (unread, or counters older than
+     *  KILL_STALE_MS) is "unknown": the poller leaves the delivery pending for later and does not park it — a park
+     *  outlived its cause, and only an operator undid it (ADR-IMPL-080). */
+    async consumerPauseState(consumer: string): Promise<"paused" | "running" | "unknown"> {
+      try {
+        return (await readGuard(`consumer.${consumer}.paused`))?.enabled === true ? "paused" : "running";
+      } catch (e) {
+        opts.logger?.warn({ consumer, err: errorForLog(e) }, "pause flag unreadable, delivery left pending");
+        return "unknown";
       }
     },
     async inSegment(key: string, memberId: string): Promise<boolean> {

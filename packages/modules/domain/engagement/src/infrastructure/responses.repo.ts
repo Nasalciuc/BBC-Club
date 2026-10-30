@@ -1,4 +1,5 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { anyOf } from "@bbc/db/helpers";
 import type { Executor } from "@bbc/db";
 import { offerResponses } from "@bbc/db/schema/engagement";
 
@@ -36,7 +37,7 @@ export const responsesRepo = {
     const rows = await exec
       .select({ offerId: offerResponses.offerId, response: offerResponses.response })
       .from(offerResponses)
-      .where(and(eq(offerResponses.memberId, actorMemberId), inArray(offerResponses.offerId, offerIds)));
+      .where(and(eq(offerResponses.memberId, actorMemberId), anyOf(offerResponses.offerId, offerIds, "uuid")));
     return Object.fromEntries(rows.map((r) => [r.offerId, r.response]));
   },
   /** Scoped by actor: 0 rows if the response belongs to someone else (handler must throw). */

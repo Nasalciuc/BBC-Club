@@ -1,8 +1,8 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { query, queryEach, type Executor } from "@bbc/db";
 import { statement } from "@bbc/db/statements";
-import { col } from "@bbc/db/helpers";
+import { anyOf, col } from "@bbc/db/helpers";
 import { requests, requestEvents } from "@bbc/db/schema/requests";
 
 type EventRow = typeof requestEvents.$inferSelect;
@@ -147,7 +147,7 @@ export function createRequestsRepo(db: Executor) {
       const rows = await (exec ?? db)
         .select()
         .from(requestEvents)
-        .where(inArray(requestEvents.requestId, [...ids]))
+        .where(anyOf(requestEvents.requestId, [...ids], "uuid"))
         .orderBy(requestEvents.createdAt);
       const byId = new Map<string, EventRow[]>();
       for (const row of rows) {

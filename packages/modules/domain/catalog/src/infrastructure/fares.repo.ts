@@ -175,6 +175,17 @@ export const faresRepo = {
     return expired.length;
   },
 
+  /** Whether a published fare is past its time. The expiry runs its UPDATE only then: an UPDATE of no row still fires
+   *  the table's statement trigger and moves catalog.fares' generation, emptying every cache built on it (X11). */
+  async anyToExpire(exec: Executor, now = new Date()) {
+    const [row] = await exec
+      .select({ one: sql<number>`1` })
+      .from(fares)
+      .where(and(eqConst(fares.published, true), lt(fares.validUntil, now)))
+      .limit(1);
+    return row !== undefined;
+  },
+
   async upsertImport(
     exec: Executor,
     row: {

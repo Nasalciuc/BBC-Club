@@ -97,27 +97,33 @@ describe("poller", () => {
 describe("flags", () => {
   it("a flag read that fails is logged without the query's parameters", async () => {
     const { lines, logger } = capture();
+    const failure = () =>
+      Object.assign(new Error(`Failed query: select\nparams: ${SECRET}`), {
+        name: "DrizzleQueryError",
+        query: "select",
+        params: [SECRET],
+        cause: { code: "57P01" },
+      });
+    // The counters are read in a short transaction, the flags' table by a select: both fail the same way.
     const failing = {
       select() {
-        throw Object.assign(new Error(`Failed query: select\nparams: ${SECRET}`), {
-          name: "DrizzleQueryError",
-          query: "select",
-          params: [SECRET],
-          cause: { code: "57P01" },
-        });
+        throw failure();
+      },
+      transaction() {
+        throw failure();
       },
     };
     const { createFlags } = await import("../src/flags");
     const flags = createFlags(failing as never, { logger });
     expect(await flags.isEnabled("x", true)).toBe(true);
     expect(await flags.isKilled("engagement")).toBe(true);
-    expect(await flags.isConsumerPaused("x.onY")).toBe(true);
+    expect(await flags.consumerPauseState("x.onY")).toBe("unknown");
     // The counters' read first (once a second), then each flag's own fallback (ADR-IMPL-075).
     expect(lines.map((l) => l.m)).toEqual([
       "generations unread, keeping the last ones",
       "flag read failed, using fallback",
       "kill flag unreadable, failing closed",
-      "pause flag unreadable, failing closed",
+      "pause flag unreadable, delivery left pending",
     ]);
     expect(JSON.stringify(lines)).not.toContain(SECRET);
     expect(lines[0]?.o).toMatchObject({ err: { sqlstate: "57P01" } });

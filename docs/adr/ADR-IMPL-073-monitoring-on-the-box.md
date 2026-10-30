@@ -56,17 +56,22 @@ covers `infra/monitoring` too).
 5. **The queue's gauges are the worker's.** `createPlatform({ queueGauges })`, true where the poller runs (the worker,
    or `all`): a scrape of an API replica serving members reads no table.
 6. **Planning is counted.** Postgres runs with `pg_stat_statements.track_planning=on`, so plans per statement show on
-   Grafana whether statements are prepared once. Postgres takes it when it is recreated on purpose (ADR-IMPL-044).
-7. **Two dashboards and five alerts, as files.** `the box` (CPU and memory by container against the limit, throttling,
+   Grafana whether statements are prepared once. Postgres takes it when it is recreated on purpose (ADR-IMPL-044);
+   until then the worker publishes no plan series (no data, rather than a 0 read as "nothing planned"). The statement
+   totals read `pg_stat_statements(false)`, without the statements' text. When pg_stat_statements drops its least-run
+   entries to make room, the sums fall a little; VictoriaMetrics' rate reads a fall under an eighth of the value as a
+   partial reset and carries on from it, so a fall that small shows no spike (a larger one reads as a reset).
+7. **Two dashboards and seven alerts, as files.** `the box` (CPU and memory by container against the limit, throttling,
    network, kills for memory, the host, Postgres connections, the oldest transaction, PgBouncer, targets) and `the app`
    (requests, p95 and p99 by route, errors, API CPU per request, event-loop delay, statements per request, plans per
    statement, Postgres time, PgBouncer parses and binds, cache hits, the queue, failed jobs, memory), with an `env`
    variable. The request panels leave out the probes — Compose's healthchecks, the scrapes, Uptime Kuma — and the cron's
-   job runs; the integrations' internal routes (offers, request status, imports) stay in. The five alerts: a container
+   job runs; the integrations' internal routes (offers, request status, imports) stay in. The seven alerts: a container
    above 90 % of its memory limit for 5 minutes; CPU steal above 20 % for 10; no `dispatch` finished in 10 minutes while
    the worker answers; an API replica or the worker that answered in the last day not answering a scrape for 5 (a
    replica that hangs, or the worker gone: one that crashed restarts and leaves no target); more than 2 % of
-   production's requests answering 5xx for 10, the probes and the cron's job runs left out. Those on production look
+   production's requests answering 5xx for 10, the probes and the cron's job runs left out; a production container
+   killed for memory (at once); event deliveries paused for 10 (ADR-IMPL-080). Those on production look
    only at what production has run, so on a box that runs staging alone they stay quiet. The worker keeps its own two
    (RUNBOOK § Database health). Provisioned from `infra/monitoring/grafana`: the UI cannot change them.
 8. **Closed by default.** Everything is on the internal `data` network; Grafana is also on `edge`, for the webhook, and
@@ -75,20 +80,32 @@ covers `infra/monitoring` too).
    alerts go to `GRAFANA_ALERTS_WEBHOOK`, usually `OPS_WEBHOOK`'s URL under a name of its own: production's compose
    substitutes both Grafana keys, so `guard_staging` refuses them in `staging.env`, which may keep its own
    `OPS_WEBHOOK`. `bootstrap.sh` and `deploy.sh` refuse `MONITORING=on` without the two, before anything changes.
+   VictoriaMetrics asks for basic auth on every path but `/health` (user `bbc`, `VM_PASSWORD`, read from its
+   environment with `-envflag.enable`, never from its command line): v1.154.0 answers `/health` before the check, and
+   its own `/metrics`, without `-metricsAuthKey`, falls back to the same basic auth; its self-scrape reads its metrics
+   in process, so it is unaffected. Grafana's datasource sends the password; the two checks refuse `MONITORING=on`
+   without it too. Grafana encrypts what it stores with `GRAFANA_SECRET_KEY` (`GF_SECURITY_SECRET_KEY`), not its
+   built-in default. These keys live in `production.env`, which Compose also hands whole to production's `api`,
+   `worker` and `postgres` (`env_file`), as every key there: accepted for now, since those three already hold the
+   database's password and the app's secrets and the monitoring keys reach only the monitoring, inside the box; a
+   file of its own per service would narrow it.
 9. **The room.** MinIO is a profile of its own, `media`: `MEDIA=on` puts it back in bootstrap's start (R1b). Staging's
    API replicas and worker get 384 MB each and its Postgres 768 MB: 2 048 in all, and `API_MEMORY_STAGING`,
    `WORKER_MEMORY_STAGING` and `POSTGRES_MEMORY_STAGING` in `staging.env` give one back. The limits add up to 6 752 MB
    of 8 192: production 3 840, staging 2 048, Uptime Kuma 128, the monitoring 736 (Grafana 384, VictoriaMetrics 192,
    cAdvisor 128, node-exporter 32); a deploy adds 1 024 for a few minutes (7 776). Each of the four has a CPU limit too:
-   1.3 cores in all.
+   1.3 cores in all. These are limits, not use: one-off `run` containers and the host itself are outside them. Under
+   pressure the four go after staging and before production (`oom_score_adj` 300).
 10. **Main's files only.** Production's monitoring reads `infra/monitoring` from the box's one checkout, its scrape
     targets and dashboards within a minute, as Caddy reads `infra/caddy`: the `api-deploy` workflow refuses a staging
     dispatch whose copy of either is not `origin/main`'s (ADR-IMPL-044).
 11. **CI checks it** in a job of its own: Compose reads the files with every overlay and both profiles; VictoriaMetrics
     checks its scrape file (`-dryRun`), then runs with the compose file's flags; beside it, a throwaway Grafana starts
     with the compose file's image, environment and memory limit and the repository's provisioning, reaches it, and must
-    hold the datasource, the two dashboards, the five rules and the contact point, with no provisioning or plugin error
-    in its log and no kill for memory.
+    hold the datasource, the two dashboards, the seven rules and the contact point, with no provisioning or plugin error
+    in its log and no kill for memory. It pulls the four images first (a tag that does not exist fails there), and runs
+    each rule's query, as Grafana loaded it, on sample points for every name the rules read
+    (`infra/monitoring/ci/sample-metrics.txt`): a rule that returns nothing fails the job.
 
 **Rejected.**
 
