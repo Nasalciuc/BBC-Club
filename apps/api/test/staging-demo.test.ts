@@ -14,7 +14,6 @@ import { DEMO_PERSONA, seedStagingDemo } from "../../../scripts/seed-staging-dem
 import { testApp } from "./helpers/test-app";
 
 const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
 
 /** The app's publisher, as the script's own run builds it: its registry knows every consumer. */
 const appEvents = (t: Awaited<ReturnType<typeof testApp>>): Parameters<typeof seedStagingDemo>[3] => ({
@@ -22,7 +21,7 @@ const appEvents = (t: Awaited<ReturnType<typeof testApp>>): Parameters<typeof se
 });
 
 describe("staging demo", () => {
-  it("gives the review account Figma's situations, dated from today, and does it again without a trace", async () => {
+  it("gives the review account its own situations, dated from today, and does it again without a trace", async () => {
     const t = await testApp({ suite: "staging-demo" });
     const auth = t.registry.facade<IdentityFacade>("identity").auth;
     const email = "review.staging-demo@test.dev";
@@ -52,7 +51,7 @@ describe("staging demo", () => {
     const now = new Date();
     const member = { id: first.memberId, email };
     const counts = await seedStagingDemo(t.db, member, now, appEvents(t));
-    expect(counts).toEqual({ fares: 6, pins: 5, offers: 3, requests: 3, inbox: 4 });
+    expect(counts).toEqual({ offers: 1, requests: 3, inbox: 2, retired: { offers: 0, fares: 0 } });
     const total = async () =>
       (
         (await t.db.execute(
@@ -64,34 +63,21 @@ describe("staging demo", () => {
       )[0]?.n;
     const clean = await total();
 
-    // Explore: the pins from the fixture's fares, three cards — London personal, with the FOR YOU context line.
+    // Explore: no pin of the demo's — the catalogue is every member's, and the demo writes no fare — and one card, the
+    // account's own London offer, with the FOR YOU context line.
     const home = HomeVM.parse(await (await t.app.request("/v1/home", cookie)).json());
     expect(home.home?.code).toBe("JFK");
-    expect(home.destinations.map((d) => d.code).sort()).toEqual(["CDG", "DXB", "HND", "LHR", "SIN"]);
-    expect(home.destinations.find((d) => d.code === "LHR")).toMatchObject({ fromPrice: 4200, hasOffer: true });
+    expect(home.destinations).toEqual([]);
     const feed = FeedVM.parse(await (await t.app.request("/v1/proposals", cookie)).json());
-    expect(feed.items.map((i) => i.title)).toEqual([
-      expect.stringMatching(/^Your \w+ in London$/),
-      "Autumn in Paris",
-      "Tokyo before the holidays",
-    ]);
+    expect(feed.items.map((i) => i.title)).toEqual([expect.stringMatching(/^Your \w+ in London$/)]);
     expect(feed.items[0]).toMatchObject({ targeting: "personal", contextLine: "You flew this route in March." });
     for (const card of feed.items) expect(Date.parse(card.validUntil)).toBeGreaterThan(now.getTime());
 
-    // Search: London has its two fares, leaving in three weeks at Figma's clock; the poster route has none.
+    // Search: the demo put no fare on sale.
     const search = SearchResultVM.parse(
       await (await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business", cookie)).json(),
     );
-    expect(search.items.map((f) => f.carrier.code).sort()).toEqual(["BA", "VS"]);
-    const ba = search.items.find((f) => f.carrier.code === "BA")!;
-    // 07:00 in London — 06:00 in the week New York still has summer time and London no longer does: real clocks.
-    expect([ba.departLocal, ba.arriveDayOffset]).toEqual(["18:55", 1]);
-    expect(ba.arriveLocal).toMatch(/^0[67]:00$/);
-    expect(Date.parse(ba.departAt!) - now.getTime()).toBeGreaterThan(20 * DAY);
-    const zurich = SearchResultVM.parse(
-      await (await t.app.request("/v1/search?from=JFK&to=ZRH&cabin=business", cookie)).json(),
-    );
-    expect(zurich.items).toEqual([]);
+    expect(search.items).toEqual([]);
 
     // Requests: one in each state the server keeps, all "sent", trips ahead; the quote has its two timeline steps.
     const list = (await (await t.app.request("/v1/requests", cookie)).json()) as { items: unknown[] };
@@ -115,14 +101,12 @@ describe("staging demo", () => {
     ]);
     expect(items.every((r) => r.dates.length > 0)).toBe(true);
 
-    // Inbox: the quote and the personal offer unread, the two broadcasts read.
+    // Inbox: the quote and the personal offer, unread; no broadcast.
     const inbox = InboxVM.parse(await (await t.app.request("/v1/inbox", cookie)).json());
     expect(inbox.unreadCount).toBe(2);
     expect(inbox.items.map((i) => [i.title, i.read])).toEqual([
       [expect.stringMatching(/^Your \w+ in London$/), false],
       ["Your quote is ready", false],
-      ["Autumn in Paris", true],
-      ["Tokyo before the holidays", true],
     ]);
     expect(inbox.items.find((i) => i.title === "Your quote is ready")?.deepLink).toMatch(/^bbcclub:\/\/requests\//);
 
@@ -130,7 +114,7 @@ describe("staging demo", () => {
     const unread = inbox.items.find((i) => !i.read)!;
     await t.app.request(`/v1/inbox/${unread.id}/read`, { method: "POST", ...cookie });
     await t.db.execute(sql`INSERT INTO engagement.offer_responses (offer_id, member_id, response)
-      VALUES (${feed.items[1]!.id}::uuid, ${first.memberId}, 'interested')`);
+      VALUES (${feed.items[0]!.id}::uuid, ${first.memberId}, 'interested')`);
     expect((await t.submitRequestAs({ cookie: cookie.headers.Cookie }, t.sampleRequestBody())).status).toBe(201);
     await t.app.request("/v1/profile/preferences", {
       method: "PUT",
@@ -157,7 +141,7 @@ describe("staging demo", () => {
     const reset = ProfileVM.parse(await (await t.app.request("/v1/profile", cookie)).json());
     expect([reset.homeAirport, reset.preferences, reset.notifications.offers]).toEqual(["JFK", {}, true]);
     expect(FeedVM.parse(await (await t.app.request("/v1/proposals", cookie)).json()).items.map((i) => i.state)).toEqual(
-      ["unseen", "unseen", "unseen"],
+      ["unseen"],
     );
     expect(((await (await t.app.request("/v1/requests", cookie)).json()) as { items: unknown[] }).items.length).toBe(3);
 
@@ -168,7 +152,7 @@ describe("staging demo", () => {
     expect(renewed.memberId).not.toBe(first.memberId);
     expect(await seedStagingDemo(t.db, { id: renewed.memberId, email }, now, appEvents(t))).toEqual(counts);
     const renewedCookie = { headers: { Cookie: await t.auth.cookieFor(email, password) } };
-    expect(FeedVM.parse(await (await t.app.request("/v1/proposals", renewedCookie)).json()).items.length).toBe(3);
+    expect(FeedVM.parse(await (await t.app.request("/v1/proposals", renewedCookie)).json()).items.length).toBe(1);
     expect(
       ((await (await t.app.request("/v1/requests", renewedCookie)).json()) as { items: unknown[] }).items.length,
     ).toBe(3);
@@ -187,57 +171,96 @@ describe("staging demo", () => {
     await t.close();
   }, 60_000);
 
-  // ADR-IMPL-067: once the site's deals are on, an operator withdraws the demo's broadcast offers (RUNBOOK, "Staging demo
-  // data"); the next deploy's run must not bring them back — Tokyo would stand twice on Explore, the demo's and the
-  // site's. The run stays idempotent: twice, the same rows, one active Tokyo at most.
-  it("keeps a demo offer an operator withdrew withdrawn, and writes no inbox item for it", async () => {
-    const t = await testApp({ suite: "staging-demo-withdrawn" });
-    await t.seedCatalogBasics();
+  // ADR-IMPL-040, amendment of 30 Oct 2026: runs before it wrote the fixture's fares (the pins on every member's globe)
+  // and the demo's broadcast offers (Paris and Tokyo in every member's Explore). The next run retires them once —
+  // offers withdrawn as the withdraw route does it, fares unpublished — and leaves the catalogue's real fares alone.
+  it("retires what earlier runs wrote for every member, once, and keeps the real catalogue", async () => {
+    const t = await testApp({ suite: "staging-demo-retire" });
+    await t.seedCatalogBasics(); // the catalogue's own fares: JFK → LHR by BA, VS and AA
     const auth = t.registry.facade<IdentityFacade>("identity").auth;
-    const email = "review.staging-withdrawn@test.dev";
+    const email = "review.staging-retire@test.dev";
     const password = "review-demo-password-1";
     const account = await ensureReviewAccount({ auth, db: t.db, email, password, persona: DEMO_PERSONA });
     await t.drainAll();
     const cookie = { headers: { Cookie: await t.auth.cookieFor(email, password) } };
     const member = { id: account.memberId, email };
     const events = appEvents(t);
-    const tokyoRows = async () =>
-      (await t.db.execute(sql`
-        SELECT status FROM proposals.offers WHERE route_to = 'HND' ORDER BY status`)) as unknown as {
-        status: string;
-      }[];
 
-    expect(await seedStagingDemo(t.db, member, new Date(), events)).toMatchObject({ offers: 3, inbox: 4 });
-    expect(await seedStagingDemo(t.db, member, new Date(), events)).toMatchObject({ offers: 3, inbox: 4 });
-    expect(await tokyoRows()).toEqual([{ status: "active" }]);
-
-    // The operator's step: the demo's broadcast offers withdrawn through the internal route.
-    const ids = (await t.db.execute(sql`
-      SELECT id FROM proposals.offers WHERE idempotency_key IN ('staging-demo:paris', 'staging-demo:tokyo')`)) as unknown as {
-      id: string;
-    }[];
-    expect(ids.length).toBe(2);
-    for (const { id } of ids) {
-      const r = await t.app.request(`/v1/internal/offers/${id}/withdraw`, {
-        method: "POST",
-        headers: { "X-Internal-Secret": t.internalSecret, "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: "the site's deals are on" }),
-      });
-      expect(r.status).toBe(200);
+    // What a run before the amendment left: the fixture's fares on sale, the demo's broadcasts active.
+    for (const f of fixture.fares) {
+      await t.db.execute(sql`
+        INSERT INTO catalog.fares (id, route_from, route_to, cabin, carrier, carrier_name, nonstop, price, currency,
+          source, valid_from, valid_until, published)
+        VALUES (${f.id}::uuid, ${f.from.code}, ${f.to.code}, ${f.cabin}, ${f.carrier.code}, ${f.carrier.name},
+          ${f.nonstop}, ${String(f.price.offer)}, 'USD', 'manual', now() - interval '1 day', now() + interval '30 days',
+          true)`);
     }
-
-    // The next deploys: still withdrawn, no inbox item for them, London (the member's own) as before.
-    for (let run = 0; run < 2; run++) {
-      expect(await seedStagingDemo(t.db, member, new Date(), events)).toMatchObject({ offers: 1, inbox: 2 });
+    for (const key of ["paris", "tokyo"]) {
+      const o = fixture.offers.find((x) => x.key === key)!;
+      await t.db.execute(sql`
+        INSERT INTO proposals.offers (idempotency_key, source, targeting, route_from, route_to, cabin, price,
+          published_price, currency, title, valid_until, status)
+        VALUES (${`staging-demo:${key}`}, 'marketing_campaign', 'broadcast', ${o.from}, ${o.to}, 'business',
+          ${String(o.price)}, ${String(o.published)}, 'USD', ${o.title}, now() + interval '30 days', 'active')`);
     }
-    expect(await tokyoRows()).toEqual([{ status: "withdrawn" }]);
-    const feed = FeedVM.parse(await (await t.app.request("/v1/proposals", cookie)).json());
-    expect(feed.items.map((i) => i.title)).toEqual([expect.stringMatching(/^Your \w+ in London$/)]);
-    const inbox = InboxVM.parse(await (await t.app.request("/v1/inbox", cookie)).json());
-    expect(inbox.items.map((i) => i.title)).toEqual([
-      expect.stringMatching(/^Your \w+ in London$/),
-      "Your quote is ready",
+    const lhr = async () =>
+      SearchResultVM.parse(
+        await (await t.app.request("/v1/search?from=JFK&to=LHR&cabin=business", cookie)).json(),
+      ).items.map((f) => f.price.offer);
+    const published = async () =>
+      Number(
+        (
+          (await t.db.execute(sql`
+            SELECT count(*)::int AS n FROM catalog.fares
+            WHERE id::text LIKE '00000000-0000-4000-8000-00000000fa%' AND published`)) as unknown as { n: number }[]
+        )[0]?.n,
+      );
+    const withdrawnEvents = async () => (await t.journal.byType("offer.withdrawn")).length;
+    expect((await lhr()).length).toBeGreaterThan(3); // the fixture's BA and VS beside the catalogue's three
+    expect(await published()).toBeGreaterThan(0);
+
+    const first = await seedStagingDemo(t.db, member, new Date(), events);
+    expect(first.retired).toEqual({ offers: 2, fares: fixture.fares.length });
+    expect(await withdrawnEvents()).toBe(2); // pending pushes suppressed by their consumers, as from the route
+    expect(await published()).toBe(0);
+    // The catalogue's own fares are untouched: London keeps exactly its three.
+    expect((await lhr()).sort()).toEqual([4200, 4350, 4490]);
+    const statuses = (await t.db.execute(sql`
+      SELECT idempotency_key AS key, status FROM proposals.offers WHERE idempotency_key LIKE 'staging-demo:%'
+      ORDER BY idempotency_key`)) as unknown as { key: string; status: string }[];
+    expect(statuses).toEqual([
+      { key: "staging-demo:london", status: "active" },
+      { key: "staging-demo:paris", status: "withdrawn" },
+      { key: "staging-demo:tokyo", status: "withdrawn" },
     ]);
+
+    // Another member sees none of the demo: no demo pin, no demo offer, no inbox item.
+    const otherHome = HomeVM.parse(
+      await (await t.app.request("/v1/home", { headers: { Cookie: t.memberB.cookie } })).json(),
+    );
+    expect(otherHome.destinations.map((d) => d.code)).not.toContain("SIN");
+    expect(otherHome.sections.find((s) => s.key === "inspire")?.items ?? []).toEqual([]);
+
+    // A second run retires nothing and publishes nothing.
+    expect((await seedStagingDemo(t.db, member, new Date(), events)).retired).toEqual({ offers: 0, fares: 0 });
+    expect(await withdrawnEvents()).toBe(2);
+
+    // The account's own offer, if an operator withdrew it, stays withdrawn — and leaves the inbox — run after run.
+    const london = (
+      (await t.db.execute(sql`
+        SELECT id FROM proposals.offers WHERE idempotency_key = 'staging-demo:london'`)) as unknown as { id: string }[]
+    )[0]!.id;
+    const r = await t.app.request(`/v1/internal/offers/${london}/withdraw`, {
+      method: "POST",
+      headers: { "X-Internal-Secret": t.internalSecret, "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "withdrawn by an operator" }),
+    });
+    expect(r.status).toBe(200);
+    for (let run = 0; run < 2; run++) {
+      expect(await seedStagingDemo(t.db, member, new Date(), events)).toMatchObject({ offers: 0, inbox: 1 });
+    }
+    const inbox = InboxVM.parse(await (await t.app.request("/v1/inbox", cookie)).json());
+    expect(inbox.items.map((i) => i.title)).toEqual(["Your quote is ready"]);
     await t.close();
   }, 60_000);
 
@@ -285,11 +308,10 @@ describe("staging demo", () => {
     }[];
     expect(deliveries[0]?.n).toBe(fixture.offers.length); // pending pushes are suppressed by its consumer
 
-    // Explore shows each demo offer once.
+    // Explore shows the account's own offer, once.
     const home = HomeVM.parse(await (await t.app.request("/v1/home", cookie)).json());
     const titles = home.sections.find((s) => s.key === "inspire")!.items.map((i) => i.title);
-    expect(titles.length).toBe(new Set(titles).size);
-    expect(titles.length).toBe(3);
+    expect(titles).toEqual([expect.stringMatching(/^Your \w+ in London$/)]);
 
     // A second run withdraws nothing more and publishes nothing.
     await seedStagingDemo(t.db, member, new Date(), events);

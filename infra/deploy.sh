@@ -279,7 +279,7 @@ wait_ready "$W" 8001 || rollback_and_exit "worker /ready red"
 $DC up -d --no-deps --force-recreate "$CRON" || rollback_and_exit "cron recreate failed"
 
 if [[ "$MODE" == "staging" ]]; then
-  echo "▶ 7/8 staging demo (ADR-IMPL-040): the review account carries Figma's situations, dated from today"
+  echo "▶ 7/8 staging demo (ADR-IMPL-040): the review account's own situations, dated from today; nothing every member sees"
   # Direct Postgres, never the pooler. The script refuses any database but staging's. A failure never undoes the
   # deploy — the API is already serving — but it is said out loud.
   if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$SVC" bun run scripts/seed-staging-demo.ts; then

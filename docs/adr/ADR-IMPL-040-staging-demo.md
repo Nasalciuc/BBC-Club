@@ -82,3 +82,18 @@ on, the demo's broadcast offers (Paris, Tokyo) are not what staging's members sh
 Explore. An operator withdraws them once through `POST /v1/internal/offers/:id/withdraw` (RUNBOOK, "Staging demo
 data"); the script's upsert no longer sets a withdrawn demo offer back to `active` (its dates still move) and writes no
 inbox item for it, and its count of offers is the ones members can see. Tested in `apps/api/test/staging-demo.test.ts`.
+
+**Amendment — 30 Oct 2026: nothing every member sees.** The catalogue and the broadcast offers are every member's, so
+the demo's fares (five pins) and its Paris and Tokyo offers stood on every staging member's Explore — the testers'
+included — beside, or instead of, the club's real data, and every deploy wrote them back. That breaks the decision
+above: the demo is the review account's. The script now writes only what is the account's alone — its personal London
+offer, its three requests, its inbox (the quote and that offer, unread) — and, in its transaction, retires what earlier
+runs wrote for everyone: the active `staging-demo:paris` and `staging-demo:tokyo` offers withdrawn as
+`POST /v1/internal/offers/:id/withdraw` does it (with the fixture seed's `fixture:*`, as before), and the fixture's fares
+unpublished as `expire-fares` takes a fare off sale — the rows stay, since the demo's requests name fa01 and fa03 and
+record their price, published price and airline themselves. The catalogue's own fares are not touched. A second run
+finds nothing to retire and publishes nothing; its log line says how many it retired. The London offer's month still
+follows BA 178's departure, 21 days on at 18:55 New York, now computed without a fare row. Staging shows the company
+site's data once its flags are on (ADR-IMPL-045, 063, 067; RUNBOOK). This supersedes the Follow-up above and the
+operator's step of the 25 Oct amendment: there is nothing left to withdraw by hand. Tested in
+`scripts/seed-staging-demo.test.ts` and `apps/api/test/staging-demo.test.ts`.

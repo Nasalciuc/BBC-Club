@@ -1157,32 +1157,21 @@ and removed by `stop`. A step test shares the box with production: a quiet hour.
 
 ## Staging demo data (ADR-IMPL-040)
 
-On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, the pins with their fares, the three offers, a request in each state, the inbox. Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:
+On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, its personal London offer, a request in each state, the inbox. Nothing every member sees: no fare (the pins are the catalogue's, everyone's) and no broadcast offer — staging's members, testers included, see the club's real data (the `catalog.site_*` flags above, and what operators send). Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:
 
 ```bash
 cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f compose.staging.yml --env-file env/production.env --env-file env/staging.env \
   run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run scripts/seed-staging-demo.ts
 ```
 
-It prints `staging demo ready — … dates from <today>`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing. The poster route JFK → ZRH is left without a fare on purpose, so the estimate (ADR-IMPL-037) can be shown there once `catalog.estimates` is on and the rules are loaded.
+It prints `staging demo ready — … dates from <today>; retired for every member: <n> offers, <n> fares`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing.
 
-**Once the site's deals are on in staging (`catalog.site_offers`, ADR-IMPL-067)** the demo's two broadcast offers — Paris
-and Tokyo, seen by every staging member — should not be what members see: withdraw them once, as the internal route
-does it (status `withdrawn` and `offer.withdrawn`, so pending pushes are suppressed). The demo seed keeps a withdrawn
-demo offer withdrawn at every later deploy and writes no inbox item for it; London, the review account's own, stays.
-
-```bash
-# staging: the two ids, then the withdraw route through the staging worker (the secret is read from its environment)
-docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc -Atc \
-  "SELECT id FROM proposals.offers WHERE idempotency_key IN ('staging-demo:paris','staging-demo:tokyo') AND status = 'active'"
-for id in <id-1> <id-2>; do
-  docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
-    bun -e "fetch('http://localhost:8001/v1/internal/offers/$id/withdraw',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET,'Content-Type':'application/json'},body:JSON.stringify({reason:'site deals on'})}).then(async r=>console.log(r.status,await r.text()))"
-done
-```
-
-Each answers `200 {"ok":true}`. To bring them back (the deals off again), set their `status` to `active` in
-`proposals.offers` and run the demo seed: it dates them from today.
+**What runs before 30 Oct 2026 left for every member** — the fixture's fares (the Paris, London, Tokyo, Dubai and
+Singapore pins on every tester's globe) and the demo's broadcast offers (Paris and Tokyo, `Save 44%`, in every Explore) —
+the first run after that date retires, in its transaction: the offers withdrawn as the internal route does it (status
+`withdrawn` and `offer.withdrawn`, so pending pushes are suppressed), the fares unpublished as `expire-fares` takes a
+fare off sale (the rows stay: the demo's requests name them). Nothing to do by hand; the next run retires nothing
+(`0 offers, 0 fares`). The review account's own London offer stays; if an operator withdraws it, it stays withdrawn.
 
 ## Redis, Kafka, Streams, and demand
 
