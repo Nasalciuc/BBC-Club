@@ -1160,8 +1160,8 @@ and removed by `stop`. A step test shares the box with production: a quiet hour.
 On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, its personal London offer, a request in each state, the inbox. Nothing every member sees: no fare (the pins are the catalogue's, everyone's) and no broadcast offer — staging's members, testers included, see the club's real data (the `catalog.site_*` flags above, and what operators send). Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:
 
 ```bash
-cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f compose.staging.yml --env-file env/production.env --env-file env/staging.env \
-  run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run scripts/seed-staging-demo.ts
+# through the staging worker: its DATABASE_URL is staging's Postgres, direct (compose.staging.yml) — no password typed
+docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" bun run scripts/seed-staging-demo.ts
 ```
 
 It prints `staging demo ready — … dates from <today>; retired for every member: <n> offers, <n> fares`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing.
@@ -1183,8 +1183,7 @@ wait for the company to confirm the rights. A flag turned off by hand is on agai
 flags as you set them, write `STAGING_REAL_DATA=off` in `staging.env`. Production never runs it. By hand:
 
 ```bash
-cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f compose.staging.yml --env-file env/production.env --env-file env/staging.env \
-  run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run scripts/staging-real-data.ts
+docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" bun run scripts/staging-real-data.ts
 ```
 
 ## Redis, Kafka, Streams, and demand
