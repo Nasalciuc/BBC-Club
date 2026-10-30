@@ -6,6 +6,7 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createPlatform, registerPlatformJobs } from "../src/api";
+import { resumeParked } from "../src/jobs/builtin";
 
 let iso: IsolatedDb;
 let db: IsolatedDb["db"];
@@ -110,6 +111,37 @@ describe("a consumer's pause (ADR-IMPL-080)", () => {
       expect(run.metrics?.resumed).toBe(1);
       expect((await deliveries()).map((d) => d.status)).toEqual(["pending"]);
     }
+  });
+
+  it("queue-health resumes in batches, each committed: a stop part-way keeps what it resumed, the next run the rest", async () => {
+    const p = platform();
+    await p.flags.set(`consumer.${CONSUMER}.paused`, { enabled: true });
+    for (const v of ["f1", "f2", "f3", "f4", "f5"]) await emit(p, v);
+    await p.poller.drainOnce(10);
+    expect((await deliveries()).map((d) => d.status)).toEqual(Array(5).fill("paused"));
+    await db.execute(sql`DELETE FROM platform.flags WHERE key = ${`consumer.${CONSUMER}.paused`}`);
+
+    // Time up after the first batch: two resumed and kept, three still parked, and it says it stopped.
+    expect(await resumeParked(db, [CONSUMER], { batch: 2, budgetMs: 0 })).toEqual({ resumed: 2, capped: true });
+    const statuses = async () => (await deliveries()).map((d) => d.status).sort();
+    expect(await statuses()).toEqual(["paused", "paused", "paused", "pending", "pending"]);
+    // A job stopped by its timeout: no batch after the signal.
+    const stopped = new AbortController();
+    stopped.abort();
+    expect(await resumeParked(db, [CONSUMER], { batch: 2, signal: stopped.signal })).toEqual({
+      resumed: 2,
+      capped: true,
+    });
+    // With time, batch after batch until one comes back short: the last one, then nothing more to do.
+    expect(await resumeParked(db, [CONSUMER], { batch: 2 })).toEqual({ resumed: 1, capped: false });
+    expect(await statuses()).toEqual(Array(5).fill("pending"));
+    expect(await resumeParked(db, [CONSUMER], { batch: 2 })).toEqual({ resumed: 0, capped: false });
+
+    // The job itself, as it runs: everything back in one run, nothing capped.
+    await db.execute(sql`UPDATE platform.event_deliveries SET status = 'paused'`);
+    const run = await p.jobs.run("queue-health");
+    expect(run.metrics?.resumed).toBe(5);
+    expect(run.metrics?.resumeCapped).toBe(0);
   });
 
   it("(d) /metrics carries queue_paused", async () => {

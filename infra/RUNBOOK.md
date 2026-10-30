@@ -178,7 +178,7 @@ INSERT INTO platform.flags(key,value) VALUES ('consumer.crm.onOfferResponded.pau
 ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value;
 ```
 
-Deliveries queue up as `paused`. Set the flag `false`, or delete its row: `queue-health` (every 10 minutes, or `POST /v1/internal/run/queue-health`) puts them back to pending. A delivery is parked only when its flag says paused; while the flags cannot be read it waits, pending. An alert fires after 10 minutes of paused deliveries (§ Monitoring).
+Deliveries queue up as `paused`. Set the flag `false`, or delete its row: `queue-health` (every 10 minutes, or `POST /v1/internal/run/queue-health`) puts them back to pending, 1 000 at a time for up to 10 s a run: a backlog larger than that takes more than one run (`resumeCapped: 1` in the run's metrics, and a warning). A delivery is parked only when its flag says paused; while the flags cannot be read it waits, pending. An alert fires after 10 minutes of paused deliveries (§ Monitoring).
 
 ## Price rules for estimates (ADR-IMPL-037)
 

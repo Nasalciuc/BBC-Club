@@ -30,8 +30,10 @@ experiments on the 100 000-member volume found three ways that verdict outlives 
    (`apps/mobile/src/lib/api.ts`) and treats an unknown code as any other error, so it needs no change.
 3. **A delivery is parked only by a flag that says so.** Under `"unknown"` the poller leaves the delivery pending and
    tries it again in 5 s. `queue-health` (every 10 minutes) puts back to pending every paused delivery whose flag no
-   longer says paused, and counts them (`resumed`); `queue_paused` is a gauge beside the queue's others, and an alert
-   fires after 10 minutes of paused deliveries.
+   longer says paused, and counts them (`resumed`): 1 000 at a time, each batch its own statement, starting none after
+   10 s of its 15 (`resumeCapped: 1` and a warning when it stopped there; the next run resumes the rest), so a large
+   backlog never outruns the role's 15 s statement timeout and stays parked. `queue_paused` is a gauge beside the
+   queue's others, and an alert fires after 10 minutes of paused deliveries.
 4. **The counters' read.** It runs in a short transaction under `SET LOCAL statement_timeout` (the read's timeout,
    500 ms), so the server stops a read stuck behind a lock and the connection goes back. One read runs at a time, and
    callers answer from what is held while it runs. They wait for it while nothing is held yet, after this process wrote
