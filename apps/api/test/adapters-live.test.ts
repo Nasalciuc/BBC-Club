@@ -15,10 +15,11 @@ const gauge = (text: string, name: string) =>
 
 describe("which adapters are live", () => {
   it("/metrics carries crm_live and push_live: 0 for the mock CRM and the recording push", async () => {
-    const t = await testApp({ suite: "adapters-live" });
+    // Set here, not inherited: a shell with CRM_ADAPTER=email would otherwise read 1.
+    const t = await testApp({ suite: "adapters-live", env: { CRM_ADAPTER: "mock", PUSH_ADAPTER: "recording" } });
     const text = await (await t.app.request("/metrics")).text();
-    expect(gauge(text, "crm_live")).toBe(0); // tests run the mock CRM
-    expect(gauge(text, "push_live")).toBe(0); // and the recording push
+    expect(gauge(text, "crm_live")).toBe(0);
+    expect(gauge(text, "push_live")).toBe(0);
     await t.close();
   });
 });
