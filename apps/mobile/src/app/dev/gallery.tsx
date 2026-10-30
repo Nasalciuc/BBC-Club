@@ -93,7 +93,7 @@ function GalleryScreen() {
 
       <SectionHeader title="Buttons" size="subtitle" />
       <Button testID="gallery.button.continue" label="Continue" trailing="arrow" onPress={noop} />
-      <Button testID="gallery.button.call" label="Call your specialist" icon="phone" onPress={noop} />
+      <Button testID="gallery.button.call" label="Call your agent" icon="phone" onPress={noop} />
       <Button testID="gallery.button.disabled" label="Continue" trailing="arrow" disabled onPress={noop} />
       <Button testID="gallery.button.sending" label="Sending…" busy onPress={noop} />
       <Button testID="gallery.button.edge" label="Use these dates" trailing="arrow" trailingAtEdge onPress={noop} />
@@ -468,11 +468,7 @@ function GalleryScreen() {
         title="One request needs your attention."
         body="Open your request to check the details and try again."
       />
-      <InfoCard
-        icon="phone"
-        title="Your quote is ready."
-        body="A specialist will call shortly to confirm the details."
-      />
+      <InfoCard icon="phone" title="Your quote is ready." body="An agent will call shortly to confirm the details." />
       <Timeline
         testID="gallery.timeline"
         steps={[
@@ -500,7 +496,7 @@ function GalleryScreen() {
         testID="gallery.empty"
         look="explore"
         title="No offers yet."
-        body="Your specialist's offers will appear here. Search a destination to request a fare."
+        body="Your agent's offers will appear here. Search a destination to request a fare."
         primary={{ label: "Search a destination", onPress: noop }}
         primaryFill={false}
       />

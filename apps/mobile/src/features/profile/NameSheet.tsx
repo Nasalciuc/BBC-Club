@@ -79,7 +79,7 @@ export const NameSheet = forwardRef<ProfileSheetHandle, Props>(function NameShee
         />
       }
     >
-      <Text style={styles.intro}>How we greet you, and who your specialist asks for when they call.</Text>
+      <Text style={styles.intro}>How we greet you, and who your agent asks for when they call.</Text>
       <View style={styles.group}>
         <TextField
           testID="profile.name.input"

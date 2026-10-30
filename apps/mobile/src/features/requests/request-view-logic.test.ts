@@ -23,11 +23,11 @@ describe("requestView — one image per state", () => {
     expect(v.badge).toBe("received");
     expect(v.notice).toEqual({
       title: "We have your request.",
-      body: "A specialist will call shortly.",
+      body: "An agent will call shortly.",
       icon: "phone",
     });
     expect(v.caption).toBe("We have your travel details.");
-    expect([v.titleBadge, v.callback, v.fare, v.call, v.sendNow]).toEqual([false, true, false, "specialist", false]);
+    expect([v.titleBadge, v.callback, v.fare, v.call, v.sendNow]).toEqual([false, true, false, "agent", false]);
   });
 
   test("received (30): the same page as just received — the call as 30 draws it (ADR-IMPL-056 §7)", () => {
@@ -37,18 +37,18 @@ describe("requestView — one image per state", () => {
   test("specialist review: the message and the steps — no number to call yet", () => {
     const v = requestView("assigned");
     expect(v.badge).toBe("received");
-    expect(v.notice).toEqual({ title: "A specialist is reviewing your request.", body: null, icon: "phone" });
-    expect(v.caption).toBe("A specialist will call you shortly.");
+    expect(v.notice).toEqual({ title: "An agent is reviewing your request.", body: null, icon: "phone" });
+    expect(v.caption).toBe("An agent will call you shortly.");
     expect([v.callback, v.call]).toEqual([false, null]);
   });
 
-  test("quote ready (11): the fare, the number we call and Call your specialist", () => {
+  test("quote ready (11): the fare, the number we call and Call your agent", () => {
     const v = requestView("quoted");
     expect(v.badge).toBe("quote_ready");
     expect(v.notice?.title).toBe("Your quote is ready.");
-    expect(v.notice?.body).toBe("A specialist will call shortly to confirm the details.");
-    expect(v.caption).toBe("Review the quote with your specialist.");
-    expect([v.titleBadge, v.callback, v.fare, v.call]).toEqual([false, true, true, "specialist"]);
+    expect(v.notice?.body).toBe("An agent will call shortly to confirm the details.");
+    expect(v.caption).toBe("Review the quote with your agent.");
+    expect([v.titleBadge, v.callback, v.fare, v.call]).toEqual([false, true, true, "agent"]);
   });
 
   test("the fare shows on a quote ready only — no other state has one", () => {
@@ -69,10 +69,10 @@ describe("requestView — one image per state", () => {
   test("booked (31): the message, the number we call and the call (ADR-IMPL-056 §7)", () => {
     const v = requestView("booked");
     expect(v.badge).toBe("booked");
-    expect(v.notice?.title).toBe("Your specialist completed this booking by phone.");
+    expect(v.notice?.title).toBe("Your agent completed this booking by phone.");
     expect(v.notice?.body).toBe("Your itinerary was sent by email.");
-    expect(v.caption).toBe("Your specialist confirms your flights.");
-    expect([v.titleBadge, v.callback, v.call]).toEqual([false, true, "specialist"]);
+    expect(v.caption).toBe("Your agent confirms your flights.");
+    expect([v.titleBadge, v.callback, v.call]).toEqual([false, true, "agent"]);
   });
 
   test("closed (33): the Closed badge by the title, the day it closed, the number we call and the call", () => {
@@ -81,7 +81,7 @@ describe("requestView — one image per state", () => {
     expect(v.titleBadge).toBe(true);
     expect(v.notice).toEqual({ title: "This request is closed.", body: null, icon: "info" });
     expect(v.closedLine).toBe("Closed  ·  Oct 3");
-    expect([v.callback, v.call, v.sendNow]).toEqual([true, "specialist", false]);
+    expect([v.callback, v.call, v.sendNow]).toEqual([true, "agent", false]);
   });
 
   test("waiting on the phone (32): Not sent by the title, saved, Send now", () => {
@@ -240,7 +240,7 @@ describe("stepCaption — the specialist's note wins (ADR-IMPL-041)", () => {
   const at = "2026-10-18T09:00:00.000Z";
   test("no note: the club's words for the state", () => {
     expect(stepCaption("quoted", requestView("quoted"), [{ status: "quoted", note: null }])).toBe(
-      "Review the quote with your specialist.",
+      "Review the quote with your agent.",
     );
     expect(stepCaption("received", requestView("received"), [])).toBe("We have your travel details.");
   });
@@ -260,7 +260,7 @@ describe("stepCaption — the specialist's note wins (ADR-IMPL-041)", () => {
       { status: "quoted", at, note: "First offer" },
       { status: "quoted", at, note: "  " },
     ];
-    expect(stepCaption("quoted", requestView("quoted"), timeline)).toBe("Review the quote with your specialist.");
+    expect(stepCaption("quoted", requestView("quoted"), timeline)).toBe("Review the quote with your agent.");
   });
 
   test("closed, on the phone or not passed on: at no step, so no note", () => {

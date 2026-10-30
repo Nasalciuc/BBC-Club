@@ -2,7 +2,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Keyboard, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AirportVM, HomeVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM } from "@bbc/shared/api/v1/fares";
 import {
   AirportRow,
   EmptyState,
@@ -40,6 +40,7 @@ import { airportSearchState } from "@/lib/airport-search-state";
 import { fetchAirports, fetchHome, fetchPopular } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
 import { formatPrice } from "@/lib/format";
+import { nextShownHome, type ShownHome } from "@/lib/home-shown-logic";
 
 /**
  * Search (03, 18): the field with `Cancel`; before typing, `Popular from <city>` (the routes members search, then the
@@ -54,7 +55,9 @@ export default function SearchScreen() {
   // `Try again` runs the search effect once more; an answer that comes after the member typed on is dropped.
   const [attempt, setAttempt] = useState(0);
   const [remembered, setRemembered] = useState(() => readRecentSearches());
-  const [home, setHome] = useState<HomeVM | null>(null);
+  // Home and the tag it came with: a 304 keeps it only for that tag (home-shown-logic.ts).
+  const [shown, setShown] = useState<ShownHome | null>(null);
+  const home = shown?.home ?? null;
   // Loading, answered, or failed with its code (offline or not): a failed Home shows its message with `Try again`,
   // never skeletons for ever (F011).
   const [homeLoad, setHomeLoad] = useState<{ state: HomeLoad; code?: string }>({ state: "loading" });
@@ -72,7 +75,9 @@ export default function SearchScreen() {
         setHomeLoad({ state: "failed", code: res.code });
         return;
       }
-      if (!res.data.notModified) setHome(res.data.home);
+      // Asked with the tag of what this session last received (lib/api.ts): a 304 brings that copy back.
+      const answer = res.data;
+      setShown((current) => nextShownHome(current, answer));
       setHomeLoad({ state: "ok" });
     })().catch(() => {
       if (!cancelled) setHomeLoad({ state: "failed" });

@@ -34,7 +34,7 @@ const body = {
 
 /**
  * Too many requests this hour (27): the message in the middle of the page — the member's own limit, or the neutral
- * words for an address shared with others (`limitedCopy`) — `Call your specialist` under it — only where the club's
+ * words for an address shared with others (`limitedCopy`) — `Call your agent` under it — only where the club's
  * general line is configured (support-phone.ts); `Done` otherwise. The tab bar shows Requests: the others are there.
  */
 export default function RequestLimitedScreen() {
@@ -43,7 +43,7 @@ export default function RequestLimitedScreen() {
   const params = useLocalSearchParams<{ minutes?: string; scope?: string }>();
   const minutes = Number(params.minutes);
   const shown = Number.isFinite(minutes) && minutes > 0 ? minutes : 1;
-  const call = clubCall("request.rateLimited.call", "Call your specialist");
+  const call = clubCall("request.rateLimited.call", "Call your agent");
   // The member's own limit blames the member; an address shared with others, or an unknown one, does not (F086).
   const copy = limitedCopy({ scope: limitScope({ scope: params.scope }), minutes: shown, canCall: CAN_CALL });
   const g = PAGE;

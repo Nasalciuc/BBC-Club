@@ -6,6 +6,7 @@ import { loadProfile } from "@/features/profile/profile-store";
 import { airportByCode } from "@/lib/airport-by-code";
 import { fetchHome, fetchProfile } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
+import { newestOnly, nextShownHome, type ShownHome } from "@/lib/home-shown-logic";
 import { DEFAULT_ORIGIN } from "./default-origin";
 import { withLiveDeals } from "./offer-card-logic";
 
@@ -41,30 +42,36 @@ export async function profileOrigin(destinations: HomeVM["destinations"] = []): 
  */
 export function useExploreHome(opts: { origin?: boolean } = {}) {
   const wantsOrigin = opts.origin !== false;
-  const [home, setHome] = useState<HomeVM | null>(null);
-  const [homeEtag, setHomeEtag] = useState<string | null>(null);
+  // Home and the tag it came with: a 304 keeps it only for that tag (home-shown-logic.ts).
+  const [shown, setShown] = useState<ShownHome | null>(null);
+  const home = shown?.home ?? null;
   const [homeLoading, setHomeLoading] = useState(true);
   // The words of a failed load, never the network layer's own line (ADR-IMPL-047): offline says when it will load.
   const [homeError, setHomeError] = useState<{ title: string; body: string } | null>(null);
   const [defaultFrom, setDefaultFrom] = useState<AirportVM | null>(null);
+  // The mount's load and a foreground's can overlap: only the newest one touches the screen (home-shown-logic.ts).
+  const [startLoad] = useState(newestOnly);
 
-  async function loadHome() {
+  async function loadHome(isNewest: () => boolean) {
     setHomeLoading(true);
     setHomeError(null);
-    const result = await fetchHome(homeEtag);
+    // The client asks with the tag of what this session last received, from the first load on (lib/api.ts): a 304
+    // keeps what is on screen when it came with that tag, else brings back the copy held for the session.
+    const result = await fetchHome();
+    if (!isNewest()) return;
     setHomeLoading(false);
     if (!result.ok) {
       setHomeError(readFailureCopy(result.code, "explore"));
       return;
     }
-    if (!result.data.notModified) {
-      setHome(result.data.home);
-      setHomeEtag(result.data.etag);
-    }
+    const answer = result.data;
+    setShown((current) => nextShownHome(current, answer));
   }
 
   function retryHome() {
-    void loadHome().catch(() => {
+    const isNewest = startLoad();
+    void loadHome(isNewest).catch(() => {
+      if (!isNewest()) return;
       setHomeLoading(false);
       setHomeError(stateCopy("route"));
     });
@@ -79,9 +86,11 @@ export function useExploreHome(opts: { origin?: boolean } = {}) {
   // once — even with no network — and Home is read again for today's. An effect event: it reads the Home on screen
   // when the app comes back, and the listener stays the one added on mount.
   const onForeground = useEffectEvent(() => {
-    const live = withLiveDeals(home, Date.now());
-    if (live === home) return;
-    setHome(live);
+    if (!shown) return;
+    const live = withLiveDeals(shown.home, Date.now());
+    if (!live || live === shown.home) return;
+    // Still the copy of that tag, less the deals past their day: a 304 for the tag keeps it.
+    setShown({ home: live, etag: shown.etag });
     retryHome();
   });
   useEffect(() => {

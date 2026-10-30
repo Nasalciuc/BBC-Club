@@ -529,7 +529,7 @@ export const fixture = {
       createdAt: "2026-09-10T10:00:00.000Z",
       timeline: [
         { status: "received", at: "2026-09-10T10:00:00.000Z", note: null },
-        { status: "quoted", at: "2026-09-11T16:30:00.000Z", note: "Quote ready — call your specialist" },
+        { status: "quoted", at: "2026-09-11T16:30:00.000Z", note: "Quote ready — call your agent" },
       ],
     },
     {

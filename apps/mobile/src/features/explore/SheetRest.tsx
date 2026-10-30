@@ -82,7 +82,7 @@ export function NoOffers({ onSearch, marginTop = 0 }: { onSearch: () => void; ma
         testID="explore.offers.empty"
         look="explore"
         title="No offers yet."
-        body="Your specialist’s offers will appear here. Search a destination to request a fare."
+        body="Your agent’s offers will appear here. Search a destination to request a fare."
         primary={{ label: "Search a destination", onPress: onSearch }}
         primaryFill={false}
       />

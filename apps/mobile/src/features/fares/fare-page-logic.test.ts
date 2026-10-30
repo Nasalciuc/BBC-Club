@@ -83,10 +83,10 @@ describe("About this fare (Figma 135:847)", () => {
 
   it("says when the published fare was recorded, read from its source", () => {
     expect(aboutFareNote(ba)).toBe(
-      "The published British Airways fare was recorded on 16 September. Your specialist will confirm current availability and fare conditions before booking.",
+      "The published British Airways fare was recorded on 16 September. Your agent will confirm current availability and fare conditions before booking.",
     );
     expect(aboutFareNote({ ...ba, price: { ...ba.price, publishedSource: "Sabre" } })).toBe(
-      "Your specialist will confirm current availability and fare conditions before booking.",
+      "Your agent will confirm current availability and fare conditions before booking.",
     );
   });
 });
@@ -134,10 +134,10 @@ describe("About this fare, 3.0 (20)", () => {
   it("says what the fare is, as drawn: indicative, round trip as the catalogue sells it, one adult, the route, its days", () => {
     const [first, second] = aboutFareLines({ ...ba, trip: "round_trip", ...search });
     expect(first).toBe(
-      "This indicative round-trip fare is for one adult flying from New York (JFK) to London (LHR), November 12–19, 2026. Your specialist confirms availability and the final fare.",
+      "This indicative round-trip fare is for one adult flying from New York (JFK) to London (LHR), November 12–19, 2026. Your agent confirms availability and the final fare.",
     );
     expect(second).toBe(
-      "Travel in Business with British Airways, with a spacious seat and a more comfortable journey. Your specialist confirms the cabin details and arranges the booking by phone.",
+      "Travel in Business with British Airways, with a spacious seat and a more comfortable journey. Your agent confirms the cabin details and arranges the booking by phone.",
     );
   });
 
@@ -150,11 +150,11 @@ describe("About this fare, 3.0 (20)", () => {
       passengers: { adult: 2, child: 1, infant: 0 },
     });
     expect(first).toBe(
-      "This indicative fare is for 3 travelers flying from New York (JFK) to London (LHR). Your specialist confirms availability and the final fare.",
+      "This indicative fare is for 3 travelers flying from New York (JFK) to London (LHR). Your agent confirms availability and the final fare.",
     );
     const [, second] = aboutFareLines({ ...ba, cabin: "first", trip: "one_way", ...search });
     expect(second).toBe(
-      "Travel in First with British Airways. Your specialist confirms the cabin details and arranges the booking by phone.",
+      "Travel in First with British Airways. Your agent confirms the cabin details and arranges the booking by phone.",
     );
     expect(longDay("2028-02-29")).toBe("February 29, 2028");
     expect(longDay(null)).toBeNull();
@@ -164,10 +164,10 @@ describe("About this fare, 3.0 (20)", () => {
     const unknown = { ...ba, carrier: { code: null, name: "Unknown", logoUrl: null } };
     const [, second] = aboutFareLines({ ...unknown, trip: "one_way", ...search });
     expect(second).toBe(
-      "Travel in Business, with a spacious seat and a more comfortable journey. Your specialist confirms the cabin details and arranges the booking by phone.",
+      "Travel in Business, with a spacious seat and a more comfortable journey. Your agent confirms the cabin details and arranges the booking by phone.",
     );
     expect(aboutFareNote(unknown)).toBe(
-      "The published fare was recorded on 16 September. Your specialist will confirm current availability and fare conditions before booking.",
+      "The published fare was recorded on 16 September. Your agent will confirm current availability and fare conditions before booking.",
     );
     expect(knownCarrier(unknown.carrier)).toBeNull();
     expect(knownCarrier({ code: null, name: "  " })).toBeNull();
@@ -187,7 +187,7 @@ describe("About this fare, 3.0 (20)", () => {
     expect(datesShortLabel(dates)).toBe("Nov 21");
     const [first] = aboutFareLines({ ...nov21, ...dates, passengers: null });
     expect(first).toBe(
-      "This indicative one-way fare is for one adult flying from New York (JFK) to London (LHR), November 21, 2026. Your specialist confirms availability and the final fare.",
+      "This indicative one-way fare is for one adult flying from New York (JFK) to London (LHR), November 21, 2026. Your agent confirms availability and the final fare.",
     );
     // A round-trip fare keeps the searched return after its own day; one before it is not a return.
     const round = { ...nov21, trip: "round_trip" as const };

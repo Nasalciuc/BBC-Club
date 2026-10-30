@@ -107,7 +107,7 @@ export function comparisonLine(price: FareVM["price"]): string | null {
  * end of its source (`Sabre · 16 Sep`, `BA published · 16 September`); a source without one leaves the promise alone.
  */
 export function aboutFareNote(fare: Pick<Fare, "carrier" | "price">): string {
-  const promise = "Your specialist will confirm current availability and fare conditions before booking.";
+  const promise = "Your agent will confirm current availability and fare conditions before booking.";
   const match = /(\d{1,2})\s+([A-Za-z]{3,})\.?\s*$/.exec(fare.price.publishedSource ?? "");
   const month = match ? MONTH_NAMES.find((m) => m.toLowerCase().startsWith(match[2]!.toLowerCase().slice(0, 3))) : null;
   if (!match || !month) return promise;
@@ -182,11 +182,11 @@ export function aboutFareLines(fare: AboutFare): [string, string] {
   const who = travelersWords(fare.passengers ?? { adult: 1, child: 0, infant: 0 });
   const days = longDays(fare.depart, fare.return);
   const route = `from ${fare.from.city} (${fare.from.code}) to ${fare.to.city} (${fare.to.code})`;
-  const first = `This indicative ${trip}fare is for ${who} flying ${route}${days ? `, ${days}` : ""}. Your specialist confirms availability and the final fare.`;
+  const first = `This indicative ${trip}fare is for ${who} flying ${route}${days ? `, ${days}` : ""}. Your agent confirms availability and the final fare.`;
   const seat = fare.cabin === "business" ? ", with a spacious seat and a more comfortable journey" : "";
   // A fare that names no airline says nothing of one — never `with Unknown`.
   const airline = knownCarrier(fare.carrier);
-  const second = `Travel in ${cabinWord(fare.cabin)}${airline ? ` with ${airline.name}` : ""}${seat}. Your specialist confirms the cabin details and arranges the booking by phone.`;
+  const second = `Travel in ${cabinWord(fare.cabin)}${airline ? ` with ${airline.name}` : ""}${seat}. Your agent confirms the cabin details and arranges the booking by phone.`;
   return [first, second];
 }
 

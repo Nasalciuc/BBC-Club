@@ -14,7 +14,7 @@ import {
 test("a gone fare uses the expired-fare copy", () => {
   expect(stateCopy("gone")).toEqual({
     title: "This fare has changed.",
-    body: "This fare is no longer available. A specialist can help you find another option.",
+    body: "This fare is no longer available. An agent can help you find another option.",
   });
 });
 
@@ -127,9 +127,7 @@ test("Profile's failure frame offers Call us beside Try again when the club's li
 });
 
 test("a failed deletion points at the call only when the club's line is configured", () => {
-  expect(stateCopy("deleteFailed", true).body).toBe(
-    "Your account could not be deleted. Try again or call your specialist.",
-  );
+  expect(stateCopy("deleteFailed", true).body).toBe("Your account could not be deleted. Try again or call your agent.");
   expect(stateCopy("deleteFailed", false).body).toBe("Your account could not be deleted. Try again in a moment.");
   // Unsaid is no number: the default never asks for a call.
   expect(stateCopy("deleteFailed").body.toLowerCase()).not.toContain("call");

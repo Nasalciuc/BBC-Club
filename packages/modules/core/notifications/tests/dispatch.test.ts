@@ -41,7 +41,7 @@ async function insertNotification(category: "transactional" | "offers_personal",
   const id = crypto.randomUUID();
   await iso.db.execute(sql`
     INSERT INTO notifications.notifications (id, member_id, category, title, body, status, scheduled_for)
-    VALUES (${id}::uuid, ${memberId}, ${category}, 'Your quote is ready', 'A specialist has a quote', 'pending', now())`);
+    VALUES (${id}::uuid, ${memberId}, ${category}, 'Your quote is ready', 'An agent has a quote', 'pending', now())`);
   return id;
 }
 

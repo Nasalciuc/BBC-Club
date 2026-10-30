@@ -165,9 +165,9 @@ export const NotificationsSheet = forwardRef<ProfileSheetHandle, Props>(function
       <Text style={styles.footnote}>
         {denied
           ? IOS
-            ? "A specialist will still call about a request you send. Request updates stay on when iOS notifications are allowed."
-            : "A specialist will still call about a request you send. Request updates stay on when notifications are allowed."
-          : "A specialist will still call about a request you send. These switches control app notifications."}
+            ? "An agent will still call about a request you send. Request updates stay on when iOS notifications are allowed."
+            : "An agent will still call about a request you send. Request updates stay on when notifications are allowed."
+          : "An agent will still call about a request you send. These switches control app notifications."}
       </Text>
     </ModalSheet>
   );

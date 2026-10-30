@@ -17,16 +17,16 @@ export type RequestView = {
   /** Beside the detail's title only for a request not sent or closed (32, 33): the steps say the others. */
   titleBadge: boolean;
   notice: RequestNotice | null;
-  /** The line under the notice (`Review the quote with your specialist.`). */
+  /** The line under the notice (`Review the quote with your agent.`). */
   caption: string | null;
   closedLine: string | null;
   /** `We will call` with the member's number, and the booking note under it: received and quote ready (11, 30). */
   callback: boolean;
   /** `Your fare` — the fare the quote is for: a quote ready only (11). */
   fare: boolean;
-  /** The call, the screen's one filled pill. `specialist` — `Call your specialist`, on every request the club holds, as
+  /** The call, the screen's one filled pill. `agent` — `Call your agent`, on every request the club holds, as
    *  11 and 30–33 draw it (ADR-IMPL-056 §7). `us` — a request we could not pass on: the member calls us. */
-  call: "specialist" | "us" | null;
+  call: "agent" | "us" | null;
   /** `Send now` (32): a request still on the phone that may still go out. */
   sendNow: boolean;
 };
@@ -107,18 +107,18 @@ export function requestView(status: string, at?: string | null, timeZone?: strin
       return {
         ...NONE,
         badge: "received",
-        notice: { title: "We have your request.", body: "A specialist will call shortly.", icon: "phone" },
+        notice: { title: "We have your request.", body: "An agent will call shortly.", icon: "phone" },
         caption: "We have your travel details.",
         callback: true,
-        call: "specialist",
+        call: "agent",
       };
     case "assigned":
       // A specialist has it: no number to call yet.
       return {
         ...NONE,
         badge: "received",
-        notice: { title: "A specialist is reviewing your request.", body: null, icon: "phone" },
-        caption: "A specialist will call you shortly.",
+        notice: { title: "An agent is reviewing your request.", body: null, icon: "phone" },
+        caption: "An agent will call you shortly.",
       };
     case "quoted":
       return {
@@ -126,26 +126,26 @@ export function requestView(status: string, at?: string | null, timeZone?: strin
         badge: "quote_ready",
         notice: {
           title: "Your quote is ready.",
-          body: "A specialist will call shortly to confirm the details.",
+          body: "An agent will call shortly to confirm the details.",
           icon: "phone",
         },
-        caption: "Review the quote with your specialist.",
+        caption: "Review the quote with your agent.",
         callback: true,
         fare: true,
-        call: "specialist",
+        call: "agent",
       };
     case "booked":
       return {
         ...NONE,
         badge: "booked",
         notice: {
-          title: "Your specialist completed this booking by phone.",
+          title: "Your agent completed this booking by phone.",
           body: "Your itinerary was sent by email.",
           icon: "phone",
         },
-        caption: "Your specialist confirms your flights.",
+        caption: "Your agent confirms your flights.",
         callback: true,
-        call: "specialist",
+        call: "agent",
       };
     case "closed":
       // 33: the badge, the day it closed, the message, the number we call and the call.
@@ -156,7 +156,7 @@ export function requestView(status: string, at?: string | null, timeZone?: strin
         notice: { title: "This request is closed.", body: null, icon: "info" },
         closedLine: closedLine(at, timeZone),
         callback: true,
-        call: "specialist",
+        call: "agent",
       };
     case "queued":
       return { ...NONE, badge: "not_sent", titleBadge: true, notice: NOT_SENT, sendNow: true };

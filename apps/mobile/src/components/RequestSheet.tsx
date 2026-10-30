@@ -361,7 +361,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
               <View style={{ marginTop: baselineOffset(PROMISE) - SHEET.promise.iconRise - SHEET.promise.icon / 2 }}>
                 <Icon name="phone-fill" size={SHEET.promise.icon} color={tokens.colors.textPrimary} />
               </View>
-              <Text style={[PROMISE, styles.promiseText]}>A specialist will call you shortly.</Text>
+              <Text style={[PROMISE, styles.promiseText]}>An agent will call you shortly.</Text>
             </View>
           </View>
         }

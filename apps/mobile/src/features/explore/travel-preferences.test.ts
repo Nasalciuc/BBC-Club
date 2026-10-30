@@ -79,7 +79,7 @@ describe("noFareCopy", () => {
     expect(copy.kind).toBe("on_request");
     expect(copy.title).toBe("Fares from Chișinău are on request.");
     expect(copy.body).toBe(
-      "We publish fares from North America for now. Tell us where you're going — your specialist will find the fare.",
+      "We publish fares from North America for now. Tell us where you're going — your agent will find the fare.",
     );
   });
 

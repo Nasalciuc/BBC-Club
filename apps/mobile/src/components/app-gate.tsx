@@ -102,7 +102,7 @@ export function AppGate({ children }: { children: ReactNode }) {
             testID: "appGate.update.cta",
             onPress: () => void openFirst(targets, (url) => Linking.openURL(url)),
           }}
-          call={clubCall("appGate.update.call", "Call a specialist")}
+          call={clubCall("appGate.update.call", "Call an agent")}
         />
       </>
     );
@@ -117,7 +117,7 @@ export function AppGate({ children }: { children: ReactNode }) {
           title={stateCopy("maintenance").title}
           body={maintenanceBody(gate.value)}
           primary={{ label: "Try again", testID: "appGate.maintenance.retry", onPress: () => askNow.current() }}
-          call={clubCall("appGate.maintenance.call", "Call a specialist")}
+          call={clubCall("appGate.maintenance.call", "Call an agent")}
         />
       </>
     );

@@ -25,7 +25,7 @@ test("saved on the phone: offline says so; a club that did not answer never says
   expect(savedCopy(false).body).toContain("You’re offline right now.");
   const unreachable = savedCopy(true);
   expect(`${unreachable.title} ${unreachable.body}`.toLowerCase()).not.toContain("offline");
-  expect(unreachable.body).toContain("a specialist will call you");
+  expect(unreachable.body).toContain("an agent will call you");
   // 26 draws the title on two lines: never longer than the offline one.
   expect(unreachable.title.length).toBeLessThanOrEqual(savedCopy(false).title.length);
 });
@@ -41,11 +41,11 @@ test("the rate-limit page blames the member only for the member's own limit (F08
   // A shared address (an office, a hotel, a carrier's NAT): the member may have sent nothing.
   expect(limitedCopy({ scope: "ip", minutes: 5, canCall: true })).toEqual({
     title: "We couldn’t take this request just now.",
-    body: "Try again in 5 minutes, or call your specialist.",
+    body: "Try again in 5 minutes, or call your agent.",
   });
   expect(limitedCopy({ scope: "member", minutes: 6, canCall: true })).toEqual({
     title: "You’ve sent several requests this hour.",
-    body: "You can send another in 6 minutes. Your specialist already has the others.",
+    body: "You can send another in 6 minutes. Your agent already has the others.",
   });
   // An older server says nothing of the scope: the neutral words, never the blame.
   expect(limitedCopy({ minutes: 1, canCall: false })).toEqual({
@@ -63,7 +63,7 @@ test("a request whose details cannot go says what to fix, calmly — never zod's
   const issue = (path: (string | number)[], message = "String must contain at least 2 character(s)") => [
     { path, message },
   ];
-  expect(bodyProblem(issue(["contact", "name"]))).toBe("Add your name, so your specialist knows who to ask for.");
+  expect(bodyProblem(issue(["contact", "name"]))).toBe("Add your name, so your agent knows who to ask for.");
   expect(bodyProblem(issue(["contact", "email"], "Invalid email"))).toBe("Add an email address we can write to.");
   expect(bodyProblem(issue(["contact", "phone"], "That phone number doesn't look right."))).toBe(
     "That phone number doesn't look right.",
@@ -88,7 +88,7 @@ test("a name the request cannot take says what to do with it — never 'Add your
     expect(parsed.success).toBe(false);
     return parsed.success ? null : bodyProblem(parsed.error.issues, body(name));
   };
-  expect(problem("")).toBe("Add your name, so your specialist knows who to ask for.");
+  expect(problem("")).toBe("Add your name, so your agent knows who to ask for.");
   expect(problem("A")).toBe("Use your full name.");
   expect(problem("A".repeat(81))).toBe("Shorten the name to 80 characters.");
   expect(REQUEST_NAME_MAX).toBe(80);
