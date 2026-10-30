@@ -217,6 +217,10 @@ export async function buildApp(opts: BuildOptions = {}) {
   }
 
   if (runsBackground) {
+    // At zero from the start (CodeRabbit on #118): a counter first written by its first failure starts at 1, and
+    // increase() over it reads 0, so bbc-job-failed and bbc-request-given-up would miss that failure.
+    for (const job of platform.jobs.names()) platform.metrics.inc("job_failed", { job }, 0);
+    platform.metrics.inc("request_sends_given_up", undefined, 0);
     registerRoute("POST", "/v1/internal/run/:job", "jobs:run");
     app.post("/v1/internal/run/:job", authorize("jobs:run"), async (c) => {
       const name = c.req.param("job");

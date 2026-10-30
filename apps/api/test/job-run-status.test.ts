@@ -26,4 +26,14 @@ describe("a job run's answer", () => {
     expect(((await failed.json()) as { status: string }).status).toBe("failed");
     await t.close();
   });
+
+  it("job_failed and request_sends_given_up read 0 from the start, so the first failure is an increase", async () => {
+    const t = await testApp({ suite: "job-run-status-zero" });
+    const text = await (await t.app.request("/metrics")).text();
+    const names = t.platform.jobs.names();
+    expect(names.length).toBeGreaterThan(0);
+    for (const job of names) expect(text).toContain(`bbc_job_failed{job="${job}"} 0`);
+    expect(text).toMatch(/^bbc_request_sends_given_up 0$/m);
+    await t.close();
+  });
 });
