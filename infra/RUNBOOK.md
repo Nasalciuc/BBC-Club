@@ -582,8 +582,8 @@ JOIN catalog.airports a ON a.code = p.airport
 WHERE r.route_from = 'JFK' AND r.valid_until > now() ORDER BY p.promoted DESC, a.popularity DESC LIMIT 24;
 ```
 
-Off: the next Home has none (within a second), with no question to the database. On staging, once it is on,
-withdraw the demo's broadcast offers ("Staging demo data", below), or Tokyo stands twice on Explore.
+Off: the next Home has none (within a second), with no question to the database. On staging the demo seed writes no
+broadcast offer, and its first run after 30 Oct 2026 withdrew the ones earlier runs left ("Staging demo data", below).
 
 ## The site's prices (ADR-IMPL-063)
 
