@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
 
-import { STAGING_REAL_DATA_FLAGS } from "./staging-real-data";
+import { storedPricingRules } from "../packages/modules/domain/catalog/src/pricing/rules";
+import { FIXTURE_RULES } from "../packages/modules/domain/catalog/tests/unit/pricing-rules.fixture";
+import { STAGING_REAL_DATA_FLAGS, rulesLine, rulesState } from "./staging-real-data";
 
 const deploy = readFileSync(join(import.meta.dir, "..", "infra/deploy.sh"), "utf8");
 
@@ -49,5 +51,25 @@ describe("infra/deploy.sh — staging only, after the demo, skipped by STAGING_R
     expect(await starts("staging real data: on\nprice rules: loaded\nchanged: 4")).toBe(true);
     expect(await starts("staging real data: on\nprice rules: loaded\nchanged: 0")).toBe(false);
     expect(await starts("changed: 10")).toBe(true);
+  });
+});
+
+describe("the price rules, as a search reads them — never a rule in the log", () => {
+  const stored = storedPricingRules(FIXTURE_RULES);
+
+  it("loaded only when the catalogue would use them: shape and fingerprint", () => {
+    expect(rulesState(stored)).toEqual({ state: "loaded", fingerprint: stored.fingerprint });
+    expect(rulesState(undefined)).toEqual({ state: "missing" });
+    expect(rulesState({ fingerprint: "test" })).toEqual({ state: "invalid" });
+    expect(rulesState({ ...stored, fingerprint: "0000000000000000" })).toEqual({ state: "invalid" }); // a hand edit
+  });
+
+  it("each state's line says what a search shows, and prints the fingerprint alone", () => {
+    expect(rulesLine(rulesState(stored))).toBe(`price rules: loaded (fingerprint ${stored.fingerprint})`);
+    expect(rulesLine({ state: "missing" })).toMatch(/^price rules: not loaded — .*no number elsewhere/);
+    expect(rulesLine({ state: "invalid" })).toMatch(/^price rules: invalid .*load them again/);
+    for (const amount of Object.values(FIXTURE_RULES.hawaii_extra)) {
+      expect(rulesLine(rulesState(stored))).not.toContain(String(amount));
+    }
   });
 });

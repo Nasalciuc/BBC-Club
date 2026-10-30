@@ -1175,8 +1175,8 @@ fare off sale (the rows stay: the demo's requests name them). Nothing to do by h
 
 **The real data, at every staging deploy.** After the demo, step 7 runs `scripts/staging-real-data.ts`: it turns on
 `catalog.estimates`, `catalog.site_prices`, `catalog.site_pins` and `catalog.site_offers` (an operator's `skip` list
-stays) and says whether the price rules are loaded — `price rules: not loaded` means a search shows the site's price
-where it has one and no number elsewhere: load them ("Price rules for estimates", above). When it turned a flag on
+stays) and says whether a search can use the price rules, as the catalogue checks them — `price rules: not loaded` or
+`invalid` means a search shows the site's price where it has one and no number elsewhere: load them ("Price rules for estimates", above). When it turned a flag on
 (`changed: 1` or more), the deploy starts `sync-site-destinations` in the worker at once instead of waiting for 07:40 or
 19:40; it runs a few minutes, its outcome in `platform.job_runs`. `catalog.site_photos` is left alone: the site's photos
 wait for the company to confirm the rights. A flag turned off by hand is on again after the next deploy: to keep the

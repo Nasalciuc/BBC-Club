@@ -6,7 +6,7 @@ import { STAGING_REAL_DATA_FLAGS, enableStagingRealData } from "../../../scripts
 import { testApp } from "./helpers/test-app";
 
 describe("staging real data", () => {
-  it("turns the site's flags on once, keeps their other settings, leaves the photos and says if rules are loaded", async () => {
+  it("turns the site's flags on once, keeps their other settings, leaves the photos and says if a search can use the rules", async () => {
     const t = await testApp({ suite: "staging-real-data" });
     const flag = async (key: string) =>
       (
@@ -23,19 +23,23 @@ describe("staging real data", () => {
     await t.db.execute(sql`DELETE FROM platform.flags WHERE key = 'catalog.pricing_rules'`);
 
     const first = await enableStagingRealData(t.db);
-    expect(first.rulesLoaded).toBe(false);
+    expect(first.rules).toEqual({ state: "missing" });
     expect(first.turnedOn.sort()).toEqual([...STAGING_REAL_DATA_FLAGS].sort());
     for (const key of STAGING_REAL_DATA_FLAGS) expect((await flag(key))?.enabled).toBe(true);
     expect(await flag("catalog.site_pins")).toEqual({ enabled: true, skip: [23] }); // an operator's skip list stays
     expect(await flag("catalog.site_photos")).toEqual({ enabled: false }); // the rights are the company's call
 
     // A second run writes nothing: no flag is turned on again.
-    expect(await enableStagingRealData(t.db)).toEqual({ turnedOn: [], rulesLoaded: false });
+    expect(await enableStagingRealData(t.db)).toEqual({ turnedOn: [], rules: { state: "missing" } });
 
     // An operator turned one off: the next deploy's run turns it back on — STAGING_REAL_DATA=off is the way to keep it.
     await set("catalog.site_offers", '{"enabled":false}');
+    // A rules row a search would refuse (not as the loader writes it) is reported as invalid, never as loaded.
     await set("catalog.pricing_rules", '{"fingerprint":"test"}');
-    expect(await enableStagingRealData(t.db)).toEqual({ turnedOn: ["catalog.site_offers"], rulesLoaded: true });
+    expect(await enableStagingRealData(t.db)).toEqual({
+      turnedOn: ["catalog.site_offers"],
+      rules: { state: "invalid" },
+    });
     await t.close();
   }, 60_000);
 });

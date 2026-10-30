@@ -8,14 +8,15 @@
  * Turns on what the flags below name, keeping each flag's other settings (a `skip` list stays). Idempotent: a flag
  * already on is not written again, so a second run changes nothing — its last line says how many it turned on, which
  * the deploy reads to start the site's sync once. `catalog.site_photos` is left alone: the site's photos wait for the
- * company to confirm the rights (seed-flags.ts). It says whether the price rules are loaded — never a rule: without
- * them a search shows the site's price where the site has one, and no number elsewhere (RUNBOOK, Price rules).
+ * company to confirm the rights (seed-flags.ts). It says whether a search can use the price rules, as the catalogue
+ * checks them — never a rule: without them a search shows the site's price where it has one, and no number elsewhere.
  * Refuses any database that is not staging's or a local one (the demo's own guard). Production never runs it.
  */
 import { sql } from "drizzle-orm";
 import type { Db } from "@bbc/db";
 import { createDb } from "@bbc/db";
 import { loadEnv, type ServerEnv } from "@bbc/shared/env";
+import { readStoredRules } from "../packages/modules/domain/catalog/src/pricing/rules";
 import { reason } from "./seed-review-account";
 import { assertStagingTarget } from "./seed-staging-demo";
 
@@ -29,8 +30,26 @@ export const STAGING_REAL_DATA_FLAGS = [
 
 const DESCRIPTION = "Turned on by scripts/staging-real-data.ts (staging only, ADR-IMPL-040): the club's real data";
 
-/** Turns the flags on and says how many it changed and whether the price rules are loaded. */
-export async function enableStagingRealData(db: Db): Promise<{ turnedOn: string[]; rulesLoaded: boolean }> {
+/** The price rules as a search reads them (the catalogue's own check): loaded — shape and fingerprint hold — missing
+ *  (no row) or invalid (a row a search refuses, as one edited by hand). */
+export type RulesState = { state: "loaded"; fingerprint: string } | { state: "missing" | "invalid" };
+
+export function rulesState(value: unknown): RulesState {
+  const read = readStoredRules(value);
+  return read.ok ? { state: "loaded", fingerprint: read.fingerprint } : { state: read.reason };
+}
+
+/** What the deploy's log says of the rules: never a rule, only whether a search can use them. */
+export function rulesLine(rules: RulesState): string {
+  if (rules.state === "loaded") return `price rules: loaded (fingerprint ${rules.fingerprint})`;
+  const without = "a search shows the site's price where it has one, and no number elsewhere";
+  return rules.state === "missing"
+    ? `price rules: not loaded — ${without}; load them (RUNBOOK, Price rules)`
+    : `price rules: invalid (not as load-pricing-rules.ts wrote them) — ${without}; load them again (RUNBOOK, Price rules)`;
+}
+
+/** Turns the flags on and says which it changed and whether a search can use the price rules. */
+export async function enableStagingRealData(db: Db): Promise<{ turnedOn: string[]; rules: RulesState }> {
   return db.transaction(async (tx) => {
     const turnedOn: string[] = [];
     for (const key of STAGING_REAL_DATA_FLAGS) {
@@ -42,10 +61,12 @@ export async function enableStagingRealData(db: Db): Promise<{ turnedOn: string[
         RETURNING key`)) as unknown as { key: string }[];
       if (rows.length > 0) turnedOn.push(key);
     }
-    const rules = (await tx.execute(
-      sql`SELECT 1 AS present FROM platform.flags WHERE key = 'catalog.pricing_rules'`,
-    )) as unknown as unknown[];
-    return { turnedOn, rulesLoaded: rules.length > 0 };
+    const row = (
+      (await tx.execute(sql`SELECT value FROM platform.flags WHERE key = 'catalog.pricing_rules'`)) as unknown as {
+        value: unknown;
+      }[]
+    )[0];
+    return { turnedOn, rules: rulesState(row?.value) };
   });
 }
 
@@ -65,11 +86,7 @@ if (import.meta.main) {
       `staging real data: on — ${STAGING_REAL_DATA_FLAGS.join(", ")}` +
         (n.turnedOn.length > 0 ? ` (turned on now: ${n.turnedOn.join(", ")})` : " (already on)"),
     );
-    console.log(
-      n.rulesLoaded
-        ? "price rules: loaded"
-        : "price rules: not loaded — a search shows the site's price where it has one; load them (RUNBOOK, Price rules)",
-    );
+    console.log(rulesLine(n.rules));
     console.log(`changed: ${n.turnedOn.length}`);
   } catch (e) {
     console.error("staging real data failed:", reason(e));
