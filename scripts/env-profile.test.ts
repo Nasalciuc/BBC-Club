@@ -1544,3 +1544,23 @@ describe("the restore and its drill check every schema the club has (audit, 30 O
     }
   });
 });
+
+describe("migrations:destructive when git cannot answer (audit, 30 Oct 2026)", () => {
+  it("a diff with no merge base fails the check instead of reading as 0 migrations", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bbc-nomerge-"));
+    const g = (...a: string[]) =>
+      spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: dir, encoding: "utf8" });
+    g("init", "-q", "-b", "main");
+    g("commit", "-q", "--allow-empty", "-m", "a");
+    g("checkout", "-q", "--orphan", "other");
+    g("commit", "-q", "--allow-empty", "-m", "b");
+    g("update-ref", "refs/remotes/origin/main", "main");
+    const r = spawnSync("bun", ["run", join(root, "scripts/check-destructive-migrations.ts")], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    rmSync(dir, { recursive: true, force: true });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("the migrations were not checked");
+  });
+});
