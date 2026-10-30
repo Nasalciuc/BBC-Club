@@ -73,3 +73,44 @@ describe("the price rules, as a search reads them — never a rule in the log", 
     }
   });
 });
+
+describe("infra/deploy.sh — the site's sync after the flags: a start, or announced", () => {
+  const js = deploy.match(/^SITE_SYNC_JS="(.*)"$/m)?.[1];
+
+  /** The deploy's JavaScript with `fetch` answering as given; its exit code and what it printed. */
+  async function sync(answer: string) {
+    const p = Bun.spawn(["bun", "-e", `globalThis.fetch = async () => { ${answer} };\n${js}`], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [code, out, err] = await Promise.all([
+      p.exited,
+      new Response(p.stdout).text(),
+      new Response(p.stderr).text(),
+    ]);
+    return { code, text: out + err };
+  }
+
+  it("is defined once and used by step 7", () => {
+    expect(js).toBeTruthy();
+    expect(deploy).toContain('docker exec "$W" bun -e "$SITE_SYNC_JS"');
+  });
+
+  it("still running after 5 s is a start — the run takes minutes", async () => {
+    const r = await sync(`throw new DOMException("The operation timed out.", "TimeoutError");`);
+    expect([r.code, r.text.trim()]).toEqual([0, "site sync: started, it runs for a few minutes"]);
+  });
+
+  it("a run finished within the 5 s says how it ended; a failed one is announced", async () => {
+    expect((await sync(`return new Response(JSON.stringify({ status: "succeeded" }));`)).code).toBe(0);
+    const failed = await sync(`return new Response(JSON.stringify({ status: "failed", error: "site down" }));`);
+    expect([failed.code, failed.text.trim()]).toEqual([1, "site sync: failed: site down"]);
+  });
+
+  it("a refusal or no connection at all is announced, never read as a start", async () => {
+    const refused = await sync(`return new Response("{}", { status: 401 });`);
+    expect([refused.code, refused.text.trim()]).toEqual([1, "site sync: refused, HTTP 401"]);
+    const down = await sync(`throw new TypeError("fetch failed");`);
+    expect([down.code, down.text.trim()]).toEqual([1, "site sync: no answer (TypeError)"]);
+  });
+});

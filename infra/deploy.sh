@@ -278,6 +278,10 @@ W="$($DC ps -q "$WORKER" | head -n1)"
 wait_ready "$W" 8001 || rollback_and_exit "worker /ready red"
 $DC up -d --no-deps --force-recreate "$CRON" || rollback_and_exit "cron recreate failed"
 
+# Starts sync-site-destinations in the worker and waits 5 s: still running then is a start (it takes minutes); a
+# refusal, a run that failed, or no connection exits 1. scripts/staging-real-data.test.ts runs it against a fake fetch.
+SITE_SYNC_JS="fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET},signal:AbortSignal.timeout(5000)}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok||j.status==='failed'){console.error('  site sync: '+(r.ok?'failed: '+(j.error||'no reason'):'refused, HTTP '+r.status));process.exit(1)}console.log('  site sync: '+(j.status||'done'))}).catch(e=>{if(e&&e.name==='TimeoutError'){console.log('  site sync: started, it runs for a few minutes');return}console.error('  site sync: no answer ('+(e&&e.name)+')');process.exit(1)})"
+
 if [[ "$MODE" == "staging" ]]; then
   echo "▶ 7/8 staging demo (ADR-IMPL-040): the review account's own situations, dated from today; nothing every member sees"
   # Direct Postgres, never the pooler. The script refuses any database but staging's. A failure never undoes the
@@ -292,9 +296,12 @@ if [[ "$MODE" == "staging" ]]; then
   elif REAL="$($DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$SVC" bun run scripts/staging-real-data.ts)"; then
     echo "$REAL"
     # Flags just turned on: the site's snapshot now, not at the next 07:40/19:40 run. The worker runs it for a few
-    # minutes; this call stops waiting after 5 s and the run goes on (platform.job_runs has its outcome).
+    # minutes; this call stops waiting after 5 s — the expected outcome — and the run goes on (platform.job_runs has
+    # it). A refusal, a run that failed within the 5 s, or no answer at all is announced; the night's run still comes.
     if grep -q '^changed: [1-9]' <<<"$REAL"; then
-      docker exec "$W" bun -e "fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET},signal:AbortSignal.timeout(5000)}).then(r=>console.log('  site sync: answered',r.status)).catch(()=>console.log('  site sync: started, it runs for a few minutes'))" || true
+      if ! docker exec "$W" bun -e "$SITE_SYNC_JS"; then
+        notify "⚠ deploy staging: the site's sync did not start — run sync-site-destinations by hand (RUNBOOK, The site's destinations)" "${OPS_WEBHOOK:-}"
+      fi
     fi
   else
     notify "⚠ deploy staging: the real data's flags were not set — run scripts/staging-real-data.ts by hand (RUNBOOK, Staging demo data)" "${OPS_WEBHOOK:-}"
