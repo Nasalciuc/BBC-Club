@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { findUnannounced } from "./check-destructive-migrations";
@@ -1548,16 +1548,28 @@ describe("the restore and its drill check every schema the club has (audit, 30 O
 describe("migrations:destructive when git cannot answer (audit, 30 Oct 2026)", () => {
   it("a diff with no merge base fails the check instead of reading as 0 migrations", () => {
     const dir = mkdtempSync(join(tmpdir(), "bbc-nomerge-"));
-    const g = (...a: string[]) =>
-      spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: dir, encoding: "utf8" });
+    // Under the pre-push hook git sets GIT_DIR, GIT_INDEX_FILE and the like: inherited, they point every command here at
+    // the repository being pushed, not at `dir` (it once committed "a" onto the branch). Only `dir` is touched.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+    const g = (...a: string[]) => {
+      const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], {
+        cwd: dir,
+        encoding: "utf8",
+        env,
+      });
+      if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr}`);
+      return r;
+    };
     g("init", "-q", "-b", "main");
     g("commit", "-q", "--allow-empty", "-m", "a");
     g("checkout", "-q", "--orphan", "other");
     g("commit", "-q", "--allow-empty", "-m", "b");
     g("update-ref", "refs/remotes/origin/main", "main");
+    expect(g("rev-parse", "--absolute-git-dir").stdout.trim()).toBe(realpathSync(join(dir, ".git")));
     const r = spawnSync("bun", ["run", join(root, "scripts/check-destructive-migrations.ts")], {
       cwd: dir,
       encoding: "utf8",
+      env,
     });
     rmSync(dir, { recursive: true, force: true });
     expect(r.status).toBe(1);
