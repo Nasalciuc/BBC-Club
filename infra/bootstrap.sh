@@ -50,7 +50,7 @@ ufw --force reset >/dev/null; ufw default deny incoming >/dev/null; ufw default 
 ufw allow 22/tcp >/dev/null; ufw --force enable >/dev/null
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/; s/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
 # Said, never hidden (audit, 30 Oct 2026): a reload that fails leaves password logins on.
-(systemctl reload ssh 2>/dev/null || systemctl reload sshd) || echo "⚠ sshd did not reload: password and root logins stay as they were — systemctl reload ssh by hand, then check sshd -T | grep -i passwordauthentication"
+(systemctl reload ssh 2>/dev/null || systemctl reload sshd) || echo "⚠ sshd did not reload: password and root logins stay as they were — systemctl reload ssh by hand, then check sshd -T | grep -Ei '^(passwordauthentication|permitrootlogin) '"
 systemctl enable --now fail2ban
 dpkg-reconfigure -f noninteractive unattended-upgrades >/dev/null 2>&1 || echo "⚠ unattended-upgrades not configured: security updates are not automatic — dpkg-reconfigure unattended-upgrades by hand"
 timedatectl set-timezone UTC || true
