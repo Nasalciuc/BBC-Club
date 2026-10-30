@@ -6,6 +6,13 @@ import { fcmSender, type FcmServiceAccount, type ProviderError } from "./fcm";
 /** Once a minute per kind at most: a dead credential fails every push, and one line a minute says so. */
 const ONE_MINUTE = 60_000;
 
+/** A device token never reaches the log (CodeRabbit on #118): an error's message can carry one — APNs' request path is
+ *  `/3/device/<token>` — so any run of 32 or more token characters (APNs' 64 hex, FCM's ~150 with `:` `-` `_`) is
+ *  replaced before the message is cut, and so is anything after `/device/`. */
+export function redactTokens(text: string): string {
+  return text.replace(/\/device\/[^\s"'?]*/g, "/device/[token]").replace(/[A-Za-z0-9_:-]{32,}/g, "[token]");
+}
+
 export function providerErrorLog(
   logger: { warn: (o: object, m?: string) => void } | undefined,
   now: () => number = Date.now,
@@ -17,8 +24,8 @@ export function providerErrorLog(
     last.set(where, at);
     const error =
       detail instanceof Error
-        ? { name: detail.name, message: detail.message.slice(0, 200) }
-        : String(detail).slice(0, 200);
+        ? { name: detail.name, message: redactTokens(detail.message).slice(0, 200) }
+        : redactTokens(String(detail)).slice(0, 200);
     logger?.warn({ where, error }, "push provider failed: every push it sends fails the same way until this is fixed");
   };
 }

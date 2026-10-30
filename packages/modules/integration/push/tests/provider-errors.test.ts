@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { generateKeyPairSync } from "node:crypto";
 import { apnsSender } from "../src/apns";
 import { fcmSender } from "../src/fcm";
-import { providerErrorLog } from "../src/module";
+import { providerErrorLog, redactTokens } from "../src/module";
 
 // Audit of 30 Oct 2026: a revoked service account or a bad .p8 failed every push as Transient or Fatal and nothing said
 // why. The senders now tell the module where they failed; the module logs it, at most once a minute per kind.
@@ -77,5 +77,18 @@ describe("push provider failures are said", () => {
     expect(lines[0]?.o).toEqual({ where: "fcm oauth", error: { name: "Error", message: "invalid_grant" } });
     expect(lines[0]?.m).toContain("push provider failed");
     expect(() => providerErrorLog(undefined)("x", 1)).not.toThrow();
+  });
+
+  it("never logs a device token, even one inside the error's message", () => {
+    const apns = "a1b2".repeat(16);
+    const fcm = `dQw4w9WgXcQ:APA91b${"Hk-_z".repeat(28)}`;
+    const lines: string[] = [];
+    const report = providerErrorLog({ warn: (o) => lines.push(JSON.stringify(o)) });
+    report("apns send", new Error(`stream reset on POST /3/device/${apns}`));
+    report("fcm send", `rejected ${fcm}`);
+    expect(lines.join("\n")).not.toContain(apns);
+    expect(lines.join("\n")).not.toContain(fcm.slice(0, 20));
+    expect(lines[0]).toContain("/3/device/[token]");
+    expect(redactTokens("HTTP 403 InvalidProviderToken")).toBe("HTTP 403 InvalidProviderToken");
   });
 });
