@@ -1256,7 +1256,9 @@ describe("Grafana's provisioning after a deploy (A-D1)", () => {
 describe("PgBouncer's RECONNECT after the migration (H2)", () => {
   it("a worker without PGBOUNCER_ADMIN_URL fails the step, so the deploy prints that RECONNECT was not sent", async () => {
     const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
-    const program = deploy.match(/"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| echo "⚠ PgBouncer RECONNECT failed/)?.[1];
+    const program = deploy.match(
+      /"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| notify "⚠ deploy \$MODE: PgBouncer RECONNECT failed/,
+    )?.[1];
     expect(program).toBeDefined();
     const env = { ...process.env };
     delete env.PGBOUNCER_ADMIN_URL;
@@ -1267,7 +1269,9 @@ describe("PgBouncer's RECONNECT after the migration (H2)", () => {
 
   it("a PgBouncer that lets the worker in and never answers RECONNECT fails the step within 10 s", async () => {
     const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
-    const program = deploy.match(/"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| echo "⚠ PgBouncer RECONNECT failed/)?.[1];
+    const program = deploy.match(
+      /"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| notify "⚠ deploy \$MODE: PgBouncer RECONNECT failed/,
+    )?.[1];
     expect(program).toBeDefined();
     // Answers the startup (AuthenticationOk, ReadyForQuery), then never answers the query: connect_timeout is past.
     let greeted = false;

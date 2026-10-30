@@ -218,7 +218,7 @@ fi
 # a worker without the URL, or a PgBouncer that does not answer within 10 s, fails the step, and the warning says so.
 if [[ -n "$($DC ps -q "$WORKER" 2>/dev/null || true)" ]]; then
   $DC exec -T -w /repo/packages/db "$WORKER" bun -e 'setTimeout(() => { console.error("PgBouncer did not answer RECONNECT within 10 s"); process.exit(4); }, 10_000).unref(); const u = process.env.PGBOUNCER_ADMIN_URL; if (!u) { console.error("PGBOUNCER_ADMIN_URL is not set in the worker"); process.exit(3); } const p = (await import("postgres")).default(u, { max: 1, prepare: false, fetch_types: false, connect_timeout: 3, onnotice: () => {} }); try { await p.unsafe("RECONNECT"); } finally { await p.end({ timeout: 1 }); }' \
-    || echo "⚠ PgBouncer RECONNECT failed: prepared statements are dropped within server_lifetime instead"
+    || notify "⚠ deploy $MODE: PgBouncer RECONNECT failed — a statement prepared before this migration may answer 5xx ('cached plan must not change result type') until server_lifetime (RUNBOOK, ADR-IMPL-074)"
 fi
 
 echo "▶ 4/8 canary one new $SVC replica for ${CANARY_SECONDS}s"
