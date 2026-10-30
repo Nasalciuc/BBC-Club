@@ -6,7 +6,7 @@ import { loadProfile } from "@/features/profile/profile-store";
 import { airportByCode } from "@/lib/airport-by-code";
 import { fetchHome, fetchProfile } from "@/lib/api";
 import { readFailureCopy, stateCopy } from "@/lib/error-context";
-import { nextShownHome, type ShownHome } from "@/lib/home-shown-logic";
+import { newestOnly, nextShownHome, type ShownHome } from "@/lib/home-shown-logic";
 import { DEFAULT_ORIGIN } from "./default-origin";
 import { withLiveDeals } from "./offer-card-logic";
 
@@ -49,13 +49,16 @@ export function useExploreHome(opts: { origin?: boolean } = {}) {
   // The words of a failed load, never the network layer's own line (ADR-IMPL-047): offline says when it will load.
   const [homeError, setHomeError] = useState<{ title: string; body: string } | null>(null);
   const [defaultFrom, setDefaultFrom] = useState<AirportVM | null>(null);
+  // The mount's load and a foreground's can overlap: only the newest one touches the screen (home-shown-logic.ts).
+  const [startLoad] = useState(newestOnly);
 
-  async function loadHome() {
+  async function loadHome(isNewest: () => boolean) {
     setHomeLoading(true);
     setHomeError(null);
     // The client asks with the tag of what this session last received, from the first load on (lib/api.ts): a 304
     // keeps what is on screen when it came with that tag, else brings back the copy held for the session.
     const result = await fetchHome();
+    if (!isNewest()) return;
     setHomeLoading(false);
     if (!result.ok) {
       setHomeError(readFailureCopy(result.code, "explore"));
@@ -66,7 +69,9 @@ export function useExploreHome(opts: { origin?: boolean } = {}) {
   }
 
   function retryHome() {
-    void loadHome().catch(() => {
+    const isNewest = startLoad();
+    void loadHome(isNewest).catch(() => {
+      if (!isNewest()) return;
       setHomeLoading(false);
       setHomeError(stateCopy("route"));
     });

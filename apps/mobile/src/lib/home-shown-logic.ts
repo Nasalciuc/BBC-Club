@@ -15,3 +15,17 @@ export function nextShownHome(shown: ShownHome | null, answer: HomeResult): Show
   if (answer.notModified && shown && answer.etag !== null && shown.etag === answer.etag) return shown;
   return { home: answer.home, etag: answer.etag };
 }
+
+/**
+ * Overlapping loads of one screen — the mount's and a return to the foreground's: only the one started last may change
+ * what the screen shows, its loading or its error. An older answer that lands after it — a 304 for an older tag among
+ * them, which brings back that tag's older copy — is dropped. `start()` begins a load and gives back whether that load
+ * is still the newest.
+ */
+export function newestOnly(): () => () => boolean {
+  let newest = 0;
+  return () => {
+    const mine = ++newest;
+    return () => mine === newest;
+  };
+}

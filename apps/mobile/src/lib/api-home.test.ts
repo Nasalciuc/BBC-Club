@@ -31,10 +31,10 @@ mock.module("@/lib/timeout", () => real.timeout);
 mock.module("@/lib/fare-gone", () => real.fareGone);
 
 const { fetchHome } = await import("./api");
-const { nextShownHome } = await import("./home-shown-logic");
+const { newestOnly, nextShownHome } = await import("./home-shown-logic");
 
 let sentTags: (string | null)[] = [];
-let answer: () => Response = () => new Response(null, { status: 500 });
+let answer: () => Response | Promise<Response> = () => new Response(null, { status: 500 });
 const serverFetch = async (_input: RequestInfo | URL, init?: RequestInit) => {
   sentTags.push((init?.headers as Record<string, string>)["If-None-Match"] ?? null);
   return answer();
@@ -149,5 +149,35 @@ describe("nextShownHome — the tag is shared by every screen, what each shows i
     const shown = { home: homeOf("JFK", "New York"), etag: null };
     const empty = { home: null, destinations: [], sections: [] };
     expect(nextShownHome(shown, { home: empty, etag: null, notModified: true }).home).toBe(empty);
+  });
+});
+
+describe("newestOnly — overlapping loads of one screen (useExploreHome)", () => {
+  it("an older load's 304 landing after a newer 200 is dropped: the screen keeps the newer Home", async () => {
+    cookie = sessionOf("member-a");
+    answer = () => ok(homeOf("JFK", "New York"), '"v1"');
+    const first = await fetchHome();
+    if (!first.ok) throw new Error("first load failed");
+    let shown = nextShownHome(null, first.data);
+
+    // The mount's load is slow; the app comes back to the foreground and loads again, and that one answers first.
+    const slow = Promise.withResolvers<Response>();
+    const replies: (Response | Promise<Response>)[] = [slow.promise, ok(homeOf("LHR", "London"), '"v2"')];
+    answer = () => replies.shift() ?? new Response(null, { status: 500 });
+    const start = newestOnly();
+    const isOlder = start();
+    const older = fetchHome();
+    const isNewer = start();
+    const newer = await fetchHome();
+    if (isNewer() && newer.ok) shown = nextShownHome(shown, newer.data);
+    slow.resolve(notModified());
+    const late = await older;
+
+    expect(isNewer()).toBe(true);
+    expect(isOlder()).toBe(false);
+    if (isOlder() && late.ok) shown = nextShownHome(shown, late.data);
+    expect(shown.home.home?.code).toBe("LHR");
+    // What the guard keeps out: applied, the late 304 would put v1's New York back over London.
+    expect(late.ok && nextShownHome(shown, late.data).home.home?.code).toBe("JFK");
   });
 });
