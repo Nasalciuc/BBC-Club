@@ -58,9 +58,9 @@ for i in {1..720}; do
   sleep 5
 done
 [[ "$promoted" == true ]] || { echo "❌ Postgres still replaying WAL after an hour — the API, the worker and cron NOT started"; exit 1; }
-schemas=$($DC exec -T postgres psql -U bbc -d bbc -tAc "SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('platform','auth','members','notifications','proposals','engagement','crm','personalization')" | tr -d '[:space:]')
-[[ "$schemas" == "8" ]] || { echo "❌ restored database has $schemas of 8 schemas — NOT starting the API"; exit 1; }
-echo "✓ 8 schemas"
+schemas=$($DC exec -T postgres psql -U bbc -d bbc -tAc "SELECT count(*) FROM information_schema.schemata WHERE schema_name IN ('platform','auth','catalog','crm','engagement','members','notifications','personalization','proposals','requests')" | tr -d '[:space:]')
+[[ "$schemas" == "10" ]] || { echo "❌ restored database has $schemas of 10 schemas — NOT starting the API"; exit 1; }
+echo "✓ 10 schemas"
 # --no-deps: Postgres was just restored and checked; a plain `up` would make it again (it reads production.env, which
 # every deploy rewrites). Cron sends its jobs to the worker (API_URL), so it starts once the worker answers /ready, as at
 # a deploy's step 6.

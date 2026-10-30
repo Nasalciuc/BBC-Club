@@ -658,7 +658,7 @@ describe("restore.sh (ADR-IMPL-077)", () => {
               if (( n <= ${opts.rejecting ?? 0} )); then echo "/var/run/postgresql:5432 - rejecting connections"; return 1; fi
               echo "/var/run/postgresql:5432 - accepting connections" ;;
             *" exec -T postgres psql "*"pg_is_in_recovery"*) ${recovery} ;;
-            *" exec -T postgres psql "*) echo 8 ;;
+            *" exec -T postgres psql "*) echo 10 ;;
             *" ps -q worker") echo ct-worker ;;
             "exec ct-worker bun -e "*"http://localhost:8001/ready"*) return ${opts.workerReady ? 0 : 1} ;;
           esac
@@ -1520,6 +1520,23 @@ describe("infra/host/disk-check.sh: the full disk is never silent (audit, 30 Oct
       expect([r.code, r.stamped]).toEqual([0, false]);
       expect(r.text).toContain("disk at 85%");
       expect(r.text).toContain("the alert reached no webhook");
+    }
+  });
+});
+
+describe("the restore and its drill check every schema the club has (audit, 30 Oct 2026)", () => {
+  it("their list is packages/db's schema files plus platform's — requests and catalog included", async () => {
+    const { readdirSync } = await import("node:fs");
+    const files = readdirSync(join(root, "packages/db/src/schema"))
+      .filter((f) => f.endsWith(".ts") && !f.startsWith("_") && f !== "index.ts")
+      .map((f) => f.replace(/\.ts$/, ""));
+    const expected = [...files, "platform"].sort();
+    for (const file of ["infra/restore-test.sh", "infra/restore.sh"]) {
+      const text = await Bun.file(join(root, file)).text();
+      const list = text.match(/schema_name IN \(([^)]*)\)/)![1]!;
+      const names = [...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!).sort();
+      expect(names, file).toEqual(expected);
+      expect(text, file).toContain(`== "${expected.length}"`);
     }
   });
 });
