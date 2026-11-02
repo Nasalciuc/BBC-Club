@@ -58,10 +58,12 @@ import {
   type Rect,
 } from "@bbc/ui";
 
-import clouds from "@/assets/images/club/globe/clouds.webp";
 import { env } from "@/lib/env";
 
-import { CLOUDS_COORDINATES, CLOUDS_LAYER, satelliteStyle } from "./satellite-source";
+import { cloudLayers } from "./cloud-drift";
+import { CLOUD_PICTURES } from "./cloud-pictures";
+import { CLOUDS_ABOVE, satelliteStyle } from "./satellite-source";
+import { useCloudClock } from "./useCloudClock";
 
 void Mapbox.setAccessToken(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "");
 // No usage telemetry. Mapbox still counts one anonymous monthly active user for billing (docs/store/data-safety.md).
@@ -74,14 +76,13 @@ Mapbox.setTelemetryEnabled(false);
  * to the drawn globe.
  */
 const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep, sea: tokens.colors.globeOcean } as const;
-/** The clouds lie as drawn in their picture (white, its alpha the cloud); no fade as they come in with the map. */
-const CLOUDS_STYLE = { rasterFadeDuration: 0 } as const;
 const SATELLITE_STYLE = JSON.stringify(satelliteStyle(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "", GLOBE_COLOURS));
 /** 02: the globe on the pale sky, a white haze at its rim, no stars. */
 const ATMOSPHERE = {
   color: tokens.colors.surfaceCard,
   highColor: tokens.colors.sky,
-  horizonBlend: 0.06,
+  // 02 draws a thin white rim, the sky blue right up to it: a wide glow would wash out the clouds beside the globe.
+  horizonBlend: 0.02,
   spaceColor: tokens.colors.sky,
   starIntensity: 0,
 } as const;
@@ -156,6 +157,8 @@ export default function MapboxGlobe({
   const [pressGuard] = useState(() => createPressGuard());
 
   const moving = appActive && !paused && !reducedMotion;
+  // The clouds drift while the globe may move (cloud-drift.ts).
+  const clouds = cloudLayers(useCloudClock(moving));
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -360,10 +363,16 @@ export default function MapboxGlobe({
         onPress={onMapPress}
       >
         <Atmosphere style={ATMOSPHERE} />
-        {/* 02's clouds: one picture of the whole sky, on the sphere, turning with it — over the seas, under the route. */}
-        <ImageSource id="clouds" url={clouds} coordinates={CLOUDS_COORDINATES}>
-          <RasterLayer id={CLOUDS_LAYER.id} aboveLayerID={CLOUDS_LAYER.above} style={CLOUDS_STYLE} />
-        </ImageSource>
+        {/* 02's clouds on the sphere, turning with it and drifting on it — over the seas, under the route. */}
+        {clouds.map((c) => (
+          <ImageSource key={c.id} id={c.id} url={CLOUD_PICTURES[c.id]} coordinates={c.coordinates}>
+            <RasterLayer
+              id={c.id}
+              aboveLayerID={CLOUDS_ABOVE}
+              style={{ rasterOpacity: c.opacity, rasterFadeDuration: 0 }}
+            />
+          </ImageSource>
+        ))}
         <Camera
           ref={camera}
           defaultSettings={{

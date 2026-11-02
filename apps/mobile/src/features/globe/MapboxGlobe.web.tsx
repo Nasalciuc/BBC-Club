@@ -40,23 +40,25 @@ import {
   type RouteEndKind,
 } from "@bbc/ui";
 
-import clouds from "@/assets/images/club/globe/clouds.webp";
 import { env } from "@/lib/env";
 
 import type { MapboxGlobeProps } from "./MapboxGlobe";
+import { type CloudLayer, cloudLayers } from "./cloud-drift";
+import { cloudPictureUrl } from "./cloud-pictures";
 import { satelliteStyle } from "./satellite-source";
+import { useCloudClock } from "./useCloudClock";
 
 export type { MapboxGlobeProps } from "./MapboxGlobe";
 
 /** The same colours as the phone's globe (MapboxGlobe.tsx): the deep ocean behind, 02's seas. */
 const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep, sea: tokens.colors.globeOcean } as const;
-/** The clouds' picture, as the web build serves it: Metro gives a bundled image here as `{ uri, width, height }`. */
-const CLOUDS_URL = (clouds as unknown as { uri: string }).uri;
+/** The clouds' pictures where they start, as the style carries them (cloud-drift.ts, cloud-pictures.ts). */
+const styleClouds = (layers: CloudLayer[]) => layers.map((c) => ({ ...c, url: cloudPictureUrl(c.id) }));
 /** 02: the globe on the pale sky, a white haze at its rim, no stars — as the phone's Atmosphere. */
 const FOG = {
   color: tokens.colors.surfaceCard,
   "high-color": tokens.colors.sky,
-  "horizon-blend": 0.06,
+  "horizon-blend": 0.02, // 02's thin rim, as the phone's
   "space-color": tokens.colors.sky,
   "star-intensity": 0,
 } as const;
@@ -110,6 +112,8 @@ export default function MapboxGlobe({
   });
 
   const moving = !paused && !reducedMotion;
+  // The clouds drift while the globe may move (cloud-drift.ts).
+  const cloudSeconds = useCloudClock(moving);
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -132,7 +136,11 @@ export default function MapboxGlobe({
       // The same imagery, seas and clouds as the phone's globe, from the same place (ADR-IMPL-085).
       // satellite-source.ts writes plain style JSON, for the phone's `styleJSON` as for GL JS: the expressions are
       // arrays there, GL JS's types want its own tuples.
-      style: satelliteStyle(token, GLOBE_COLOURS, CLOUDS_URL) as unknown as mapboxgl.StyleSpecification,
+      style: satelliteStyle(
+        token,
+        GLOBE_COLOURS,
+        styleClouds(cloudLayers(0)),
+      ) as unknown as mapboxgl.StyleSpecification,
       projection: "globe",
       center: [...OPENING_CENTER] as LngLatLike,
       zoom: REST_ZOOM,
@@ -219,6 +227,16 @@ export default function MapboxGlobe({
     }, 1000);
     return () => clearInterval(t);
   }, [mapReady, moving, selected]);
+
+  // The clouds move on: each picture to where its band has drifted, `a` and `b` to their share of the sky.
+  useEffect(() => {
+    const m = map.current;
+    if (!mapReady || !m) return;
+    for (const c of cloudLayers(cloudSeconds)) {
+      (m.getSource(c.id) as mapboxgl.ImageSource | undefined)?.setCoordinates(c.coordinates);
+      if (m.getLayer(c.id)) m.setPaintProperty(c.id, "raster-opacity", c.opacity);
+    }
+  }, [mapReady, cloudSeconds]);
 
   // A chosen destination flies the camera to frame the route over the sheet (13); none eases back to rest (02).
   const dest = pins.find((p) => p.code === selected) ?? null;

@@ -6,8 +6,8 @@
  * (MapboxGlobe.tsx), the web (MapboxGlobe.web.tsx) and the tile probe (mapbox-ready-logic.ts) all ask the same place.
  *
  * Over the imagery, as 02 draws the Earth (the owner's ask): the seas a lighter blue than the photographs' near-navy
- * water, and the clouds — one picture of the whole sky, laid on the sphere so they turn with it
- * (`assets/images/club/globe/clouds.webp`, made by `scripts/globe-clouds.py`).
+ * water, and the clouds — pictures of the whole sky laid on the sphere, turning with it and drifting on it as the
+ * winds would (cloud-drift.ts; the pictures made by `scripts/globe-clouds.py`).
  *
  * No imports from the app or @bbc/ui: the unit tests run from the repository's root (ADR-IMPL-083).
  */
@@ -36,29 +36,26 @@ export const SEA_OPACITY = 0.8;
 /** The colours the style takes from the tokens: the background's and the seas'. */
 export type GlobeColours = { ocean: string; sea: string };
 
-/** Web Mercator's last latitude: the cloud picture spans the whole map, edge to edge, pole to pole as far as it goes. */
-const MERCATOR_MAX_LAT = 85.0511287798066;
+/** The layer the clouds lie on: over the seas, under the route. */
+export const CLOUDS_ABOVE = "sea";
 
-/** The cloud picture's corners — top left, top right, bottom right, bottom left — as Mapbox's image source takes them. */
-export const CLOUDS_COORDINATES: [[number, number], [number, number], [number, number], [number, number]] = [
-  [-180, MERCATOR_MAX_LAT],
-  [180, MERCATOR_MAX_LAT],
-  [180, -MERCATOR_MAX_LAT],
-  [-180, -MERCATOR_MAX_LAT],
-];
-
-/** The layer the clouds lie on, over the seas and under the route. */
-export const CLOUDS_LAYER = { id: "clouds", above: "sea" } as const;
+/** A cloud picture as the style carries it (the web): its layer's id, its address, where it lies, how much shows. */
+export type StyleCloud = {
+  id: string;
+  url: string;
+  coordinates: [[number, number], [number, number], [number, number], [number, number]];
+  opacity: number;
+};
 
 /**
  * The globe's style: `satellite-v9`'s two layers — its background and the imagery — with the imagery from the style's
- * tiles, then the seas, then (given the picture's URL, as on the web) the clouds. The background is the drawn globe's
+ * tiles, then the seas, then (given their pictures, as on the web) the clouds. The background is the drawn globe's
  * deep ocean (ADR-IMPL-068): where a tile is missing, the sea, never near-black. The seas are Mapbox Streets' water (the
  * Vector Tiles API, served on demo access), filled with the drawn globe's ocean. The phone adds the clouds itself, as
- * an ImageSource that resolves the bundled picture (MapboxGlobe.tsx). No glyphs, no sprite: the pins and their labels
+ * ImageSources that resolve the bundled pictures (MapboxGlobe.tsx). No glyphs, no sprite: the pins and their labels
  * are the app's own views, the route a line layer added over all of it.
  */
-export function satelliteStyle(token: string, colours: GlobeColours, cloudsUrl?: string) {
+export function satelliteStyle(token: string, colours: GlobeColours, clouds: readonly StyleCloud[] = []) {
   return {
     version: 8 as const,
     name: "BBC Club satellite",
@@ -72,7 +69,9 @@ export function satelliteStyle(token: string, colours: GlobeColours, cloudsUrl?:
         attribution: SATELLITE_ATTRIBUTION,
       },
       streets: { type: "vector" as const, url: "mapbox://mapbox.mapbox-streets-v8" },
-      ...(cloudsUrl ? { clouds: { type: "image" as const, url: cloudsUrl, coordinates: CLOUDS_COORDINATES } } : {}),
+      ...Object.fromEntries(
+        clouds.map((c) => [c.id, { type: "image" as const, url: c.url, coordinates: c.coordinates }]),
+      ),
     },
     layers: [
       { id: "background", type: "background" as const, paint: { "background-color": colours.ocean } },
@@ -84,16 +83,12 @@ export function satelliteStyle(token: string, colours: GlobeColours, cloudsUrl?:
         "source-layer": "water",
         paint: { "fill-color": colours.sea, "fill-opacity": SEA_OPACITY, "fill-antialias": false },
       },
-      ...(cloudsUrl
-        ? [
-            {
-              id: CLOUDS_LAYER.id,
-              type: "raster" as const,
-              source: "clouds",
-              paint: { "raster-fade-duration": 0 },
-            },
-          ]
-        : []),
+      ...clouds.map((c) => ({
+        id: c.id,
+        type: "raster" as const,
+        source: c.id,
+        paint: { "raster-fade-duration": 0, "raster-opacity": c.opacity },
+      })),
     ],
   };
 }

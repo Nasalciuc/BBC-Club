@@ -1,14 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
 import { tileProbeUrl } from "./mapbox-ready-logic";
-import {
-  CLOUDS_COORDINATES,
-  CLOUDS_LAYER,
-  SATELLITE_TILE_SIZE,
-  SEA_OPACITY,
-  satelliteStyle,
-  satelliteTileUrl,
-} from "./satellite-source";
+import { cloudLayers } from "./cloud-drift";
+import { CLOUDS_ABOVE, SATELLITE_TILE_SIZE, SEA_OPACITY, satelliteStyle, satelliteTileUrl } from "./satellite-source";
 
 /** Any colours: the style takes them from the caller (the tokens). */
 const COLOURS = { ocean: "ocean", sea: "sea" };
@@ -55,24 +49,22 @@ describe("the satellite imagery comes from the style's tiles (ADR-IMPL-085)", ()
   });
 });
 
-describe("the clouds: one picture of the whole sky, on the sphere (ADR-IMPL-085)", () => {
-  it("spans Web Mercator's whole map, corner to corner, as Mapbox's image source takes it", () => {
-    const [topLeft, topRight, bottomRight, bottomLeft] = CLOUDS_COORDINATES;
-    expect(topLeft[0]).toBe(-180);
-    expect(topRight[0]).toBe(180);
-    expect(bottomRight).toEqual([180, -topLeft[1]]);
-    expect(bottomLeft).toEqual([-180, -topLeft[1]]);
-    expect(topLeft[1]).toBeCloseTo(85.0511, 4);
+describe("the clouds in the style (ADR-IMPL-085)", () => {
+  it("on the web the style carries every cloud picture over the seas, where it lies and how much it shows", () => {
+    const clouds = cloudLayers(0).map((c) => ({ ...c, url: `/assets/${c.id}.webp` }));
+    const web = satelliteStyle("pk.x", COLOURS, clouds);
+    for (const c of clouds) {
+      expect(web.sources).toMatchObject({ [c.id]: { type: "image", url: c.url, coordinates: c.coordinates } });
+    }
+    const ids = web.layers.map((l) => l.id);
+    expect(ids.slice(0, 3)).toEqual(["background", "satellite", CLOUDS_ABOVE]);
+    expect(ids.slice(3)).toEqual(clouds.map((c) => c.id));
+    expect(web.layers[3]).toMatchObject({ type: "raster", paint: { "raster-opacity": clouds[0].opacity } });
   });
 
-  it("on the web the style carries the picture over the seas; on the phone the map adds it there itself", () => {
-    const web = satelliteStyle("pk.x", COLOURS, "/assets/clouds.webp");
-    expect(web.sources).toMatchObject({
-      clouds: { type: "image", url: "/assets/clouds.webp", coordinates: CLOUDS_COORDINATES },
-    });
-    expect(web.layers.map((l) => l.id)).toEqual(["background", "satellite", CLOUDS_LAYER.above, CLOUDS_LAYER.id]);
+  it("on the phone the style has none: the map adds them over the seas itself", () => {
     const phone = satelliteStyle("pk.x", COLOURS);
-    expect("clouds" in phone.sources).toBe(false);
-    expect(phone.layers.map((l) => l.id)).toContain(CLOUDS_LAYER.above);
+    expect(Object.keys(phone.sources)).toEqual(["satellite", "streets"]);
+    expect(phone.layers.map((l) => l.id)).toContain(CLOUDS_ABOVE);
   });
 });
