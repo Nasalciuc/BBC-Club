@@ -51,8 +51,17 @@ jobs:
           EVENT: ${{ github.event_name }}
           VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
           DISPATCHED_SHA: ${{ github.sha }}
+          DISPATCHED_REF: ${{ github.ref }}
+          TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
+          # Production by hand only from main (audit, 30 Oct 2026): a dispatch on a branch would run that branch's
+          # deploy.sh, unreviewed, on the production box. Staging from a branch stays allowed (RUNBOOK, Staging on the
+          # same box). GitHub's required reviewers on the production environment remain the real gate.
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$TARGET" = "production" ] && [ "$DISPATCHED_REF" != "refs/heads/main" ]; then
+            echo "::error::production is deployed from main only (dispatched on $DISPATCHED_REF)"
+            exit 1
+          fi
           # At workflow_run, github.sha is main's tip now, not the commit validate checked: the run's head_sha is.
           if [ "$EVENT" = "workflow_run" ]; then sha="$VALIDATED_SHA"; else sha="$DISPATCHED_SHA"; fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"

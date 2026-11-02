@@ -91,7 +91,8 @@ for k in OPS_WEBHOOK SEC_WEBHOOK POSTGRES_PASSWORD POSTGRES_PASSWORD_STAGING LOA
 done
 need=POSTGRES_PASSWORD; [[ "$MODE" == "staging" ]] && need=POSTGRES_PASSWORD_STAGING
 [[ "${!need}" =~ ^[A-Za-z0-9._~-]+$ ]] || { echo "❌ $need must use only A-Z a-z 0-9 . _ ~ - (it goes into connection URLs). Regenerate: openssl rand -hex 32"; exit 1; }
-notify() { local hook="${2:-$OPS_WEBHOOK}"; [[ -n "${hook:-}" ]] && curl -fsS -X POST "$hook" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
+# Echo first, then post (env-value.sh): a failed post is said in this log; it never stops the deploy's own exit path.
+notify() { local hook="${2:-$OPS_WEBHOOK}"; echo "$1"; webhook_post "$1" "${hook:-}" || true; }
 
 if [[ "$MODE" == "production" ]] && [[ "${LOADTEST:-}" == "1" ]]; then
   echo "❌ LOADTEST=1 is refused in production"; exit 1
@@ -184,10 +185,19 @@ for svc in "$SVC" "$WORKER"; do
     echo "⚠ $IMAGE has no scripts/check-env.ts: its env is not checked before the canary"
     break
   fi
-  if ! $DC run --rm --no-deps "$svc" bun scripts/check-env.ts; then
+  if ! CHECKED="$($DC run --rm --no-deps "$svc" bun scripts/check-env.ts)"; then
+    echo "$CHECKED"
     restore_tag
     notify "🚨 deploy $MODE stopped: $ENVF does not pass $IMAGE's checks as $svc (scripts/check-env.ts, in the deploy log). Old API still serving." "${SEC_WEBHOOK:-}"
     exit 1
+  fi
+  echo "$CHECKED"
+  # Production that boots with the mock CRM or the recording push serves members as if all were well: a request reads
+  # "Received" and reaches no agent, a push reads "delivered" and never leaves. Allowed — the box may be waiting for
+  # its Firebase project — but said at every deploy, to the webhook, never only in this log.
+  if [[ "$MODE" == "production" && "$svc" == "$SVC" ]]; then
+    case "$CHECKED" in *"CRM mock"*) notify "⚠ production runs CRM_ADAPTER=mock: members' quote requests read Received and reach no agent (RUNBOOK, CRM)" "${SEC_WEBHOOK:-}" ;; esac
+    case "$CHECKED" in *"push recording"*) notify "⚠ production runs PUSH_ADAPTER=recording: pushes read delivered and none is sent (RUNBOOK, Push)" "${SEC_WEBHOOK:-}" ;; esac
   fi
 done
 
@@ -208,7 +218,7 @@ fi
 # a worker without the URL, or a PgBouncer that does not answer within 10 s, fails the step, and the warning says so.
 if [[ -n "$($DC ps -q "$WORKER" 2>/dev/null || true)" ]]; then
   $DC exec -T -w /repo/packages/db "$WORKER" bun -e 'setTimeout(() => { console.error("PgBouncer did not answer RECONNECT within 10 s"); process.exit(4); }, 10_000).unref(); const u = process.env.PGBOUNCER_ADMIN_URL; if (!u) { console.error("PGBOUNCER_ADMIN_URL is not set in the worker"); process.exit(3); } const p = (await import("postgres")).default(u, { max: 1, prepare: false, fetch_types: false, connect_timeout: 3, onnotice: () => {} }); try { await p.unsafe("RECONNECT"); } finally { await p.end({ timeout: 1 }); }' \
-    || echo "⚠ PgBouncer RECONNECT failed: prepared statements are dropped within server_lifetime instead"
+    || notify "⚠ deploy $MODE: PgBouncer RECONNECT failed — a statement prepared before this migration may answer 5xx ('cached plan must not change result type') until server_lifetime (RUNBOOK, ADR-IMPL-074)"
 fi
 
 echo "▶ 4/8 canary one new $SVC replica for ${CANARY_SECONDS}s"
@@ -231,21 +241,31 @@ CANARY="$(comm -13 <(printf '%s\n' $OLD | sort) <(svc_ids "$SVC" | sort) | head 
 [[ -n "$CANARY" ]] || rollback_and_exit "no canary container after scale-up"
 drop_canary() { docker stop "$CANARY" >/dev/null 2>&1 || true; docker rm "$CANARY" >/dev/null 2>&1 || true; }
 wait_ready "$CANARY" 8000 || { drop_canary; rollback_and_exit "/ready red on canary $CANARY"; }
+metrics_of() {
+  docker exec "$1" bun -e "fetch('http://localhost:8000/metrics',{signal:AbortSignal.timeout(10000)}).then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
+}
+if [[ -n "$OLD_ONE" ]]; then
+  METRICS_DIR="$(mktemp -d)"
+  chmod 0700 "$METRICS_DIR"
+  cleanup_metrics() { rm -rf "$METRICS_DIR"; }
+  # The old replica's counters run from its start: read now, they are subtracted, so both sides cover the canary's
+  # window (scripts/canary-compare.ts). Unreadable now: compared over its whole life, as before, and said.
+  OLD_AT_START=()
+  if metrics_of "$OLD_ONE" > "$METRICS_DIR/old-start.txt"; then
+    OLD_AT_START=("$METRICS_DIR/old-start.txt")
+  else
+    echo "⚠ old replica /metrics unreadable at the canary's start: compared over its whole life"
+  fi
+fi
 sleep "$CANARY_SECONDS"
 if [[ -z "$OLD_ONE" ]]; then
   echo "no old replica; canary judged on /ready only"
 else
-  METRICS_DIR="$(mktemp -d)"
-  chmod 0700 "$METRICS_DIR"
-  cleanup_metrics() { rm -rf "$METRICS_DIR"; }
-  metrics_of() {
-    docker exec "$1" bun -e "fetch('http://localhost:8000/metrics',{signal:AbortSignal.timeout(10000)}).then(r=>r.text()).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))"
-  }
   metrics_of "$CANARY" > "$METRICS_DIR/canary.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "canary /metrics unreadable"; }
   metrics_of "$OLD_ONE" > "$METRICS_DIR/old.txt" || { cleanup_metrics; drop_canary; rollback_and_exit "old replica /metrics unreadable"; }
   chmod 0600 "$METRICS_DIR"/*.txt
   # Image USER is bbc; run the one-shot compare as root so 0600 host files stay private.
-  if ! REASON="$(docker run --rm --user 0:0 -v "$METRICS_DIR:$METRICS_DIR:ro" "$IMAGE" bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt")"; then
+  if ! REASON="$(docker run --rm --user 0:0 -v "$METRICS_DIR:$METRICS_DIR:ro" "$IMAGE" bun scripts/canary-compare.ts "$METRICS_DIR/canary.txt" "$METRICS_DIR/old.txt" "${OLD_AT_START[@]}")"; then
     echo "$REASON"
     cleanup_metrics
     drop_canary
@@ -278,12 +298,33 @@ W="$($DC ps -q "$WORKER" | head -n1)"
 wait_ready "$W" 8001 || rollback_and_exit "worker /ready red"
 $DC up -d --no-deps --force-recreate "$CRON" || rollback_and_exit "cron recreate failed"
 
+# Starts sync-site-destinations in the worker and waits 5 s: still running then is a start (it takes minutes); a
+# refusal, a run that failed, or no connection exits 1. scripts/staging-real-data.test.ts runs it against a fake fetch.
+SITE_SYNC_JS="fetch('http://localhost:8001/v1/internal/run/sync-site-destinations',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET},signal:AbortSignal.timeout(5000)}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok||j.status==='failed'){console.error('  site sync: '+(r.ok?'failed: '+(j.error||'no reason'):'refused, HTTP '+r.status));process.exit(1)}console.log('  site sync: '+(j.status||'done'))}).catch(e=>{if(e&&e.name==='TimeoutError'){console.log('  site sync: started, it runs for a few minutes');return}console.error('  site sync: no answer ('+(e&&e.name)+')');process.exit(1)})"
+
 if [[ "$MODE" == "staging" ]]; then
-  echo "▶ 7/8 staging demo (ADR-IMPL-040): the review account carries Figma's situations, dated from today"
+  echo "▶ 7/8 staging demo (ADR-IMPL-040): the review account's own situations, dated from today; nothing every member sees"
   # Direct Postgres, never the pooler. The script refuses any database but staging's. A failure never undoes the
   # deploy — the API is already serving — but it is said out loud.
   if ! $DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$SVC" bun run scripts/seed-staging-demo.ts; then
     notify "⚠ deploy staging: the demo data did not refresh — run infra/deploy.sh's step 7 by hand (RUNBOOK, Staging demo data)" "${OPS_WEBHOOK:-}"
+  fi
+  # Staging shows the club's real data (ADR-IMPL-040, 30 Oct 2026): the company site's deals, pins and the price a
+  # search shows from home. STAGING_REAL_DATA=off in staging.env leaves the flags as an operator set them.
+  if [[ "$(env_value "$STG_ENV" STAGING_REAL_DATA)" == "off" ]]; then
+    echo "  real data: STAGING_REAL_DATA=off in staging.env — the catalogue's flags left as they are"
+  elif REAL="$($DC run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="$MIGRATE_URL" "$SVC" bun run scripts/staging-real-data.ts)"; then
+    echo "$REAL"
+    # Flags just turned on: the site's snapshot now, not at the next 07:40/19:40 run. The worker runs it for a few
+    # minutes; this call stops waiting after 5 s — the expected outcome — and the run goes on (platform.job_runs has
+    # it). A refusal, a run that failed within the 5 s, or no answer at all is announced; the night's run still comes.
+    if grep -q '^changed: [1-9]' <<<"$REAL"; then
+      if ! docker exec "$W" bun -e "$SITE_SYNC_JS"; then
+        notify "⚠ deploy staging: the site's sync did not start — run sync-site-destinations by hand (RUNBOOK, The site's destinations)" "${OPS_WEBHOOK:-}"
+      fi
+    fi
+  else
+    notify "⚠ deploy staging: the real data's flags were not set — run scripts/staging-real-data.ts by hand (RUNBOOK, Staging demo data)" "${OPS_WEBHOOK:-}"
   fi
 else
   echo "▶ 7/8 staging demo — production: skipped (the review account is created by hand, docs/release.md)"

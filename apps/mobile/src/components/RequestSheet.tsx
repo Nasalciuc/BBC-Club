@@ -39,7 +39,7 @@ import {
   retryMinutes,
   type RequestSource,
 } from "@/features/requests/confirmation-logic";
-import { requestSummary, type RequestSummary } from "@/features/requests/request-summary";
+import { priceForTrip, requestSummary, type RequestSummary } from "@/features/requests/request-summary";
 import {
   buildDraft,
   draftToBody,
@@ -85,7 +85,7 @@ export type RequestSheetHandle = {
   dismiss: () => void;
 };
 
-const NO_SUMMARY: RequestSummary = { title: "", cabin: "", route: "", carrier: null, price: null };
+const NO_SUMMARY: RequestSummary = { title: "", cabin: "", route: "", carrier: null, price: null, trip: null };
 /** An offer whose page named no airline: none on the trip card (knownCarrier). */
 const NO_AIRLINE = { code: null, name: "", logoUrl: null };
 
@@ -382,7 +382,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             route={summary.route}
             carrier={summary.carrier}
             mark={airlineMark(summary.carrier?.code)}
-            price={summary.price}
+            // ADR-IMPL-081: a fare's price only beside the trip it covers — `One way` chosen on a round-trip fare drops it.
+            price={priceForTrip(summary, state.tripType)}
           />
         </View>
 

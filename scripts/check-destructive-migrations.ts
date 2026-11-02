@@ -58,10 +58,26 @@ if (import.meta.main) {
     console.error("check-destructive-migrations: origin/main is not available — fetch it (CI: fetch-depth: 0).");
     process.exit(1);
   }
-  const changed = git(["diff", "--name-only", "--diff-filter=AM", "origin/main...HEAD", "--", "packages/db/migrations"])
-    .out.split("\n")
-    .concat(git(["diff", "--name-only", "--diff-filter=AM", "HEAD", "--", "packages/db/migrations"]).out.split("\n"))
-    .concat(git(["ls-files", "--others", "--exclude-standard", "--", "packages/db/migrations"]).out.split("\n"))
+  // A git call that fails (no merge base in a shallow or rebased checkout) is a check not made, never "0 files"
+  // (audit, 30 Oct 2026).
+  const files = (args: string[]) => {
+    const r = git(args);
+    if (!r.ok) {
+      console.error(`check-destructive-migrations: git ${args.join(" ")} failed — the migrations were not checked.`);
+      process.exit(1);
+    }
+    return r.out.split("\n");
+  };
+  const changed = files([
+    "diff",
+    "--name-only",
+    "--diff-filter=AM",
+    "origin/main...HEAD",
+    "--",
+    "packages/db/migrations",
+  ])
+    .concat(files(["diff", "--name-only", "--diff-filter=AM", "HEAD", "--", "packages/db/migrations"]))
+    .concat(files(["ls-files", "--others", "--exclude-standard", "--", "packages/db/migrations"]))
     .filter((f) => f.endsWith(".sql"));
 
   const problems = [...new Set(changed)].flatMap((file) =>

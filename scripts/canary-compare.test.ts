@@ -2,12 +2,17 @@ import { describe, expect, it } from "bun:test";
 import { createMetrics } from "../packages/modules/platform/src/telemetry/metrics";
 import { compareMetrics } from "./canary-compare";
 
-async function scrape(rows: { status: number; ms: number; n: number }[]): Promise<string> {
+async function scrape(
+  rows: { status: number; ms: number; n: number; route?: string }[],
+  startedAt?: number,
+): Promise<string> {
   const m = createMetrics();
+  if (startedAt !== undefined) m.gauge("process_start_time_seconds", () => startedAt);
   for (const row of rows) {
+    const route = row.route ?? "/v1/home";
     for (let i = 0; i < row.n; i++) {
-      m.inc("http_requests", { route: "/v1/home", status: String(row.status) });
-      m.observe("http_duration_ms", row.ms, { route: "/v1/home" });
+      m.inc("http_requests", { route, status: String(row.status) });
+      m.observe("http_duration_ms", row.ms, { route });
     }
   }
   return m.render();
@@ -39,9 +44,9 @@ describe("canary compare", () => {
     expect(compareMetrics(canary, old).ok).toBe(false);
   });
 
-  it("fails when the canary p99 is two buckets above the old replica", async () => {
-    const old = await scrape([{ status: 200, ms: 100, n: 100 }]);
-    const canary = await scrape([{ status: 200, ms: 200, n: 100 }]);
+  it("fails when the canary p99 is two buckets above the old replica and over the 300-ms floor", async () => {
+    const old = await scrape([{ status: 200, ms: 300, n: 100 }]);
+    const canary = await scrape([{ status: 200, ms: 750, n: 100 }]);
     const v = compareMetrics(canary, old);
     expect(v.ok).toBe(false);
     expect(v.reason).toContain("two or more above");
@@ -76,5 +81,81 @@ describe("canary compare", () => {
       { status: 500, ms: 100, n: 2 },
     ]);
     expect(compareMetrics(noisy, "").ok).toBe(false);
+  });
+
+  // 30 Oct 2026: production rolled back on "canary p99 bucket 25 is two or more above old 5" — milliseconds, not a
+  // regression. Below the launch p99 target, latency never fails a canary.
+  it("passes a canary two buckets slower when it is still under 300 ms", async () => {
+    const old = await scrape([{ status: 200, ms: 4, n: 100 }]);
+    const canary = await scrape([{ status: 200, ms: 20, n: 100 }]);
+    const v = compareMetrics(canary, old);
+    expect(v.ok).toBe(true);
+    expect(v.reason).toContain("p99 le=25 vs old le=5");
+  });
+
+  it("leaves the probes out: /health, /ready, /status and /metrics are never members' requests", async () => {
+    // Today's shape: the canary's 600 s held ~80 probes and a few members; one slow /ready on a cold pool.
+    const canary = await scrape([
+      { status: 200, ms: 2, n: 60, route: "/health" },
+      { status: 200, ms: 3, n: 20, route: "/metrics" },
+      { status: 200, ms: 2000, n: 1, route: "/ready" },
+      { status: 200, ms: 40, n: 5 },
+    ]);
+    const old = await scrape([{ status: 200, ms: 2, n: 5000, route: "/health" }]);
+    const v = compareMetrics(canary, old);
+    expect(v.ok).toBe(true);
+    expect(v.reason).toBe("canary served 5 requests (< 50); judged on /ready and zero 5xx only");
+    // A 5xx from a probe does not count either; a member's does.
+    const probe500 = await scrape([
+      { status: 500, ms: 2, n: 3, route: "/ready" },
+      { status: 200, ms: 40, n: 5 },
+    ]);
+    expect(compareMetrics(probe500, old).ok).toBe(true);
+    const member500 = await scrape([
+      { status: 500, ms: 40, n: 1 },
+      { status: 200, ms: 40, n: 5 },
+    ]);
+    expect(compareMetrics(member500, old).ok).toBe(false);
+  });
+
+  it("compares the old replica over the canary's window, not its whole life", async () => {
+    // Its life: 10 000 fast requests; during the window: 100 at 300 ms. The canary at 500 ms is one bucket worse.
+    const before = await scrape([{ status: 200, ms: 4, n: 10_000 }]);
+    const after = await scrape([
+      { status: 200, ms: 4, n: 10_000 },
+      { status: 200, ms: 300, n: 100 },
+    ]);
+    const canary = await scrape([{ status: 200, ms: 500, n: 100 }]);
+    expect(compareMetrics(canary, after).ok).toBe(false); // lifetime: p99 le=5 against le=500
+    const windowed = compareMetrics(canary, after, before);
+    expect(windowed.ok).toBe(true); // window: le=300 against le=500, one bucket
+    expect(windowed.reason).toContain("vs old le=300");
+  });
+
+  it("a restarted old replica (counters went down) is judged on its later read alone", async () => {
+    const before = await scrape([{ status: 200, ms: 4, n: 10_000 }]);
+    const after = await scrape([{ status: 200, ms: 300, n: 100 }]);
+    const canary = await scrape([{ status: 200, ms: 300, n: 100 }]);
+    expect(compareMetrics(canary, after, before).reason).toContain("vs old le=300");
+  });
+
+  it("a restart that served more than before is caught by its start time, not subtracted (CodeRabbit on #118)", async () => {
+    // Before: 10 at 4 ms. Restarted, then 100 at 4 ms and one at 500 ms: its p99 is le=5. Subtracting the two lives
+    // would leave 90 fast and the slow one, a p99 of le=500, and pass a canary at 750 ms.
+    const before = await scrape([{ status: 200, ms: 4, n: 10 }], 1_000);
+    const after = await scrape(
+      [
+        { status: 200, ms: 4, n: 100 },
+        { status: 200, ms: 500, n: 1 },
+      ],
+      2_000,
+    );
+    const canary = await scrape([{ status: 200, ms: 750, n: 100 }], 3_000);
+    const verdict = compareMetrics(canary, after, before);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toContain("above old 5 ");
+    // The same process at both reads (same start time) is still a window.
+    const same = await scrape([{ status: 200, ms: 4, n: 10 }], 2_000);
+    expect(compareMetrics(canary, after, same).reason).toContain("vs old le=500");
   });
 });

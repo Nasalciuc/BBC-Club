@@ -60,13 +60,20 @@ const offer = (to: string, price: ProposalCardVM["price"], rating?: number | nul
 
 describe("offerCardModel", () => {
   it("names the city and country of the route's arrival, with the saving on the published fare (02)", () => {
-    expect(offerCardModel(offer("CDG", { offer: 3850, published: 6900, currency: "USD" }), [PARIS])).toEqual({
+    const priced = { offer: 3850, published: 6900, publishedSource: "Sabre · 16 Sep", currency: "USD" };
+    expect(offerCardModel(offer("CDG", priced), [PARIS])).toEqual({
       city: "Paris",
       country: "France",
       fromPrice: "$3,850",
       savePercent: 44,
       rating: null,
     });
+  });
+
+  it("no saving for a published fare without its source (ADR-IMPL-081)", () => {
+    expect(
+      offerCardModel(offer("CDG", { offer: 3850, published: 6900, currency: "USD" }), [PARIS]).savePercent,
+    ).toBeNull();
   });
 
   it("prints the offer's rating as given, to one decimal (02: 4.8); none without one", () => {
@@ -112,33 +119,51 @@ const deal = (origin: { code: string; city: string }, amount = 1101): SiteDealVM
 });
 const JFK_HOME = { code: "JFK", city: "New York" };
 
-describe("dealCardModel (ADR-IMPL-067)", () => {
-  it("the city, its country and `from` the site's price — never a saving, never a star", () => {
+describe("dealCardModel (ADR-IMPL-067, ADR-IMPL-081)", () => {
+  const priced = (d: SiteDealVM, amount: number): SiteDealVM => ({
+    ...d,
+    estimate: { amount, currency: "USD", trip: "round_trip", cabin: "business", basis: "formula", source: "site" },
+  });
+
+  it("without an estimate: the site's price, said per person — never a saving, never a star", () => {
     expect(dealCardModel(deal(JFK_HOME), JFK_HOME)).toEqual({
       city: "London",
       country: "United Kingdom",
       fromPrice: "$1,101",
       savePercent: null,
       rating: null,
-      origin: null,
+      origin: "per person",
     });
   });
 
-  it("names the origin when the deal leaves from another city than the member's", () => {
+  it("with an estimate: the price its destination's search shows, said round trip (one number for card and page)", () => {
+    const model = dealCardModel(priced(deal(JFK_HOME), 2011), JFK_HOME);
+    expect(model.fromPrice).toBe("$2,011");
+    expect(model.origin).toBe("round trip");
+    expect(model.savePercent).toBeNull();
+  });
+
+  it("names the origin after what the price covers when the deal leaves from another city than the member's", () => {
     const seattle = { code: "SEA", city: "Seattle" };
-    expect(dealCardModel(deal({ code: "SFO", city: "San Francisco" }), seattle).origin).toBe("from San Francisco");
-    expect(dealCardModel(deal({ code: "IAD", city: "Washington" }), { code: "YYZ", city: "Toronto" }).origin).toBe(
-      "from Washington",
+    expect(dealCardModel(deal({ code: "SFO", city: "San Francisco" }), seattle).origin).toBe(
+      "per person · from San Francisco",
+    );
+    expect(
+      dealCardModel(priced(deal({ code: "IAD", city: "Washington" }), 1900), { code: "YYZ", city: "Toronto" }).origin,
+    ).toBe("round trip · from Washington");
+  });
+
+  it("no origin for the member's own airport or own city (Newark's member and New York's deal from JFK)", () => {
+    expect(dealCardModel(deal({ code: "EWR", city: "New York" }), { code: "ewr", city: "Newark" }).origin).toBe(
+      "per person",
+    );
+    expect(dealCardModel(deal({ code: "JFK", city: "New York" }), { code: "LGA", city: "New York" }).origin).toBe(
+      "per person",
     );
   });
 
-  it("no line for the member's own airport or own city (Newark's member and New York's deal from JFK)", () => {
-    expect(dealCardModel(deal({ code: "EWR", city: "New York" }), { code: "ewr", city: "Newark" }).origin).toBeNull();
-    expect(dealCardModel(deal({ code: "JFK", city: "New York" }), { code: "LGA", city: "New York" }).origin).toBeNull();
-  });
-
   it("names the origin when Home does not know the member's airport", () => {
-    expect(dealCardModel(deal(JFK_HOME), null).origin).toBe("from New York");
+    expect(dealCardModel(deal(JFK_HOME), null).origin).toBe("per person · from New York");
   });
 });
 

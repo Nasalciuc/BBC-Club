@@ -125,7 +125,8 @@ export const mobileBff = (): ModuleDescriptor<Ports, Record<string, never>> => (
         ports.catalog.destinations(undefined, homeCode, { cabin }),
         ports.proposals.feed(undefined, actor, null, HOME_OFFERS_READ),
         // ADR-IMPL-067: none while catalog.site_offers is off.
-        ports.catalog.siteDeals(undefined, homeCode, SITE_DEALS_ASKED),
+        // ADR-IMPL-081: each deal priced in the member's cabin, as its destination's search will price it.
+        ports.catalog.siteDeals(undefined, homeCode, SITE_DEALS_ASKED, cabin),
       ]);
 
       const offerRouteTos = new Set(offerRows.map((o) => String(o.routeTo).toUpperCase()));

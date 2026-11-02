@@ -1,5 +1,6 @@
 import type { FareVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalDetailVM } from "@bbc/shared/api/v1/proposals";
+import { onRecord } from "../../lib/saving";
 
 type Offer = Pick<ProposalDetailVM, "id" | "route" | "cabin" | "price" | "validUntil" | "flightFacts">;
 
@@ -73,7 +74,8 @@ export function offerFare(
     departAt: null,
     arriveAt: null,
     departDate: null,
-    price: offer.price,
+    // ADR-IMPL-081: a published price without its source is not printed — not on the page, its sheets or the request.
+    price: onRecord(offer.price),
     trip: undefined,
     validUntil: offer.validUntil,
     hasOffer: true,

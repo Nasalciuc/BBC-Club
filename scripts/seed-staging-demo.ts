@@ -1,16 +1,18 @@
 /**
- * Staging only (ADR-IMPL-040): the review account carries Figma's situations — the pins with their fares, the three
- * offers, a request in each state the server keeps, the inbox — with every date counted from today, so a demo never
- * shows a departure in the past, an expired offer or "Your October in London" in December.
+ * Staging only (ADR-IMPL-040): the review account carries Figma's situations that are its own — its personal offer, a
+ * request in each state the server keeps, the inbox — with every date counted from today, so a demo never shows an
+ * expired offer or "Your October in London" in December.
  *   bun run scripts/seed-staging-demo.ts        (infra/deploy.sh runs it after every staging deploy)
+ * Nothing every member sees (amendment of 30 Oct 2026): no fare — the catalogue is everyone's, so the fixture's pins
+ * stood on every tester's globe — and no broadcast offer. What earlier runs wrote there is retired, once: the fixture's
+ * fares unpublished, the demo's and the fixture seed's offers withdrawn as the withdraw route does it. Staging's members
+ * see the club's real data: the company site's (the `catalog.site_*` flags, RUNBOOK) and what operators send.
  * Refuses any database that is not staging's or a local one. Idempotent: fixed ids and keys, rewritten in place, and
  * everything a demo did to the account is undone — a read or new inbox item, an offer tapped, a request made, a
- * preference or home airport changed, a password changed. The account's phones keep their sign-in. A demo offer an
- * operator withdrew stays withdrawn, run after run (ADR-IMPL-067: once the site's deals are on, the demo's Paris and
- * Tokyo leave Explore for good — RUNBOOK, "Staging demo data").
+ * preference or home airport changed, a password changed. The account's phones keep their sign-in.
  * The data is the fixture's (packages/shared/src/fixture.ts); only its dates move.
  */
-import { and, eq, inArray, like, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { Db } from "@bbc/db";
 import { fares } from "@bbc/db/schema/catalog";
@@ -111,32 +113,23 @@ export function atLocal(day: Date, hhmm: string, tz: string): Date {
   return new Date(at);
 }
 
+/** The fixture's fares the two fare requests name. Requests keep the fare's id, price and airline as recorded when the
+ *  member asked; the fare itself is not written — the catalogue is every member's. */
 const FARE = {
   ba: "00000000-0000-4000-8000-00000000fa01",
-  vs: "00000000-0000-4000-8000-00000000fa02",
   af: "00000000-0000-4000-8000-00000000fa03",
-  jl: "00000000-0000-4000-8000-00000000fa04",
-  ek: "00000000-0000-4000-8000-00000000fa05",
-  sq: "00000000-0000-4000-8000-00000000fa06",
 } as const;
 
-/** When each fixture fare leaves New York, in days from today, at Figma's clock. Undated fares stay undated; fa07,
- *  the closed one, is not shown anywhere in the demo. */
-const DEPARTS: Record<string, { inDays: number; at: string } | null> = {
-  [FARE.ba]: { inDays: 21, at: "18:55" },
-  [FARE.vs]: { inDays: 21, at: "20:10" },
-  [FARE.af]: null,
-  [FARE.jl]: { inDays: 35, at: "12:30" },
-  [FARE.ek]: null,
-  [FARE.sq]: { inDays: 45, at: "21:00" },
-};
+/** BA 178 leaves New York in 21 days at 18:55 (Figma's clock): the London offer names the month its trip is in. */
+const LONDON_DEPARTS = { inDays: 21, at: "18:55" } as const;
 
-/** Days since publication and days of validity left, per fixture offer — newest first, as the feed sorts. */
+/** Days since publication and days of validity left for the account's own offer. */
 const OFFERS: Record<string, { publishedDaysAgo: number; validDays: number }> = {
   london: { publishedDaysAgo: 1, validDays: 19 },
-  paris: { publishedDaysAgo: 4, validDays: 30 },
-  tokyo: { publishedDaysAgo: 6, validDays: 33 },
 };
+
+/** The fixture's offers this script writes: the ones made for the account alone. A broadcast reaches every member. */
+const ACCOUNT_OFFERS = fixture.offers.filter((o) => o.targeting === "user");
 
 /** Per fixture request: when it was made (days ago) and its trip (days from today), the fixture's lengths of stay. The
  *  fixture's fourth, "not sent", lives in the app's offline queue — the server never holds it. */
@@ -174,41 +167,11 @@ function excluded<T extends PgTable>(table: T, row: Record<string, unknown>, con
   return set;
 }
 
-/** Every row, computed from `now` — no I/O. */
+/** Every row, computed from `now` — no I/O. Only the account's own: no fare, no broadcast offer. */
 export function demoPlan(member: { id: string; email: string }, now: Date) {
-  const fareRows = fixture.fares
-    .filter((f) => f.id in DEPARTS)
-    .map((f) => {
-      const plan = DEPARTS[f.id] ?? null;
-      const departAt = plan ? atLocal(dayStart(now, plan.inDays), plan.at, NEW_YORK) : null;
-      const arriveAt = departAt ? new Date(departAt.getTime() + f.durationMinutes * 60_000) : null;
-      return {
-        id: f.id,
-        routeFrom: f.from.code,
-        routeTo: f.to.code,
-        cabin: f.cabin,
-        carrier: f.carrier.code,
-        carrierName: f.carrier.name,
-        product: f.product,
-        nonstop: f.nonstop,
-        durationMinutes: f.durationMinutes,
-        departAt,
-        arriveAt,
-        price: String(f.price.offer),
-        publishedPrice: "published" in f.price ? String(f.price.published) : null,
-        publishedSource: "publishedSource" in f.price ? f.price.publishedSource : null,
-        currency: f.price.currency,
-        source: "manual" as const,
-        validFrom: new Date("2026-09-01T00:00:00.000Z"),
-        // A dated fare closes the day before it leaves; an undated one stays two months.
-        validUntil: departAt ? new Date(departAt.getTime() - DAY) : dayStart(now, 60),
-        published: true,
-      };
-    });
-
-  const londonDeparts = fareRows.find((f) => f.id === FARE.ba)?.departAt ?? dayStart(now, 21);
+  const londonDeparts = atLocal(dayStart(now, LONDON_DEPARTS.inDays), LONDON_DEPARTS.at, NEW_YORK);
   const londonMonth = MONTHS[wallClock(londonDeparts, NEW_YORK).month - 1] ?? "";
-  const offerRows = fixture.offers.map((o) => {
+  const offerRows = ACCOUNT_OFFERS.map((o) => {
     const plan = OFFERS[o.key] ?? { publishedDaysAgo: 1, validDays: 30 };
     return {
       key: o.key,
@@ -290,16 +253,23 @@ export function demoPlan(member: { id: string; email: string }, now: Date) {
       };
     });
 
-  return { fares: fareRows, offers: offerRows, requests: requestRows };
+  return { offers: offerRows, requests: requestRows };
 }
 
 /** The fixture seed's offers (packages/db/scripts/seed-fixture.ts): not meant for staging (ADR-IMPL-040). */
 const FIXTURE_OFFER_KEYS = "fixture:%";
+/** The demo's broadcast offers, written by runs before 30 Oct 2026: every member saw them. */
+export const RETIRED_DEMO_OFFER_KEYS = fixture.offers
+  .filter((o) => o.targeting !== "user")
+  .map((o) => DEMO.offerKey(o.key));
+/** The fixture's fares, written by runs before 30 Oct 2026 (and by the fixture seed): the pins on every member's globe. */
+export const RETIRED_FARE_IDS = fixture.fares.map((f) => f.id);
 
 /**
- * Writes the plan in one transaction and returns what the member now sees. Four upserts, one per table, then the
- * account's own traces removed and the inbox written whole. `events` is the app's publisher — its registry knows the
- * consumers, so an offer.withdrawn reaches them (pending pushes suppressed, campaigns closed).
+ * Writes the plan in one transaction and returns what the member now sees, and what it retired. First what every
+ * member saw is retired (offers withdrawn, fares unpublished), then two upserts, then the account's own traces removed
+ * and the inbox written whole. `events` is the app's publisher — its registry knows the consumers, so an
+ * offer.withdrawn reaches them (pending pushes suppressed, campaigns closed).
  */
 export async function seedStagingDemo(
   db: Db,
@@ -308,31 +278,47 @@ export async function seedStagingDemo(
   events: WithdrawDeps["events"],
 ) {
   const plan = demoPlan(member, now);
-  const fareRows = plan.fares;
   const offerRows = plan.offers.map((o) => o.row);
   const requestRows = plan.requests.map((r) => r.row);
   const requestIds = requestRows.map((r) => r.id);
   const eventRows = plan.requests.flatMap((r) => r.events);
   return db.transaction(async (tx) => {
-    // The fixture seed's offers beside the demo's were Paris and Tokyo twice on Explore: withdrawn as the internal
-    // withdraw route does it — status and offer.withdrawn, in this transaction. Only active ones: a second run
+    // Offers every member saw — the fixture seed's, and the demo's broadcasts of earlier runs — withdrawn as the
+    // internal withdraw route does it: status and offer.withdrawn, in this transaction. Only active ones: a second run
     // finds none and publishes nothing.
-    const fixtureOffers = await tx
+    const retiredOffers = await tx
       .select({ id: offers.id })
       .from(offers)
-      .where(and(like(offers.idempotencyKey, FIXTURE_OFFER_KEYS), eq(offers.status, "active")));
-    for (const { id } of fixtureOffers) {
-      await withdraw({ db: tx, events }, id, "staging demo: the fixture seed is not meant for staging");
+      .where(
+        and(
+          or(like(offers.idempotencyKey, FIXTURE_OFFER_KEYS), inArray(offers.idempotencyKey, RETIRED_DEMO_OFFER_KEYS)),
+          eq(offers.status, "active"),
+        ),
+      );
+    for (const { id } of retiredOffers) {
+      await withdraw({ db: tx, events }, id, "staging demo: every member saw it; staging shows the club's real data");
     }
 
-    await tx
-      .insert(fares)
-      .values(fareRows)
-      .onConflictDoUpdate({ target: fares.id, set: { ...excluded(fares, fareRows[0]!, "id"), updatedAt: now } });
+    // The fixture's fares off every member's globe, as expire-fares takes a fare off sale: unpublished, the row kept
+    // (a request still names its fare). Only published ones, so a second run writes nothing.
+    const publishedFixtureFares = await tx
+      .select({ id: fares.id })
+      .from(fares)
+      .where(and(inArray(fares.id, RETIRED_FARE_IDS), eq(fares.published, true)));
+    if (publishedFixtureFares.length > 0) {
+      await tx
+        .update(fares)
+        .set({ published: false, updatedAt: now })
+        .where(
+          inArray(
+            fares.id,
+            publishedFixtureFares.map((f) => f.id),
+          ),
+        );
+    }
 
-    // Rewritten in place — but a demo offer an operator withdrew (POST /v1/internal/offers/:id/withdraw: its
-    // offer.withdrawn already closed what its consumers held) stays withdrawn: the next deploy must not bring it back
-    // beside the site's deals (ADR-IMPL-067). Its dates still move, so it reads as the others do.
+    // Rewritten in place — but the account's offer, if an operator withdrew it (POST /v1/internal/offers/:id/withdraw:
+    // its offer.withdrawn already closed what its consumers held), stays withdrawn. Its dates still move.
     const saved = await tx
       .insert(offers)
       .values(offerRows)
@@ -366,8 +352,8 @@ export async function seedStagingDemo(
     await tx.delete(notificationPreferences).where(eq(notificationPreferences.memberId, member.id));
     await tx.delete(notificationsTable).where(eq(notificationsTable.memberId, member.id));
 
-    // The inbox as the handlers would have written it (titles, bodies, links), already delivered: the quote and the
-    // personal offer unread, the two broadcasts read.
+    // The inbox as the handlers would have written it (titles, bodies, links), already delivered and unread: the quote
+    // and the personal offer.
     const inbox: (typeof notificationsTable.$inferInsert)[] = [];
     const quoted = plan.requests.find((r) => r.row.status === "quoted");
     if (quoted) {
@@ -406,19 +392,18 @@ export async function seedStagingDemo(
         status: "sent",
         scheduledFor: at,
         sentAt: at,
-        readAt: row.targeting === "user" ? null : new Date(at.getTime() + HOUR),
+        readAt: null,
         createdAt: at,
       });
     }
     await tx.insert(notificationsTable).values(inbox);
 
     return {
-      fares: fareRows.length,
-      pins: new Set(fareRows.map((f) => f.routeTo)).size,
-      // The demo offers members can see: a withdrawn one is not counted.
+      // The account's offers it can see: a withdrawn one is not counted.
       offers: saved.filter((o) => o.status !== "withdrawn").length,
       requests: requestRows.length,
       inbox: inbox.length,
+      retired: { offers: retiredOffers.length, fares: publishedFixtureFares.length },
     };
   });
 }
@@ -456,8 +441,9 @@ if (import.meta.main) {
     const now = new Date();
     const n = await seedStagingDemo(db, { id: account.memberId, email }, now, events);
     console.log(
-      `staging demo ready — the review account ${account.created ? "created" : "refreshed"}; ${n.fares} fares (${n.pins} pins), ` +
-        `${n.offers} offers, ${n.requests} requests, ${n.inbox} inbox items; dates from ${ymd(now)}`,
+      `staging demo ready — the review account ${account.created ? "created" : "refreshed"}; ` +
+        `${n.offers} offers, ${n.requests} requests, ${n.inbox} inbox items; dates from ${ymd(now)}; ` +
+        `retired for every member: ${n.retired.offers} offers, ${n.retired.fares} fares`,
     );
   } catch (e) {
     console.error("staging demo failed:", reason(e));

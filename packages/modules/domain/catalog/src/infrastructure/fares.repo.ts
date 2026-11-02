@@ -4,7 +4,7 @@ import { and, asc, eq, getTableColumns, gt, gte, isNotNull, isNull, lt, lte, or,
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { isIanaZone } from "@bbc/shared/time-zone";
 import { dayStartIn } from "@bbc/db/time-zones";
-import { eqConst } from "@bbc/db/helpers";
+import { anyOf, eqConst } from "@bbc/db/helpers";
 import { alias } from "drizzle-orm/pg-core";
 import { airports, fares } from "@bbc/db/schema/catalog";
 
@@ -118,6 +118,32 @@ export const faresRepo = {
 
   async anyOnSale(exec: Executor, q: Pick<SearchQuery, "from" | "to" | "cabin" | "now">): Promise<boolean> {
     return (await this.anyOnSaleSelect(exec, q)).length > 0;
+  },
+
+  /**
+   * ADR-IMPL-081: which of `tos` have a fare on sale from `from` in the cabin, any day — the search's rule without its
+   * clocks, for many arrivals in one read (Home's deals: a route with fares on sale shows them, never an estimate).
+   */
+  async onSaleTo(
+    exec: Executor,
+    q: Pick<SearchQuery, "from" | "cabin" | "now"> & { tos: readonly string[] },
+  ): Promise<Set<string>> {
+    if (q.tos.length === 0) return new Set();
+    const now = q.now ?? new Date();
+    const rows = await exec
+      .selectDistinct({ to: fares.routeTo })
+      .from(fares)
+      .where(
+        and(
+          eqConst(fares.published, true),
+          eq(fares.routeFrom, q.from.toUpperCase()),
+          anyOf(fares.routeTo, [...new Set(q.tos.map((c) => c.toUpperCase()))], "bpchar"),
+          eq(fares.cabin, q.cabin),
+          lte(fares.validFrom, now),
+          gt(fares.validUntil, now),
+        ),
+      );
+    return new Set(rows.map((r) => r.to.trim()));
   },
 
   /** Any row by id (ignore published/window) — caller maps expired → 410. */

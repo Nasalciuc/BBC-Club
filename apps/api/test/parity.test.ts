@@ -33,7 +33,8 @@ describe("fixture parity (london offer)", () => {
     expect(card.title).toBe(london.title);
     expect(card.route).toMatchObject({ from: london.from, to: london.to });
     expect(card.price.offer).toBe(london.price);
-    expect(card.price.published).toBe(london.published);
+    // ADR-IMPL-081: an offer records no source for its published price, so the club never sends one.
+    expect(card.price.published).toBeUndefined();
     expect(card.targeting).toBe("personal");
     expect(card.state).toBe("unseen");
 
