@@ -20,3 +20,15 @@ container_oom_events_total{container_label_com_docker_compose_service="api"} 0 _
 container_oom_events_total{container_label_com_docker_compose_service="api"} 0 __T2__
 bbc_queue_paused{env="production"} 0 __T1__
 bbc_queue_paused{env="production"} 0 __T2__
+bbc_crm_live{env="production"} 1 __T1__
+bbc_crm_live{env="production"} 1 __T2__
+bbc_push_live{env="production"} 1 __T1__
+bbc_push_live{env="production"} 1 __T2__
+bbc_job_failed{env="production",exported_job="dispatch"} 0 __T1__
+bbc_job_failed{env="production",exported_job="dispatch"} 0 __T2__
+bbc_queue_dead{env="production"} 0 __T1__
+bbc_queue_dead{env="production"} 0 __T2__
+bbc_queue_oldest_pending_seconds{env="production"} 2 __T1__
+bbc_queue_oldest_pending_seconds{env="production"} 2 __T2__
+bbc_request_sends_given_up{env="production"} 0 __T1__
+bbc_request_sends_given_up{env="production"} 0 __T2__

@@ -217,7 +217,7 @@ jobs:
           wait_for /api/datasources/uid/victoriametrics/health .status OK
           wait_for /api/datasources/uid/postgres .uid postgres
           wait_for '/api/search?type=dash-db&tag=bbc' length 3
-          wait_for /api/v1/provisioning/alert-rules length 7
+          wait_for /api/v1/provisioning/alert-rules length 12
           wait_for /api/v1/provisioning/contact-points '[.[] | select(.name == "ops")] | length' 1
           # Each rule as Grafana loaded it, its query run against the sample points: a result, or the rule is named.
           api /api/v1/provisioning/alert-rules |

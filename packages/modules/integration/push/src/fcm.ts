@@ -5,7 +5,11 @@ export type FcmServiceAccount = { project_id: string; client_email: string; priv
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-export function fcmSender(sa: FcmServiceAccount, fetchImpl: typeof fetch = fetch): PushFacade {
+/** Called when the provider fails in a way no single notification explains — its credentials, the network — with
+ *  where, and an Error or a status line, never a token (the module logs it, at most once a minute). */
+export type ProviderError = (where: string, detail: unknown) => void;
+
+export function fcmSender(sa: FcmServiceAccount, fetchImpl: typeof fetch = fetch, onError?: ProviderError): PushFacade {
   let access: { value: string; exp: number } | null = null;
   const accessToken = async () => {
     if (access && Date.now() < access.exp - 5 * 60_000) return access.value;
@@ -32,10 +36,18 @@ export function fcmSender(sa: FcmServiceAccount, fetchImpl: typeof fetch = fetch
   return {
     async send({ token, title, body, data, collapseId }): Promise<PushResult> {
       let res: Response;
+      let auth: string;
+      try {
+        auth = await accessToken();
+      } catch (e) {
+        // A revoked or rotated service account: every push fails here, so it is said (audit, 30 Oct 2026).
+        onError?.("fcm oauth", e);
+        return { ok: false, reason: "Transient" };
+      }
       try {
         res = await fetchImpl(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
           method: "POST",
-          headers: { authorization: `Bearer ${await accessToken()}`, "content-type": "application/json" },
+          headers: { authorization: `Bearer ${auth}`, "content-type": "application/json" },
           signal: AbortSignal.timeout(10_000),
           body: JSON.stringify({
             message: {
@@ -49,7 +61,8 @@ export function fcmSender(sa: FcmServiceAccount, fetchImpl: typeof fetch = fetch
             },
           }),
         });
-      } catch {
+      } catch (e) {
+        onError?.("fcm send", e);
         return { ok: false, reason: "Transient" };
       }
       if (res.ok) return { ok: true, ticketId: ((await res.json()) as { name?: string }).name };
@@ -65,6 +78,7 @@ export function fcmSender(sa: FcmServiceAccount, fetchImpl: typeof fetch = fetch
       }
       if (res.status === 401 || res.status === 403) {
         access = null;
+        onError?.("fcm refused", `HTTP ${res.status} ${code}`.trim());
         return { ok: false, reason: "Fatal" };
       }
       if (res.status >= 500) return { ok: false, reason: "Transient" };

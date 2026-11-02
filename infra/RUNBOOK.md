@@ -42,7 +42,7 @@ The `api-deploy` workflow holds `/var/lock/bbc-deploy.lock` from its `git checko
 
 Before step 1, nothing changes unless `staging.env` sets no key that production's services read (§ Staging on the same box), the origin certificate passes `origin_tls_check` (§ Certificates), and N, the number of API replicas, is 1–9: `API_REPLICAS` (`API_REPLICAS_STAGING` on staging), default 2, read the way Compose reads it — the shell, then `staging.env`, then `production.env`. A Postgres (`postgres`, `postgres-staging`) whose running command line is not the one the compose files give it now is said there, to `OPS_WEBHOOK` too, and the deploy goes on: `Postgres (postgres) runs older settings than compose: recreate it in a quiet minute: … up -d --no-deps postgres` (§ The first deploy after ADR-IMPL-077).
 
-Sequence: (1) `pg_dump` (2) pull API+worker images, then `scripts/check-env.ts` in the new image, as the API and as the worker: the server's own boot rules on this env file. A failed pull or a refusal (which names the setting) puts the previous image tag back and stops; nothing else has changed (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer — then `RECONNECT` on PgBouncer's console through the running worker, so a statement prepared before the migration is prepared again (ADR-IMPL-074) (4) `up -d --no-deps` the pooler — never Postgres, which takes new settings only when recreated on purpose (§ Memory and replicas) — then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica (`scripts/canary-compare.ts`): abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse; under 50 requests judge only `/ready` and zero 5xx (5) scale API to the replicas there were plus N (2N, unless `API_REPLICAS` just changed; a stopped container counts, as Compose counts it), wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) staging only: the demo data (8) Caddy, where the box has one, takes this commit's Caddyfile — a one-off `caddy validate` first (certificates included), then `up -d --no-deps caddy`, which makes a new container only when one of its four settings changed, then a graceful `caddy reload`; production with `MONITORING=on`: `bbc_monitor` takes `GRAFANA_PG_PASSWORD` and the monitoring this commit's settings (§ Monitoring). Caddy serves production too, so a staging deploy applies `infra/caddy` only when it is exactly `origin/main`'s; a branch's is validated and left for review. Then old API images are removed, except this one, the one it replaced, the other environment's and the five newest. A Caddy failure leaves the API deployed and Caddy on its previous config, and the deploy reports it red. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
+Sequence: (1) `pg_dump` (2) pull API+worker images, then `scripts/check-env.ts` in the new image, as the API and as the worker: the server's own boot rules on this env file. A failed pull or a refusal (which names the setting) puts the previous image tag back and stops; nothing else has changed (3) migrate with a **direct** `DATABASE_URL` to Postgres — never PgBouncer — then `RECONNECT` on PgBouncer's console through the running worker, so a statement prepared before the migration is prepared again (ADR-IMPL-074) (4) `up -d --no-deps` the pooler — never Postgres, which takes new settings only when recreated on purpose (§ Memory and replicas) — then start **one** new replica and wait `CANARY_SECONDS` (600, or 120 on staging), then compare its `/metrics` with an old replica's over the same window (`scripts/canary-compare.ts`; the old one is read when the canary starts, and that read is subtracted): members' requests only — `/health`, `/ready`, `/status` and `/metrics` are left out — abort when `/ready` fails, when the 5xx ratio exceeds `max(1%, 2× old)`, or when p99 is two buckets worse **and** over 300 ms (the launch target); under 50 members' requests judge only `/ready` and zero 5xx (5) scale API to the replicas there were plus N (2N, unless `API_REPLICAS` just changed; a stopped container counts, as Compose counts it), wait `/ready` on the other new containers, SIGTERM the old generation (drain: `/ready` 503 for 5 s then `server.stop(false)`), scale back to N (6) recreate the **single** worker (never two pollers), wait `/ready` on 8001, then force-recreate cron so `API_URL` is the worker (7) staging only: the demo data (8) Caddy, where the box has one, takes this commit's Caddyfile — a one-off `caddy validate` first (certificates included), then `up -d --no-deps caddy`, which makes a new container only when one of its four settings changed, then a graceful `caddy reload`; production with `MONITORING=on`: `bbc_monitor` takes `GRAFANA_PG_PASSWORD` and the monitoring this commit's settings (§ Monitoring). Caddy serves production too, so a staging deploy applies `infra/caddy` only when it is exactly `origin/main`'s; a branch's is validated and left for review. Then old API images are removed, except this one, the one it replaced, the other environment's and the five newest. A Caddy failure leaves the API deployed and Caddy on its previous config, and the deploy reports it red. `rollback_and_exit` restores the previous image tag and brings API+worker back. It reports that rollback only after `/ready` is green on every restored API replica, and on the worker at port 8001 when the previous image has one.
 
 Compose healthcheck is `/health`; the deploy gate is `/ready`. Caddy `api_site` resolves replicas with `dynamic a` (refresh 5 s), `least_conn`, passive health on 5xx.
 
@@ -582,8 +582,8 @@ JOIN catalog.airports a ON a.code = p.airport
 WHERE r.route_from = 'JFK' AND r.valid_until > now() ORDER BY p.promoted DESC, a.popularity DESC LIMIT 24;
 ```
 
-Off: the next Home has none (within a second), with no question to the database. On staging, once it is on,
-withdraw the demo's broadcast offers ("Staging demo data", below), or Tokyo stands twice on Explore.
+Off: the next Home has none (within a second), with no question to the database. On staging the demo seed writes no
+broadcast offer, and its first run after 30 Oct 2026 withdrew the ones earlier runs left ("Staging demo data", below).
 
 ## The site's prices (ADR-IMPL-063)
 
@@ -1001,7 +1001,7 @@ docker compose ... --profile glitchtip rm -f redis glitchtip glitchtip-worker gl
 
 ## Monitoring (ADR-IMPL-073)
 
-Metrics only: VictoriaMetrics scrapes each API replica and each worker, production's and staging's, the host (node-exporter) and every container (cAdvisor) each 30 s and keeps 90 days (`vm_data`, about 1–2 GB); Grafana shows three dashboards — the third read from production's Postgres itself, as `bbc_monitor` (ADR-IMPL-077) — and sends seven alerts to `GRAFANA_ALERTS_WEBHOOK`. Logs and traces wait for staging's own machine. Four containers, 736 MB of limits (VictoriaMetrics 192, Grafana 384, cAdvisor 128, node-exporter 32), all on the internal network; only Grafana is published, on the box's loopback. Production reads `infra/monitoring` from this checkout, as it reads `infra/caddy`: a staging dispatch whose copy is not `origin/main`'s stops (§ Staging on the same box). The commands below use `$DC` from § Daily shape.
+Metrics only: VictoriaMetrics scrapes each API replica and each worker, production's and staging's, the host (node-exporter) and every container (cAdvisor) each 30 s and keeps 90 days (`vm_data`, about 1–2 GB); Grafana shows three dashboards — the third read from production's Postgres itself, as `bbc_monitor` (ADR-IMPL-077) — and sends twelve alerts to `GRAFANA_ALERTS_WEBHOOK`. Logs and traces wait for staging's own machine. Four containers, 736 MB of limits (VictoriaMetrics 192, Grafana 384, cAdvisor 128, node-exporter 32), all on the internal network; only Grafana is published, on the box's loopback. Production reads `infra/monitoring` from this checkout, as it reads `infra/caddy`: a staging dispatch whose copy is not `origin/main`'s stops (§ Staging on the same box). The commands below use `$DC` from § Daily shape.
 
 **Turn it on (once).**
 
@@ -1015,7 +1015,7 @@ Metrics only: VictoriaMetrics scrapes each API replica and each worker, producti
 
 **Look.** `ssh -L 3000:127.0.0.1:3000 root@<host>`, then http://localhost:3000, user `admin`. Folder `BBC Club`: `the box` (CPU and memory by container against its limit, throttling, the host, Postgres connections, PgBouncer, network, kills for memory) and `the app` (the club's requests and p95/p99 by route — the probes and the cron's job runs left out — errors, API CPU per request, event-loop delay, statements per request, plans per statement, PgBouncer parses and binds, cache hit ratio, the queue, failed jobs). The `env` variable switches production and staging. `the database` (production only, ADR-IMPL-077): the slowest statements by total time, the indexes never read (a candidate to drop only after two weeks of real members, and through a PR: `db:verify`'s `NO_INDEX_NEEDED` lists the known ones), dead rows and when autovacuum last ran, the share of updates that stayed HOT, the largest tables, the statements that spill to disk. The dashboards and alerts are files in `infra/monitoring/grafana`: a change is a PR, never an edit in the UI (the UI refuses).
 
-**The seven alerts** (to `GRAFANA_ALERTS_WEBHOOK`; the worker sends its own two to `OPS_WEBHOOK`, § Database health):
+**The twelve alerts** (to `GRAFANA_ALERTS_WEBHOOK`; the worker sends its own two to `OPS_WEBHOOK`, § Database health):
 
 | Alert                                                                                                | When    | First move                                                                                                                                                                                                                        |
 | ---------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1026,8 +1026,13 @@ Metrics only: VictoriaMetrics scrapes each API replica and each worker, producti
 | More than 2 % of production's requests fail with a 5xx (the probes and the cron's job runs left out) | 10 min  | `$DC logs api --tail 200`; § Roll back right now                                                                                                                                                                                  |
 | A production container was killed for memory                                                         | at once | `$DC logs <service> --since 30m`, then `Memory against the limit` on `the box`: a leak, or a limit too small for its load (§ Memory and replicas)                                                                                 |
 | Event deliveries have been paused for 10 minutes                                                     | 10 min  | § Pause one event consumer: a flag left on, or flags the worker cannot read (`$DC logs worker --since 30m`)                                                                                                                       |
+| Production serves members on the mock CRM or the recording push                                      | 10 min  | `CRM_ADAPTER` and `PUSH_ADAPTER` in production.env, then a deploy. Repeats every 4 h until both are live                                                                                                                          |
+| A production job failed                                                                              | 1 min   | `SELECT job, error FROM platform.job_runs WHERE status = 'failed' ORDER BY started_at DESC LIMIT 5;` — the job is named in the alert                                                                                              |
+| An event delivery is dead and waits for a manual replay                                              | 5 min   | § The queue is stuck: the dead letter's consumer and its error, then a replay                                                                                                                                                     |
+| Event deliveries have waited more than 5 minutes                                                     | 5 min   | § The queue is stuck: the worker's poller (`$DC logs worker --since 30m`)                                                                                                                                                         |
+| A member's quote request was given up after its retries                                              | 1 min   | § A request that was never sent: fix the cause, then re-queue it                                                                                                                                                                  |
 
-The five on production — the dispatch, the targets, the 5xx, the kill for memory and the paused deliveries — look only at what production has run: on a box that runs staging alone, before production's first deploy, they stay quiet. The memory and CPU-steal alerts look at the whole box.
+The ten on production — the dispatch, the targets, the 5xx, the kill for memory, the paused deliveries, the adapters, the failed jobs, the dead and the late deliveries, and the given-up requests — look only at what production has run: on a box that runs staging alone, before production's first deploy, they stay quiet. The memory and CPU-steal alerts look at the whole box.
 
 **Who sees the monitoring's secrets.** `GRAFANA_ADMIN_PASSWORD`, `GRAFANA_PG_PASSWORD`, `VM_PASSWORD` and `GRAFANA_SECRET_KEY` are in `production.env`, which Compose hands whole to production's `api`, `worker` and `postgres` (their `env_file`), as it does every other key there; Grafana and VictoriaMetrics get only the ones they read (`environment`), and staging's services read `staging.env`, where `guard_staging` refuses these names. Accepted for now: those three containers already hold the database's own password and the app's secrets, and the monitoring keys only reach the monitoring, inside the box. Giving each service its own env file is the change that would narrow it.
 
@@ -1157,32 +1162,34 @@ and removed by `stop`. A step test shares the box with production: a quiet hour.
 
 ## Staging demo data (ADR-IMPL-040)
 
-On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, the pins with their fares, the three offers, a request in each state, the inbox. Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:
+On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, its personal London offer, a request in each state, the inbox. Nothing every member sees: no fare (the pins are the catalogue's, everyone's) and no broadcast offer — staging's members, testers included, see the club's real data (the `catalog.site_*` flags above, and what operators send). Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:
 
 ```bash
-cd /opt/bbc/infra && docker compose -f docker-compose.yml -f compose.prod.yml -f compose.staging.yml --env-file env/production.env --env-file env/staging.env \
-  run --rm --no-deps -e DB_POOLER=none -e DATABASE_URL="postgres://bbc:${POSTGRES_PASSWORD_STAGING}@postgres-staging:5432/bbc" api-staging bun run scripts/seed-staging-demo.ts
+# through the staging worker: its DATABASE_URL is staging's Postgres, direct (compose.staging.yml) — no password typed
+docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" bun run scripts/seed-staging-demo.ts
 ```
 
-It prints `staging demo ready — … dates from <today>`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing. The poster route JFK → ZRH is left without a fare on purpose, so the estimate (ADR-IMPL-037) can be shown there once `catalog.estimates` is on and the rules are loaded.
+It prints `staging demo ready — … dates from <today>; retired for every member: <n> offers, <n> fares`. It refuses any database that is not staging's (`postgres-staging` / `pgbouncer-staging`): pointed at production it stops before writing.
 
-**Once the site's deals are on in staging (`catalog.site_offers`, ADR-IMPL-067)** the demo's two broadcast offers — Paris
-and Tokyo, seen by every staging member — should not be what members see: withdraw them once, as the internal route
-does it (status `withdrawn` and `offer.withdrawn`, so pending pushes are suppressed). The demo seed keeps a withdrawn
-demo offer withdrawn at every later deploy and writes no inbox item for it; London, the review account's own, stays.
+**What runs before 30 Oct 2026 left for every member** — the fixture's fares (the Paris, London, Tokyo, Dubai and
+Singapore pins on every tester's globe) and the demo's broadcast offers (Paris and Tokyo, `Save 44%`, in every Explore) —
+the first run after that date retires, in its transaction: the offers withdrawn as the internal route does it (status
+`withdrawn` and `offer.withdrawn`, so pending pushes are suppressed), the fares unpublished as `expire-fares` takes a
+fare off sale (the rows stay: the demo's requests name them). Nothing to do by hand; the next run retires nothing
+(`0 offers, 0 fares`). The review account's own London offer stays; if an operator withdraws it, it stays withdrawn.
+
+**The real data, at every staging deploy.** After the demo, step 7 runs `scripts/staging-real-data.ts`: it turns on
+`catalog.estimates`, `catalog.site_prices`, `catalog.site_pins` and `catalog.site_offers` (an operator's `skip` list
+stays) and says whether a search can use the price rules, as the catalogue checks them — `price rules: not loaded` or
+`invalid` means a search shows the site's price where it has one and no number elsewhere: load them ("Price rules for estimates", above). When it turned a flag on
+(`changed: 1` or more), the deploy starts `sync-site-destinations` in the worker at once instead of waiting for 07:40 or
+19:40; it runs a few minutes, its outcome in `platform.job_runs`. `catalog.site_photos` is left alone: the site's photos
+wait for the company to confirm the rights. A flag turned off by hand is on again after the next deploy: to keep the
+flags as you set them, write `STAGING_REAL_DATA=off` in `staging.env`. Production never runs it. By hand:
 
 ```bash
-# staging: the two ids, then the withdraw route through the staging worker (the secret is read from its environment)
-docker exec -it bbc-postgres-staging-1 psql -U bbc -d bbc -Atc \
-  "SELECT id FROM proposals.offers WHERE idempotency_key IN ('staging-demo:paris','staging-demo:tokyo') AND status = 'active'"
-for id in <id-1> <id-2>; do
-  docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" \
-    bun -e "fetch('http://localhost:8001/v1/internal/offers/$id/withdraw',{method:'POST',headers:{'X-Internal-Secret':process.env.INTERNAL_API_SECRET,'Content-Type':'application/json'},body:JSON.stringify({reason:'site deals on'})}).then(async r=>console.log(r.status,await r.text()))"
-done
+docker exec -i "$(docker ps -qf name=bbc-worker-staging | head -1)" bun run scripts/staging-real-data.ts
 ```
-
-Each answers `200 {"ok":true}`. To bring them back (the deals off again), set their `status` to `active` in
-`proposals.offers` and run the demo seed: it dates them from today.
 
 ## Redis, Kafka, Streams, and demand
 
