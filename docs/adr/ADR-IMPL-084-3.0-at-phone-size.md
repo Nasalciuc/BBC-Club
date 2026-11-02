@@ -76,6 +76,6 @@ longer matching the images' proportions.
   floor (13 pt, 12 for tracked capitals), nothing cut, nothing wider than the screen.
 - Then on Android (the e2e emulator's screenshots, Pixel 6): Android rounds a line's width up where the web does not,
   so a line that fits by a point or two on the web is cut there. The offer card's `United Kingdom` (112.1 of 114.1 pt)
-  was; the cards are 142 wide. The same shots showed two older faults the larger words made worse: the one fare's
+  was cut; the cards are 142 wide. The same shots showed two older faults the larger words made worse: the one fare's
   flight card wrapped its days (`Oct 12, / 2026`) and slid under the docked pill, and Received's `BRITISH` and
   `AIRWAYS` overlapped under the ribbon; both are in the table.
