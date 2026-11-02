@@ -34,4 +34,11 @@ the web.
   without it, as the phones do. The public token (`pk.`) is in the web bundle as it is in the apps; it should be limited
   to the club's URLs in Mapbox's account.
 - Mapbox GL JS counts map loads for billing, as the phones count monthly users (docs/store/data-safety.md lists Mapbox).
+- **The token's imagery is refused today.** With the preview environment's token, on 2 Nov 2026 Mapbox served the
+  `satellite-v9` style (200) and refused every satellite raster tile (`/v4/mapbox.satellite/…`: 429, its rate-limit
+  header at minus one): the account allows that token no raster tiles. The tile probe sees it and keeps the drawn globe —
+  on the phones as on the web — so no member has seen the satellite globe on a preview build. The globe draws its
+  imagery once the Mapbox account (its billing, or the token's scopes) allows raster tiles; nothing in the club changes
+  for that. Checked with the same imagery swapped in (NASA's Blue Marble) in a test browser: the web globe draws, turns
+  and frames a route.
 - No server change, no new flag.
