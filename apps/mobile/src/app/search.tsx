@@ -11,6 +11,7 @@ import {
   RecentRow,
   SearchField,
   SectionHeader,
+  POPULAR_CARD_HEIGHT,
   Skeleton,
   StateMessage,
   baselineOffset,
@@ -251,8 +252,8 @@ export default function SearchScreen() {
               <View style={styles.popular}>
                 <Skeleton width={220} height={22} radius="pill" />
                 <View style={styles.cards}>
-                  <Skeleton height={166} radius="sm" />
-                  <Skeleton height={166} radius="sm" />
+                  <Skeleton height={POPULAR_CARD_HEIGHT} radius="sm" />
+                  <Skeleton height={POPULAR_CARD_HEIGHT} radius="sm" />
                 </View>
               </View>
             ) : before === "error" ? (

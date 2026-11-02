@@ -30,6 +30,8 @@ const CARD = { radius: 10, photo: 118, padLeft: 13.4, priceRight: 34, chevronRig
 const CITY_BASELINE = 24;
 const LINE_PITCH = 21;
 const TEXT_AREA = 60;
+/** The card's height with its default photograph: what a screen's loading skeleton takes, so nothing moves on load. */
+export const POPULAR_CARD_HEIGHT = CARD.photo + TEXT_AREA;
 const DOT = { size: 2.3, gap: 8.5 } as const;
 
 export function PopularCard({ city, airport, code, fromPrice, image, fallback, photoHeight, onPress, testID }: Props) {
