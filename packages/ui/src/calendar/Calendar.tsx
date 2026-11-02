@@ -46,7 +46,10 @@ const CARD = {
    * The days, fitted over both months — the image draws November's rows 30.5 to 31.9 apart from 56.6 under the card's
    * top and December's about 31.2 apart from 57.0: 56.5 down, 31.02 apart, the card ending 11.95 under the last row.
    */
-  grid: { top: 66, left: 11.31, right: 9.93, bottom: 12, columnGap: 2.465, rowGap: 2.5 },
+  // The rows 8 apart at phone size (ADR-IMPL-084): with the 36-pt day and half the gap's slop above and below, each
+  // day is a 44-pt target that never reaches into its neighbour's (07's 2.5 left it 38.5). The columns are 48 or
+  // more wide on a phone.
+  grid: { top: 66, left: 11.31, right: 9.93, bottom: 12, columnGap: 2.465, rowGap: 8 },
 } as const;
 
 /** The figures' baselines from the square's top: the day's 18.35; the chosen's 18.7, centred in its circle. */
@@ -219,8 +222,8 @@ function Day({
       accessibilityState={{ disabled: blocked, selected: circle || cell.state === "inRange" }}
       disabled={blocked}
       onPress={() => onSelect(cell.date)}
-      // The slop reaches into the gaps around the square: the 31-pt row and the column make the day a full target
-      // without taking its neighbour's.
+      // The slop reaches into the gaps around the square: the 36-pt row and half of each 8-pt gap make the day a 44-pt
+      // target without taking its neighbour's; the 48-pt column is wide enough.
       hitSlop={{ top: CARD.grid.rowGap / 2, bottom: CARD.grid.rowGap / 2 }}
       style={styles.cell}
     >
