@@ -1,8 +1,9 @@
 # ADR-IMPL-085 — The globe's imagery from the style's tiles
 
 Status: proposed · Date: 2026-11-02 · Scope: `apps/mobile` (`features/globe/satellite-source.ts`, `MapboxGlobe.tsx`,
-`MapboxGlobe.web.tsx`, `mapbox-ready-logic.ts`) · Amends ADR-IMPL-035 (the Mapbox globe), ADR-IMPL-068 (the black
-globe's floor) and ADR-IMPL-082 (its consequence "the token's imagery is refused today") · Owner's request, 2 Nov 2026.
+`MapboxGlobe.web.tsx`, `mapbox-ready-logic.ts`, `assets/images/club/globe/clouds.webp`), `scripts/globe-clouds.py` ·
+Amends ADR-IMPL-035 (the Mapbox globe), ADR-IMPL-068 (the black globe's floor) and ADR-IMPL-082 (its consequence "the
+token's imagery is refused today") · Owner's request, 2 Nov 2026.
 
 **Context.** No member has seen the satellite globe: the tile probe (F107) has kept the drawn globe on every phone and
 on the web. The club's Mapbox account has no payment method — Mapbox's _demo access_ — and Mapbox refuses that account
@@ -36,6 +37,17 @@ map and the probe all asked the one API the account cannot use, while the same i
 3. **The probe** asks the world's tile at zoom 0 from the same place (`tileProbeUrl`): the drawn globe gives way only to
    imagery the map itself can load. Everything else in `Globe.tsx` is unchanged — the fade, the reprobe on return, the
    drawn globe when Mapbox fails.
+4. **02's seas and clouds over the photographs** (the owner's ask, 2 Nov 2026: the satellite water is near-navy and
+   cloudless, 02 draws a lighter sea and white clouds):
+   - the seas: Mapbox Streets' `water` (the Vector Tiles API, served on demo access) filled with the drawn globe's ocean
+     (`globe-ocean`) at 0.8 over the imagery, so its shading still shows;
+   - the clouds: one picture of the whole sky, `assets/images/club/globe/clouds.webp` (2048 × 2048, Web Mercator to
+     85.05°, white with the cloud in the alpha, 418 KB), laid on the sphere as an image source over the seas and under
+     the route, so they turn with the Earth. The phone adds it as `ImageSource` + `RasterLayer` (above `sea`), which
+     resolves the bundled file; the web's style carries it with the URL Metro gives. The picture is made by
+     `scripts/globe-clouds.py` — gradient noise on the sphere, warped into swirls, thick in the tropics' belt and the
+     storm tracks, thin over the subtropics, a fixed seed — so nothing is owed for it. A weather service's real clouds
+     (NASA's daily imagery) were left aside: one more service at run time, and swaths missing near the equator.
 
 **Consequences.**
 
@@ -50,6 +62,8 @@ map and the probe all asked the one API the account cannot use, while the same i
   the phones' requests carry none, so a restricted token would refuse them and keep the drawn globe. Restrict only a
   token of the web build's own, and give the phones an unrestricted one — not the one token for both that ADR-IMPL-082's
   advice would restrict.
-- An over-the-air update: no native change.
+- An over-the-air update: no native change. The update grows by the clouds' 418 KB.
 - Checked on 2 Nov 2026 in the owner's browser with Mapbox GL JS 3.9, the account's token and this style, projection
   `globe`: the map loaded and went idle with every tile in, no error, and drew the Earth by day.
+  With the seas and this picture of the clouds (the generator's algorithm run in the page), the same: idle, no error,
+  the Earth by day as 02 draws it. The phones' build is to be seen on the preview build.
