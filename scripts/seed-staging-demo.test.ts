@@ -115,6 +115,18 @@ describe("demoPlan — the account's own situations, dated from today", () => {
     for (const r of plan.requests) if (r.row.fareId) expect(RETIRED_FARE_IDS).toContain(r.row.fareId);
   });
 
+  it("with the site's answer for the London route, London is priced as the site prices it — and claims no saving", () => {
+    const priced = demoPlan(member, now, 1999);
+    const london = priced.offers.find((o) => o.key === "london")!.row;
+    expect([london.price, london.publishedPrice]).toEqual(["1999", null]);
+    // The other offers, if any, and every request keep the fixture's figures.
+    for (const { key, row } of priced.offers.filter((o) => o.key !== "london")) {
+      const src = fixture.offers.find((o) => o.key === key)!;
+      expect([row.price, row.publishedPrice]).toEqual([String(src.price), String(src.published)]);
+    }
+    expect(priced.requests).toEqual(plan.requests);
+  });
+
   it("is a pure function of the clock", () => {
     expect(demoPlan(member, now)).toEqual(plan);
     const later = demoPlan(member, new Date("2027-03-01T00:00:00Z"));

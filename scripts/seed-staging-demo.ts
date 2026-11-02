@@ -12,10 +12,10 @@
  * preference or home airport changed, a password changed. The account's phones keep their sign-in.
  * The data is the fixture's (packages/shared/src/fixture.ts); only its dates move.
  */
-import { and, eq, inArray, like, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, like, notInArray, or, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { Db } from "@bbc/db";
-import { fares } from "@bbc/db/schema/catalog";
+import { fares, sitePrices } from "@bbc/db/schema/catalog";
 import { offerResponses } from "@bbc/db/schema/engagement";
 import { notificationPreferences } from "@bbc/db/schema/members";
 import { notificationsTable } from "@bbc/db/schema/notifications";
@@ -167,8 +167,14 @@ function excluded<T extends PgTable>(table: T, row: Record<string, unknown>, con
   return set;
 }
 
-/** Every row, computed from `now` — no I/O. Only the account's own: no fare, no broadcast offer. */
-export function demoPlan(member: { id: string; email: string }, now: Date) {
+/**
+ * Every row, computed from `now` — no I/O. Only the account's own: no fare, no broadcast offer. `sitePrice`: the
+ * company site's stored answer for the London offer's route (round trip, business, whole USD), when staging has one.
+ * Then the offer is priced as the site prices that city everywhere else on staging — its pin, its deal, its search —
+ * and keeps no published price: the fixture's `$7,850` has no source on record (DESIGN.md: `Save` only where the
+ * published fare is on record). None: the fixture's prices, as before.
+ */
+export function demoPlan(member: { id: string; email: string }, now: Date, sitePrice: number | null = null) {
   const londonDeparts = atLocal(dayStart(now, LONDON_DEPARTS.inDays), LONDON_DEPARTS.at, NEW_YORK);
   const londonMonth = MONTHS[wallClock(londonDeparts, NEW_YORK).month - 1] ?? "";
   const offerRows = ACCOUNT_OFFERS.map((o) => {
@@ -183,8 +189,8 @@ export function demoPlan(member: { id: string; email: string }, now: Date) {
         routeFrom: o.from,
         routeTo: o.to,
         cabin: "business" as const,
-        price: String(o.price),
-        publishedPrice: String(o.published),
+        price: String(o.key === "london" && sitePrice ? sitePrice : o.price),
+        publishedPrice: o.key === "london" && sitePrice ? null : String(o.published),
         currency: "USD",
         // "Your October in London" names the trip's month: it follows the flight.
         title: o.key === "london" ? o.title.replace(/^Your \S+ in /, `Your ${londonMonth} in `) : o.title,
@@ -271,13 +277,34 @@ export const RETIRED_FARE_IDS = fixture.fares.map((f) => f.id);
  * and the inbox written whole. `events` is the app's publisher — its registry knows the consumers, so an
  * offer.withdrawn reaches them (pending pushes suppressed, campaigns closed).
  */
+/** The site's stored answer for the London offer's route, round trip in business, while it stands; null — none yet. */
+async function londonSitePrice(db: Db, now: Date): Promise<number | null> {
+  const london = ACCOUNT_OFFERS.find((o) => o.key === "london");
+  if (!london) return null;
+  const [row] = await db
+    .select({ business: sitePrices.business })
+    .from(sitePrices)
+    .where(
+      and(
+        eq(sitePrices.routeFrom, london.from),
+        eq(sitePrices.routeTo, london.to),
+        eq(sitePrices.trip, "round_trip"),
+        eq(sitePrices.status, "priced"),
+        isNotNull(sitePrices.business),
+        gt(sitePrices.expiresAt, now),
+      ),
+    )
+    .limit(1);
+  return row?.business ?? null;
+}
+
 export async function seedStagingDemo(
   db: Db,
   member: { id: string; email: string },
   now: Date,
   events: WithdrawDeps["events"],
 ) {
-  const plan = demoPlan(member, now);
+  const plan = demoPlan(member, now, await londonSitePrice(db, now));
   const offerRows = plan.offers.map((o) => o.row);
   const requestRows = plan.requests.map((r) => r.row);
   const requestIds = requestRows.map((r) => r.id);
