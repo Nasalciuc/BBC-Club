@@ -48,7 +48,7 @@ export function parseLocalities(text: string): ReferenceLocality[] {
 type Executor = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
 
 /**
- * Writes the file's places, 500 per statement: new ones inserted, changed ones updated, the same ones untouched. Skipped
+ * Writes the file's places: new ones inserted, changed ones updated, the same ones untouched. Skipped
  * when the table already holds as many rows as the file, unless `force`. Returns how many rows were written.
  */
 export async function loadLocalitiesReference(
@@ -62,16 +62,20 @@ export async function loadLocalitiesReference(
   }[];
   if (!force && held?.n === rows.length) return 0;
   let written = 0;
-  for (let i = 0; i < rows.length; i += 500) {
-    const values = sql.join(
-      rows
-        .slice(i, i + 500)
-        .map((r) => sql`(${r.id}, ${r.name}, ${r.countryCode}, ${r.lat}::float8, ${r.lng}::float8, ${r.population})`),
-      sql`, `,
-    );
+  // Ten thousand rows a statement, each column one array parameter: a fresh database loads the file in a few
+  // statements, not a hundred (a test's migrate on an empty database runs it whole).
+  for (let i = 0; i < rows.length; i += 10_000) {
+    const chunk = rows.slice(i, i + 10_000);
     const changed = (await db.execute(sql`
       INSERT INTO catalog.localities (id, name, country_code, lat, lng, population)
-      VALUES ${values}
+      SELECT * FROM unnest(
+        ${sql.param(chunk.map((r) => r.id))}::int[],
+        ${sql.param(chunk.map((r) => r.name))}::text[],
+        ${sql.param(chunk.map((r) => r.countryCode))}::text[],
+        ${sql.param(chunk.map((r) => r.lat))}::float8[],
+        ${sql.param(chunk.map((r) => r.lng))}::float8[],
+        ${sql.param(chunk.map((r) => r.population))}::int[]
+      )
       ON CONFLICT (id) DO UPDATE SET
         name = excluded.name,
         country_code = excluded.country_code,
