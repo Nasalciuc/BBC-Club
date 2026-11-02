@@ -34,6 +34,7 @@ describe("extras ledger", () => {
   it("second migrate applies nothing; ensure_event_partitions exists; the ledger has every named step", async () => {
     const first = await runMigrate();
     expect(first.code).toBe(0);
+    expect(first.out).toContain("localities reference: 46547 written");
 
     const indexes: any[] = await db.execute(sql`
       SELECT indexname FROM pg_indexes
@@ -68,6 +69,8 @@ describe("extras ledger", () => {
     const second = await runMigrate();
     expect(second.code).toBe(0);
     expect(second.out).not.toMatch(/extras applied: 0001/);
+    // The towns are there: the second run counts them and writes none (ADR-IMPL-083).
+    expect(second.out).not.toMatch(/localities reference/);
     expect(second.out).not.toMatch(/requests schema applied/);
     expect(second.out).not.toMatch(/catalog schema applied/);
     expect(second.out).not.toMatch(/db:verify fitness fixes applied/);
@@ -167,7 +170,9 @@ describe("extras ledger", () => {
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
     );
     expect(demand[0]?.rel).toBe("catalog.demand_daily");
-  });
+    // Two whole migrations of an empty database, the reference airports and towns (ADR-IMPL-083) loaded by the first:
+    // past the 5 s default while the other packages' suites run beside it.
+  }, 30_000);
 
   // ADR-IMPL-042: both or neither. A CHECK passes when its expression is NULL, so each half of a pair is tried alone.
   it("requests_shown_estimate takes both or neither, a positive amount, USD only", async () => {
