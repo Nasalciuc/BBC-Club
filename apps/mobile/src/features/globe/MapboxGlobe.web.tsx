@@ -40,6 +40,7 @@ import {
   type RouteEndKind,
 } from "@bbc/ui";
 
+import clouds from "@/assets/images/club/globe/clouds.webp";
 import { env } from "@/lib/env";
 
 import type { MapboxGlobeProps } from "./MapboxGlobe";
@@ -47,6 +48,10 @@ import { satelliteStyle } from "./satellite-source";
 
 export type { MapboxGlobeProps } from "./MapboxGlobe";
 
+/** The same colours as the phone's globe (MapboxGlobe.tsx): the deep ocean behind, 02's seas. */
+const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep, sea: tokens.colors.globeOcean } as const;
+/** The clouds' picture, as the web build serves it: Metro gives a bundled image here as `{ uri, width, height }`. */
+const CLOUDS_URL = (clouds as unknown as { uri: string }).uri;
 /** 02: the globe on the pale sky, a white haze at its rim, no stars — as the phone's Atmosphere. */
 const FOG = {
   color: tokens.colors.surfaceCard,
@@ -124,8 +129,10 @@ export default function MapboxGlobe({
     const m = new mapboxgl.Map({
       container: element,
       accessToken: token,
-      // The same imagery as the phone's globe, from the same place (ADR-IMPL-085); its background already the ocean.
-      style: satelliteStyle(token, tokens.colors.globeOceanDeep),
+      // The same imagery, seas and clouds as the phone's globe, from the same place (ADR-IMPL-085).
+      // satellite-source.ts writes plain style JSON, for the phone's `styleJSON` as for GL JS: the expressions are
+      // arrays there, GL JS's types want its own tuples.
+      style: satelliteStyle(token, GLOBE_COLOURS, CLOUDS_URL) as unknown as mapboxgl.StyleSpecification,
       projection: "globe",
       center: [...OPENING_CENTER] as LngLatLike,
       zoom: REST_ZOOM,

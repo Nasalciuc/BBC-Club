@@ -7,7 +7,17 @@
  * (ADR-IMPL-085, satellite-source.ts). Our pins and their labels are React views on the map
  * (MarkerView); a chosen route is a white line with its plane, framed over the sheet (13).
  */
-import Mapbox, { Atmosphere, Camera, LineLayer, MapView, MarkerView, ShapeSource, type MapState } from "@rnmapbox/maps";
+import Mapbox, {
+  Atmosphere,
+  Camera,
+  ImageSource,
+  LineLayer,
+  MapView,
+  MarkerView,
+  RasterLayer,
+  ShapeSource,
+  type MapState,
+} from "@rnmapbox/maps";
 import { type ComponentRef, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -48,9 +58,10 @@ import {
   type Rect,
 } from "@bbc/ui";
 
+import clouds from "@/assets/images/club/globe/clouds.webp";
 import { env } from "@/lib/env";
 
-import { satelliteStyle } from "./satellite-source";
+import { CLOUDS_COORDINATES, CLOUDS_LAYER, satelliteStyle } from "./satellite-source";
 
 void Mapbox.setAccessToken(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "");
 // No usage telemetry. Mapbox still counts one anonymous monthly active user for billing (docs/store/data-safety.md).
@@ -58,12 +69,14 @@ Mapbox.setTelemetryEnabled(false);
 
 /**
  * The Earth as photographed, without names (the owner's reference, 13 Oct 2026): `satellite-v9`, its imagery asked for
- * as the style's tiles (ADR-IMPL-085). Its background is the drawn globe's deep ocean, not satellite-v9's near-black
- * (ADR-IMPL-068): a missing tile shows the sea. A map that cannot load falls back to the drawn globe.
+ * as the style's tiles (ADR-IMPL-085), with 02's lighter seas and its clouds. Its background is the drawn globe's deep
+ * ocean, not satellite-v9's near-black (ADR-IMPL-068): a missing tile shows the sea. A map that cannot load falls back
+ * to the drawn globe.
  */
-const SATELLITE_STYLE = JSON.stringify(
-  satelliteStyle(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "", tokens.colors.globeOceanDeep),
-);
+const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep, sea: tokens.colors.globeOcean } as const;
+/** The clouds lie as drawn in their picture (white, its alpha the cloud); no fade as they come in with the map. */
+const CLOUDS_STYLE = { rasterFadeDuration: 0 } as const;
+const SATELLITE_STYLE = JSON.stringify(satelliteStyle(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "", GLOBE_COLOURS));
 /** 02: the globe on the pale sky, a white haze at its rim, no stars. */
 const ATMOSPHERE = {
   color: tokens.colors.surfaceCard,
@@ -347,6 +360,10 @@ export default function MapboxGlobe({
         onPress={onMapPress}
       >
         <Atmosphere style={ATMOSPHERE} />
+        {/* 02's clouds: one picture of the whole sky, on the sphere, turning with it — over the seas, under the route. */}
+        <ImageSource id="clouds" url={clouds} coordinates={CLOUDS_COORDINATES}>
+          <RasterLayer id={CLOUDS_LAYER.id} aboveLayerID={CLOUDS_LAYER.above} style={CLOUDS_STYLE} />
+        </ImageSource>
         <Camera
           ref={camera}
           defaultSettings={{

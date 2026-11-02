@@ -91,3 +91,9 @@ remain their airlines'.
 | `airlines/logos/tap-air-portugal.webp`      | TAP Air Portugal      | TP   | `97ea40073458e846…` |
 | `airlines/logos/turkish-airlines.webp`      | Turkish Airlines      | TK   | `754e605243c88d89…` |
 | `airlines/logos/united-airlines.webp`       | United Airlines       | UA   | `1909ea6df654113f…` |
+
+## Made here: the globe's clouds (ADR-IMPL-085)
+
+`globe/clouds.webp` is not the design package's: `scripts/globe-clouds.py` draws it (gradient noise on the sphere, a
+fixed seed), 2048 × 2048 in Web Mercator, white with the cloud in the alpha, WebP q90 with alpha at 70. Nothing is
+owed for it; run the script again to remake it.
