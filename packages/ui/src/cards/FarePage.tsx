@@ -32,15 +32,16 @@ export type FareWeather = { place: string; temperature: string; summary: string;
  * rule at 178.2 from 11.1 to 62.8; `Your fare` 193.1 in on 21.15, the price on 46.1, what it is down from on 62.9; the
  * `Save` pill 24.45 down, 22.6 tall, 7.4 from the right, its words 9.7 either side.
  */
+// At phone size (ADR-IMPL-084) the card is 94 tall and its lines 24, 52 and 76 down; the Save pill 28 tall.
 const SUMMARY = {
-  height: 73.3,
+  height: 94,
   radius: 10,
-  mark: { left: 9.2, top: 12.9, height: 34.1 },
-  weather: { left: 60.2, label: 21.15, temp: 48, sideGap: 5.93, summary: 40.2, dates: 53.7 },
-  rule: { left: 178.2, top: 11.1, bottom: 62.8 },
+  mark: { left: 9.2, top: 16, height: 38 },
+  weather: { left: 60.2, label: 24, temp: 54, sideGap: 5.93, summary: 46, dates: 62 },
+  rule: { left: 178.2, top: 12, bottom: 82 },
   // The fare's column runs 5 short of the card's edge: `Down from $7,550 · Sabre · 16 Sep` keeps 05's one line.
-  fare: { left: 193.1, alone: 15, right: 5, label: 21.15, price: 46.1, down: 62.9 },
-  save: { top: 24.45, height: 22.6, right: 7.4, pad: 9.7 },
+  fare: { left: 193.1, alone: 15, right: 5, label: 25, price: 54, down: 78 },
+  save: { top: 30, height: 28, right: 9, pad: 11 },
 } as const;
 const SMALL = r(tokens.type.fareSmall);
 const TEMP = r(tokens.type.fareTemp);
@@ -163,21 +164,23 @@ export function FareSummaryCard({
  * on 36.6, its city on 50.1, its clock on 66.2 and its day on 78.2; the line on 32.6 from 185.2 to 220.7 and from 245.6
  * to 281.6, the plane between them on 233.4; `+1` 3.8 after the clock, 1.3 over its baseline.
  */
+// At phone size (ADR-IMPL-084) the card is 122 tall: the title on 27, the codes on 50, the cities on 69, the clocks on
+// 92, the days on 112, the line on 45, the airline's mark on 62 and its name on 86.
 const OVERVIEW = {
-  height: 89.8,
+  height: 122,
   radius: 10,
-  title: { role: r(tokens.type.fareCardTitle), left: 13, baseline: 22.2 },
+  title: { role: r(tokens.type.fareCardTitle), left: 14, baseline: 27 },
   // The ribbon drawn 1.25 times its crop (04's logo, where it is smaller).
-  airline: { centre: 48.1, mark: 45.2, name: 66.8, role: r(tokens.type.fareAirline), width: 70, ribbonScale: 1.25 },
+  airline: { centre: 48.1, mark: 62, name: 86, role: r(tokens.type.fareAirline), width: 70, ribbonScale: 1.25 },
   depart: 138.5,
   // 05 draws the arrival 299.85 in; at the reading sizes its day (`Nov 11, 2026`) needs ~72 pt (ADR-IMPL-057).
   arrive: 282,
-  code: { role: r(tokens.type.fareCode), baseline: 36.6 },
-  city: { role: r(tokens.type.fareCity), baseline: 50.1 },
-  time: { role: r(tokens.type.fareTime), baseline: 66.2 },
-  day: { role: r(tokens.type.fareDay), baseline: 78.2 },
+  code: { role: r(tokens.type.fareCode), baseline: 50 },
+  city: { role: r(tokens.type.fareCity), baseline: 69 },
+  time: { role: r(tokens.type.fareTime), baseline: 92 },
+  day: { role: r(tokens.type.fareDay), baseline: 112 },
   plus: { role: r(tokens.type.farePlus), gap: 3.8, rise: 1.3 },
-  line: { y: 32.6, a: [185.2, 220.7], b: [245.6, 274], plane: 233.4, size: 20.3 },
+  line: { y: 45, a: [185.2, 220.7], b: [245.6, 274], plane: 233.4, size: 20.3 },
 } as const;
 
 /** The speedmarque alone (05): the British Airways crop's ribbon, its wordmark left outside the window. */
@@ -387,11 +390,12 @@ function Leg({
  * navy (3.2 on, 2.9 off, 1 pt), the plane at its middle, a navy dot 6.5 across at each airport with its code over its
  * city 7.4 beside it.
  */
+// At phone size (ADR-IMPL-084): the title on 27, the map 38 down and 110 tall.
 const ROUTE = {
-  height: 121.1,
+  height: 155,
   radius: 9,
-  title: { role: r(tokens.type.fareCardTitle), left: 12.9, baseline: 21.4 },
-  map: { top: 28.8, left: 9.4, right: 9.5, bottom: 6.9, height: 85.4, radius: 8.5 },
+  title: { role: r(tokens.type.fareCardTitle), left: 14, baseline: 27 },
+  map: { top: 38, left: 9.4, right: 9.5, bottom: 7, height: 110, radius: 8.5 },
   dot: 3.25,
   gap: 7.4,
   code: { role: r(tokens.type.mapCode), rise: 2.55 },

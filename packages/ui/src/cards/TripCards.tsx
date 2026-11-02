@@ -186,7 +186,7 @@ export function TripSummaryCard({
         <View style={summary.rule} />
         <View style={summary.lowerRow}>
           <View style={summary.days}>
-            <Text style={[g.dates.role, summary.navy]} numberOfLines={1}>
+            <Text style={[g.dates.role, summary.navy]} numberOfLines={2}>
               {dates}
             </Text>
             <Text style={[g.route.role, summary.muted, summary.lineGap]} numberOfLines={2}>
@@ -568,8 +568,9 @@ type PhotoCardProps = {
 
 /**
  * A trip on Profile (12, `My trips`; sheet 40 · 12), measured: 89.4 × 135, radius 8; the city's photograph darkened
- * from 42 % of its height to its foot; the words 8 pt in, in white — the city's baseline 32.6 pt above the foot, the
- * days' 19.9, the route's 8.1. The whole card opens the request.
+ * from 42 % of its height to its foot; the words 8 pt in, in white. At phone size (ADR-IMPL-084): 120 × 150 at least,
+ * the city over the days over the route at their own line heights, the last 10 pt over the foot. The whole card opens
+ * the request.
  */
 export function TripPhotoCard({
   photo,
@@ -627,25 +628,26 @@ const styles = StyleSheet.create({
   // 12 draws four to the screen's width; at the club's reading sizes (ADR-IMPL-057) three, so the days fit on their
   // line. Larger text still makes the cards taller, never cut: the city alone keeps one line.
   photoCard: {
-    width: 112,
-    minHeight: 135,
+    width: 120,
+    minHeight: 150,
     borderRadius: 8,
     overflow: "hidden",
     justifyContent: "flex-end",
     backgroundColor: tokens.colors.surfaceTint,
   },
   pressed: { opacity: 0.85 },
-  photoText: { paddingLeft: 8, paddingRight: 6, paddingBottom: 8.1 - belowBaseline(tokens.type.tripRoute) },
+  photoText: { paddingLeft: 9, paddingRight: 7, paddingBottom: 10 - belowBaseline(tokens.type.tripRoute) },
   photoCity: { ...rn(tokens.type.tripCity), color: tokens.colors.textOnPhoto },
   photoDates: {
     ...rn(tokens.type.tripDates),
     color: tokens.colors.textOnPhoto,
-    marginTop: 32.6 - 19.9 - belowBaseline(tokens.type.tripCity) - baselineOffset(tokens.type.tripDates),
+    // At phone size (ADR-IMPL-084) the lines follow one another at their own heights, 2 pt apart.
+    marginTop: 2,
   },
   photoRoute: {
     ...rn(tokens.type.tripRoute),
     color: tokens.colors.textOnPhoto,
-    marginTop: 19.9 - 8.1 - belowBaseline(tokens.type.tripDates) - baselineOffset(tokens.type.tripRoute),
+    marginTop: 2,
   },
   carrier: {
     ...rn(tokens.type.caption),

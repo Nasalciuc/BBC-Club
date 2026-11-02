@@ -63,31 +63,33 @@ const r = (t: (typeof tokens.type)[keyof typeof tokens.type]) => rn(t) as TypeRo
  * 186.4; the rating on 144.5; the pill 193.5–215.6.
  */
 const LOOKS: Record<"rest" | "sheet", CardLook> = {
+  // At phone size (ADR-IMPL-084): 134 × 286, the lines 20 apart from 170, the pill 30 tall — `United Kingdom` on one
+  // line; the third card runs off the screen's edge, as a carousel's does.
   rest: {
-    width: 121.3,
-    height: 265,
+    width: 134,
+    height: 286,
     radius: 12,
     photo: 144.7,
     textLeft: 11,
-    city: { role: r(tokens.type.offerCity), baseline: 166.8 },
-    country: { role: r(tokens.type.offerCountry), baseline: 182.8 },
-    from: { role: r(tokens.type.offerFrom), baseline: 200.6 },
-    price: { role: r(tokens.type.offerPrice), baseline: 218.4 },
-    rating: { role: r(tokens.type.offerRating), baseline: 168.6, right: 8.9, star: 12.56, starTop: -10.45, gap: 1.75 },
-    pill: { top: 229.3, height: 26.8, left: 11.1, right: 8.7, role: r(tokens.type.offerSave) },
+    city: { role: r(tokens.type.offerCity), baseline: 170 },
+    country: { role: r(tokens.type.offerCountry), baseline: 190 },
+    from: { role: r(tokens.type.offerFrom), baseline: 210 },
+    price: { role: r(tokens.type.offerPrice), baseline: 231 },
+    rating: { role: r(tokens.type.offerRating), baseline: 171.8, right: 8.9, star: 12.56, starTop: -10.45, gap: 1.75 },
+    pill: { top: 243, height: 30, left: 11.1, right: 8.7, role: r(tokens.type.offerSave) },
   },
   sheet: {
-    width: 121.4,
-    height: 222.4,
+    width: 134,
+    height: 246,
     radius: 10.5,
     photo: 124.1,
     textLeft: 11.4,
-    city: { role: r(tokens.type.offerSmCity), baseline: 143.5 },
-    country: { role: r(tokens.type.offerSmCountry), baseline: 157.1 },
-    from: { role: r(tokens.type.offerSmFrom), baseline: 170.8 },
-    price: { role: r(tokens.type.offerSmPrice), baseline: 186.4 },
-    rating: { role: r(tokens.type.offerSmRating), baseline: 144.5, right: 8.2, star: 11.58, starTop: -9.68, gap: 1.66 },
-    pill: { top: 193.5, height: 22.1, left: 11.4, right: 8.4, role: r(tokens.type.offerSmSave) },
+    city: { role: r(tokens.type.offerSmCity), baseline: 147 },
+    country: { role: r(tokens.type.offerSmCountry), baseline: 166 },
+    from: { role: r(tokens.type.offerSmFrom), baseline: 185 },
+    price: { role: r(tokens.type.offerSmPrice), baseline: 204 },
+    rating: { role: r(tokens.type.offerSmRating), baseline: 148, right: 8.2, star: 11.58, starTop: -9.68, gap: 1.66 },
+    pill: { top: 214, height: 26, left: 11.4, right: 8.4, role: r(tokens.type.offerSmSave) },
   },
 };
 /**
@@ -95,14 +97,15 @@ const LOOKS: Record<"rest" | "sheet", CardLook> = {
  * the top, 77.6 tall; the words 11.55 in — the city's baseline 92, the price's 108.7, `from` before it in slate
  * (DESIGN.md: a starting fare says so; 08 draws the price alone).
  */
+// At phone size (ADR-IMPL-084): 132 tall, the city on 98 and the price on 120.
 const COMPACT = {
   width: 114.2,
-  height: 117.2,
+  height: 132,
   radius: 8.1,
   photo: 77.6,
   textLeft: 11.55,
-  city: { role: r(tokens.type.offerCitySm), baseline: 92.0 },
-  price: { role: r(tokens.type.offerPriceSm), baseline: 108.74 },
+  city: { role: r(tokens.type.offerCitySm), baseline: 98 },
+  price: { role: r(tokens.type.offerPriceSm), baseline: 120 },
   from: r(tokens.type.offerFromSm),
 } as const;
 
@@ -336,28 +339,30 @@ type WideProps = Omit<Props, "look" | "compact"> & {
  * the words 12.5 after it on 17.6, 31.8, 48.9, 64.7; the star at L+218.3 on 20.9; the pill 89.9 × 22.6 at the right,
  * 7.2 from it and 6.6 from the foot.
  */
+// At phone size (ADR-IMPL-084) the lines are 19–20 apart, so a country on two lines pushes the rest down instead of
+// over it: two to a row 124 tall at least, the photo 72 wide, the pill 26 tall; one across 98 tall, the pill 28.
 const WIDE = {
   half: {
-    height: 96.7,
-    photo: 80.9,
-    gap: 10.7,
-    city: 17.8,
-    country: 32.6,
-    from: 47.5,
-    price: 63.4,
-    rating: { baseline: 19.4, right: 6.8, star: 11.2, starTop: -9.44, gap: 1.62 },
-    pill: { top: 70.5, height: 20.8, left: -1.1, right: 5.7 },
+    height: 124,
+    photo: 72,
+    gap: 10,
+    city: 21,
+    country: 40,
+    from: 60,
+    price: 80,
+    rating: { baseline: 21.6, right: 6.8, star: 11.2, starTop: -9.44, gap: 1.62 },
+    pill: { top: 90, height: 26, left: -1.1, right: 5.7 },
   },
   full: {
-    height: 74.8,
+    height: 98,
     photo: 154.3,
     gap: 12.5,
-    city: 17.6,
-    country: 31.8,
-    from: 48.9,
-    price: 64.7,
-    rating: { baseline: 20.9, left: 218.3, star: 11.6, starTop: -9.83, gap: 1.65 },
-    pill: { width: 89.9, height: 22.6, right: 7.2, bottom: 6.6 },
+    city: 22,
+    country: 41,
+    from: 61,
+    price: 81,
+    rating: { baseline: 23.3, left: 218.3, star: 11.6, starTop: -9.83, gap: 1.65 },
+    pill: { width: 96, height: 28, right: 7.2, bottom: 8 },
   },
 } as const;
 const wideRoles = {

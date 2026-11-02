@@ -28,26 +28,26 @@ type Props = {
 };
 
 /**
- * 09's filters: 31.7 pt tall, the words 12.3 Medium 14 pt either side, at least 55.5 wide (`All`); chosen, navy with
+ * 09's filters (38 at phone size, ADR-IMPL-084; drawn 31.7 pt tall), the words 12.3 Medium 14 pt either side, at least 55.5 wide (`All`); chosen, navy with
  * 12.5 Semibold white words. 13's trip chips: 31 pt, a 16-pt icon 12 pt in, the words 9 pt after it, 14 pt to the
  * edge. Both light grey and fully round; the target reaches 44 pt by its hit slop.
  */
-const FILTER = { height: 31.7, pad: 14, minWidth: 55.5 } as const;
-const TRIP = { height: 31, padLeft: 12, icon: 16, gap: 9, padRight: 14 } as const;
+const FILTER = { height: 38, pad: 16, minWidth: 58 } as const;
+const TRIP = { height: 36, padLeft: 13, icon: 18, gap: 9, padRight: 15 } as const;
 const LOOKS = {
-  route: { height: 31.3, padLeft: 12.5, icon: 16, gap: 8.1, padRight: 13.2, stroke: 1.9, text: tokens.type.routeChip },
-  place: { height: 30, padLeft: 10.3, icon: 16, gap: 7.1, padRight: 11.7, stroke: 1.9, text: tokens.type.placeChip },
+  route: { height: 36, padLeft: 13, icon: 18, gap: 8.1, padRight: 14, stroke: 1.9, text: tokens.type.routeChip },
+  place: { height: 36, padLeft: 12, icon: 18, gap: 7.5, padRight: 13, stroke: 1.9, text: tokens.type.placeChip },
   // 05: the fare's facts, 26.8 pt, 9.3 in, the words 7.15 after the icon's 16-pt box and 12.6 from the edge; the seat
   // drawn smaller in its box (13.4 tall).
   fare: {
-    height: 26.8,
-    padLeft: 9.3,
-    icon: 16,
+    height: 34,
+    padLeft: 11,
+    icon: 18,
     gap: 7.15,
     padRight: 12.6,
     stroke: 1.75,
     text: tokens.type.fareChip,
-    sizes: { seat: 13.65 },
+    sizes: { seat: 15.5 },
   },
 } as const;
 

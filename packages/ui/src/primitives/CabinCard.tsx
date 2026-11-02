@@ -28,7 +28,8 @@ const LINE_BASELINE = 43.6;
 
 /**
  * A cabin to choose (01; sheet 39): the seat, the cabin over its line, a check circle. Chosen: a navy border on the
- * selected tint and a filled navy check; the other white on its hairline, its circle empty. Two side by side.
+ * selected tint and a filled navy check; the other white on its hairline, its circle empty. Two side by side on 01,
+ * one over the other at phone size (ADR-IMPL-084).
  */
 export function CabinCard({ title, line, cabin, selected, onPress, testID }: Props) {
   return (
@@ -51,7 +52,8 @@ export function CabinCard({ title, line, cabin, selected, onPress, testID }: Pro
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
-        <Text style={styles.line}>{line}</Text>
+        {/* One over the other at phone size (ADR-IMPL-084), the line has the card's width: 01's break is left out. */}
+        <Text style={styles.line}>{line.replace(/\n/g, " ")}</Text>
       </View>
       {selected ? (
         <View style={[styles.mark, styles.check]}>

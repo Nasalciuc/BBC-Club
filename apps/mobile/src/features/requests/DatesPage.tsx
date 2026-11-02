@@ -65,27 +65,28 @@ const PAGE = {
     right: 6.93,
     radius: 7.5,
     /** Pen x and baselines from the frame's corner; the two lines of the words 14.5 apart. */
-    text: { eyebrowLeft: 14.14, left: 14.15, subLeft: 14.5, eyebrow: 73.18, title: 97.94, sub: 114.98, subPitch: 14.5 },
+    // At phone size (ADR-IMPL-084) the lines sit 22, 20 and 18 apart for the larger words.
+    text: { eyebrowLeft: 14.14, left: 14.15, subLeft: 14.5, eyebrow: 66, title: 92, sub: 114, subPitch: 18 },
   },
   card: { left: 7.16, right: 7.16, radius: 10 },
   calendar: { top: 7.85 },
   flexible: {
     /** Under December's card: 6.21 on 07, less what the uniform rows add to that card's height. */
     top: 5.6,
-    height: 46.16,
-    title: { left: 15.56, baseline: 20.5 },
-    body: { left: 15.82, baseline: 34.7 },
+    height: 58,
+    title: { left: 15.56, baseline: 24 },
+    body: { left: 15.82, baseline: 44 },
     toggle: { right: 13.16 },
   },
   preferred: {
     top: 11.36,
     circle: { left: 17.9, size: 28.4 },
     glyph: 14,
-    title: { left: 59.38, baseline: 11.66 },
-    body: { left: 59.78, baseline: 25.68 },
+    title: { left: 59.38, baseline: 13 },
+    body: { left: 59.78, baseline: 33 },
   },
   pill: {
-    height: 32.8,
+    height: 50,
     left: 11.08,
     right: 10.62,
     above: 11.9,

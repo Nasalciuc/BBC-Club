@@ -18,10 +18,11 @@ type Props<K extends string> = {
  * white on a hairline with its words navy; while the request sends (23) the other rests in the light tint, its words
  * slate.
  */
+// At phone size (ADR-IMPL-084): 40 tall, 10 apart, radius 8.
 const REQUEST = {
-  height: 24.8,
-  gap: 9.5,
-  radius: 4.5,
+  height: 40,
+  gap: 10,
+  radius: 8,
   // 06: the words under the segment's middle — the chosen 0.07, the other 0.43.
   drop: { on: 0.07, off: 0.43 },
   on: rn(tokens.type.segmentOn) as TextStyle,

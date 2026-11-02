@@ -44,15 +44,16 @@ type Props = {
 const CARD = { radius: 12, photoW: 134.6, photoLeft: 7.4, photoTop: 4.7, photoBottom: 6, photoRadius: 8.5 } as const;
 const TEXT_LEFT = 16.3;
 const BADGE = { top: 16.5, right: 10.1 } as const;
+// At phone size (ADR-IMPL-084): the route 28 and the days 24 under the line above, the rule 16 under the days.
 const CITY = 36.6;
-const ROUTE = 61.4;
-const DATES = 83.1;
-const RULE = 98.3;
+const ROUTE = 64.6;
+const DATES = 88.6;
+const RULE = 104.6;
 const FACTS_AFTER_RULE = 23.1;
 const BOTTOM_AFTER_FACTS = 19.5;
 const NOTE = { afterRule: 16.8, ruleAfter: 10.4, factsAfterRule: 19.6 } as const;
 const RULE_RIGHT = 24.4;
-const CHEVRON = { size: 24, centre: 73.5, right: 3.4 } as const;
+const CHEVRON = { size: 24, centre: 77, right: 3.4 } as const;
 const FACT = { icon: 16 } as const;
 /**
  * Each fact's mark: how far its ink starts inside its 16-pt box, and where the words start after the box. The first
@@ -200,9 +201,11 @@ const styles = StyleSheet.create({
     color: tokens.colors.textPrimary,
     marginTop: ROUTE - CITY - belowBaseline(cityType) - baselineOffset(routeType),
   },
+  // The days stop where the chevron's column starts: a long range wraps before it, never under it.
   dates: {
     ...rn(datesType),
     color: tokens.colors.textSecondary,
+    paddingRight: RULE_RIGHT,
     marginTop: DATES - ROUTE - belowBaseline(routeType) - baselineOffset(datesType),
   },
   rule: {

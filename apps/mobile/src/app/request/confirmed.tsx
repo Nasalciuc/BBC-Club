@@ -92,7 +92,7 @@ const PAGE = {
   rule: { below: 17.51, inset: 24, thickness: 0.7 },
   next: { baseline: 31.94, left: 24.84 },
   trip: { below: 11.76, left: 21.2, right: 21.2 },
-  pill: { above: 9.27, height: 34.36, left: 21.11, right: 21.5, chevron: { size: 16.15, stroke: 2.082, inset: 8.57 } },
+  pill: { above: 12, height: 50, left: 21.11, right: 21.5, chevron: { size: 16.15, stroke: 2.082, inset: 8.57 } },
   pillChevron: { x: 0, y: 0.47 },
   others: { baseline: 31.46, left: 24.01 },
   seeAll: { left: 330.37, rise: 1.1, gap: 1.6, chevron: { size: 13.27, stroke: 2.293, drop: 0.49 } },
@@ -112,7 +112,7 @@ const SAVED = {
   column: 328,
   title: { baseline: 254.85, pitch: 30.49 },
   body: { baseline: 322.75, pitch: 21.05, left: 23.85 },
-  pill: { height: 42.93, left: 19.96, right: 20.5, bottom: 27.35 },
+  pill: { height: 50, left: 19.96, right: 20.5, bottom: 27.35 },
 } as const;
 // 26's lines as it spaces them (the tokens round a line height to the point).
 const savedTitle = {

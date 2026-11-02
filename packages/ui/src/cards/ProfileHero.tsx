@@ -32,15 +32,15 @@ type Props = {
 /**
  * 12, measured on a 47-pt status bar: the photograph 95.3 pt under the safe area; the 113.6-pt portrait in its 3.8-pt
  * white ring, 75.8 of it on the photograph; the name's baseline 63.4 pt under the photograph's foot, `Flies from JFK`
- * 16.6 under it, centred.
+ * 16.6 under it, centred — at phone size (ADR-IMPL-084) 66 and 24, for the larger words.
  */
 const BAND_BELOW_INSET = 95.3;
 /** The portrait's diameter on Profile (12), its ring included — Edit profile's Photo sheet shows it at the same size. */
 export const PROFILE_AVATAR = 113.6;
 const AVATAR = PROFILE_AVATAR;
 const AVATAR_OVER = 75.8;
-const NAME_BASELINE = 63.4;
-const HOME_PITCH = 16.6;
+const NAME_BASELINE = 66;
+const HOME_PITCH = 24;
 
 /** The band's height on a phone with this top inset — for a satellite view asked for at the band's size. */
 export function profileBandHeight(topInset: number): number {

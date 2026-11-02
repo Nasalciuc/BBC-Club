@@ -26,9 +26,10 @@ type Props = {
  * price ending 34 pt from the right edge; the chevron 15 pt in, in the middle of the words.
  */
 const CARD = { radius: 10, photo: 118, padLeft: 13.4, priceRight: 34, chevronRight: 6, chevron: 18 } as const;
-const CITY_BASELINE = 18.7;
-const LINE_PITCH = 16.6;
-const TEXT_AREA = 47.7;
+// At phone size (ADR-IMPL-084): the city 24 under the photograph, the airport 21 under it, the words' area 60 tall.
+const CITY_BASELINE = 24;
+const LINE_PITCH = 21;
+const TEXT_AREA = 60;
 const DOT = { size: 2.3, gap: 8.5 } as const;
 
 export function PopularCard({ city, airport, code, fromPrice, image, fallback, photoHeight, onPress, testID }: Props) {

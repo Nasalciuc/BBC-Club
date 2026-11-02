@@ -567,32 +567,40 @@ const SECTION = rn(tokens.type.requestSection) as Role;
  * rule on 549.6; `We will contact you` on 576.7, 20.2 in; the contact fields from 589.3, 36.8 tall, 7.6 apart — the
  * fields 19.2 in and 17.8 from the right; the pill 29 tall, its words and arrow centred, the promise 15.3 under it.
  */
+// At phone size (ADR-IMPL-084): the segments 40 tall and the fields 54, 10–12 apart; the section's title 30 under the
+// rule; the pill 50 tall. The measures below are still from the screen's top as 06 counts it, each step the one after
+// the last.
+const SEG_TOP = 408.5 + 12;
+const DATES_TOP = SEG_TOP + 40 + 12;
+const TRAVELERS_TOP = DATES_TOP + 54 + 10;
+const RULE_TOP = TRAVELERS_TOP + 54 + 18;
+const SECTION_BASELINE = RULE_TOP + 32;
 const SHEET = {
   card: { marginLeft: 17.3, marginRight: 16.2 },
   cardBottom: 408.5,
   column: { marginLeft: 19.2, marginRight: 17.8 },
-  segments: { top: 418.4, bottom: 418.4 + 24.8 },
-  dates: { top: 453.17, bottom: 453.17 + 37.4, gap: 9.5 },
+  segments: { top: SEG_TOP, bottom: SEG_TOP + 40 },
+  dates: { top: DATES_TOP, bottom: DATES_TOP + 54, gap: 8 },
   // 22: the return's line under its field, from the field's own left.
-  returnError: { left: 173.1 + 9.5 },
-  travelers: { top: 499.32, bottom: 499.32 + 37.4 },
-  divider: { marginTop: 549.37 - (499.32 + 37.4), marginLeft: 18.7, marginRight: 17.8 },
+  returnError: { left: 173.1 + 8 },
+  travelers: { top: TRAVELERS_TOP, bottom: TRAVELERS_TOP + 54 },
+  divider: { marginTop: RULE_TOP - (TRAVELERS_TOP + 54), marginLeft: 18.7, marginRight: 17.8 },
   section: {
-    top: 576.68 - baselineOffset(SECTION) - 549.83,
+    top: SECTION_BASELINE - baselineOffset(SECTION) - (RULE_TOP + 0.46),
     left: 20.2,
-    bottom: 576.68 - baselineOffset(SECTION) + SECTION.lineHeight,
+    bottom: SECTION_BASELINE - baselineOffset(SECTION) + SECTION.lineHeight,
   },
-  contact: { first: 588.12, gap: 7.6 },
+  contact: { first: SECTION_BASELINE + 14, gap: 10 },
   pill: {
-    height: 29,
-    arrow: 16.4,
-    arrowStroke: 1.6,
-    arrowGap: 5.2,
+    height: 50,
+    arrow: 18,
+    arrowStroke: 1.9,
+    arrowGap: 6,
     // 06: the words 0.19 over the pill's middle.
     lift: 0.19,
     shadow: { ...tokens.elevation.card },
   },
-  promise: { below: 15.91, icon: 9.5, iconRise: 3.4 },
+  promise: { below: 20, icon: 11, iconRise: 4 },
 } as const;
 
 /** 06's days on the card: `Nov 12 – Nov 19, 2026` — each day by its month, the year once. */
