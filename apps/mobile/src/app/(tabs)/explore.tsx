@@ -2,7 +2,7 @@ import { type Href, useIsFocused, useLocalSearchParams, useRouter } from "expo-r
 import { useEffect, useRef, useState } from "react";
 import { BackHandler, type LayoutChangeEvent, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AirportVM, BookablePlaceVM, FareVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
+import type { AirportVM, BookablePlaceVM, FareVM, NearAirportVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
 import {
   BackButton,
@@ -41,6 +41,8 @@ import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
 import { NOTHING_NEAR, exploreTap } from "@/features/globe/globe-tap-logic";
 import { cityToOpen } from "@/features/globe/open-city";
+import { type TapChoices, placesTap, pointToAsk } from "@/features/globe/places-near-logic";
+import { TapPlaces } from "@/features/globe/TapPlaces";
 import { useDestinations } from "@/features/globe/useDestinations";
 import { Landmarks } from "@/features/places/Landmarks";
 import { usePlaceLandmarks } from "@/features/places/usePlaceLandmarks";
@@ -50,6 +52,7 @@ import type { SearchContext } from "@/features/requests/useRequestDraft";
 import { useSearch } from "@/features/search/useSearch";
 import { portraitOf } from "@/features/profile/portrait";
 import { useProfile } from "@/features/profile/useProfile";
+import { fetchPlacesNear } from "@/lib/api";
 import { env } from "@/lib/env";
 import { monogram } from "@/lib/monogram";
 
@@ -120,13 +123,17 @@ export default function ExploreScreen() {
   // shown at rest under the search bar until the next choice; and the distance to the city a tap snapped to, shown under
   // its country while that city is the one chosen.
   const [tapAnswer, setTapAnswer] = useState<"none" | "home" | null>(null);
+  // ADR-IMPL-083: where the last tap fell — the town and the airports near it — until the next tap or choice; and which
+  // tap is the last, so an answer that comes back after another tap, or after a choice, is left unread.
+  const [tapChoices, setTapChoices] = useState<{ choices: TapChoices; named: boolean } | null>(null);
+  const tapAsked = useRef(0);
   const [tapNote, setTapNote] = useState<{ code: string; line: string } | null>(null);
   const nearest = tapNote && tapNote.code === state.to?.code ? tapNote.line : undefined;
 
   // The destination chosen on the globe comes with the dates it was last searched for, as from Search's recent list
   // (03, 04): Search and the globe keep one list.
   function selectDestination(airport: AirportVM) {
-    setTapAnswer(null);
+    forgetTap();
     const dates = rememberSearch(airport)[0]?.dates;
     dispatch({ type: "selectDestination", airport });
     if (dates?.depart) {
@@ -151,25 +158,52 @@ export default function ExploreScreen() {
     setTapNote(null);
   }
 
-  // ADR-IMPL-068: a tap anywhere on the globe at rest snaps to the nearest city the club sells within 600 km, opened as
-  // a pin's is; farther or over the sea, the calm answer; the member's own city, the home answer. Without Home's list
-  // (the flag off, an older server) the globe gets no handler, so no tap of its own: its pins and gestures are as
-  // before. The search stays the screen reader's way to a city: the globe gains no element.
+  /** What the last tap answered is put away, and an answer still on its way will not be shown. */
+  function forgetTap() {
+    tapAsked.current += 1;
+    setTapAnswer(null);
+    setTapChoices(null);
+  }
+
+  // ADR-IMPL-083: a tap anywhere on the globe at rest names the spot and offers the airports near it — any airport with
+  // scheduled service within 600 km, the nearest three once home's metro is left out (`GET /v1/places/near`); a row
+  // opens its airport as a pin's tap does. Nothing near, the calm answer; the member's own city, the home answer.
+  // Offline, or when the server cannot answer: the snap to the nearest city the club sells (ADR-IMPL-068), from Home's
+  // list. Without that list (`catalog.globe_tap` off, an older server) the globe gets no handler, so no tap of its own:
+  // its pins and gestures are as before. The search stays the screen reader's way to a city: the globe gains no element.
   const canTapGlobe = (home?.bookable?.length ?? 0) > 0;
   function onTapGlobe(tap: GlobeTap) {
-    const what = exploreTap(mode, tap, home?.bookable, home?.home ?? null);
-    if (!what) return;
-    if (what.kind === "answer") {
+    if (mode !== "rest") return;
+    forgetTap();
+    const asked = tapAsked.current;
+    void (async () => {
+      const answer = offline ? null : await fetchPlacesNear(pointToAsk(tap));
+      if (asked !== tapAsked.current) return;
       setTapNote(null);
-      setTapAnswer(what.answer);
-      return;
-    }
-    // Opened as a pin's tap opens it.
-    openCity(what.place.code, { place: what.place, note: what.note });
+      if (answer?.ok) {
+        const what = placesTap(answer.data, tap, home?.home ?? null);
+        if (what.kind === "answer") setTapAnswer(what.answer);
+        else setTapChoices({ choices: what.choices, named: answer.data.locality !== null });
+        return;
+      }
+      const what = exploreTap(mode, tap, home?.bookable, home?.home ?? null);
+      if (!what) return;
+      if (what.kind === "answer") {
+        setTapAnswer(what.answer);
+        return;
+      }
+      // Opened as a pin's tap opens it.
+      openCity(what.place.code, { place: what.place, note: what.note });
+    })();
+  }
+
+  // An airport offered for the tap opens as a pin's tap does: its pin's airport when the city has a pin.
+  function onChooseNear(airport: NearAirportVM) {
+    openCity(airport.code, { place: airport, note: null });
   }
 
   function openSearch() {
-    setTapAnswer(null);
+    forgetTap();
     router.push("/search" as Href);
   }
 
@@ -440,6 +474,11 @@ export default function ExploreScreen() {
             </View>
             {/* ADR-IMPL-068: the answer to a tap that found no city to open. No image draws it: the attention notice
                 of sheet 41, read out as it appears. */}
+            {tapChoices ? (
+              <View style={styles.answer}>
+                <TapPlaces choices={tapChoices.choices} named={tapChoices.named} onChoose={onChooseNear} />
+              </View>
+            ) : null}
             {tapAnswer ? (
               <View style={styles.answer}>
                 <NoticeCard
@@ -457,7 +496,7 @@ export default function ExploreScreen() {
               onOpenOffer={onOpenOffer}
               onOpenDeal={onOpenDeal}
               onSeeAll={() => {
-                setTapAnswer(null);
+                forgetTap();
                 setSheetIndex(STOP.all);
               }}
               onSearch={openSearch}

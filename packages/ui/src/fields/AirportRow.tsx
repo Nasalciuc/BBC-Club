@@ -14,6 +14,8 @@ type Props = {
    * the code in slate at the right.
    */
   layout?: "detail" | "code";
+  /** How far the airport is from where the member tapped (`70 km`, ADR-IMPL-083): in slate before the chevron. */
+  distance?: string;
   onPress: () => void;
   testID: string;
 };
@@ -33,13 +35,22 @@ const LINE_PITCH = 17.1;
 const DOT = { size: 2.6, gap: 8.8 } as const;
 
 /** An airport to choose (14, 18): a white card with the map pin, the city, the airport and its code. */
-export function AirportRow({ code, city, airport, state = "default", layout = "detail", onPress, testID }: Props) {
+export function AirportRow({
+  code,
+  city,
+  airport,
+  state = "default",
+  layout = "detail",
+  distance,
+  onPress,
+  testID,
+}: Props) {
   const selected = state === "selected";
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={`${city}, ${airport}, ${code}`}
+      accessibilityLabel={distance ? `${city}, ${airport}, ${code}, ${distance} away` : `${city}, ${airport}, ${code}`}
       accessibilityState={{ selected }}
       onPress={onPress}
       style={({ pressed }) => [
@@ -70,6 +81,7 @@ export function AirportRow({ code, city, airport, state = "default", layout = "d
         ) : null}
       </View>
       {layout === "code" ? <Text style={styles.code}>{code}</Text> : null}
+      {distance ? <Text style={styles.distance}>{distance}</Text> : null}
       {selected ? (
         <Icon name="check" size={20} color={tokens.colors.textPrimary} strokeWidth={2.25} />
       ) : layout === "detail" ? (
@@ -117,4 +129,10 @@ const styles = StyleSheet.create({
   airport: { ...rn(meta), color: tokens.colors.textSecondary, flexShrink: 1 },
   dot: { width: DOT.size, height: DOT.size, borderRadius: DOT.size, backgroundColor: tokens.colors.textSecondary },
   code: { ...rn(tokens.type.onboardCode), color: tokens.colors.textSecondary },
+  distance: {
+    ...rn(meta),
+    color: tokens.colors.textSecondary,
+    marginLeft: tokens.space.sm,
+    marginRight: tokens.space.xxs,
+  },
 });
