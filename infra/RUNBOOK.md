@@ -689,8 +689,12 @@ skipped while the table holds as many rows as the file). A corrected name or poi
 bun run --filter @bbc/db db:migrate -- --localities
 ```
 
-Off, the route answers nothing and reads nothing, and the app falls back to ADR-IMPL-068's snap (also its offline
-answer). GeoNames' licence (CC BY 4.0) asks for the credit the card prints under the airports.
+Off, the route answers an empty list without reading anything, and Home leaves out `bookable` (ADR-IMPL-068): once a
+phone's Home refreshes, its globe takes no tap at all — the pins, the search and the gestures as before. Until then, a
+phone that still holds the earlier list gets the empty answer and shows the calm "nothing near" note. ADR-IMPL-068's
+snap to the nearest city the club sells is the app's answer only when the route cannot be reached (offline, an error,
+an older server), never when the flag is off. GeoNames' licence (CC BY 4.0) asks for the credit the card prints under
+the airports.
 
 ## The queue is stuck (oldest pending > 5 min)
 
