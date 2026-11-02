@@ -159,6 +159,8 @@ export default function SearchScreen() {
         <SearchField
           testID="explore.airportQuery"
           editable
+          // Search opens to be typed in: the field takes the focus (and the keyboard) at once (audit, 1 Nov 2026).
+          autoFocus
           tone="field"
           placeholder="Where would you like to go?"
           value={query ? { text: query } : null}

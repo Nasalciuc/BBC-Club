@@ -54,7 +54,7 @@ export function PopularCard({ city, airport, code, fromPrice, image, fallback, p
               {airport}
             </Text>
             <View style={styles.dot} />
-            <Text style={styles.airport}>{code}</Text>
+            <Text style={[styles.airport, styles.code]}>{code}</Text>
           </View>
         </View>
         {fromPrice ? (
@@ -99,7 +99,10 @@ const styles = StyleSheet.create({
   },
   airport: { ...rn(meta), color: tokens.colors.textSecondary, flexShrink: 1 },
   dot: { width: DOT.size, height: DOT.size, borderRadius: DOT.size, backgroundColor: tokens.colors.textSecondary },
-  price: { alignItems: "flex-end", paddingTop: CITY_BASELINE - baselineOffset(from) },
+  // The code keeps its letters; a long airport name gives way to it (`Charles de Gaulle Internati… · CDG`).
+  code: { flexShrink: 0 },
+  // Clear of the airport's line: with a real airport's long name the code ran into the price (`CDG$2,025`).
+  price: { alignItems: "flex-end", marginLeft: tokens.space.xs, paddingTop: CITY_BASELINE - baselineOffset(from) },
   from: { ...rn(from), color: tokens.colors.textSecondary },
   amount: {
     ...rn(amount),
