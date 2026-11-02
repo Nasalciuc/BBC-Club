@@ -23,29 +23,32 @@ export type FieldLook = {
   chevron: { right: number; drop: number; size: number; stroke: number };
 };
 
+// At phone size (ADR-IMPL-084): 54 tall, radius 8; a text field's icon 19 centred 22 in, the rule at 42 from 10 to 10,
+// the label 50 in on 21, the value on 42.
+// A picker's icon column is narrower, so a day with its year (`Nov 16, 2026`) keeps one line in half the width.
 export const PICKER_REQUEST: FieldLook = {
-  height: 37.4,
-  radius: 5,
-  icon: { centre: 17.3, rise: 0.2, size: 14.5, stroke: 1.5 },
-  rule: { left: 32.5, top: 6.8, bottom: 6.5 },
-  label: { left: 39, baseline: 15.48, role: rn(tokens.type.fieldLabel) as Role, color: tokens.colors.textLabel },
-  value: { baseline: 30.05, role: rn(tokens.type.fieldValue) as Role },
-  chevron: { right: 15.7, drop: 0.6, size: 11, stroke: 2.04 },
+  height: 54,
+  radius: 8,
+  icon: { centre: 19, rise: 0.2, size: 18, stroke: 1.6 },
+  rule: { left: 36, top: 10, bottom: 10 },
+  label: { left: 43, baseline: 21, role: rn(tokens.type.fieldLabel) as Role, color: tokens.colors.textLabel },
+  value: { baseline: 42, role: rn(tokens.type.fieldValue) as Role },
+  chevron: { right: 12, drop: 0.6, size: 13, stroke: 2 },
 };
 
 export const TEXT_REQUEST: FieldLook = {
-  height: 36.8,
-  radius: 5,
-  icon: { centre: 16.9, rise: 0, size: 14.5, stroke: 1.5 },
-  rule: { left: 33.2, top: 6.8, bottom: 6.5 },
-  label: { left: 40.33, baseline: 15.5, role: rn(tokens.type.fieldLabel) as Role, color: tokens.colors.textLabel },
+  height: 54,
+  radius: 8,
+  icon: { centre: 22, rise: 0, size: 19, stroke: 1.6 },
+  rule: { left: 42, top: 10, bottom: 10 },
+  label: { left: 50, baseline: 21, role: rn(tokens.type.fieldLabel) as Role, color: tokens.colors.textLabel },
   value: {
-    baseline: 30.4,
+    baseline: 42,
     role: rn(tokens.type.fieldValue) as Role,
     placeholder: rn(tokens.type.fieldPlaceholder) as Role,
-    placeholderBaseline: 28.56,
+    placeholderBaseline: 41,
   },
-  chevron: { right: 15.7, drop: 0.2, size: 11, stroke: 2.04 },
+  chevron: { right: 18, drop: 0.2, size: 14, stroke: 2 },
 };
 
 /**

@@ -18,7 +18,7 @@ const PAGE = {
   title: { baseline: 308.41, pitch: 32.74 },
   body: { baseline: 380.23, pitch: 21.48 },
   column: 300,
-  pill: { top: 427.01, height: 42.75, left: 18.78, right: 19.25, icon: 21.9, gap: 14.21, words: { x: 0, y: -0.17 } },
+  pill: { top: 427.01, height: 50, left: 18.78, right: 19.25, icon: 21.9, gap: 14.21, words: { x: 0, y: -0.17 } },
 } as const;
 // 27's lines as it spaces them (the tokens round a line height to the point).
 const title = {

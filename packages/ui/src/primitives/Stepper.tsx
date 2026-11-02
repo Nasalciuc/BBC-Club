@@ -36,7 +36,8 @@ const ONB = {
   textLeft: 58.3,
   labelBaseline: 28.5,
   captionPitch: 15.4,
-  pill: { width: 104, height: 33.2, right: 11.7, top: 13.5, minus: 32.8, plus: 33 },
+  // 01 draws 104 × 33.2; 124 × 40 at phone size (ADR-IMPL-084).
+  pill: { width: 124, height: 40, right: 11.7, top: 13.5, minus: 40, plus: 40 },
   sign: 17,
 } as const;
 const onbLabel = tokens.type.travelerTitle;

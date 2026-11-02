@@ -61,8 +61,10 @@ const DETAILED = {
   plus: { role: r(tokens.type.flightPlus) },
   day: { role: r(tokens.type.flightDay), baseline: 90.6 },
   departLeft: 15.4,
-  arriveLeft: 178.1,
-  line: { left: 93.1, right: 152.9, y: 67.1, plane: { left: 111.3, right: 125.3 }, stroke: 0.7 },
+  // At phone size (ADR-IMPL-084): the line shorter (124–156, the plane centred on it) so each airport's column holds
+  // its day on one line — `May 30, 2026` is 99.7 pt at `flight-day`; 13's 93.1–152.9 left the departure 77.7.
+  arriveLeft: 160,
+  line: { left: 124, right: 156, y: 67.1, plane: { left: 133, right: 147 }, stroke: 0.7 },
   rule: { left: 268.1, top: 45.9, bottom: 93.9, width: 0.7 },
   price: { role: r(tokens.type.flightPrice), right: 15.2, baseline: 73.1 },
   basis: { role: r(tokens.type.flightBasis), right: 15.7, baseline: 89.2 },
@@ -74,19 +76,21 @@ const DETAILED = {
  * the clocks' baseline; the arrival 205.3 in, its `+1` 3.7 over that baseline and 2.4 after the clock; the price 303.4
  * in on 29.2 and what it buys on 42.6.
  */
+// At phone size (ADR-IMPL-084): 78 tall; the clocks on 27, the codes on 46, the stops on 66; the price on 35 and
+// what it buys on 54; the mark centred on 39.
 const COMPACT = {
-  height: 61.4,
+  height: 78,
   radius: 12.5,
-  mark: { centreX: 54.6, centreY: 27.6 },
-  time: { role: r(tokens.type.optionTime), baseline: 22.8 },
-  code: { role: r(tokens.type.optionCode), baseline: 35.7 },
-  meta: { role: r(tokens.type.optionMeta), baseline: 49.7 },
+  mark: { centreX: 54.6, centreY: 39 },
+  time: { role: r(tokens.type.optionTime), baseline: 27 },
+  code: { role: r(tokens.type.optionCode), baseline: 46 },
+  meta: { role: r(tokens.type.optionMeta), baseline: 66 },
   plus: { role: r(tokens.type.optionPlus), rise: 3.7, gap: 2.4 },
   departLeft: 112.5,
   arriveLeft: 205.3,
   arrow: { left: 159.9, width: 27.2, height: 8.3, rise: 1.55, stroke: 0.9 },
-  price: { role: r(tokens.type.optionPrice), left: 303.4, baseline: 29.2 },
-  basis: { role: r(tokens.type.optionBasis), baseline: 42.6 },
+  price: { role: r(tokens.type.optionPrice), left: 298, baseline: 35 },
+  basis: { role: r(tokens.type.optionBasis), baseline: 54 },
 } as const;
 
 /** 13: the plane on the line between the airports. */

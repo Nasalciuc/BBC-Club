@@ -35,15 +35,16 @@ type RowLook = {
 export type RowLookName = "profile" | "settings" | "edit" | "fare";
 
 const LOOKS: Record<RowLookName, RowLook> = {
+  // 12 at phone size (ADR-IMPL-084): the settings rows' measures (34), in Profile's own words and slate.
   profile: {
     radius: 10,
-    height: 29.65,
-    icon: 16.5,
-    iconCentre: 22.5,
-    labelLeft: 45.3,
-    valueRight: 25.9,
-    chevron: { size: 13.4, stroke: 1.6, right: 11.2, color: tokens.colors.chevronLight },
-    rule: { left: 45.4, right: 11 },
+    height: 48,
+    icon: 20,
+    iconCentre: 25.2,
+    labelLeft: 52.4,
+    valueRight: 30.4,
+    chevron: { size: 17, stroke: 1.9, right: 12.9, color: tokens.colors.chevronLight },
+    rule: { left: 52.4, right: 11 },
     label: rn(tokens.type.profileRow) as RowLook["label"],
     value: rn(tokens.type.profileValue),
     sub: rn(tokens.type.profileValue) as RowLook["sub"],
@@ -67,17 +68,17 @@ const LOOKS: Record<RowLookName, RowLook> = {
     labelColor: tokens.colors.textPrimary,
     valueColor: tokens.colors.textPrimary,
   },
-  // 05: `About this fare` and `The comparison`, 37 pt each; the marks 20 pt on 22, the words from 51.05; the rule
-  // from 43.1 to 13.1 short of the right edge; the chevron 20 at 1.8, its ink 15 from the edge.
+  // 05 at phone size (ADR-IMPL-084): `About this fare` and `The comparison`, 48 pt each; the marks 20 pt on 24, the
+  // words from 52; the rule from 52 to 13.1 short of the right edge; the chevron 20 at 1.8, its ink 15 from the edge.
   fare: {
     radius: 9,
-    height: 37,
+    height: 48,
     icon: 20,
-    iconCentre: 22,
-    labelLeft: 51.05,
+    iconCentre: 24,
+    labelLeft: 52,
     valueRight: 30,
     chevron: { size: 20, stroke: 1.8, right: 15, color: tokens.colors.textMuted },
-    rule: { left: 43.1, right: 13.1, color: tokens.colors.ruleLine },
+    rule: { left: 52, right: 13.1, color: tokens.colors.ruleLine },
     label: rn(tokens.type.fareRow) as RowLook["label"],
     value: rn(tokens.type.fareRow),
     sub: rn(tokens.type.fareRow) as RowLook["sub"],

@@ -156,7 +156,7 @@ export default function SettingsScreen() {
           label={signingOut ? "Signing out…" : "Sign out"}
           variant="destructive"
           busy={signingOut}
-          height={36}
+          height={48}
           text="settingsSignout"
           style={styles.signOut}
           onPress={signOutNow}

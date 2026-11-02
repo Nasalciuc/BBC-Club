@@ -20,12 +20,14 @@ import { readStoredRules } from "../packages/modules/domain/catalog/src/pricing/
 import { reason } from "./seed-review-account";
 import { assertStagingTarget } from "./seed-staging-demo";
 
-/** What staging's members see from the company's site: the estimate is the master switch the other three read. */
+/** What staging's members see from the company's site: the estimate is the master switch the other three read; the
+ *  globe's tap (ADR-IMPL-068, ADR-IMPL-083) opens the site's cities and names any place with its nearest airports. */
 export const STAGING_REAL_DATA_FLAGS = [
   "catalog.estimates",
   "catalog.site_prices",
   "catalog.site_pins",
   "catalog.site_offers",
+  "catalog.globe_tap",
 ] as const;
 
 const DESCRIPTION = "Turned on by scripts/staging-real-data.ts (staging only, ADR-IMPL-040): the club's real data";

@@ -678,6 +678,24 @@ It costs Home one read of the set (kept a minute, and dropped on every process w
 about 21 KB of JSON (today's 169 airports) inside Home's ETag. Off is the same with `false`, seen within a second; the
 app keeps the last Home it parsed until its next load.
 
+### Where a tap fell (ADR-IMPL-083)
+
+With the same flag on, a tap on the globe asks `GET /v1/places/near` for the town under the finger and the airports near
+it (any with scheduled service within 600 km; the app offers three). The towns are `catalog.localities`, GeoNames'
+places of 5,000 people or more, loaded by `db:migrate` from `packages/db/seeds/localities-reference.tsv` (46,547 rows;
+skipped while the table holds as many rows as the file). A corrected name or point that keeps the count lands with:
+
+```sh
+bun run --filter @bbc/db db:migrate -- --localities
+```
+
+Off, the route answers an empty list without reading anything, and Home leaves out `bookable` (ADR-IMPL-068): once a
+phone's Home refreshes, its globe takes no tap at all — the pins, the search and the gestures as before. Until then, a
+phone that still holds the earlier list gets the empty answer and shows the calm "nothing near" note. ADR-IMPL-068's
+snap to the nearest city the club sells is the app's answer only when the route cannot be reached (offline, an error,
+an older server), never when the flag is off. GeoNames' licence (CC BY 4.0) asks for the credit the card prints under
+the airports.
+
 ## The queue is stuck (oldest pending > 5 min)
 
 1. `$DC exec -T worker bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep queue_` — depth, age, dead. The worker's: the queue's gauges are where the poller runs (with `MONITORING=on`, Grafana's `Event queue` panel too).
@@ -1164,7 +1182,7 @@ and removed by `stop`. A step test shares the box with production: a quiet hour.
 
 ## Staging demo data (ADR-IMPL-040)
 
-On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, its personal London offer, a request in each state, the inbox. Nothing every member sees: no fare (the pins are the catalogue's, everyone's) and no broadcast offer — staging's members, testers included, see the club's real data (the `catalog.site_*` flags above, and what operators send). Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:
+On staging the review account (`REVIEW_ACCOUNT_EMAIL` / `REVIEW_ACCOUNT_PASSWORD` in `staging.env`) is Figma's member: Alex Morgan, home JFK, its personal London offer (priced as the site prices London — its stored answer, round trip in business — once the site has answered, with no saving claimed; the fixture's price before that), a request in each state, the inbox. Nothing every member sees: no fare (the pins are the catalogue's, everyone's) and no broadcast offer — staging's members, testers included, see the club's real data (the `catalog.site_*` flags above, and what operators send). Every date is counted from the day the script runs, so nothing in a demo is in the past. `deploy.sh staging` refreshes it at step 7 — a deploy is the only thing that changes the server, and the refresh is one more line in its log. Between deploys, or after a demo that changed things (a read inbox item, a request made, an offer tapped, saved preferences, another home airport, a changed password — all undone), run it by hand:
 
 ```bash
 # through the staging worker: its DATABASE_URL is staging's Postgres, direct (compose.staging.yml) — no password typed
@@ -1181,7 +1199,7 @@ fare off sale (the rows stay: the demo's requests name them). Nothing to do by h
 (`0 offers, 0 fares`). The review account's own London offer stays; if an operator withdraws it, it stays withdrawn.
 
 **The real data, at every staging deploy.** After the demo, step 7 runs `scripts/staging-real-data.ts`: it turns on
-`catalog.estimates`, `catalog.site_prices`, `catalog.site_pins` and `catalog.site_offers` (an operator's `skip` list
+`catalog.estimates`, `catalog.site_prices`, `catalog.site_pins`, `catalog.site_offers` and `catalog.globe_tap` (the globe's tap, ADR-IMPL-083; an operator's `skip` list
 stays) and says whether a search can use the price rules, as the catalogue checks them — `price rules: not loaded` or
 `invalid` means a search shows the site's price where it has one and no number elsewhere: load them ("Price rules for estimates", above). When it turned a flag on
 (`changed: 1` or more), the deploy starts `sync-site-destinations` in the worker at once instead of waiting for 07:40 or

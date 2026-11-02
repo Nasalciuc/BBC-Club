@@ -37,20 +37,24 @@ type Props = {
 const CARD = {
   radius: 10,
   gap: 6.4,
-  title: { baseline: 25.45, left: 14.94 },
+  title: { baseline: 28, left: 14.94 },
   /** The arrows' centres, from the card's right edge and top; Lucide's chevrons at 15.4 with a 0.96-pt line. */
-  arrows: { back: 66.69, on: 22.22, centre: 19.62, glyph: { size: 15.4, stroke: 1.5 } },
+  arrows: { back: 70, on: 22.22, centre: 22.5, glyph: { size: 18, stroke: 1.6 } },
   /** The weekdays on their own columns, a little narrower than the days' (07: 51.1 apart against 51.4). */
-  weekdays: { baseline: 49.77, left: 10.55, right: 10.28 },
+  weekdays: { baseline: 56, left: 10.55, right: 10.28 },
   /**
    * The days, fitted over both months — the image draws November's rows 30.5 to 31.9 apart from 56.6 under the card's
    * top and December's about 31.2 apart from 57.0: 56.5 down, 31.02 apart, the card ending 11.95 under the last row.
    */
-  grid: { top: 56.5, left: 11.31, right: 9.93, bottom: 11.95, columnGap: 2.465, rowGap: 1.92 },
+  // At phone size (ADR-IMPL-084) each week is a 44-pt row with its 36-pt days centred in it, so the days look 8 apart
+  // and each is a 44-pt target inside its own row (a touch outside a parent's bounds never reaches it; 07's 2.5-pt
+  // gaps left a day 38.5). The columns are 48 or more wide on a phone.
+  grid: { top: 66, left: 11.31, right: 9.93, bottom: 12, columnGap: 2.465, rowHeight: 44 },
 } as const;
 
 /** The figures' baselines from the square's top: the day's 18.35; the chosen's 18.7, centred in its circle. */
-const DAY = { height: 29.1, radius: 4.8, circle: 29.7, baseline: 18.35, chosenBaseline: 18.7 } as const;
+// At phone size (ADR-IMPL-084) a day is 36 tall, its circle 36, its figure 22.5 down.
+const DAY = { height: 36, radius: 6, circle: 36, baseline: 22.8, chosenBaseline: 23.1 } as const;
 
 const DAY_TYPE = rn(tokens.type.day);
 const CHOSEN_TYPE = rn(tokens.type.dayChosen);
@@ -218,9 +222,8 @@ function Day({
       accessibilityState={{ disabled: blocked, selected: circle || cell.state === "inRange" }}
       disabled={blocked}
       onPress={() => onSelect(cell.date)}
-      // The slop reaches into the gaps around the square: the 31-pt row and the column make the day a full target
-      // without taking its neighbour's.
-      hitSlop={{ top: CARD.grid.rowGap / 2, bottom: CARD.grid.rowGap / 2 }}
+      // The day's 4-pt slop above and below stays inside its 44-pt row: a 44-pt target, never its neighbour's.
+      hitSlop={{ top: (CARD.grid.rowHeight - DAY.height) / 2, bottom: (CARD.grid.rowHeight - DAY.height) / 2 }}
       style={styles.cell}
     >
       {band ? (
@@ -288,9 +291,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   weekday: { flex: 1, textAlign: "center", color: tokens.colors.textSecondary },
-  grid: { gap: CARD.grid.rowGap },
+  grid: {},
   gridDisabled: { opacity: 0.4 },
-  row: { flexDirection: "row", gap: CARD.grid.columnGap },
+  row: { flexDirection: "row", alignItems: "center", height: CARD.grid.rowHeight, gap: CARD.grid.columnGap },
   cell: {
     flex: 1,
     height: DAY.height,

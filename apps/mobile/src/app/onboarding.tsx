@@ -482,8 +482,9 @@ const styles = StyleSheet.create({
     gap: tokens.space.xs,
   },
   labelCabin: { marginTop: after(ONB.airportTop + HOME_CARD.height, ONB.cabinLabel, labelType) },
+  // 01 draws the two cabins side by side; at phone size (ADR-IMPL-084) their lines need the width: one over the other.
   cabins: {
-    flexDirection: "row",
+    flexDirection: "column",
     gap: ONB.cabinGap,
     marginTop: ONB.cabinTop - labelBottom(ONB.cabinLabel),
     marginLeft: ONB.cardLeft,

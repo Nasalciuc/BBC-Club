@@ -217,6 +217,42 @@ export const BookablePlaceVM = AirportVM.pick({
 });
 export type BookablePlaceVM = z.infer<typeof BookablePlaceVM>;
 
+/** How far from a tap on the globe an airport may be and still be offered (ADR-IMPL-083; ADR-IMPL-068's reach). */
+export const PLACES_NEAR_REACH_KM = 600;
+/** How far from the tap the town that names it may be (ADR-IMPL-083). */
+export const LOCALITY_REACH_KM = 50;
+/** At most this many airports in an answer, nearest first: the app keeps three once it has left out home's metro. */
+export const PLACES_NEAR_AIRPORTS = 6;
+
+/** The town or city a tap on the globe fell in or near (ADR-IMPL-083): its name (GeoNames), its country, how far. */
+export const NearLocalityVM = z.object({
+  name: z.string().min(1),
+  countryCode: z.string().length(2),
+  km: z.number().nonnegative(),
+});
+export type NearLocalityVM = z.infer<typeof NearLocalityVM>;
+
+/** An airport near a tap on the globe (ADR-IMPL-083): every airport with scheduled service counts; how far from the tap. */
+export const NearAirportVM = AirportVM.extend({ km: z.number().nonnegative() });
+export type NearAirportVM = z.infer<typeof NearAirportVM>;
+
+/**
+ * GET /v1/places/near?lat=&lng= (ADR-IMPL-083): the town a tap on the globe fell in or near (null: none within
+ * LOCALITY_REACH_KM, or one this app cannot read) and the airports within PLACES_NEAR_REACH_KM of it, nearest first, at
+ * most PLACES_NEAR_AIRPORTS — none over open sea, and none while `catalog.globe_tap` is off. An airport this app cannot
+ * read is dropped, never the answer. No price: a chosen airport's search prices it, as a pin's does.
+ */
+export const PlacesNearVM = z.object({
+  locality: NearLocalityVM.nullable().catch(null),
+  airports: z.array(z.unknown()).transform((items) =>
+    items.flatMap((item) => {
+      const parsed = NearAirportVM.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
+    }),
+  ),
+});
+export type PlacesNearVM = z.output<typeof PlacesNearVM>;
+
 export const HomeVM = z.object({
   home: AirportVM.nullable(),
   destinations: z.array(DestinationPinVM),

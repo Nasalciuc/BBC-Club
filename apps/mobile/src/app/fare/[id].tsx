@@ -73,18 +73,20 @@ const STATUS = 47;
  * `No payment is taken in the app.` 13.2 under it and 8.7 over the tab bar (as the web harness renders the margins
  * below: 14.16 and 7.74).
  */
+// At phone size (ADR-IMPL-084) the chips are 34 tall, the cards 94 and 122 tall, the rows 48, the pill 50; each 12
+// under what is above it.
 const PAGE = {
   title: { baseline: 288.5, left: 15.5 },
-  chips: { top: 299.8, left: 15.2, gap: 7.1, height: 26.8 },
-  summary: { top: 337.2, left: 14.8, right: 13.8, height: 73.3 },
-  overview: { top: 420.4, left: 15, right: 14.1, height: 89.8 },
-  rows: { top: 517.22, left: 15, right: 14.1, row: 37.5 },
-  route: { top: 601.27, left: 15, right: 14.1 },
-  pill: { height: 39.3, left: 15.2, right: 14.1, above: 7.1, lift: 0.47, fineBelow: 14.16, fineAboveTabs: 7.74 },
+  chips: { top: 299.8, left: 15.2, gap: 8, height: 34 },
+  summary: { top: 299.8 + 34 + 12, left: 14.8, right: 13.8, height: 94 },
+  overview: { top: 299.8 + 34 + 12 + 94 + 12, left: 15, right: 14.1, height: 122 },
+  rows: { top: 299.8 + 34 + 12 + 94 + 12 + 122 + 12, left: 15, right: 14.1, row: 48 },
+  route: { top: 299.8 + 34 + 12 + 94 + 12 + 122 + 12 + 2 * 48 + 12, left: 15, right: 14.1 },
+  pill: { height: 50, left: 15.2, right: 14.1, above: 10, lift: 0.47, fineBelow: 14.16, fineAboveTabs: 7.74 },
 } as const;
 
 /** 21: the message centred on 305.1, the pill 41.5 tall from 328.9, 15.3 and 14.6 in, its words 0.44 over its middle. */
-const GONE = { title: 305.1, pill: { top: 328.9, height: 41.5, left: 15.3, right: 14.6, lift: 0.44 } } as const;
+const GONE = { title: 305.1, pill: { top: 328.9, height: 50, left: 15.3, right: 14.6, lift: 0.44 } } as const;
 
 type Role = TextStyle & { fontSize: number; lineHeight: number };
 const TITLE = rn(tokens.type.fareTitle) as Role;

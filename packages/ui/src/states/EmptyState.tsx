@@ -68,7 +68,7 @@ const LOOK: Record<Look, Geometry> = {
     toTitle: 0,
     toBody: 32.5,
     toPill: 28.6,
-    pill: { height: 43.4, text: "buttonExplore", padding: 48 },
+    pill: { height: 50, text: "buttonExplore", padding: 48 },
     bodyWidth: 260,
   },
   search: {
@@ -78,7 +78,7 @@ const LOOK: Record<Look, Geometry> = {
     toBody: 25.8,
     toPill: 18.1,
     // 15's outline pill: its words Medium, its ring the deeper slate (not the light navy hairline).
-    pill: { height: 33.2, text: "buttonClear", padding: 29.3, border: tokens.colors.textMuted },
+    pill: { height: 44, text: "buttonClear", padding: 29.3, border: tokens.colors.textMuted },
     icon: { size: 36, stroke: 1.3 },
     bodyWidth: 300,
   },

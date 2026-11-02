@@ -37,3 +37,16 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+# Data sources — `localities-reference.tsv`
+
+The towns and cities a tap on Explore's globe is named by (ADR-IMPL-083), built on 2 Nov 2026 from:
+
+- **GeoNames** — <https://www.geonames.org/> (`cities1000`, as packaged by the npm module `all-the-cities` 3.1.0,
+  MIT): each place's GeoNames id, name, country code, coordinates and population. GeoNames' data is licensed under the
+  **Creative Commons Attribution 4.0 License** (<https://creativecommons.org/licenses/by/4.0/>); the app credits
+  GeoNames where it shows a place's name from it.
+
+Kept: populated places (feature codes PPL, PPLA–PPLA5, PPLC, PPLF, PPLG, PPLL, PPLR, PPLS, STLMT) of 5,000 people or
+more — 46,547 places. Left out: sections of a city (PPLX), and historical, abandoned or destroyed places (PPLH, PPLQ,
+PPLW). Rows load through `scripts/localities-reference.ts`; the file owns the table.

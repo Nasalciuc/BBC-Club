@@ -393,7 +393,7 @@ export default function ProfileScreen() {
             />
           </RowGroup>
           <View style={styles.cardGap}>
-            <RowGroup testID="profile.account" look="profile" rowHeight={31.2}>
+            <RowGroup testID="profile.account" look="profile">
               <ListRow
                 testID="profile.notifications"
                 icon="bell"
@@ -499,11 +499,16 @@ function Stat({ value, label, at }: { value: string; label: string; at: number }
  * two red actions, and a slip on Delete account must not sign the member out (`useSignOut` asks nothing).
  */
 const STAT_W = 110;
-const PILL = 33.9;
+/**
+ * At phone size (ADR-IMPL-084): the numbers' baseline 34 under the home line's, their names' 22 under that, the rules
+ * 30 tall from 18 under the home line; the pills 48 tall, 22 under the names.
+ */
+const STATS = { numbers: 34, label: 22, rule: 18, ruleHeight: 30, pills: 22 } as const;
+const PILL = 48;
 /** The pills reach 44 pt above and below (`Button`'s slop): their holders keep that room. */
 const PILL_SLOP = hitSlopFor(PILL);
-const DELETE = { height: 33.4, gap: 8.8 } as const;
-const SIGN_OUT = { height: 29.3, gap: tokens.space.md } as const;
+const DELETE = { height: 48, gap: 12 } as const;
+const SIGN_OUT = { height: 48, gap: tokens.space.lg } as const;
 const DELETE_SLOP = hitSlopFor(DELETE.height, DELETE.gap, SIGN_OUT.gap);
 const SIGN_OUT_SLOP = hitSlopFor(SIGN_OUT.height, SIGN_OUT.gap);
 const statValue = tokens.type.statValue;
@@ -521,31 +526,31 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: tokens.space.gutter, paddingTop: tokens.space.lg, gap: tokens.space.md },
   // The block's top is the numbers' line box: their baseline 29.6 under the home line's.
   stats: {
-    height: baselineOffset(statValue) + 14.7 + belowBaseline(statLabel),
-    marginTop: 29.6 - belowBaseline(homeType) - baselineOffset(statValue),
+    height: baselineOffset(statValue) + STATS.label + belowBaseline(statLabel),
+    marginTop: STATS.numbers - belowBaseline(homeType) - baselineOffset(statValue),
   },
   stat: { position: "absolute", left: "50%", top: 0, width: STAT_W, alignItems: "center" },
   statRule: {
     position: "absolute",
     left: "50%",
-    // 16.9 under the home line's baseline, which is 29.6 − the numbers' offset above the block.
-    top: 16.9 - (29.6 - baselineOffset(statValue)),
+    // STATS.rule under the home line's baseline, which is STATS.numbers − the numbers' offset above the block.
+    top: STATS.rule - (STATS.numbers - baselineOffset(statValue)),
     width: StyleSheet.hairlineWidth,
-    height: 22.6,
+    height: STATS.ruleHeight,
     backgroundColor: tokens.colors.borderDefault,
   },
   statValue: { ...rn(statValue), color: tokens.colors.textPrimary },
   statLabel: {
     ...rn(statLabel),
     color: tokens.colors.textOnTint,
-    marginTop: 14.7 - belowBaseline(statValue) - baselineOffset(statLabel),
+    marginTop: STATS.label - belowBaseline(statValue) - baselineOffset(statLabel),
   },
   actions: {
     flexDirection: "row",
     gap: 8.1,
     paddingLeft: 16.3,
     paddingRight: 16.1,
-    marginTop: 14.7 - belowBaseline(statLabel) - PILL_SLOP.top,
+    marginTop: STATS.pills - belowBaseline(statLabel) - PILL_SLOP.top,
     marginBottom: -PILL_SLOP.bottom,
   },
   actionsAlone: { marginTop: tokens.space.lg - PILL_SLOP.top },
@@ -557,7 +562,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingLeft: 16,
     paddingRight: 18.9 - 3.2 - 2,
-    marginTop: 37.2 - baselineOffset(tripsTitle),
+    marginTop: 40 - baselineOffset(tripsTitle),
   },
   tripsTitle: { ...rn(tripsTitle), color: tokens.colors.textPrimary },
   seeAll: {
@@ -568,9 +573,9 @@ const styles = StyleSheet.create({
   },
   seeAllText: { ...rn(seeAll), color: tokens.colors.textOnTint },
   pressed: { opacity: 0.7 },
-  tripsRow: { paddingLeft: 12.5, paddingRight: 8.3, gap: 4.9, marginTop: 10.8 - belowBaseline(tripsTitle) },
-  rows: { paddingLeft: 15, paddingRight: 16, marginTop: 13.1 },
-  cardGap: { marginTop: 9.5 },
+  tripsRow: { paddingLeft: 12.5, paddingRight: 8.3, gap: 6, marginTop: 14 - belowBaseline(tripsTitle) },
+  rows: { paddingLeft: 15, paddingRight: 16, marginTop: 20 },
+  cardGap: { marginTop: 12 },
   deleteGap: {
     marginTop: DELETE.gap - DELETE_SLOP.top,
     paddingTop: DELETE_SLOP.top,
@@ -584,7 +589,7 @@ const styles = StyleSheet.create({
     marginLeft: 0.6,
     marginRight: -0.4,
   },
-  signOut: { alignSelf: "stretch", borderWidth: 0.6 },
+  signOut: { alignSelf: "stretch", borderWidth: 1 },
   // A message is `text-secondary`, never `status-danger` (DESIGN.md: that is for a field at fault only).
   message: { ...rn(tokens.type.bodySm), color: tokens.colors.textSecondary, textAlign: "center", marginTop: 8 },
 });

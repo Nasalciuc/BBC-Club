@@ -65,7 +65,7 @@ export {
   fareBasis,
   flightFacts,
 } from "./cards/flight-facts";
-export { PopularCard } from "./cards/PopularCard";
+export { POPULAR_CARD_HEIGHT, PopularCard } from "./cards/PopularCard";
 export { RecentRow } from "./cards/RecentRow";
 export { PROFILE_AVATAR, ProfileHero, profileBandHeight } from "./cards/ProfileHero";
 export { RequestCard } from "./cards/RequestCard";

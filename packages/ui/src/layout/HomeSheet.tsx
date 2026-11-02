@@ -15,7 +15,8 @@ import { useSheetTrace } from "./useSheetTrace";
 
 /** 13: `Request a quote`, 40.6 tall, 16.4 and 16.8 from the edges, its foot 13.9 over the sheet's bottom edge (the tab
  *  bar's top, its hairline included). */
-const FOOTER = { pill: 40.6, left: 16.4, right: 16.8, bottom: 13.9 } as const;
+// 13 draws the pill 40.6 tall; 50 at phone size (ADR-IMPL-084).
+const FOOTER = { pill: 50, left: 16.4, right: 16.8, bottom: 13.9 } as const;
 const FOOTER_HEIGHT = FOOTER.pill + FOOTER.bottom;
 /** The docked pill's height (13), for the screen's `Button`. */
 export const HOME_SHEET_PILL = FOOTER.pill;

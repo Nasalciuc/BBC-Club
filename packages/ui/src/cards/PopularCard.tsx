@@ -26,9 +26,12 @@ type Props = {
  * price ending 34 pt from the right edge; the chevron 15 pt in, in the middle of the words.
  */
 const CARD = { radius: 10, photo: 118, padLeft: 13.4, priceRight: 34, chevronRight: 6, chevron: 18 } as const;
-const CITY_BASELINE = 18.7;
-const LINE_PITCH = 16.6;
-const TEXT_AREA = 47.7;
+// At phone size (ADR-IMPL-084): the city 24 under the photograph, the airport 21 under it, the words' area 60 tall.
+const CITY_BASELINE = 24;
+const LINE_PITCH = 21;
+const TEXT_AREA = 60;
+/** The card's height with its default photograph: what a screen's loading skeleton takes, so nothing moves on load. */
+export const POPULAR_CARD_HEIGHT = CARD.photo + TEXT_AREA;
 const DOT = { size: 2.3, gap: 8.5 } as const;
 
 export function PopularCard({ city, airport, code, fromPrice, image, fallback, photoHeight, onPress, testID }: Props) {
@@ -53,7 +56,7 @@ export function PopularCard({ city, airport, code, fromPrice, image, fallback, p
               {airport}
             </Text>
             <View style={styles.dot} />
-            <Text style={styles.airport}>{code}</Text>
+            <Text style={[styles.airport, styles.code]}>{code}</Text>
           </View>
         </View>
         {fromPrice ? (
@@ -98,7 +101,10 @@ const styles = StyleSheet.create({
   },
   airport: { ...rn(meta), color: tokens.colors.textSecondary, flexShrink: 1 },
   dot: { width: DOT.size, height: DOT.size, borderRadius: DOT.size, backgroundColor: tokens.colors.textSecondary },
-  price: { alignItems: "flex-end", paddingTop: CITY_BASELINE - baselineOffset(from) },
+  // The code keeps its letters; a long airport name gives way to it (`Charles de Gaulle Internati… · CDG`).
+  code: { flexShrink: 0 },
+  // Clear of the airport's line: with a real airport's long name the code ran into the price (`CDG$2,025`).
+  price: { alignItems: "flex-end", marginLeft: tokens.space.xs, paddingTop: CITY_BASELINE - baselineOffset(from) },
   from: { ...rn(from), color: tokens.colors.textSecondary },
   amount: {
     ...rn(amount),

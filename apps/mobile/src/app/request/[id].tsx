@@ -555,7 +555,8 @@ export default function RequestDetailScreen() {
  */
 const GUTTER = 19.2;
 const TEXT_IN = 23 - GUTTER;
-const PILL_HEIGHT = 40.2;
+// 11 draws 40.2; 50 at phone size (ADR-IMPL-084).
+const PILL_HEIGHT = 50;
 const title = tokens.type.headline;
 const facts = tokens.type.detailFacts;
 const meta = tokens.type.detailMeta;

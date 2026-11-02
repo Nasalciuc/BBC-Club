@@ -3,6 +3,7 @@ import type { Executor } from "@bbc/db";
 import type { ModulePlatform } from "@bbc/shared/module-contract";
 import { airports } from "@bbc/db/schema/catalog";
 import { airportsRepo } from "../infrastructure/airports.repo";
+import { nearestAirports } from "./places-near";
 
 type Row = typeof airports.$inferSelect;
 type Held = { byCode: ReadonlyMap<string, Row>; busiestFirst: readonly Row[] };
@@ -60,6 +61,10 @@ export function createAirportsReference(reference: ModulePlatform["reference"], 
         .filter((a) => a.popularity === top)
         .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
         .slice(0, 50);
+    },
+    /** ADR-IMPL-083: the airports within `reachKm` of a point, nearest first, at most `limit` — from memory. */
+    async near(at: { lat: number; lng: number }, limit: number, reachKm: number): Promise<{ row: Row; km: number }[]> {
+      return nearestAirports((await snapshot.get()).busiestFirst, at, limit, reachKm);
     },
     /** ADR-IMPL-036's search, kept per typed text (trimmed, lower case) for the airports' generation. */
     search(q: string): Promise<Row[]> {

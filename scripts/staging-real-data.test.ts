@@ -10,12 +10,13 @@ import { STAGING_REAL_DATA_FLAGS, rulesLine, rulesState } from "./staging-real-d
 const deploy = readFileSync(join(import.meta.dir, "..", "infra/deploy.sh"), "utf8");
 
 describe("staging real data — what it turns on", () => {
-  it("the site's deals, pins and prices, under the estimates' master switch — never the site's photos", () => {
+  it("the site's deals, pins and prices under the estimates' master switch, and the globe's tap — never the site's photos", () => {
     expect([...STAGING_REAL_DATA_FLAGS]).toEqual([
       "catalog.estimates",
       "catalog.site_prices",
       "catalog.site_pins",
       "catalog.site_offers",
+      "catalog.globe_tap",
     ]);
     // The site's photos wait for the company to confirm the rights (seed-flags.ts).
     expect(STAGING_REAL_DATA_FLAGS).not.toContain("catalog.site_photos" as never);

@@ -19,10 +19,12 @@ import {
   AirportVM,
   FareVM,
   HomeVM,
+  PlacesNearVM,
   SearchResultVM,
   type AirportVM as AirportVMType,
   type FareVM as FareVMType,
   type HomeVM as HomeVMType,
+  type PlacesNearVM as PlacesNearVMType,
   type SearchResultVM as SearchResultVMType,
 } from "@bbc/shared/api/v1/fares";
 import {
@@ -550,6 +552,24 @@ export async function fetchPlacePhotos(codes: readonly string[]): Promise<ApiRes
       return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
     }
     return { ok: true, data: parsed.data.items };
+  });
+}
+
+/**
+ * GET /v1/places/near?lat=&lng= — where a tap on the globe fell (ADR-IMPL-083): the town and the airports near it. The
+ * point goes as the caller rounds it (`pointToAsk`); an airport this app cannot read is dropped by the contract.
+ */
+export async function fetchPlacesNear(at: { lat: string; lng: string }): Promise<ApiResult<PlacesNearVMType>> {
+  return asResult(async () => {
+    const res = await apiFetch(`/v1/places/near?lat=${encodeURIComponent(at.lat)}&lng=${encodeURIComponent(at.lng)}`);
+    if (!res.ok) {
+      return failFromBody(res, (await parseJson(res)) as { error?: { code?: string; message?: string } } | null);
+    }
+    const parsed = PlacesNearVM.safeParse(await parseJson(res));
+    if (!parsed.success) {
+      return { ok: false, message: authMessage("UNKNOWN"), code: "VALIDATION", status: 500 };
+    }
+    return { ok: true, data: parsed.data };
   });
 }
 

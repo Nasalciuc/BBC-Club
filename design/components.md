@@ -5,7 +5,9 @@ agent would otherwise guess. The references are the component sheets in `isolate
 (37–44) and the screens beside them. The entry's components (`ClubButton`, `ClubField`, `ClubIcon`) stay 1.0 and read
 only `club.ts`.
 
-Numbers are points, measured from the images (ADR-IMPL-056). A component drawn differently on different screens has a
+Numbers are points, measured from the images (ADR-IMPL-056). **At phone size (ADR-IMPL-084)** the club raised the
+words and, on the screens drawn small, the rows, pills, fields, chips and cards: where ADR-IMPL-084's table lists a
+value, it replaces the one below. A component drawn differently on different screens has a
 `look` per screen, named for it, holding that screen's values; where two images draw the same element differently, the
 screen it appears on most wins and a state follows its screen (`DESIGN.md`). The 1.0 defaults (52-pt pills, 56-pt rows,
 24-pt sheet corners) remain for the few places no image draws (the gallery, the error pages, the 1.0 sheets).
@@ -246,16 +248,20 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   search bar floats on the globe's foot and the offers sit on the page, the sky fading into it; raised, it is the white
   sheet with the sheet shadow — on a chosen route (13) with 26-pt corners and the grabber 41.5 × 4.4, over every offer
   (16) with 22-pt corners and the grabber 48.4 × 4.2; the docked `Request a quote` 40.6 tall.
-- **Globe** (02, 13) — the Earth by day on the pale sky: Mapbox's satellite imagery where the build has it, else the
-  drawn globe in the `globe-*` colours. Destinations are navy drop pins (18 × 25, the tip on the place) with a white
+- **Globe** (02, 13) — the Earth by day on the pale sky: Mapbox's satellite imagery where the build has it (the web
+  too, ADR-IMPL-082), else the drawn globe in the `globe-*` colours. Destinations are navy drop pins (18 × 25, the tip on the place) with a white
   label beside the head — the city over its price (`pin`, `pin-detail`) — placed right of the pin or else left, and left
   out where it would cover another label, a pin or a button; a chosen route shows only its two ends with their codes, a
-  white line arcing between them and the plane at its middle. At rest a tap anywhere on the disc (ADR-IMPL-068) opens
-  the nearest city the club sells within 600 km as its pin would; a tap on the sky is nothing, a drag never a tap. No
-  image draws its answers, so these are proposed until design draws them (ADR-IMPL-068, reported): the distance
-  (`Nearest: Rome · 180 km`) is a second line under the country (13), and nothing near — or the member's own city — the
-  `attention` NoticeCard under the search bar, linking to Search; while they show, 13's first flight is no longer whole
-  above the docked pill, nor 02's offer cards above the tab bar.
+  white line arcing between them and the plane at its middle. At rest a tap anywhere on the disc names the spot and
+  offers its airports (ADR-IMPL-083, amending ADR-IMPL-068): under the search bar, the town in Search's section title
+  (`Bălţi, Moldova`; `Near …` past 15 km; `Airports near there` with no town in 50 km) over the three nearest airports
+  within 600 km — any with scheduled service, never home's metro — as Search's `AirportRow`s (18) with how far each is
+  in slate before the chevron (`70 km`), then GeoNames' credit (`PhotoCredit`); a row opens its airport as a pin's tap
+  does. Offline, or when the server cannot answer, the tap opens the nearest city the club sells within 600 km
+  (ADR-IMPL-068). A tap on the sky is nothing, a drag never a tap. No image draws these answers, so they are proposed
+  until design draws them (reported): the distance (`Nearest: Rome · 180 km`) is a second line under the country (13),
+  and nothing near — or the member's own city — the `attention` NoticeCard under the search bar, linking to Search;
+  while they show, 13's first flight is no longer whole above the docked pill, nor 02's offer cards above the tab bar.
 - **Wordmark** — `BuyBusinessClass` Semibold and ` Club` Regular, one line, navy — over 08's daylight photograph too
   (white only over a dark one); 07 sets `BuyBusinessClass` Bold (`wordmarkDates`).
 - **Avatar** — the member's portrait in a white ring: the photo they added themselves (Edit profile's `Photo` row, on a

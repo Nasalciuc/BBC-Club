@@ -72,7 +72,8 @@ export const MODAL_SHEET_LOOKS: Record<ModalSheetLookName, ModalSheetLook> = {
    * its promise pinned, the promise's foot 35.9 over the sheet's.
    */
   request: {
-    height: 585.96,
+    // 06 draws 585.96; at phone size (ADR-IMPL-084) the sheet takes up to 740, its content scrolling under the pill.
+    height: 740,
     radius: 17.7,
     grabber: { width: 34.6, height: 4.1, top: 5.35, color: tokens.colors.grabberRequest },
     close: { diameter: 44, top: 6, right: 4.44, glyph: { size: 19.4, stroke: 1.14 }, tone: "plain" },
@@ -88,7 +89,8 @@ export const MODAL_SHEET_LOOKS: Record<ModalSheetLookName, ModalSheetLook> = {
    * the other sheets.
    */
   question: {
-    height: 228.08,
+    // 25 draws 228.08; the 50-pt pill at phone size (ADR-IMPL-084) takes 6 more.
+    height: 234,
     radius: 16.75,
     grabber: { width: 37.32, height: 3.68, top: 7.11, color: tokens.colors.grabberQuestion },
     close: { diameter: 44, top: 6, right: 4.44, glyph: { size: 19.4, stroke: 1.14 }, tone: "plain" },
@@ -106,7 +108,8 @@ export const MODAL_SHEET_LOOKS: Record<ModalSheetLookName, ModalSheetLook> = {
    * The page under it dimmed darker still.
    */
   delete: {
-    height: 353.38,
+    // 35 draws 353.38; at phone size (ADR-IMPL-084) the larger words and the 48-pt pill take more.
+    height: 400,
     radius: 19.75,
     grabber: { width: 37.32, height: 4.15, top: 9.37, color: tokens.colors.grabberDelete },
     close: { diameter: 44, top: 6, right: 4.44, glyph: { size: 19.4, stroke: 1.14 }, tone: "plain" },
@@ -121,10 +124,10 @@ export const MODAL_SHEET_LOOKS: Record<ModalSheetLookName, ModalSheetLook> = {
  * 25's pinned answers: the pill 44.25 tall, its words 1.14 lower than the pill centres them; `Not now`'s line 12.95
  * under it (its baseline 182.6 from the sheet's top).
  */
-export const QUESTION_ANSWERS = { pill: 44.25, words: { x: 0, y: 1.14 }, gap: 12.95 } as const;
+export const QUESTION_ANSWERS = { pill: 50, words: { x: 0, y: 1.14 }, gap: 12.95 } as const;
 
 /** 35: the field 21.5 under the words' last baseline; the red pill 36.86 tall, `Cancel`'s line 20.18 under it. */
-export const DELETE_PARTS = { field: 21.5, pill: 36.86, gap: 20.18 } as const;
+export const DELETE_PARTS = { field: 21.5, pill: 48, gap: 20.18 } as const;
 
 /** The pinned action's foot over the sheet's: the image's, or as far into a taller bottom inset as the image's is. */
 export function sheetLookFooterBottom(look: ModalSheetLook, bottomInset: number): number {

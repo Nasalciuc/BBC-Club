@@ -43,7 +43,7 @@ const PAGE = {
   sheetTop: 217.9 - 47,
   corner: 20,
   // Its foot 59.8 over the tab bar's top (59.3 over its hairline); its words 0.14 higher than centred.
-  pill: { height: 36.6, left: 12.9, right: 13.5, aboveTabs: 59.3, wordsLift: 0.14 },
+  pill: { height: 50, left: 12.9, right: 13.5, aboveTabs: 59.3, wordsLift: 0.14 },
 };
 
 /**
