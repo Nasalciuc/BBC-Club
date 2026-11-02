@@ -57,17 +57,24 @@ export function morph(t: number): number {
 }
 
 /**
- * Where each picture lies and how much of it shows, `t` seconds after the clouds began to move. A picture spans a whole
- * turn of longitude from its shift; past 180° Mapbox carries it round the globe. Opacities sum to one: `a` and `b`
- * share the sky, never doubling it.
+ * Where each picture lies and how much of it shows, `t` seconds after the clouds began to move. Opacities sum to one:
+ * `a` and `b` share the sky, never doubling it.
+ *
+ * Mapbox does not carry an image round the globe: on the globe it draws an image source only inside the world (−180°
+ * to 180°), and it holds the image in the one tile that contains the image's middle — outside the world there is no
+ * such tile, and the image is not drawn at all (Mapbox GL JS 3.33, `getCoordinatesCenterTileID`). So each picture holds
+ * two turns of its band (`globe-clouds.py`) and is laid from −540° + shift to 180° + shift: whatever the shift (0–360°),
+ * one whole turn of it covers the world, the rest falls outside and is not drawn, and its middle (shift − 180°) stays
+ * inside the world, so its tile is the world's own (zoom 0, 0/0).
  */
 export function cloudLayers(t: number): CloudLayer[] {
   const b = morph(t);
   return CLOUD_LAYER_IDS.map((id) => {
     const [, slice, band] = id.split("-") as ["clouds", CloudSlice, CloudBand];
     const { north, south } = CLOUD_BANDS[band];
-    const west = -180 + bandShift(band, t);
-    const east = west + 360;
+    const shift = bandShift(band, t);
+    const west = -540 + shift;
+    const east = 180 + shift;
     return {
       id,
       slice,

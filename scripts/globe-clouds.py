@@ -13,6 +13,9 @@ They move (the owner's ask: as air masses would): two moments of the same sky, `
 on in `b` — that the app fades into each other, each cut into three bands the app slides at the winds' own pace and way:
 east in the northern and southern westerlies, west in the tropics' trade winds (`features/globe/cloud-drift.ts`). The
 bands overlap by 12°, each fading out across the overlap as its neighbour fades in, so at rest they sum to the whole.
+Each band's picture holds two turns of its sky side by side (3072 px across): wherever a band has drifted, the app lays
+it so that one whole turn covers the world and its middle stays inside the world, the one place Mapbox's image source
+can sit (`cloud-drift.ts`).
 Needs numpy and Pillow (with WebP); takes about four minutes.
 """
 
@@ -154,12 +157,14 @@ def main():
             bottom = min(SIZE, int(np.ceil(mercator_row(south, SIZE))))
             weight = band_weight(lat_rows[top:bottom], band)[:, None]
             a8 = (alpha[top:bottom] * weight * 255).round().astype(np.uint8)
-            white = Image.new("L", (SIZE, bottom - top), 255)
+            # Two turns side by side: the sky is seamless across the date line, so the second turn carries on the first.
+            a8 = np.concatenate([a8, a8], axis=1)
+            white = Image.new("L", (2 * SIZE, bottom - top), 255)
             picture = Image.merge("RGBA", [white, white, white, Image.fromarray(a8, "L")])
             out = OUT_DIR / f"clouds-{name}-{band}.webp"
             # The alpha kept whole: a lossy one shows its steps as contour lines across the soft edges.
             picture.save(out, "WEBP", quality=90, alpha_quality=100, method=6)
-            print(f"{out.name}: {SIZE}x{bottom - top}, {out.stat().st_size // 1024} KB")
+            print(f"{out.name}: {2 * SIZE}x{bottom - top}, {out.stat().st_size // 1024} KB")
     print(f"done in {time.time() - started:.0f}s")
 
 

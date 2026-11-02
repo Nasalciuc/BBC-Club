@@ -95,8 +95,9 @@ remain their airlines'.
 ## Made here: the globe's clouds (ADR-IMPL-085)
 
 `globe/clouds-{a,b}-{north,tropics,south}.webp` are not the design package's: `scripts/globe-clouds.py` draws them
-(gradient noise on the sphere, a fixed seed), two moments of one sky cut into three overlapping bands, 1536 px wide in
-Web Mercator, white with the cloud in the alpha, WebP q90 with its alpha lossless. Nothing is owed for them; run the
+(gradient noise on the sphere, a fixed seed), two moments of one sky cut into three overlapping bands, 1536 px a turn
+in Web Mercator and two turns side by side (3072 px across), white with the cloud in the alpha, WebP q90 with its alpha
+lossless. Nothing is owed for them; run the
 script again to remake them.
 
 `globe/sky-clouds.webp` is the design's own: 02's cumulus around and before the globe

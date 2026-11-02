@@ -1,7 +1,7 @@
 # ADR-IMPL-085 — The globe's imagery from the style's tiles
 
 Status: proposed · Date: 2026-11-02 · Scope: `apps/mobile` (`features/globe/satellite-source.ts`, `MapboxGlobe.tsx`,
-`MapboxGlobe.web.tsx`, `mapbox-ready-logic.ts`, `assets/images/club/globe/clouds.webp`), `scripts/globe-clouds.py` ·
+`MapboxGlobe.web.tsx`, `mapbox-ready-logic.ts`, `cloud-drift.ts`, `assets/images/club/globe/`), `scripts/globe-clouds.py` ·
 Amends ADR-IMPL-035 (the Mapbox globe), ADR-IMPL-068 (the black globe's floor) and ADR-IMPL-082 (its consequence "the
 token's imagery is refused today") · Owner's request, 2 Nov 2026.
 
@@ -52,9 +52,13 @@ map and the probe all asked the one API the account cannot use, while the same i
    — north of 14°, 26° either side of the equator, south of −14° — that overlap by 12° and fade across the overlap.
    `cloud-drift.ts` slides each band along longitude at the winds' own way — east 0.11°/s in the northern westerlies,
    0.09°/s in the southern, west 0.06°/s in the trades — and fades `a` into `b` and back over 150 s; the six pictures
-   (1536 px wide, about 0.7 MB together) are moved twice a second while the globe may move (`useCloudClock`: Explore on
-   screen, the app in front, motion not reduced), and stay still otherwise. A picture spans a whole turn from its
-   shift, past 180° where it has drifted; Mapbox carries it round.
+   (about 0.75 MB together) are moved twice a second while the globe may move (`useCloudClock`: Explore on screen, the
+   app in front, motion not reduced), and stay still otherwise. Mapbox does not carry an image round the globe: it
+   draws an image source only inside the world, from the one tile under the image's middle, and a middle past 180° has
+   no tile, so the image is not drawn at all (GL JS 3.33's `getCoordinatesCenterTileID`; CodeRabbit on #121). So each
+   picture holds two turns of its band side by side (3072 px across, 1536 a turn) and lies from −540° + shift to
+   180° + shift: whatever the shift, one whole turn covers the world, the rest falls outside it and is not drawn, and
+   the middle (shift − 180°) stays inside, in the world's own tile.
 6. **02's clouds beside and before the globe**: `SkyClouds` no longer draws soft round puffs. It lays 02's own cumulus,
    lifted off the design (`scripts/sky-clouds-from-design.py`, `assets/images/club/globe/sky-clouds.webp`, 52 KB): the
    sky's colour estimated around each cloud and unmixed from it, the clouds in front of the globe's foot keyed from its
@@ -81,3 +85,9 @@ map and the probe all asked the one API the account cannot use, while the same i
   `globe`: the map loaded and went idle with every tile in, no error, and drew the Earth by day.
   The six looks of decision 4 were drawn the same way, each idle with no error; D is the one kept. The phones' build is
   to be seen on the preview build.
+- The drift (decision 5) was checked the same day with the app's own Mapbox GL JS 3.33.0 in a headless Chromium, on the
+  globe, with a picture whose colour is its longitude: at shifts of 0°, 90°, 179.97°, 180°, 270° and 359.97° (the
+  trades' first tick), seen from twelve longitudes, every point sampled showed the colour it should, within 0.6°, and
+  the picture sat in tile 0/0/0. The first placement (one turn from −180° + shift) left a gap as wide as the shift and,
+  from 180° on, a tile 0/1/0 that is never drawn — at 359.97° no cloud at all. The phones' SDK was not checked: the
+  preview build is where to see it.
