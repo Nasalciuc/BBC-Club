@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { fixture } from "@bbc/shared/fixture";
 
-import { requestSummary } from "./request-summary";
+import { priceForTrip, requestSummary } from "./request-summary";
 
 describe("requestSummary — the trip at the top of the request sheet (06)", () => {
   it("reads a fare as 06 draws it: the cities, the cabin, the clocks, the airline, the price and its saving", () => {
@@ -14,6 +14,7 @@ describe("requestSummary — the trip at the top of the request sheet (06)", () 
       route: "JFK 18:55 → LHR 07:00 +1",
       carrier: { code: "BA", name: "British Airways", logoUrl: null },
       price: { amount: "$4,200", percent: 46, published: "$7,850", source: "Sabre · 16 Sep" },
+      trip: null, // the fixture's fare does not say its trip
     });
   });
 
@@ -24,6 +25,7 @@ describe("requestSummary — the trip at the top of the request sheet (06)", () 
       route: "JFK → LIS",
       carrier: null,
       price: null,
+      trip: null,
     });
   });
 
@@ -63,5 +65,25 @@ describe("requestSummary — the trip at the top of the request sheet (06)", () 
     const fare = { ...fixture.fares[0]!, price: { offer: 4200, published: 7850, currency: "USD" } };
     const summary = requestSummary({ fare, from: "JFK", to: "LHR", cabin: "business" });
     expect(summary.price).toEqual({ amount: "$4,200", percent: null, published: null, source: null });
+  });
+});
+
+describe("priceForTrip — a fare's price only beside the trip it covers (ADR-IMPL-081)", () => {
+  const price = { amount: "$4,200", percent: null, published: null, source: null };
+
+  it("a one-way fare's price for a one-way request; none once a round trip is asked", () => {
+    expect(priceForTrip({ price, trip: "one_way" }, "oneway")).toBe(price);
+    expect(priceForTrip({ price, trip: "one_way" }, "round")).toBeNull();
+  });
+
+  it("a round-trip fare's price for a round trip; none for one way", () => {
+    expect(priceForTrip({ price, trip: "round_trip" }, "round")).toBe(price);
+    expect(priceForTrip({ price, trip: "round_trip" }, "oneway")).toBeNull();
+  });
+
+  it("an offer's price, whose trip is not known, stands for either; no price stays none", () => {
+    expect(priceForTrip({ price, trip: null }, "round")).toBe(price);
+    expect(priceForTrip({ price, trip: null }, "oneway")).toBe(price);
+    expect(priceForTrip({ price: null, trip: "one_way" }, "oneway")).toBeNull();
   });
 });
