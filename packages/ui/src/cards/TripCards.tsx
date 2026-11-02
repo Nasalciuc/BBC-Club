@@ -298,7 +298,8 @@ const RECEIVED = {
   facts: { role: role(tokens.type.receivedTripFacts), baseline: 79.02 },
   dot: { size: 2.3, rise: 3.79, before: 5.66, after: 7.13 },
   airline: { centre: 317.4, width: 64, ribbon: { middle: 20.37, scale: 1.1 }, mark: { middle: 29.75 } },
-  name: { role: role(tokens.type.receivedAirline), first: 35.15, pitch: 8.8 },
+  // At reading sizes the two words keep their role's line apart (08 draws them 8.8 apart at about 7 pt; ADR-IMPL-084).
+  name: { role: role(tokens.type.receivedAirline), first: 35.15, pitch: role(tokens.type.receivedAirline).lineHeight },
 } as const;
 
 /**

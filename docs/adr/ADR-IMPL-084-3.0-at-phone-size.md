@@ -49,11 +49,13 @@ longer matching the images' proportions.
    | Chips: trip, route, place / fare / filters | 31 / 26.8 / 31.7    | 36 / 34 / 38                                                                                                            |
    | Calendar days and circles                  | 29.1                | 36                                                                                                                      |
    | Fare cards: summary / overview / route     | 73 / 90 / 121       | 94 / 122 / 155, their lines re-spaced                                                                                   |
-   | Offer cards (02, 16)                       | 121 wide            | 134 × 286 and 134 × 246 (`United Kingdom` on one line; the third card runs off the edge)                                |
+   | Offer cards (02, 16)                       | 121 wide            | 142 × 286 and 142 × 246 (`United Kingdom` on one line; the third card runs off the edge)                                |
    | Wide offer cards                           | —                   | lines 19–20 apart, so a two-line country pushes the rest down                                                           |
    | 08's compact fares                         | 117                 | 132 tall                                                                                                                |
    | Popular cards (03)                         | —                   | words 24 and 21 apart                                                                                                   |
    | Flight options (04, 13)                    | 61.4                | 78 tall                                                                                                                 |
+   | One fare's flight card (13)                | line 93.1–152.9     | line 124–156, the arrival from 160: each airport's day (`May 30, 2026`, 99.7 pt) on one line                            |
+   | Received's British Airways name (08)       | words 8.8 apart     | their role's line apart, so `BRITISH` and `AIRWAYS` no longer overlap                                                   |
    | Request cards (09)                         | —                   | route and days 28 and 24 apart; the days stop before the chevron                                                        |
    | Profile's trips                            | 89 × 135            | 120 × 150, their lines following one another                                                                            |
    | Profile's name and home line               | —                   | 66 and 24 down                                                                                                          |
@@ -72,3 +74,8 @@ longer matching the images' proportions.
 - Parity shots and e2e flows see taller screens; the flows find elements by `testID`, not by position.
 - Verified on the web build: every screen and state from onboarding on (the same 65 as the walk); no line under the
   floor (13 pt, 12 for tracked capitals), nothing cut, nothing wider than the screen.
+- Then on Android (the e2e emulator's screenshots, Pixel 6): Android rounds a line's width up where the web does not,
+  so a line that fits by a point or two on the web is cut there. The offer card's `United Kingdom` (112.1 of 114.1 pt)
+  was; the cards are 142 wide. The same shots showed two older faults the larger words made worse: the one fare's
+  flight card wrapped its days (`Oct 12, / 2026`) and slid under the docked pill, and Received's `BRITISH` and
+  `AIRWAYS` overlapped under the ribbon; both are in the table.

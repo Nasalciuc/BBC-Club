@@ -61,8 +61,10 @@ const DETAILED = {
   plus: { role: r(tokens.type.flightPlus) },
   day: { role: r(tokens.type.flightDay), baseline: 90.6 },
   departLeft: 15.4,
-  arriveLeft: 178.1,
-  line: { left: 93.1, right: 152.9, y: 67.1, plane: { left: 111.3, right: 125.3 }, stroke: 0.7 },
+  // At phone size (ADR-IMPL-084): the line shorter (124–156, the plane centred on it) so each airport's column holds
+  // its day on one line — `May 30, 2026` is 99.7 pt at `flight-day`; 13's 93.1–152.9 left the departure 77.7.
+  arriveLeft: 160,
+  line: { left: 124, right: 156, y: 67.1, plane: { left: 133, right: 147 }, stroke: 0.7 },
   rule: { left: 268.1, top: 45.9, bottom: 93.9, width: 0.7 },
   price: { role: r(tokens.type.flightPrice), right: 15.2, baseline: 73.1 },
   basis: { role: r(tokens.type.flightBasis), right: 15.7, baseline: 89.2 },

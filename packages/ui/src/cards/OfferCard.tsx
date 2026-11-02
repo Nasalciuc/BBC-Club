@@ -63,10 +63,11 @@ const r = (t: (typeof tokens.type)[keyof typeof tokens.type]) => rn(t) as TypeRo
  * 186.4; the rating on 144.5; the pill 193.5–215.6.
  */
 const LOOKS: Record<"rest" | "sheet", CardLook> = {
-  // At phone size (ADR-IMPL-084): 134 × 286, the lines 20 apart from 170, the pill 30 tall — `United Kingdom` on one
-  // line; the third card runs off the screen's edge, as a carousel's does.
+  // At phone size (ADR-IMPL-084): 142 × 286, the lines 20 apart from 170, the pill 30 tall — `United Kingdom` (112 pt
+  // at `offer-country`) on one line with room for Android's rounding, which cut it at 134; the third card runs off the
+  // screen's edge, as a carousel's does.
   rest: {
-    width: 134,
+    width: 142,
     height: 286,
     radius: 12,
     photo: 144.7,
@@ -79,7 +80,7 @@ const LOOKS: Record<"rest" | "sheet", CardLook> = {
     pill: { top: 243, height: 30, left: 11.1, right: 8.7, role: r(tokens.type.offerSave) },
   },
   sheet: {
-    width: 134,
+    width: 142,
     height: 246,
     radius: 10.5,
     photo: 124.1,
