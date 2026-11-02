@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { findUnannounced } from "./check-destructive-migrations";
@@ -658,7 +658,7 @@ describe("restore.sh (ADR-IMPL-077)", () => {
               if (( n <= ${opts.rejecting ?? 0} )); then echo "/var/run/postgresql:5432 - rejecting connections"; return 1; fi
               echo "/var/run/postgresql:5432 - accepting connections" ;;
             *" exec -T postgres psql "*"pg_is_in_recovery"*) ${recovery} ;;
-            *" exec -T postgres psql "*) echo 8 ;;
+            *" exec -T postgres psql "*) echo 10 ;;
             *" ps -q worker") echo ct-worker ;;
             "exec ct-worker bun -e "*"http://localhost:8001/ready"*) return ${opts.workerReady ? 0 : 1} ;;
           esac
@@ -1256,7 +1256,9 @@ describe("Grafana's provisioning after a deploy (A-D1)", () => {
 describe("PgBouncer's RECONNECT after the migration (H2)", () => {
   it("a worker without PGBOUNCER_ADMIN_URL fails the step, so the deploy prints that RECONNECT was not sent", async () => {
     const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
-    const program = deploy.match(/"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| echo "⚠ PgBouncer RECONNECT failed/)?.[1];
+    const program = deploy.match(
+      /"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| notify "⚠ deploy \$MODE: PgBouncer RECONNECT failed/,
+    )?.[1];
     expect(program).toBeDefined();
     const env = { ...process.env };
     delete env.PGBOUNCER_ADMIN_URL;
@@ -1267,7 +1269,9 @@ describe("PgBouncer's RECONNECT after the migration (H2)", () => {
 
   it("a PgBouncer that lets the worker in and never answers RECONNECT fails the step within 10 s", async () => {
     const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
-    const program = deploy.match(/"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| echo "⚠ PgBouncer RECONNECT failed/)?.[1];
+    const program = deploy.match(
+      /"\$WORKER" bun -e '([^']+)' \\\n\s*\|\| notify "⚠ deploy \$MODE: PgBouncer RECONNECT failed/,
+    )?.[1];
     expect(program).toBeDefined();
     // Answers the startup (AuthenticationOk, ReadyForQuery), then never answers the query: connect_timeout is past.
     let greeted = false;
@@ -1341,12 +1345,12 @@ describe("Grafana's secret key (A-S2)", () => {
 });
 
 describe("Grafana's alerts (A-R2, H1)", () => {
-  it("seven rules, the CI check counts seven, and the kill and pause rules read what cAdvisor and the worker publish", async () => {
+  it("twelve rules, the CI check counts twelve, and the kill and pause rules read what cAdvisor and the worker publish", async () => {
     const doc = Bun.YAML.parse(
       await Bun.file(join(root, "infra/monitoring/grafana/provisioning/alerting/alerts.yml")).text(),
     ) as { groups: { rules: { uid: string; data: { model: { expr?: string } }[] }[] }[] };
     const rules = doc.groups[0]!.rules;
-    expect(rules).toHaveLength(7);
+    expect(rules).toHaveLength(12);
     const expr = (uid: string) => rules.find((r) => r.uid === uid)!.data[0]!.model.expr!;
     expect(expr("bbc-container-oom")).toContain("container_oom_events_total");
     expect(expr("bbc-queue-paused")).toContain('bbc_queue_paused{env="production"}');
@@ -1418,5 +1422,189 @@ describe("migrations:destructive (ADR-IMPL-074)", () => {
   it("still catches a DELETE without WHERE across lines", () => {
     expect(lines("SELECT 1;\nDELETE\n  FROM t;")).toEqual([2]);
     expect(lines("DELETE FROM t\n  WHERE id = 1;")).toEqual([]);
+  });
+});
+
+describe("production on the mock CRM or the recording push (audit, 30 Oct 2026)", () => {
+  it("is announced at every production deploy, to the webhook, not only in the log", async () => {
+    const deploy = await Bun.file(join(root, "infra/deploy.sh")).text();
+    const step2 = deploy.slice(deploy.indexOf("bun scripts/check-env.ts"), deploy.indexOf("▶ 3/8"));
+    expect(step2).toContain('[[ "$MODE" == "production" && "$svc" == "$SVC" ]]');
+    expect(step2).toMatch(/\*"CRM mock"\*\) notify "⚠ production runs CRM_ADAPTER=mock/);
+    expect(step2).toMatch(/\*"push recording"\*\) notify "⚠ production runs PUSH_ADAPTER=recording/);
+  });
+});
+
+describe("webhook_post: every alert's way out (audit, 30 Oct 2026)", () => {
+  /** webhook_post with `curl` standing in: it records its arguments, one per line, prints the status it is given (what
+   *  `-w '%{http_code}'` prints) and exits as told. */
+  async function post(text: string, url: string, curlExit: number, status = curlExit === 0 ? "200" : "000") {
+    const dir = mkdtempSync(join(tmpdir(), "bbc-hook-"));
+    const args = join(dir, "args");
+    writeFileSync(
+      join(dir, "curl"),
+      `#!/bin/sh\nprintf '%s\\n' "$@" > "${args}"\nprintf '${status}'\nexit ${curlExit}\n`,
+      { mode: 0o755 },
+    );
+    const proc = Bun.spawn(
+      ["bash", "-c", `PATH="${dir}:$PATH"; source ${lib}; webhook_post "$1" "$2"; echo "rc=$?"`, "_", text, url],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    await proc.exited;
+    const out = await new Response(proc.stdout).text();
+    const err = await new Response(proc.stderr).text();
+    let payload: string | undefined;
+    try {
+      const lines = readFileSync(args, "utf8").split("\n");
+      payload = lines[lines.indexOf("-d") + 1];
+    } catch {
+      payload = undefined;
+    }
+    rmSync(dir, { recursive: true, force: true });
+    return { out, err, payload };
+  }
+
+  it("sends the text as JSON whatever it holds: quotes, a backslash, a newline", async () => {
+    const text = 'deploy "production" stopped at C:\\path\nsecond line';
+    const r = await post(text, "https://hooks.example.test/x", 0);
+    expect(r.out).toContain("rc=0");
+    expect(JSON.parse(r.payload!)).toEqual({ text });
+  });
+
+  it("a failed post says so on stderr and returns 1; no webhook is a quiet 2", async () => {
+    const failed = await post("🚨 backup FAILED", "https://hooks.example.test/x", 22);
+    expect(failed.out).toContain("rc=1");
+    expect(failed.err).toContain("⚠ webhook post failed");
+    // curl -f passes a 3xx it did not follow: only a 2xx is a delivery (CodeRabbit on #118).
+    for (const status of ["302", "404", "500"]) {
+      const r = await post("🚨 backup FAILED", "https://hooks.example.test/x", 0, status);
+      expect(r.out, status).toContain("rc=1");
+      expect(r.err, status).toContain(`⚠ webhook post failed (HTTP ${status})`);
+    }
+    expect((await post("ok", "https://hooks.example.test/x", 0, "204")).out).toContain("rc=0");
+    const none = await post("🚨 backup FAILED", "", 0);
+    expect(none.out).toContain("rc=2");
+    expect(none.err).toBe("");
+    expect(none.payload).toBeUndefined();
+  });
+
+  it("is what deploy.sh, backup.sh and restore-test.sh notify through — no curl of their own", async () => {
+    for (const file of ["infra/deploy.sh", "infra/host/backup.sh", "infra/restore-test.sh"]) {
+      const text = await Bun.file(join(root, file)).text();
+      const line = text.split("\n").find((l) => l.startsWith("notify()"))!;
+      expect(line, file).toContain("webhook_post");
+      expect(line, file).not.toContain("curl");
+    }
+  });
+});
+
+describe("infra/host/disk-check.sh: the full disk is never silent (audit, 30 Oct 2026)", () => {
+  /** The script in a throwaway infra/, with `df` at 85 % and `curl` exiting as told; its output and the stamp. */
+  async function check(curlExit: number, webhook: string) {
+    const dir = mkdtempSync(join(tmpdir(), "bbc-disk-"));
+    const bin = join(dir, "bin");
+    mkdirSync(join(dir, "host"), { recursive: true });
+    mkdirSync(join(dir, "env"));
+    mkdirSync(bin);
+    copyFileSync(join(root, "infra/host/disk-check.sh"), join(dir, "host/disk-check.sh"));
+    copyFileSync(join(root, "infra/env-value.sh"), join(dir, "env-value.sh"));
+    writeFileSync(join(dir, "docker-compose.yml"), "services: {}\n");
+    writeFileSync(join(dir, "env/production.env"), webhook ? `OPS_WEBHOOK=${webhook}\n` : "");
+    writeFileSync(join(bin, "df"), "#!/bin/sh\nprintf 'Use%%\\n 85%%\\n'\n", { mode: 0o755 });
+    writeFileSync(join(bin, "curl"), `#!/bin/sh\nprintf '${curlExit === 0 ? "200" : "000"}'\nexit ${curlExit}\n`, {
+      mode: 0o755,
+    });
+    const stamp = join(dir, "stamp");
+    const proc = Bun.spawn(["bash", join(dir, "host/disk-check.sh")], {
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, BBC_DISK_STAMP: stamp },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const code = await proc.exited;
+    const text = (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text());
+    const stamped = Bun.file(stamp).size > 0 || (await Bun.file(stamp).exists());
+    rmSync(dir, { recursive: true, force: true });
+    return { code, text, stamped };
+  }
+
+  it("logs the alert, and starts the hour's quiet only once the webhook took it", async () => {
+    const sent = await check(0, "https://hooks.example.test/x");
+    expect([sent.code, sent.stamped]).toEqual([0, true]);
+    expect(sent.text).toContain("disk at 85%");
+  });
+
+  it("a dead webhook or none: the alert and why it went nowhere are in the log, and the next run tries again", async () => {
+    for (const r of [await check(22, "https://hooks.example.test/x"), await check(0, "")]) {
+      expect([r.code, r.stamped]).toEqual([0, false]);
+      expect(r.text).toContain("disk at 85%");
+      expect(r.text).toContain("the alert reached no webhook");
+    }
+  });
+});
+
+describe("the restore and its drill check every schema the club has (audit, 30 Oct 2026)", () => {
+  it("their list is packages/db's schema files plus platform's — requests and catalog included", async () => {
+    const { readdirSync } = await import("node:fs");
+    const files = readdirSync(join(root, "packages/db/src/schema"))
+      .filter((f) => f.endsWith(".ts") && !f.startsWith("_") && f !== "index.ts")
+      .map((f) => f.replace(/\.ts$/, ""));
+    const expected = [...files, "platform"].sort();
+    for (const file of ["infra/restore-test.sh", "infra/restore.sh"]) {
+      const text = await Bun.file(join(root, file)).text();
+      const list = text.match(/schema_name IN \(([^)]*)\)/)![1]!;
+      const names = [...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!).sort();
+      expect(names, file).toEqual(expected);
+      expect(text, file).toContain(`== "${expected.length}"`);
+    }
+  });
+});
+
+describe("migrations:destructive when git cannot answer (audit, 30 Oct 2026)", () => {
+  it("a diff with no merge base fails the check instead of reading as 0 migrations", () => {
+    const dir = mkdtempSync(join(tmpdir(), "bbc-nomerge-"));
+    // Under the pre-push hook git sets GIT_DIR, GIT_INDEX_FILE and the like: inherited, they point every command here at
+    // the repository being pushed, not at `dir` (it once committed "a" onto the branch). Only `dir` is touched.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+    const g = (...a: string[]) => {
+      // No signing and no hooks: a developer's global commit.gpgSign or core.hooksPath must not reach the fixture
+      // (CodeRabbit on #118). The hooks path is `dir` itself, which holds no hook files.
+      const r = spawnSync(
+        "git",
+        [
+          "-c",
+          "user.email=t@t",
+          "-c",
+          "user.name=t",
+          "-c",
+          "commit.gpgSign=false",
+          "-c",
+          `core.hooksPath=${dir}`,
+          ...a,
+        ],
+        {
+          cwd: dir,
+          encoding: "utf8",
+          env,
+        },
+      );
+      if (r.status !== 0) throw new Error(`git ${a[0]}: ${r.stderr}`);
+      return r;
+    };
+    g("init", "-q", "-b", "main");
+    g("commit", "-q", "--allow-empty", "-m", "a");
+    g("checkout", "-q", "--orphan", "other");
+    g("commit", "-q", "--allow-empty", "-m", "b");
+    g("update-ref", "refs/remotes/origin/main", "main");
+    // Git prints forward slashes, Bun's realpath backslashes on Windows: the same directory, written two ways.
+    const same = (x: string) => x.replace(/\\/g, "/").toLowerCase();
+    expect(same(g("rev-parse", "--absolute-git-dir").stdout.trim())).toBe(same(realpathSync(join(dir, ".git"))));
+    const r = spawnSync("bun", ["run", join(root, "scripts/check-destructive-migrations.ts")], {
+      cwd: dir,
+      encoding: "utf8",
+      env,
+    });
+    rmSync(dir, { recursive: true, force: true });
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("the migrations were not checked");
   });
 });

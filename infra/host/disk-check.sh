@@ -19,11 +19,18 @@ ENV_FILE="$INFRA_DIR/env/production.env"
 source "$INFRA_DIR/env-value.sh"
 OPS_WEBHOOK="$(env_optional "$ENV_FILE" OPS_WEBHOOK)"
 USE=$(df --output=pcent / | tail -1 | tr -dc '0-9')
-STAMP=/run/bbc-disk-alerted
+STAMP="${BBC_DISK_STAMP:-/run/bbc-disk-alerted}" # overridable for the test only
 if (( USE >= 70 )); then
   if [[ ! -f $STAMP ]] || (( $(date +%s) - $(stat -c %Y $STAMP) > 3600 )); then
-    [[ -n "${OPS_WEBHOOK:-}" ]] && curl -fsS -X POST "$OPS_WEBHOOK" -H 'Content-Type: application/json' -d "{\"text\":\"⚠️ disk at ${USE}% on $(hostname). See RUNBOOK → Disk filling up.\"}" >/dev/null || true
-    touch $STAMP
+    # Always in the log (/var/log/bbc-disk.log); the hour's quiet starts only once the webhook took it, so a dead or
+    # missing webhook is retried at the next run and said each time (audit, 30 Oct 2026).
+    MSG="⚠️ disk at ${USE}% on $(hostname). See RUNBOOK → Disk filling up."
+    echo "$(date -Iseconds) $MSG"
+    if webhook_post "$MSG" "${OPS_WEBHOOK:-}"; then
+      touch $STAMP
+    else
+      echo "$(date -Iseconds) the alert reached no webhook (OPS_WEBHOOK unset or failing): only this log has it"
+    fi
   fi
 else
   rm -f $STAMP

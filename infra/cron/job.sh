@@ -1,5 +1,6 @@
 #!/bin/sh
-# POST /v1/internal/run/<job> with the internal secret; print outcome for docker logs.
+# POST /v1/internal/run/<job> with the internal secret; print outcome for docker logs. A failed run answers 500, so it
+# prints FAIL (job_runs and bbc_job_failed have the reason).
 name="$1"
 out=$(wget -q -O- --header="X-Internal-Secret: ${INTERNAL_API_SECRET}" --post-data='' "${API_URL}/v1/internal/run/${name}" 2>&1) \
   && echo "$(date -Iseconds) job=${name} ok ${out}" \

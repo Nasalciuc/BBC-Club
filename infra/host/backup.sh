@@ -21,7 +21,7 @@ DC="docker compose -f $INFRA_DIR/docker-compose.yml -f $INFRA_DIR/compose.prod.y
 source "$INFRA_DIR/env-value.sh"
 OPS_WEBHOOK="$(env_optional "$ENV_FILE" OPS_WEBHOOK)"
 SEC_WEBHOOK="$(env_optional "$ENV_FILE" SEC_WEBHOOK)"
-notify() { [[ -n "${2:-}" ]] && curl -fsS -X POST "$2" -H 'Content-Type: application/json' -d "{\"text\":\"$1\"}" >/dev/null || true; echo "$1"; }
+notify() { echo "$1"; webhook_post "$1" "${2:-}" || true; }
 if $DC exec -T -u postgres postgres pgbackrest --stanza=bbc --type="$TYPE" backup; then
   notify "✅ backup $TYPE ok $(date -u +%H:%M)" "${OPS_WEBHOOK:-}"
 else

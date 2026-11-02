@@ -1,3 +1,4 @@
+import type { ProviderError } from "./fcm";
 import http2 from "node:http2";
 import { SignJWT, importPKCS8 } from "jose";
 import type { PushFacade, PushResult } from "./api/types";
@@ -68,7 +69,11 @@ export function http2Transport(authority: string, timeoutMs = 10_000): ApnsTrans
     });
 }
 
-export function apnsSender(cfg: ApnsConfig, transport: ApnsTransport = http2Transport(HOST[cfg.env])): PushFacade {
+export function apnsSender(
+  cfg: ApnsConfig,
+  transport: ApnsTransport = http2Transport(HOST[cfg.env]),
+  onError?: ProviderError,
+): PushFacade {
   let token: { value: string; at: number } | null = null;
   const bearer = async () => {
     if (token && Date.now() - token.at < TOKEN_TTL_MS) return token.value;
@@ -84,8 +89,16 @@ export function apnsSender(cfg: ApnsConfig, transport: ApnsTransport = http2Tran
 
   return {
     async send({ token: deviceToken, title, body, data, collapseId }): Promise<PushResult> {
+      let auth: string;
+      try {
+        auth = await bearer();
+      } catch (e) {
+        // A .p8 that does not sign: every iPhone push fails here, so it is said (audit, 30 Oct 2026).
+        onError?.("apns key", e);
+        return { ok: false, reason: "Transient" };
+      }
       const headers: Record<string, string> = {
-        authorization: `bearer ${await bearer()}`,
+        authorization: `bearer ${auth}`,
         "apns-topic": cfg.bundleId,
         "apns-push-type": "alert",
         "apns-priority": "10",
@@ -98,7 +111,8 @@ export function apnsSender(cfg: ApnsConfig, transport: ApnsTransport = http2Tran
       let res;
       try {
         res = await transport({ path: `/3/device/${deviceToken}`, headers, body: payload });
-      } catch {
+      } catch (e) {
+        onError?.("apns send", e);
         return { ok: false, reason: "Transient" };
       }
       if (res.status === 200) return { ok: true, ticketId: res.headers["apns-id"] };
@@ -115,6 +129,7 @@ export function apnsSender(cfg: ApnsConfig, transport: ApnsTransport = http2Tran
       if (res.status === 429) return { ok: false, reason: "RateLimited", retryAfterMs: 60_000 };
       if (res.status === 403 && /ProviderToken/.test(reason)) {
         token = null;
+        onError?.("apns refused", `HTTP 403 ${reason}`);
         return { ok: false, reason: "Transient" };
       }
       if (res.status >= 500) return { ok: false, reason: "Transient" };
