@@ -3,11 +3,8 @@
  * and the airports near it. The repository reads the towns of a latitude band; the airports come from the airports held
  * in memory (`airports-reference.ts`).
  */
-import type { TownCandidate } from "../infrastructure/localities.repo";
+import { SMALLEST_TOWN, type TownCandidate } from "../infrastructure/localities.repo";
 import { distanceKm } from "../pricing/estimate";
-
-/** GeoNames keeps places of 5,000 people or more in the file (seeds/NOTICE.md): the smallest weighs nothing extra. */
-const SMALLEST_TOWN = 5_000;
 
 /**
  * How near a town counts as being: its distance, shortened by its size — divided by 1 + log10(population / 5,000) —
