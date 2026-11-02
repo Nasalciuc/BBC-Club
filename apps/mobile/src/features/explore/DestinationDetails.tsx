@@ -606,6 +606,8 @@ function Fare({
   // Where the price and what it buys do not fit beside each other (a long price, larger text, Android's rounding),
   // what it buys takes the next line, without its dot: neither is ever cut. Once below, it stays below.
   const [basisBelow, setBasisBelow] = useState(false);
+  // Where what it buys stands beside the price: its own top margin, so that margin alone never reads as a wrap.
+  const inlineTop = baselineOffset(s.price.role) - b.rise - baselineOffset(b.role);
   return (
     <View testID={testID}>
       <Text style={[s.label.role, styles.slate, { marginTop: s.label.baseline - baselineOffset(s.label.role) }]}>
@@ -623,17 +625,9 @@ function Fare({
         {basis ? (
           <View
             onLayout={(e) => {
-              if (e.nativeEvent.layout.y > 1) setBasisBelow(true);
+              if (e.nativeEvent.layout.y > inlineTop + 1) setBasisBelow(true);
             }}
-            style={[
-              styles.basis,
-              basisBelow
-                ? styles.basisBelow
-                : {
-                    marginTop: baselineOffset(s.price.role) - b.rise - baselineOffset(b.role),
-                    marginLeft: b.dotGap,
-                  },
-            ]}
+            style={[styles.basis, basisBelow ? styles.basisBelow : { marginTop: inlineTop, marginLeft: b.dotGap }]}
           >
             {basisBelow ? null : <Text style={[b.role, tone]}>·</Text>}
             <Text style={[b.role, tone, basisBelow ? null : { marginLeft: b.wordsGap }]}>{basis}</Text>
