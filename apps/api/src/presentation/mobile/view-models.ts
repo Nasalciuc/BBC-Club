@@ -81,6 +81,7 @@ export function toSiteDealVM(deal: SiteDeal): SiteDealVM {
     origin: deal.origin,
     price: deal.price,
     validUntil: deal.validUntil,
+    ...(deal.estimate ? { estimate: deal.estimate } : {}),
   };
 }
 

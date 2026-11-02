@@ -207,3 +207,49 @@ describe("GET /v1/home — the site's deals (ADR-IMPL-067)", () => {
     await t.close();
   });
 });
+
+describe("GET /v1/home — one price per city (ADR-IMPL-081)", () => {
+  it("a deal carries its destination's search price, round trip in the member's cabin; none without a number", async () => {
+    const t = await testApp({ suite: "home-site-deals-estimate" });
+    await seedSiteDeals(t);
+    await t.flags.set("catalog.site_offers", { enabled: true });
+    // The site's stored answer for New York → London (made up), as the refresh job or a search leaves it.
+    await t.db.execute(sql`
+      INSERT INTO catalog.site_prices (route_from, route_to, trip, status, business, first, premium_economy, fetched_at, expires_at)
+      VALUES ('JFK', 'LHR', 'round_trip', 'priced', 2011, 4022, NULL, now(), now() + interval '24 hours')`);
+
+    // Estimates off: the site's price alone, no estimate — as before.
+    const before = HomeVM.parse((await home(t)).json);
+    expect(before.deals?.every((d) => d.estimate === undefined)).toBe(true);
+
+    await t.flags.set("catalog.estimates", { enabled: true });
+    await t.flags.set("catalog.site_prices", { enabled: true });
+    const body = HomeVM.parse((await home(t)).json);
+    const london = body.deals?.find((d) => d.destination.code === "LHR");
+    expect(london?.price).toMatchObject({ amount: 1101, basis: "site" });
+    expect(london?.estimate).toMatchObject({
+      amount: 2011,
+      currency: "USD",
+      trip: "round_trip",
+      cabin: "business",
+      basis: "formula",
+      source: "site",
+    });
+    // No stored answer and no rules: no number, so no estimate — the card keeps the site's price, per person.
+    expect(body.deals?.find((d) => d.destination.code === "DXB")?.estimate).toBeUndefined();
+    await t.close();
+  });
+
+  it("an offer never carries a published price: it records no source for one (DESIGN.md, FTC)", async () => {
+    const t = await testApp({ suite: "home-offer-published" });
+    await seedSiteDeals(t);
+    await t.seedBroadcastOffer({ routeTo: "CDG", title: "Autumn in Paris" });
+    await t.db.execute(sql`UPDATE proposals.offers SET published_price = price * 2`);
+    const body = HomeVM.parse((await home(t)).json);
+    const offer = body.sections.flatMap((s) => s.items).find((i) => i.title === "Autumn in Paris");
+    expect(offer?.price.offer).toBeGreaterThan(0);
+    expect(offer?.price).not.toHaveProperty("published");
+    expect(offer?.price).not.toHaveProperty("publishedSource");
+    await t.close();
+  });
+});

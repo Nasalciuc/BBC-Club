@@ -34,26 +34,36 @@ export function offerCardModel(
   };
 }
 
-/** A card's model for one of the company site's deals (ADR-IMPL-067): the line naming where it leaves from, too. */
-export type DealCardModel = OfferCardModel & { origin: string | null };
+/** A card's model for one of the company site's deals (ADR-IMPL-067): the line under the price, too. */
+export type DealCardModel = OfferCardModel & {
+  /** Under the price: what it covers (ADR-IMPL-081: `round trip`, or the site's `per person`), then `from New York`
+   *  when the deal leaves from another city than the member's own. */
+  origin: string | null;
+};
 
 /**
- * What a site deal's card shows (02, 16): the destination's city and country, `from` and the site's price — a starting
- * price per person, no trip or cabin, since the site gives none — never `Save X%` (the site's "Old Price" has no source,
- * and the server never sends it) and never a star. `from New York` under the price when the deal leaves from another
- * city than the member's own: not their airport and not their city (a member at Newark sees New York's deals unnamed).
+ * What a site deal's card shows (02, 16): the destination's city and country, `from` and a price — never `Save X%` (the
+ * site's "Old Price" has no source, and the server never sends it) and never a star. ADR-IMPL-081: the price its
+ * destination's search shows (`estimate`, the round trip), so the card and the page it opens say one number, and the
+ * card says `round trip`; without one, the site's "Price Today", which the site gives per person with no trip, and the
+ * card says `per person`. `from New York` after it when the deal leaves from another city than the member's own: not
+ * their airport and not their city (a member at Newark sees New York's deals unnamed).
  */
 export function dealCardModel(deal: SiteDealVM, home: Pick<AirportVM, "code" | "city"> | null): DealCardModel {
   const own =
     home !== null &&
     (deal.origin.code === home.code.toUpperCase() || deal.origin.city.toLowerCase() === home.city.toLowerCase());
+  const estimate = deal.estimate ?? null;
+  const covers = estimate ? "round trip" : "per person";
   return {
     city: deal.destination.city,
     country: countryName(deal.destination.countryCode),
-    fromPrice: formatPrice(deal.price.amount, deal.price.currency),
+    fromPrice: estimate
+      ? formatPrice(estimate.amount, estimate.currency)
+      : formatPrice(deal.price.amount, deal.price.currency),
     savePercent: null,
     rating: null,
-    origin: own ? null : `from ${deal.origin.city}`,
+    origin: own ? covers : `${covers} · from ${deal.origin.city}`,
   };
 }
 

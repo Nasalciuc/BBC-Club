@@ -563,8 +563,10 @@ FROM catalog.site_routes GROUP BY route_from ORDER BY 2 DESC;
 With `catalog.site_offers` on (seeded off), Explore's "Offers to inspire" shows, after the member's own offers, up to 24
 of the site's deals: from the member's airport and its metro first (New York is JFK, EWR and LGA), then from the nearest
 city the site sells from — Seattle sees San Francisco's, Toronto Washington's, Boston its five and then New York's — one
-deal per city, each card saying `from $X` (the site's "Price Today": per person, indicative; no trip, no cabin) and,
-when it leaves from another city than the member's, `from New York`. Never `Save X%`: the site's "Old Price" has no
+deal per city, each card saying `from $X round trip` — the price its destination's search shows (ADR-IMPL-081: the
+site's stored answer for the route, else the formula, in the member's cabin; with estimates on) — or, where there is no
+such number, `from $X per person` (the site's "Price Today": indicative; no trip, no cabin), and, when it leaves from
+another city than the member's, `· from New York`. Never `Save X%`: the site's "Old Price" has no
 source and is never served. A tap opens the destination as a pin does. The deals are read from the snapshot, never from
 the site; a deal is shown for a day after the run that read it and is gone with the next run if the site dropped it.
 A run that fails changes nothing: the deals it leaves end within the day (two runs a day: one failure leaves twelve
