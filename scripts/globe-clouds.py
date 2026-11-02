@@ -2,8 +2,8 @@
 
     python3 scripts/globe-clouds.py   # writes apps/mobile/assets/images/club/globe/clouds-{a,b}-{north,tropics,south}.webp
 
-Clouds of our own making, so nothing is owed to anyone for them, drawn as 02 draws them over the Earth: thin white
-wisps and small puffs, not banks. Gradient noise sampled on the unit sphere (seamless across the date line and over the
+Clouds of our own making, so nothing is owed to anyone for them: fine ones, thin white wisps and small puffs, not
+banks (the owner's choice among six looks, variant D). Gradient noise sampled on the unit sphere (seamless across the date line and over the
 poles), swirled, the north axis squeezed so they run east-west as the winds draw them; ridged noise for the wisps,
 plain noise for the puffs; only where a weather system is, most in the tropics' belt and the storm tracks near 55°,
 fewest over the subtropics (the Sahara and Arabia stay clear). Laid out in Web Mercator to 85.05°, so Mapbox's image source
@@ -120,10 +120,11 @@ def sky(size, t=0.0):
     wx, wy, wz = (fbm(px * s, py * s, pz * s + t, 3, off=o) for o in (1.7, 8.3, 4.1))
     ax, ay, az = px + 0.55 * wx, py + 0.55 * wy, pz + 0.55 * wz
     # Where the weather systems are.
-    systems = smooth(-0.16, 0.18, fbm(ax * 1.5, ay * 1.5, az * 1.5, 3, off=31.0) + (band - 0.5) * 0.6)
-    wisps = smooth(0.56, 0.86, ridged(ax * 3.2, ay * 3.2, az * 3.2, 5))
-    puffs = smooth(0.08, 0.30, fbm(ax * 7.0, ay * 7.0, az * 7.0, 5, gain=0.55, off=13.0))
-    return np.minimum(0.9, systems * np.maximum(wisps * 0.8, puffs * 0.75))
+    # The owner's choice (variant D, 2 Nov 2026): fine clouds — fewer systems, thinner wisps, smaller puffs.
+    systems = smooth(-0.05, 0.25, fbm(ax * 1.5, ay * 1.5, az * 1.5, 3, off=31.0) + (band - 0.5) * 0.6)
+    wisps = smooth(0.66, 0.90, ridged(ax * 5.0, ay * 5.0, az * 5.0, 5))
+    puffs = smooth(0.14, 0.32, fbm(ax * 12.0, ay * 12.0, az * 12.0, 5, gain=0.55, off=13.0))
+    return np.minimum(0.9, systems * np.maximum(wisps * 0.55, puffs * 0.7))
 
 
 def mercator_row(lat, size):

@@ -71,11 +71,11 @@ Mapbox.setTelemetryEnabled(false);
 
 /**
  * The Earth as photographed, without names (the owner's reference, 13 Oct 2026): `satellite-v9`, its imagery asked for
- * as the style's tiles (ADR-IMPL-085), with 02's lighter seas and its clouds. Its background is the drawn globe's deep
+ * as the style's tiles (ADR-IMPL-085), livelier, with fine clouds (variant D). Its background is the drawn globe's deep
  * ocean, not satellite-v9's near-black (ADR-IMPL-068): a missing tile shows the sea. A map that cannot load falls back
  * to the drawn globe.
  */
-const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep, sea: tokens.colors.globeOcean } as const;
+const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep } as const;
 const SATELLITE_STYLE = JSON.stringify(satelliteStyle(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "", GLOBE_COLOURS));
 /** 02: the globe on the pale sky, a white haze at its rim, no stars. */
 const ATMOSPHERE = {
@@ -363,7 +363,7 @@ export default function MapboxGlobe({
         onPress={onMapPress}
       >
         <Atmosphere style={ATMOSPHERE} />
-        {/* 02's clouds on the sphere, turning with it and drifting on it — over the seas, under the route. */}
+        {/* The clouds on the sphere, turning with it and drifting on it — over the imagery, under the route. */}
         {clouds.map((c) => (
           <ImageSource key={c.id} id={c.id} url={CLOUD_PICTURES[c.id]} coordinates={c.coordinates}>
             <RasterLayer

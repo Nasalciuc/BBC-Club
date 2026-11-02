@@ -50,8 +50,8 @@ import { useCloudClock } from "./useCloudClock";
 
 export type { MapboxGlobeProps } from "./MapboxGlobe";
 
-/** The same colours as the phone's globe (MapboxGlobe.tsx): the deep ocean behind, 02's seas. */
-const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep, sea: tokens.colors.globeOcean } as const;
+/** The same colour as the phone's globe (MapboxGlobe.tsx): the deep ocean behind a missing tile. */
+const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep } as const;
 /** The clouds' pictures where they start, as the style carries them (cloud-drift.ts, cloud-pictures.ts). */
 const styleClouds = (layers: CloudLayer[]) => layers.map((c) => ({ ...c, url: cloudPictureUrl(c.id) }));
 /** 02: the globe on the pale sky, a white haze at its rim, no stars — as the phone's Atmosphere. */
@@ -133,7 +133,7 @@ export default function MapboxGlobe({
     const m = new mapboxgl.Map({
       container: element,
       accessToken: token,
-      // The same imagery, seas and clouds as the phone's globe, from the same place (ADR-IMPL-085).
+      // The same imagery and clouds as the phone's globe, from the same place (ADR-IMPL-085).
       // satellite-source.ts writes plain style JSON, for the phone's `styleJSON` as for GL JS: the expressions are
       // arrays there, GL JS's types want its own tuples.
       style: satelliteStyle(
