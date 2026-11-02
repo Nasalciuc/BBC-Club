@@ -148,7 +148,8 @@ export const catalogModule = (
       ["catalog.site", "catalog.airports"],
       { maxEntries: MEMO_ENTRIES, ttlMs: SITE_PINS_CACHE_S * 1000, ns: "catalog.site_pins" },
     );
-    const siteDealsMemo = platform.reference.memo<SiteDeal[]>(["catalog.site", "catalog.airports"], {
+    // `catalog.fares` too (ADR-IMPL-081): a deal's estimate stands only while no published fare is on sale for its route.
+    const siteDealsMemo = platform.reference.memo<SiteDeal[]>(["catalog.site", "catalog.airports", "catalog.fares"], {
       maxEntries: SITE_DEALS_ENTRIES,
       ns: "catalog.site_deals",
       ttlMs: SITE_DEALS_CACHE_S * 1000,

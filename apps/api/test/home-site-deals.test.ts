@@ -243,6 +243,17 @@ describe("GET /v1/home — one price per city (ADR-IMPL-081)", () => {
     expect(london?.estimate).toBeUndefined();
     // No stored answer and no rules: no number, so no estimate — the card keeps the site's price, per person.
     expect(body.deals?.find((d) => d.destination.code === "DXB")?.estimate).toBeUndefined();
+
+    // A fare put on sale for New York → Tokyo after the deals were kept: the next Home drops Tokyo's estimate at once
+    // (the deals' memo follows `catalog.fares`), as Tokyo's search now shows the fare (made-up fare).
+    await t.db.execute(sql`
+      INSERT INTO catalog.fares (route_from, route_to, cabin, carrier, carrier_name, price, currency, source,
+        valid_from, valid_until, published)
+      VALUES ('JFK', 'HND', 'business', 'JL', 'Japan Airlines', '4100.00', 'USD', 'manual',
+        now() - interval '1 day', now() + interval '30 days', true)`);
+    t.platform.reference.generations.invalidate(); // the trigger bumped catalog.fares; within a second anywhere
+    const after = HomeVM.parse((await home(t)).json);
+    expect(after.deals?.find((d) => d.destination.code === "HND")?.estimate).toBeUndefined();
     await t.close();
   });
 
