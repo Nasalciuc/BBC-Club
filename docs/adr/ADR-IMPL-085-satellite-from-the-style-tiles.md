@@ -46,7 +46,10 @@ map and the probe all asked the one API the account cannot use, while the same i
   Demo access also caps the Maps SDK at 100 monthly users (the console's figure). A launch needs a payment method on the
   account (standard access) whatever the source.
 - The token is in the style's tile URL, as it was in every request Mapbox's SDK made: the public `pk.` token, in the
-  bundle already. It should be limited to the club's URLs in Mapbox's account.
+  bundle already. A URL restriction holds only for requests a browser makes (it is checked against the page's address);
+  the phones' requests carry none, so a restricted token would refuse them and keep the drawn globe. Restrict only a
+  token of the web build's own, and give the phones an unrestricted one — not the one token for both that ADR-IMPL-082's
+  advice would restrict.
 - An over-the-air update: no native change.
 - Checked on 2 Nov 2026 in the owner's browser with Mapbox GL JS 3.9, the account's token and this style, projection
   `globe`: the map loaded and went idle with every tile in, no error, and drew the Earth by day.
