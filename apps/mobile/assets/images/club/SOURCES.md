@@ -95,5 +95,5 @@ remain their airlines'.
 ## Made here: the globe's clouds (ADR-IMPL-085)
 
 `globe/clouds.webp` is not the design package's: `scripts/globe-clouds.py` draws it (gradient noise on the sphere, a
-fixed seed), 2048 × 2048 in Web Mercator, white with the cloud in the alpha, WebP q90 with alpha at 70. Nothing is
+fixed seed), 2048 × 2048 in Web Mercator, white with the cloud in the alpha, WebP q90 with its alpha lossless. Nothing is
 owed for it; run the script again to remake it.
