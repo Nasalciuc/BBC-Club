@@ -1,7 +1,9 @@
 # The design's artwork in the app (ADR-IMPL-056)
 
-Copied from `isolated/bbc-club-3.0-design/final/assets/` (the 3.0 design package, #75) without scaling or editing,
-re-encoded as WebP. Nothing here was generated or retouched; to replace a file, export it again from the package.
+The files in the tables below are copied from `isolated/bbc-club-3.0-design/final/assets/` (the 3.0 design package,
+#75) without scaling or editing, re-encoded as WebP. None of them was generated or retouched; to replace one, export it
+again from the package. The exceptions are the globe's clouds, under "Made here" at the end: `globe/clouds-*.webp`,
+drawn by `scripts/globe-clouds.py`, and `globe/sky-clouds.webp`, lifted off 02 by `scripts/sky-clouds-from-design.py`.
 
 | File                                | Source (under `assets/`)                           | Source sha256       | Pixels    | Encoding      |
 | ----------------------------------- | -------------------------------------------------- | ------------------- | --------- | ------------- |
