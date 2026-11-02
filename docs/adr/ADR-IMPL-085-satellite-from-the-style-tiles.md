@@ -37,22 +37,22 @@ map and the probe all asked the one API the account cannot use, while the same i
 3. **The probe** asks the world's tile at zoom 0 from the same place (`tileProbeUrl`): the drawn globe gives way only to
    imagery the map itself can load. Everything else in `Globe.tsx` is unchanged — the fade, the reprobe on return, the
    drawn globe when Mapbox fails.
-4. **02's seas and clouds over the photographs** (the owner's ask, 2 Nov 2026: the satellite water is near-navy and
-   cloudless, 02 draws a lighter sea and white clouds):
-   - the seas: Mapbox Streets' `water` (the Vector Tiles API, served on demo access) filled with the drawn globe's ocean
-     (`globe-ocean`) at 0.8 over the imagery, so its shading still shows;
-   - the clouds on the globe: pictures of the whole sky (Web Mercator to 85.05°, white with the cloud in the alpha),
-     made by `scripts/globe-clouds.py` — as 02 draws them, thin white wisps (ridged noise) and small puffs, swirled, only
-     where a weather system is: most in the tropics' belt and the storm tracks, fewest over the subtropics; a fixed seed,
-     so nothing is owed for them. Laid on the sphere as image sources over the seas and under the route, they turn with
-     the Earth. The phone adds them as `ImageSource` + `RasterLayer` (above `sea`), which resolve the bundled files; the
-     web's style carries them with the URLs Metro gives.
+4. **The look: variant D** (the owner's choice, 2 Nov 2026, among six drawn on Explore with the account's own imagery:
+   natural, vivid like 02, pastel, natural with fine clouds, a first heavy-clouded one, minimal). The photographs as they
+   are, with their own deep seas, a little livelier (`raster-saturation` 0.15, `raster-contrast` 0.08); no lighter sea
+   over them (an earlier step filled Mapbox Streets' water with the drawn globe's ocean; D has none, so no new colour
+   and no vector tiles). Fine clouds over them: pictures of the whole sky (Web Mercator to 85.05°, white with the
+   cloud in the alpha) made by `scripts/globe-clouds.py` — thin wisps (ridged noise) and small puffs, swirled, only
+   where a weather system is: most in the tropics' belt and the storm tracks, fewest over the subtropics; a fixed
+   seed, so nothing is owed for them. Laid on the sphere as image sources over the imagery and under the route, they
+   turn with the Earth. The phone adds them as `ImageSource` + `RasterLayer` (above `satellite`), which resolve the
+   bundled files; the web's style carries them with the URLs Metro gives.
 5. **The clouds move** (the owner's ask: as air masses would; simulated, his choice over NASA's daily clouds or a paid
    live service): two moments of one sky, `a` and `b` (the swirl a little further on in `b`), each cut into three bands
    — north of 14°, 26° either side of the equator, south of −14° — that overlap by 12° and fade across the overlap.
    `cloud-drift.ts` slides each band along longitude at the winds' own way — east 0.11°/s in the northern westerlies,
    0.09°/s in the southern, west 0.06°/s in the trades — and fades `a` into `b` and back over 150 s; the six pictures
-   (1536 px wide, about 1.0 MB together) are moved twice a second while the globe may move (`useCloudClock`: Explore on
+   (1536 px wide, about 0.7 MB together) are moved twice a second while the globe may move (`useCloudClock`: Explore on
    screen, the app in front, motion not reduced), and stay still otherwise. A picture spans a whole turn from its
    shift, past 180° where it has drifted; Mapbox carries it round.
 6. **02's clouds beside and before the globe**: `SkyClouds` no longer draws soft round puffs. It lays 02's own cumulus,
@@ -75,9 +75,9 @@ map and the probe all asked the one API the account cannot use, while the same i
   the phones' requests carry none, so a restricted token would refuse them and keep the drawn globe. Restrict only a
   token of the web build's own, and give the phones an unrestricted one — not the one token for both that ADR-IMPL-082's
   advice would restrict.
-- An over-the-air update: no native change. The update grows by the clouds' pictures, about 1.1 MB (their alpha
+- An over-the-air update: no native change. The update grows by the clouds' pictures, about 0.8 MB (their alpha
   kept whole: a lossy one showed its steps as contour lines).
 - Checked on 2 Nov 2026 in the owner's browser with Mapbox GL JS 3.9, the account's token and this style, projection
   `globe`: the map loaded and went idle with every tile in, no error, and drew the Earth by day.
-  With the seas and this picture of the clouds (the generator's algorithm run in the page), the same: idle, no error,
-  the Earth by day as 02 draws it. The phones' build is to be seen on the preview build.
+  The six looks of decision 4 were drawn the same way, each idle with no error; D is the one kept. The phones' build is
+  to be seen on the preview build.
