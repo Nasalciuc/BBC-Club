@@ -103,9 +103,9 @@ module.exports = {
     }
   ],
   "question-sub": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "21px",
+      "lineHeight": "22px",
       "letterSpacing": "0.01px",
       "fontWeight": "400"
     }
@@ -119,47 +119,47 @@ module.exports = {
     }
   ],
   "title-lg": [
-    "23.25px",
+    "24px",
     {
-      "lineHeight": "27px",
+      "lineHeight": "28px",
       "letterSpacing": "0.06px",
       "fontWeight": "700"
     }
   ],
   "title": [
-    "21.5px",
+    "22.25px",
     {
-      "lineHeight": "25px",
+      "lineHeight": "26px",
       "letterSpacing": "0px",
       "fontWeight": "700"
     }
   ],
   "title-sm": [
-    "18.25px",
+    "19px",
     {
-      "lineHeight": "22px",
+      "lineHeight": "23px",
       "letterSpacing": "-0.11px",
       "fontWeight": "700"
     }
   ],
   "subtitle": [
-    "16.5px",
+    "17.4px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "0.11px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.12px",
       "fontWeight": "700"
     }
   ],
   "greeting": [
-    "24.5px",
+    "25.15px",
     {
-      "lineHeight": "28px",
-      "letterSpacing": "0.66px",
+      "lineHeight": "29px",
+      "letterSpacing": "0.68px",
       "fontWeight": "400"
     }
   ],
   "greeting-name": [
-    "34.12px",
+    "34.1px",
     {
       "lineHeight": "38px",
       "letterSpacing": "0px",
@@ -167,218 +167,218 @@ module.exports = {
     }
   ],
   "body-lg": [
-    "18.5px",
+    "19.25px",
     {
-      "lineHeight": "24px",
-      "letterSpacing": "0.43px",
+      "lineHeight": "25px",
+      "letterSpacing": "0.45px",
       "fontWeight": "400"
     }
   ],
   "body": [
-    "15.75px",
+    "16.8px",
+    {
+      "lineHeight": "23px",
+      "letterSpacing": "0px",
+      "fontWeight": "400"
+    }
+  ],
+  "body-strong": [
+    "16.8px",
+    {
+      "lineHeight": "23px",
+      "letterSpacing": "0px",
+      "fontWeight": "600"
+    }
+  ],
+  "body-sm": [
+    "16.45px",
     {
       "lineHeight": "22px",
       "letterSpacing": "0px",
       "fontWeight": "400"
     }
   ],
-  "body-strong": [
-    "15.75px",
-    {
-      "lineHeight": "21px",
-      "letterSpacing": "0px",
-      "fontWeight": "600"
-    }
-  ],
-  "body-sm": [
-    "15.25px",
-    {
-      "lineHeight": "21px",
-      "letterSpacing": "0px",
-      "fontWeight": "400"
-    }
-  ],
   "field": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.47px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.51px",
       "fontWeight": "400"
     }
   ],
   "link": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.21px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.23px",
       "fontWeight": "400"
     }
   ],
   "link-sm": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "-0.18px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.2px",
       "fontWeight": "500"
     }
   ],
   "row-title": [
-    "14.5px",
+    "15.9px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "-0.22px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.24px",
       "fontWeight": "700"
     }
   ],
   "row-title-lg": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "22px",
       "letterSpacing": "0px",
       "fontWeight": "700"
     }
   ],
   "row-meta": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "21px",
       "letterSpacing": "0px",
       "fontWeight": "400"
     }
   ],
   "card-meta": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.57px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.63px",
       "fontWeight": "400"
     }
   ],
   "fact": [
-    "13px",
+    "14.75px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.4px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.45px",
       "fontWeight": "400"
     }
   ],
   "request-city": [
-    "21px",
+    "21.75px",
     {
-      "lineHeight": "24px",
-      "letterSpacing": "-0.51px",
+      "lineHeight": "25px",
+      "letterSpacing": "-0.53px",
       "fontWeight": "700"
     }
   ],
   "request-route": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.57px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.61px",
       "fontWeight": "400"
     }
   ],
   "request-dates": [
-    "15px",
-    {
-      "lineHeight": "20px",
-      "letterSpacing": "0.42px",
-      "fontWeight": "400"
-    }
-  ],
-  "notice-title-sm": [
-    "15.25px",
-    {
-      "lineHeight": "20px",
-      "letterSpacing": "0.23px",
-      "fontWeight": "700"
-    }
-  ],
-  "notice-body-sm": [
-    "15px",
-    {
-      "lineHeight": "20px",
-      "letterSpacing": "0px",
-      "fontWeight": "400"
-    }
-  ],
-  "detail-facts": [
-    "16px",
+    "16.25px",
     {
       "lineHeight": "21px",
       "letterSpacing": "0.45px",
       "fontWeight": "400"
     }
   ],
-  "detail-meta": [
-    "14.75px",
+  "notice-title-sm": [
+    "16.45px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.71px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.25px",
+      "fontWeight": "700"
+    }
+  ],
+  "notice-body-sm": [
+    "16.25px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "0px",
+      "fontWeight": "400"
+    }
+  ],
+  "detail-facts": [
+    "17px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "0.48px",
+      "fontWeight": "400"
+    }
+  ],
+  "detail-meta": [
+    "16.05px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "0.77px",
       "fontWeight": "400"
     }
   ],
   "detail-section": [
-    "20.5px",
+    "21.25px",
     {
-      "lineHeight": "25px",
-      "letterSpacing": "-0.59px",
+      "lineHeight": "26px",
+      "letterSpacing": "-0.61px",
       "fontWeight": "700"
     }
   ],
   "step": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.35px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.39px",
       "fontWeight": "500"
     }
   ],
   "step-todo": [
-    "13.75px",
+    "15.3px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.85px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.95px",
       "fontWeight": "400"
     }
   ],
   "step-date": [
-    "13.75px",
+    "15.3px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.6px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.67px",
       "fontWeight": "400"
     }
   ],
   "notice-title": [
-    "16.75px",
+    "17.55px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "21px",
       "letterSpacing": "0.05px",
       "fontWeight": "600"
     }
   ],
   "notice-body": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.47px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.51px",
       "fontWeight": "400"
     }
   ],
   "detail-caption": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.54px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.58px",
       "fontWeight": "400"
     }
   ],
   "fare-label": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.28px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.3px",
       "fontWeight": "400"
     }
   ],
@@ -391,314 +391,314 @@ module.exports = {
     }
   ],
   "fare-was": [
-    "17.5px",
+    "18.25px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "0.3px",
+      "lineHeight": "23px",
+      "letterSpacing": "0.31px",
       "fontWeight": "400"
     }
   ],
   "save": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.16px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.17px",
       "fontWeight": "500"
     }
   ],
   "call-label": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.41px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.45px",
       "fontWeight": "400"
     }
   ],
   "call-phone": [
-    "18px",
+    "18.75px",
     {
       "lineHeight": "23px",
-      "letterSpacing": "-0.46px",
+      "letterSpacing": "-0.48px",
       "fontWeight": "600"
     }
   ],
   "fine-print": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.26px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.29px",
       "fontWeight": "400"
     }
   ],
   "button-detail": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.35px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.37px",
       "fontWeight": "600"
     }
   ],
   "badge-title": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "-0.36px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.39px",
       "fontWeight": "500"
     }
   ],
   "profile-name": [
-    "24.5px",
+    "25.15px",
     {
-      "lineHeight": "29px",
+      "lineHeight": "30px",
       "letterSpacing": "0.09px",
       "fontWeight": "700"
     }
   ],
   "profile-home": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.34px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.37px",
       "fontWeight": "400"
     }
   ],
   "stat-value": [
-    "20.5px",
+    "21.25px",
     {
-      "lineHeight": "25px",
-      "letterSpacing": "-0.47px",
+      "lineHeight": "26px",
+      "letterSpacing": "-0.49px",
       "fontWeight": "700"
     }
   ],
   "stat-label": [
-    "13.5px",
+    "15.1px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.26px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.29px",
       "fontWeight": "400"
     }
   ],
   "profile-pill": [
-    "14.75px",
+    "16.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.36px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.4px",
       "fontWeight": "600"
     }
   ],
   "profile-section": [
-    "19.5px",
+    "20.25px",
     {
-      "lineHeight": "23px",
-      "letterSpacing": "0.62px",
+      "lineHeight": "24px",
+      "letterSpacing": "0.64px",
       "fontWeight": "700"
     }
   ],
   "profile-link": [
-    "13.75px",
+    "15.3px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.4px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.45px",
       "fontWeight": "400"
     }
   ],
   "trip-city": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.07px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.08px",
       "fontWeight": "700"
     }
   ],
   "trip-dates": [
-    "12.25px",
+    "14px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.96px",
+      "lineHeight": "18px",
+      "letterSpacing": "1.1px",
       "fontWeight": "500"
     }
   ],
   "trip-route": [
-    "12.25px",
+    "14px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.79px",
+      "lineHeight": "18px",
+      "letterSpacing": "0.9px",
       "fontWeight": "400"
     }
   ],
   "profile-row": [
-    "13.25px",
+    "16.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.3px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.38px",
       "fontWeight": "400"
     }
   ],
   "profile-value": [
-    "13px",
+    "15.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.58px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.69px",
       "fontWeight": "400"
     }
   ],
   "profile-danger": [
-    "14.25px",
+    "16.5px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "-0.14px",
-      "fontWeight": "400"
-    }
-  ],
-  "profile-signout": [
-    "14px",
-    {
-      "lineHeight": "18px",
-      "letterSpacing": "0.33px",
-      "fontWeight": "600"
-    }
-  ],
-  "settings-title": [
-    "19px",
-    {
-      "lineHeight": "23px",
-      "letterSpacing": "0.69px",
-      "fontWeight": "700"
-    }
-  ],
-  "settings-row": [
-    "15.5px",
-    {
-      "lineHeight": "20px",
-      "letterSpacing": "0.23px",
-      "fontWeight": "400"
-    }
-  ],
-  "settings-value": [
-    "15.25px",
-    {
-      "lineHeight": "20px",
-      "letterSpacing": "0.46px",
-      "fontWeight": "400"
-    }
-  ],
-  "settings-sub": [
-    "14.25px",
-    {
-      "lineHeight": "19px",
-      "letterSpacing": "0.32px",
-      "fontWeight": "400"
-    }
-  ],
-  "settings-danger": [
-    "15.75px",
-    {
-      "lineHeight": "20px",
+      "lineHeight": "21px",
       "letterSpacing": "-0.16px",
       "fontWeight": "400"
     }
   ],
-  "settings-signout": [
-    "15.5px",
+  "profile-signout": [
+    "16.5px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.46px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.39px",
+      "fontWeight": "600"
+    }
+  ],
+  "settings-title": [
+    "19.75px",
+    {
+      "lineHeight": "24px",
+      "letterSpacing": "0.72px",
+      "fontWeight": "700"
+    }
+  ],
+  "settings-row": [
+    "16.6px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "0.25px",
+      "fontWeight": "400"
+    }
+  ],
+  "settings-value": [
+    "16.45px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "0.5px",
+      "fontWeight": "400"
+    }
+  ],
+  "settings-sub": [
+    "15.7px",
+    {
+      "lineHeight": "20px",
+      "letterSpacing": "0.35px",
+      "fontWeight": "400"
+    }
+  ],
+  "settings-danger": [
+    "16.8px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "-0.17px",
+      "fontWeight": "400"
+    }
+  ],
+  "settings-signout": [
+    "16.6px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "0.49px",
       "fontWeight": "600"
     }
   ],
   "edit-title": [
-    "20px",
+    "20.75px",
     {
-      "lineHeight": "24px",
-      "letterSpacing": "0.69px",
+      "lineHeight": "25px",
+      "letterSpacing": "0.72px",
       "fontWeight": "700"
     }
   ],
   "edit-row": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.24px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.26px",
       "fontWeight": "400"
     }
   ],
   "edit-value": [
-    "14.5px",
+    "15.9px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.48px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.53px",
       "fontWeight": "400"
     }
   ],
   "badge": [
-    "14.5px",
+    "15.9px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "-0.25px",
+      "lineHeight": "19px",
+      "letterSpacing": "-0.27px",
       "fontWeight": "500"
     }
   ],
   "badge-strong": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.38px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.42px",
       "fontWeight": "600"
     }
   ],
   "chip": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "-0.36px",
+      "lineHeight": "19px",
+      "letterSpacing": "-0.39px",
       "fontWeight": "500"
     }
   ],
   "chip-selected": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.3px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.32px",
       "fontWeight": "600"
     }
   ],
   "chip-trip": [
-    "14.5px",
+    "15.9px",
     {
-      "lineHeight": "17px",
+      "lineHeight": "19px",
       "letterSpacing": "0px",
       "fontWeight": "400"
     }
   ],
   "label-strong": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "19px",
+      "lineHeight": "20px",
       "letterSpacing": "0px",
       "fontWeight": "600"
     }
   ],
   "caption": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
+      "lineHeight": "20px",
       "letterSpacing": "0px",
       "fontWeight": "400"
     }
   ],
   "caption-sm": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
+      "lineHeight": "19px",
       "letterSpacing": "0px",
       "fontWeight": "400"
     }
   ],
   "label": [
-    "11.25px",
+    "12.45px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "1.35px",
+      "lineHeight": "15px",
+      "letterSpacing": "1.49px",
       "fontWeight": "600"
     }
   ],
@@ -711,7 +711,7 @@ module.exports = {
     }
   ],
   "price-lg": [
-    "26.5px",
+    "26.8px",
     {
       "lineHeight": "29px",
       "letterSpacing": "0px",
@@ -719,50 +719,50 @@ module.exports = {
     }
   ],
   "price": [
-    "18px",
+    "18.75px",
     {
-      "lineHeight": "21px",
+      "lineHeight": "22px",
       "letterSpacing": "0px",
       "fontWeight": "700"
     }
   ],
   "price-sm": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "-0.31px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.33px",
       "fontWeight": "700"
     }
   ],
   "button": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "22px",
       "letterSpacing": "0px",
       "fontWeight": "600"
     }
   ],
   "button-bold": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.77px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.83px",
       "fontWeight": "700"
     }
   ],
   "button-sm": [
-    "15.5px",
+    "16.6px",
     {
-      "lineHeight": "19px",
+      "lineHeight": "21px",
       "letterSpacing": "0px",
       "fontWeight": "600"
     }
   ],
   "button-lg": [
-    "19px",
+    "19.75px",
     {
-      "lineHeight": "24px",
-      "letterSpacing": "0.16px",
+      "lineHeight": "25px",
+      "letterSpacing": "0.17px",
       "fontWeight": "600"
     }
   ],
@@ -775,10 +775,10 @@ module.exports = {
     }
   ],
   "subtitle-lg": [
-    "19px",
+    "19.75px",
     {
-      "lineHeight": "25px",
-      "letterSpacing": "0.88px",
+      "lineHeight": "26px",
+      "letterSpacing": "0.91px",
       "fontWeight": "400"
     }
   ],
@@ -791,402 +791,402 @@ module.exports = {
     }
   ],
   "empty-body": [
-    "16.75px",
+    "17.55px",
     {
-      "lineHeight": "23px",
-      "letterSpacing": "0.22px",
-      "fontWeight": "400"
-    }
-  ],
-  "empty-title-sm": [
-    "18.5px",
-    {
-      "lineHeight": "22px",
-      "letterSpacing": "0.3px",
-      "fontWeight": "700"
-    }
-  ],
-  "empty-body-sm": [
-    "16px",
-    {
-      "lineHeight": "20px",
+      "lineHeight": "25px",
       "letterSpacing": "0.23px",
       "fontWeight": "400"
     }
   ],
-  "tab": [
-    "13.75px",
+  "empty-title-sm": [
+    "19.25px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.49px",
+      "lineHeight": "23px",
+      "letterSpacing": "0.31px",
+      "fontWeight": "700"
+    }
+  ],
+  "empty-body-sm": [
+    "17px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "0.24px",
+      "fontWeight": "400"
+    }
+  ],
+  "tab": [
+    "15.3px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.55px",
       "fontWeight": "400"
     }
   ],
   "tab-active": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "-0.51px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.56px",
       "fontWeight": "600"
     }
   ],
   "wordmark": [
-    "17.25px",
+    "18px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "-0.24px",
+      "lineHeight": "23px",
+      "letterSpacing": "-0.25px",
       "fontWeight": "600"
     }
   ],
   "wordmark-club": [
-    "18.5px",
+    "19.25px",
     {
-      "lineHeight": "23px",
-      "letterSpacing": "-0.64px",
+      "lineHeight": "24px",
+      "letterSpacing": "-0.67px",
       "fontWeight": "400"
     }
   ],
   "onboard-label": [
-    "16px",
+    "17px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "0.11px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.12px",
       "fontWeight": "600"
     }
   ],
   "onboard-place": [
-    "16px",
+    "17px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "0.36px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.38px",
       "fontWeight": "600"
     }
   ],
   "cabin-title": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "19px",
+      "lineHeight": "21px",
       "letterSpacing": "-0.05px",
       "fontWeight": "600"
     }
   ],
   "cabin-line": [
-    "12.75px",
+    "14.5px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.07px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.08px",
       "fontWeight": "400"
     }
   ],
   "traveler-title": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "-0.42px",
+      "lineHeight": "22px",
+      "letterSpacing": "-0.45px",
       "fontWeight": "600"
     }
   ],
   "traveler-sub": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.25px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.28px",
       "fontWeight": "400"
     }
   ],
   "stepper-value": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "21px",
       "letterSpacing": "0px",
       "fontWeight": "500"
     }
   ],
   "family-title": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.35px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.39px",
       "fontWeight": "600"
     }
   ],
   "family-body": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "-0.15px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.17px",
       "fontWeight": "400"
     }
   ],
   "button-onboard": [
-    "15.5px",
+    "16.6px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.68px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.73px",
       "fontWeight": "600"
     }
   ],
   "skip": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.54px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.58px",
       "fontWeight": "400"
     }
   ],
   "onboard-field-label": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.56px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.62px",
       "fontWeight": "400"
     }
   ],
   "onboard-input": [
-    "17px",
+    "17.75px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "-0.5px",
+      "lineHeight": "23px",
+      "letterSpacing": "-0.52px",
       "fontWeight": "500"
     }
   ],
   "onboard-cancel": [
-    "16.5px",
+    "17.4px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "-0.6px",
+      "lineHeight": "23px",
+      "letterSpacing": "-0.63px",
       "fontWeight": "500"
     }
   ],
   "onboard-helper": [
-    "14.5px",
+    "15.9px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "-0.12px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.13px",
       "fontWeight": "400"
     }
   ],
   "onboard-row": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "-0.39px",
+      "lineHeight": "22px",
+      "letterSpacing": "-0.41px",
       "fontWeight": "600"
     }
   ],
   "onboard-code": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.36px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.39px",
       "fontWeight": "600"
     }
   ],
   "button-clear": [
-    "16px",
+    "17px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "-0.32px",
+      "lineHeight": "22px",
+      "letterSpacing": "-0.34px",
       "fontWeight": "500"
     }
   ],
   "pin": [
-    "12.75px",
+    "14.5px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "-0.21px",
+      "lineHeight": "18px",
+      "letterSpacing": "-0.24px",
       "fontWeight": "700"
     }
   ],
   "pin-detail": [
-    "12.25px",
+    "14px",
     {
-      "lineHeight": "15px",
-      "letterSpacing": "-0.16px",
+      "lineHeight": "17px",
+      "letterSpacing": "-0.18px",
       "fontWeight": "400"
     }
   ],
   "search-bar": [
-    "16.75px",
+    "17.55px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "0.96px",
+      "lineHeight": "23px",
+      "letterSpacing": "1.01px",
       "fontWeight": "400"
     }
   ],
   "see-all": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "-0.1px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.11px",
       "fontWeight": "400"
     }
   ],
   "see-all-sm": [
-    "14.5px",
+    "15.9px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.1px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.11px",
       "fontWeight": "400"
     }
   ],
   "offer-city": [
-    "16.75px",
+    "17.55px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "-0.25px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.26px",
       "fontWeight": "700"
     }
   ],
   "offer-rating": [
-    "13.75px",
+    "15.3px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.3px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.33px",
       "fontWeight": "400"
     }
   ],
   "offer-country": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.57px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.64px",
       "fontWeight": "400"
     }
   ],
   "offer-from": [
-    "13px",
+    "14.75px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.61px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.69px",
       "fontWeight": "400"
     }
   ],
   "offer-price": [
-    "17.25px",
+    "18px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "-0.43px",
+      "lineHeight": "22px",
+      "letterSpacing": "-0.45px",
       "fontWeight": "700"
     }
   ],
   "offer-save": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.16px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.18px",
       "fontWeight": "600"
     }
   ],
   "sheet-done": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.53px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.57px",
       "fontWeight": "600"
     }
   ],
   "sheet-title": [
-    "18.75px",
+    "19.5px",
     {
       "lineHeight": "23px",
-      "letterSpacing": "-0.31px",
+      "letterSpacing": "-0.32px",
       "fontWeight": "700"
     }
   ],
   "offer-sm-city": [
-    "16.5px",
+    "17.4px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "21px",
       "letterSpacing": "-0.09px",
       "fontWeight": "700"
     }
   ],
   "offer-sm-rating": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.61px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.69px",
       "fontWeight": "400"
     }
   ],
   "offer-sm-country": [
-    "12.75px",
+    "14.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.87px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.99px",
       "fontWeight": "400"
     }
   ],
   "offer-sm-from": [
-    "12.5px",
+    "14.25px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "1.26px",
+      "lineHeight": "19px",
+      "letterSpacing": "1.44px",
       "fontWeight": "400"
     }
   ],
   "offer-sm-price": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.56px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.59px",
       "fontWeight": "700"
     }
   ],
   "offer-sm-save": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "-0.06px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.07px",
       "fontWeight": "600"
     }
   ],
   "wide-city": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "-0.44px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.47px",
       "fontWeight": "700"
     }
   ],
   "wide-country": [
-    "12.75px",
+    "14.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.56px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.64px",
       "fontWeight": "400"
     }
   ],
   "wide-from": [
-    "12.5px",
+    "14.25px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "1.16px",
+      "lineHeight": "19px",
+      "letterSpacing": "1.32px",
       "fontWeight": "400"
     }
   ],
   "wide-price": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "21px",
       "letterSpacing": "0px",
       "fontWeight": "700"
     }
   ],
   "wide-save": [
-    "13.5px",
+    "15.1px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.55px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.62px",
       "fontWeight": "600"
     }
   ],
   "wide-save-lg": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "-0.25px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.28px",
       "fontWeight": "600"
     }
   ],
@@ -1199,202 +1199,202 @@ module.exports = {
     }
   ],
   "route-country": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.56px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.6px",
       "fontWeight": "400"
     }
   ],
   "route-chip": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.45px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.5px",
       "fontWeight": "400"
     }
   ],
   "route-label": [
-    "11px",
+    "12.25px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "1.92px",
+      "lineHeight": "16px",
+      "letterSpacing": "2.14px",
       "fontWeight": "500"
     }
   ],
   "route-price": [
-    "22px",
+    "22.75px",
     {
-      "lineHeight": "26px",
+      "lineHeight": "27px",
       "letterSpacing": "0.05px",
       "fontWeight": "700"
     }
   ],
   "route-basis": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.45px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.5px",
       "fontWeight": "400"
     }
   ],
   "route-note": [
-    "13px",
+    "14.75px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.66px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.75px",
       "fontWeight": "400"
     }
   ],
   "route-time-label": [
-    "11px",
+    "12.25px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "0.94px",
+      "lineHeight": "16px",
+      "letterSpacing": "1.05px",
       "fontWeight": "500"
     }
   ],
   "route-clock": [
-    "21px",
+    "21.75px",
     {
-      "lineHeight": "25px",
-      "letterSpacing": "-0.59px",
+      "lineHeight": "26px",
+      "letterSpacing": "-0.61px",
       "fontWeight": "700"
     }
   ],
   "route-zone": [
-    "13.75px",
+    "15.3px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.8px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.89px",
       "fontWeight": "400"
     }
   ],
   "route-options": [
-    "18px",
+    "18.75px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "0.2px",
+      "lineHeight": "23px",
+      "letterSpacing": "0.21px",
       "fontWeight": "700"
     }
   ],
   "route-pin": [
-    "12px",
+    "13.75px",
     {
-      "lineHeight": "15px",
-      "letterSpacing": "-0.28px",
+      "lineHeight": "17px",
+      "letterSpacing": "-0.32px",
       "fontWeight": "700"
     }
   ],
   "button-route": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.86px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.93px",
       "fontWeight": "600"
     }
   ],
   "explore-empty-title": [
-    "23px",
+    "23.75px",
     {
-      "lineHeight": "28px",
+      "lineHeight": "29px",
       "letterSpacing": "0.05px",
       "fontWeight": "700"
     }
   ],
   "explore-empty-body": [
-    "15.5px",
+    "16.6px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "0.38px",
+      "lineHeight": "23px",
+      "letterSpacing": "0.41px",
       "fontWeight": "400"
     }
   ],
   "button-explore": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.78px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.84px",
       "fontWeight": "600"
     }
   ],
   "route-message-title": [
-    "20px",
+    "20.75px",
     {
-      "lineHeight": "24px",
+      "lineHeight": "25px",
       "letterSpacing": "0px",
       "fontWeight": "700"
     }
   ],
   "route-message": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.39px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.43px",
       "fontWeight": "400"
     }
   ],
   "route-link": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.37px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.41px",
       "fontWeight": "500"
     }
   ],
   "flight-cabin": [
-    "13px",
+    "14.75px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.44px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.5px",
       "fontWeight": "400"
     }
   ],
   "flight-code": [
-    "16px",
+    "17px",
     {
-      "lineHeight": "19px",
+      "lineHeight": "20px",
       "letterSpacing": "0px",
       "fontWeight": "700"
     }
   ],
   "flight-time": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "18px",
+      "lineHeight": "19px",
       "letterSpacing": "0px",
       "fontWeight": "700"
     }
   ],
   "flight-plus": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "-0.25px",
+      "lineHeight": "19px",
+      "letterSpacing": "-0.28px",
       "fontWeight": "700"
     }
   ],
   "flight-day": [
-    "13.75px",
+    "15.3px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.57px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.63px",
       "fontWeight": "400"
     }
   ],
   "flight-price": [
-    "17.25px",
+    "18px",
     {
-      "lineHeight": "21px",
+      "lineHeight": "22px",
       "letterSpacing": "-0.1px",
       "fontWeight": "700"
     }
   ],
   "flight-basis": [
-    "13px",
+    "14.75px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.68px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.77px",
       "fontWeight": "400"
     }
   ],
@@ -1407,130 +1407,130 @@ module.exports = {
     }
   ],
   "place-about": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.86px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.95px",
       "fontWeight": "400"
     }
   ],
   "place-chip": [
-    "14.5px",
+    "15.9px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.36px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.39px",
       "fontWeight": "500"
     }
   ],
   "place-label": [
-    "11px",
+    "12.25px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "2.47px",
+      "lineHeight": "16px",
+      "letterSpacing": "2.75px",
       "fontWeight": "500"
     }
   ],
   "place-price": [
-    "22px",
+    "22.75px",
     {
-      "lineHeight": "26px",
-      "letterSpacing": "-0.23px",
+      "lineHeight": "27px",
+      "letterSpacing": "-0.24px",
       "fontWeight": "700"
     }
   ],
   "place-basis": [
-    "18px",
+    "18.75px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "0.48px",
+      "lineHeight": "23px",
+      "letterSpacing": "0.5px",
       "fontWeight": "700"
     }
   ],
   "place-note": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.6px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.66px",
       "fontWeight": "400"
     }
   ],
   "place-time-label": [
-    "11px",
+    "12.25px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "1.25px",
+      "lineHeight": "16px",
+      "letterSpacing": "1.39px",
       "fontWeight": "500"
     }
   ],
   "place-clock": [
-    "16px",
+    "17px",
     {
-      "lineHeight": "19px",
+      "lineHeight": "20px",
       "letterSpacing": "0px",
       "fontWeight": "700"
     }
   ],
   "place-zone": [
-    "12px",
+    "13.75px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.7px",
+      "lineHeight": "18px",
+      "letterSpacing": "0.8px",
       "fontWeight": "400"
     }
   ],
   "place-options": [
-    "21px",
+    "21.75px",
     {
-      "lineHeight": "25px",
-      "letterSpacing": "0.25px",
+      "lineHeight": "26px",
+      "letterSpacing": "0.26px",
       "fontWeight": "700"
     }
   ],
   "option-time": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "-0.14px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.15px",
       "fontWeight": "700"
     }
   ],
   "option-code": [
-    "12.75px",
+    "14.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.31px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.35px",
       "fontWeight": "400"
     }
   ],
   "option-meta": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.45px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.51px",
       "fontWeight": "400"
     }
   ],
   "option-plus": [
-    "12.25px",
+    "14px",
     {
-      "lineHeight": "16px",
+      "lineHeight": "18px",
       "letterSpacing": "0px",
       "fontWeight": "400"
     }
   ],
   "option-price": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "-0.2px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.21px",
       "fontWeight": "700"
     }
   ],
   "option-basis": [
-    "13px",
+    "14.75px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.42px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.48px",
       "fontWeight": "400"
     }
   ],
@@ -1543,159 +1543,159 @@ module.exports = {
     }
   ],
   "fare-chip": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.34px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.38px",
       "fontWeight": "400"
     }
   ],
   "fare-small": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "-0.08px",
+      "lineHeight": "19px",
+      "letterSpacing": "-0.09px",
       "fontWeight": "400"
     }
   ],
   "fare-temp": [
-    "22px",
+    "22.75px",
     {
-      "lineHeight": "26px",
+      "lineHeight": "27px",
       "letterSpacing": "0.13px",
       "fontWeight": "600"
     }
   ],
   "fare-weather": [
-    "12.75px",
+    "14.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.3px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.34px",
       "fontWeight": "400"
     }
   ],
   "fare-amount": [
-    "25.5px",
+    "25.95px",
     {
-      "lineHeight": "29px",
-      "letterSpacing": "-0.86px",
+      "lineHeight": "30px",
+      "letterSpacing": "-0.88px",
       "fontWeight": "700"
     }
   ],
   "fare-down": [
-    "13px",
+    "14.75px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.95px",
+      "lineHeight": "19px",
+      "letterSpacing": "1.08px",
       "fontWeight": "400"
     }
   ],
   "fare-save": [
-    "13.75px",
+    "15.3px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.36px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.4px",
       "fontWeight": "500"
     }
   ],
   "fare-card-title": [
-    "15px",
+    "16.25px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "-0.18px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.19px",
       "fontWeight": "700"
     }
   ],
   "fare-code": [
-    "19.75px",
+    "20.5px",
     {
-      "lineHeight": "24px",
-      "letterSpacing": "-0.57px",
+      "lineHeight": "25px",
+      "letterSpacing": "-0.59px",
       "fontWeight": "600"
     }
   ],
   "fare-city": [
-    "12.75px",
+    "14.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.07px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.08px",
       "fontWeight": "400"
     }
   ],
   "fare-time": [
-    "14.75px",
+    "16.05px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.2px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.22px",
       "fontWeight": "700"
     }
   ],
   "fare-day": [
-    "12.5px",
+    "14.25px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.32px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.36px",
       "fontWeight": "400"
     }
   ],
   "fare-plus": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
+      "lineHeight": "19px",
       "letterSpacing": "0px",
       "fontWeight": "400"
     }
   ],
   "fare-airline": [
-    "13.5px",
+    "15.1px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.43px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.48px",
       "fontWeight": "400"
     }
   ],
   "fare-row": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.23px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.25px",
       "fontWeight": "600"
     }
   ],
   "map-code": [
-    "14px",
+    "15.5px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.25px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.28px",
       "fontWeight": "700"
     }
   ],
   "map-city": [
-    "11.5px",
+    "13.4px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "0.21px",
+      "lineHeight": "17px",
+      "letterSpacing": "0.24px",
       "fontWeight": "500"
     }
   ],
   "button-fare": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "-0.13px",
+      "lineHeight": "22px",
+      "letterSpacing": "-0.14px",
       "fontWeight": "600"
     }
   ],
   "fare-fine": [
-    "12.5px",
+    "14.25px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.44px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.5px",
       "fontWeight": "400"
     }
   ],
   "about-title": [
-    "26.75px",
+    "27px",
     {
       "lineHeight": "31px",
       "letterSpacing": "0.1px",
@@ -1703,295 +1703,295 @@ module.exports = {
     }
   ],
   "about-body": [
-    "15.75px",
+    "16.8px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "0.21px",
+      "fontWeight": "400"
+    }
+  ],
+  "button-about": [
+    "16.8px",
+    {
+      "lineHeight": "22px",
+      "letterSpacing": "0.41px",
+      "fontWeight": "600"
+    }
+  ],
+  "gone-title": [
+    "25.75px",
+    {
+      "lineHeight": "30px",
+      "letterSpacing": "0.39px",
+      "fontWeight": "700"
+    }
+  ],
+  "button-gone": [
+    "17.4px",
+    {
+      "lineHeight": "23px",
+      "letterSpacing": "0.3px",
+      "fontWeight": "600"
+    }
+  ],
+  "request-title": [
+    "20px",
+    {
+      "lineHeight": "24px",
+      "letterSpacing": "0.49px",
+      "fontWeight": "700"
+    }
+  ],
+  "summary-title": [
+    "16.05px",
+    {
+      "lineHeight": "20px",
+      "letterSpacing": "0.52px",
+      "fontWeight": "700"
+    }
+  ],
+  "summary-cabin": [
+    "14.25px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.64px",
+      "fontWeight": "400"
+    }
+  ],
+  "summary-dates": [
+    "15.3px",
+    {
+      "lineHeight": "20px",
+      "letterSpacing": "0.71px",
+      "fontWeight": "400"
+    }
+  ],
+  "summary-route": [
+    "14.5px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.92px",
+      "fontWeight": "400"
+    }
+  ],
+  "summary-price": [
+    "15.3px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "-0.14px",
+      "fontWeight": "700"
+    }
+  ],
+  "summary-published": [
+    "14.25px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.19px",
+      "fontWeight": "400"
+    }
+  ],
+  "summary-save": [
+    "14.25px",
+    {
+      "lineHeight": "19px",
+      "letterSpacing": "0.19px",
+      "fontWeight": "500"
+    }
+  ],
+  "summary-source": [
+    "13.75px",
+    {
+      "lineHeight": "18px",
+      "letterSpacing": "0.4px",
+      "fontWeight": "400"
+    }
+  ],
+  "segment-on": [
+    "16px",
+    {
+      "lineHeight": "21px",
+      "letterSpacing": "0.32px",
+      "fontWeight": "600"
+    }
+  ],
+  "segment-off": [
+    "16px",
     {
       "lineHeight": "21px",
       "letterSpacing": "0.2px",
       "fontWeight": "400"
     }
   ],
-  "button-about": [
-    "15.75px",
-    {
-      "lineHeight": "20px",
-      "letterSpacing": "0.38px",
-      "fontWeight": "600"
-    }
-  ],
-  "gone-title": [
-    "25.25px",
-    {
-      "lineHeight": "29px",
-      "letterSpacing": "0.38px",
-      "fontWeight": "700"
-    }
-  ],
-  "button-gone": [
-    "16.5px",
-    {
-      "lineHeight": "21px",
-      "letterSpacing": "0.28px",
-      "fontWeight": "600"
-    }
-  ],
-  "request-title": [
-    "19.25px",
-    {
-      "lineHeight": "23px",
-      "letterSpacing": "0.47px",
-      "fontWeight": "700"
-    }
-  ],
-  "summary-title": [
-    "14.75px",
-    {
-      "lineHeight": "18px",
-      "letterSpacing": "0.48px",
-      "fontWeight": "700"
-    }
-  ],
-  "summary-cabin": [
-    "12.5px",
-    {
-      "lineHeight": "16px",
-      "letterSpacing": "0.56px",
-      "fontWeight": "400"
-    }
-  ],
-  "summary-dates": [
-    "13.75px",
-    {
-      "lineHeight": "18px",
-      "letterSpacing": "0.64px",
-      "fontWeight": "400"
-    }
-  ],
-  "summary-route": [
-    "12.75px",
-    {
-      "lineHeight": "17px",
-      "letterSpacing": "0.81px",
-      "fontWeight": "400"
-    }
-  ],
-  "summary-price": [
-    "13.75px",
-    {
-      "lineHeight": "17px",
-      "letterSpacing": "-0.13px",
-      "fontWeight": "700"
-    }
-  ],
-  "summary-published": [
-    "12.5px",
-    {
-      "lineHeight": "16px",
-      "letterSpacing": "0.17px",
-      "fontWeight": "400"
-    }
-  ],
-  "summary-save": [
-    "12.5px",
-    {
-      "lineHeight": "16px",
-      "letterSpacing": "0.17px",
-      "fontWeight": "500"
-    }
-  ],
-  "summary-source": [
-    "12px",
-    {
-      "lineHeight": "16px",
-      "letterSpacing": "0.35px",
-      "fontWeight": "400"
-    }
-  ],
-  "segment-on": [
-    "13.25px",
-    {
-      "lineHeight": "17px",
-      "letterSpacing": "0.27px",
-      "fontWeight": "600"
-    }
-  ],
-  "segment-off": [
-    "13px",
-    {
-      "lineHeight": "17px",
-      "letterSpacing": "0.16px",
-      "fontWeight": "400"
-    }
-  ],
   "field-label": [
-    "12.5px",
+    "14.25px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.36px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.41px",
       "fontWeight": "400"
     }
   ],
   "field-value": [
-    "13.75px",
+    "16.5px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.52px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.63px",
       "fontWeight": "400"
     }
   ],
   "field-placeholder": [
-    "12.5px",
+    "15px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.76px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.92px",
       "fontWeight": "400"
     }
   ],
   "request-section": [
-    "17px",
+    "17.75px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.36px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.38px",
       "fontWeight": "700"
     }
   ],
   "button-request": [
-    "13.75px",
+    "15.3px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.52px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.58px",
       "fontWeight": "600"
     }
   ],
   "request-promise": [
-    "13px",
+    "14.75px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.27px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.31px",
       "fontWeight": "400"
     }
   ],
   "field-error": [
-    "12.25px",
+    "14px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "0.65px",
+      "lineHeight": "18px",
+      "letterSpacing": "0.74px",
       "fontWeight": "400"
     }
   ],
   "wordmark-dates": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "-0.25px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.27px",
       "fontWeight": "700"
     }
   ],
   "wordmark-dates-club": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.32px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.34px",
       "fontWeight": "400"
     }
   ],
   "dates-eyebrow": [
-    "11px",
+    "12.25px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "2.39px",
+      "lineHeight": "15px",
+      "letterSpacing": "2.66px",
       "fontWeight": "600"
     }
   ],
   "dates-title": [
-    "21.25px",
+    "22px",
     {
-      "lineHeight": "27px",
-      "letterSpacing": "-0.28px",
+      "lineHeight": "28px",
+      "letterSpacing": "-0.29px",
       "fontWeight": "700"
     }
   ],
   "dates-sub": [
-    "13.5px",
+    "15.1px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "0.4px",
+      "lineHeight": "21px",
+      "letterSpacing": "0.45px",
       "fontWeight": "400"
     }
   ],
   "month-title": [
-    "17.5px",
+    "18.25px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "-0.32px",
+      "lineHeight": "22px",
+      "letterSpacing": "-0.33px",
       "fontWeight": "700"
     }
   ],
   "weekday": [
-    "12.5px",
+    "14.25px",
     {
-      "lineHeight": "15px",
-      "letterSpacing": "0.54px",
+      "lineHeight": "17px",
+      "letterSpacing": "0.62px",
       "fontWeight": "400"
     }
   ],
   "day": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "-0.43px",
+      "lineHeight": "19px",
+      "letterSpacing": "-0.47px",
       "fontWeight": "400"
     }
   ],
   "day-chosen": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "-0.62px",
+      "lineHeight": "20px",
+      "letterSpacing": "-0.68px",
       "fontWeight": "600"
     }
   ],
   "dates-row-title": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.25px",
-      "fontWeight": "600"
-    }
-  ],
-  "dates-row-body": [
-    "12.5px",
-    {
-      "lineHeight": "16px",
-      "letterSpacing": "0.77px",
-      "fontWeight": "400"
-    }
-  ],
-  "button-dates": [
-    "14px",
-    {
-      "lineHeight": "18px",
+      "lineHeight": "20px",
       "letterSpacing": "0.28px",
       "fontWeight": "600"
     }
   ],
-  "wordmark-received": [
-    "17.75px",
+  "dates-row-body": [
+    "14.25px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "-0.54px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.88px",
+      "fontWeight": "400"
+    }
+  ],
+  "button-dates": [
+    "15.5px",
+    {
+      "lineHeight": "20px",
+      "letterSpacing": "0.31px",
+      "fontWeight": "600"
+    }
+  ],
+  "wordmark-received": [
+    "18.5px",
+    {
+      "lineHeight": "23px",
+      "letterSpacing": "-0.56px",
       "fontWeight": "600"
     }
   ],
   "wordmark-received-club": [
-    "18px",
+    "18.75px",
     {
       "lineHeight": "23px",
-      "letterSpacing": "-0.34px",
+      "letterSpacing": "-0.35px",
       "fontWeight": "400"
     }
   ],
   "received-title": [
-    "27.75px",
+    "27.8px",
     {
       "lineHeight": "35px",
       "letterSpacing": "-0.05px",
@@ -1999,119 +1999,119 @@ module.exports = {
     }
   ],
   "received-body": [
-    "16px",
+    "17px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "0.48px",
+      "lineHeight": "24px",
+      "letterSpacing": "0.51px",
       "fontWeight": "400"
     }
   ],
   "received-phone": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "22px",
+      "lineHeight": "24px",
       "letterSpacing": "0.07px",
       "fontWeight": "600"
     }
   ],
   "received-next": [
-    "20px",
+    "20.75px",
     {
-      "lineHeight": "25px",
-      "letterSpacing": "0.31px",
+      "lineHeight": "26px",
+      "letterSpacing": "0.32px",
       "fontWeight": "600"
     }
   ],
   "received-trip-label": [
-    "11px",
+    "12.25px",
     {
-      "lineHeight": "14px",
-      "letterSpacing": "1.85px",
+      "lineHeight": "15px",
+      "letterSpacing": "2.06px",
       "fontWeight": "500"
     }
   ],
   "received-trip-codes": [
-    "18.75px",
+    "19.5px",
     {
-      "lineHeight": "23px",
-      "letterSpacing": "0.51px",
+      "lineHeight": "24px",
+      "letterSpacing": "0.53px",
       "fontWeight": "600"
     }
   ],
   "received-trip-dates": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.32px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.35px",
       "fontWeight": "400"
     }
   ],
   "received-trip-facts": [
-    "14.25px",
+    "15.7px",
     {
-      "lineHeight": "18px",
-      "letterSpacing": "0.63px",
+      "lineHeight": "20px",
+      "letterSpacing": "0.69px",
       "fontWeight": "400"
     }
   ],
   "received-airline": [
-    "12.5px",
+    "14.25px",
     {
-      "lineHeight": "16px",
-      "letterSpacing": "-0.13px",
+      "lineHeight": "18px",
+      "letterSpacing": "-0.15px",
       "fontWeight": "500"
     }
   ],
   "button-received": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "21px",
       "letterSpacing": "0.02px",
       "fontWeight": "600"
     }
   ],
   "received-section": [
-    "15.5px",
+    "16.6px",
     {
-      "lineHeight": "19px",
+      "lineHeight": "21px",
       "letterSpacing": "-0.01px",
       "fontWeight": "600"
     }
   ],
   "received-see-all": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.17px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.19px",
       "fontWeight": "500"
     }
   ],
   "offer-city-sm": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.32px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.36px",
       "fontWeight": "500"
     }
   ],
   "offer-price-sm": [
-    "15.25px",
+    "16.45px",
     {
-      "lineHeight": "19px",
-      "letterSpacing": "-0.74px",
+      "lineHeight": "21px",
+      "letterSpacing": "-0.8px",
       "fontWeight": "700"
     }
   ],
   "offer-from-sm": [
-    "13.25px",
+    "14.95px",
     {
-      "lineHeight": "17px",
-      "letterSpacing": "0.32px",
+      "lineHeight": "19px",
+      "letterSpacing": "0.36px",
       "fontWeight": "400"
     }
   ],
   "saved-title": [
-    "27.75px",
+    "27.8px",
     {
       "lineHeight": "31px",
       "letterSpacing": "-0.42px",
@@ -2119,18 +2119,18 @@ module.exports = {
     }
   ],
   "saved-body": [
-    "17px",
+    "17.75px",
     {
-      "lineHeight": "23px",
-      "letterSpacing": "0.17px",
+      "lineHeight": "24px",
+      "letterSpacing": "0.18px",
       "fontWeight": "400"
     }
   ],
   "button-saved": [
-    "17.25px",
+    "18px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "0.22px",
+      "lineHeight": "23px",
+      "letterSpacing": "0.23px",
       "fontWeight": "500"
     }
   ],
@@ -2143,7 +2143,7 @@ module.exports = {
     }
   ],
   "limited-body": [
-    "18.75px",
+    "19.5px",
     {
       "lineHeight": "23px",
       "letterSpacing": "-0.1px",
@@ -2151,74 +2151,74 @@ module.exports = {
     }
   ],
   "button-limited": [
-    "17.5px",
+    "18.25px",
     {
-      "lineHeight": "23px",
-      "letterSpacing": "-0.17px",
+      "lineHeight": "24px",
+      "letterSpacing": "-0.18px",
       "fontWeight": "500"
     }
   ],
   "delete-title": [
-    "23.5px",
+    "24.25px",
     {
-      "lineHeight": "29px",
+      "lineHeight": "30px",
       "letterSpacing": "-0.06px",
       "fontWeight": "700"
     }
   ],
   "delete-body": [
-    "16.5px",
+    "17.4px",
     {
-      "lineHeight": "22px",
-      "letterSpacing": "0.22px",
+      "lineHeight": "23px",
+      "letterSpacing": "0.23px",
       "fontWeight": "400"
     }
   ],
   "delete-field": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "22px",
       "letterSpacing": "-0.07px",
       "fontWeight": "400"
     }
   ],
   "button-delete": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "20px",
-      "letterSpacing": "0.14px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.15px",
       "fontWeight": "600"
     }
   ],
   "button-cancel": [
-    "15.75px",
+    "16.8px",
     {
-      "lineHeight": "20px",
+      "lineHeight": "22px",
       "letterSpacing": "0.05px",
       "fontWeight": "600"
     }
   ],
   "question-title": [
-    "21px",
+    "21.75px",
     {
-      "lineHeight": "26px",
-      "letterSpacing": "-0.48px",
+      "lineHeight": "27px",
+      "letterSpacing": "-0.5px",
       "fontWeight": "700"
     }
   ],
   "button-question": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "0.13px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.14px",
       "fontWeight": "600"
     }
   ],
   "button-not-now": [
-    "16.25px",
+    "17.2px",
     {
-      "lineHeight": "21px",
-      "letterSpacing": "0.34px",
+      "lineHeight": "22px",
+      "letterSpacing": "0.36px",
       "fontWeight": "500"
     }
   ]
