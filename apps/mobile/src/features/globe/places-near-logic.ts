@@ -7,7 +7,7 @@
  */
 import type { NearAirportVM, NearLocalityVM } from "@bbc/shared/api/v1/fares";
 
-import { countryName } from "@/lib/countries";
+import { countryName } from "../../lib/countries";
 
 import { HOME_METRO_KM, greatCircleKm, roundKm } from "./globe-tap-logic";
 
