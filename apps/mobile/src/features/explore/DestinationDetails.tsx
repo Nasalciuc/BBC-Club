@@ -160,7 +160,8 @@ const PAGE: Geometry = {
       time: r(tokens.type.placeClock),
       timeBaseline: 38.4,
       zone: r(tokens.type.placeZone),
-      zoneBaseline: 50.4,
+      // A line of `place-zone` under the clock (ADR-IMPL-084's sizes): on 04's 50.4 it touched the clock's figures.
+      zoneBaseline: 56,
     },
     rule: { left: 11.2 + 252, top: 14.1, bottom: 64 },
   },
@@ -602,6 +603,9 @@ function Fare({
   const s = g.summary;
   const b = s.basis;
   const tone = b.tone === "navy" ? styles.navy : styles.slate;
+  // Where the price and what it buys do not fit beside each other (a long price, larger text, Android's rounding),
+  // what it buys takes the next line, without its dot: neither is ever cut. Once below, it stays below.
+  const [basisBelow, setBasisBelow] = useState(false);
   return (
     <View testID={testID}>
       <Text style={[s.label.role, styles.slate, { marginTop: s.label.baseline - baselineOffset(s.label.role) }]}>
@@ -615,20 +619,24 @@ function Fare({
         accessible
         accessibilityLabel={basis ? `${price}, ${basis}` : price}
       >
-        <Text style={[s.price.role, styles.navy]} numberOfLines={1}>
-          {price}
-        </Text>
+        <Text style={[s.price.role, styles.navy, styles.price]}>{price}</Text>
         {basis ? (
           <View
+            onLayout={(e) => {
+              if (e.nativeEvent.layout.y > 1) setBasisBelow(true);
+            }}
             style={[
               styles.basis,
-              { marginTop: baselineOffset(s.price.role) - b.rise - baselineOffset(b.role), marginLeft: b.dotGap },
+              basisBelow
+                ? styles.basisBelow
+                : {
+                    marginTop: baselineOffset(s.price.role) - b.rise - baselineOffset(b.role),
+                    marginLeft: b.dotGap,
+                  },
             ]}
           >
-            <Text style={[b.role, tone]}>·</Text>
-            <Text style={[b.role, tone, { marginLeft: b.wordsGap }]} numberOfLines={1}>
-              {basis}
-            </Text>
+            {basisBelow ? null : <Text style={[b.role, tone]}>·</Text>}
+            <Text style={[b.role, tone, basisBelow ? null : { marginLeft: b.wordsGap }]}>{basis}</Text>
           </View>
         ) : null}
       </View>
@@ -731,8 +739,10 @@ const styles = StyleSheet.create({
   vrule: { position: "absolute", width: RULE, backgroundColor: tokens.colors.borderFaint },
   columns: { flexDirection: "row", alignItems: "flex-start" },
   clock: { flex: 1, minWidth: 0 },
-  priceLine: { flexDirection: "row", alignItems: "flex-start" },
-  basis: { flexDirection: "row", flexShrink: 1 },
+  priceLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start" },
+  price: { flexShrink: 0 },
+  basis: { flexDirection: "row", flexShrink: 0 },
+  basisBelow: { flexBasis: "100%" },
   linkHit: { alignSelf: "flex-start" },
   link: { color: tokens.colors.textPrimary, textDecorationLine: "underline" },
   pressed: { opacity: 0.6 },
