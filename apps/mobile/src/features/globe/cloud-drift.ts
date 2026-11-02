@@ -51,6 +51,16 @@ export function bandShift(band: CloudBand, t: number): number {
   return shift < 0 ? shift + 360 : shift;
 }
 
+/**
+ * A picture's address as the phone's map can load it, or null. @rnmapbox/maps 10.3.7 takes a file or a web address; on
+ * Android a release build keeps a bundled picture as a drawable resource, addressed by a bare name with no scheme, and
+ * the library throws on it in native code, which no JavaScript can catch (the fix decodes the drawable, from 10.3.9). An
+ * update's pictures are files and debug builds serve them over HTTP, so those keep their clouds.
+ */
+export function mapReadableUrl(uri: string | undefined): string | null {
+  return uri !== undefined && /^[a-z][a-z0-9+.-]*:\/\//i.test(uri) ? uri : null;
+}
+
 /** How much of `b` shows at `t` (0..1): from nothing at the start, all of it half a cycle on, and back. */
 export function morph(t: number): number {
   return 0.5 - 0.5 * Math.cos((2 * Math.PI * t) / CLOUD_MORPH_S);

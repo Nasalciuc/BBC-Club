@@ -81,6 +81,13 @@ map and the probe all asked the one API the account cannot use, while the same i
   advice would restrict.
 - An over-the-air update: no native change. The update grows by the clouds' pictures, about 0.8 MB (their alpha
   kept whole: a lossy one showed its steps as contour lines).
+- On Android, @rnmapbox/maps 10.3.7 cannot take a picture that a release build keeps as a drawable resource: it throws
+  in native code as the source is added, beyond any JavaScript (CodeRabbit on #121; the library decodes the drawable
+  from 10.3.9). So the phone lays the clouds only when every picture has a file or web address (`mapReadableUrl`,
+  `phoneCloudUrls`): an update's pictures, a debug build, iOS. An Android build whose pictures are its own drawables —
+  a new build, and an update that reuses them — shows the globe without its clouds. Raising @rnmapbox/maps to 10.3.9 or
+  later lifts that; it is a native change, so under the fingerprint runtime version it needs a new build, and the
+  updates made after it reach only builds made with it. The owner's call.
 - Checked on 2 Nov 2026 in the owner's browser with Mapbox GL JS 3.9, the account's token and this style, projection
   `globe`: the map loaded and went idle with every tile in, no error, and drew the Earth by day.
   The six looks of decision 4 were drawn the same way, each idle with no error; D is the one kept. The phones' build is

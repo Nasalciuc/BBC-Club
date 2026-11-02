@@ -1,6 +1,14 @@
 import { describe, expect, it } from "bun:test";
 
-import { CLOUD_BANDS, CLOUD_LAYER_IDS, CLOUD_MORPH_S, bandShift, cloudLayers, morph } from "./cloud-drift";
+import {
+  CLOUD_BANDS,
+  CLOUD_LAYER_IDS,
+  CLOUD_MORPH_S,
+  bandShift,
+  cloudLayers,
+  mapReadableUrl,
+  morph,
+} from "./cloud-drift";
 
 /**
  * The tile Mapbox GL JS 3.33 holds an image source in (`getCoordinatesCenterTileID`, src/source/image_source.ts): the
@@ -98,5 +106,21 @@ describe("the globe's clouds move as the winds would (ADR-IMPL-085)", () => {
   it("the bands overlap, so where they part the clouds blur rather than tear", () => {
     expect(CLOUD_BANDS.north.south).toBeLessThan(CLOUD_BANDS.tropics.north);
     expect(CLOUD_BANDS.south.north).toBeGreaterThan(CLOUD_BANDS.tropics.south);
+  });
+
+  it("reach the phone's map only by an address it can load, never a drawable's bare name", () => {
+    // An update's file, a debug build's server, an iOS build's own file: kept as they are.
+    for (const uri of [
+      "file:///data/user/0/club/files/.expo-internal/abc.webp",
+      "http://192.168.1.4:8081/assets/clouds-a-north.webp?platform=android&hash=abc",
+      "https://cdn.example.test/clouds.webp",
+      "file:///private/var/containers/Bundle/Application/X/App.app/assets/clouds-a-north.webp",
+    ]) {
+      expect(mapReadableUrl(uri)).toBe(uri);
+    }
+    // An Android release build's own picture: a resource name, on which @rnmapbox/maps 10.3.7 throws natively.
+    expect(mapReadableUrl("assets_images_club_globe_cloudsanorth")).toBeNull();
+    expect(mapReadableUrl("")).toBeNull();
+    expect(mapReadableUrl(undefined)).toBeNull();
   });
 });

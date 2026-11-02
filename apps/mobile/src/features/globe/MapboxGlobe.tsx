@@ -61,7 +61,7 @@ import {
 import { env } from "@/lib/env";
 
 import { cloudLayers } from "./cloud-drift";
-import { CLOUD_PICTURES } from "./cloud-pictures";
+import { phoneCloudUrls } from "./cloud-pictures";
 import { CLOUDS_ABOVE, satelliteStyle } from "./satellite-source";
 import { useCloudClock } from "./useCloudClock";
 
@@ -157,7 +157,9 @@ export default function MapboxGlobe({
   const [pressGuard] = useState(() => createPressGuard());
 
   const moving = appActive && !paused && !reducedMotion;
-  // The clouds drift while the globe may move (cloud-drift.ts).
+  // The clouds drift while the globe may move (cloud-drift.ts). Laid only where every picture has an address the map can
+  // load: an Android release build's own pictures have none for @rnmapbox/maps 10.3.7, which would crash (ADR-IMPL-085).
+  const [cloudUrls] = useState(phoneCloudUrls);
   const clouds = cloudLayers(useCloudClock(moving));
 
   useEffect(() => {
@@ -364,8 +366,8 @@ export default function MapboxGlobe({
       >
         <Atmosphere style={ATMOSPHERE} />
         {/* The clouds on the sphere, turning with it and drifting on it — over the imagery, under the route. */}
-        {clouds.map((c) => (
-          <ImageSource key={c.id} id={c.id} url={CLOUD_PICTURES[c.id]} coordinates={c.coordinates}>
+        {(cloudUrls ? clouds : []).map((c) => (
+          <ImageSource key={c.id} id={c.id} url={cloudUrls?.[c.id]} coordinates={c.coordinates}>
             <RasterLayer
               id={c.id}
               aboveLayerID={CLOUDS_ABOVE}
