@@ -16,6 +16,7 @@ import {
   Toggle,
   TopBar,
   baselineOffset,
+  belowBaseline,
   datesChosen,
   rn,
   selectDay,
@@ -362,7 +363,15 @@ const styles = StyleSheet.create({
     paddingRight: TOGGLE_SLOP.right,
     justifyContent: "center",
   },
-  preferred: { height: PAGE.preferred.circle.size, marginTop: PAGE.preferred.top },
+  // As tall as its lower line reaches (ADR-IMPL-084 put `Your agent confirms availability.` on 33, under the circle's
+  // 28.4), so the scroll's end leaves the whole row above the pinned pill.
+  preferred: {
+    height: Math.max(
+      PAGE.preferred.circle.size,
+      PAGE.preferred.body.baseline + belowBaseline(tokens.type.datesRowBody),
+    ),
+    marginTop: PAGE.preferred.top,
+  },
   preferredMark: {
     position: "absolute",
     left: PAGE.preferred.circle.left,
