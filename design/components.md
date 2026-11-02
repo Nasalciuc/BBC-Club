@@ -5,7 +5,9 @@ agent would otherwise guess. The references are the component sheets in `isolate
 (37–44) and the screens beside them. The entry's components (`ClubButton`, `ClubField`, `ClubIcon`) stay 1.0 and read
 only `club.ts`.
 
-Numbers are points, measured from the images (ADR-IMPL-056). A component drawn differently on different screens has a
+Numbers are points, measured from the images (ADR-IMPL-056). **At phone size (ADR-IMPL-084)** the club raised the
+words and, on the screens drawn small, the rows, pills, fields, chips and cards: where ADR-IMPL-084's table lists a
+value, it replaces the one below. A component drawn differently on different screens has a
 `look` per screen, named for it, holding that screen's values; where two images draw the same element differently, the
 screen it appears on most wins and a state follows its screen (`DESIGN.md`). The 1.0 defaults (52-pt pills, 56-pt rows,
 24-pt sheet corners) remain for the few places no image draws (the gallery, the error pages, the 1.0 sheets).
