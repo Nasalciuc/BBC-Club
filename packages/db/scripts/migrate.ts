@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 import { createDb } from "../src/client";
 import { applyReferenceFixes, loadAirportsReference } from "./airports-reference";
 import { ConcurrentIndexStopped, applyConcurrentIndexFile } from "./concurrent-indexes";
+import { loadLocalitiesReference } from "./localities-reference";
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -849,6 +850,10 @@ try {
   if (corrected) console.log(`airports reference: ${corrected} corrected`);
   const added = await loadAirportsReference(db);
   if (added) console.log(`airports reference: ${added} added`);
+  // The towns a tap on the globe is named by (ADR-IMPL-083): skipped while the table holds as many rows as the file,
+  // unless `--localities` asks for every row to be compared (a correction that keeps the count).
+  const places = await loadLocalitiesReference(db, undefined, { force: process.argv.includes("--localities") });
+  if (places) console.log(`localities reference: ${places} written`);
 
   console.log("migrations up to date");
   process.exit(0);

@@ -4,6 +4,7 @@ import {
   char,
   numeric,
   integer,
+  doublePrecision,
   boolean,
   index,
   unique,
@@ -135,6 +136,31 @@ export const airports = catalog.table(
     check("airports_description", sql`${t.description} IS NULL OR length(btrim(${t.description})) BETWEEN 1 AND 160`),
     // On the globe (0035).
     check("airports_coordinates", sql`${t.lat} BETWEEN -90 AND 90 AND ${t.lng} BETWEEN -180 AND 180`),
+  ],
+);
+
+/**
+ * The towns and cities a tap on the globe is named by (ADR-IMPL-083): GeoNames' populated places of 5,000 people or
+ * more, by GeoNames' id. Reference data, loaded insert-only by migrate.ts from `seeds/localities-reference.tsv`
+ * (`scripts/localities-reference.ts`; sources and licence: seeds/NOTICE.md). Read only by the nearest-place question, a
+ * latitude band at a time: `localities_lat`.
+ */
+export const localities = catalog.table(
+  "localities",
+  {
+    id: integer("id").primaryKey(),
+    name: text("name").notNull(),
+    countryCode: char("country_code", { length: 2 }).notNull(),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    population: integer("population").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("localities_lat").on(t.lat),
+    check("localities_name", sql`length(btrim(${t.name})) BETWEEN 1 AND 200`),
+    check("localities_coordinates", sql`${t.lat} BETWEEN -90 AND 90 AND ${t.lng} BETWEEN -180 AND 180`),
+    check("localities_population", sql`${t.population} >= 0`),
   ],
 );
 

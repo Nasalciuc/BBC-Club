@@ -12,8 +12,15 @@ import type { JobContext } from "@bbc/platform";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
+import {
+  LOCALITY_REACH_KM,
+  PLACES_NEAR_AIRPORTS,
+  PLACES_NEAR_REACH_KM,
+  type PlacesNearVM,
+} from "@bbc/shared/api/v1/fares";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
+import { localitiesRepo } from "./infrastructure/localities.repo";
 import { placeLandmarksRepo } from "./infrastructure/place-landmarks.repo";
 import { placePhotosRepo } from "./infrastructure/place-photos.repo";
 import { siteRepo } from "./infrastructure/site.repo";
@@ -55,6 +62,7 @@ import {
 import { estimateFare } from "./pricing/estimate";
 import { estimateSources as readEstimateSources, type StoredRules } from "./pricing/estimate-rules";
 import { bookableFrom } from "./application/bookable";
+import { namingTown, parsePoint } from "./application/places-near";
 import type { BookablePlace, CatalogFacade, DestinationPin, SiteDeal } from "./api";
 
 function isVisible(row: { published: boolean; validFrom: Date; validUntil: Date }, now = new Date()) {
@@ -656,6 +664,29 @@ export const catalogModule = (
       if (!flag?.enabled) return c.json({ items });
       const standIns = await placeLandmarksRepo.standIns(conn, onSatellite, flag.skip);
       return c.json({ items: withLandmarkPhotos(items, standIns) });
+    });
+
+    // ADR-IMPL-083: where a tap on Explore's globe fell — the town that names the spot (GeoNames, within 50 km) and any
+    // airport with scheduled service within 600 km, nearest first, at most six; the app leaves out home's metro and
+    // keeps three. One read (the towns of the point's latitude band); the airports from memory. Nothing is read while
+    // `catalog.globe_tap` is off (the flag's cached row). The point is never logged: the request log keeps the path.
+    gate.get("/places/near", { permission: "fares:read", rate: "read" }, async (c) => {
+      const at = parsePoint(c.req.query("lat"), c.req.query("lng"));
+      if (!at) {
+        return c.json(apiError("VALIDATION", { message: "lat and lng: decimal degrees, lat within ±90" }), 400);
+      }
+      if (!(await platform.flags.isEnabled("catalog.globe_tap", false))) {
+        return c.json({ locality: null, airports: [] } satisfies PlacesNearVM);
+      }
+      const [towns, airports] = await Promise.all([
+        localitiesRepo.near(conn, at, LOCALITY_REACH_KM),
+        airportsRef.near(at, PLACES_NEAR_AIRPORTS, PLACES_NEAR_REACH_KM),
+      ]);
+      const town = namingTown(towns, LOCALITY_REACH_KM);
+      return c.json({
+        locality: town ? { name: town.name, countryCode: town.countryCode, km: Math.round(town.km * 10) / 10 } : null,
+        airports: airports.map(({ row, km }) => ({ ...toAirportVM(row), km: Math.round(km) })),
+      } satisfies PlacesNearVM);
     });
 
     // ADR-IMPL-064: up to three landmarks of the city an airport serves, from the table at once (the job looks them
