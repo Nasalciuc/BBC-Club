@@ -8,6 +8,10 @@ facade's `bookable`, `application/bookable.ts`, `site.repo` `bookable`, the nigh
 3.3, decision D8, owner item 5 · Amends ADR-IMPL-033 and ADR-IMPL-035 (the globe takes taps off its pins) and
 ADR-IMPL-045 (the night's sync also reads the site for the globe's tap).
 
+**Amended by ADR-IMPL-083 (2 Nov 2026, the owner's decision):** a tap online now names the spot and offers the three
+nearest airports with scheduled service, any of them (decisions 1 and 4 below hold offline and when the server cannot
+answer).
+
 Every decision below was taken by default for the owner, from the brief and the evidence of 25 Oct 2026; **the owner
 may change any of them**.
 

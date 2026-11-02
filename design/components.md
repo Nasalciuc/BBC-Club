@@ -250,12 +250,16 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   too, ADR-IMPL-082), else the drawn globe in the `globe-*` colours. Destinations are navy drop pins (18 × 25, the tip on the place) with a white
   label beside the head — the city over its price (`pin`, `pin-detail`) — placed right of the pin or else left, and left
   out where it would cover another label, a pin or a button; a chosen route shows only its two ends with their codes, a
-  white line arcing between them and the plane at its middle. At rest a tap anywhere on the disc (ADR-IMPL-068) opens
-  the nearest city the club sells within 600 km as its pin would; a tap on the sky is nothing, a drag never a tap. No
-  image draws its answers, so these are proposed until design draws them (ADR-IMPL-068, reported): the distance
-  (`Nearest: Rome · 180 km`) is a second line under the country (13), and nothing near — or the member's own city — the
-  `attention` NoticeCard under the search bar, linking to Search; while they show, 13's first flight is no longer whole
-  above the docked pill, nor 02's offer cards above the tab bar.
+  white line arcing between them and the plane at its middle. At rest a tap anywhere on the disc names the spot and
+  offers its airports (ADR-IMPL-083, amending ADR-IMPL-068): under the search bar, the town in Search's section title
+  (`Bălţi, Moldova`; `Near …` past 15 km; `Airports near there` with no town in 50 km) over the three nearest airports
+  within 600 km — any with scheduled service, never home's metro — as Search's `AirportRow`s (18) with how far each is
+  in slate before the chevron (`70 km`), then GeoNames' credit (`PhotoCredit`); a row opens its airport as a pin's tap
+  does. Offline, or when the server cannot answer, the tap opens the nearest city the club sells within 600 km
+  (ADR-IMPL-068). A tap on the sky is nothing, a drag never a tap. No image draws these answers, so they are proposed
+  until design draws them (reported): the distance (`Nearest: Rome · 180 km`) is a second line under the country (13),
+  and nothing near — or the member's own city — the `attention` NoticeCard under the search bar, linking to Search;
+  while they show, 13's first flight is no longer whole above the docked pill, nor 02's offer cards above the tab bar.
 - **Wordmark** — `BuyBusinessClass` Semibold and ` Club` Regular, one line, navy — over 08's daylight photograph too
   (white only over a dark one); 07 sets `BuyBusinessClass` Bold (`wordmarkDates`).
 - **Avatar** — the member's portrait in a white ring: the photo they added themselves (Edit profile's `Photo` row, on a

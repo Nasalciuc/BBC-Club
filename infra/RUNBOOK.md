@@ -676,6 +676,20 @@ It costs Home one read of the set (kept a minute, and dropped on every process w
 about 21 KB of JSON (today's 169 airports) inside Home's ETag. Off is the same with `false`, seen within a second; the
 app keeps the last Home it parsed until its next load.
 
+### Where a tap fell (ADR-IMPL-083)
+
+With the same flag on, a tap on the globe asks `GET /v1/places/near` for the town under the finger and the airports near
+it (any with scheduled service within 600 km; the app offers three). The towns are `catalog.localities`, GeoNames'
+places of 5,000 people or more, loaded by `db:migrate` from `packages/db/seeds/localities-reference.tsv` (46,547 rows;
+skipped while the table holds as many rows as the file). A corrected name or point that keeps the count lands with:
+
+```sh
+bun run --filter @bbc/db db:migrate -- --localities
+```
+
+Off, the route answers nothing and reads nothing, and the app falls back to ADR-IMPL-068's snap (also its offline
+answer). GeoNames' licence (CC BY 4.0) asks for the credit the card prints under the airports.
+
 ## The queue is stuck (oldest pending > 5 min)
 
 1. `$DC exec -T worker bun -e "fetch('http://localhost:8001/metrics').then(r=>r.text()).then(t=>console.log(t))" | grep queue_` — depth, age, dead. The worker's: the queue's gauges are where the poller runs (with `MONITORING=on`, Grafana's `Event queue` panel too).
