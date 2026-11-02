@@ -46,10 +46,10 @@ const CARD = {
    * The days, fitted over both months — the image draws November's rows 30.5 to 31.9 apart from 56.6 under the card's
    * top and December's about 31.2 apart from 57.0: 56.5 down, 31.02 apart, the card ending 11.95 under the last row.
    */
-  // The rows 8 apart at phone size (ADR-IMPL-084): with the 36-pt day and half the gap's slop above and below, each
-  // day is a 44-pt target that never reaches into its neighbour's (07's 2.5 left it 38.5). The columns are 48 or
-  // more wide on a phone.
-  grid: { top: 66, left: 11.31, right: 9.93, bottom: 12, columnGap: 2.465, rowGap: 8 },
+  // At phone size (ADR-IMPL-084) each week is a 44-pt row with its 36-pt days centred in it, so the days look 8 apart
+  // and each is a 44-pt target inside its own row (a touch outside a parent's bounds never reaches it; 07's 2.5-pt
+  // gaps left a day 38.5). The columns are 48 or more wide on a phone.
+  grid: { top: 66, left: 11.31, right: 9.93, bottom: 12, columnGap: 2.465, rowHeight: 44 },
 } as const;
 
 /** The figures' baselines from the square's top: the day's 18.35; the chosen's 18.7, centred in its circle. */
@@ -222,9 +222,8 @@ function Day({
       accessibilityState={{ disabled: blocked, selected: circle || cell.state === "inRange" }}
       disabled={blocked}
       onPress={() => onSelect(cell.date)}
-      // The slop reaches into the gaps around the square: the 36-pt row and half of each 8-pt gap make the day a 44-pt
-      // target without taking its neighbour's; the 48-pt column is wide enough.
-      hitSlop={{ top: CARD.grid.rowGap / 2, bottom: CARD.grid.rowGap / 2 }}
+      // The day's 4-pt slop above and below stays inside its 44-pt row: a 44-pt target, never its neighbour's.
+      hitSlop={{ top: (CARD.grid.rowHeight - DAY.height) / 2, bottom: (CARD.grid.rowHeight - DAY.height) / 2 }}
       style={styles.cell}
     >
       {band ? (
@@ -292,9 +291,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   weekday: { flex: 1, textAlign: "center", color: tokens.colors.textSecondary },
-  grid: { gap: CARD.grid.rowGap },
+  grid: {},
   gridDisabled: { opacity: 0.4 },
-  row: { flexDirection: "row", gap: CARD.grid.columnGap },
+  row: { flexDirection: "row", alignItems: "center", height: CARD.grid.rowHeight, gap: CARD.grid.columnGap },
   cell: {
     flex: 1,
     height: DAY.height,
