@@ -60,13 +60,20 @@ const offer = (to: string, price: ProposalCardVM["price"], rating?: number | nul
 
 describe("offerCardModel", () => {
   it("names the city and country of the route's arrival, with the saving on the published fare (02)", () => {
-    expect(offerCardModel(offer("CDG", { offer: 3850, published: 6900, currency: "USD" }), [PARIS])).toEqual({
+    const priced = { offer: 3850, published: 6900, publishedSource: "Sabre · 16 Sep", currency: "USD" };
+    expect(offerCardModel(offer("CDG", priced), [PARIS])).toEqual({
       city: "Paris",
       country: "France",
       fromPrice: "$3,850",
       savePercent: 44,
       rating: null,
     });
+  });
+
+  it("no saving for a published fare without its source (ADR-IMPL-081)", () => {
+    expect(
+      offerCardModel(offer("CDG", { offer: 3850, published: 6900, currency: "USD" }), [PARIS]).savePercent,
+    ).toBeNull();
   });
 
   it("prints the offer's rating as given, to one decimal (02: 4.8); none without one", () => {

@@ -59,9 +59,9 @@ describe("requestSummary — the trip at the top of the request sheet (06)", () 
     });
   });
 
-  it("strikes the published fare only with its source on record", () => {
+  it("neither strikes the published fare nor says the saving without its source on record (ADR-IMPL-081)", () => {
     const fare = { ...fixture.fares[0]!, price: { offer: 4200, published: 7850, currency: "USD" } };
     const summary = requestSummary({ fare, from: "JFK", to: "LHR", cabin: "business" });
-    expect(summary.price).toEqual({ amount: "$4,200", percent: 46, published: null, source: null });
+    expect(summary.price).toEqual({ amount: "$4,200", percent: null, published: null, source: null });
   });
 });

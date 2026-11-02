@@ -17,9 +17,10 @@ export function toCard(row: OfferRow, state: "interested" | "dismissed" | null |
     ...(row.contextLine ? { contextLine: row.contextLine } : {}),
     route: { from: row.routeFrom, to: row.routeTo },
     cabin: row.cabin,
+    // ADR-IMPL-081: an offer records no source for its published price, and PricePair allows `published` only with one
+    // (DESIGN.md, FTC): the club sends the offer's own price alone — no `Down from`, no `Save X%` on any app.
     price: {
       offer: parseFloat(row.price),
-      ...(row.publishedPrice ? { published: parseFloat(row.publishedPrice) } : {}),
       currency: row.currency,
     },
     ...(row.mediaUrl ? { mediaUrl: row.mediaUrl } : {}),
