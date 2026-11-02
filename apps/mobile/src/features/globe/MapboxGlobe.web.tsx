@@ -355,7 +355,9 @@ export default function MapboxGlobe({
   return (
     // `globe.map`: the satellite globe's surface, which takes the pan, the pinch and the tap — as on the phone.
     <View testID="globe.map" style={StyleSheet.absoluteFill} onLayout={onLayout}>
-      <View ref={container} style={StyleSheet.absoluteFill} />
+      {/* Sized in points, not by the absolute fill: Mapbox's own stylesheet makes its container `position: relative`,
+          which would leave it no height. */}
+      <View ref={container} style={{ width: size.width, height: size.height }} />
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {plane && middle ? (
           <View
