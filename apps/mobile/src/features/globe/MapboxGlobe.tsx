@@ -3,19 +3,11 @@
  * native module: importing @rnmapbox/maps without it throws.
  *
  * The Earth by day, as Mapbox's satellite imagery shows it, without names — downloaded the first time a region is seen,
- * then served from Mapbox's cache — on the pale sky (02). Our pins and their labels are React views on the map
+ * then served from Mapbox's cache — on the pale sky (02). The imagery is `satellite-v9`'s, asked for as the style's tiles
+ * (ADR-IMPL-085, satellite-source.ts). Our pins and their labels are React views on the map
  * (MarkerView); a chosen route is a white line with its plane, framed over the sheet (13).
  */
-import Mapbox, {
-  Atmosphere,
-  BackgroundLayer,
-  Camera,
-  LineLayer,
-  MapView,
-  MarkerView,
-  ShapeSource,
-  type MapState,
-} from "@rnmapbox/maps";
+import Mapbox, { Atmosphere, Camera, LineLayer, MapView, MarkerView, ShapeSource, type MapState } from "@rnmapbox/maps";
 import { type ComponentRef, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -58,19 +50,20 @@ import {
 
 import { env } from "@/lib/env";
 
+import { satelliteStyle } from "./satellite-source";
+
 void Mapbox.setAccessToken(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "");
 // No usage telemetry. Mapbox still counts one anonymous monthly active user for billing (docs/store/data-safety.md).
 Mapbox.setTelemetryEnabled(false);
 
-/** The Earth as photographed, without names (the owner's reference, 13 Oct 2026). A map that cannot load falls back to
- *  the drawn globe. */
-const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-v9";
 /**
- * The black globe's floor (ADR-IMPL-068, over the air): satellite-v9 paints its background layer, rgb(4,7,14), wherever
- * a tile is missing — a sphere of near-black where the imagery did not come. Recoloured to the drawn globe's deep ocean,
- * a missing tile shows the sea instead.
+ * The Earth as photographed, without names (the owner's reference, 13 Oct 2026): `satellite-v9`, its imagery asked for
+ * as the style's tiles (ADR-IMPL-085). Its background is the drawn globe's deep ocean, not satellite-v9's near-black
+ * (ADR-IMPL-068): a missing tile shows the sea. A map that cannot load falls back to the drawn globe.
  */
-const BACKGROUND = { backgroundColor: tokens.colors.globeOceanDeep } as const;
+const SATELLITE_STYLE = JSON.stringify(
+  satelliteStyle(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "", tokens.colors.globeOceanDeep),
+);
 /** 02: the globe on the pale sky, a white haze at its rim, no stars. */
 const ATMOSPHERE = {
   color: tokens.colors.surfaceCard,
@@ -324,7 +317,7 @@ export default function MapboxGlobe({
     <View testID="globe.map" style={StyleSheet.absoluteFill} onLayout={onLayout}>
       <MapView
         style={StyleSheet.absoluteFill}
-        styleURL={SATELLITE_STYLE}
+        styleJSON={SATELLITE_STYLE}
         projection="globe"
         rotateEnabled={false}
         pitchEnabled={false}
@@ -353,7 +346,6 @@ export default function MapboxGlobe({
         }}
         onPress={onMapPress}
       >
-        <BackgroundLayer id="background" existing style={BACKGROUND} />
         <Atmosphere style={ATMOSPHERE} />
         <Camera
           ref={camera}

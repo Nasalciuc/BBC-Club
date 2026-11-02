@@ -6,21 +6,23 @@
  * as an image; otherwise the drawn globe stays. ADR-IMPL-068: asked again when the app comes back to the foreground or
  * the phone comes back online, while Mapbox is shown and the phone is online — only a refused token then hands Explore
  * back to the drawn globe. The token is never logged. JS only — the native bump (10.3.8's tile errors) is separate.
+ * ADR-IMPL-085: the tile asked is one of the map's own — the style's tiles (Static Tiles API), where the map asks too.
  */
 import { timeoutSignal } from "../../lib/timeout";
 
+import { satelliteTileUrl } from "./satellite-source";
+
 export type TileProbe = "pending" | "ok" | "failed";
 
-/** The world's single tile at zoom 0 — the smallest question the satellite imagery answers. */
-const TILE_PROBE = "https://api.mapbox.com/v4/mapbox.satellite/0/0/0@2x.jpg90";
 export const TILE_PROBE_TIMEOUT_MS = 5000;
 
 export function shouldShowMapbox(s: { styleLoaded: boolean; tileProbe: TileProbe }): boolean {
   return s.styleLoaded && s.tileProbe === "ok";
 }
 
+/** The world's single tile at zoom 0 — the smallest question the satellite imagery answers. */
 export function tileProbeUrl(token: string): string {
-  return `${TILE_PROBE}?access_token=${encodeURIComponent(token)}`;
+  return satelliteTileUrl(token, { z: 0, x: 0, y: 0 });
 }
 
 type ProbeAnswer = { status: number; headers: { get: (name: string) => string | null } };

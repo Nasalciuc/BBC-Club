@@ -3,7 +3,8 @@
  * ADR-IMPL-035), drawn by Mapbox GL JS — @rnmapbox/maps has no globe of its own in a browser. Metro takes this file for
  * the web build; the phone's builds never see it.
  *
- * The Earth by day, as Mapbox's satellite imagery shows it, without names, on the pale sky (02). Our pins, their labels
+ * The Earth by day, as Mapbox's satellite imagery shows it, without names, on the pale sky (02) — `satellite-v9`, asked
+ * for as the style's tiles (ADR-IMPL-085, satellite-source.ts). Our pins, their labels
  * and a chosen route's two ends are React views laid over the map where Mapbox projects each place, moved with the
  * camera; the route is a white line drawn on the map with its plane at the middle (13). Mapbox's logo and attribution
  * stay visible just above the sheet.
@@ -42,11 +43,10 @@ import {
 import { env } from "@/lib/env";
 
 import type { MapboxGlobeProps } from "./MapboxGlobe";
+import { satelliteStyle } from "./satellite-source";
 
 export type { MapboxGlobeProps } from "./MapboxGlobe";
 
-/** The same imagery as the phone's globe (MapboxGlobe.tsx). */
-const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-v9";
 /** 02: the globe on the pale sky, a white haze at its rim, no stars — as the phone's Atmosphere. */
 const FOG = {
   color: tokens.colors.surfaceCard,
@@ -124,7 +124,8 @@ export default function MapboxGlobe({
     const m = new mapboxgl.Map({
       container: element,
       accessToken: token,
-      style: SATELLITE_STYLE,
+      // The same imagery as the phone's globe, from the same place (ADR-IMPL-085); its background already the ocean.
+      style: satelliteStyle(token, tokens.colors.globeOceanDeep),
       projection: "globe",
       center: [...OPENING_CENTER] as LngLatLike,
       zoom: REST_ZOOM,
@@ -141,8 +142,6 @@ export default function MapboxGlobe({
     m.on("style.load", () => {
       styleLoaded = true;
       m.setFog(FOG);
-      // The black globe's floor (ADR-IMPL-068): a missing tile shows the drawn globe's deep ocean, not near-black.
-      if (m.getLayer("background")) m.setPaintProperty("background", "background-color", tokens.colors.globeOceanDeep);
       m.addSource(ROUTE_SOURCE, { type: "geojson", data: NO_LINE, lineMetrics: true });
       m.addLayer({
         id: ROUTE_LAYER,
