@@ -213,10 +213,12 @@ describe("GET /v1/home — one price per city (ADR-IMPL-081)", () => {
     const t = await testApp({ suite: "home-site-deals-estimate" });
     await seedSiteDeals(t);
     await t.flags.set("catalog.site_offers", { enabled: true });
-    // The site's stored answer for New York → London (made up), as the refresh job or a search leaves it.
+    // The site's stored answers (made up), as the refresh job or a search leaves them: New York → Tokyo, and New York →
+    // London, where the fixture also has a published business fare on sale.
     await t.db.execute(sql`
       INSERT INTO catalog.site_prices (route_from, route_to, trip, status, business, first, premium_economy, fetched_at, expires_at)
-      VALUES ('JFK', 'LHR', 'round_trip', 'priced', 2011, 4022, NULL, now(), now() + interval '24 hours')`);
+      VALUES ('JFK', 'HND', 'round_trip', 'priced', 2011, 4022, NULL, now(), now() + interval '24 hours'),
+             ('JFK', 'LHR', 'round_trip', 'priced', 1999, 3998, NULL, now(), now() + interval '24 hours')`);
 
     // Estimates off: the site's price alone, no estimate — as before.
     const before = HomeVM.parse((await home(t)).json);
@@ -225,9 +227,9 @@ describe("GET /v1/home — one price per city (ADR-IMPL-081)", () => {
     await t.flags.set("catalog.estimates", { enabled: true });
     await t.flags.set("catalog.site_prices", { enabled: true });
     const body = HomeVM.parse((await home(t)).json);
-    const london = body.deals?.find((d) => d.destination.code === "LHR");
-    expect(london?.price).toMatchObject({ amount: 1101, basis: "site" });
-    expect(london?.estimate).toMatchObject({
+    const tokyo = body.deals?.find((d) => d.destination.code === "HND");
+    expect(tokyo?.price).toMatchObject({ amount: 1301, basis: "site" });
+    expect(tokyo?.estimate).toMatchObject({
       amount: 2011,
       currency: "USD",
       trip: "round_trip",
@@ -235,6 +237,10 @@ describe("GET /v1/home — one price per city (ADR-IMPL-081)", () => {
       basis: "formula",
       source: "site",
     });
+    // A published fare on sale for the route: its search shows the fare, so the deal has no estimate either.
+    const london = body.deals?.find((d) => d.destination.code === "LHR");
+    expect(london?.price).toMatchObject({ amount: 1101, basis: "site" });
+    expect(london?.estimate).toBeUndefined();
     // No stored answer and no rules: no number, so no estimate — the card keeps the site's price, per person.
     expect(body.deals?.find((d) => d.destination.code === "DXB")?.estimate).toBeUndefined();
     await t.close();

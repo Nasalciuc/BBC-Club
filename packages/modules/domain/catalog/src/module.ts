@@ -406,7 +406,8 @@ export const catalogModule = (
      * ADR-IMPL-081: each deal's price as its destination's search will show it — the round trip in the member's cabin,
      * from the deal's own airport, in D6's order without the live question (the site's stored answer, else the formula),
      * exactly as Home's site pins are priced. Null where there is no number (estimates off, the company has no price):
-     * the card keeps the site's "Price Today" and says it is per person. One read of stored answers per origin.
+     * the card keeps the site's "Price Today" and says it is per person. None either where the route has a published fare
+     * on sale in the cabin: its search shows the fare, not an estimate. One read of fares and one of answers per origin.
      */
     async function dealEstimates(
       e: Executor,
@@ -418,22 +419,22 @@ export const catalogModule = (
       const sources = await estimateSources("home");
       if (!sources) return deals.map(() => null);
       const origins = [...new Set(deals.map((d) => d.routeFrom))];
+      const tosFrom = (code: string) => deals.filter((d) => d.routeFrom === code).map((d) => d.airport.code.trim());
       const rows = new Map(await Promise.all(origins.map(async (code) => [code, await airportAt(e, code)] as const)));
+      // A route with fares on sale shows them in its search, never an estimate (as `indicativeFor`): none here either.
+      const onSale = new Map(
+        await Promise.all(
+          origins.map(
+            async (code) => [code, await faresRepo.onSaleTo(e, { from: code, tos: tosFrom(code), cabin })] as const,
+          ),
+        ),
+      );
       const answers = sources.site
         ? new Map(
             await Promise.all(
               origins.map(
                 async (code) =>
-                  [
-                    code,
-                    await sitePricesRepo.freshFrom(
-                      e,
-                      code,
-                      deals.filter((d) => d.routeFrom === code).map((d) => d.airport.code.trim()),
-                      "round_trip",
-                      marginS,
-                    ),
-                  ] as const,
+                  [code, await sitePricesRepo.freshFrom(e, code, tosFrom(code), "round_trip", marginS)] as const,
               ),
             ),
           )
@@ -441,7 +442,7 @@ export const catalogModule = (
       return Promise.all(
         deals.map(async (d) => {
           const from = rows.get(d.routeFrom);
-          if (!from) return null;
+          if (!from || onSale.get(d.routeFrom)?.has(d.airport.code.trim())) return null;
           if (!answers) return sources.rules ? toEstimateVM(sources.rules.rules, from, d.airport, cabin) : null;
           const resolved = await siteResolution(from, d.airport, cabin, sources.rules, {
             live: false,

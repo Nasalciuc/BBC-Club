@@ -28,7 +28,7 @@ The owner chose the search's price everywhere, and the price alone where a refer
 1. **A deal carries its destination's price.** `siteDeals(exec, home, limit, cabin)` prices each picked deal as Home's
    site pins are priced (ADR-IMPL-045, -063): from the deal's own airport to the destination's main airport, round trip,
    in the member's cabin, in D6's order without the live question — the site's stored answer (one `freshFrom` read per
-   origin), else the formula; with `catalog.site_prices` off, the formula alone. Where there is a number it is the deal's
+   origin), else the formula; with `catalog.site_prices` off, the formula alone. A route with a published fare on sale in the cabin gets none, as `indicativeFor` gives none: its search shows the fare. Where there is a number it is the deal's
    `estimate` (`EstimateVM`: `trip: round_trip`, `basis: formula`, `source`, `asOf`). Nothing new is asked of the site:
    `refresh-site-prices` already keeps the answers for every snapshot route. The memo key adds the cabin, the rules'
    fingerprint and whether the site prices.
