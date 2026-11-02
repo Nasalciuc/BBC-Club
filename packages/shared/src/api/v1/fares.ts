@@ -167,7 +167,7 @@ export type SiteDealPhotoVM = z.infer<typeof SiteDealPhotoVM>;
 /**
  * One of the company site's deals (ADR-IMPL-067): its lowest price for a destination from a US city, `from $X` — whole
  * USD, per person, indicative (the site's own words: taxes in, "call for current best prices"). The site says no trip,
- * no cabin, no dates: the card prints none. Never a reference price — the site's "Old Price" has no source per deal, so
+ * no cabin, no dates: alone, the card says `per person` (ADR-IMPL-081: with `estimate`, the round trip). Never a reference price — the site's "Old Price" has no source per deal, so
  * there is no `published` and no saving here at all (DESIGN.md: `Save 48%` only where the published fare is on record).
  * `origin` is the US city the deal leaves from — the member's own airport, or the nearest city the site sells from
  * ("from New York"). Shown until `validUntil`, at most a day after the site was read (D6).
@@ -191,6 +191,14 @@ export const SiteDealVM = z.object({
     from: z.literal(true),
   }),
   validUntil: z.string().datetime(),
+  /**
+   * ADR-IMPL-081: the deal's destination priced as its search prices it — the round trip in the member's cabin, from the
+   * deal's own airport (the site's stored answer, else the formula). With it the card shows this price and says
+   * `round trip`, so the card and the destination it opens show one number; without it (estimates off, the company has
+   * no price) the card keeps `price` and says it is per person. Optional both ways: an app built before it shows
+   * `price` as before; an estimate this app cannot read reads as none, and the deal still shows.
+   */
+  estimate: EstimateVM.optional().catch(undefined),
 });
 export type SiteDealVM = z.infer<typeof SiteDealVM>;
 

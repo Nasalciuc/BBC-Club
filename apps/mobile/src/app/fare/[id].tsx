@@ -439,7 +439,6 @@ export default function FareDetailScreen() {
   const comparable = difference != null && difference > 0;
   const passengers = search.passengers ?? profile?.preferences.passengers ?? null;
   const days = datesShortLabel(dates);
-  const rows = comparable ? 2 : 1;
   const titleTop = PAGE.title.baseline - baselineOffset(TITLE);
   const fadeFrom = FARE_HERO.fade.from + dy;
 
@@ -542,7 +541,9 @@ export default function FareDetailScreen() {
         {airports ? (
           <View
             style={{
-              marginTop: PAGE.route.top - (PAGE.rows.top + rows * PAGE.rows.row),
+              // The route keeps 05's gap under the rows however many there are: an offer without its comparison
+              // (ADR-IMPL-081) has one row, and the card follows it up instead of leaving a row's hole.
+              marginTop: PAGE.route.top - (PAGE.rows.top + 2 * PAGE.rows.row),
               marginLeft: PAGE.route.left,
               marginRight: PAGE.route.right,
             }}

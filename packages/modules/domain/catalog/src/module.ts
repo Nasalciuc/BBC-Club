@@ -11,6 +11,7 @@ import { SearchEvent } from "@bbc/platform";
 import type { JobContext } from "@bbc/platform";
 import { apiError } from "@bbc/shared/errors";
 import type { AppEnv } from "@bbc/shared/http/app-env";
+import type { EstimateVM } from "@bbc/shared/api/v1/fares";
 import { PLACE_PHOTOS_MAX_CODES, type PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import { airportsRepo } from "./infrastructure/airports.repo";
 import { faresRepo } from "./infrastructure/fares.repo";
@@ -147,7 +148,8 @@ export const catalogModule = (
       ["catalog.site", "catalog.airports"],
       { maxEntries: MEMO_ENTRIES, ttlMs: SITE_PINS_CACHE_S * 1000, ns: "catalog.site_pins" },
     );
-    const siteDealsMemo = platform.reference.memo<SiteDeal[]>(["catalog.site", "catalog.airports"], {
+    // `catalog.fares` too (ADR-IMPL-081): a deal's estimate stands only while no published fare is on sale for its route.
+    const siteDealsMemo = platform.reference.memo<SiteDeal[]>(["catalog.site", "catalog.airports", "catalog.fares"], {
       maxEntries: SITE_DEALS_ENTRIES,
       ns: "catalog.site_deals",
       ttlMs: SITE_DEALS_CACHE_S * 1000,
@@ -354,6 +356,7 @@ export const catalogModule = (
       limit: number,
       photos: boolean,
       marginS: number,
+      cabin: "business" | "first",
     ): Promise<SiteDeal[]> {
       const [homeRow, origins] = await Promise.all([airportAt(e, home), siteRepo.dealOrigins(e, marginS)]);
       if (!homeRow || origins.length === 0 || limit <= 0) return [];
@@ -375,8 +378,15 @@ export const catalogModule = (
         picked = pickDeals(at, metros.slice(0, asked), rows, limit);
         if (picked.length >= limit) break;
       }
-      return picked.map(({ deal, metro }) => {
+      const estimates = await dealEstimates(
+        e,
+        picked.map(({ deal }) => deal),
+        cabin,
+        marginS,
+      );
+      return picked.map(({ deal, metro }, i) => {
         const photo = deal.photo ? toPlacePhotoVM(deal.photo) : null;
+        const estimate = estimates[i];
         return {
           id: `site-${deal.deal}-${deal.routeFrom}`,
           destination: {
@@ -386,20 +396,80 @@ export const catalogModule = (
           origin: { code: deal.routeFrom, city: metro.city },
           price: { amount: deal.price, currency: "USD" as const, basis: "site" as const, from: true as const },
           validUntil: deal.validUntil.toISOString(),
+          ...(estimate ? { estimate } : {}),
           airports: [...deal.airports],
           originAirports: [...metro.airports],
         };
       });
     }
 
+    /**
+     * ADR-IMPL-081: each deal's price as its destination's search will show it — the round trip in the member's cabin,
+     * from the deal's own airport, in D6's order without the live question (the site's stored answer, else the formula),
+     * exactly as Home's site pins are priced. Null where there is no number (estimates off, the company has no price):
+     * the card keeps the site's "Price Today" and says it is per person. None either where the route has a published fare
+     * on sale in the cabin: its search shows the fare, not an estimate. One read of fares and one of answers per origin.
+     */
+    async function dealEstimates(
+      e: Executor,
+      deals: readonly { routeFrom: string; airport: AirportRow }[],
+      cabin: "business" | "first",
+      marginS: number,
+    ): Promise<(EstimateVM | null)[]> {
+      if (deals.length === 0) return [];
+      const sources = await estimateSources("home");
+      if (!sources) return deals.map(() => null);
+      const origins = [...new Set(deals.map((d) => d.routeFrom))];
+      const tosFrom = (code: string) => deals.filter((d) => d.routeFrom === code).map((d) => d.airport.code.trim());
+      const rows = new Map(await Promise.all(origins.map(async (code) => [code, await airportAt(e, code)] as const)));
+      // A route with fares on sale shows them in its search, never an estimate (as `indicativeFor`): none here either.
+      const onSale = new Map(
+        await Promise.all(
+          origins.map(
+            async (code) => [code, await faresRepo.onSaleTo(e, { from: code, tos: tosFrom(code), cabin })] as const,
+          ),
+        ),
+      );
+      const answers = sources.site
+        ? new Map(
+            await Promise.all(
+              origins.map(
+                async (code) =>
+                  [code, await sitePricesRepo.freshFrom(e, code, tosFrom(code), "round_trip", marginS)] as const,
+              ),
+            ),
+          )
+        : null;
+      return Promise.all(
+        deals.map(async (d) => {
+          const from = rows.get(d.routeFrom);
+          if (!from || onSale.get(d.routeFrom)?.has(d.airport.code.trim())) return null;
+          if (!answers) return sources.rules ? toEstimateVM(sources.rules.rules, from, d.airport, cabin) : null;
+          const resolved = await siteResolution(from, d.airport, cabin, sources.rules, {
+            live: false,
+            stored: async () => answers.get(d.routeFrom)?.get(d.airport.code.trim()) ?? null,
+          });
+          return resolvedVM(resolved, cabin);
+        }),
+      );
+    }
+
     /** ADR-IMPL-067: Home's site deals, behind `catalog.site_offers` (seeded off); kept like the site's pins — a minute,
      *  dropped when the sync or an import moves a generation (ADR-IMPL-075). With an executor, read now, unkept. */
-    async function siteDeals(exec: Executor | undefined, home: string, limit: number): Promise<SiteDeal[]> {
+    async function siteDeals(
+      exec: Executor | undefined,
+      home: string,
+      limit: number,
+      cabin: "business" | "first" = "business",
+    ): Promise<SiteDeal[]> {
       if (!(await platform.flags.isEnabled("catalog.site_offers", false))) return [];
       const photos = await placePhotosOn();
-      if (exec) return loadSiteDeals(exec, home, limit, photos, 0);
-      const key = `${home.toUpperCase()}:${limit}:${photos ? "photos" : "-"}`;
-      const load = () => loadSiteDeals(conn, home, limit, photos, keptMargin(SITE_DEALS_CACHE_S));
+      if (exec) return loadSiteDeals(exec, home, limit, photos, 0, cabin);
+      // ADR-IMPL-081: priced as the pins are, so kept by what prices them too — the cabin, the rules, the site's answers.
+      const sources = await estimateSources("home");
+      const pricing = sources ? `${sources.rules?.fingerprint ?? "-"}:${sources.site ? "site" : "formula"}` : "none";
+      const key = `${home.toUpperCase()}:${limit}:${photos ? "photos" : "-"}:${cabin}:${pricing}`;
+      const load = () => loadSiteDeals(conn, home, limit, photos, keptMargin(SITE_DEALS_CACHE_S), cabin);
       return siteDealsMemo.get(key, load);
     }
 

@@ -245,8 +245,8 @@ describe("query budget per route", () => {
     expect(tapAgain, `the set was read again within its minute:\n${tapAgain.join("\n")}`).toEqual([]);
 
     // ADR-IMPL-067: with the site's deals on (the pins off), the home screen adds them — the home airport, the origins and
-    // one read of the deals for the nearest metros, whatever their number — then keeps them a minute. Measured on this
-    // fixture: 12 queries against 8 with every cache cold (the flag and those three), 4 against 4 while kept.
+    // one read of the deals for the nearest metros, whatever their number, and (ADR-IMPL-081, estimates on) one read of
+    // the fares on sale from each origin — then keeps them a minute: the next home screen reads none of them.
     await t.flags.set("catalog.site_pins", { enabled: false });
     await t.flags.set("catalog.site_offers", { enabled: true });
     const dealsHome = await queriesFor("/v1/home", cookie);
@@ -256,10 +256,11 @@ describe("query budget per route", () => {
       dealsHome.length,
       `home with the site's deals ran ${dealsHome.length} queries (budget ${BUDGET["GET /v1/home"]}):\n${dealsHome.join("\n")}`,
     ).toBeLessThanOrEqual(BUDGET["GET /v1/home"]!);
+    // ADR-IMPL-081: and one read of the fares on sale from each origin, whose routes take no estimate.
     expect(
       dealsHome.length,
-      "the site's deals cost at most four reads over the home screen without them",
-    ).toBeLessThanOrEqual(home.length + 4);
+      "the site's deals cost at most five reads over the home screen without them",
+    ).toBeLessThanOrEqual(home.length + 5);
     const dealsAgain = await queriesFor("/v1/home", cookie);
     expect(dealsAgain.length, "kept a minute: the next home screen reads none of them").toBeLessThanOrEqual(
       home.length,

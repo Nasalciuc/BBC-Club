@@ -21,9 +21,27 @@ export type RequestSummary = {
    * the club's saves (06: `$3,900` over `$7,550 Save 48%`); a quote has no price yet.
    */
   price: { amount: string; percent: number | null; published: string | null; source: string | null } | null;
+  /** What the price covers, as the catalogue sells the fare (ADR-IMPL-081); null for an offer or a fare that does not
+   *  say — its price then stands whatever trip is asked. */
+  trip: "round_trip" | "one_way" | null;
 };
 
-type SummaryFare = Pick<FareVM, "carrier" | "price" | "departLocal" | "arriveLocal" | "arriveDayOffset">;
+/**
+ * The price the trip card prints for the trip being asked (ADR-IMPL-081): a fare sold one way is not the price of a
+ * round trip, nor the reverse — then no price, never a number beside days it does not cover. A price whose trip is not
+ * known (an offer) stands as it is.
+ */
+export function priceForTrip(
+  summary: Pick<RequestSummary, "price" | "trip">,
+  asked: "round" | "oneway",
+): RequestSummary["price"] {
+  if (!summary.price || summary.trip === null) return summary.price;
+  const covers = summary.trip === "round_trip" ? "round" : "oneway";
+  return covers === asked ? summary.price : null;
+}
+
+type SummaryFare = Pick<FareVM, "carrier" | "price" | "departLocal" | "arriveLocal" | "arriveDayOffset"> &
+  Partial<Pick<FareVM, "trip">>;
 
 /** The published fare only with its saving and its source — a struck price never stands without both (FTC). */
 function summaryPrice(price: FareVM["price"]): NonNullable<RequestSummary["price"]> {
@@ -56,5 +74,6 @@ export function requestSummary(input: {
     route,
     carrier: carrier ? { code: carrier.code, name: carrier.name, logoUrl: carrier.logoUrl } : null,
     price: fare ? summaryPrice(fare.price) : null,
+    trip: fare?.trip ?? null,
   };
 }

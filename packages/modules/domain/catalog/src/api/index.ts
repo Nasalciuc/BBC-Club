@@ -101,9 +101,10 @@ export type CatalogFacade = {
    * by great-circle distance — a home the site sells nothing from (Seattle, Toronto, Chișinău) gets the nearest's — each
    * deal naming the city it leaves from; one deal per destination city, never the member's own; in the pins' order (the
    * site's home page first, then the busiest). Read from the snapshot (`site_routes`, twice a day), only deals still
-   * served (`valid_until`, D6); the price is the site's "Price Today", never its "Old Price". Cached a minute with the
-   * pins' generation; with an executor, read now.
+   * served (`valid_until`, D6); the price is the site's "Price Today", never its "Old Price" — and (ADR-IMPL-081) each
+   * deal's `estimate`, its destination priced in `cabin` (business unless given) as Home's site pins are, where there is
+   * a number. Cached a minute with the pins' generation; with an executor, read now.
    */
-  siteDeals(exec: Executor | undefined, home: string, limit: number): Promise<SiteDeal[]>;
+  siteDeals(exec: Executor | undefined, home: string, limit: number, cabin?: "business" | "first"): Promise<SiteDeal[]>;
   importCsv(input: unknown): Promise<{ imported: number }>;
 };
