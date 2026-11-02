@@ -51,6 +51,7 @@
     "hono": "^4.7.0",
     "libphonenumber-js": "^1.13.13",
     "lucide-react-native": "^1.47.0",
+    "mapbox-gl": "3.33.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",

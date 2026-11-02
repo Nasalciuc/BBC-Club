@@ -1,14 +1,14 @@
 /**
  * Which globe Explore draws (ADR-IMPL-035, ADR-IMPL-055). Mapbox when the build can: not the e2e APK (Maestro taps the
  * drawn globe's pins, offline), a public token present, and the native module linked — @rnmapbox/maps throws on import
- * without it, so it is loaded only after that check. Anything else, or a Mapbox failure at render, draws GlobeFallback.
+ * without it, so it is loaded only after that check — or, on the web, Mapbox GL JS (ADR-IMPL-082). Anything else, or a Mapbox failure at render, draws GlobeFallback.
  *
  * Instant globe: the drawn globe shows at once; the satellite globe fades in over it once Mapbox has loaded, and the
  * drawn one leaves when the fade is done. Both stand where the screen asks — centred at rest under the greeting (02),
  * lifted over the sheet once a route is chosen (13).
  */
 import { Component, type ReactNode, Suspense, lazy, useEffect, useRef, useState } from "react";
-import { AppState, NativeModules, StyleSheet } from "react-native";
+import { AppState, NativeModules, Platform, StyleSheet } from "react-native";
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { GLOBE_SPEC, GlobeFallback, routeView, tokens } from "@bbc/ui";
@@ -26,7 +26,10 @@ import {
 import type { MapboxGlobeProps } from "./MapboxGlobe";
 
 export const MAPBOX_READY =
-  env.EXPO_PUBLIC_APP_ENV !== "e2e" && env.EXPO_PUBLIC_MAPBOX_TOKEN !== undefined && NativeModules.RNMBXModule != null;
+  env.EXPO_PUBLIC_APP_ENV !== "e2e" &&
+  env.EXPO_PUBLIC_MAPBOX_TOKEN !== undefined &&
+  // ADR-IMPL-082: on the web, Mapbox GL JS draws the same globe (MapboxGlobe.web.tsx); a phone needs the native module.
+  (Platform.OS === "web" || NativeModules.RNMBXModule != null);
 
 const MapboxGlobe = lazy(() => import("./MapboxGlobe"));
 

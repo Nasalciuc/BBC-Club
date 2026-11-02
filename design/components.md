@@ -246,8 +246,8 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   search bar floats on the globe's foot and the offers sit on the page, the sky fading into it; raised, it is the white
   sheet with the sheet shadow — on a chosen route (13) with 26-pt corners and the grabber 41.5 × 4.4, over every offer
   (16) with 22-pt corners and the grabber 48.4 × 4.2; the docked `Request a quote` 40.6 tall.
-- **Globe** (02, 13) — the Earth by day on the pale sky: Mapbox's satellite imagery where the build has it, else the
-  drawn globe in the `globe-*` colours. Destinations are navy drop pins (18 × 25, the tip on the place) with a white
+- **Globe** (02, 13) — the Earth by day on the pale sky: Mapbox's satellite imagery where the build has it (the web
+  too, ADR-IMPL-082), else the drawn globe in the `globe-*` colours. Destinations are navy drop pins (18 × 25, the tip on the place) with a white
   label beside the head — the city over its price (`pin`, `pin-detail`) — placed right of the pin or else left, and left
   out where it would cover another label, a pin or a button; a chosen route shows only its two ends with their codes, a
   white line arcing between them and the plane at its middle. At rest a tap anywhere on the disc (ADR-IMPL-068) opens
