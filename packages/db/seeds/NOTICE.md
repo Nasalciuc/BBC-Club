@@ -45,7 +45,8 @@ The towns and cities a tap on Explore's globe is named by (ADR-IMPL-083), built 
 - **GeoNames** — <https://www.geonames.org/> (`cities1000`, as packaged by the npm module `all-the-cities` 3.1.0,
   MIT): each place's GeoNames id, name, country code, coordinates and population. GeoNames' data is licensed under the
   **Creative Commons Attribution 4.0 License** (<https://creativecommons.org/licenses/by/4.0/>); the app credits
-  GeoNames where it shows a place's name from it.
+  GeoNames in Settings (`Place names — GeoNames · CC BY 4.0`, ADR-IMPL-086), off the card that shows a place's name
+  from it.
 
 Kept: populated places (feature codes PPL, PPLA–PPLA5, PPLC, PPLF, PPLG, PPLL, PPLR, PPLS, STLMT) of 5,000 people or
 more — 46,547 places. Left out: sections of a city (PPLX), and historical, abandoned or destroyed places (PPLH, PPLQ,

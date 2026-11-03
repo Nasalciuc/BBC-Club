@@ -5,7 +5,7 @@ import { Icon, Photo, baselineOffset, rn, tokens } from "@bbc/ui";
 
 import { clubHomePhoto } from "@/features/places/club-photos";
 import { cardPicture } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 
 type Props = {
   airport: AirportVM | null;
@@ -48,7 +48,7 @@ export function HomeAirportCard({ airport, error, onPress, testID }: Props) {
             <Photo
               source={club ? club.source : cardPicture(undefined, photoFor(airport.code), PICTURE_HEADERS)}
               position={club ? { top: club.top } : undefined}
-              fallback={CLUB_PICTURE}
+              fallback={null}
               style={StyleSheet.absoluteFill}
             />
             <LinearGradient

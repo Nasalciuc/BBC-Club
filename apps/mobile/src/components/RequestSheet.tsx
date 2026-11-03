@@ -29,7 +29,7 @@ import { cabinLabel, datesChipLabel, travelersLabel } from "@/features/explore/t
 import { airlineMark } from "@/features/fares/airline-marks";
 import { clubPhoto } from "@/features/places/club-photos";
 import { cardPicture } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import { DatesPage, type DatesPageHandle } from "@/features/requests/DatesPage";
 import { putConfirmation } from "@/features/requests/confirmation-handoff";
 import {
@@ -375,7 +375,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
               (!trip.media ? clubPhoto(trip.toCode, "request") : null) ??
               cardPicture(trip.media, photoFor(trip.toCode), PICTURE_HEADERS)
             }
-            fallback={CLUB_PICTURE}
+            fallback={null}
             title={summary.title}
             cabin={cabinLabel(state.cabin)}
             dates={summaryDates(outbound?.date || null, round ? state.legs[1]?.date || null : null)}

@@ -125,7 +125,7 @@ export default function ExploreScreen() {
   const [tapAnswer, setTapAnswer] = useState<"none" | "home" | null>(null);
   // ADR-IMPL-083: where the last tap fell — the town and the airports near it — until the next tap or choice; and which
   // tap is the last, so an answer that comes back after another tap, or after a choice, is left unread.
-  const [tapChoices, setTapChoices] = useState<{ choices: TapChoices; named: boolean } | null>(null);
+  const [tapChoices, setTapChoices] = useState<{ choices: TapChoices } | null>(null);
   const tapAsked = useRef(0);
   const [tapNote, setTapNote] = useState<{ code: string; line: string } | null>(null);
   const nearest = tapNote && tapNote.code === state.to?.code ? tapNote.line : undefined;
@@ -183,7 +183,7 @@ export default function ExploreScreen() {
       if (answer?.ok) {
         const what = placesTap(answer.data, tap, home?.home ?? null);
         if (what.kind === "answer") setTapAnswer(what.answer);
-        else setTapChoices({ choices: what.choices, named: answer.data.locality !== null });
+        else setTapChoices({ choices: what.choices });
         return;
       }
       const what = exploreTap(mode, tap, home?.bookable, home?.home ?? null);
@@ -476,7 +476,7 @@ export default function ExploreScreen() {
                 of sheet 41, read out as it appears. */}
             {tapChoices ? (
               <View style={styles.answer}>
-                <TapPlaces choices={tapChoices.choices} named={tapChoices.named} onChoose={onChooseNear} />
+                <TapPlaces choices={tapChoices.choices} onChoose={onChooseNear} />
               </View>
             ) : null}
             {tapAnswer ? (

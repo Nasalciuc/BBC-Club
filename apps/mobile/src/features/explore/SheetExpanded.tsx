@@ -13,7 +13,7 @@ import {
   tokens,
 } from "@bbc/ui";
 
-import { CLUB_PICTURE, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { usePlacePhotos } from "@/features/places/usePlacePhotos";
 
 import { homeDeals, offerCardModel, sheetExpandedState } from "./offer-card-logic";
 import { NoOffers, OfferCards, offerPicture } from "./SheetRest";
@@ -132,7 +132,7 @@ export function SheetExpanded({ home, homeLoading, onOpenOffer, onOpenDeal, onSe
                     savePercent={model.savePercent}
                     rating={model.rating}
                     image={offerPicture(item, photoFor(item.route.to))}
-                    fallback={CLUB_PICTURE}
+                    fallback={null}
                     onPress={() => onOpenOffer(item)}
                   />
                 );
