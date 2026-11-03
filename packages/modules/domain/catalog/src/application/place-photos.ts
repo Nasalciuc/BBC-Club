@@ -1,8 +1,9 @@
 /**
  * Place photos (ADR-IMPL-043): for the city each airport serves, a photograph hosted elsewhere, or the point a satellite
  * view is centred on. Four tiers, in order: Wikimedia Commons through Wikidata; Pexels, when the club holds a key; the
- * satellite view (the app draws it from Mapbox); the app's own image while nothing is known. The route answers from the
- * table at once and adds the airports it has never seen; the resolve-place-photos job looks them up, ten a minute.
+ * satellite view (the app draws it from Mapbox); the light tint while nothing is known (ADR-IMPL-086). The route
+ * answers from the table at once and adds the airports it has never seen; the resolve-place-photos job looks them up,
+ * ten a minute.
  */
 import { z } from "zod";
 import { errorForLog, type Executor } from "@bbc/db";

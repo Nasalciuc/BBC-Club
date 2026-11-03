@@ -8,6 +8,7 @@ import {
   MAX_RETRY_AFTER_S,
   REQUEST_TIMEOUT_MS,
   SourceError,
+  MIN_PHOTO_WIDTH,
   acceptCommons,
   cityByNameSparql,
   cityFacts,
@@ -143,7 +144,7 @@ describe("Wikidata", () => {
     expect(cityFacts([], LONDON)).toEqual({ qid: null, files: [], centre: null });
   });
 
-  it("puts night views first, drops montages, maps and flags, keeps three", () => {
+  it("puts main images first, then night views, drops montages, maps and flags, keeps three (ADR-IMPL-086)", () => {
     const rows = [
       heathrow({ night: "London at night.jpg", image: "London Montage.jpg" }),
       heathrow({ night: "Thames by night.jpg", image: "Flag of London.jpg" }),
@@ -152,7 +153,7 @@ describe("Wikidata", () => {
     ];
     expect(cityFacts(rows, LONDON)).toEqual({
       qid: "Q84",
-      files: ["London at night.jpg", "Thames by night.jpg", "City of London skyline.jpg"],
+      files: ["City of London skyline.jpg", "Westminster.jpg", "London at night.jpg"],
       centre: { lat: 51.507222, lng: -0.1275 },
     });
   });
@@ -203,7 +204,7 @@ describe("Wikidata", () => {
     for (const code of ["RMO", "KIV"]) {
       expect(cityFacts(answer, { ...CHISINAU, code })).toEqual({
         qid: "Q21197",
-        files: [cathedral, arch], // the night view first
+        files: [arch, cathedral], // the main image first, then the night view (ADR-IMPL-086)
         centre: { lat: 47.022777777, lng: 28.835277777 },
       });
     }
@@ -324,10 +325,27 @@ describe("Commons", () => {
     );
   });
 
+  it("accepts a town's only, smaller photograph: the original as the full-width photo, the 500-px card (ADR-IMPL-086)", () => {
+    // Ji-Paraná's main image is 800 × 600: asked at 1280 px, Commons answers with the original itself.
+    const original = "https://upload.wikimedia.org/wikipedia/commons/3/34/Ji-Parana_005.jpg";
+    const { hero, card } = info({
+      width: 800,
+      height: 600,
+      thumburl: original,
+      license: "Public domain",
+      artist: null,
+    });
+    expect(acceptCommons(hero, card)).toMatchObject({ heroUrl: original, cardUrl: commonsThumb("London.jpg", 500) });
+    const edge = info({ width: MIN_PHOTO_WIDTH, height: 480 });
+    expect(acceptCommons(edge.hero, edge.card)).not.toBeNull();
+    const under = info({ width: MIN_PHOTO_WIDTH - 1, height: 480 });
+    expect(acceptCommons(under.hero, under.card)).toBeNull();
+  });
+
   it("refuses what the app should not show", () => {
     const refused = [
       info({ mime: "image/png" }),
-      info({ width: 1280, height: 720 }), // the full width would be the original
+      info({ width: 600, height: 400 }), // narrower than MIN_PHOTO_WIDTH: too soft to show
       info({ width: 2000, height: 3000 }), // portrait
       info({ width: 6000, height: 1500 }), // a panorama
       info({ license: "GFDL" }),

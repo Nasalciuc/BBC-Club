@@ -165,6 +165,7 @@ describe("extras ledger", () => {
       "0053_platform_monitor_role_limits.sql",
       "0054_retention_indexes.sql",
       "0055_catalog_airport_zone_links.sql",
+      "0056_catalog_place_photos_look_again.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,
@@ -610,6 +611,40 @@ describe("extras ledger", () => {
     await db.execute(sql`UPDATE catalog.airports SET tz = 'Asia/Choibalsan' WHERE code = 'COQ'`);
     await db.execute(sql.raw(readFileSync(join(pkgRoot, "migrations/0055_catalog_airport_zone_links.sql"), "utf8")));
     expect(await tzOf()).toBe("Asia/Ulaanbaatar");
+  });
+
+  // ADR-IMPL-086: the photos the job chose under the old rules (a night view first, nothing under 1280 px) are looked at
+  // again at once; an operator's own photo and a row already due are left as they are.
+  it("0056 makes every photo the job chose due now, and leaves an operator's photo alone", async () => {
+    expect((await runMigrate()).code).toBe(0);
+    await db.execute(sql`DELETE FROM catalog.place_photos WHERE code IN ('LHR', 'CDG', 'JFK', 'FCO')`);
+    await db.execute(sql`
+      INSERT INTO catalog.place_photos (code, status, source, card_url, hero_url, author, license, link, lat, lng, expires_at)
+      VALUES
+        ('LHR', 'photo', 'wikimedia', 'https://upload.wikimedia.org/c.jpg', 'https://upload.wikimedia.org/h.jpg',
+          'Jane Doe', 'CC BY-SA 4.0', 'https://commons.wikimedia.org/wiki/File:L.jpg', NULL, NULL, now() + interval '20 days'),
+        ('CDG', 'satellite', NULL, NULL, NULL, NULL, NULL, NULL, 48.85, 2.35, now() + interval '20 days'),
+        ('JFK', 'photo', 'override', 'https://example.com/c.jpg', 'https://example.com/h.jpg',
+          NULL, NULL, NULL, NULL, NULL, 'infinity'),
+        ('FCO', 'satellite', NULL, NULL, NULL, NULL, NULL, NULL, 41.9, 12.5, now() - interval '1 hour')`);
+    const before = (await db.execute(
+      sql`SELECT code, expires_at::text AS at FROM catalog.place_photos WHERE code = 'FCO'`,
+    )) as unknown as { at: string }[];
+    await db.execute(
+      sql.raw(readFileSync(join(pkgRoot, "migrations/0056_catalog_place_photos_look_again.sql"), "utf8")),
+    );
+    const rows = (await db.execute(
+      sql`SELECT code, expires_at <= now() AS due, expires_at::text AS at FROM catalog.place_photos
+          WHERE code IN ('LHR', 'CDG', 'JFK', 'FCO') ORDER BY code`,
+    )) as unknown as { code: string; due: boolean; at: string }[];
+    expect(rows.map((r) => [r.code, r.due])).toEqual([
+      ["CDG", true],
+      ["FCO", true],
+      ["JFK", false],
+      ["LHR", true],
+    ]);
+    expect(rows.find((r) => r.code === "JFK")?.at).toBe("infinity");
+    expect(rows.find((r) => r.code === "FCO")?.at).toBe(before[0]?.at);
   });
 
   // ADR-IMPL-056: the member's photo is only ever an https address — on a table drizzle's own first migration creates.
