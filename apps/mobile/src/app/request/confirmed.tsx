@@ -32,7 +32,7 @@ import {
 } from "@/features/notifications/NotificationsAskSheet";
 import { RECEIVED_TRIP_FRAME, clubPhoto, clubReceivedPhoto } from "@/features/places/club-photos";
 import { bandPicture, cardPicture } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 import {
   type ConfirmationModel,
   confirmationFromRequest,
@@ -301,7 +301,7 @@ export default function RequestConfirmedScreen() {
         <View style={[styles.hero, { height: heroHeight }]}>
           <Photo
             source={heroSource}
-            fallback={CLUB_PICTURE}
+            fallback={null}
             cachePolicy={own ? "disk" : picture.cache}
             position={own ? { left: own.left, top: 0 } : undefined}
             style={StyleSheet.absoluteFill}
@@ -380,7 +380,7 @@ export default function RequestConfirmedScreen() {
                 testID="confirmation.trip"
                 photo={clubPhoto(to, "request") ?? cardPicture(model?.media ?? null, photoFor(to), PICTURE_HEADERS)}
                 position={clubPhoto(to, "request") ? RECEIVED_TRIP_FRAME : undefined}
-                fallback={CLUB_PICTURE}
+                fallback={null}
                 cabin={model?.cabin === "first" ? "FIRST CLASS" : "BUSINESS CLASS"}
                 from={from}
                 to={to}

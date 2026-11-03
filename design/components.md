@@ -256,7 +256,7 @@ screen it appears on most wins and a state follows its screen (`DESIGN.md`). The
   offers its airports (ADR-IMPL-083, amending ADR-IMPL-068): under the search bar, the town in Search's section title
   (`Bălţi, Moldova`; `Near …` past 15 km; `Airports near there` with no town in 50 km) over the three nearest airports
   within 600 km — any with scheduled service, never home's metro — as Search's `AirportRow`s (18) with how far each is
-  in slate before the chevron (`70 km`), then GeoNames' credit (`PhotoCredit`); a row opens its airport as a pin's tap
+  in slate before the chevron (`70 km`) — GeoNames' credit is in Settings (ADR-IMPL-086); a row opens its airport as a pin's tap
   does. Offline, or when the server cannot answer, the tap opens the nearest city the club sells within 600 km
   (ADR-IMPL-068). A tap on the sky is nothing, a drag never a tap. No image draws these answers, so they are proposed
   until design draws them (reported): the distance (`Nearest: Rome · 180 km`) is a second line under the country (13),

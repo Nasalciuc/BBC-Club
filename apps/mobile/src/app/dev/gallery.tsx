@@ -55,7 +55,6 @@ import {
 } from "@bbc/ui";
 
 import { ScreenStatusBar } from "@/components/screen-status-bar";
-import { CLUB_PICTURE } from "@/features/places/usePlacePhotos";
 
 /**
  * The route: the gallery in a development build only. A release build that reaches it — a link, Expo's sitemap — goes
@@ -228,7 +227,7 @@ function GalleryScreen() {
           fromPrice="$3,450"
           savePercent={54}
           image={null}
-          fallback={CLUB_PICTURE}
+          fallback={null}
           onPress={noop}
         />
         <OfferCard
@@ -238,7 +237,7 @@ function GalleryScreen() {
           fromPrice="$4,200"
           savePercent={44}
           image={null}
-          fallback={CLUB_PICTURE}
+          fallback={null}
           onPress={noop}
         />
         <OfferCard
@@ -247,7 +246,7 @@ function GalleryScreen() {
           country="UAE"
           fromPrice="$4,100"
           image={null}
-          fallback={CLUB_PICTURE}
+          fallback={null}
           onPress={noop}
         />
       </CarouselRow>
@@ -260,7 +259,7 @@ function GalleryScreen() {
           fromPrice="$3,900"
           savePercent={48}
           image={null}
-          fallback={CLUB_PICTURE}
+          fallback={null}
           onPress={noop}
         />
         <OfferCardWide
@@ -271,7 +270,7 @@ function GalleryScreen() {
           fromPrice="$3,450"
           savePercent={54}
           image={null}
-          fallback={CLUB_PICTURE}
+          fallback={null}
           onPress={noop}
         />
       </View>
@@ -283,7 +282,7 @@ function GalleryScreen() {
         fromPrice="$4,200"
         savePercent={44}
         image={null}
-        fallback={CLUB_PICTURE}
+        fallback={null}
         onPress={noop}
       />
       <AirportRow testID="gallery.airport.lhr" code="LHR" city="London" airport="Heathrow Airport" onPress={noop} />
@@ -350,7 +349,7 @@ function GalleryScreen() {
         code="LHR"
         fromPrice="$3,900"
         image={null}
-        fallback={CLUB_PICTURE}
+        fallback={null}
         onPress={noop}
       />
       <RecentRow
@@ -358,7 +357,7 @@ function GalleryScreen() {
         city="Paris"
         detail="Oct 5 – 12, 2026"
         image={null}
-        fallback={CLUB_PICTURE}
+        fallback={null}
         onPress={noop}
       />
       <FlightCard testID="gallery.flight.detailed" fare={fixture.fares[0]!} layout="detailed" onPress={noop} />
@@ -373,7 +372,7 @@ function GalleryScreen() {
       <TripSummaryCard
         testID="gallery.tripSummary"
         photo={null}
-        fallback={CLUB_PICTURE}
+        fallback={null}
         title="New York to London"
         cabin="Business"
         dates="Nov 12 – 19, 2026"
@@ -384,7 +383,7 @@ function GalleryScreen() {
       <TripCard
         testID="gallery.trip"
         photo={null}
-        fallback={CLUB_PICTURE}
+        fallback={null}
         cabin="BUSINESS CLASS"
         from="JFK"
         to="LHR"
@@ -395,7 +394,7 @@ function GalleryScreen() {
       <RequestCard
         testID="gallery.request"
         photo={null}
-        fallback={CLUB_PICTURE}
+        fallback={null}
         city="London"
         route="JFK → LHR"
         dates="Nov 12 – 19"
@@ -407,7 +406,7 @@ function GalleryScreen() {
       <RequestCard
         testID="gallery.request.notSent"
         photo={null}
-        fallback={CLUB_PICTURE}
+        fallback={null}
         city="Rome"
         route="JFK → FCO"
         dates="Dec 3 – 10"
@@ -421,7 +420,7 @@ function GalleryScreen() {
         <TripPhotoCard
           testID="gallery.tripPhoto"
           photo={null}
-          fallback={CLUB_PICTURE}
+          fallback={null}
           city="London"
           dates="Nov 12 – 19"
           route="JFK → LHR"
@@ -430,7 +429,7 @@ function GalleryScreen() {
         <TripPhotoCard
           testID="gallery.tripPhoto.2"
           photo={null}
-          fallback={CLUB_PICTURE}
+          fallback={null}
           city="Tokyo"
           dates="Jan 14 – 21"
           route="JFK → HND"

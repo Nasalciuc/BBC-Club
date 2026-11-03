@@ -1,16 +1,12 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { PlacePhotoVM } from "@bbc/shared/api/v1/places";
 
-import cabinImage from "@/assets/images/cabin.webp";
 import { fetchPlacePhotos } from "@/lib/api";
 import { appVersion } from "@/lib/app-meta";
 import { env } from "@/lib/env";
 
 import { wikimediaHeaders } from "./place-photo-logic";
 import { POLL_MS, createPlacePhotoStore, photoIn } from "./place-photo-store";
-
-/** The club's own image — the last tier, and what shows when a photo cannot load (ADR-IMPL-043). */
-export const CLUB_PICTURE: number = cabinImage;
 
 /** Sent with every picture from Wikimedia: its policy refuses an anonymous client. */
 export const PICTURE_HEADERS = wikimediaHeaders(appVersion(), env.EXPO_PUBLIC_API_URL);

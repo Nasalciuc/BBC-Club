@@ -58,11 +58,22 @@ export default function SettingsScreen() {
     })().catch(() => setLoadFailure(stateCopy("route")));
   }, [reloadToken]);
 
-  // 34 draws each card's second row taller than its first; Help, which 34 does not draw, takes the look's own height.
-  const rows: { key: string; label: string; url: string | undefined; height?: number }[] = [
+  // 34 draws each card's second row taller than its first; Help and the place names' credit, which 34 does not draw,
+  // take the look's own height.
+  const rows: {
+    key: string;
+    label: string;
+    url: string | undefined;
+    height?: number;
+    value?: string;
+    icon?: "map-pin";
+  }[] = [
     { key: "privacy", label: "Privacy policy", url: env.EXPO_PUBLIC_PRIVACY_URL, height: ROW.privacy },
     { key: "terms", label: "Terms of use", url: env.EXPO_PUBLIC_TERMS_URL, height: ROW.terms },
     { key: "help", label: "Help", url: env.EXPO_PUBLIC_HELP_URL },
+    // GeoNames' licence (CC BY 4.0) asks for its credit where the app names a place from it — a tap on the globe:
+    // here, out of Explore's way (ADR-IMPL-086; packages/db/seeds/NOTICE.md).
+    { key: "placeNames", label: "Place names", value: "GeoNames · CC BY 4.0", url: GEONAMES_URL, icon: "map-pin" },
   ];
   const legal = rows.filter((row): row is (typeof rows)[number] & { url: string } => Boolean(row.url));
 
@@ -128,8 +139,9 @@ export default function SettingsScreen() {
               <ListRow
                 key={row.key}
                 testID={`settings.${row.key}`}
-                icon="file-text"
+                icon={row.icon ?? "file-text"}
                 label={row.label}
+                value={row.value}
                 height={row.height}
                 trailing="external"
                 onPress={() => void Linking.openURL(row.url)}
@@ -187,6 +199,9 @@ export default function SettingsScreen() {
  * Privacy policy 46.6 and Terms of use 48.4 in the third, Delete account 46.8 on its own.
  */
 const ROW = { phone: 45.4, password: 48, privacy: 46.6, terms: 48.4, delete: 46.8 } as const;
+
+/** Where the towns a tap on the globe names come from (ADR-IMPL-083), credited as its licence asks. */
+const GEONAMES_URL = "https://www.geonames.org/";
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: tokens.colors.surfacePage },

@@ -9,7 +9,7 @@ import { PlacePhotosVM } from "@bbc/shared/api/v1/places";
 import type { AppEnv } from "@bbc/shared/http/app-env";
 import type { Fetch } from "../../src/application/place-photo-sources";
 import { PLACE_PHOTOS_REQUESTS_MS, resolvePlacePhotos } from "../../src/application/place-photos";
-import { placePhotosRepo } from "../../src/infrastructure/place-photos.repo";
+import { PHOTO_POLICY, placePhotosRepo } from "../../src/infrastructure/place-photos.repo";
 import { catalogModule } from "../../src/module";
 import { binding, commonsThumb, fakeSources } from "../unit/place-photos.fixture";
 
@@ -321,6 +321,35 @@ describe("place photos", () => {
     expect(await t.row("LHR")).toMatchObject({ status: "photo", source: "pexels", attempts: 1, hours: 1 });
     expect(await t.row("CDG")).toMatchObject({ status: "satellite", attempts: 0, hours: 24 });
     expect(t.sources.calls.filter((c) => c.url.includes("pexels"))).toHaveLength(1);
+    await t.iso.drop();
+  });
+
+  it("a photo chosen under older rules is looked at again at once, whatever its expiry, and once (ADR-IMPL-086)", async () => {
+    const t = await setup("place-photos-policy", { wikidata: [london, paris], commons: { "London at night.jpg": {} } });
+    await placePhotosRepo.addPending(t.iso.db, ["LHR", "CDG"]);
+    // As the earlier rules left them, due in a month: London chosen under them (and by a worker that predates the column,
+    // which never writes it), Paris under the current ones.
+    await t.iso.db.execute(sql`
+      UPDATE catalog.place_photos SET status = 'satellite', lat = 51.5, lng = -0.12, expires_at = now() + interval '20 days',
+        policy = 1 WHERE code = 'LHR'`);
+    await t.iso.db.execute(sql`
+      UPDATE catalog.place_photos SET status = 'satellite', lat = 49, lng = 2.5, expires_at = now() + interval '20 days',
+        policy = ${PHOTO_POLICY} WHERE code = 'CDG'`);
+    const policyOf = async (code: string) =>
+      (
+        (await t.iso.db.execute(sql`SELECT policy FROM catalog.place_photos WHERE code = ${code}`)) as unknown as {
+          policy: number;
+        }[]
+      )[0]?.policy;
+
+    const metrics = await t.run();
+    expect(metrics).toMatchObject({ claimed: 1 });
+    expect(await t.row("LHR")).toMatchObject({ status: "photo", source: "wikimedia" });
+    expect(await policyOf("LHR")).toBe(PHOTO_POLICY);
+    expect(await t.row("CDG")).toMatchObject({ status: "satellite" });
+
+    // Brought up to date, the row waits for its month like any other: the next run claims nothing.
+    expect(await t.run()).toMatchObject({ claimed: 0 });
     await t.iso.drop();
   });
 

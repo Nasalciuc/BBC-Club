@@ -17,7 +17,7 @@ import {
 
 import { clubPhoto } from "@/features/places/club-photos";
 import { cardPicture, remote } from "@/features/places/place-photo-logic";
-import { CLUB_PICTURE, PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
+import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 
 import { dealCardModel, homeDeals, offerCardModel } from "./offer-card-logic";
 
@@ -151,7 +151,7 @@ export function OfferCards({
             savePercent={model.savePercent}
             rating={model.rating}
             image={offerPicture(item, photoFor(item.route.to), compact ? "any" : "offer")}
-            fallback={CLUB_PICTURE}
+            fallback={null}
             onPress={() => onOpenOffer(item)}
             look={look}
             compact={compact}
@@ -171,7 +171,7 @@ export function OfferCards({
             rating={null}
             origin={model.origin}
             image={dealPicture(deal, photoFor(deal.destination.code))}
-            fallback={CLUB_PICTURE}
+            fallback={null}
             onPress={() => onOpenDeal?.(deal)}
             look={look}
             compact={compact}

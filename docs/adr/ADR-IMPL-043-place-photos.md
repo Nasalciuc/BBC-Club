@@ -1,6 +1,7 @@
 # ADR-IMPL-043 — A photograph for every city, without storing one
 
-Status: accepted · Date: 2026-10-09
+Status: accepted · Date: 2026-10-09 · Amended by ADR-IMPL-086 (3 Nov 2026): the city's main image before its night
+view, a Commons original from 640 px wide, and the light tint — not the club's picture — where no photo is known.
 
 **Context.** Figma draws a destination's photograph on the offer cards (89:386, 89:389), on an offer's fare page
 (135:846, `Proposal / DestinationPhoto`) and behind the member's name on Profile (233:4453, `Proposal / ProfileHero`,

@@ -1,8 +1,9 @@
 /**
  * Where a city's photo comes from (ADR-IMPL-043). Wikidata names the city an airport serves and the photos its editors
- * chose for it (a night view first, then the main image); Wikimedia Commons says who took each one and under which
- * licence, and serves it at the two widths the app shows; Pexels, when the club holds a key, has one where Commons has
- * none. Each function here builds a request or reads an answer — the job (place-photos.ts) decides what to keep.
+ * chose for it (its main image first, then a night view; ADR-IMPL-086); Wikimedia Commons says who took each one and
+ * under which licence, and serves it at the two widths the app shows; Pexels, when the club holds a key, has one where
+ * Commons has none. Each function here builds a request or reads an answer — the job (place-photos.ts) decides what to
+ * keep.
  */
 import { z } from "zod";
 
@@ -256,7 +257,7 @@ const NOT_A_VIEW =
 export type CityFacts = {
   /** The city's Wikidata item ("Q21197"), when one was found. */
   qid: string | null;
-  /** Candidate files, best first: night views, then main images. At most three. */
+  /** Candidate files, best first: main images, then night views (ADR-IMPL-086). At most three. */
   files: string[];
   /** The city's centre, when Wikidata knows it and it lies within 150 km of the airport. */
   centre: Centre | null;
@@ -267,8 +268,8 @@ const NO_CITY: CityFacts = { qid: null, files: [], centre: null };
 const qidOf = (uri: string | undefined) =>
   uri?.match(/^https?:\/\/www\.wikidata\.org\/entity\/(Q[1-9]\d*)$/)?.[1] ?? null;
 
-/** What a chosen city item says: its night views then its main images, files named as no view left out, three at
- *  most; its centre within 150 km of the airport. */
+/** What a chosen city item says: its main images then its night views (the photo a reader of the city's page sees
+ *  first, ADR-IMPL-086), files named as no view left out, three at most; its centre within 150 km of the airport. */
 function factsOf(
   qid: string,
   city: { centre: Centre | null; nights: Set<string>; images: Set<string> },
@@ -276,7 +277,7 @@ function factsOf(
 ): CityFacts {
   const views = (names: Set<string>) =>
     [...names].sort().filter((name) => !NOT_A_VIEW.test(normalize(name.replace(/\.[a-z0-9]+$/i, ""))));
-  const files = [...new Set([...views(city.nights), ...views(city.images)])].slice(0, 3);
+  const files = [...new Set([...views(city.images), ...views(city.nights)])].slice(0, 3);
   const centre = city.centre && distanceKm(city.centre, place) <= CITY_NEAR_KM ? city.centre : null;
   return { qid, files, centre };
 }
@@ -579,16 +580,25 @@ export const onWikimedia = (url: string | undefined) =>
   isHttpsOn(url, (h) => h === "wikimedia.org" || h.endsWith(".wikimedia.org"));
 
 /**
- * A Commons file the app may show: a JPEG photograph in landscape, wider than the full-width thumbnail (so both widths
- * are real thumbnails, never the original), under a free licence, without restrictions (personality rights,
- * trademarks), with an author whenever the licence asks for one. `hero` is the answer at 1280 px with the metadata,
+ * The narrowest original a city photo may have (ADR-IMPL-086): a town's only photograph is often 800 px wide, and its
+ * own photograph, a little soft across a phone, says more than the satellite view or the club's picture. Narrower is a
+ * thumbnail someone uploaded, too soft to show.
+ */
+export const MIN_PHOTO_WIDTH = 640;
+
+/**
+ * A Commons file the app may show: a JPEG photograph in landscape, at least `MIN_PHOTO_WIDTH` wide, under a free
+ * licence, without restrictions (personality rights, trademarks), with an author whenever the licence asks for one.
+ * Wider than the full-width thumbnail, both widths are real thumbnails; narrower, Commons answers the 1280-px question
+ * with the original itself, which the full-width photo then is (ADR-IMPL-086; tried on Ji-Paraná's 800-px photo,
+ * 3 Nov 2026), and the card is still its 500-px thumbnail. `hero` is the answer at 1280 px with the metadata,
  * `card` the answer at 500 px. A TIFF stays out even when Commons serves its thumbnails as JPEG: on Commons TIFF
  * originals are mostly scans and remote-sensing products, and the one a site city had was a satellite image
  * (ADR-IMPL-064, amendment 3, withdrawn). PNG, SVG and GIF stay out: drawings, maps and screenshots.
  */
 export function acceptCommons(hero: ImageInfo | undefined, card: ImageInfo | undefined): FoundPhoto | null {
   if (!hero || !card) return null;
-  if (hero.mime !== "image/jpeg" || !hero.width || !hero.height || hero.width <= HERO_WIDTH) return null;
+  if (hero.mime !== "image/jpeg" || !hero.width || !hero.height || hero.width < MIN_PHOTO_WIDTH) return null;
   if (!isLandscape(hero.width, hero.height)) return null;
   if (hero.thumbwidth !== HERO_WIDTH || card.thumbwidth !== CARD_WIDTH) return null;
   const heroUrl = hero.thumburl;

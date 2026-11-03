@@ -165,6 +165,7 @@ describe("extras ledger", () => {
       "0053_platform_monitor_role_limits.sql",
       "0054_retention_indexes.sql",
       "0055_catalog_airport_zone_links.sql",
+      "0056_catalog_place_photos_policy.sql",
     ]);
     const demand: { rel: string | null }[] = await db.execute(
       sql`SELECT to_regclass('catalog.demand_daily')::text AS rel`,

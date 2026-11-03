@@ -1,5 +1,7 @@
 # ADR-IMPL-083 — A tap on the globe names the place and offers its airports
 
+> Amended by ADR-IMPL-086 (3 Nov 2026): GeoNames' credit stands in Settings, not on the card under the airports.
+
 Status: proposed · Date: 2026-11-02 · Scope: `packages/shared` (`PlacesNearVM`, `NearAirportVM`, `NearLocalityVM` and
 their limits in `api/v1/fares.ts`), `packages/db` (`catalog.localities`, its migration, `seeds/localities-reference.tsv`,
 `scripts/localities-reference.ts`, migrate.ts, the test template's hash), `catalog` (`GET /v1/places/near`,
