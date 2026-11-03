@@ -159,8 +159,9 @@ export default function MapboxGlobe({
   const moving = appActive && !paused && !reducedMotion;
   // The clouds drift while the globe may move (cloud-drift.ts). Laid only where every picture has an address the map can
   // load: an Android release build's own pictures have none for @rnmapbox/maps 10.3.7, which would crash (ADR-IMPL-085).
+  // Without them the clock stays still: nothing to move, so no render twice a second.
   const [cloudUrls] = useState(phoneCloudUrls);
-  const clouds = cloudLayers(useCloudClock(moving));
+  const clouds = cloudLayers(useCloudClock(moving && cloudUrls !== null));
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
