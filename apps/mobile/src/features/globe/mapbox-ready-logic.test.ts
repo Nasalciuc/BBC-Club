@@ -38,9 +38,9 @@ describe("the satellite globe fades in only over imagery (F107)", () => {
     expect(readTileProbe(answer(200, null))).toBe("failed");
   });
 
-  it("asks for one tile of the satellite raster with the token, encoded", () => {
+  it("asks for one tile of the imagery where the map asks for it (ADR-IMPL-085), with the token, encoded", () => {
     expect(tileProbeUrl("pk.a+b")).toBe(
-      "https://api.mapbox.com/v4/mapbox.satellite/0/0/0@2x.jpg90?access_token=pk.a%2Bb",
+      "https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/0/0/0@2x?access_token=pk.a%2Bb",
     );
   });
 

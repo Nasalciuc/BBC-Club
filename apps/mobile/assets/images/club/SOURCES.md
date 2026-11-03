@@ -1,7 +1,9 @@
 # The design's artwork in the app (ADR-IMPL-056)
 
-Copied from `isolated/bbc-club-3.0-design/final/assets/` (the 3.0 design package, #75) without scaling or editing,
-re-encoded as WebP. Nothing here was generated or retouched; to replace a file, export it again from the package.
+The files in the tables below are copied from `isolated/bbc-club-3.0-design/final/assets/` (the 3.0 design package,
+#75) without scaling or editing, re-encoded as WebP. None of them was generated or retouched; to replace one, export it
+again from the package. The exceptions are the globe's clouds, under "Made here" at the end: `globe/clouds-*.webp`,
+drawn by `scripts/globe-clouds.py`, and `globe/sky-clouds.webp`, lifted off 02 by `scripts/sky-clouds-from-design.py`.
 
 | File                                | Source (under `assets/`)                           | Source sha256       | Pixels    | Encoding      |
 | ----------------------------------- | -------------------------------------------------- | ------------------- | --------- | ------------- |
@@ -91,3 +93,15 @@ remain their airlines'.
 | `airlines/logos/tap-air-portugal.webp`      | TAP Air Portugal      | TP   | `97ea40073458e846…` |
 | `airlines/logos/turkish-airlines.webp`      | Turkish Airlines      | TK   | `754e605243c88d89…` |
 | `airlines/logos/united-airlines.webp`       | United Airlines       | UA   | `1909ea6df654113f…` |
+
+## Made here: the globe's clouds (ADR-IMPL-085)
+
+`globe/clouds-{a,b}-{north,tropics,south}.webp` are not the design package's: `scripts/globe-clouds.py` draws them
+(gradient noise on the sphere, a fixed seed), two moments of one sky cut into three overlapping bands, 1536 px a turn
+in Web Mercator and two turns side by side (3072 px across), white with the cloud in the alpha, WebP q90 with its alpha
+lossless. Nothing is owed for them; run the
+script again to remake them.
+
+`globe/sky-clouds.webp` is the design's own: 02's cumulus around and before the globe
+(`screens/02-explore.png`, rows 200–819), lifted off its sky by `scripts/sky-clouds-from-design.py` into white and
+shade with an alpha, 852 × 619, WebP q90 with its alpha lossless.

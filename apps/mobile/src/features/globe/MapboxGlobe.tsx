@@ -3,16 +3,18 @@
  * native module: importing @rnmapbox/maps without it throws.
  *
  * The Earth by day, as Mapbox's satellite imagery shows it, without names — downloaded the first time a region is seen,
- * then served from Mapbox's cache — on the pale sky (02). Our pins and their labels are React views on the map
+ * then served from Mapbox's cache — on the pale sky (02). The imagery is `satellite-v9`'s, asked for as the style's tiles
+ * (ADR-IMPL-085, satellite-source.ts). Our pins and their labels are React views on the map
  * (MarkerView); a chosen route is a white line with its plane, framed over the sheet (13).
  */
 import Mapbox, {
   Atmosphere,
-  BackgroundLayer,
   Camera,
+  ImageSource,
   LineLayer,
   MapView,
   MarkerView,
+  RasterLayer,
   ShapeSource,
   type MapState,
 } from "@rnmapbox/maps";
@@ -58,24 +60,29 @@ import {
 
 import { env } from "@/lib/env";
 
+import { cloudLayers } from "./cloud-drift";
+import { phoneCloudUrls } from "./cloud-pictures";
+import { CLOUDS_ABOVE, satelliteStyle } from "./satellite-source";
+import { useCloudClock } from "./useCloudClock";
+
 void Mapbox.setAccessToken(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "");
 // No usage telemetry. Mapbox still counts one anonymous monthly active user for billing (docs/store/data-safety.md).
 Mapbox.setTelemetryEnabled(false);
 
-/** The Earth as photographed, without names (the owner's reference, 13 Oct 2026). A map that cannot load falls back to
- *  the drawn globe. */
-const SATELLITE_STYLE = "mapbox://styles/mapbox/satellite-v9";
 /**
- * The black globe's floor (ADR-IMPL-068, over the air): satellite-v9 paints its background layer, rgb(4,7,14), wherever
- * a tile is missing — a sphere of near-black where the imagery did not come. Recoloured to the drawn globe's deep ocean,
- * a missing tile shows the sea instead.
+ * The Earth as photographed, without names (the owner's reference, 13 Oct 2026): `satellite-v9`, its imagery asked for
+ * as the style's tiles (ADR-IMPL-085), livelier, with fine clouds (variant D). Its background is the drawn globe's deep
+ * ocean, not satellite-v9's near-black (ADR-IMPL-068): a missing tile shows the sea. A map that cannot load falls back
+ * to the drawn globe.
  */
-const BACKGROUND = { backgroundColor: tokens.colors.globeOceanDeep } as const;
+const GLOBE_COLOURS = { ocean: tokens.colors.globeOceanDeep } as const;
+const SATELLITE_STYLE = JSON.stringify(satelliteStyle(env.EXPO_PUBLIC_MAPBOX_TOKEN ?? "", GLOBE_COLOURS));
 /** 02: the globe on the pale sky, a white haze at its rim, no stars. */
 const ATMOSPHERE = {
   color: tokens.colors.surfaceCard,
   highColor: tokens.colors.sky,
-  horizonBlend: 0.06,
+  // 02 draws a thin white rim, the sky blue right up to it: a wide glow would wash out the clouds beside the globe.
+  horizonBlend: 0.02,
   spaceColor: tokens.colors.sky,
   starIntensity: 0,
 } as const;
@@ -150,6 +157,11 @@ export default function MapboxGlobe({
   const [pressGuard] = useState(() => createPressGuard());
 
   const moving = appActive && !paused && !reducedMotion;
+  // The clouds drift while the globe may move (cloud-drift.ts). Laid only where every picture has an address the map can
+  // load: an Android release build's own pictures have none for @rnmapbox/maps 10.3.7, which would crash (ADR-IMPL-085).
+  // Without them the clock stays still: nothing to move, so no render twice a second.
+  const [cloudUrls] = useState(phoneCloudUrls);
+  const clouds = cloudLayers(useCloudClock(moving && cloudUrls !== null));
 
   useEffect(() => {
     void AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -324,7 +336,7 @@ export default function MapboxGlobe({
     <View testID="globe.map" style={StyleSheet.absoluteFill} onLayout={onLayout}>
       <MapView
         style={StyleSheet.absoluteFill}
-        styleURL={SATELLITE_STYLE}
+        styleJSON={SATELLITE_STYLE}
         projection="globe"
         rotateEnabled={false}
         pitchEnabled={false}
@@ -353,8 +365,17 @@ export default function MapboxGlobe({
         }}
         onPress={onMapPress}
       >
-        <BackgroundLayer id="background" existing style={BACKGROUND} />
         <Atmosphere style={ATMOSPHERE} />
+        {/* The clouds on the sphere, turning with it and drifting on it — over the imagery, under the route. */}
+        {(cloudUrls ? clouds : []).map((c) => (
+          <ImageSource key={c.id} id={c.id} url={cloudUrls?.[c.id]} coordinates={c.coordinates}>
+            <RasterLayer
+              id={c.id}
+              aboveLayerID={CLOUDS_ABOVE}
+              style={{ rasterOpacity: c.opacity, rasterFadeDuration: 0 }}
+            />
+          </ImageSource>
+        ))}
         <Camera
           ref={camera}
           defaultSettings={{
