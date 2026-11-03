@@ -1,5 +1,5 @@
 import type { Executor } from "@bbc/db";
-import { and, asc, desc, eq, inArray, isNull, lte, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, lte, ne, notInArray, or, sql } from "drizzle-orm";
 import { anyOf } from "@bbc/db/helpers";
 import { airports, placePhotos } from "@bbc/db/schema/catalog";
 
@@ -52,6 +52,14 @@ const lookAgain = sql`now() + interval '30 days' + random() * interval '3 days'`
 
 const coord = (n: number) => n.toFixed(6);
 
+/**
+ * The rules a city's photo is chosen by (ADR-IMPL-086): 1, ADR-IMPL-043's (a night view first, an original wider than
+ * 1280 px); 2, the main image first and an original from 640 px. A row last claimed under older rules is due now, and
+ * the claim moves it to these: a worker still on the old code during a deploy never writes the column, so what it
+ * chooses then is chosen again by the new one.
+ */
+export const PHOTO_POLICY = 2;
+
 /** ADR-IMPL-043. Addresses and credits only — an image never enters the database. */
 export const placePhotosRepo = {
   async getMany(exec: Executor, codes: string[]): Promise<PlacePhotoRow[]> {
@@ -84,7 +92,8 @@ export const placePhotosRepo = {
 
   /**
    * Takes up to `limit` due rows — new ones first, then the longest due — and holds them for ten minutes: a run that
-   * dies leaves them to a later one. Never an operator's photo. Counts the look in `attempts`.
+   * dies leaves them to a later one. Due: expired, or chosen under older rules than `PHOTO_POLICY` (whatever its expiry
+   * says), which the claim brings up to date. Never an operator's photo. Counts the look in `attempts`.
    */
   async claimDue(
     exec: Executor,
@@ -93,13 +102,17 @@ export const placePhotosRepo = {
     const due = exec
       .select({ code: placePhotos.code })
       .from(placePhotos)
-      .where(and(lte(placePhotos.expiresAt, sql`now()`), notOverride))
+      .where(and(or(lte(placePhotos.expiresAt, sql`now()`), lt(placePhotos.policy, PHOTO_POLICY)), notOverride))
       .orderBy(desc(sql`${placePhotos.status} = 'pending'`), asc(placePhotos.expiresAt))
       .limit(limit)
       .for("update", { skipLocked: true });
     return exec
       .update(placePhotos)
-      .set({ expiresAt: sql`now() + interval '10 minutes'`, attempts: sql`${placePhotos.attempts} + 1` })
+      .set({
+        expiresAt: sql`now() + interval '10 minutes'`,
+        attempts: sql`${placePhotos.attempts} + 1`,
+        policy: PHOTO_POLICY,
+      })
       .where(inArray(placePhotos.code, due)) // a subquery: one statement text already
       .returning({ code: placePhotos.code, attempts: placePhotos.attempts, status: placePhotos.status });
   },

@@ -1,7 +1,8 @@
 # ADR-IMPL-086 — The city's own photograph, and credits out of the way
 
-Status: proposed · Date: 2026-11-03 · Scope: `catalog` (`application/place-photo-sources.ts`), `packages/db`
-(`migrations/0056_catalog_place_photos_look_again.sql`, migrate.ts), the app (the photo slots of Explore's offers,
+Status: proposed · Date: 2026-11-03 · Scope: `catalog` (`application/place-photo-sources.ts`,
+`infrastructure/place-photos.repo.ts`), `packages/db` (`catalog.place_photos.policy`: `0056_catalog_place_photos_policy.sql`,
+its snapshot sync, migrate.ts), the app (the photo slots of Explore's offers,
 onboarding's home airport, the request sheet and the request received; `usePlacePhotos.ts`; `features/globe/TapPlaces.tsx`;
 `app/settings.tsx`), `design/components.md`, `packages/db/seeds/NOTICE.md` · Amends ADR-IMPL-043 (decisions on the
 order of a city's files, the size a Commons file needs, the last tier) and ADR-IMPL-083 (where GeoNames' credit
@@ -25,10 +26,14 @@ Explore.
    question with the original itself (`thumbwidth` 1280, the original's address — asked of Commons for
    `Ji-Parana 005.jpg` on 3 Nov 2026), which the full-width photo then is, and the card is still its 500-px thumbnail.
    The licence, the credit, the restrictions and the landscape band are ADR-IMPL-043's.
-3. **Looked at again now.** Migration 0056 makes every row the job chose itself due at once, not up to 33 days later:
-   a night view gives way to the city's main image, a satellite view to a town's own photograph. An operator's photo
-   (`override`, never expiring) and a row already due are left as they are. The job keeps its own pace (ten a minute,
-   Wikimedia's limits).
+3. **Looked at again now, by the new rules only.** `catalog.place_photos.policy` holds the rules a row was last claimed
+   under: 1 for every row today (ADR-IMPL-043's), `PHOTO_POLICY` (2) once the job claims it. The job's claim takes a row
+   under older rules whatever its expiry, and moves it to the current ones, not up to 33 days later: a night view gives
+   way to the city's main image, a satellite view to a town's own photograph. Only the new code writes the column, so a
+   worker still on the old code during the deploy (migrations run before the canary and the new worker) cannot spend
+   the refresh: whatever it chooses keeps 1 and is chosen again (CodeRabbit on #122, which found the first version — a
+   migration making every row due at once — open to exactly that). An operator's photo is never claimed. The job keeps
+   its own pace (ten a minute, Wikimedia's limits).
 4. **No cabin in a city's slot.** While a city's photo is not known, or when there is none a card can show, the slot is
    the light tint `Photo` draws while a picture loads (`fallback={null}`), as ADR-IMPL-056 meant: the trip card of the
    request sheet, the request received, Explore's offers and onboarding's home airport. The fare page's hero keeps the
@@ -46,4 +51,6 @@ Explore.
 - Mapbox's logo and its (i) stay on the globe: Mapbox's terms require both on the map and allow only another corner
   (asked by the owner on 3 Nov 2026; where they stand is his call).
 - Checked: the unit tests (the order, Chișinău's answer, a 800-px original, the 640-px edge), the catalog's contract
-  tests, migrate's test of 0056, the app's typecheck and lint.
+  tests (a row under the older rules is claimed at once, once, and comes back as London's photo; one under the current
+  rules is left to its month), migrate's ledger with 0056, `drizzle-kit generate` proposing nothing, `db:verify`, the
+  app's typecheck and lint.

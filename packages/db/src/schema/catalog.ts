@@ -4,6 +4,7 @@ import {
   char,
   numeric,
   integer,
+  smallint,
   doublePrecision,
   boolean,
   index,
@@ -200,6 +201,12 @@ export const placePhotos = catalog.table(
     resolvedAt: tz("resolved_at"),
     /** When the job looks again: a new row is due at once; an operator's photo, never ('infinity'). */
     expiresAt: tz("expires_at").notNull().defaultNow(),
+    /**
+     * The rules the row was last claimed under (ADR-IMPL-086): a row under older rules is due whatever `expires_at` says,
+     * and the job's claim moves it to the current ones — a worker that predates the rules never touches the column, so
+     * what it writes during a deploy is looked at again by the new one.
+     */
+    policy: smallint("policy").notNull().default(1),
     createdAt: createdAt(),
   },
   (t) => [
@@ -218,6 +225,7 @@ export const placePhotos = catalog.table(
       sql`(${t.cardUrl} IS NULL OR ${t.cardUrl} LIKE 'https://%') AND (${t.heroUrl} IS NULL OR ${t.heroUrl} LIKE 'https://%') AND (${t.link} IS NULL OR ${t.link} LIKE 'https://%')`,
     ),
     check("place_photos_attempts", sql`${t.attempts} >= 0`),
+    check("place_photos_policy", sql`${t.policy} >= 1`),
   ],
 );
 
