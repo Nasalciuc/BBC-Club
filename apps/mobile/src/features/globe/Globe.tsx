@@ -177,7 +177,9 @@ export function Globe(props: Props) {
         bounds={bounds}
         avoid={avoid}
         paused={paused}
-        onZoomedIn={mapProps.onZoomedIn}
+        // One globe reports its pinch at a time, the one on screen: the drawn one until the satellite one is shown. Each
+        // reports its own state again when it takes over (its effect runs on the callback's change).
+        onZoomedIn={show ? undefined : mapProps.onZoomedIn}
       />
     </Animated.View>
   ) : null;
@@ -191,6 +193,7 @@ export function Globe(props: Props) {
           <Animated.View style={[StyleSheet.absoluteFill, fadeStyle]} pointerEvents={show ? "auto" : "none"}>
             <MapboxGlobe
               {...mapProps}
+              onZoomedIn={show ? mapProps.onZoomedIn : undefined}
               pins={pins}
               home={home}
               selected={selected}

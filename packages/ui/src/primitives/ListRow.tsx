@@ -179,6 +179,7 @@ export function ListRow({
         disabled={disabled}
         onPress={onPress}
         toggle={toggle}
+        trailing={trailing}
         gapAbove={inGroup ? 0 : gapAbove}
         gapBelow={inGroup ? 0 : gapBelow}
         testID={testID}
@@ -288,6 +289,7 @@ function LookRow({
   disabled,
   onPress,
   toggle,
+  trailing,
   gapAbove,
   gapBelow,
   testID,
@@ -303,11 +305,14 @@ function LookRow({
   disabled: boolean;
   onPress?: () => void;
   toggle?: Props["toggle"];
+  /** `external`: a page outside the app (a link to the screen reader), the chevron as drawn; `none`: no chevron. */
+  trailing?: Props["trailing"];
   gapAbove: number;
   gapBelow: number;
   testID?: string;
 }) {
   const pressable = onPress != null && !disabled;
+  const role = trailing === "external" ? "link" : "button";
   const tint = danger ? tokens.colors.statusDanger : tokens.colors.textPrimary;
   const a11yLabel = [label, value, subtitle].filter(Boolean).join(", ");
   const rowHeight = height ?? look.height;
@@ -359,7 +364,7 @@ function LookRow({
           disabled={disabled}
           accessibilityLabel={label}
         />
-      ) : onPress ? (
+      ) : onPress && trailing !== "none" ? (
         <View style={[lookStyles.chevron, { right: chevronBoxRight }]} pointerEvents="none">
           <Icon name="chevron" size={look.chevron.size} color={look.chevron.color} strokeWidth={look.chevron.stroke} />
         </View>
@@ -377,7 +382,7 @@ function LookRow({
         testID={testID}
         style={[...frame, disabled && styles.disabled]}
         accessible={onPress != null}
-        accessibilityRole={onPress != null ? "button" : undefined}
+        accessibilityRole={onPress != null ? role : undefined}
         accessibilityState={onPress != null ? { disabled: true } : undefined}
         accessibilityLabel={a11yLabel}
       >
@@ -388,7 +393,7 @@ function LookRow({
   return (
     <Pressable
       testID={testID}
-      accessibilityRole="button"
+      accessibilityRole={role}
       accessibilityLabel={a11yLabel}
       onPress={onPress}
       hitSlop={slop.top > 0 || slop.bottom > 0 ? slop : undefined}
