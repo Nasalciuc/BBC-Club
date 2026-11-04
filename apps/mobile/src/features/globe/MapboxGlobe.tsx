@@ -62,7 +62,7 @@ import { env } from "@/lib/env";
 
 import { cloudLayers } from "./cloud-drift";
 import { phoneCloudUrls } from "./cloud-pictures";
-import { ORNAMENT, isZoomedIn } from "./ornament";
+import { ORNAMENT, isZoomedIn, logoRight } from "./ornament";
 import { CLOUDS_ABOVE, satelliteStyle } from "./satellite-source";
 import { useCloudClock } from "./useCloudClock";
 
@@ -346,10 +346,7 @@ export default function MapboxGlobe({
   // screen asks for it (`ornamentTop`).
   const inset = ORNAMENT.inset;
   const bottom = Math.max(inset, size.height - sheetTop + inset);
-  const logoAt =
-    ornamentTop === undefined
-      ? { bottom, left: inset }
-      : { top: ornamentTop, right: inset + ORNAMENT.attribution + ORNAMENT.gap };
+  const logoAt = ornamentTop === undefined ? { bottom, left: inset } : { top: ornamentTop, right: logoRight() };
   const attributionAt = ornamentTop === undefined ? { bottom, right: inset } : { top: ornamentTop, right: inset };
 
   return (

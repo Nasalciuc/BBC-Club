@@ -35,8 +35,10 @@ const HEAD = {
   avatarRight: 18.8,
   avatarTop: -0.85,
 } as const;
-/** The veil's soft foot, in points. */
-const VEIL_SOFT = 10;
+/** The portrait's foot under the safe area: what stands under the header (Mapbox's logo at rest) starts below it. */
+export const PORTRAIT_FOOT = HEAD.avatarTop + HEAD.avatar;
+/** The veil's soft foot. */
+const VEIL_SOFT = tokens.space.sm;
 const greetingType = tokens.type.greeting;
 const nameType = tokens.type.greetingName;
 
@@ -51,7 +53,7 @@ export function GreetingHeader({
   onProfile,
   topInset,
   veiled = false,
-  veilFoot = topInset + HEAD.nameBaseline + 12,
+  veilFoot = topInset + HEAD.nameBaseline + tokens.space.sm,
 }: Props) {
   const greeting = greetingFor(new Date().getHours());
   const reducedMotion = useReducedMotion();
@@ -60,7 +62,7 @@ export function GreetingHeader({
   }));
   return (
     <>
-      {/* Opaque sky to 10 pt above its foot, then soft: the slate greeting keeps its 4.5:1 over any imagery. */}
+      {/* Opaque sky to `sm` above its foot, then soft: the slate greeting keeps its 4.5:1 over any imagery. */}
       <Animated.View
         style={[styles.veil, { height: veilFoot }, veil]}
         pointerEvents="none"
@@ -100,7 +102,7 @@ export function GreetingHeader({
 
 const styles = StyleSheet.create({
   veil: { position: "absolute", left: 0, right: 0, top: 0 },
-  header: { position: "absolute", left: 0, right: 0, height: HEAD.nameBaseline + 12 },
+  header: { position: "absolute", left: 0, right: 0, height: HEAD.nameBaseline + tokens.space.sm },
   text: { position: "absolute", left: 0, right: HEAD.avatarRight + HEAD.avatar + tokens.space.xs, top: 0, bottom: 0 },
   greeting: {
     ...rn(greetingType),

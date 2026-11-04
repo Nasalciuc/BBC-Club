@@ -45,7 +45,7 @@ import { env } from "@/lib/env";
 import type { MapboxGlobeProps } from "./MapboxGlobe";
 import { type CloudLayer, cloudLayers } from "./cloud-drift";
 import { cloudPictureUrl } from "./cloud-pictures";
-import { ORNAMENT, isZoomedIn } from "./ornament";
+import { ORNAMENT, isZoomedIn, logoRight } from "./ornament";
 import { satelliteStyle } from "./satellite-source";
 import { useCloudClock } from "./useCloudClock";
 
@@ -376,8 +376,9 @@ export default function MapboxGlobe({
 
   // Mapbox's terms: logo and attribution always visible — just above the sheet, or both in the top-right corner where
   // the screen asks for it (`ornamentTop`), as on the phone. Mapbox GL keeps its logo bottom-left and the (i)
-  // bottom-right: their corners' boxes are moved.
-  const ornament = Math.max(8, size.height - sheetTop + 8);
+  // bottom-right: their corners' boxes are moved, and up there their controls lose GL's own 10-px corner margins, so
+  // each stands exactly where `ornamentRect` keeps the labels away.
+  const ornament = Math.max(ORNAMENT.inset, size.height - sheetTop + ORNAMENT.inset);
   useEffect(() => {
     const element = container.current as unknown as HTMLElement | null;
     const logo = element?.querySelector<HTMLElement>(".mapboxgl-ctrl-bottom-left");
@@ -387,11 +388,13 @@ export default function MapboxGlobe({
       if (!box) continue;
       box.style.top = up ? `${ornamentTop}px` : "";
       box.style.bottom = up ? "auto" : `${ornament}px`;
+      for (const control of box.querySelectorAll<HTMLElement>(".mapboxgl-ctrl")) control.style.margin = up ? "0" : "";
     }
     if (logo) {
       logo.style.left = up ? "auto" : "";
-      logo.style.right = up ? `${ORNAMENT.inset + ORNAMENT.attribution + ORNAMENT.gap}px` : "";
+      logo.style.right = up ? `${logoRight()}px` : "";
     }
+    if (attribution) attribution.style.right = up ? `${ORNAMENT.inset}px` : "";
   }, [ornament, ornamentTop, mapReady]);
 
   return (

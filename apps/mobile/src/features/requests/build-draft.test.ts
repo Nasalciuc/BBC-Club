@@ -11,10 +11,14 @@ import {
   requestDraftReducer,
 } from "./useRequestDraft";
 
-/** Runtime today: a fixed calendar day eventually falls before `earliestLegDay` and flunks a body that ships. */
-const TODAY = new Date().toISOString().slice(0, 10);
+/**
+ * Runtime today: a fixed calendar day eventually falls before `earliestLegDay` and flunks a body that ships. Read once,
+ * so today and every day counted from it agree even when the run crosses midnight UTC.
+ */
+const NOW = new Date();
+const TODAY = NOW.toISOString().slice(0, 10);
 const inDays = (n: number) => {
-  const d = new Date();
+  const d = new Date(NOW);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };

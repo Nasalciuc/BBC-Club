@@ -89,6 +89,8 @@ const NO_SUMMARY: RequestSummary = { title: "", cabin: "", route: "", carrier: n
 /** An offer whose page named no airline: none on the trip card (knownCarrier). */
 const NO_AIRLINE = { code: null, name: "", logoUrl: null };
 
+/** A keyboard and the sheet over it have risen by then, whether or not the keyboard said so. */
+const KEYBOARD_RISE_MS = 450;
 /** How long a field's focus waits for the keyboard to rise before it stops listening. */
 const KEYBOARD_WAIT_MS = 1000;
 /** `RequestBody.note` takes 500 characters; the field stops there instead of refusing the request. */
@@ -138,17 +140,30 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   const phoneBlock = useRef<View>(null);
   const notSent = useRef<View>(null);
   // The last fields sit low in the sheet, under the pinned pill once the keyboard is up: typing in one scrolls it into
-  // view, now and again once the keyboard has risen (a keyboard already up sends no event, so the first reveal counts).
+  // view now, again once the keyboard has risen, and once more after the sheet has had time to rise — Android 10 and
+  // below may send no keyboardDidShow, and a keyboard already up sends none. Leaving the field (or focusing another)
+  // cancels what is pending, so a field the member has left is never scrolled back into view.
   const emailBlock = useRef<View>(null);
   const noteBlock = useRef<View>(null);
-  function revealWhileTyping(block: { current: View | null }) {
-    modalRef.current?.reveal(block.current);
-    const shown = Keyboard.addListener("keyboardDidShow", () => {
-      shown.remove();
-      modalRef.current?.reveal(block.current);
-    });
-    setTimeout(() => shown.remove(), KEYBOARD_WAIT_MS);
+  const typing = useRef<(() => void) | null>(null);
+  function stopRevealing() {
+    typing.current?.();
+    typing.current = null;
   }
+  function revealWhileTyping(block: { current: View | null }) {
+    stopRevealing();
+    const reveal = () => modalRef.current?.reveal(block.current);
+    reveal();
+    const shown = Keyboard.addListener("keyboardDidShow", reveal);
+    const late = setTimeout(reveal, KEYBOARD_RISE_MS);
+    const done = setTimeout(stopRevealing, KEYBOARD_WAIT_MS);
+    typing.current = () => {
+      shown.remove();
+      clearTimeout(late);
+      clearTimeout(done);
+    };
+  }
+  useEffect(() => stopRevealing, []);
 
   useEffect(() => {
     keyRef.current = idempotencyKey;
@@ -527,6 +542,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             autoCapitalize="none"
             autoComplete="email"
             onFocus={() => revealWhileTyping(emailBlock)}
+            onBlur={stopRevealing}
           />
         </View>
         <View ref={noteBlock} style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
@@ -542,6 +558,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             multiline
             maxLength={NOTE_MAX}
             onFocus={() => revealWhileTyping(noteBlock)}
+            onBlur={stopRevealing}
           />
         </View>
 
