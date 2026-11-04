@@ -91,6 +91,9 @@ describe("airportName", () => {
     );
     expect(airportName({ name: "Bangor Airport", city: "Bangor" })).toBe("Bangor Airport");
     expect(airportName({ name: "Roanoke Regional Airport", city: "Roanoke" })).toBe("Roanoke Regional Airport");
+    // The globe's tap (ADR-IMPL-083) reaches small fields: never a bare `Domestic Airport` under the town's name.
+    expect(airportName({ name: "Dawadmi Domestic Airport", city: "Dawadmi" })).toBe("Dawadmi Domestic Airport");
+    expect(airportName({ name: "Ndjili National Airport", city: "Ndjili" })).toBe("Ndjili National Airport");
     // A remainder that names the airport is kept without its city, as before.
     expect(airportName({ name: "London Heathrow Airport", city: "London" })).toBe("Heathrow Airport");
     expect(airportName({ name: "Heathrow Airport", city: "London" })).toBe("Heathrow Airport");

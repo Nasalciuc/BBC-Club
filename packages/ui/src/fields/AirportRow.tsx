@@ -67,16 +67,14 @@ export function AirportRow({
         strokeWidth={layout === "code" ? CODE.pinStroke : 1.8}
       />
       <View style={[styles.text, layout === "detail" ? styles.detailText : styles.codeText]}>
-        <Text style={layout === "detail" ? styles.city : styles.codeCity} numberOfLines={1}>
-          {city}
-        </Text>
+        <Text style={layout === "detail" ? styles.city : styles.codeCity}>{city}</Text>
         {layout === "detail" ? (
           <View style={styles.airportRow}>
-            <Text style={styles.airport} numberOfLines={1}>
-              {airport}
-            </Text>
+            <Text style={styles.airport}>{airport}</Text>
             <View style={styles.dot} />
-            <Text style={styles.airport}>{code}</Text>
+            <Text style={styles.airportCode} numberOfLines={1}>
+              {code}
+            </Text>
           </View>
         ) : null}
       </View>
@@ -126,12 +124,15 @@ const styles = StyleSheet.create({
     gap: DOT.gap,
     marginTop: LINE_PITCH - belowBaseline(city) - baselineOffset(meta),
   },
+  // The name wraps where the row cannot hold it (DESIGN: never cut); the code and the distance never break.
   airport: { ...rn(meta), color: tokens.colors.textSecondary, flexShrink: 1 },
+  airportCode: { ...rn(meta), color: tokens.colors.textSecondary, flexShrink: 0 },
   dot: { width: DOT.size, height: DOT.size, borderRadius: DOT.size, backgroundColor: tokens.colors.textSecondary },
   code: { ...rn(tokens.type.onboardCode), color: tokens.colors.textSecondary },
   distance: {
     ...rn(meta),
     color: tokens.colors.textSecondary,
+    flexShrink: 0,
     marginLeft: tokens.space.sm,
     marginRight: tokens.space.xxs,
   },
