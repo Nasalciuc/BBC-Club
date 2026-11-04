@@ -62,6 +62,7 @@ import { env } from "@/lib/env";
 
 import { cloudLayers } from "./cloud-drift";
 import { phoneCloudUrls } from "./cloud-pictures";
+import { ORNAMENT, isZoomedIn } from "./ornament";
 import { CLOUDS_ABOVE, satelliteStyle } from "./satellite-source";
 import { useCloudClock } from "./useCloudClock";
 
@@ -111,6 +112,13 @@ export type MapboxGlobeProps = {
   /** The sheet's top: Mapbox's logo and attribution must stay visible just above it. */
   sheetTop: number;
   /**
+   * Where Mapbox's logo and attribution stand instead, from the top (both in the top-right corner): at rest, where 02's
+   * clouds lie over the globe's foot and would cover them above the sheet (ADR-IMPL-086: any corner, the owner's call).
+   */
+  ornamentTop?: number;
+  /** The member has pinched the globe in past its rest size, or let it ease back (the header veils it meanwhile). */
+  onZoomedIn?: (zoomedIn: boolean) => void;
+  /**
    * Explore is not on screen — another tab, or a screen pushed over it — or the sheet covers the globe: the globe stays
    * drawn but nothing turns.
    */
@@ -131,6 +139,8 @@ export default function MapboxGlobe({
   centreY,
   band,
   sheetTop,
+  ornamentTop,
+  onZoomedIn,
   paused = false,
   onFailed,
   onReady,
@@ -151,6 +161,11 @@ export default function MapboxGlobe({
   const [arc, setArc] = useState(1);
   // Where the camera stands, for the labels: which pins are on the near side, and on which side each label fits.
   const [seen, setSeen] = useState<GlobeCamera>({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM });
+  // Pinched in, the globe rises under the header: Explore veils it there (the header's words stay readable).
+  const zoomedIn = isZoomedIn(seen.zoom, REST_ZOOM);
+  useEffect(() => {
+    onZoomedIn?.(zoomedIn);
+  }, [zoomedIn, onZoomedIn]);
   // ADR-IMPL-068: one choice per touch. @rnmapbox/maps 10.3.7 keeps a press on a MarkerView from the map (iOS ignores the
   // touch, Android absorbs the press), but a press in a pin's hit slop, outside its MarkerView, reaches the map — and on
   // Android may reach the pin too: whichever answers first chooses.
@@ -327,8 +342,15 @@ export default function MapboxGlobe({
     }
   }
 
-  // Mapbox's terms: logo and attribution always visible — just above the sheet.
-  const ornament = { bottom: Math.max(8, size.height - sheetTop + 8) };
+  // Mapbox's terms: logo and attribution always visible — just above the sheet, or in the top-right corner where the
+  // screen asks for it (`ornamentTop`).
+  const inset = ORNAMENT.inset;
+  const bottom = Math.max(inset, size.height - sheetTop + inset);
+  const logoAt =
+    ornamentTop === undefined
+      ? { bottom, left: inset }
+      : { top: ornamentTop, right: inset + ORNAMENT.attribution + ORNAMENT.gap };
+  const attributionAt = ornamentTop === undefined ? { bottom, right: inset } : { top: ornamentTop, right: inset };
 
   return (
     // `globe.map`: the satellite globe's surface, which takes the pan, the pinch and (ADR-IMPL-068) the tap — as
@@ -342,8 +364,8 @@ export default function MapboxGlobe({
         pitchEnabled={false}
         compassEnabled={false}
         scaleBarEnabled={false}
-        logoPosition={{ bottom: ornament.bottom, left: 8 }}
-        attributionPosition={{ bottom: ornament.bottom, right: 8 }}
+        logoPosition={logoAt}
+        attributionPosition={attributionAt}
         onCameraChanged={onCameraChanged}
         onMapLoadingError={() => {
           if (!styleLoaded.current) onFailed();

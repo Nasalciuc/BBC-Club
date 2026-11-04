@@ -1,4 +1,6 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useReducedMotion, withTiming } from "react-native-reanimated";
 import { Avatar, type PhotoSource, baselineOffset, rn, tokens } from "@bbc/ui";
 
 import { greetingFor } from "./greeting";
@@ -11,6 +13,12 @@ type Props = {
   portrait?: PhotoSource | null;
   onProfile: () => void;
   topInset: number;
+  /**
+   * The globe is pinched in and has risen under the header: the words stand on a veil of 02's sky, from the screen's
+   * top to `veilFoot` (Mapbox's logo stands just under it and must stay visible).
+   */
+  veiled?: boolean;
+  veilFoot?: number;
 };
 
 /**
@@ -27,6 +35,8 @@ const HEAD = {
   avatarRight: 18.8,
   avatarTop: -0.85,
 } as const;
+/** The veil's soft foot, in points. */
+const VEIL_SOFT = 10;
 const greetingType = tokens.type.greeting;
 const nameType = tokens.type.greetingName;
 
@@ -34,35 +44,62 @@ const nameType = tokens.type.greetingName;
  * Explore's header (02, 16): `Good morning,` in its slate over the member's first name, their portrait at the right —
  * their initials until the club keeps a photo (ADR-IMPL-055) — which opens Profile.
  */
-export function GreetingHeader({ name, initials, portrait = null, onProfile, topInset }: Props) {
+export function GreetingHeader({
+  name,
+  initials,
+  portrait = null,
+  onProfile,
+  topInset,
+  veiled = false,
+  veilFoot = topInset + HEAD.nameBaseline + 12,
+}: Props) {
   const greeting = greetingFor(new Date().getHours());
+  const reducedMotion = useReducedMotion();
+  const veil = useAnimatedStyle(() => ({
+    opacity: withTiming(veiled ? 1 : 0, { duration: reducedMotion ? 0 : tokens.motion.fade }),
+  }));
   return (
-    <View style={[styles.header, { top: topInset }]} pointerEvents="box-none" testID="explore.header">
-      <View style={styles.text} accessible accessibilityRole="header">
-        <Text style={styles.greeting} numberOfLines={1}>
-          {name ? `${greeting},` : greeting}
-        </Text>
-        {name ? (
-          <Text style={styles.name} numberOfLines={1}>
-            {name}
-          </Text>
-        ) : null}
-      </View>
-      <Pressable
-        testID="explore.profile"
-        accessibilityRole="button"
-        accessibilityLabel="Profile"
-        hitSlop={4}
-        onPress={onProfile}
-        style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}
+    <>
+      {/* Opaque sky to 10 pt above its foot, then soft: the slate greeting keeps its 4.5:1 over any imagery. */}
+      <Animated.View
+        style={[styles.veil, { height: veilFoot }, veil]}
+        pointerEvents="none"
+        testID="explore.header.veil"
       >
-        <Avatar initials={initials} photo={portrait} size={HEAD.avatar} />
-      </Pressable>
-    </View>
+        <LinearGradient
+          colors={[tokens.colors.sky, tokens.colors.sky, `${tokens.colors.sky}00`]}
+          locations={[0, Math.max(0, (veilFoot - VEIL_SOFT) / veilFoot), 1]}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+      <View style={[styles.header, { top: topInset }]} pointerEvents="box-none" testID="explore.header">
+        <View style={styles.text} accessible accessibilityRole="header">
+          <Text style={styles.greeting} numberOfLines={1}>
+            {name ? `${greeting},` : greeting}
+          </Text>
+          {name ? (
+            <Text style={styles.name} numberOfLines={1}>
+              {name}
+            </Text>
+          ) : null}
+        </View>
+        <Pressable
+          testID="explore.profile"
+          accessibilityRole="button"
+          accessibilityLabel="Profile"
+          hitSlop={4}
+          onPress={onProfile}
+          style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}
+        >
+          <Avatar initials={initials} photo={portrait} size={HEAD.avatar} />
+        </Pressable>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  veil: { position: "absolute", left: 0, right: 0, top: 0 },
   header: { position: "absolute", left: 0, right: 0, height: HEAD.nameBaseline + 12 },
   text: { position: "absolute", left: 0, right: HEAD.avatarRight + HEAD.avatar + tokens.space.xs, top: 0, bottom: 0 },
   greeting: {

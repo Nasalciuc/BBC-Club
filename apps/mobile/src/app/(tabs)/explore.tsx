@@ -41,6 +41,7 @@ import { useOffline } from "@/features/explore/useOffline";
 import { Globe } from "@/features/globe/Globe";
 import { NOTHING_NEAR, exploreTap } from "@/features/globe/globe-tap-logic";
 import { cityToOpen } from "@/features/globe/open-city";
+import { ornamentRect } from "@/features/globe/ornament";
 import { type TapChoices, placesTap, pointToAsk } from "@/features/globe/places-near-logic";
 import { TapPlaces } from "@/features/globe/TapPlaces";
 import { useDestinations } from "@/features/globe/useDestinations";
@@ -60,6 +61,11 @@ import { monogram } from "@/lib/monogram";
 const STOP = { rest: 0, route: 1, all: 2 } as const;
 /** 02: the labels stay under the greeting; 13: under the status bar, clear of the round buttons. */
 const BAND_TOP = { rest: 76, route: 8 } as const;
+/**
+ * At rest Mapbox's logo and (i) stand in the top-right corner, 8 pt under the portrait (its foot 54 under the safe
+ * area): above the sheet they would sit in 02's clouds over the globe's foot, which cover them (ADR-IMPL-086).
+ */
+const ORNAMENT_TOP_REST = 62;
 /**
  * 13: the round buttons over a chosen route — back 36 across, 14.7 from the left; the bookmark 35.5, 15.2 from the
  * right — their tops 3.7 above the status bar's foot; the chevron 24 at 1.6, the bookmark 16.5 at 2.2.
@@ -91,6 +97,8 @@ export default function ExploreScreen() {
   // opens raised, one already open beneath raises its sheet.
   const { offers: offersParam } = useLocalSearchParams<{ offers?: string }>();
   const [sheetIndex, setSheetIndex] = useState<number>(() => (offersParam === "all" ? STOP.all : STOP.rest));
+  // The member has pinched the globe in: it rises under the greeting, which then stands on a veil of sky.
+  const [globeZoomedIn, setGlobeZoomedIn] = useState(false);
   // The one profile every screen shares (F104), asked again each time Explore comes into view: the name, the portrait
   // and the usual cabin may have changed on Profile.
   const profile = useProfile();
@@ -286,6 +294,8 @@ export default function ExploreScreen() {
   // The labels' band: under the greeting (or the round buttons) and over the search bar (or the sheet).
   const roundTop = insets.top + ROUND.top;
   const pad = tokens.space.xxs;
+  // Raised (a route, every offer), the sheet holds no clouds over the globe: the logo and (i) go back above it.
+  const ornamentTop = mode === "rest" ? insets.top + ORNAMENT_TOP_REST : undefined;
   const band = {
     top: insets.top + (routeShown ? BAND_TOP.route : BAND_TOP.rest),
     bottom: stopTop + (routeShown ? -tokens.space.xs : HOME_SHEET_HANDLE - tokens.space.xxs),
@@ -304,7 +314,9 @@ export default function ExploreScreen() {
             bottom: roundTop + ROUND.save.size + pad,
           },
         ]
-      : [],
+      : ornamentTop === undefined
+        ? []
+        : [ornamentRect(ornamentTop, size.width, pad)],
   };
 
   // 13: the words centred, the chevron 4.7 after them — 18.4 at 1.8.
@@ -339,6 +351,8 @@ export default function ExploreScreen() {
         centreY={centreY}
         band={band}
         sheetTop={sheetTop(sheetIndex, height, insets.top)}
+        ornamentTop={ornamentTop}
+        onZoomedIn={setGlobeZoomedIn}
         paused={!focused || mode === "all"}
       />
       <SkyClouds centreY={globeCentreY(false, insets.top)} shown={!routeShown} />
@@ -376,6 +390,8 @@ export default function ExploreScreen() {
           portrait={portraitOf(profile)}
           onProfile={() => router.push("/(tabs)/profile" as Href)}
           topInset={insets.top}
+          veiled={globeZoomedIn}
+          veilFoot={insets.top + ORNAMENT_TOP_REST}
         />
       )}
       <HomeSheet

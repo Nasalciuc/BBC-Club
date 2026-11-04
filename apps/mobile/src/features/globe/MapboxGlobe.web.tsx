@@ -45,6 +45,7 @@ import { env } from "@/lib/env";
 import type { MapboxGlobeProps } from "./MapboxGlobe";
 import { type CloudLayer, cloudLayers } from "./cloud-drift";
 import { cloudPictureUrl } from "./cloud-pictures";
+import { ORNAMENT, isZoomedIn } from "./ornament";
 import { satelliteStyle } from "./satellite-source";
 import { useCloudClock } from "./useCloudClock";
 
@@ -86,6 +87,8 @@ export default function MapboxGlobe({
   centreY,
   band,
   sheetTop,
+  ornamentTop,
+  onZoomedIn,
   paused = false,
   onFailed,
   onReady,
@@ -102,6 +105,11 @@ export default function MapboxGlobe({
   // Where the camera stands, for which pins are on the near side and where each label fits; `frame` moves the views
   // laid over the map with every frame the camera moves.
   const [seen, setSeen] = useState<GlobeCamera>({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM });
+  // Pinched in, the globe rises under the header: Explore veils it there (the header's words stay readable).
+  const zoomedIn = isZoomedIn(seen.zoom, REST_ZOOM);
+  useEffect(() => {
+    onZoomedIn?.(zoomedIn);
+  }, [zoomedIn, onZoomedIn]);
   const [, setFrame] = useState(0);
   const [pressGuard] = useState(() => createPressGuard());
   // The press handler reads what is drawn now, not what was drawn when the map was made.
@@ -366,15 +374,25 @@ export default function MapboxGlobe({
     latest.current.press = press;
   });
 
-  // Mapbox's terms: logo and attribution always visible — just above the sheet.
+  // Mapbox's terms: logo and attribution always visible — just above the sheet, or both in the top-right corner where
+  // the screen asks for it (`ornamentTop`), as on the phone. Mapbox GL keeps its logo bottom-left and the (i)
+  // bottom-right: their corners' boxes are moved.
   const ornament = Math.max(8, size.height - sheetTop + 8);
   useEffect(() => {
     const element = container.current as unknown as HTMLElement | null;
-    for (const corner of ["bottom-left", "bottom-right"]) {
-      const box = element?.querySelector<HTMLElement>(`.mapboxgl-ctrl-${corner}`);
-      if (box) box.style.bottom = `${ornament}px`;
+    const logo = element?.querySelector<HTMLElement>(".mapboxgl-ctrl-bottom-left");
+    const attribution = element?.querySelector<HTMLElement>(".mapboxgl-ctrl-bottom-right");
+    const up = ornamentTop !== undefined;
+    for (const box of [logo, attribution]) {
+      if (!box) continue;
+      box.style.top = up ? `${ornamentTop}px` : "";
+      box.style.bottom = up ? "auto" : `${ornament}px`;
     }
-  }, [ornament, mapReady]);
+    if (logo) {
+      logo.style.left = up ? "auto" : "";
+      logo.style.right = up ? `${ORNAMENT.inset + ORNAMENT.attribution + ORNAMENT.gap}px` : "";
+    }
+  }, [ornament, ornamentTop, mapReady]);
 
   return (
     // `globe.map`: the satellite globe's surface, which takes the pan, the pinch and the tap — as on the phone.
