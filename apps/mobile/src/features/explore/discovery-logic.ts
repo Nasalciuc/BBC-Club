@@ -61,8 +61,12 @@ function defaultResolve(): string | undefined {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-/** What is left of `Los Angeles International` without its city: generic words only, which name no airport. */
-const GENERIC_ONLY = /^(?:(?:international|intl\.?|regional|municipal|airport|airfield)\s*)+$/i;
+/**
+ * What is left of `Los Angeles International` (or `Dawadmi Domestic Airport`) without its city: generic words only,
+ * which name no airport.
+ */
+const GENERIC_ONLY =
+  /^(?:(?:international|intl\.?|intercontinental|regional|municipal|domestic|national|airport|airfield)\s*)+$/i;
 
 /**
  * `Heathrow Airport` (03, 18): the catalogue's name (`Heathrow`), called an airport where it does not say so already

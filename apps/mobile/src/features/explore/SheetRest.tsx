@@ -1,4 +1,5 @@
-import { StyleSheet, View } from "react-native";
+import * as WebBrowser from "expo-web-browser";
+import { Linking, StyleSheet, View } from "react-native";
 import type { HomeVM, SiteDealVM } from "@bbc/shared/api/v1/fares";
 import type { PlacePhotoVM } from "@bbc/shared/api/v1/places";
 import type { ProposalCardVM } from "@bbc/shared/api/v1/proposals";
@@ -6,6 +7,7 @@ import {
   CAROUSEL_PAD,
   CarouselRow,
   EmptyState,
+  ListRow,
   OfferCard,
   SectionHeader,
   Skeleton,
@@ -19,6 +21,7 @@ import { clubPhoto } from "@/features/places/club-photos";
 import { cardPicture, remote } from "@/features/places/place-photo-logic";
 import { PICTURE_HEADERS, usePlacePhotos } from "@/features/places/usePlacePhotos";
 
+import { openGuides } from "./guides";
 import { dealCardModel, homeDeals, offerCardModel } from "./offer-card-logic";
 
 /**
@@ -226,6 +229,36 @@ export function SheetRest({ home, homeLoading, onOpenOffer, onOpenDeal, onSeeAll
           />
         </View>
       )}
+      <Guides />
+    </View>
+  );
+}
+
+/**
+ * The company's travel guides under the offers (the owner's choice, 4 Nov 2026): one row as Settings draws its links,
+ * opening the site's blog in the app's browser (`guides.ts`). No image draws it: proposed until design does.
+ */
+function Guides() {
+  return (
+    <View style={styles.guides}>
+      <ListRow
+        testID="explore.guides"
+        look="settings"
+        icon="file-text"
+        label="Guides"
+        subtitle="From buybusinessclass.com"
+        trailing="external"
+        onPress={() =>
+          void openGuides(
+            (url) =>
+              WebBrowser.openBrowserAsync(url, {
+                controlsColor: tokens.colors.textPrimary,
+                toolbarColor: tokens.colors.surfacePage,
+              }),
+            (url) => Linking.openURL(url),
+          ).catch(() => undefined)
+        }
+      />
     </View>
   );
 }
@@ -235,4 +268,5 @@ const styles = StyleSheet.create({
   header: { marginTop: titleTop - REST.barHeight, marginLeft: REST.titleLeft, marginRight: REST.actionRight },
   // The row keeps its own room above the cards for their shadow.
   cards: { marginTop: REST.cardsTop - CAROUSEL_PAD - (titleTop + titleType.lineHeight) },
+  guides: { marginTop: tokens.space.lg },
 });

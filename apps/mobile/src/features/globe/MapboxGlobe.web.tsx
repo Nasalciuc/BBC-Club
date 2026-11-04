@@ -37,6 +37,7 @@ import {
   type LngLat,
   type Pin,
   type PinToPlace,
+  type Rect,
   type RouteEndKind,
 } from "@bbc/ui";
 
@@ -45,6 +46,7 @@ import { env } from "@/lib/env";
 import type { MapboxGlobeProps } from "./MapboxGlobe";
 import { type CloudLayer, cloudLayers } from "./cloud-drift";
 import { cloudPictureUrl } from "./cloud-pictures";
+import { ORNAMENT, isZoomedIn, logoRight } from "./ornament";
 import { satelliteStyle } from "./satellite-source";
 import { useCloudClock } from "./useCloudClock";
 
@@ -86,6 +88,8 @@ export default function MapboxGlobe({
   centreY,
   band,
   sheetTop,
+  ornamentTop,
+  onZoomedIn,
   paused = false,
   onFailed,
   onReady,
@@ -98,10 +102,17 @@ export default function MapboxGlobe({
   const { fontScale } = useWindowDimensions();
   const [reducedMotion, setReducedMotion] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  // The (i)'s credits while they are open, on screen: the labels keep off them (below).
+  const [credits, setCredits] = useState<Rect | null>(null);
   const [arc, setArc] = useState(1);
   // Where the camera stands, for which pins are on the near side and where each label fits; `frame` moves the views
   // laid over the map with every frame the camera moves.
   const [seen, setSeen] = useState<GlobeCamera>({ center: [...OPENING_CENTER] as LngLat, zoom: REST_ZOOM });
+  // Pinched in, the globe rises under the header: Explore veils it there (the header's words stay readable).
+  const zoomedIn = isZoomedIn(seen.zoom, REST_ZOOM);
+  useEffect(() => {
+    onZoomedIn?.(zoomedIn);
+  }, [zoomedIn, onZoomedIn]);
   const [, setFrame] = useState(0);
   const [pressGuard] = useState(() => createPressGuard());
   // The press handler reads what is drawn now, not what was drawn when the map was made.
@@ -334,7 +345,7 @@ export default function MapboxGlobe({
   const placed = placeLabels(
     shown,
     { left: 8, top: band.top, right: size.width - 8, bottom: band.bottom },
-    band.avoid ?? [],
+    credits ? [...(band.avoid ?? []), credits] : (band.avoid ?? []),
     labelScale(fontScale),
   );
   const plane = middle && arc >= 1 ? project(middle.at[0], middle.at[1]) : null;
@@ -366,15 +377,60 @@ export default function MapboxGlobe({
     latest.current.press = press;
   });
 
-  // Mapbox's terms: logo and attribution always visible — just above the sheet.
-  const ornament = Math.max(8, size.height - sheetTop + 8);
+  // Mapbox's terms: logo and attribution always visible — just above the sheet, or both in the top-right corner where
+  // the screen asks for it (`ornamentTop`), as on the phone. Mapbox GL keeps its logo bottom-left and the (i)
+  // bottom-right: their corners' boxes are moved, and up there their controls lose GL's own 10-px corner margins, so
+  // each stands exactly where `ornamentRect` keeps the labels away.
+  const ornament = Math.max(ORNAMENT.inset, size.height - sheetTop + ORNAMENT.inset);
   useEffect(() => {
     const element = container.current as unknown as HTMLElement | null;
-    for (const corner of ["bottom-left", "bottom-right"]) {
-      const box = element?.querySelector<HTMLElement>(`.mapboxgl-ctrl-${corner}`);
-      if (box) box.style.bottom = `${ornament}px`;
+    const logo = element?.querySelector<HTMLElement>(".mapboxgl-ctrl-bottom-left");
+    const attribution = element?.querySelector<HTMLElement>(".mapboxgl-ctrl-bottom-right");
+    const up = ornamentTop !== undefined;
+    for (const box of [logo, attribution]) {
+      if (!box) continue;
+      box.style.top = up ? `${ornamentTop}px` : "";
+      box.style.bottom = up ? "auto" : `${ornament}px`;
+      for (const control of box.querySelectorAll<HTMLElement>(".mapboxgl-ctrl")) control.style.margin = up ? "0" : "";
     }
-  }, [ornament, mapReady]);
+    if (logo) {
+      logo.style.left = up ? "auto" : "";
+      logo.style.right = up ? `${logoRight()}px` : "";
+    }
+    // Opened, the (i)'s credits run left over the logo: its corner is drawn above the logo's, so they stay readable
+    // and pressable (the logo shows again once they close).
+    if (attribution) {
+      attribution.style.right = up ? `${ORNAMENT.inset}px` : "";
+      attribution.style.zIndex = up ? "3" : "";
+    }
+  }, [ornament, ornamentTop, mapReady]);
+
+  // Opened, the (i)'s credits run left past the corner `ornamentRect` keeps clear: while they are open the labels keep
+  // off where they are drawn too, so none covers them or takes their taps (the labels lie above the map's own boxes).
+  useEffect(() => {
+    const element = container.current as unknown as HTMLElement | null;
+    const attrib = element?.querySelector<HTMLElement>(".mapboxgl-ctrl-attrib");
+    if (!element || !attrib) return;
+    const measure = () => {
+      if (!attrib.classList.contains("mapboxgl-compact-show")) {
+        setCredits(null);
+        return;
+      }
+      const at = attrib.getBoundingClientRect();
+      const box = element.getBoundingClientRect();
+      const pad = ORNAMENT.gap;
+      setCredits({
+        left: at.left - box.left - pad,
+        top: at.top - box.top - pad,
+        right: at.right - box.left + pad,
+        bottom: at.bottom - box.top + pad,
+      });
+    };
+    measure();
+    const watch = new MutationObserver(measure);
+    watch.observe(attrib, { attributes: true, attributeFilter: ["class"] });
+    return () => watch.disconnect();
+  }, [ornament, ornamentTop, mapReady, size.width]);
 
   return (
     // `globe.map`: the satellite globe's surface, which takes the pan, the pinch and the tap — as on the phone.
