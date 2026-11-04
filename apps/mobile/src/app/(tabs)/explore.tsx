@@ -23,7 +23,7 @@ import { DestinationDetails } from "@/features/explore/DestinationDetails";
 import { HOME_AIRPORT_MESSAGE } from "@/features/explore/discovery-logic";
 import { globeCentreY, sheetSnaps, sheetTop } from "@/features/explore/explore-layout";
 import { firstName } from "@/features/explore/greeting";
-import { GreetingHeader, PORTRAIT_FOOT } from "@/features/explore/GreetingHeader";
+import { GreetingHeader, HEADER_FOOT } from "@/features/explore/GreetingHeader";
 import { dealDestination } from "@/features/explore/offer-card-logic";
 import { createTapGuard, fareHref, openOffer } from "@/features/explore/open-offer";
 import { rememberDates, rememberSearch } from "@/features/explore/recent-searches";
@@ -62,10 +62,11 @@ const STOP = { rest: 0, route: 1, all: 2 } as const;
 /** 02: the labels stay under the greeting; 13: under the status bar, clear of the round buttons. */
 const BAND_TOP = { rest: 76, route: 8 } as const;
 /**
- * At rest Mapbox's logo and (i) stand in the top-right corner, `xs` under the portrait (its foot 54 under the safe
- * area): above the sheet they would sit in 02's clouds over the globe's foot, which cover them (ADR-IMPL-086).
+ * At rest Mapbox's logo and (i) stand in the top-right corner, at the header's foot — under the name and where the
+ * header's veil has faded out: above the sheet they would sit in 02's clouds over the globe's foot, which cover them
+ * (ADR-IMPL-086). The corner is clear of the clouds to about 100 pt under the safe area on every phone width.
  */
-const ORNAMENT_TOP_REST = PORTRAIT_FOOT + tokens.space.xs;
+const ORNAMENT_TOP_REST = HEADER_FOOT;
 /**
  * 13: the round buttons over a chosen route — back 36 across, 14.7 from the left; the bookmark 35.5, 15.2 from the
  * right — their tops 3.7 above the status bar's foot; the chevron 24 at 1.6, the bookmark 16.5 at 2.2.

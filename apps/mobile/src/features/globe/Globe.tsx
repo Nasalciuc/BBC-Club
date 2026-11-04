@@ -177,6 +177,7 @@ export function Globe(props: Props) {
         bounds={bounds}
         avoid={avoid}
         paused={paused}
+        onZoomedIn={mapProps.onZoomedIn}
       />
     </Animated.View>
   ) : null;

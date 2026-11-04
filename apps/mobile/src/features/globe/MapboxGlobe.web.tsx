@@ -394,7 +394,12 @@ export default function MapboxGlobe({
       logo.style.left = up ? "auto" : "";
       logo.style.right = up ? `${logoRight()}px` : "";
     }
-    if (attribution) attribution.style.right = up ? `${ORNAMENT.inset}px` : "";
+    // Opened, the (i)'s credits run left over the logo: its corner is drawn above the logo's, so they stay readable
+    // and pressable (the logo shows again once they close).
+    if (attribution) {
+      attribution.style.right = up ? `${ORNAMENT.inset}px` : "";
+      attribution.style.zIndex = up ? "3" : "";
+    }
   }, [ornament, ornamentTop, mapReady]);
 
   return (

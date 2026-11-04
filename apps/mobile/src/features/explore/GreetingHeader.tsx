@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useReducedMotion, withTiming } from "react-native-reanimated";
-import { Avatar, type PhotoSource, baselineOffset, rn, tokens } from "@bbc/ui";
+import { Avatar, type PhotoSource, baselineOffset, belowBaseline, rn, tokens } from "@bbc/ui";
 
 import { greetingFor } from "./greeting";
 
@@ -14,8 +14,8 @@ type Props = {
   onProfile: () => void;
   topInset: number;
   /**
-   * The globe is pinched in and has risen under the header: the words stand on a veil of 02's sky, from the screen's
-   * top to `veilFoot` (Mapbox's logo stands just under it and must stay visible).
+   * The globe is pinched in and has risen under the header: the words stand on a veil of 02's sky, opaque from the
+   * screen's top to the name's foot, faded out by `veilFoot` (Mapbox's logo stands just under it and must stay visible).
    */
   veiled?: boolean;
   veilFoot?: number;
@@ -35,12 +35,17 @@ const HEAD = {
   avatarRight: 18.8,
   avatarTop: -0.85,
 } as const;
-/** The portrait's foot under the safe area: what stands under the header (Mapbox's logo at rest) starts below it. */
-export const PORTRAIT_FOOT = HEAD.avatarTop + HEAD.avatar;
-/** The veil's soft foot. */
-const VEIL_SOFT = tokens.space.sm;
 const greetingType = tokens.type.greeting;
 const nameType = tokens.type.greetingName;
+/** The name's line ends here, under the safe area (its descenders included): the veil is opaque down to it. */
+const NAME_FOOT = HEAD.nameBaseline + belowBaseline(nameType);
+/** The veil's soft foot, under the name. */
+const VEIL_SOFT = tokens.space.xs;
+/**
+ * The header's foot under the safe area, where its veil has faded out: what stands under the header (Mapbox's logo at
+ * rest) starts here, clear of the name and of the veil.
+ */
+export const HEADER_FOOT = NAME_FOOT + VEIL_SOFT;
 
 /**
  * Explore's header (02, 16): `Good morning,` in its slate over the member's first name, their portrait at the right —
@@ -53,7 +58,7 @@ export function GreetingHeader({
   onProfile,
   topInset,
   veiled = false,
-  veilFoot = topInset + HEAD.nameBaseline + tokens.space.sm,
+  veilFoot = topInset + HEADER_FOOT,
 }: Props) {
   const greeting = greetingFor(new Date().getHours());
   const reducedMotion = useReducedMotion();
@@ -62,7 +67,7 @@ export function GreetingHeader({
   }));
   return (
     <>
-      {/* Opaque sky to `sm` above its foot, then soft: the slate greeting keeps its 4.5:1 over any imagery. */}
+      {/* Opaque sky behind the whole name, soft only under it: the slate greeting keeps its 4.5:1 over any imagery. */}
       <Animated.View
         style={[styles.veil, { height: veilFoot }, veil]}
         pointerEvents="none"

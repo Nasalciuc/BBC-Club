@@ -55,7 +55,12 @@ type Props = {
    * pan and pinch, and the pins' own presses, as before.
    */
   onTapPlace?: (tap: GlobeTap) => void;
+  /** Pinched in past its rest size, or eased back to it: the screen above may veil what the globe rises under. */
+  onZoomedIn?: (zoomedIn: boolean) => void;
 };
+
+/** How far past the rest size counts as pinched in (×): the slow turn's ease back lands within it. */
+const ZOOMED_IN_ABOVE = 1.035;
 
 /** e2e builds hold still: Maestro taps globe.pin.LHR, and parity compares the stills. */
 const HOLD_STILL = process.env.EXPO_PUBLIC_APP_ENV === "e2e";
@@ -123,6 +128,7 @@ export function GlobeFallback({
   avoid = [],
   paused = false,
   onTapPlace,
+  onZoomedIn,
 }: Props) {
   const sel = pins.find((p) => p.code === selected) ?? null;
   const route: Route | null = sel ? { from: home ? [home.lng, home.lat] : null, to: [sel.lng, sel.lat] } : null;
@@ -137,6 +143,10 @@ export function GlobeFallback({
     createGlobeEngine({ size, selected, route, reducedMotion: false, holdStill: HOLD_STILL, tap }),
   );
   const [frame, setFrame] = useState(() => engine.initialFrame);
+  const zoomedIn = frame.zoom > GLOBE_SPEC.zoom.min * ZOOMED_IN_ABOVE;
+  useEffect(() => {
+    onZoomedIn?.(zoomedIn);
+  }, [zoomedIn, onZoomedIn]);
   // One choice per touch: a pin's press and the globe's tap may both answer it, in either order.
   const [pressGuard] = useState(() => createPressGuard());
 

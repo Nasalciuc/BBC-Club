@@ -266,6 +266,8 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   }
 
   async function onSubmit() {
+    // A tap on the pill does not blur the Note: its pending reveal must not scroll away from an error shown now.
+    stopRevealing();
     if (submittingRef.current) return;
     submittingRef.current = true;
     try {
