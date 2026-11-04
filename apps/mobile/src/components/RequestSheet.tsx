@@ -89,6 +89,8 @@ const NO_SUMMARY: RequestSummary = { title: "", cabin: "", route: "", carrier: n
 /** An offer whose page named no airline: none on the trip card (knownCarrier). */
 const NO_AIRLINE = { code: null, name: "", logoUrl: null };
 
+/** How long a field's focus waits for the keyboard to rise before it stops listening. */
+const KEYBOARD_WAIT_MS = 1000;
 /** `RequestBody.note` takes 500 characters; the field stops there instead of refusing the request. */
 const NOTE_MAX = 500;
 
@@ -135,6 +137,18 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   const returnBlock = useRef<View>(null);
   const phoneBlock = useRef<View>(null);
   const notSent = useRef<View>(null);
+  // The last fields sit low in the sheet, under the pinned pill once the keyboard is up: typing in one scrolls it into
+  // view, now and again once the keyboard has risen (a keyboard already up sends no event, so the first reveal counts).
+  const emailBlock = useRef<View>(null);
+  const noteBlock = useRef<View>(null);
+  function revealWhileTyping(block: { current: View | null }) {
+    modalRef.current?.reveal(block.current);
+    const shown = Keyboard.addListener("keyboardDidShow", () => {
+      shown.remove();
+      modalRef.current?.reveal(block.current);
+    });
+    setTimeout(() => shown.remove(), KEYBOARD_WAIT_MS);
+  }
 
   useEffect(() => {
     keyRef.current = idempotencyKey;
@@ -500,7 +514,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             </View>
           ) : null}
         </View>
-        <View style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
+        <View ref={emailBlock} style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
           <TextField
             look="request"
             testID="request.email"
@@ -512,9 +526,10 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
+            onFocus={() => revealWhileTyping(emailBlock)}
           />
         </View>
-        <View style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
+        <View ref={noteBlock} style={[SHEET.column, { marginTop: SHEET.contact.gap }]}>
           <TextField
             look="request"
             testID="request.note"
@@ -526,6 +541,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
             onChangeText={(v) => dispatch({ type: "setNote", note: v })}
             multiline
             maxLength={NOTE_MAX}
+            onFocus={() => revealWhileTyping(noteBlock)}
           />
         </View>
 

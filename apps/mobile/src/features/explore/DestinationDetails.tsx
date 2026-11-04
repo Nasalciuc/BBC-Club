@@ -390,7 +390,6 @@ export function DestinationDetails({
                     styles.slate,
                     { marginTop: after(s.clock.zoneBaseline - s.clock.timeBaseline, s.clock.time, s.clock.zone) },
                   ]}
-                  numberOfLines={2}
                 >
                   {clock.zone}
                 </Text>
