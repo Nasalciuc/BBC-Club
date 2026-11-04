@@ -59,8 +59,11 @@ type Props = {
   onZoomedIn?: (zoomedIn: boolean) => void;
 };
 
-/** How far past the rest size counts as pinched in (×): the slow turn's ease back lands within it. */
-const ZOOMED_IN_ABOVE = 1.035;
+/**
+ * How far past the rest size counts as pinched in (×): the satellite globe's 0.05 of a zoom level (`ornament.ts`), as a
+ * scale, so both globes call the same pinch "in". The slow turn's ease back lands within it.
+ */
+const ZOOMED_IN_ABOVE = 2 ** 0.05;
 
 /** e2e builds hold still: Maestro taps globe.pin.LHR, and parity compares the stills. */
 const HOLD_STILL = process.env.EXPO_PUBLIC_APP_ENV === "e2e";
