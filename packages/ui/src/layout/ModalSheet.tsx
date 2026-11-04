@@ -43,6 +43,7 @@ export type ModalSheetHandle = {
   /**
    * Scrolls the content just enough that `target` shows whole, clear of the pinned actions and of the keyboard;
    * nothing moves when it shows already. Called once a message appears (an effect on the message), never on a layout.
+   * Each call supersedes the one before, even mid-measure: `null` only cancels, so an earlier field never scrolls back.
    */
   reveal: (target: Revealable | null) => void;
 };
@@ -142,6 +143,8 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
   const viewportRef = useRef<View>(null);
   // The content's scroll, as the scroll view reports it: `reveal` moves from there.
   const offset = useRef(0);
+  // The latest `reveal`: a measure that comes back after a later call (or a cancel) moves nothing.
+  const revealing = useRef(0);
   const { height: windowHeight } = useWindowDimensions();
   // From `present` until the sheet has gone: while it is open, Android's Back belongs to it.
   const [open, setOpen] = useState(false);
@@ -152,10 +155,13 @@ export const ModalSheet = forwardRef<ModalSheetHandle, Props>(function ModalShee
     },
     dismiss: () => modal.current?.dismiss(),
     reveal: (target) => {
+      revealing.current += 1;
+      const call = revealing.current;
       const viewport = viewportRef.current;
       if (!target || !viewport) return;
       viewport.measureInWindow((_vx, viewportTop, _vw, viewportHeight) => {
         target.measureInWindow((_x, top, _w, height) => {
+          if (call !== revealing.current) return;
           const y = revealScroll({ top: top - viewportTop, height }, viewportHeight, offset.current);
           if (y != null) scrollRef.current?.scrollTo({ y, animated: true });
         });

@@ -146,9 +146,15 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
   const emailBlock = useRef<View>(null);
   const noteBlock = useRef<View>(null);
   const typing = useRef<(() => void) | null>(null);
-  function stopRevealing() {
+  function endWaiting() {
     typing.current?.();
     typing.current = null;
+  }
+  function stopRevealing() {
+    if (!typing.current) return;
+    endWaiting();
+    // A measure already under way comes back to nothing: the sheet scrolls for the field in hand, or for none.
+    modalRef.current?.reveal(null);
   }
   function revealWhileTyping(block: { current: View | null }) {
     stopRevealing();
@@ -156,7 +162,7 @@ export const RequestSheet = forwardRef<RequestSheetHandle>(function RequestSheet
     reveal();
     const shown = Keyboard.addListener("keyboardDidShow", reveal);
     const late = setTimeout(reveal, KEYBOARD_RISE_MS);
-    const done = setTimeout(stopRevealing, KEYBOARD_WAIT_MS);
+    const done = setTimeout(endWaiting, KEYBOARD_WAIT_MS);
     typing.current = () => {
       shown.remove();
       clearTimeout(late);
