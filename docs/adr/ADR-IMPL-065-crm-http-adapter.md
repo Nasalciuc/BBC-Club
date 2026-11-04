@@ -55,7 +55,8 @@ by itself" (the call, its words and the list's hint at it only with the club's g
    - refuses a call whose `Idempotency-Key` differs from the body's `reference` (point 4): the header is not signed, the
      body is, so a call replayed within the window under another key would otherwise pass its de-duplication.
 
-   Each try signs its own timestamp. The secret never leaves the server. Test vectors, with made-up values (timestamp
+   Each try signs its own timestamp. The secret is handed to the CRM team once, out of band, and is never in a
+   request, a URL, a log or an event payload. Test vectors, with made-up values (timestamp
    `1700000000`, body `{"reference":"R-T001"}`; `http-crm.test.ts` holds them):
 
    | Key                                               | `X-BBC-Signature`                                                  |

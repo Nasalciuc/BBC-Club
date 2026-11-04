@@ -12,7 +12,7 @@ import {
 export type HttpCrmConfig = {
   /** CRM_API_URL: where each request is POSTed. */
   url: string;
-  /** CRM_API_SECRET: signs each call. It never leaves the server, in a header or a log. */
+  /** CRM_API_SECRET: signs each call. Handed to the CRM team out of band; never in a header, a URL or a log. */
   secret: string;
   /** The ceiling of one call; 5 s. Tests pass less. */
   timeoutMs?: number;
