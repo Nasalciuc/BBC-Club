@@ -147,11 +147,13 @@ describe("buildDraft — never a day that has passed (F006)", () => {
 });
 
 describe("buildDraft — a fare's own day and trip (F097)", () => {
+  // Days from today, not fixed ones: a fixed day falls behind today and gives way to the suggestion (F006).
+  const FARE_DAY = inDays(6);
   const fa01 = {
     ...fixture.fares[0]!,
-    departAt: "2026-11-10T23:55:00.000Z",
+    departAt: `${FARE_DAY}T23:55:00.000Z`,
     departLocal: "18:55",
-    departDate: "2026-11-10",
+    departDate: FARE_DAY,
     trip: "one_way" as const,
   };
 
@@ -159,7 +161,7 @@ describe("buildDraft — a fare's own day and trip (F097)", () => {
     const draft = buildDraft({ fare: fa01, today: TODAY });
     expect(draft.tripType).toBe("oneway");
     const body = draftToBody({ ...draft, contact: CONTACT });
-    expect(body.legs).toEqual([{ from: "JFK", to: "LHR", date: "2026-11-10" }]);
+    expect(body.legs).toEqual([{ from: "JFK", to: "LHR", date: FARE_DAY }]);
     expect(body.priceAtRequest).toBe(4200);
     expect(body.fareId).toBe(fa01.id);
     expect(RequestBody.safeParse(body).success).toBe(true);
@@ -169,21 +171,21 @@ describe("buildDraft — a fare's own day and trip (F097)", () => {
     const draft = buildDraft({ fare: { ...fa01, trip: "round_trip" }, today: TODAY });
     expect(draft.tripType).toBe("round");
     expect(draft.legs).toEqual([
-      { from: "JFK", to: "LHR", date: "2026-11-10" },
-      { from: "LHR", to: "JFK", date: "2026-11-17" },
+      { from: "JFK", to: "LHR", date: FARE_DAY },
+      { from: "LHR", to: "JFK", date: inDays(13) },
     ]);
   });
 
   it("the fare's own day wins over a searched one (the page prints the fare's day)", () => {
     const search = {
-      dates: { depart: "2026-11-03", return: "2026-11-20", flexible: false },
+      dates: { depart: inDays(1), return: inDays(16), flexible: false },
       cabin: "business" as const,
       passengers: { adult: 1, child: 0, infant: 0 },
     };
-    expect(buildDraft({ fare: fa01, search, today: TODAY }).legs[0]?.date).toBe("2026-11-10");
+    expect(buildDraft({ fare: fa01, search, today: TODAY }).legs[0]?.date).toBe(FARE_DAY);
     // A round-trip fare keeps the searched return when it comes after the fare's day.
     const round = buildDraft({ fare: { ...fa01, trip: "round_trip" }, search, today: TODAY });
-    expect(round.legs.map((l) => l.date)).toEqual(["2026-11-10", "2026-11-20"]);
+    expect(round.legs.map((l) => l.date)).toEqual([FARE_DAY, inDays(16)]);
   });
 
   it("a fare without a day of its own keeps the suggestion, but takes its trip from the fare", () => {
@@ -221,7 +223,7 @@ describe("legsForTripType — One way and back", () => {
       mode: "quote",
       today: TODAY,
       search: {
-        dates: { depart: "2026-11-03", return: null, flexible: false },
+        dates: { depart: inDays(1), return: null, flexible: false },
         cabin: "business",
         passengers: { adult: 1, child: 0, infant: 0 },
       },
