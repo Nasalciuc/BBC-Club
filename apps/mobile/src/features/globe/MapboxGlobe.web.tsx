@@ -37,6 +37,7 @@ import {
   type LngLat,
   type Pin,
   type PinToPlace,
+  type Rect,
   type RouteEndKind,
 } from "@bbc/ui";
 
@@ -101,6 +102,8 @@ export default function MapboxGlobe({
   const { fontScale } = useWindowDimensions();
   const [reducedMotion, setReducedMotion] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  // The (i)'s credits while they are open, on screen: the labels keep off them (below).
+  const [credits, setCredits] = useState<Rect | null>(null);
   const [arc, setArc] = useState(1);
   // Where the camera stands, for which pins are on the near side and where each label fits; `frame` moves the views
   // laid over the map with every frame the camera moves.
@@ -342,7 +345,7 @@ export default function MapboxGlobe({
   const placed = placeLabels(
     shown,
     { left: 8, top: band.top, right: size.width - 8, bottom: band.bottom },
-    band.avoid ?? [],
+    credits ? [...(band.avoid ?? []), credits] : (band.avoid ?? []),
     labelScale(fontScale),
   );
   const plane = middle && arc >= 1 ? project(middle.at[0], middle.at[1]) : null;
@@ -401,6 +404,33 @@ export default function MapboxGlobe({
       attribution.style.zIndex = up ? "3" : "";
     }
   }, [ornament, ornamentTop, mapReady]);
+
+  // Opened, the (i)'s credits run left past the corner `ornamentRect` keeps clear: while they are open the labels keep
+  // off where they are drawn too, so none covers them or takes their taps (the labels lie above the map's own boxes).
+  useEffect(() => {
+    const element = container.current as unknown as HTMLElement | null;
+    const attrib = element?.querySelector<HTMLElement>(".mapboxgl-ctrl-attrib");
+    if (!element || !attrib) return;
+    const measure = () => {
+      if (!attrib.classList.contains("mapboxgl-compact-show")) {
+        setCredits(null);
+        return;
+      }
+      const at = attrib.getBoundingClientRect();
+      const box = element.getBoundingClientRect();
+      const pad = ORNAMENT.gap;
+      setCredits({
+        left: at.left - box.left - pad,
+        top: at.top - box.top - pad,
+        right: at.right - box.left + pad,
+        bottom: at.bottom - box.top + pad,
+      });
+    };
+    measure();
+    const watch = new MutationObserver(measure);
+    watch.observe(attrib, { attributes: true, attributeFilter: ["class"] });
+    return () => watch.disconnect();
+  }, [ornament, ornamentTop, mapReady, size.width]);
 
   return (
     // `globe.map`: the satellite globe's surface, which takes the pan, the pinch and the tap — as on the phone.
