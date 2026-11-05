@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import { isolatedDb, type IsolatedDb } from "@bbc/db/testing/isolated-db";
 import { createPlatform } from "../src/api";
+import { createJobs } from "../src/jobs";
 
 let iso: IsolatedDb;
 let db: IsolatedDb["db"];
@@ -94,5 +95,84 @@ describe("singleton jobs on a connection pool", () => {
       sql`SELECT metrics FROM platform.job_runs WHERE job = ${"metrics-ok"} ORDER BY started_at DESC LIMIT 1`,
     );
     expect(ok.metrics).toEqual({ n: 3 });
+  });
+});
+
+describe("singleton jobs never wedge the pool (5 Nov 2026)", () => {
+  // Production at 02:00 UTC, staging at 04:00: more singleton jobs fired in one second than the pool has connections.
+  // Each reserved one for its lock and then waited for another to write its "running" row: every job stopped until
+  // the worker was restarted, eight hours later.
+  it("ten singleton jobs at once on a pool of ten all finish", async () => {
+    const p = createPlatform(db, { level: "silent" });
+    const names = Array.from({ length: 10 }, (_, i) => `burst-${i}`);
+    for (const name of names)
+      p.jobs.register(name, {
+        cron: "manual",
+        singleton: true,
+        handler: async (ctx) => {
+          await new Promise((r) => setTimeout(r, 50));
+          await ctx.db.execute(sql`SELECT 1`);
+        },
+      });
+    const wedged = new Promise<"wedged">((r) => setTimeout(() => r("wedged"), 20_000));
+    const outcome = await Promise.race([Promise.all(names.map((n) => p.jobs.run(n))), wedged]);
+    expect(outcome === "wedged" ? outcome : outcome.map((r) => r.status)).toEqual(names.map(() => "succeeded"));
+  }, 30_000);
+
+  it("a run that finds no free slot in time is recorded as skipped, not left waiting", async () => {
+    const quiet = { info: () => {}, warn: () => {}, error: () => {} };
+    const jobs = createJobs(db, { logger: quiet, slots: 1, slotWaitMs: 200 });
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    jobs.register("slot-holder", { cron: "manual", singleton: true, handler: () => held });
+    jobs.register("slot-waiter", { cron: "manual", singleton: true, handler: async () => {} });
+    const holder = jobs.run("slot-holder");
+    await new Promise((r) => setTimeout(r, 50));
+    const waiter = await jobs.run("slot-waiter");
+    release();
+    expect({ waiter: waiter.status, holder: (await holder).status }).toEqual({
+      waiter: "skipped",
+      holder: "succeeded",
+    });
+    expect((await jobs.run("slot-waiter")).status).toBe("succeeded");
+  });
+
+  it("a handler that outlives its timeout and its grace ends the run, and frees its lock and slot", async () => {
+    const quiet = { info: () => {}, warn: () => {}, error: () => {} };
+    const jobs = createJobs(db, { logger: quiet, slots: 1, graceMs: 100 });
+    let calls = 0;
+    jobs.register("stuck", {
+      cron: "manual",
+      singleton: true,
+      timeoutMs: 100,
+      handler: async () => {
+        calls++;
+        if (calls === 1) await new Promise(() => {}); // never settles, the signal ignored
+      },
+    });
+    const started = Date.now();
+    const first = await jobs.run("stuck");
+    expect({ status: first.status, error: first.error, fast: Date.now() - started < 5_000 }).toEqual({
+      status: "failed",
+      error: "JobTimedOut: job stuck: still running 100 ms after its 100 ms timeout",
+      fast: true,
+    });
+    expect((await jobs.run("stuck")).status).toBe("succeeded");
+  });
+
+  it("a handler that stops within its grace keeps its own outcome", async () => {
+    const quiet = { info: () => {}, warn: () => {}, error: () => {} };
+    const jobs = createJobs(db, { logger: quiet, graceMs: 2_000 });
+    jobs.register("winds-down", {
+      cron: "manual",
+      timeoutMs: 100,
+      handler: async ({ signal }) => {
+        await new Promise((r) => signal.addEventListener("abort", r));
+        await new Promise((r) => setTimeout(r, 100));
+        return { stoppedEarly: 1 };
+      },
+    });
+    const r = await jobs.run("winds-down");
+    expect({ status: r.status, metrics: r.metrics }).toEqual({ status: "succeeded", metrics: { stoppedEarly: 1 } });
   });
 });
